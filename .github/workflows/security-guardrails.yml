@@ -80,7 +80,7 @@ jobs:
           SEMGREP_NO_OPT_PREVIEW: '1'
 
       - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: security-reports/sast/semgrep.sarif
 
@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload Trivy SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: security-reports/sca/trivy.sarif
 
