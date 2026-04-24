@@ -1,0 +1,93 @@
+name: CI - Web Image Build + GHCR Push
+
+# Faz 19.8 dual-build — Codex AGREE 019dc0ef Option B
+# Yeni image isimleri:
+#   - ghcr.io/halildeu/platform-web-frontend        (prod build args)
+#   - ghcr.io/halildeu/platform-web-frontend-testai (test build args)
+# Gitops overlay'leri 19.9'da digest pin ile bu image'lara geçecek.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: halildeu
+
+jobs:
+  build-and-push:
+    name: Build + Push ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: prod
+            image_name: platform-web-frontend
+            kc_url: https://ai.acik.com
+            kc_realm: serban
+            origin: https://ai.acik.com
+            gateway: https://ai.acik.com
+          - variant: testai
+            image_name: platform-web-frontend-testai
+            kc_url: https://testai.acik.com
+            kc_realm: platform-test
+            origin: https://testai.acik.com
+            gateway: https://testai.acik.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Build + Push image (${{ matrix.variant }})
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          build-args: |
+            VITE_KEYCLOAK_URL=${{ matrix.kc_url }}
+            VITE_KEYCLOAK_REALM=${{ matrix.kc_realm }}
+            VITE_KEYCLOAK_CLIENT_ID=frontend
+            VITE_FRONTEND_PUBLIC_ORIGIN=${{ matrix.origin }}
+            VITE_GATEWAY_URL=${{ matrix.gateway }}
+            VITE_AUTH_MODE=keycloak
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:sha-${{ steps.sha.outputs.short }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:latest
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,scope=${{ matrix.variant }},mode=max
+          provenance: false
+
+      - name: Summary — digest (19.9 pin için kanıt)
+        run: |
+          echo "### ${{ matrix.image_name }} image push (${{ matrix.variant }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: \`sha-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Digest**: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:sha-${{ steps.sha.outputs.short }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Pinnable**: \`${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build args**:" >> $GITHUB_STEP_SUMMARY
+          echo "  - VITE_KEYCLOAK_URL: \`${{ matrix.kc_url }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "  - VITE_KEYCLOAK_REALM: \`${{ matrix.kc_realm }}\`" >> $GITHUB_STEP_SUMMARY
