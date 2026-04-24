@@ -1,6 +1,6 @@
 {
   "name": "@mfe/create-app",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "packageStrategy": "internal-platform",
   "internal": true,
@@ -18,7 +18,11 @@
       "default": "./src/index.ts"
     }
   },
-  "files": ["src", "CONTRACT.md", "README.md"],
+  "files": [
+    "src",
+    "CONTRACT.md",
+    "README.md"
+  ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
