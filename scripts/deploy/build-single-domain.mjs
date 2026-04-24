@@ -200,6 +200,13 @@ const shellEnv = {
   VITE_MFE_REPORTING_URL: remoteEntryUrlFor('reporting'),
   MFE_USERS_URL: remoteEntryUrlFor('users'),
   VITE_MFE_USERS_URL: remoteEntryUrlFor('users'),
+  // Faz 19 post-cutover fix: 3 MFE daha enable + URL (user raporu schema-explorer 404)
+  MFE_SCHEMA_EXPLORER_URL: remoteEntryUrlFor('schema-explorer'),
+  VITE_MFE_SCHEMA_EXPLORER_URL: remoteEntryUrlFor('schema-explorer'),
+  MFE_SUGGESTIONS_URL: remoteEntryUrlFor('suggestions'),
+  VITE_MFE_SUGGESTIONS_URL: remoteEntryUrlFor('suggestions'),
+  MFE_ETHIC_URL: remoteEntryUrlFor('ethic'),
+  VITE_MFE_ETHIC_URL: remoteEntryUrlFor('ethic'),
   VITE_SHELL_ENABLE_ACCESS_REMOTE: '1',
   SHELL_ENABLE_ACCESS_REMOTE: '1',
   VITE_SHELL_ENABLE_AUDIT_REMOTE: '1',
@@ -208,12 +215,13 @@ const shellEnv = {
   SHELL_ENABLE_USERS_REMOTE: '1',
   VITE_SHELL_ENABLE_REPORTING_REMOTE: '1',
   SHELL_ENABLE_REPORTING_REMOTE: '1',
-  VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE: '0',
-  SHELL_ENABLE_SUGGESTIONS_REMOTE: '0',
-  VITE_SHELL_ENABLE_ETHIC_REMOTE: '0',
-  SHELL_ENABLE_ETHIC_REMOTE: '0',
-  VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '0',
-  SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '0',
+  // Faz 19 fix: disable → enable (3 MFE)
+  VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE: '1',
+  SHELL_ENABLE_SUGGESTIONS_REMOTE: '1',
+  VITE_SHELL_ENABLE_ETHIC_REMOTE: '1',
+  SHELL_ENABLE_ETHIC_REMOTE: '1',
+  VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '1',
+  SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '1',
 };
 
 const shellRemoteUrl = `${publicOrigin}/remoteEntry.js`;
