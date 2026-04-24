@@ -10,11 +10,18 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(scriptDir, '..', '..');
 const outputDir = path.resolve(webRoot, 'dist/ubuntu-single-domain');
 
+// Faz 19 post-cutover: MFE remotes genişletildi
+// User bulgusu 2026-04-25: /admin/schema-explorer remoteEntry.js yüklenemedi
+// Kök sebep: build-single-domain.mjs sadece 4 MFE alıyordu (access/audit/reporting/users)
+// Shell routing 7 MFE bekliyor (+ schema-explorer + suggestions + ethic)
 const coreRemotes = [
   { app: 'mfe-access', slug: 'access' },
   { app: 'mfe-audit', slug: 'audit' },
   { app: 'mfe-reporting', slug: 'reporting' },
   { app: 'mfe-users', slug: 'users' },
+  { app: 'mfe-schema-explorer', slug: 'schema-explorer' },
+  { app: 'mfe-suggestions', slug: 'suggestions' },
+  { app: 'mfe-ethic', slug: 'ethic' },
 ];
 
 function trimTrailingSlash(value) {
