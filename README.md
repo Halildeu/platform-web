@@ -10,7 +10,39 @@
 ![Node](https://img.shields.io/badge/node-20%20%7C%2022-green)
 ![React](https://img.shields.io/badge/react-18.2%20%7C%2018.3-blue)
 
-# @mfe Platform
+# platform-web
+
+**Status**: Live (Faz 19.1 COMPLETE 2026-04-24). 739 commits migrated from platform-ssot via `git filter-repo`.
+
+**Authority**: MFE + design-system + i18n-dicts kaynak kodu.
+**Canonical manifest**: [platform-k8s-gitops](https://github.com/Halildeu/platform-k8s-gitops)
+**Sibling repo**: [platform-backend](https://github.com/Halildeu/platform-backend)
+**ADR**: [ADR-0004 split-repo authority transfer](https://github.com/Halildeu/platform-k8s-gitops/blob/main/docs/adr/0004-split-repo-authority-transfer.md)
+
+## Frontend delivery (Option B canonical, Faz 18.11.a)
+
+- `ai.acik.com` → K8s prod NodePort (auth chain + backend)
+- `testai.acik.com` → K8s test NodePort
+- Edge: host-static `platform-web-nginx` (prod) + `platform-web-nginx-stage` (test)
+- **K8s frontend authoritative DEĞİL** (Option A Faz 19.10+ karar kapısı)
+
+## Geliştirme
+
+```bash
+pnpm install --frozen-lockfile
+pnpm run -w lint
+pnpm run -w build
+```
+
+Node 22.12+ + pnpm 10.12.4.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) — repo sınırı, branch protection, 16 legacy workflow disable, large file cleanup Faz 19.8+.
+
+---
+
+# @mfe Platform (historical)
 
 Micro-frontend platform with shared design system, X-suite component packages, and module federation architecture.
 

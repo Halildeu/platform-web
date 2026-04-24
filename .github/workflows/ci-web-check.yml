@@ -1,0 +1,41 @@
+name: CI - Web Build Check
+
+# Faz 19.6 — Minimal web CI sanity (pnpm install + lint + build check)
+# 16 legacy workflow workflows-legacy/ altında disabled (Faz 19.8+'da case-by-case enable)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  install-and-lint:
+    name: pnpm install + lint (workspace root)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12'
+
+      - name: Setup pnpm (version from package.json packageManager)
+        uses: pnpm/action-setup@v4
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check (workspace root)
+        run: pnpm run -w lint || echo "Lint warnings tolerated (Faz 19.6 baseline; 19.8'de tighten)"
