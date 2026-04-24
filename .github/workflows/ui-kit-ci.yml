@@ -45,7 +45,7 @@ jobs:
           path: coverage/
       - name: Upload coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: design-system
@@ -53,7 +53,7 @@ jobs:
           fail_ci_if_error: false
       - name: Upload x-suite coverage
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: x-suite
