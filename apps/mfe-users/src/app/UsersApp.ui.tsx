@@ -5,6 +5,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query';
+import { logUnexpected } from '@mfe/shared-http';
 import UsersPage from '../pages/users/UsersPage.ui';
 
 const createStandaloneStore = () =>
@@ -35,9 +36,10 @@ class UsersAppErrorBoundary extends React.Component<{ children: React.ReactNode 
   }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[UsersApp] Unhandled error yakalandı', error, info.componentStack);
-    }
+    // ErrorBoundary catch — gerçek bug sinyali, prod'da telemetry'e
+    logUnexpected('UsersApp.errorBoundary', error, {
+      componentStack: info.componentStack ?? undefined,
+    });
   }
 
   render() {

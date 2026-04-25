@@ -1,4 +1,4 @@
-import { api, registerAuthTokenResolver } from '@mfe/shared-http';
+import { api, registerAuthTokenResolver, logExpected } from '@mfe/shared-http';
 import type { ApiInstance } from '@mfe/shared-http';
 import type { ShellNotificationEntry, ShellTelemetryEvent } from 'mfe_shell/services';
 
@@ -53,7 +53,8 @@ export const configureShellServices = (services: Partial<RemoteShellServices>): 
 export const getShellServices = (): RemoteShellServices => {
   if (!currentServices) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('[mfe-users] Shell servisleri henüz konfigüre edilmedi; noop kullanılacak.');
+      // Expected: standalone dev (mfe-users tek başına, shell host değil) — noop fallback
+      logExpected('shellServices.getShellServices', undefined, { reason: 'standalone-dev-noop' });
       return fallbackServices;
     }
     throw new Error('[mfe-users] Shell servisleri konfigüre edilmedi.');

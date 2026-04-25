@@ -18,6 +18,7 @@ const EntityGridTemplate = React.lazy(() =>
   import('@mfe/design-system').then((m) => ({ default: m.EntityGridTemplate })),
 );
 import type { UserSummary, UserModuleAccessLevel } from '@mfe/shared-types';
+import { logExpected, logUnexpected } from '@mfe/shared-http';
 import { Badge, Button, Empty, useDownloadWithProgress, type BadgeTone } from '@mfe/design-system';
 import UserActions from './UserActions.ui';
 import { fetchUsers } from '../../../entities/user/api/users.api';
@@ -407,9 +408,8 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           paramsWithCallbacks.successCallback(items, total);
           return;
         }
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[UsersGrid] SSRM success handler not found');
-        }
+        // Expected: SSRM API surface bazı versiyonlarda farklı isimlendirme — handler yoksa noop
+        logExpected('UsersGrid.ssrmSuccess', undefined, { reason: 'handler-not-found' });
       };
       const ssrmFailFor = (p: IServerSideGetRowsParams<UserSummary>) => {
         const paramsWithCallbacks = p as ServerSideParamsWithCallbacks;
@@ -421,9 +421,8 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           paramsWithCallbacks.failCallback();
           return;
         }
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[UsersGrid] SSRM fail handler not found');
-        }
+        // Expected: SSRM API surface bazı versiyonlarda farklı isimlendirme — handler yoksa noop
+        logExpected('UsersGrid.ssrmFail', undefined, { reason: 'handler-not-found' });
       };
 
       return {
@@ -527,9 +526,9 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             const batch = inFlight.get(key) ?? [];
             batch.forEach((p) => ssrmSuccessFor(p, items, total));
           } catch (error: unknown) {
-            if (process.env.NODE_ENV !== 'production') {
-              console.error('Kullanıcılar yüklenirken hata oluştu', error);
-            }
+            // Unexpected: API client genelde error throw etmiyor (controlled access fallback);
+            // buraya gelirse network/programatic — telemetry'e
+            logUnexpected('UsersGrid.serverGetRows', error);
             setGridState('network-error');
             debugLog('server:getRows:error', requestLabel, error);
             notifyOnce('network-error', 'error', error instanceof Error ? error.message : 'Kullanıcılar yüklenirken hata oluştu.');
@@ -592,9 +591,8 @@ const UsersGrid: React.FC<UsersGridProps> = ({
       setGridState('idle');
       setClientRows(response.items ?? []);
     } catch (error: unknown) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error('Kullanıcılar yüklenirken hata oluştu (client mode)', error);
-      }
+      // Unexpected: client mode'da API throw — controlled fallback bypass durumu
+      logUnexpected('UsersGrid.loadClientData', error);
       setGridState('network-error');
       notifyOnce('network-error', 'error', error instanceof Error ? error.message : 'Kullanıcı verileri yüklenemedi.');
     } finally {
