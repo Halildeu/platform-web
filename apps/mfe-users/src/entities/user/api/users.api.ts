@@ -1,5 +1,5 @@
 import { AxiosError, isAxiosError } from 'axios';
-import { api, getGatewayBaseUrl } from '@mfe/shared-http';
+import { api, getGatewayBaseUrl, logExpected, logUnexpected } from '@mfe/shared-http';
 import type { ApiInstance } from '@mfe/shared-http';
 import { PaginatedResponse, UserDetail, UserSummary } from '@mfe/shared-types';
 import type { UserModuleAccessLevel, UserModulePermission } from '@mfe/shared-types';
@@ -547,7 +547,8 @@ const getStoredScope = (): RequestScope => {
     }
     return parsed as RequestScope;
   } catch (error: unknown) {
-    console.warn('Scope bilgisi çözümlenemedi', error);
+    // Expected: localStorage parse hatası (eski format / corrupt JSON) → boş scope ile devam
+    logExpected('usersApi.getStoredScope', error, { reason: 'localStorage-parse' });
     return {};
   }
 };
@@ -606,8 +607,12 @@ const parseErrorResponse = async (
 };
 
 const reportError = (context: string, parsed: ParsedError) => {
-  const traceInfo = parsed.traceId ? ` traceId=${parsed.traceId}` : '';
-  console.warn(`[usersApi] ${context} hata: ${parsed.message}${traceInfo}`, parsed.fieldErrors);
+  // Backend'den gelen yapısal hata response'u — kullanıcıya gösterilen mesaj zaten toaster'da olacak,
+  // burası sadece DEV troubleshooting için. Prod'da telemetry'e gidiyor.
+  logUnexpected(`usersApi.${context}`, parsed.message, {
+    traceId: parsed.traceId,
+    fieldErrors: parsed.fieldErrors,
+  });
 };
 
 const buildQueryString = (params: UsersQueryParams) => {
@@ -651,7 +656,8 @@ const mergeHeaders = (scope?: RequestScope) => {
       }
     }
   } catch (error: unknown) {
-    console.warn('Internal API anahtarı okunamadı', error);
+    // Expected: localStorage / SSR access yokluğu → header'sız devam
+    logExpected('usersApi.mergeHeaders', error, { reason: 'localStorage-access' });
   }
   return headers;
 };
@@ -986,7 +992,8 @@ export const fetchUsers = async (
     if (isAxiosError(error)) {
       const status = error.response?.status ?? 0;
       if (!error.response) {
-        console.warn('[usersApi] Kullanıcı listesi alınamadı, bağlantı hatası.', error);
+        // Expected: network/connect error → boş response + reason
+        logExpected('usersApi.list', error, { reason: 'network-error', status: 0 });
         return Object.assign(buildEmptyUsersResponse(params), {
           meta: { reason: 'network-error' as const },
         });
@@ -996,9 +1003,8 @@ export const fetchUsers = async (
           status === 403 && isProfileMissingPayload(error.response?.data)
             ? ('profile-missing' as const)
             : ('unauthorized' as const);
-        console.warn(
-          '[usersApi] Kullanıcı listesi yetkisiz döndü. Boş sonuç ile devam ediliyor.',
-        );
+        // Expected: 401/403 → controlled access fallback (toast suppress)
+        logExpected('usersApi.list', undefined, { reason, status });
         return Object.assign(buildEmptyUsersResponse(params), {
           meta: { reason },
         });
@@ -1147,7 +1153,11 @@ export const fetchUserDetail = async (
     if (isAxiosError(error)) {
       const status = error.response?.status ?? 0;
       if (!error.response || UNAUTHORIZED_STATUS.has(status)) {
-        console.warn('[usersApi] Kullanıcı detayı alınamadı, demo veri döndürülüyor.', error);
+        // Expected: 401/403/network → demo veri ile devam (UX kesintisiz)
+        logExpected('usersApi.detail', error, {
+          reason: !error.response ? 'network-error' : 'unauthorized',
+          status,
+        });
         return buildFallbackUserDetail(user);
       }
       const parsed = await parseErrorResponse(error);
@@ -1171,11 +1181,16 @@ export const fetchUserDetail = async (
   } catch (error: unknown) {
     if (isAxiosError(error)) {
       const status = error.response?.status ?? 0;
-      if (!UNAUTHORIZED_STATUS.has(status)) {
-        console.warn('[usersApi] Yetki listesi alınamadı, boş devam ediliyor.', error);
+      if (UNAUTHORIZED_STATUS.has(status)) {
+        // Expected: 401/403 → boş yetki listesi ile devam
+        logExpected('usersApi.permissions', undefined, { reason: 'unauthorized', status });
+      } else {
+        // Unexpected: 5xx ya da bilinmeyen status → telemetry'e
+        logUnexpected('usersApi.permissions', error, { status });
       }
     } else {
-      console.warn('[usersApi] Yetki listesi alınamadı, boş devam ediliyor.', error);
+      // Unexpected: axios dışı hata (programatic)
+      logUnexpected('usersApi.permissions', error);
     }
   }
 
