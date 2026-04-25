@@ -32,7 +32,28 @@ const sharedCore = {
 };
 const sharedProdOnly = {};
 
+/* 2026-04-25 Faz 19.MSSQL.K — Build-time env-driven mfe_shell remote URL.
+ * Önceki hardcoded 'http://localhost:3000/remoteEntry.js' → tarayıcı runtime'da
+ * single-domain build'inde net::ERR_CONNECTION_REFUSED veriyordu (çünkü prod'da
+ * localhost:3000 yok, mfe-shell aynı origin'de /remoteEntry.js).
+ * Pattern: mfe-reporting + mfe-users ile aynı (env-driven via build-single-domain.mjs).
+ */
+function readEnvString(keys: string[], fallback: string): string {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value !== 'string') continue;
+    const normalized = value.trim();
+    if (normalized.length > 0) return normalized;
+  }
+  return fallback;
+}
+
 export default defineConfig(({ mode }) => {
+  const shellRemoteEntry = readEnvString(
+    ['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'],
+    'http://localhost:3000/remoteEntry.js',
+  );
+
   return {
     plugins: [
       react(),
@@ -41,7 +62,7 @@ export default defineConfig(({ mode }) => {
         filename: 'remoteEntry.js',
         dts: false,
         remotes: {
-          mfe_shell: { type: 'module', name: 'mfe_shell', entry: 'http://localhost:3000/remoteEntry.js' },
+          mfe_shell: { type: 'module', name: 'mfe_shell', entry: shellRemoteEntry },
         },
         exposes: {
           './SchemaExplorerApp': './src/App.tsx',
