@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { api, type ApiInstance } from '@mfe/shared-http';
+import { api, logUnexpected, type ApiInstance } from '@mfe/shared-http';
 import type { AccessLevel, AccessModulePolicy, AccessRole } from '../../../features/access-management/model/access.types';
 import { getShellServices } from '../../../app/services/shell-services';
 import { mockAccessRoles } from '../../../features/access-management/lib/mock-data';
@@ -44,9 +44,12 @@ const parseError = (err: unknown): never => {
     const data = res.response?.data;
     const msg = data?.message || data?.error || err.message || 'İstek başarısız';
     const traceId = data?.meta?.traceId;
-    if (traceId) {
-      console.warn(`[roles.api] traceId=${traceId} message=${msg}`, data?.fieldErrors);
-    }
+    // Backend'den gelen yapısal hata — telemetry'e (UI'da toast zaten gösterecek)
+    logUnexpected('roles.api.parseError', msg, {
+      traceId,
+      status: res.response?.status,
+      fieldErrors: data?.fieldErrors,
+    });
     throw new Error(msg);
   }
   throw err;

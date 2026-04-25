@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { api, type ApiInstance } from '@mfe/shared-http';
+import { api, logUnexpected, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../../app/services/shell-services';
 
 export type PermissionDto = {
@@ -25,9 +25,11 @@ const parseError = (err: unknown) => {
     const res = err as AxiosError<ErrorResponse>;
     const msg = res.response?.data?.message || res.response?.data?.error || err.message || 'İstek başarısız';
     const traceId = res.response?.data?.meta?.traceId;
-    if (traceId) {
-      console.warn(`[permissions.api] traceId=${traceId} message=${msg}`);
-    }
+    // Backend'den gelen yapısal hata — telemetry'e (UI'da toast zaten gösterecek)
+    logUnexpected('permissions.api.parseError', msg, {
+      traceId,
+      status: res.response?.status,
+    });
     throw new Error(msg);
   }
   throw err;

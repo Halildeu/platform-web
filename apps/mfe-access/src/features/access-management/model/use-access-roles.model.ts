@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { logExpected, logUnexpected } from '@mfe/shared-http';
 import type { AccessFilters, AccessLevel, AccessModulePolicy, AccessRole } from './access.types';
 import {
   getRoles,
@@ -76,7 +77,8 @@ export const useAccessRoles = (filters: AccessFilters) => {
       return;
     }
     if (rolesQuery.status === 'error') {
-      if (process.env.NODE_ENV !== 'production') console.warn('[useAccessRoles] Role listesi alınamadı.', rolesQuery.error);
+      // Expected: API hatası gösterimi UI tarafında (error state component'i) — DEV'de görünür kalsın
+      logExpected('useAccessRoles.list', rolesQuery.error, { reason: 'query-error-state' });
       /* Error state — let component render error UI instead of silent mock */
     }
   }, [rolesQuery.data, rolesQuery.error, rolesQuery.status]);
@@ -86,7 +88,8 @@ export const useAccessRoles = (filters: AccessFilters) => {
       try {
         return await queryClient.ensureQueryData(['role', id], () => getRole(id));
       } catch (error: unknown) {
-        if (process.env.NODE_ENV !== 'production') console.warn('[useAccessRoles] Role detayı alınamadı.', error);
+        // Expected: ensureQueryData throw'u React Query error state'e propagate olur
+        logExpected('useAccessRoles.detail', error, { reason: 'query-fallback-rethrow' });
         throw error; /* Propagate to React Query error state */
       }
     },
@@ -175,7 +178,8 @@ export const useAccessRoles = (filters: AccessFilters) => {
         await queryClient.invalidateQueries({ queryKey: ['roles'] });
         return { role: cloned.role, auditId: cloned.auditId ?? cloned.role.id };
       } catch (error: unknown) {
-        console.warn('[useAccessRoles] Role klonlama başarısız, mock fallback.', error);
+        // Unexpected: mock fallback'e düşmemiz lazım, ama API hata sinyali telemetry'e
+        logUnexpected('useAccessRoles.clone', error, { sourceRoleId: payload.sourceRoleId });
         const source = data.find((role) => role.id === payload.sourceRoleId);
         if (!source) {
           throw new Error(`Rol bulunamadı: ${payload.sourceRoleId}`);
