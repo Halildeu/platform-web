@@ -3,6 +3,22 @@
 
 import React from 'react';
 
+// 2026-04-25 Faz 19.11: Production console.warn suppress (Codex AGREE 019dc1ee)
+// User bulgusu: tarayıcı F12'de yaratıcı console.warn spam'i (190 call site, 7 MFE).
+// Pattern: API 401/403/network/parse fallback expected akışta console.warn.
+// Strateji: Expected error'ları prod'da silent (Sentry zaten unexpected'leri yakalıyor).
+// Migration path: packages/shared-http/apiLogger.ts (logExpected/logUnexpected helper).
+// Bu shell-wide guard tüm MFE'lere yansır (module federation host).
+if (typeof window !== 'undefined' && import.meta.env.PROD) {
+  // eslint-disable-next-line no-console
+  console.warn = () => {
+    /* prod silent — expected fallback'ler için. Unexpected error'lar console.error + Sentry. */
+  };
+  // console.debug debug-only, prod'da gereksiz
+  // eslint-disable-next-line no-console
+  console.debug = () => {};
+}
+
 // Inject build-time env vars into window.__env__ so that
 // design-system (separate chunk) can read them at runtime.
 // Vite's define config replaces process.env with a JSON object.

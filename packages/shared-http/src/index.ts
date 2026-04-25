@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 export * from './telemetryClient';
+export * from './apiLogger';
 
 type AuthMode = 'keycloak' | 'permitAll';
 
