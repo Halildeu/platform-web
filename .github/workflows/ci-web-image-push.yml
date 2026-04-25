@@ -34,13 +34,18 @@ jobs:
             kc_url: https://ai.acik.com
             kc_realm: serban
             origin: https://ai.acik.com
-            gateway: https://ai.acik.com
+            # 2026-04-25 Faz 19.MSSQL.O: gateway URL'ye /api suffix eklendi.
+            # Önceki: https://ai.acik.com → AuthBootstrapper api.get('/v1/authz/me')
+            # → https://ai.acik.com/v1/authz/me (404 → SPA fallback HTML → JSON parse fail
+            # → permissions: [] → header'da modüller görünmüyor "henüz hiçbir rol atanmamış").
+            # Doğru: https://ai.acik.com/api → resolve = /api/v1/authz/me → backend OK.
+            gateway: https://ai.acik.com/api
           - variant: testai
             image_name: platform-web-frontend-testai
             kc_url: https://testai.acik.com
             kc_realm: platform-test
             origin: https://testai.acik.com
-            gateway: https://testai.acik.com
+            gateway: https://testai.acik.com/api
 
     steps:
       - name: Checkout

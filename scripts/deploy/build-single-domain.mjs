@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -258,6 +258,32 @@ for (const remote of coreRemotes) {
   }
   copyDirContents(sourceDir, path.join(outputDir, 'remotes', remote.slug));
 }
+
+/* 2026-04-25 Faz 19.MSSQL.O: MFE asset merge to root /assets/
+ * Vite Module Federation child build CSS/JS preload absolute path `/assets/...`
+ * generates (relative `./assets/` desteklenmiyor MF v2 virtual_mf pattern'inde).
+ * Tarayıcı runtime: GET /assets/App-XXX.css → 404 (dosya /remotes/<slug>/assets/'da)
+ * → "Unable to preload CSS" → React tree çökmesi.
+ * Fix: her remote'un assets dosyalarını root /assets/'a kopyala (dest hardlink yok,
+ *      build output relative kalır). Çakışma olursa shell asset'leri öncelikli (zaten
+ *      root /assets/'da olur copyDirContents ile shell-first).
+ */
+const rootAssetsDir = path.join(outputDir, 'assets');
+ensureDir(rootAssetsDir);
+let mergedCount = 0;
+for (const remote of coreRemotes) {
+  const remoteAssetsDir = path.join(outputDir, 'remotes', remote.slug, 'assets');
+  if (!existsSync(remoteAssetsDir)) continue;
+  for (const file of readdirSync(remoteAssetsDir)) {
+    const src = path.join(remoteAssetsDir, file);
+    const dest = path.join(rootAssetsDir, file);
+    if (!existsSync(dest)) {
+      copyFileSync(src, dest);
+      mergedCount += 1;
+    }
+  }
+}
+console.log(`[ubuntu] merged ${mergedCount} MFE asset files to root /assets/`);
 
 writeManifest(publicOrigin, coreRemotes);
 
