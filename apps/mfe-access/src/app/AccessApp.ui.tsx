@@ -1,5 +1,6 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { logUnexpected } from '@mfe/shared-http';
 import RolesPage from '../pages/roles/RolesPage.ui';
 
 /**
@@ -27,9 +28,10 @@ class AccessAppErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[AccessApp] Unhandled error yakalandı', error, info.componentStack);
-    }
+    // ErrorBoundary catch — gerçek bug sinyali, prod'da telemetry'e
+    logUnexpected('AccessApp.errorBoundary', error, {
+      componentStack: info.componentStack ?? undefined,
+    });
   }
 
   render() {

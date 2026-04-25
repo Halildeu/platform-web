@@ -3,6 +3,7 @@ import {
   registerAuthTokenResolver,
   registerTraceIdResolver,
   registerUnauthorizedHandler,
+  logExpected,
 } from '@mfe/shared-http';
 import type { ApiInstance } from '@mfe/shared-http';
 import type { ShellNotificationEntry, ShellTelemetryEvent } from 'mfe_shell/services';
@@ -66,7 +67,8 @@ export const configureShellServices = (services: Partial<RemoteShellServices>): 
 export const getShellServices = (): RemoteShellServices => {
   if (!currentServices) {
     if (isRuntimeDev()) {
-      console.warn('[mfe-access] Shell servisleri henüz konfigüre edilmedi; noop kullanılacak.');
+      // Expected: standalone dev (mfe-access tek başına, shell host değil) — noop fallback
+      logExpected('shellServices.getShellServices', undefined, { reason: 'standalone-dev-noop' });
       return fallbackServices;
     }
     throw new Error('[mfe-access] Shell servisleri konfigüre edilmedi.');
