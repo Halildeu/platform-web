@@ -2,6 +2,7 @@
 // AG Grid setup delegated to @mfe/design-system (single owner)
 
 import React from 'react';
+import { initRuntimeErrorMonitor } from './telemetry/runtime-error-monitor';
 
 // 2026-04-25 Faz 19.11: Production console.warn suppress (Codex AGREE 019dc1ee)
 // User bulgusu: tarayıcı F12'de yaratıcı console.warn spam'i (190 call site, 7 MFE).
@@ -49,6 +50,11 @@ initOtel();
 // Feature flags: runtime kill switches for safe rollout
 import { initFeatureFlags } from '../lib/feature-flags';
 initFeatureFlags();
+
+// Runtime browser error capture: early window errors + console.error +
+// unhandled promise rejections are collected into a shell buffer and
+// forwarded to shell telemetry when possible.
+initRuntimeErrorMonitor();
 
 // Quiet-green: suppress known non-actionable console noise in development
 if (process.env.NODE_ENV === 'development') {
