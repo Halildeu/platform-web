@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
 import RolesPage from '../pages/roles/RolesPage.ui';
+import DataAccessPage from '../pages/data-access/DataAccessPage.ui';
 
 /**
  * AccessApp — MF remote entry component.
@@ -70,6 +71,7 @@ const AccessApp: React.FC = () => {
       <AccessAppErrorBoundary>
         <Routes>
           <Route path="roles" element={<RolesPage />} />
+          <Route path="data-access" element={<DataAccessPage />} />
           <Route path="*" element={<Navigate to="roles" replace />} />
         </Routes>
       </AccessAppErrorBoundary>
