@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "1.0.0",
-  "description": "MFE K\u00f6k Dizini",
+  "description": "MFE Kök Dizini",
   "private": true,
   "engines": {
     "node": ">=22.12"
@@ -230,6 +230,8 @@
   "devDependencies": {
     "@axe-core/cli": "^4.8.2",
     "@axe-core/playwright": "^4.11.1",
+    "@commitlint/cli": "^20.5.2",
+    "@commitlint/config-conventional": "^20.5.0",
     "@eslint/css": "^1.1.0",
     "@eslint/js": "^9.39.1",
     "@lhci/cli": "^0.15.1",
@@ -261,6 +263,7 @@
     "eslint": "^9.39.1",
     "globals": "^17.5.0",
     "kill-port": "^2.0.1",
+    "lint-staged": "^16.4.0",
     "npm-run-all": "^4.1.5",
     "postcss": "^8.5.9",
     "prettier": "^3.8.2",

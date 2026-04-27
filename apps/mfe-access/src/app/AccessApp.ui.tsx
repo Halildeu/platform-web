@@ -1,7 +1,9 @@
 import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
 import RolesPage from '../pages/roles/RolesPage.ui';
+import DataAccessPage from '../pages/data-access/DataAccessPage.ui';
 
 /**
  * AccessApp — MF remote entry component.
@@ -48,9 +50,11 @@ class AccessAppErrorBoundary extends React.Component<
 }
 
 const AccessApp: React.FC = () => {
-  const shellQueryClient = (typeof window !== 'undefined'
-    ? (window as Record<string, unknown>).__SHELL_QUERY_CLIENT__
-    : undefined) as QueryClient | undefined;
+  const shellQueryClient = (
+    typeof window !== 'undefined'
+      ? (window as Record<string, unknown>).__SHELL_QUERY_CLIENT__
+      : undefined
+  ) as QueryClient | undefined;
 
   const queryClientRef = React.useRef<QueryClient>();
   if (!shellQueryClient && !queryClientRef.current) {
@@ -65,7 +69,11 @@ const AccessApp: React.FC = () => {
   return (
     <QueryClientProvider client={effectiveQueryClient}>
       <AccessAppErrorBoundary>
-        <RolesPage />
+        <Routes>
+          <Route path="roles" element={<RolesPage />} />
+          <Route path="data-access" element={<DataAccessPage />} />
+          <Route path="*" element={<Navigate to="roles" replace />} />
+        </Routes>
       </AccessAppErrorBoundary>
     </QueryClientProvider>
   );
