@@ -15,6 +15,7 @@ import ProjectsTab from './tabs/ProjectsTab';
 import DepotsTab from './tabs/DepotsTab';
 import BranchesTab from './tabs/BranchesTab';
 import AssignmentsTab from './tabs/AssignmentsTab';
+import ScopeAssignModal from '../../widgets/scope-assign-modal/ScopeAssignModal';
 
 const DataAccessPage: React.FC = () => {
   const { t, ready } = useDataAccessI18n();
@@ -76,28 +77,33 @@ const DataAccessPage: React.FC = () => {
   const pageTitle = t('dataAccess.layout.title');
   const pageDescription = t('dataAccess.layout.description');
 
-  // assignTarget state is reserved for the ScopeAssignModal hookup that
-  // ships in PR-E/4. Suppress the unused-state lint until then.
-  void assignTarget;
-
   return (
-    <PageLayout
-      {...pageLayoutPreset}
-      title={<HoverDescription description={pageDescription}>{pageTitle}</HoverDescription>}
-      description={undefined}
-      classes={{
-        header: '!px-6 !rounded-2xl !border !border-border-subtle shadow-sm !overflow-visible',
-      }}
-      breadcrumbItems={breadcrumbs}
-      contentClassName="!px-0 !py-4"
-    >
-      <div
-        className="overflow-hidden !rounded-2xl border border-border-subtle bg-surface-default shadow-sm"
-        data-testid="access-data-access-page"
+    <>
+      <PageLayout
+        {...pageLayoutPreset}
+        title={<HoverDescription description={pageDescription}>{pageTitle}</HoverDescription>}
+        description={undefined}
+        classes={{
+          header: '!px-6 !rounded-2xl !border !border-border-subtle shadow-sm !overflow-visible',
+        }}
+        breadcrumbItems={breadcrumbs}
+        contentClassName="!px-0 !py-4"
       >
-        <Tabs items={items} defaultActiveKey="companies" variant="line" />
-      </div>
-    </PageLayout>
+        <div
+          className="overflow-hidden !rounded-2xl border border-border-subtle bg-surface-default shadow-sm"
+          data-testid="access-data-access-page"
+        >
+          <Tabs items={items} defaultActiveKey="companies" variant="line" />
+        </div>
+      </PageLayout>
+
+      <ScopeAssignModal
+        open={assignTarget !== null}
+        initialKind={assignTarget}
+        onClose={() => setAssignTarget(null)}
+        t={t}
+      />
+    </>
   );
 };
 
