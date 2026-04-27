@@ -1,13 +1,10 @@
-import React, { Suspense, useMemo } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import { useAppSelector } from "../store/store.hooks";
-import { isPermitAllMode } from "../auth/auth-config";
-import { ProtectedRoute } from "../guards/ProtectedRoute";
-import {
-  isEthicRemoteEnabled,
-  isSuggestionsRemoteEnabled,
-} from "../shell-navigation";
-import { useShellCommonI18n } from "../i18n";
+import React, { Suspense } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAppSelector } from '../store/store.hooks';
+import { isPermitAllMode } from '../auth/auth-config';
+import { ProtectedRoute } from '../guards/ProtectedRoute';
+import { isEthicRemoteEnabled, isSuggestionsRemoteEnabled } from '../shell-navigation';
+import { useShellCommonI18n } from '../i18n';
 import {
   SuggestionsApp,
   EthicApp,
@@ -15,36 +12,44 @@ import {
   AuditModule,
   UsersModule,
   SchemaExplorerModule,
-} from "./lazy-routes";
-import { ReportingLayout } from "../../pages/admin/reports/ReportingLayout";
-const ReportBuilderWizard = React.lazy(() => import("../../pages/admin/reports/builder/ReportBuilderWizard").then(m => ({ default: m.ReportBuilderWizard })));
-const DashboardBuilder = React.lazy(() => import("../../pages/admin/reports/dashboard-builder/DashboardBuilder").then(m => ({ default: m.DashboardBuilder })));
-const ReportEditorRoute = React.lazy(() => import("../../pages/admin/reports/builder/ReportEditor").then(m => ({ default: m.ReportEditorRoute })));
+} from './lazy-routes';
+import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
+const ReportBuilderWizard = React.lazy(() =>
+  import('../../pages/admin/reports/builder/ReportBuilderWizard').then((m) => ({
+    default: m.ReportBuilderWizard,
+  })),
+);
+const DashboardBuilder = React.lazy(() =>
+  import('../../pages/admin/reports/dashboard-builder/DashboardBuilder').then((m) => ({
+    default: m.DashboardBuilder,
+  })),
+);
+const ReportEditorRoute = React.lazy(() =>
+  import('../../pages/admin/reports/builder/ReportEditor').then((m) => ({
+    default: m.ReportEditorRoute,
+  })),
+);
 
 /* ---- Page imports ---- */
-import { LoginPage } from "../../pages/login";
-import { RegisterPage } from "../../pages/register";
-import { UnauthorizedPage } from "../../pages/unauthorized";
-import ThemeMatrixPage from "../../pages/runtime/ThemeMatrixPage";
-import { HomePage } from "../../pages/home/HomePage";
-import ThemeAdminPage from "../../pages/admin/ThemeAdminPage";
-import DesignLabPage from "../../pages/admin/DesignLabPage";
-import { DesignLabRoutes } from "../../pages/admin/design-lab/DesignLabRoutes";
+import { LoginPage } from '../../pages/login';
+import { RegisterPage } from '../../pages/register';
+import { UnauthorizedPage } from '../../pages/unauthorized';
+import ThemeMatrixPage from '../../pages/runtime/ThemeMatrixPage';
+import { HomePage } from '../../pages/home/HomePage';
+import ThemeAdminPage from '../../pages/admin/ThemeAdminPage';
+import DesignLabPage from '../../pages/admin/DesignLabPage';
+import { DesignLabRoutes } from '../../pages/admin/design-lab/DesignLabRoutes';
 
-const XSuiteDashboardPage = React.lazy(
-  () => import("../../pages/admin/XSuiteDashboardPage"),
-);
+const XSuiteDashboardPage = React.lazy(() => import('../../pages/admin/XSuiteDashboardPage'));
 const ServiceControlPage = React.lazy(
-  () => import("../../pages/admin/service-control/ServiceControlPage"),
+  () => import('../../pages/admin/service-control/ServiceControlPage'),
 );
 
 /* ------------------------------------------------------------------ */
 /*  AppRouter — All application routes                                 */
 /* ------------------------------------------------------------------ */
 
-const AuthTraceRoute: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const AuthTraceRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Dev-only auth state logging
   return <>{children}</>;
 };
@@ -60,7 +65,7 @@ export const AppRouter: React.FC = () => {
   const defaultShellPath = '/home';
 
   return (
-    <Suspense fallback={<div>{t("shell.header.suspenseLoading")}</div>}>
+    <Suspense fallback={<div>{t('shell.header.suspenseLoading')}</div>}>
       <Routes>
         <Route
           path="/suggestions"
@@ -87,14 +92,13 @@ export const AppRouter: React.FC = () => {
           }
         />
         <Route
-          path="/access/roles"
+          path="/access/*"
           element={
             <ProtectedRoute requiredModule="ACCESS">
               <AccessModule />
             </ProtectedRoute>
           }
         />
-        <Route path="/access" element={<Navigate to="/access/roles" replace />} />
         <Route
           path="/audit/events"
           element={
@@ -107,7 +111,13 @@ export const AppRouter: React.FC = () => {
           path="/admin/reports/builder"
           element={
             <ProtectedRoute requiredModule="REPORT">
-              <Suspense fallback={<div className="flex justify-center py-16"><span className="inline-flex h-6 w-6 animate-spin rounded-full border-2 border-border-subtle border-t-action-primary" /></div>}>
+              <Suspense
+                fallback={
+                  <div className="flex justify-center py-16">
+                    <span className="inline-flex h-6 w-6 animate-spin rounded-full border-2 border-border-subtle border-t-action-primary" />
+                  </div>
+                }
+              >
                 <ReportBuilderWizard />
               </Suspense>
             </ProtectedRoute>
@@ -117,7 +127,13 @@ export const AppRouter: React.FC = () => {
           path="/admin/reports/builder/dashboard"
           element={
             <ProtectedRoute requiredModule="REPORT">
-              <Suspense fallback={<div className="flex justify-center py-16"><span className="inline-flex h-6 w-6 animate-spin rounded-full border-2 border-border-subtle border-t-action-primary" /></div>}>
+              <Suspense
+                fallback={
+                  <div className="flex justify-center py-16">
+                    <span className="inline-flex h-6 w-6 animate-spin rounded-full border-2 border-border-subtle border-t-action-primary" />
+                  </div>
+                }
+              >
                 <DashboardBuilder />
               </Suspense>
             </ProtectedRoute>
@@ -127,7 +143,13 @@ export const AppRouter: React.FC = () => {
           path="/admin/reports/builder/edit/:reportKey"
           element={
             <ProtectedRoute requiredModule="REPORT">
-              <Suspense fallback={<div className="flex justify-center py-16"><span className="inline-flex h-6 w-6 animate-spin rounded-full border-2 border-border-subtle border-t-action-primary" /></div>}>
+              <Suspense
+                fallback={
+                  <div className="flex justify-center py-16">
+                    <span className="inline-flex h-6 w-6 animate-spin rounded-full border-2 border-border-subtle border-t-action-primary" />
+                  </div>
+                }
+              >
                 <ReportEditorRoute />
               </Suspense>
             </ProtectedRoute>
@@ -155,9 +177,7 @@ export const AppRouter: React.FC = () => {
           path="/admin/users"
           element={
             <AuthTraceRoute>
-              <ProtectedRoute
-                requiredModule="USER_MANAGEMENT"
-              >
+              <ProtectedRoute requiredModule="USER_MANAGEMENT">
                 <UsersModule />
               </ProtectedRoute>
             </AuthTraceRoute>
@@ -221,13 +241,10 @@ export const AppRouter: React.FC = () => {
           element={
             !initialized && !permitAllMode ? (
               <div className="px-6 py-10 text-sm font-medium text-text-secondary">
-                {t("auth.session.validating")}
+                {t('auth.session.validating')}
               </div>
             ) : (
-              <Navigate
-                to={token || permitAllMode ? defaultShellPath : "/login"}
-                replace
-              />
+              <Navigate to={token || permitAllMode ? defaultShellPath : '/login'} replace />
             )
           }
         />
