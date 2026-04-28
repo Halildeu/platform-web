@@ -1,26 +1,42 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 10
     labels:
-      - "dependencies"
+      - 'dependencies'
+    # K7 (2026-04-28): grouped sadece patch — minor bump'lar ayrı PR (24-update
+    # mega PR'lar tekrar oluşmasın). Major bump'lar her zaman ayrı PR.
     groups:
       dev-dependencies:
-        dependency-type: "development"
+        dependency-type: 'development'
         update-types:
-          - "minor"
-          - "patch"
+          - 'patch'
       production-dependencies:
-        dependency-type: "production"
+        dependency-type: 'production'
         update-types:
-          - "patch"
-  - package-ecosystem: "github-actions"
-    directory: "/"
+          - 'patch'
+    # K7: AG Grid + AG Charts major bump'ları ignore. Repo kuralı
+    # `.claude/rules/ag-grid.md` v34.3.1 PINNED — explicit approval şart.
+    ignore:
+      - dependency-name: 'ag-grid-community'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'ag-grid-enterprise'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'ag-grid-react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'ag-charts-community'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'ag-charts-enterprise'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'ag-charts-react'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     labels:
-      - "ci"
+      - 'ci'

@@ -215,9 +215,64 @@ K4 (Tokens)  ──→ Sprint C (F6 Docs Portal) ön-koşul
 
 - 🟡 Quality-sprint manifest M1+M2+M3 `status` ve `target_date` alanları manuel güncellenmeli (yeni hedef: 2026-05-09)
 - 🟡 chromatic.yml + audit-quality.yml + benchmark-gate + design-system-gate workflow'ları (legacy altında) — sıradaki sprint'te case-by-case değerlendir
-- 🟡 K2 (Evidence registry pipeline) — `scripts/collect-evidence.mjs` çıktısını CI'a bağla
-- 🟡 K1a — 16 D/F bileşene `*.depth.test.tsx` (en büyük kalan iş)
+- ✅ K2 (Evidence registry pipeline) — PR #37 + #39 + #40 ile tamamlandı (§12 closure)
+- ✅ K1a — ShellHeader F→B (PR #36) ile tamamlandı; taze scorer'da F=0 D=0 (§12 closure)
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi._
+## §12 Sprint K1 + K2 + K3 Closure (2026-04-28)
+
+**Bu seansda 8 PR ile K1, K2 ve K3 sprint'leri kapatıldı:**
+
+| PR  | Sprint       | Konu                                                                    |
+| --- | ------------ | ----------------------------------------------------------------------- |
+| #35 | (foundation) | docs roadmap konsolidasyon + scorecard-gate + codeql workflow           |
+| #36 | K1a          | ShellHeader F→B (54) — depth tests + a11y + displayname                 |
+| #37 | K2-1         | Evidence registry pipeline (collect-evidence + sync wrapper + workflow) |
+| #38 | K1-M2a       | A11y-gate aktif CI + manifest M1/M3 completed                           |
+| #39 | K2-2         | useEvidence helper + provenance UI (3 consumer)                         |
+| #40 | K2-3         | QualityDashboardPage direct provenance completion                       |
+| #41 | K3-1         | F5 fallback contract (16 test useAdaptiveLayout + AdaptiveForm)         |
+| #42 | K3-2         | F5 privacy audit hard gate (23 file scan, 0 violation)                  |
+
+### Sprint kapanma özeti
+
+- ✅ **K1**: Quality-sprint M1 (16→0 D/F, ShellHeader F→B) + M3 (scorecard-gate aktif) + M2 (a11y-gate aktif, 73.5% coverage)
+- ✅ **K2**: Evidence pipeline + 3 Design Lab consumer (VisualRegressionPage + SecurityPosture + QualityDashboardPage) + scorecard public sync (Truth Plane W1 hedef)
+- ✅ **K3**: PHASE F5 fallback (K3-1) + privacy audit hard gate (K3-2). 5/7 kriter ✅; v2 progressions açık (Adaptive components v2 + AI test generation hardening).
+
+### Codex MCP istişareleri
+
+`019dd2e2-...` thread, 9 iter:
+
+1. ROADMAP denetim · 2. Commit timing · 3. K1a · 4. K2-1 · 5. K1-M2a + K2-2 · 6. Sıradaki sprint · 7. K3-1 fallback · 8. K3-2 privacy · 9. K7 dependency triage
+
+Toplam ~40 verdict, hepsi AGREE/REVISE direct impl.
+
+### Aktif workflow yüzeyi 11 (önceki 6 → şimdiki 11)
+
+ci-web-check · ci-web-image-push (pre-build sync) · gate-secrets · gate-osv-scan · web-playwright-{smoke,nightly} · codeql · **scorecard-gate** · **evidence-collect** · **a11y-gate** · **privacy-audit**
+
+(Bold = bu seans aktive edildi)
+
+### PHASE F5 progress
+
+| Kriter                 | Önceki   | Şimdi               |
+| ---------------------- | -------- | ------------------- |
+| MCP tools (≥20)        | ✅ 21/20 | ✅ 21/20            |
+| CLI komutları          | ✅       | ✅                  |
+| Grounding              | ✅       | ✅                  |
+| AI test generation     | 🟡       | 🟡                  |
+| Adaptive components v2 | ⬜       | ⬜ (gelecek sprint) |
+| **Privacy**            | ⬜       | **✅ K3-2**         |
+| **Fallback**           | ⬜       | **✅ K3-1**         |
+
+### Sıradaki
+
+- **PR #43 K7** (bu doc'la birlikte): dependency triage spike (kod migration YOK)
+- **K8 (gelecek)**: ilk gerçek dependency migration — @sentry/react patch
+- **Kalan F5**: Adaptive components v2 progressions + AI test generation hardening
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 sprint K1+K2+K3 closure log eklendi._
