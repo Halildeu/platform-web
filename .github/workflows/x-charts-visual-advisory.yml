@@ -1,0 +1,58 @@
+name: x-charts Visual Advisory
+
+on:
+  pull_request:
+    paths:
+      - 'packages/x-charts/**'
+      - 'packages/design-system/src/__visual__/x-charts.visual.ts'
+      - 'packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts/**'
+      - 'packages/design-system/playwright.config.ts'
+      - '.storybook/**'
+      - '.github/workflows/x-charts-visual-advisory.yml'
+
+jobs:
+  x-charts-visual:
+    name: x-charts Visual (advisory)
+    runs-on: ubuntu-latest
+    # K5 PR — advisory mode. Failures do NOT block merge.
+    # Hard gate planned for follow-up sprint after 1-2 weeks baseline soak.
+    continue-on-error: true
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run x-charts visual baseline
+        run: |
+          pnpm exec playwright test \
+            --config packages/design-system/playwright.config.ts \
+            --project=desktop-light \
+            --grep "x-charts"
+
+      - name: Upload visual artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x-charts-visual-results
+          path: |
+            packages/design-system/src/__visual__/test-results
+            packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts
+          if-no-files-found: warn
+          retention-days: 14
