@@ -1,0 +1,62 @@
+name: Privacy Audit (F5)
+
+# K3-2 (PHASE F5 Privacy) — design-system F5 runtime yüzeyinde executable
+# external network primitive (fetch / XHR / sendBeacon / WebSocket / EventSource)
+# veya HTTP client import'u (axios / node-fetch / undici / vb.) bulunmamasını
+# garanti eder. "Zero external data transmission" invariant'i hard-block CI gate.
+#
+# Consumer callback'ler scope DIŞINDA (onSubmit/refreshAll/validate consumer
+# implementation'larına design-system kefil olamaz).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/design-system/src/mcp/**'
+      - 'packages/design-system/src/components/adaptive-form/**'
+      - 'packages/design-system/src/components/smart-dashboard/**'
+      - 'packages/design-system/src/hooks/useAdaptiveLayout.ts'
+      - 'packages/design-system/src/intelligence/**'
+      - 'packages/design-system/scripts/ci/privacy-audit.mjs'
+      - 'packages/design-system/package.json'
+      - '.github/workflows/privacy-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/design-system/src/mcp/**'
+      - 'packages/design-system/src/components/adaptive-form/**'
+      - 'packages/design-system/src/components/smart-dashboard/**'
+      - 'packages/design-system/src/hooks/useAdaptiveLayout.ts'
+      - 'packages/design-system/src/intelligence/**'
+      - 'packages/design-system/scripts/ci/privacy-audit.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-audit:
+    name: F5 Privacy — Zero External Data
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12'
+
+      # Audit script saf Node — pnpm install gerektirmiyor.
+      - name: Run privacy audit
+        run: node packages/design-system/scripts/ci/privacy-audit.mjs --ci
+
+      - name: Upload privacy-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: privacy-audit
+          path: packages/design-system/reports/privacy-audit.json
+          retention-days: 30
+          if-no-files-found: warn

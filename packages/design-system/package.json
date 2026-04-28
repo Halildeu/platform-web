@@ -178,6 +178,8 @@
     "quality:reports": "npm run scorecard:json && npm run scorecard:dashboard && npm run bundle-report && npm run changelog && npm run docs:api",
     "test:a11y-gate": "node scripts/ci/a11y-gate.mjs",
     "test:a11y-gate:ci": "node scripts/ci/a11y-gate.mjs --ci",
+    "privacy-audit": "node scripts/ci/privacy-audit.mjs",
+    "privacy-audit:ci": "node scripts/ci/privacy-audit.mjs --ci",
     "quality:release": "node scripts/ci/quality-gate.mjs",
     "quality:release:visual": "node scripts/ci/quality-gate.mjs --visual",
     "license-audit": "node scripts/ci/license-audit.mjs",
