@@ -238,7 +238,7 @@ AI-native yeteneklerle rakipleri gec. MCP v2 (20+ tool), AI-powered testing, int
 | Grounding           | Halusinasyon orani                                      | 0% (catalog-verified) | ✅                                                                               |
 | AI test generation  | Uretilen testler compile + %95+ PASS                    | ✅                    | 🟡                                                                               |
 | Adaptive components | useAdaptiveLayout + SmartDashboard v2 + AdaptiveForm v2 | ✅                    | ⬜                                                                               |
-| Privacy             | Zero external data transmission audit                   | ✅                    | ⬜                                                                               |
+| Privacy             | Zero external data transmission audit                   | ✅                    | ✅ K3-2 (privacy-audit 23 file / 0 violation + CI hard-block, 2026-04-28)        |
 | Fallback            | AI off → standard behavior testi                        | ✅                    | ✅ K3-1 (useAdaptiveLayout.fallback 7/7 + AdaptiveForm.fallback 9/9, 2026-04-28) |
 
 ### F5 Drift Guardlari (CI Gates)
