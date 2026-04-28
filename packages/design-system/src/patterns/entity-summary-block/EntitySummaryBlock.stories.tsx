@@ -8,7 +8,13 @@ const meta: Meta<typeof EntitySummaryBlock> = {
   title: 'Patterns/EntitySummaryBlock',
   component: EntitySummaryBlock,
   tags: ['autodocs'],
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof EntitySummaryBlock>;
@@ -34,8 +40,12 @@ export const WithBadgeAndActions: Story = {
     avatar: { name: 'AP' },
     actions: (
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button variant="outline" size="sm">Duzenle</Button>
-        <Button variant="primary" size="sm">Detay</Button>
+        <Button variant="outline" size="sm">
+          Duzenle
+        </Button>
+        <Button variant="primary" size="sm">
+          Detay
+        </Button>
       </div>
     ),
     items: [
@@ -71,9 +81,9 @@ export const WithManyItems: Story = {
     subtitle: 'Extended info',
     avatar: { name: 'FE' },
     items: Array.from({ length: 6 }, (_, i) => ({
-      key: \`f\${i}\`,
-      label: \`Field \${i + 1}\`,
-      value: \`Value \${i + 1}\`,
+      key: `f${i}`,
+      label: `Field ${i + 1}`,
+      value: `Value ${i + 1}`,
     })),
   },
 };

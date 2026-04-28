@@ -6,7 +6,13 @@ const meta: Meta<typeof GridShell> = {
   component: GridShell,
   title: 'Advanced/DataGrid/GridShell',
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 
@@ -25,16 +31,16 @@ export const Default: Story = {
     height: 300,
   },
   play: async ({ canvasElement }) => {
-    const el = canvasElement.querySelector('[role="button"], button, [data-testid], input, [tabindex]');
+    const el = canvasElement.querySelector(
+      '[role="button"], button, [data-testid], input, [tabindex]',
+    );
     if (el) (el as HTMLElement).click();
   },
 };
 
 export const EmptyGrid: Story = {
   args: {
-    columnDefs: [
-      { field: 'name', headerName: 'Name' },
-    ],
+    columnDefs: [{ field: 'name', headerName: 'Name' }],
     rowData: [],
     height: 200,
   },
@@ -48,9 +54,7 @@ export const ManyColumns: Story = {
       { field: 'email', headerName: 'Email' },
       { field: 'status', headerName: 'Status' },
     ],
-    rowData: [
-      { id: 1, name: 'Alpha', email: 'a@test.com', status: 'active' },
-    ],
+    rowData: [{ id: 1, name: 'Alpha', email: 'a@test.com', status: 'active' }],
     height: 300,
   },
 };
@@ -75,7 +79,7 @@ export const ManyRows: Story = {
       { field: 'id', headerName: 'ID' },
       { field: 'name', headerName: 'Name' },
     ],
-    rowData: Array.from({ length: 20 }, (_, i) => ({ id: i + 1, name: \`Row \${i + 1}\` })),
+    rowData: Array.from({ length: 20 }, (_, i) => ({ id: i + 1, name: `Row ${i + 1}` })),
     height: 400,
   },
 };
