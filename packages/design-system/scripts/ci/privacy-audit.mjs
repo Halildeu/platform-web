@@ -130,9 +130,11 @@ function stripCommentsAndStrings(line) {
   // Single-line comments
   const lineCommentIdx = result.indexOf('//');
   if (lineCommentIdx >= 0) result = result.slice(0, lineCommentIdx);
-  // Template literals — keep simple replacement; we only care about call sites
-  result = result.replace(/`(?:\\[`$\\]|[^`])*`/g, '`STRING`');
-  // Single/double quoted strings
+  // Template literals — non-overlapping alternation (no ReDoS).
+  // [^`\\] = non-backtick non-backslash, \\[\s\S] = escaped any char.
+  // Disjoint character sets → no catastrophic backtracking.
+  result = result.replace(/`(?:[^`\\]|\\[\s\S])*`/g, '`STRING`');
+  // Single/double quoted strings (already non-overlapping)
   result = result.replace(/'(?:\\.|[^'\\])*'/g, "'STRING'");
   result = result.replace(/"(?:\\.|[^"\\])*"/g, '"STRING"');
   return result;
