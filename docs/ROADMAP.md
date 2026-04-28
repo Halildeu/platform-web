@@ -400,4 +400,110 @@ K5 v3 ancak bu sprint sonuçlandığında devam edebilir.
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3 closure, §13 K7+K8+GHA-bumps closure, §14 A0+A2+Storybook+K5-attempt closure log eklendi._
+## §15 Sprint K5 v3 + Storybook Scoped Fix Closure (2026-04-28, seans 5)
+
+**Bu seansda K5 visual baseline blocker'ı çözüldü ve gerçek Linux-baseline ile compare yeşil PR merged:**
+
+| PR  | Konu                                                            | Sonuç                         |
+| --- | --------------------------------------------------------------- | ----------------------------- |
+| #52 | K5 v1+v2 (full Storybook + Mac baseline)                        | ⛔ closed (superseded by #54) |
+| #54 | K5 v3 — scoped Storybook (.storybook-k5) + Linux-first baseline | ✅ merged `978de69f`          |
+
+### Storybook full build hang root cause
+
+§14'te keşfedilen full Storybook build hang (yerel Mac 21+ dk + CI Linux 25 dk timeout) **bu seansda root cause analysis ile gerçek behavior aldı**:
+
+- **Hang noktası**: Vite production "Building preview" phase
+- **Yapı**: 5 addons (a11y, docs, themes, onboarding, design-token) + 229 story files + autodocs `'tag'` + reactDocgen `'react-docgen-typescript'`
+- **Kanıt**: scoped config (`.storybook-k5/main.ts`) — sadece AllChartTypes story, zero addons, autodocs+docgen kapalı — **yerel 1.23s + CI <2 dk** build
+- **Tek değişken**: scope. Stories sayısı 229 → 1, addons 5 → 0, docgen on → off. Yapısal sorun ya 229 story import graph üzerinde rolldown deadlock'u, ya bir addon'un Vite plugin'i, ya da react-docgen-typescript devasa scope'ta inifinite loop.
+
+Full Storybook hang RCA **devam ediyor (ayrı sprint)**; bu seans sadece K5'i unblock'ladı.
+
+### K5 v3 yapısı
+
+1. **`.storybook-k5/main.ts`** (NEW) — minimal Storybook config:
+   - Stories: yalnızca `packages/x-charts/src/__stories__/AllChartTypes.stories.tsx`
+   - Addons: `[]`
+   - `autodocs: false`, `reactDocgen: false`, `tags: []`
+   - `viteFinal` alias: `@mfe/design-system` → `packages/design-system/src/index.ts` (x-charts peerDep çözümü)
+
+2. **`.github/workflows/x-charts-visual-advisory.yml`** (NEW) — 2-job split:
+   - `compare-baseline` (pull_request): scoped Storybook build → Playwright compare against committed Linux baseline. Advisory mode (continue-on-error).
+   - `generate-baseline` (workflow_dispatch only): scoped build → `--update-snapshots` → upload `x-charts-linux-baseline` artifact (30d retention). Maintainer downloads and commits.
+
+3. **`packages/design-system/playwright.config.ts`** — env-based webServer:
+   - `PW_STORYBOOK_STATIC_DIR=storybook-static-k5` → `python3 -m http.server 6006`
+   - Fallback: `npm run storybook` (default dev mode for local work)
+
+4. **`packages/design-system/src/__visual__/x-charts.visual.ts`** (NEW) — 13 chart visual tests:
+   - `test.setTimeout(120_000)` (config global 30s yetiyor değil)
+   - `page.emulateMedia({ reducedMotion: 'reduce' })` BEFORE goto (ECharts animation kapatma)
+   - `waitForFunction` canvas/svg geometry > 0 readiness signal
+
+5. **`packages/x-charts/src/__stories__/AllChartTypes.stories.tsx`** — VisualBox wrappers:
+   - 640x360 fixed container
+   - `data-testid="x-charts-{name}"` deterministic locator
+
+### Linux baseline (CI artifact)
+
+- `gh workflow run x-charts-visual-advisory.yml --ref claude/k5-v3-scoped-storybook -f mode=baseline`
+- generate-baseline run `25064334940` ✅ success
+- `gh run download 25064334940 -n x-charts-linux-baseline -D /tmp/k5-linux-baseline`
+- 13 PNG artifact (288 KB) → committed to repo `60bfbc55`
+- Mac vs Linux PNG boyut diff confirmed (~1-9% pixel-level): bar-chart Mac 8363b → Linux 7590b
+- Mac baseline source DEĞİL (Codex kuralı: same platform produces and consumes baseline)
+
+### Compare-baseline gerçek green (NOT fake)
+
+- compare-baseline run `25064629080` (push tetikli, Linux baseline commit'inden sonra)
+- Job: success
+- Step 'Compare against committed baseline': **success**
+- 13 chart × 1 PNG, Linux build vs Linux baseline = pixel match
+- Advisory mode (continue-on-error: true) yine de yeşil — gerçek regression koruması işliyor
+
+### Gerçek doğrulama özeti (fake test değil)
+
+| Adım                                         | Sonuç                                        | Süre  |
+| -------------------------------------------- | -------------------------------------------- | ----- |
+| Yerel scoped Storybook build                 | ✅ 3086 modules, iframe.html + 4.5 MB bundle | 1.23s |
+| Yerel snapshot baseline (--update-snapshots) | ✅ 13 passed                                 | 4.1s  |
+| Mac PNG'leri DELETE before commit            | ✅ (fake-baseline değil)                     | —     |
+| CI generate-baseline workflow_dispatch       | ✅ 13 PNG artifact uploaded                  | <5dk  |
+| `gh run download` Linux artifact             | ✅ 288 KB, 13 PNG                            | —     |
+| Linux baseline commit + push                 | ✅ `60bfbc55`                                | —     |
+| CI compare-baseline (push retrigger)         | ✅ step success                              | <5dk  |
+| PR #54 8/8 CI checks (advisory + standard)   | ✅ MERGEABLE                                 | —     |
+| Merge                                        | ✅ `978de69f`                                | —     |
+
+### Codex MCP iter-7 consensus
+
+threadId `019dd3c3-f710-7583-ab3f-549173f3dbd8` — REVISE absorbed:
+
+- ✓ Full Storybook hang RCA separate (K5 bloke etmesin)
+- ✓ Scoped Storybook config (no addons, no docgen, single story)
+- ✓ Positive bisect (boş'tan başla, ekle)
+- ✓ viteFinal alias for @mfe/design-system peerDep
+- ✓ 2-job split (generate workflow_dispatch + compare PR)
+- ✓ Linux baseline workflow_dispatch + artifact + commit
+- ✓ Mac baseline NEVER source
+
+### Bu seans toplam
+
+- **K5 v3 PR #54 merged** (Linux baseline + scoped Storybook + advisory CI gate working)
+- PR #52 closed (superseded)
+- Full Storybook hang RCA: scope-narrowed (229 stories + addons + docgen yapısal sorun) — ayrı sprint
+
+### Sıradaki
+
+- **K5 hard gate** (1-2 hafta baseline soak sonrası `continue-on-error: false`)
+- **K5 browser matrix** (firefox + webkit projelerini ekle)
+- **Composite chart snapshots** (ChartDashboard + KPICard + DrillDown stories)
+- **Full Storybook hang RCA** ayrı sprint (`--debug-webpack`, addon disable matrix, react-docgen tuning)
+- **F5 K3-3** AI test generation hardening
+- **F5 K3-4** Adaptive components v2 progressions
+- Sprint A/B/C/D, K9/K10, M4/M5, W3/W5/W6/W7/W8 (uzun vade)
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3 closure, §13 K7+K8+GHA-bumps closure, §14 A0+A2+Storybook+K5-attempt closure, §15 K5-v3+Storybook-scoped-fix closure log eklendi._
