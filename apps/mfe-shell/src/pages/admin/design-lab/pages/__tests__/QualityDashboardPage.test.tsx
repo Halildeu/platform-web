@@ -6,22 +6,55 @@ import { MemoryRouter } from 'react-router-dom';
 
 const MOCK_ITEMS = [
   {
-    name: 'Button', kind: 'component', availability: 'exported', lifecycle: 'stable',
-    group: 'general', subgroup: 'actions', taxonomyGroupId: 'general', taxonomySubgroup: 'actions',
-    importStatement: '', whereUsed: [], tags: [], demoMode: 'live', description: 'Primary button',
-    sectionIds: [], qualityGates: ['design_tokens', 'a11y_keyboard_support', 'ux_catalog_alignment'],
+    name: 'Button',
+    kind: 'component',
+    availability: 'exported',
+    lifecycle: 'stable',
+    group: 'general',
+    subgroup: 'actions',
+    taxonomyGroupId: 'general',
+    taxonomySubgroup: 'actions',
+    importStatement: '',
+    whereUsed: [],
+    tags: [],
+    demoMode: 'live',
+    description: 'Primary button',
+    sectionIds: [],
+    qualityGates: ['design_tokens', 'a11y_keyboard_support', 'ux_catalog_alignment'],
   },
   {
-    name: 'Select', kind: 'component', availability: 'exported', lifecycle: 'beta',
-    group: 'general', subgroup: 'inputs', taxonomyGroupId: 'general', taxonomySubgroup: 'inputs',
-    importStatement: '', whereUsed: [], tags: [], demoMode: 'live', description: 'Select dropdown',
-    sectionIds: [], qualityGates: ['design_tokens'],
+    name: 'Select',
+    kind: 'component',
+    availability: 'exported',
+    lifecycle: 'beta',
+    group: 'general',
+    subgroup: 'inputs',
+    taxonomyGroupId: 'general',
+    taxonomySubgroup: 'inputs',
+    importStatement: '',
+    whereUsed: [],
+    tags: [],
+    demoMode: 'live',
+    description: 'Select dropdown',
+    sectionIds: [],
+    qualityGates: ['design_tokens'],
   },
   {
-    name: 'DataGrid', kind: 'component', availability: 'exported', lifecycle: 'stable',
-    group: 'advanced', subgroup: 'data', taxonomyGroupId: 'advanced', taxonomySubgroup: 'data',
-    importStatement: '', whereUsed: [], tags: [], demoMode: 'live', description: 'Grid component',
-    sectionIds: [], qualityGates: [],
+    name: 'DataGrid',
+    kind: 'component',
+    availability: 'exported',
+    lifecycle: 'stable',
+    group: 'advanced',
+    subgroup: 'data',
+    taxonomyGroupId: 'advanced',
+    taxonomySubgroup: 'data',
+    importStatement: '',
+    whereUsed: [],
+    tags: [],
+    demoMode: 'live',
+    description: 'Grid component',
+    sectionIds: [],
+    qualityGates: [],
   },
 ];
 
@@ -46,28 +79,41 @@ vi.mock('../../DesignLabSidebarRouter', () => ({
 
 vi.mock('../../components/QualityBadge', () => ({
   QualityBadge: ({ score }: { score: number }) => <span data-testid="quality-badge">{score}%</span>,
-  getQualityTier: (score: number) => score >= 90 ? 'platinum' : score >= 70 ? 'gold' : score >= 50 ? 'silver' : 'bronze',
+  getQualityTier: (score: number) =>
+    score >= 90 ? 'platinum' : score >= 70 ? 'gold' : score >= 50 ? 'silver' : 'bronze',
   countByTier: () => ({ platinum: 0, gold: 1, silver: 1, bronze: 1 }),
 }));
 
 vi.mock('../../components/PackageQualityScore', () => ({
-  PackageQualityScore: ({ packageName }: { packageName: string }) => <div data-testid={`pkg-${packageName}`}>{packageName}</div>,
+  PackageQualityScore: ({ packageName }: { packageName: string }) => (
+    <div data-testid={`pkg-${packageName}`}>{packageName}</div>
+  ),
 }));
 
 vi.mock('../../components/AlertPanel', () => ({
   AlertPanel: ({ alerts }: { alerts: Array<{ title: string }> }) => (
-    <div data-testid="alert-panel">{alerts.map((a, i) => <div key={i}>{a.title}</div>)}</div>
+    <div data-testid="alert-panel">
+      {alerts.map((a, i) => (
+        <div key={i}>{a.title}</div>
+      ))}
+    </div>
   ),
 }));
 
 vi.mock('../../components/SLOTracker', () => ({
   SLOTracker: ({ metrics }: { metrics: Array<{ name: string }> }) => (
-    <div data-testid="slo-tracker">{metrics.map((m, i) => <div key={i}>{m.name}</div>)}</div>
+    <div data-testid="slo-tracker">
+      {metrics.map((m, i) => (
+        <div key={i}>{m.name}</div>
+      ))}
+    </div>
   ),
 }));
 
 vi.mock('../../components/CoverageMatrix', () => ({
-  CoverageMatrix: ({ items }: { items: unknown[] }) => <div data-testid="coverage-matrix">{items.length} items</div>,
+  CoverageMatrix: ({ items }: { items: unknown[] }) => (
+    <div data-testid="coverage-matrix">{items.length} items</div>
+  ),
 }));
 
 vi.mock('../../components/QualityGatesOverview', () => ({
@@ -79,7 +125,9 @@ vi.mock('../../components/SecurityPosture', () => ({
 }));
 
 vi.mock('../../components/DataProvenanceBadge', () => ({
-  DataProvenanceBadge: ({ level }: { level: string }) => <span data-testid="provenance-badge">{level}</span>,
+  DataProvenanceBadge: ({ level }: { level: string }) => (
+    <span data-testid="provenance-badge">{level}</span>
+  ),
 }));
 
 vi.mock('../../evidence/useEvidence', () => ({
@@ -87,9 +135,17 @@ vi.mock('../../evidence/useEvidence', () => ({
   FALLBACK_REGISTRY: {
     tests: {},
     benchmarks: { workflow_exists: false, threshold_enforced: false, last_run: null, results: {} },
-    visual_regression: { provider: 'none', workflow_exists: false, last_run: null, status: 'no_data', stats: { pass: 0, fail: 0, changed: 0, new: 0, skipped: 0 } },
+    visual_regression: {
+      provider: 'none',
+      workflow_exists: false,
+      last_run: null,
+      status: 'no_data',
+      stats: { pass: 0, fail: 0, changed: 0, new: 0, skipped: 0 },
+    },
     security: {},
   },
+  // K2-3: getEvidenceProvenance helper — test mock no_data döndürür (W1.5 fake guarantee).
+  getEvidenceProvenance: () => 'no_data',
 }));
 
 vi.mock('../../docs/guideRegistry', () => ({ hasGuide: () => false }));
@@ -100,7 +156,11 @@ vi.mock('../../playground', () => ({ hasPlayground: () => false }));
 import QualityDashboardPage from '../QualityDashboardPage';
 
 function renderPage() {
-  return render(<MemoryRouter><QualityDashboardPage /></MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <QualityDashboardPage />
+    </MemoryRouter>,
+  );
 }
 
 describe('QualityDashboardPage', () => {

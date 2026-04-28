@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Shield as _Shield,
   Award,
@@ -17,34 +17,28 @@ import {
   Blocks,
   FileCode2,
   Microscope,
-} from "lucide-react";
-import { Text } from "@mfe/design-system";
-import { useDesignLab } from "../DesignLabProvider";
-import type { DesignLabIndexItem } from "../DesignLabProvider";
-import {
-  QualityBadge,
-  getQualityTier,
-  countByTier,
-} from "../components/QualityBadge";
-import type { QualityTier } from "../components/QualityBadge";
-import {
-  PackageQualityScore,
-} from "../components/PackageQualityScore";
-import type { ComponentScoreEntry } from "../components/PackageQualityScore";
-import { hasGuide } from "../docs/guideRegistry";
-import { hasTokens } from "../tabs/componentTokenMap";
-import { hasExamples } from "../examples/registry";
-import { hasPlayground } from "../playground";
-import { AlertPanel } from "../components/AlertPanel";
-import type { Alert } from "../components/AlertPanel";
-import { SLOTracker } from "../components/SLOTracker";
-import type { SLOMetric } from "../components/SLOTracker";
-import { CoverageMatrix } from "../components/CoverageMatrix";
-import type { CoverageItem } from "../components/CoverageMatrix";
-import { QualityGatesOverview } from "../components/QualityGatesOverview";
-import { SecurityPosture } from "../components/SecurityPosture";
-import { DataProvenanceBadge } from "../components/DataProvenanceBadge";
-import { useEvidence, FALLBACK_REGISTRY } from "../evidence/useEvidence";
+} from 'lucide-react';
+import { Text } from '@mfe/design-system';
+import { useDesignLab } from '../DesignLabProvider';
+import type { DesignLabIndexItem } from '../DesignLabProvider';
+import { QualityBadge, getQualityTier, countByTier } from '../components/QualityBadge';
+import type { QualityTier } from '../components/QualityBadge';
+import { PackageQualityScore } from '../components/PackageQualityScore';
+import type { ComponentScoreEntry } from '../components/PackageQualityScore';
+import { hasGuide } from '../docs/guideRegistry';
+import { hasTokens } from '../tabs/componentTokenMap';
+import { hasExamples } from '../examples/registry';
+import { hasPlayground } from '../playground';
+import { AlertPanel } from '../components/AlertPanel';
+import type { Alert } from '../components/AlertPanel';
+import { SLOTracker } from '../components/SLOTracker';
+import type { SLOMetric } from '../components/SLOTracker';
+import { CoverageMatrix } from '../components/CoverageMatrix';
+import type { CoverageItem } from '../components/CoverageMatrix';
+import { QualityGatesOverview } from '../components/QualityGatesOverview';
+import { SecurityPosture } from '../components/SecurityPosture';
+import { DataProvenanceBadge } from '../components/DataProvenanceBadge';
+import { useEvidence, FALLBACK_REGISTRY, getEvidenceProvenance } from '../evidence/useEvidence';
 
 /* ------------------------------------------------------------------ */
 /*  Quality Command Center                                             */
@@ -89,22 +83,62 @@ function useScorecardData(): ScorecardEntry[] {
     // Regenerate with: cd packages/design-system && npm run scorecard:json
     // Then copy: cp packages/design-system/reports/scorecard.json apps/mfe-shell/public/
     fetch('/scorecard.json')
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setData(d as ScorecardEntry[]))
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setData(d as ScorecardEntry[]))
       .catch(() => setData([]));
   }, []);
   return data;
 }
 
 const SCORECARD_METRICS = [
-  { key: 'testDepth', label: 'Test Depth', icon: <FlaskConical className="h-3.5 w-3.5" />, color: 'text-action-primary' },
-  { key: 'api', label: 'API Quality', icon: <FileCode2 className="h-3.5 w-3.5" />, color: 'text-state-info-text' },
-  { key: 'a11y', label: 'Accessibility', icon: <ShieldCheck className="h-3.5 w-3.5" />, color: 'text-state-success-text' },
-  { key: 'testCoverage', label: 'Test Coverage', icon: <Microscope className="h-3.5 w-3.5" />, color: 'text-action-secondary' },
-  { key: 'accessControl', label: 'Access Control', icon: <_Shield className="h-3.5 w-3.5" />, color: 'text-state-warning-text' },
-  { key: 'storyCompleteness', label: 'Story Complete', icon: <Blocks className="h-3.5 w-3.5" />, color: 'text-state-error-text' },
-  { key: 'i18n', label: 'i18n Ready', icon: <Languages className="h-3.5 w-3.5" />, color: 'text-text-secondary' },
-  { key: 'documentation', label: 'Documentation', icon: <BookMarked className="h-3.5 w-3.5" />, color: 'text-action-primary' },
+  {
+    key: 'testDepth',
+    label: 'Test Depth',
+    icon: <FlaskConical className="h-3.5 w-3.5" />,
+    color: 'text-action-primary',
+  },
+  {
+    key: 'api',
+    label: 'API Quality',
+    icon: <FileCode2 className="h-3.5 w-3.5" />,
+    color: 'text-state-info-text',
+  },
+  {
+    key: 'a11y',
+    label: 'Accessibility',
+    icon: <ShieldCheck className="h-3.5 w-3.5" />,
+    color: 'text-state-success-text',
+  },
+  {
+    key: 'testCoverage',
+    label: 'Test Coverage',
+    icon: <Microscope className="h-3.5 w-3.5" />,
+    color: 'text-action-secondary',
+  },
+  {
+    key: 'accessControl',
+    label: 'Access Control',
+    icon: <_Shield className="h-3.5 w-3.5" />,
+    color: 'text-state-warning-text',
+  },
+  {
+    key: 'storyCompleteness',
+    label: 'Story Complete',
+    icon: <Blocks className="h-3.5 w-3.5" />,
+    color: 'text-state-error-text',
+  },
+  {
+    key: 'i18n',
+    label: 'i18n Ready',
+    icon: <Languages className="h-3.5 w-3.5" />,
+    color: 'text-text-secondary',
+  },
+  {
+    key: 'documentation',
+    label: 'Documentation',
+    icon: <BookMarked className="h-3.5 w-3.5" />,
+    color: 'text-action-primary',
+  },
 ] as const;
 
 const GRADE_COLORS: Record<string, string> = {
@@ -118,72 +152,84 @@ const GRADE_COLORS: Record<string, string> = {
 /* ---- Quality gate definitions ---- */
 
 const QUALITY_GATES = [
-  { key: "design_tokens", label: "Design Tokens", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  { key: "a11y_keyboard_support", label: "Keyboard A11y", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  { key: "ux_catalog_alignment", label: "UX Catalog", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  { key: "browser_tests", label: "Browser Tests", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  { key: "visual_regression", label: "Visual Regression", icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  { key: 'design_tokens', label: 'Design Tokens', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  {
+    key: 'a11y_keyboard_support',
+    label: 'Keyboard A11y',
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+  },
+  {
+    key: 'ux_catalog_alignment',
+    label: 'UX Catalog',
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+  },
+  { key: 'browser_tests', label: 'Browser Tests', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  {
+    key: 'visual_regression',
+    label: 'Visual Regression',
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+  },
 ] as const;
 
 /* ---- Package grouping ---- */
 
 const PACKAGE_PREFIXES: { name: string; match: (item: DesignLabIndexItem) => boolean }[] = [
   {
-    name: "x-data-grid",
+    name: 'x-data-grid',
     match: (i) =>
-      i.name.includes("DataGrid") ||
-      i.name.includes("Grid") ||
-      i.name === "EntityGrid" ||
-      i.name === "AgGridServer",
+      i.name.includes('DataGrid') ||
+      i.name.includes('Grid') ||
+      i.name === 'EntityGrid' ||
+      i.name === 'AgGridServer',
   },
   {
-    name: "x-charts",
+    name: 'x-charts',
     match: (i) =>
-      i.name.includes("Chart") ||
-      i.name.includes("Sparkline") ||
-      i.name.includes("KPI") ||
-      i.name.includes("Gauge") ||
-      i.name.includes("Stat"),
+      i.name.includes('Chart') ||
+      i.name.includes('Sparkline') ||
+      i.name.includes('KPI') ||
+      i.name.includes('Gauge') ||
+      i.name.includes('Stat'),
   },
   {
-    name: "x-scheduler",
+    name: 'x-scheduler',
     match: (i) =>
-      i.name.includes("Scheduler") || i.name.includes("Agenda") || i.name.includes("ResourceView"),
+      i.name.includes('Scheduler') || i.name.includes('Agenda') || i.name.includes('ResourceView'),
   },
   {
-    name: "x-kanban",
-    match: (i) => i.name.includes("Kanban"),
+    name: 'x-kanban',
+    match: (i) => i.name.includes('Kanban'),
   },
   {
-    name: "x-editor",
+    name: 'x-editor',
     match: (i) =>
-      i.name.includes("Editor") ||
-      i.name.includes("SlashCommand") ||
-      i.name.includes("MentionList"),
+      i.name.includes('Editor') ||
+      i.name.includes('SlashCommand') ||
+      i.name.includes('MentionList'),
   },
   {
-    name: "x-form-builder",
+    name: 'x-form-builder',
     match: (i) =>
-      i.name.includes("FormRenderer") ||
-      i.name.includes("FieldRenderer") ||
-      i.name.includes("FormPreview") ||
-      i.name.includes("MultiStepForm") ||
-      i.name.includes("FormSummary") ||
-      i.name.includes("RepeatableField") ||
-      i.name.includes("FieldRegistry"),
+      i.name.includes('FormRenderer') ||
+      i.name.includes('FieldRenderer') ||
+      i.name.includes('FormPreview') ||
+      i.name.includes('MultiStepForm') ||
+      i.name.includes('FormSummary') ||
+      i.name.includes('RepeatableField') ||
+      i.name.includes('FieldRegistry'),
   },
   {
-    name: "core",
+    name: 'core',
     match: () => true, // fallback
   },
 ];
 
 function assignPackage(item: DesignLabIndexItem): string {
   for (const pkg of PACKAGE_PREFIXES) {
-    if (pkg.name === "core") continue;
+    if (pkg.name === 'core') continue;
     if (pkg.match(item)) return pkg.name;
   }
-  return "core";
+  return 'core';
 }
 
 /* ---- Score computation ---- */
@@ -195,13 +241,11 @@ function computeComponentScore(item: DesignLabIndexItem): {
 } {
   // A11y score based on quality gates and props
   const a11yChecks = [
-    item.qualityGates.includes("design_tokens"),
-    item.qualityGates.includes("a11y_keyboard_support"),
+    item.qualityGates.includes('design_tokens'),
+    item.qualityGates.includes('a11y_keyboard_support'),
     item.qualityGates.length >= 2,
   ];
-  const a11yScore = Math.round(
-    (a11yChecks.filter(Boolean).length / a11yChecks.length) * 100,
-  );
+  const a11yScore = Math.round((a11yChecks.filter(Boolean).length / a11yChecks.length) * 100);
 
   // Quality checklist score based on coverage
   const key = item.name;
@@ -210,8 +254,8 @@ function computeComponentScore(item: DesignLabIndexItem): {
     hasTokens(key) || hasTokens(item.name),
     hasExamples(key) || hasExamples(item.name),
     hasPlayground(key) || hasPlayground(item.name),
-    item.qualityGates.includes("ux_catalog_alignment"),
-    item.lifecycle === "stable",
+    item.qualityGates.includes('ux_catalog_alignment'),
+    item.lifecycle === 'stable',
     item.qualityGates.length >= 3,
   ];
   const qualityScore = Math.round(
@@ -229,10 +273,30 @@ const TIER_DISPLAY: Record<
   QualityTier,
   { label: string; color: string; bg: string; barBg: string }
 > = {
-  platinum: { label: "Platinum", color: "text-action-primary", bg: "bg-action-primary/10", barBg: "bg-action-primary" },
-  gold: { label: "Gold", color: "text-state-warning-text", bg: "bg-state-warning-bg", barBg: "bg-state-warning-text" },
-  silver: { label: "Silver", color: "text-text-secondary", bg: "bg-surface-muted", barBg: "bg-border-strong" },
-  bronze: { label: "Bronze", color: "text-state-warning-text", bg: "bg-state-warning-bg", barBg: "bg-state-warning-text" },
+  platinum: {
+    label: 'Platinum',
+    color: 'text-action-primary',
+    bg: 'bg-action-primary/10',
+    barBg: 'bg-action-primary',
+  },
+  gold: {
+    label: 'Gold',
+    color: 'text-state-warning-text',
+    bg: 'bg-state-warning-bg',
+    barBg: 'bg-state-warning-text',
+  },
+  silver: {
+    label: 'Silver',
+    color: 'text-text-secondary',
+    bg: 'bg-surface-muted',
+    barBg: 'bg-border-strong',
+  },
+  bronze: {
+    label: 'Bronze',
+    color: 'text-state-warning-text',
+    bg: 'bg-state-warning-bg',
+    barBg: 'bg-state-warning-text',
+  },
 };
 
 /* ================================================================== */
@@ -242,7 +306,6 @@ const TIER_DISPLAY: Record<
 export default function QualityDashboardPage() {
   const { index } = useDesignLab();
   const navigate = useNavigate();
-  const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
   const evidenceState = useEvidence();
   const evidence = evidenceState.status === 'loaded' ? evidenceState.data : FALLBACK_REGISTRY;
   const evidenceAvailable = evidenceState.status === 'loaded';
@@ -251,10 +314,7 @@ export default function QualityDashboardPage() {
   /* ---- Compute all scores ---- */
   const scoredComponents = useMemo(() => {
     return index.items
-      .filter(
-        (item) =>
-          item.availability === "exported" && item.kind === "component",
-      )
+      .filter((item) => item.availability === 'exported' && item.kind === 'component')
       .map((item) => ({
         item,
         pkg: assignPackage(item),
@@ -266,8 +326,7 @@ export default function QualityDashboardPage() {
   const overallScore = useMemo(() => {
     if (scoredComponents.length === 0) return 0;
     return Math.round(
-      scoredComponents.reduce((s, c) => s + c.combined, 0) /
-        scoredComponents.length,
+      scoredComponents.reduce((s, c) => s + c.combined, 0) / scoredComponents.length,
     );
   }, [scoredComponents]);
 
@@ -292,10 +351,8 @@ export default function QualityDashboardPage() {
         name,
         components,
         avgScore: Math.round(
-          components.reduce(
-            (s, c) => s + Math.round(c.a11yScore * 0.4 + c.qualityScore * 0.6),
-            0,
-          ) / components.length,
+          components.reduce((s, c) => s + Math.round(c.a11yScore * 0.4 + c.qualityScore * 0.6), 0) /
+            components.length,
         ),
       }))
       .sort((a, b) => b.avgScore - a.avgScore);
@@ -304,7 +361,16 @@ export default function QualityDashboardPage() {
   /* ---- Scorecard aggregates ---- */
   const scorecardAgg = useMemo(() => {
     if (scorecardData.length === 0) return null;
-    const metricKeys = ['testDepth', 'api', 'a11y', 'testCoverage', 'accessControl', 'storyCompleteness', 'i18n', 'documentation'] as const;
+    const metricKeys = [
+      'testDepth',
+      'api',
+      'a11y',
+      'testCoverage',
+      'accessControl',
+      'storyCompleteness',
+      'i18n',
+      'documentation',
+    ] as const;
     const avgs: Record<string, number> = {};
     for (const key of metricKeys) {
       const sum = scorecardData.reduce((s, c) => s + (c.scores[key] ?? 0), 0);
@@ -312,28 +378,35 @@ export default function QualityDashboardPage() {
     }
     const grades: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, F: 0 };
     for (const c of scorecardData) grades[c.grade] = (grades[c.grade] ?? 0) + 1;
-    const shallowTests = scorecardData.filter(c => c.scores.testDepth < 30).length;
-    const noStory = scorecardData.filter(c => c.scores.storyCompleteness === 0).length;
-    const noA11y = scorecardData.filter(c => c.scores.a11y === 0).length;
-    const noAccessControl = scorecardData.filter(c => c.scores.accessControl === 0).length;
-    const avgTotal = Math.round(scorecardData.reduce((s, c) => s + c.totalScore, 0) / scorecardData.length);
-    return { avgs, grades, shallowTests, noStory, noA11y, noAccessControl, avgTotal, total: scorecardData.length };
+    const shallowTests = scorecardData.filter((c) => c.scores.testDepth < 30).length;
+    const noStory = scorecardData.filter((c) => c.scores.storyCompleteness === 0).length;
+    const noA11y = scorecardData.filter((c) => c.scores.a11y === 0).length;
+    const noAccessControl = scorecardData.filter((c) => c.scores.accessControl === 0).length;
+    const avgTotal = Math.round(
+      scorecardData.reduce((s, c) => s + c.totalScore, 0) / scorecardData.length,
+    );
+    return {
+      avgs,
+      grades,
+      shallowTests,
+      noStory,
+      noA11y,
+      noAccessControl,
+      avgTotal,
+      total: scorecardData.length,
+    };
   }, [scorecardData]);
 
   /* ---- Bottom 20 ---- */
   const bottom20 = useMemo(() => {
-    return [...scoredComponents]
-      .sort((a, b) => a.combined - b.combined)
-      .slice(0, 20);
+    return [...scoredComponents].sort((a, b) => a.combined - b.combined).slice(0, 20);
   }, [scoredComponents]);
 
   /* ---- Quality gates summary ---- */
   const gateStats = useMemo(() => {
     const total = scoredComponents.length;
     return QUALITY_GATES.map((gate) => {
-      const passing = scoredComponents.filter((c) =>
-        c.item.qualityGates.includes(gate.key),
-      ).length;
+      const passing = scoredComponents.filter((c) => c.item.qualityGates.includes(gate.key)).length;
       return {
         ...gate,
         passing,
@@ -344,10 +417,7 @@ export default function QualityDashboardPage() {
   }, [scoredComponents]);
 
   /* ---- Max tier count for chart bar scaling ---- */
-  const maxTierCount = Math.max(
-    ...Object.values(tierDistribution),
-    1,
-  );
+  const maxTierCount = Math.max(...Object.values(tierDistribution), 1);
 
   /* ---- Generate actionable alerts ---- */
   const alerts = useMemo<Alert[]>(() => {
@@ -359,22 +429,38 @@ export default function QualityDashboardPage() {
       result.push({
         severity: 'critical',
         title: `${zeroGates.length} bileşen sıfır kalite kapısına sahip`,
-        description: `${zeroGates.slice(0, 3).map((c) => c.item.name).join(', ')}${zeroGates.length > 3 ? ` ve ${zeroGates.length - 3} diğer` : ''}`,
+        description: `${zeroGates
+          .slice(0, 3)
+          .map((c) => c.item.name)
+          .join(', ')}${zeroGates.length > 3 ? ` ve ${zeroGates.length - 3} diğer` : ''}`,
         action: { label: 'İncele', href: '#bottom-components' },
       });
     }
 
     // Warning: coverage < 70% in any dimension
-    const guideCoverage = scoredComponents.filter((c) => hasGuide(c.item.name)).length / Math.max(scoredComponents.length, 1) * 100;
-    const tokenCoverage = scoredComponents.filter((c) => hasTokens(c.item.name)).length / Math.max(scoredComponents.length, 1) * 100;
-    const exampleCoverage = scoredComponents.filter((c) => hasExamples(c.item.name)).length / Math.max(scoredComponents.length, 1) * 100;
-    const playgroundCoverage = scoredComponents.filter((c) => hasPlayground(c.item.name)).length / Math.max(scoredComponents.length, 1) * 100;
+    const guideCoverage =
+      (scoredComponents.filter((c) => hasGuide(c.item.name)).length /
+        Math.max(scoredComponents.length, 1)) *
+      100;
+    const tokenCoverage =
+      (scoredComponents.filter((c) => hasTokens(c.item.name)).length /
+        Math.max(scoredComponents.length, 1)) *
+      100;
+    const exampleCoverage =
+      (scoredComponents.filter((c) => hasExamples(c.item.name)).length /
+        Math.max(scoredComponents.length, 1)) *
+      100;
+    const playgroundCoverage =
+      (scoredComponents.filter((c) => hasPlayground(c.item.name)).length /
+        Math.max(scoredComponents.length, 1)) *
+      100;
 
     const lowCoverage: string[] = [];
     if (guideCoverage < 70) lowCoverage.push(`Guide (%${Math.round(guideCoverage)})`);
     if (tokenCoverage < 70) lowCoverage.push(`Tokens (%${Math.round(tokenCoverage)})`);
     if (exampleCoverage < 70) lowCoverage.push(`Examples (%${Math.round(exampleCoverage)})`);
-    if (playgroundCoverage < 70) lowCoverage.push(`Playground (%${Math.round(playgroundCoverage)})`);
+    if (playgroundCoverage < 70)
+      lowCoverage.push(`Playground (%${Math.round(playgroundCoverage)})`);
 
     if (lowCoverage.length > 0) {
       result.push({
@@ -386,12 +472,17 @@ export default function QualityDashboardPage() {
     }
 
     // Info: beta/planned components that may need attention
-    const betaComponents = scoredComponents.filter((c) => c.item.lifecycle === 'beta' || c.item.lifecycle === 'planned');
+    const betaComponents = scoredComponents.filter(
+      (c) => c.item.lifecycle === 'beta' || c.item.lifecycle === 'planned',
+    );
     if (betaComponents.length > 0) {
       result.push({
         severity: 'info',
         title: `${betaComponents.length} beta/planned bileşen mevcut`,
-        description: betaComponents.slice(0, 3).map((c) => c.item.name).join(', '),
+        description: betaComponents
+          .slice(0, 3)
+          .map((c) => c.item.name)
+          .join(', '),
       });
     }
 
@@ -407,9 +498,10 @@ export default function QualityDashboardPage() {
       const totalPass = Object.values(evidence.tests).reduce((s, t) => s + t.pass, 0);
       testHealthPct = totalTests > 0 ? Math.round((totalPass / totalTests) * 100) : 0;
     } else {
-      const avgGatePassRate = gateStats.length > 0
-        ? Math.round(gateStats.reduce((s, g) => s + g.pct, 0) / gateStats.length)
-        : 0;
+      const avgGatePassRate =
+        gateStats.length > 0
+          ? Math.round(gateStats.reduce((s, g) => s + g.pct, 0) / gateStats.length)
+          : 0;
       testHealthPct = avgGatePassRate;
     }
 
@@ -417,11 +509,46 @@ export default function QualityDashboardPage() {
     const buildHealthPct = evidenceAvailable && evidence.benchmarks.workflow_exists ? 99 : 99;
 
     return [
-      { name: 'Availability', target: '99.9%', current: 99, status: 'healthy' as const, budgetRemaining: 92 },
-      { name: 'Latency P95', target: '<3s', current: 96, status: 'healthy' as const, budgetRemaining: 88 },
-      { name: 'Error Rate', target: '<0.1%', current: 99, status: 'healthy' as const, budgetRemaining: 95 },
-      { name: 'Test Health', target: '>90%', current: Math.min(testHealthPct, 100), status: testHealthPct >= 90 ? 'healthy' as const : testHealthPct >= 70 ? 'warning' as const : 'critical' as const, budgetRemaining: Math.max(testHealthPct - 70, 0) },
-      { name: 'Build Health', target: '99%', current: buildHealthPct, status: 'healthy' as const, budgetRemaining: 90 },
+      {
+        name: 'Availability',
+        target: '99.9%',
+        current: 99,
+        status: 'healthy' as const,
+        budgetRemaining: 92,
+      },
+      {
+        name: 'Latency P95',
+        target: '<3s',
+        current: 96,
+        status: 'healthy' as const,
+        budgetRemaining: 88,
+      },
+      {
+        name: 'Error Rate',
+        target: '<0.1%',
+        current: 99,
+        status: 'healthy' as const,
+        budgetRemaining: 95,
+      },
+      {
+        name: 'Test Health',
+        target: '>90%',
+        current: Math.min(testHealthPct, 100),
+        status:
+          testHealthPct >= 90
+            ? ('healthy' as const)
+            : testHealthPct >= 70
+              ? ('warning' as const)
+              : ('critical' as const),
+        budgetRemaining: Math.max(testHealthPct - 70, 0),
+      },
+      {
+        name: 'Build Health',
+        target: '99%',
+        current: buildHealthPct,
+        status: 'healthy' as const,
+        budgetRemaining: 90,
+      },
     ];
   }, [gateStats, evidence, evidenceAvailable]);
 
@@ -441,7 +568,9 @@ export default function QualityDashboardPage() {
   const handleComponentNavigate = (componentName: string) => {
     const comp = scoredComponents.find((c) => c.item.name === componentName);
     if (comp) {
-      navigate(`/admin/design-lab/components/${comp.item.taxonomyGroupId}/${encodeURIComponent(comp.item.name.replace(/\//g, '~'))}`);
+      navigate(
+        `/admin/design-lab/components/${comp.item.taxonomyGroupId}/${encodeURIComponent(comp.item.name.replace(/\//g, '~'))}`,
+      );
     }
   };
 
@@ -485,21 +614,33 @@ export default function QualityDashboardPage() {
         <div className="grid grid-cols-4 gap-3">
           <div className="rounded-xl border border-border-subtle bg-surface-default p-4 text-center">
             <Text className="text-3xl font-bold text-text-primary">{scorecardAgg.total}</Text>
-            <Text variant="secondary" className="text-xs">Toplam Bilesen</Text>
+            <Text variant="secondary" className="text-xs">
+              Toplam Bilesen
+            </Text>
           </div>
           <div className="rounded-xl border border-border-subtle bg-surface-default p-4 text-center">
             <Text className="text-3xl font-bold text-action-primary">{scorecardAgg.avgTotal}</Text>
-            <Text variant="secondary" className="text-xs">Ortalama Skor</Text>
+            <Text variant="secondary" className="text-xs">
+              Ortalama Skor
+            </Text>
           </div>
           <div className="rounded-xl border border-border-subtle bg-surface-default p-4 text-center">
-            <Text className={`text-3xl font-bold ${(scorecardAgg.grades.D + scorecardAgg.grades.F) > 0 ? 'text-state-danger-text' : 'text-state-success-text'}`}>
+            <Text
+              className={`text-3xl font-bold ${scorecardAgg.grades.D + scorecardAgg.grades.F > 0 ? 'text-state-danger-text' : 'text-state-success-text'}`}
+            >
               {scorecardAgg.grades.D + scorecardAgg.grades.F}
             </Text>
-            <Text variant="secondary" className="text-xs">Kritik (D+F)</Text>
+            <Text variant="secondary" className="text-xs">
+              Kritik (D+F)
+            </Text>
           </div>
           <div className="rounded-xl border border-border-subtle bg-surface-default p-4 text-center">
-            <Text className="text-3xl font-bold text-state-warning-text">{scorecardAgg.shallowTests}</Text>
-            <Text variant="secondary" className="text-xs">Shallow Test</Text>
+            <Text className="text-3xl font-bold text-state-warning-text">
+              {scorecardAgg.shallowTests}
+            </Text>
+            <Text variant="secondary" className="text-xs">
+              Shallow Test
+            </Text>
           </div>
         </div>
       )}
@@ -527,7 +668,8 @@ export default function QualityDashboardPage() {
               <Text as="div" className="text-sm font-semibold text-text-primary">
                 CI Scorecard — {scorecardAgg.total} Bilesen
               </Text>
-              <DataProvenanceBadge level="ci" />
+              {/* K2-3: scorecard fetch loaded ise 'ci'; aksi halde 'no_data'. Kor 'ci' iddiasi yok. */}
+              <DataProvenanceBadge level={scorecardAgg ? 'ci' : 'no_data'} />
             </div>
             <Text as="div" className="text-2xl font-bold tabular-nums text-text-primary">
               {scorecardAgg.avgTotal}/100
@@ -536,8 +678,11 @@ export default function QualityDashboardPage() {
 
           {/* Grade Distribution */}
           <div className="mb-4 flex items-center gap-2">
-            {(['A', 'B', 'C', 'D', 'F'] as const).map(grade => (
-              <div key={grade} className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${GRADE_COLORS[grade]}`}>
+            {(['A', 'B', 'C', 'D', 'F'] as const).map((grade) => (
+              <div
+                key={grade}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${GRADE_COLORS[grade]}`}
+              >
                 <span className="text-xs font-bold">{grade}</span>
                 <span className="text-[10px] font-medium">{scorecardAgg.grades[grade]}</span>
               </div>
@@ -546,13 +691,18 @@ export default function QualityDashboardPage() {
 
           {/* 8 Metric Bars */}
           <div className="grid grid-cols-4 gap-3">
-            {SCORECARD_METRICS.map(m => {
+            {SCORECARD_METRICS.map((m) => {
               const val = scorecardAgg.avgs[m.key] ?? 0;
               return (
-                <div key={m.key} className="rounded-lg border border-border-subtle/60 bg-surface-canvas/30 p-3">
+                <div
+                  key={m.key}
+                  className="rounded-lg border border-border-subtle/60 bg-surface-canvas/30 p-3"
+                >
                   <div className="mb-1.5 flex items-center gap-1.5">
                     <span className={m.color}>{m.icon}</span>
-                    <Text variant="secondary" className="text-[10px] font-medium">{m.label}</Text>
+                    <Text variant="secondary" className="text-[10px] font-medium">
+                      {m.label}
+                    </Text>
                   </div>
                   <div className="flex items-end gap-1.5">
                     <Text className="text-lg font-bold tabular-nums text-text-primary">{val}%</Text>
@@ -571,27 +721,43 @@ export default function QualityDashboardPage() {
           {/* Risk Indicators */}
           <div className="mt-4 grid grid-cols-4 gap-2">
             <div className="rounded-lg bg-state-danger-bg/40 p-2.5 text-center">
-              <Text className="text-lg font-bold text-state-danger-text">{scorecardAgg.shallowTests}</Text>
-              <Text variant="secondary" className="text-[10px]">Shallow Test</Text>
+              <Text className="text-lg font-bold text-state-danger-text">
+                {scorecardAgg.shallowTests}
+              </Text>
+              <Text variant="secondary" className="text-[10px]">
+                Shallow Test
+              </Text>
             </div>
             <div className="rounded-lg bg-state-warning-bg/40 p-2.5 text-center">
-              <Text className="text-lg font-bold text-state-warning-text">{scorecardAgg.noStory}</Text>
-              <Text variant="secondary" className="text-[10px]">Story Yok</Text>
+              <Text className="text-lg font-bold text-state-warning-text">
+                {scorecardAgg.noStory}
+              </Text>
+              <Text variant="secondary" className="text-[10px]">
+                Story Yok
+              </Text>
             </div>
             <div className="rounded-lg bg-state-warning-bg/40 p-2.5 text-center">
-              <Text className="text-lg font-bold text-state-warning-text">{scorecardAgg.noA11y}</Text>
-              <Text variant="secondary" className="text-[10px]">A11y Yok</Text>
+              <Text className="text-lg font-bold text-state-warning-text">
+                {scorecardAgg.noA11y}
+              </Text>
+              <Text variant="secondary" className="text-[10px]">
+                A11y Yok
+              </Text>
             </div>
             <div className="rounded-lg bg-state-info-bg/40 p-2.5 text-center">
-              <Text className="text-lg font-bold text-state-info-text">{scorecardAgg.noAccessControl}</Text>
-              <Text variant="secondary" className="text-[10px]">AccessControl Yok</Text>
+              <Text className="text-lg font-bold text-state-info-text">
+                {scorecardAgg.noAccessControl}
+              </Text>
+              <Text variant="secondary" className="text-[10px]">
+                AccessControl Yok
+              </Text>
             </div>
           </div>
 
           {/* Expandable: Shallow Tests + A11y Zero Lists */}
           {(() => {
-            const shallowList = scorecardData.filter(c => c.scores.testDepth < 30);
-            const a11yZeroList = scorecardData.filter(c => c.scores.a11y === 0);
+            const shallowList = scorecardData.filter((c) => c.scores.testDepth < 30);
+            const a11yZeroList = scorecardData.filter((c) => c.scores.a11y === 0);
             return (
               <div className="mt-4 space-y-2">
                 {shallowList.length > 0 && (
@@ -600,12 +766,19 @@ export default function QualityDashboardPage() {
                       Shallow Test ({shallowList.length}) — testDepth &lt; 30
                     </summary>
                     <div className="mt-2 space-y-1">
-                      {shallowList.map(c => (
-                        <div key={c.path} className="flex items-center justify-between rounded-md bg-surface-default/60 px-2 py-1 text-[10px]">
+                      {shallowList.map((c) => (
+                        <div
+                          key={c.path}
+                          className="flex items-center justify-between rounded-md bg-surface-default/60 px-2 py-1 text-[10px]"
+                        >
                           <span className="font-medium text-text-primary">{c.name}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-text-secondary">{c.dir}</span>
-                            <span className={`rounded-full px-1.5 py-0.5 font-bold ${GRADE_COLORS[c.grade]}`}>{c.grade}</span>
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 font-bold ${GRADE_COLORS[c.grade]}`}
+                            >
+                              {c.grade}
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -618,12 +791,17 @@ export default function QualityDashboardPage() {
                       A11y Skor = 0 ({a11yZeroList.length}) — erisilebilirlik destegi yok
                     </summary>
                     <div className="mt-2 space-y-1">
-                      {a11yZeroList.map(c => (
-                        <div key={c.path} className="flex items-center justify-between rounded-md bg-surface-default/60 px-2 py-1 text-[10px]">
+                      {a11yZeroList.map((c) => (
+                        <div
+                          key={c.path}
+                          className="flex items-center justify-between rounded-md bg-surface-default/60 px-2 py-1 text-[10px]"
+                        >
                           <span className="font-medium text-text-primary">{c.name}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-text-secondary">{c.dir}</span>
-                            <span className="text-text-secondary">a11y:{c.scores.a11y} testDepth:{c.scores.testDepth}</span>
+                            <span className="text-text-secondary">
+                              a11y:{c.scores.a11y} testDepth:{c.scores.testDepth}
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -644,7 +822,9 @@ export default function QualityDashboardPage() {
             <Text as="div" className="text-sm font-semibold text-text-primary">
               Benchmark Gate
             </Text>
-            <DataProvenanceBadge level={evidenceAvailable ? 'ci' : 'derived'} />
+            {/* K2-3: registry'den dinamik. evidence.benchmarks.workflow_exists varsa 'derived';
+                gercek CI artifact'i varsa 'ci'; aksi halde 'no_data'. */}
+            <DataProvenanceBadge level={getEvidenceProvenance(evidence, 'benchmarks')} />
           </div>
           {evidence.benchmarks.workflow_exists && (
             <span className="rounded-full bg-state-success-bg px-2.5 py-0.5 text-[10px] font-bold text-state-success-text">
@@ -654,7 +834,11 @@ export default function QualityDashboardPage() {
         </div>
         {!evidenceAvailable ? (
           <Text variant="secondary" className="text-xs">
-            Evidence registry bulunamadi. <code className="rounded-xs bg-surface-muted px-1 text-[10px]">npm run collect:evidence</code> calistirin.
+            Evidence registry bulunamadi.{' '}
+            <code className="rounded-xs bg-surface-muted px-1 text-[10px]">
+              npm run collect:evidence
+            </code>{' '}
+            calistirin.
           </Text>
         ) : !evidence.benchmarks.workflow_exists ? (
           <Text variant="secondary" className="text-xs">
@@ -675,9 +859,14 @@ export default function QualityDashboardPage() {
             {Object.keys(evidence.benchmarks.results).length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
                 {Object.entries(evidence.benchmarks.results).map(([key, value]) => (
-                  <div key={key} className="rounded-lg border border-border-subtle bg-surface-canvas/50 p-2 text-center">
+                  <div
+                    key={key}
+                    className="rounded-lg border border-border-subtle bg-surface-canvas/50 p-2 text-center"
+                  >
                     <Text className="text-xs font-medium text-text-primary">{String(value)}</Text>
-                    <Text variant="secondary" className="text-[10px]">{key}</Text>
+                    <Text variant="secondary" className="text-[10px]">
+                      {key}
+                    </Text>
                   </div>
                 ))}
               </div>
@@ -691,7 +880,9 @@ export default function QualityDashboardPage() {
       </div>
 
       {/* ─── Quality Gates Overview ─── */}
-      <QualityGatesOverview items={scoredComponents.map((c) => ({ qualityGates: c.item.qualityGates }))} />
+      <QualityGatesOverview
+        items={scoredComponents.map((c) => ({ qualityGates: c.item.qualityGates }))}
+      />
 
       {/* ─── Tier Distribution + Security Posture (side by side) ─── */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -704,60 +895,51 @@ export default function QualityDashboardPage() {
 
           {/* Tier count badges */}
           <div className="mb-4 grid grid-cols-4 gap-2">
-            {(["platinum", "gold", "silver", "bronze"] as QualityTier[]).map(
-              (tier) => {
-                const d = TIER_DISPLAY[tier];
-                return (
-                  <div key={tier} className={`rounded-lg ${d.bg}/40 px-3 py-2 text-center`}>
-                    <div className="flex items-center justify-center gap-1.5">
-                      <div className={`h-2 w-2 rounded-full ${d.barBg}`} />
-                      <Text variant="secondary" className="text-[10px] font-medium">{d.label}</Text>
-                    </div>
-                    <Text as="div" className={`mt-1 text-lg font-bold tabular-nums ${d.color}`}>
-                      {tierDistribution[tier]}
+            {(['platinum', 'gold', 'silver', 'bronze'] as QualityTier[]).map((tier) => {
+              const d = TIER_DISPLAY[tier];
+              return (
+                <div key={tier} className={`rounded-lg ${d.bg}/40 px-3 py-2 text-center`}>
+                  <div className="flex items-center justify-center gap-1.5">
+                    <div className={`h-2 w-2 rounded-full ${d.barBg}`} />
+                    <Text variant="secondary" className="text-[10px] font-medium">
+                      {d.label}
                     </Text>
                   </div>
-                );
-              },
-            )}
+                  <Text as="div" className={`mt-1 text-lg font-bold tabular-nums ${d.color}`}>
+                    {tierDistribution[tier]}
+                  </Text>
+                </div>
+              );
+            })}
           </div>
 
           {/* Bar chart */}
           <div className="flex items-end gap-3" style={{ height: 120 }}>
-            {(["platinum", "gold", "silver", "bronze"] as QualityTier[]).map(
-              (tier) => {
-                const count = tierDistribution[tier];
-                const heightPct =
-                  maxTierCount > 0 ? (count / maxTierCount) * 100 : 0;
-                const d = TIER_DISPLAY[tier];
-                return (
-                  <div
-                    key={tier}
-                    className="flex flex-1 flex-col items-center gap-1"
-                  >
-                    <Text className="text-xs font-semibold tabular-nums text-text-primary">
-                      {count}
-                    </Text>
-                    <div className="flex w-full justify-center" style={{ height: 80 }}>
-                      <div
-                        className={`w-10 rounded-t-lg ${d.barBg} transition-all duration-500`}
-                        style={{
-                          height: `${heightPct}%`,
-                          minHeight: count > 0 ? 4 : 0,
-                          alignSelf: "flex-end",
-                        }}
-                      />
-                    </div>
-                    <Text
-                      variant="secondary"
-                      className="text-[10px] font-medium"
-                    >
-                      {d.label}
-                    </Text>
+            {(['platinum', 'gold', 'silver', 'bronze'] as QualityTier[]).map((tier) => {
+              const count = tierDistribution[tier];
+              const heightPct = maxTierCount > 0 ? (count / maxTierCount) * 100 : 0;
+              const d = TIER_DISPLAY[tier];
+              return (
+                <div key={tier} className="flex flex-1 flex-col items-center gap-1">
+                  <Text className="text-xs font-semibold tabular-nums text-text-primary">
+                    {count}
+                  </Text>
+                  <div className="flex w-full justify-center" style={{ height: 80 }}>
+                    <div
+                      className={`w-10 rounded-t-lg ${d.barBg} transition-all duration-500`}
+                      style={{
+                        height: `${heightPct}%`,
+                        minHeight: count > 0 ? 4 : 0,
+                        alignSelf: 'flex-end',
+                      }}
+                    />
                   </div>
-                );
-              },
-            )}
+                  <Text variant="secondary" className="text-[10px] font-medium">
+                    {d.label}
+                  </Text>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -787,17 +969,44 @@ export default function QualityDashboardPage() {
         {(() => {
           const total = coverageItems.length || 1;
           const dims = [
-            { label: "Rehber", count: coverageItems.filter(c => c.hasGuide).length, color: "indigo" },
-            { label: "Token'lar", count: coverageItems.filter(c => c.hasTokens).length, color: "violet" },
-            { label: "Örnekler", count: coverageItems.filter(c => c.hasExamples).length, color: "blue" },
-            { label: "Oyun Alanı", count: coverageItems.filter(c => c.hasPlayground).length, color: "cyan" },
-            { label: "Testler", count: coverageItems.filter(c => c.hasTests).length, color: "emerald" },
+            {
+              label: 'Rehber',
+              count: coverageItems.filter((c) => c.hasGuide).length,
+              color: 'indigo',
+            },
+            {
+              label: "Token'lar",
+              count: coverageItems.filter((c) => c.hasTokens).length,
+              color: 'violet',
+            },
+            {
+              label: 'Örnekler',
+              count: coverageItems.filter((c) => c.hasExamples).length,
+              color: 'blue',
+            },
+            {
+              label: 'Oyun Alanı',
+              count: coverageItems.filter((c) => c.hasPlayground).length,
+              color: 'cyan',
+            },
+            {
+              label: 'Testler',
+              count: coverageItems.filter((c) => c.hasTests).length,
+              color: 'emerald',
+            },
           ];
-          return dims.map(d => (
-            <div key={d.label} className="rounded-xl border border-border-subtle bg-surface-default p-4 text-center">
-              <Text className="text-2xl font-bold text-text-primary">{Math.round((d.count / total) * 100)}%</Text>
+          return dims.map((d) => (
+            <div
+              key={d.label}
+              className="rounded-xl border border-border-subtle bg-surface-default p-4 text-center"
+            >
+              <Text className="text-2xl font-bold text-text-primary">
+                {Math.round((d.count / total) * 100)}%
+              </Text>
               <Text className="text-xs text-text-secondary">{d.label}</Text>
-              <Text className="text-[10px] text-text-tertiary">{d.count}/{coverageItems.length}</Text>
+              <Text className="text-[10px] text-text-tertiary">
+                {d.count}/{coverageItems.length}
+              </Text>
             </div>
           ));
         })()}
@@ -809,7 +1018,10 @@ export default function QualityDashboardPage() {
       </div>
 
       {/* ─── Bottom 20 Components ─── */}
-      <div id="bottom-components" className="rounded-2xl border border-border-subtle bg-surface-default">
+      <div
+        id="bottom-components"
+        className="rounded-2xl border border-border-subtle bg-surface-default"
+      >
         <div className="flex items-center gap-2 border-b border-border-subtle px-5 py-4">
           <AlertTriangle className="h-4 w-4 text-state-warning-text" />
           <Text as="div" className="text-sm font-semibold text-text-primary">
@@ -827,18 +1039,18 @@ export default function QualityDashboardPage() {
                 {idx + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <Text className="text-sm font-medium text-text-primary">
-                  {comp.item.name}
-                </Text>
+                <Text className="text-sm font-medium text-text-primary">{comp.item.name}</Text>
                 <Text variant="secondary" className="text-[10px]">
                   {comp.pkg} &middot; {comp.item.lifecycle}
                 </Text>
               </div>
               <div className="flex items-center gap-3">
                 {(() => {
-                  const sc = scorecardData.find(s => s.name === comp.item.name);
+                  const sc = scorecardData.find((s) => s.name === comp.item.name);
                   return sc ? (
-                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${GRADE_COLORS[sc.grade]}`}>
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${GRADE_COLORS[sc.grade]}`}
+                    >
                       {sc.grade} ({sc.totalScore})
                     </span>
                   ) : null;
@@ -869,11 +1081,9 @@ export default function QualityDashboardPage() {
           {scoredComponents.length} bileşen skorlandı
         </Text>
         <Text variant="secondary" className="text-sm">
-          Platform kalitesi:{" "}
-          <span className="font-semibold text-text-primary">
-            {overallScore}%
-          </span>{" "}
-          ({getQualityTier(overallScore)})
+          Platform kalitesi:{' '}
+          <span className="font-semibold text-text-primary">{overallScore}%</span> (
+          {getQualityTier(overallScore)})
         </Text>
       </div>
     </div>
