@@ -2,38 +2,38 @@ name: Web Playwright Nightly (Passive Schedule)
 
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: '0 1 * * *'
   workflow_dispatch:
     inputs:
       base_url:
-        description: "Playwright baseUrl override (boşsa secrets.PLAYWRIGHT_BASE_URL kullanılır)"
+        description: 'Playwright baseUrl override (boşsa secrets.PLAYWRIGHT_BASE_URL kullanılır)'
         required: false
-        default: ""
+        default: ''
         type: string
       soft_mode:
-        description: "1: Soft mode (job kırma yok), 0: Hard mode (FAIL -> job fail)"
+        description: '1: Soft mode (job kırma yok), 0: Hard mode (FAIL -> job fail)'
         required: false
-        default: "1"
+        default: '1'
         type: choice
         options:
-          - "0"
-          - "1"
+          - '0'
+          - '1'
       auth_mode:
-        description: "Auth modu"
+        description: 'Auth modu'
         required: false
-        default: "none"
+        default: 'none'
         type: choice
         options:
           - none
           - token_injection
       readonly_enforce:
-        description: "Readonly enforcement (0: kapalı, 1: açık)"
+        description: 'Readonly enforcement (0: kapalı, 1: açık)'
         required: false
-        default: "0"
+        default: '0'
         type: choice
         options:
-          - "0"
-          - "1"
+          - '0'
+          - '1'
 
 jobs:
   pw-nightly:
@@ -50,12 +50,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Resolve baseUrl (inputs.base_url > secrets.PLAYWRIGHT_BASE_URL)
         run: |
@@ -76,17 +79,14 @@ jobs:
           fi
           echo "PLAYWRIGHT_BASE_URL=${RESOLVED_BASE_URL}" >> "${GITHUB_ENV}"
 
-      - name: Install web dependencies
-        run: npm ci
-        working-directory: web
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright YAML nightly (soft mode)
-        run: npm run pw:nightly
-        working-directory: web
+        run: pnpm run pw:nightly
         env:
           PW_SOFT_MODE: ${{ inputs.soft_mode || '1' }}
           PW_AUTH_MODE: ${{ inputs.auth_mode || 'none' }}
@@ -101,7 +101,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pw-nightly-reports
-          path: web/test-results/pw
+          path: test-results/pw
 
   pw-local:
     runs-on: [self-hosted, vault-local]
@@ -111,12 +111,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Resolve baseUrl (inputs.base_url required for local)
         run: |
@@ -128,19 +131,16 @@ jobs:
           fi
           echo "PLAYWRIGHT_BASE_URL=${INPUT_BASE_URL}" >> "${GITHUB_ENV}"
 
-      - name: Install web dependencies
-        run: npm ci
-        working-directory: web
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers (Chromium)
-        run: npx playwright install chromium
-        working-directory: web
+        run: pnpm exec playwright install chromium
 
       - name: Run Playwright YAML nightly (soft mode)
-        run: npm run pw:nightly
-        working-directory: web
+        run: pnpm run pw:nightly
         env:
-          PW_ALLOW_LOCALHOST: "1"
+          PW_ALLOW_LOCALHOST: '1'
           PW_SOFT_MODE: ${{ inputs.soft_mode || '1' }}
           PW_AUTH_MODE: ${{ inputs.auth_mode || 'none' }}
           PW_READONLY_ENFORCE: ${{ inputs.readonly_enforce || '0' }}
@@ -154,4 +154,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pw-nightly-reports
-          path: web/test-results/pw
+          path: test-results/pw
