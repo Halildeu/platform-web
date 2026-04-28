@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # K2 (Wave 1.1) — Docker build context'ine taze evidence + scorecard yaz.
       # GHCR image içine baked olur, Design Lab Truth Plane production'da güncel kalır.
