@@ -9,7 +9,13 @@ const meta: Meta<typeof Breadcrumb> = {
   argTypes: {
     maxItems: { control: 'number' },
   },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof Breadcrumb>;
@@ -67,17 +73,14 @@ export const SingleItem: Story = {
 
 export const TwoItems: Story = {
   args: {
-    items: [
-      { label: 'Ana Sayfa', href: '#' },
-      { label: 'Detay' },
-    ],
+    items: [{ label: 'Ana Sayfa', href: '#' }, { label: 'Detay' }],
   },
 };
 
 export const ManyItems: Story = {
   args: {
     items: Array.from({ length: 7 }, (_, i) => ({
-      label: \`Level \${i + 1}\`,
+      label: `Level ${i + 1}`,
       href: i < 6 ? '#' : undefined,
     })),
     maxItems: 4,

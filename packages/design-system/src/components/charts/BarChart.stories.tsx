@@ -23,7 +23,13 @@ const meta: Meta<typeof BarChart> = {
   component: BarChart,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof BarChart>;
@@ -76,7 +82,7 @@ export const SingleBar: Story = {
 export const ManyBars: Story = {
   args: {
     data: Array.from({ length: 12 }, (_, i) => ({
-      label: \`Month \${i + 1}\`,
+      label: `Month ${i + 1}`,
       value: Math.round(50 + Math.random() * 200),
     })),
     title: 'Monthly Data',

@@ -1,9 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import React from 'react';
 
-const meta: Meta = { title: 'Advanced/DataGrid/AgGridServer' 
+const meta: Meta = {
+  title: 'Advanced/DataGrid/AgGridServer',
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 
@@ -12,7 +19,9 @@ type Story = StoryObj;
 export const Default: Story = {
   render: () => <div>AgGridServer requires AG Grid modules — see integration docs</div>,
   play: async ({ canvasElement }) => {
-    const el = canvasElement.querySelector('[role="button"], button, [data-testid], input, [tabindex]');
+    const el = canvasElement.querySelector(
+      '[role="button"], button, [data-testid], input, [tabindex]',
+    );
     if (el) (el as HTMLElement).click();
   },
 };
