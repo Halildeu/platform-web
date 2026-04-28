@@ -253,34 +253,42 @@ function scoreAccessControl(content, dir) {
 }
 
 // ── Score: Story Completeness (0-100) ──
-function scoreStory(componentName, componentDir) {
-  const kebab = componentName.replace(/([A-Z])/g, (_, c, i) => i ? `-${c.toLowerCase()}` : c.toLowerCase());
-  // Find story files — check direct, kebab subdir, and all immediate subdirs
-  const storyPatterns = [
-    path.join(SRC, componentDir, `${componentName}.stories.tsx`),
-    path.join(SRC, componentDir, kebab, `${componentName}.stories.tsx`),
-  ];
-  // Scan subdirs for story file (handles form/connected/ConnectedInput.stories.tsx etc)
-  const topDir = path.join(SRC, componentDir);
-  if (fs.existsSync(topDir)) {
-    for (const entry of fs.readdirSync(topDir, { withFileTypes: true })) {
+function findStoryFileRecursive(rootDir, componentName, maxDepth = 4) {
+  if (!fs.existsSync(rootDir)) return null;
+  const target = `${componentName}.stories.tsx`;
+  const stack = [{ dir: rootDir, depth: 0 }];
+  while (stack.length) {
+    const { dir, depth } = stack.pop();
+    if (depth > maxDepth) continue;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch { continue; }
+    for (const entry of entries) {
       if (entry.isDirectory() && entry.name !== '__tests__' && entry.name !== 'node_modules') {
-        storyPatterns.push(path.join(topDir, entry.name, `${componentName}.stories.tsx`));
+        stack.push({ dir: path.join(dir, entry.name), depth: depth + 1 });
+      } else if (entry.name === target) {
+        return path.join(dir, entry.name);
       }
     }
   }
+  return null;
+}
 
-  let storyFile = null;
-  for (const p of storyPatterns) {
-    if (fs.existsSync(p)) { storyFile = p; break; }
-  }
+function scoreStory(componentName, componentDir) {
+  // Recursive search across all subdirectories (handles deep paths like
+  // advanced/data-grid/filter-builder/FilterBuilderPanel.stories.tsx).
+  const topDir = path.join(SRC, componentDir);
+  const storyFile = findStoryFileRecursive(topDir, componentName);
   if (!storyFile) return 0;
 
   const content = fs.readFileSync(storyFile, 'utf-8');
   let score = 30; // Story exists
 
-  // Count story exports
-  const storyExports = (content.match(/export\s+const\s+\w+/g) || []).length - 1; // -1 for meta
+  // Count story exports. Note: meta is declared as `const meta` (no export) in
+  // 100% of stories in this codebase, so the `export const \w+` regex already
+  // excludes it. Previous `- 1` was a no-op-with-side-effect that under-counted
+  // every story by 6 pts.
+  const storyExports = (content.match(/export\s+const\s+\w+/g) || []).length;
   score += Math.min(30, storyExports * 6); // Up to 5 stories = 30pts
 
   // Has argTypes (interactive controls)
