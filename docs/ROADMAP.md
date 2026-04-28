@@ -269,10 +269,73 @@ ci-web-check · ci-web-image-push (pre-build sync) · gate-secrets · gate-osv-s
 
 ### Sıradaki
 
-- **PR #43 K7** (bu doc'la birlikte): dependency triage spike (kod migration YOK)
-- **K8 (gelecek)**: ilk gerçek dependency migration — @sentry/react patch
-- **Kalan F5**: Adaptive components v2 progressions + AI test generation hardening
+- **K7 + K8 + A1 + A3 ✅ tamamlandı** — detay §13
+- **Kalan F5**: Adaptive components v2 progressions + AI test generation hardening (gelecek seans)
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 sprint K1+K2+K3 closure log eklendi._
+## §13 Sprint K7 + K8 + GHA-bumps Closure (2026-04-28, seans 2)
+
+**Bu seansda 4 PR ile K7 (dependency triage), K8 (ilk gerçek dep migration), A1 (checkout v6) ve A3 (docker v7) tamamlandı:**
+
+| PR  | Sprint | Konu                                                                                                                             | Merge |
+| --- | ------ | -------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| #43 | K7     | Dependency triage spike + dependabot policy + sprint closure                                                                     | ✅    |
+| #45 | K8     | @sentry/react 10.48→10.50 minor + TS workspace convergence (mfe-schema-explorer ~5.7→^5.9.3 real upgrade + 9 manifest alignment) | ✅    |
+| #46 | A1     | actions/checkout v4→v6 (7 active workflows)                                                                                      | ✅    |
+| #47 | A3     | docker/build-push-action v6→v7 (ci-web-image-push)                                                                               | ✅    |
+
+### Closed dependabot PRs (supersede + obsolete)
+
+| PR  | Konu                         | Sebep                                                                              |
+| --- | ---------------------------- | ---------------------------------------------------------------------------------- |
+| #3  | actions/checkout 4→6         | Superseded by A1 PR #46 (broader scope, 7 workflow)                                |
+| #6  | dev-deps grouped 24 update   | K7 dependabot policy değişti (patch-only grouping); auto-closed                    |
+| #9  | ag-charts 12→13              | PINNED — repo kuralı; K7'de dependabot ignore eklendi                              |
+| #10 | typescript 5.7→5.9           | Superseded by narrower K8 PR #45 (workspace TS convergence; x-\* `^5.0.0` korundu) |
+| #11 | ag-grid 34→35                | PINNED — repo kuralı; K7'de dependabot ignore eklendi                              |
+| #16 | @sentry/react 10.50          | Superseded by K8 PR #45 (broader workspace test coverage)                          |
+| #20 | docker/build-push-action 6→7 | Superseded by A3 PR #47                                                            |
+
+### Codex MCP istişaresi
+
+threadId `019dd3c3-f710-7583-ab3f-549173f3dbd8`, 3 iter:
+
+1. K8 plan istişaresi (sentry + TS convergence) — REVISE × 2 → AGREE
+2. K8 son revize teyit ("patch" → "minor" relabel + exact lockfile resolution asserts) — AGREE
+3. Sıradaki sprint plan (A0+A1+A2+A3 split) — REVISE → A0 ertele, A1 önce; A2 A0 sonrası gelir
+
+### Aktif workflow yüzeyi (11 consistency)
+
+11/11 active workflow `checkout@v6` hizalandı (önceki: 4 v4 + 7 mix). `docker/build-push-action@v7` ci-web-image-push'da. `setup-node` + `cache` + `pnpm/action-setup` hâlâ v4 (A2 lane'i; A0 sonrası).
+
+### Sıradaki (gelecek seans)
+
+- **A0**: web-playwright workflow repair (`web/` path archaeology + pnpm v10 alignment + script migration; Codex iter-4 detaylı plan gerekli)
+- **A2**: setup-node + cache + pnpm/action-setup install-stack bump (A0 sonrası; supersede #21, #22, #23)
+- **K5**: Charts visual baseline (snapshot + advisory→hard gate progression)
+- **F5 K3-3**: AI test generation hardening
+- **F5 K3-4**: Adaptive components v2 progressions
+
+### K8 lockfile + test verification (kanıt)
+
+```
+pnpm install --frozen-lockfile=false  ✓ (4.6s)
+pnpm install --frozen-lockfile        ✓ (469ms)
+pnpm --filter mfe-schema-explorer exec tsc --noEmit  ✓
+pnpm --filter mfe-schema-explorer exec tsc --version ✓ (5.9.3)
+pnpm --filter mfe-schema-explorer build              ✓ (190 modules, 474ms)
+pnpm --filter mfe-shell test          ✓ (433 pass / 3 skip / 99 files)
+pnpm --filter @mfe/i18n-dicts test    ✓ (9 pass)
+! rg 'typescript@5\.7\.3' pnpm-lock.yaml             ✓ (TS 5.7 absent)
+rg "@sentry/react@10\.50\.0" pnpm-lock.yaml          ✓ (exact resolution)
+! rg "@sentry/react@10\.(5[1-9]|[6-9][0-9])"         ✓ (no 10.51+ drift)
+```
+
+### A3 post-merge observability
+
+`ci-web-image-push.yml` `push: main` triggered run for commit `6d4c00ba` (A3 merge): IN_PROGRESS at closure time. Önceki 2 main commit (`1480b918` A1, `1671a3f1` K8) SUCCESS. `docker/build-push-action@v7` build path verification post-merge'de devam ediyor.
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 sprint K1+K2+K3 closure + §13 sprint K7+K8+GHA-bumps closure log eklendi._
