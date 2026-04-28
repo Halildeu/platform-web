@@ -1,0 +1,87 @@
+name: Evidence Registry Sync
+
+# K2 (Wave 1.1) — Design Lab Truth Plane'e besleyen evidence registry üretir.
+# scripts/sync-public-evidence.mjs hem evidence-registry.v1.json hem scorecard.json
+# güncellenmiş halini apps/mfe-shell/public/'a yazar; artifact upload eder.
+#
+# Auto-commit YOK (Codex iter-4 Karar-1 REVISE): GITHUB_TOKEN ile push deploy
+# tetiklemeyebilir + commit noise üretir. Production freshness için
+# ci-web-image-push.yml Docker build öncesi sync çalışır.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/collect-evidence.mjs'
+      - 'scripts/sync-public-evidence.mjs'
+      - 'apps/mfe-shell/src/pages/admin/design-lab/evidence/**'
+      - 'apps/mfe-shell/public/evidence-registry.v1.json'
+      - 'apps/mfe-shell/public/scorecard.json'
+      - '.github/workflows/evidence-collect.yml'
+      - 'packages/design-system/scripts/ci/component-scorecard.mjs'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/collect-evidence.mjs'
+      - 'scripts/sync-public-evidence.mjs'
+      - 'packages/design-system/src/**'
+      - 'packages/design-system/scripts/ci/**'
+  schedule:
+    # Nightly UTC 03:00 — playwright-nightly öncesi çalışsın ki taze registry çıksın
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync public evidence + scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12'
+
+      - name: Setup pnpm (version from package.json packageManager)
+        uses: pnpm/action-setup@v4
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run sync-public-evidence
+        run: node scripts/sync-public-evidence.mjs
+
+      - name: Validate evidence schema
+        run: |
+          node -e "
+            const r = require('./apps/mfe-shell/public/evidence-registry.v1.json');
+            if (r.schema_version !== 1) { console.error('schema_version mismatch'); process.exit(1); }
+            const required = ['visual_regression','security','benchmarks','coverage','compatibility','tests','docs_truth','provenance','source_refs'];
+            const missing = required.filter(k => !(k in r));
+            if (missing.length) { console.error('Missing keys:', missing.join(',')); process.exit(1); }
+            console.log('Evidence schema OK — provenance:', JSON.stringify(r.provenance));
+          "
+
+      - name: Upload evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-registry
+          path: |
+            apps/mfe-shell/public/evidence-registry.v1.json
+            apps/mfe-shell/public/scorecard.json
+            .evidence/
+          retention-days: 30
+          if-no-files-found: warn

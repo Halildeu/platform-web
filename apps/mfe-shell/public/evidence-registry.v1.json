@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/collect-evidence.mjs",
+  "timestamp": "2026-04-28T09:15:40.302Z",
+  "version": "1.0.0",
+  "visual_regression": {
+    "provider": "playwright",
+    "workflow_exists": true,
+    "last_run": null,
+    "status": "configured",
+    "stats": {
+      "pass": 0,
+      "fail": 0,
+      "changed": 0,
+      "new": 0,
+      "skipped": 0
+    }
+  },
+  "browser_tests": {
+    "files": 99,
+    "provider": "playwright"
+  },
+  "visual_regression_tests": {
+    "files": 194,
+    "provider": "vitest-screenshot"
+  },
+  "security": {
+    "codeql": {
+      "workflow_exists": true,
+      "status": "configured"
+    },
+    "secret_scan": {
+      "workflow_exists": true,
+      "status": "configured"
+    },
+    "trivy": {
+      "workflow_exists": true,
+      "status": "configured"
+    },
+    "sbom": {
+      "workflow_exists": false,
+      "status": "missing"
+    },
+    "guardrails": {
+      "workflow_exists": false,
+      "status": "missing"
+    }
+  },
+  "benchmarks": {
+    "workflow_exists": false,
+    "last_run": null,
+    "threshold_enforced": false,
+    "results": {}
+  },
+  "coverage": {
+    "available": false,
+    "lines": null,
+    "branches": null,
+    "functions": null,
+    "statements": null
+  },
+  "compatibility": {
+    "workflow_exists": false,
+    "matrix": {
+      "node": ["22"],
+      "react": ["18.2"]
+    }
+  },
+  "tests": {
+    "design_system": {
+      "files": 0,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0
+    },
+    "x_suite": {
+      "files": 0,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0
+    },
+    "shell": {
+      "files": 0,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0
+    }
+  },
+  "docs_truth": {
+    "phantom_imports": 0,
+    "stale_examples": 0,
+    "last_check": null
+  },
+  "provenance": {
+    "visual_regression": "derived",
+    "security": "derived",
+    "benchmarks": "no_data",
+    "coverage": "no_data",
+    "compatibility": "no_data",
+    "tests": "no_data",
+    "docs_truth": "no_data"
+  },
+  "source_refs": {
+    "visual_regression": ".github/workflows/web-playwright-nightly.yml",
+    "security.codeql": ".github/workflows/codeql.yml",
+    "security.secret_scan": ".github/workflows/gate-secrets.yml",
+    "security.trivy": ".github/workflows/gate-osv-scan.yml"
+  }
+}

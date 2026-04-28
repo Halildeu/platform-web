@@ -1,8 +1,13 @@
 /**
  * Hook that reads the evidence registry and provides typed data to panels.
- * In development: reads from .evidence/registry.json via fetch
- * In CI: reads from uploaded artifact
+ * Production: /evidence-registry.v1.json (public, build-time synced via scripts/sync-public-evidence.mjs)
+ * Dev fallback: .evidence/registry.json
  * Fallback: returns "no data" state
+ *
+ * Schema v1 (K2 — Wave 1.1):
+ *   - schema_version: 1
+ *   - per-section provenance: 'live' | 'ci' | 'derived' | 'no_data'
+ *   - source_refs: workflow path eşlemesi
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -11,7 +16,15 @@ import { useState, useEffect, useRef } from 'react';
 /*  Types                                                               */
 /* ------------------------------------------------------------------ */
 
-export type EvidenceStatus = 'configured' | 'passing' | 'failing' | 'never_run' | 'missing' | 'no_data';
+export type EvidenceStatus =
+  | 'configured'
+  | 'passing'
+  | 'failing'
+  | 'never_run'
+  | 'missing'
+  | 'no_data';
+
+export type EvidenceProvenance = 'live' | 'ci' | 'derived' | 'no_data';
 
 export interface VisualRegressionEvidence {
   provider: 'chromatic' | 'playwright' | 'none';
@@ -85,6 +98,8 @@ export interface DocsTruthEvidence {
 }
 
 export interface EvidenceRegistry {
+  schema_version?: number;
+  generated_by?: string;
   timestamp: string;
   version: string;
   visual_regression: VisualRegressionEvidence;
@@ -94,6 +109,19 @@ export interface EvidenceRegistry {
   compatibility: CompatibilityEvidence;
   tests: TestsEvidence;
   docs_truth: DocsTruthEvidence;
+  provenance?: Partial<
+    Record<
+      | 'visual_regression'
+      | 'security'
+      | 'benchmarks'
+      | 'coverage'
+      | 'compatibility'
+      | 'tests'
+      | 'docs_truth',
+      EvidenceProvenance
+    >
+  >;
+  source_refs?: Record<string, string>;
 }
 
 export type EvidenceState =
@@ -178,18 +206,36 @@ export function useEvidence(): EvidenceState {
     if (sessionCache || fetchedRef.current) return;
     fetchedRef.current = true;
 
+    // K2 (Wave 1.1) priority order — production path first, dev fallback last.
     const paths = [
+      '/evidence-registry.v1.json',
       '/.evidence/registry.json',
       '/evidence/registry.json',
       './evidence/registry.json',
     ];
 
+    function isValidRegistry(data: unknown): data is EvidenceRegistry {
+      if (!data || typeof data !== 'object') return false;
+      const r = data as Record<string, unknown>;
+      // Minimum required shape for the 7-panel surface.
+      return (
+        'visual_regression' in r &&
+        'security' in r &&
+        'benchmarks' in r &&
+        'coverage' in r &&
+        'compatibility' in r &&
+        'tests' in r &&
+        'docs_truth' in r
+      );
+    }
+
     async function tryFetch() {
       for (const path of paths) {
         try {
-          const res = await fetch(path);
+          const res = await fetch(path, { cache: 'no-store' });
           if (res.ok) {
-            const data: EvidenceRegistry = await res.json();
+            const data: unknown = await res.json();
+            if (!isValidRegistry(data)) continue;
             sessionCache = data;
             setState({ status: 'loaded', data });
             return;
