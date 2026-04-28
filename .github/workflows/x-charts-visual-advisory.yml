@@ -1,0 +1,134 @@
+name: x-charts Visual Advisory
+
+# Two distinct job paths:
+#
+#   compare-baseline: runs on pull_request — checks committed Linux
+#                     baselines against fresh snapshots. Advisory until
+#                     the K5 hard-gate sprint.
+#
+#   generate-baseline: runs on workflow_dispatch — produces fresh Linux
+#                      baselines and uploads them as an artifact.
+#                      Maintainers download and commit the artifact to
+#                      update the baseline. NEVER auto-commits.
+#
+# Both jobs use the K5-scoped Storybook config (`.storybook-k5`) which
+# bundles only the AllChartTypes story file. Full Storybook config
+# (5 addons + 229 stories + autodocs) hangs in Vite production build
+# (separate RCA, see PR #52 thread); K5 must not block on that.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/x-charts/**'
+      - 'packages/design-system/src/__visual__/x-charts.visual.ts'
+      - 'packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts/**'
+      - 'packages/design-system/playwright.config.ts'
+      - '.storybook-k5/**'
+      - '.github/workflows/x-charts-visual-advisory.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'baseline = regenerate Linux baselines and upload artifact'
+        required: true
+        default: 'baseline'
+        type: choice
+        options:
+          - baseline
+
+jobs:
+  compare-baseline:
+    name: Compare against committed baseline (advisory)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Advisory until follow-up sprint — failures do NOT block merge.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Storybook (K5 scoped)
+        run: pnpm exec storybook build --config-dir .storybook-k5 --output-dir storybook-static-k5
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Compare against committed baseline
+        env:
+          PW_STORYBOOK_STATIC_DIR: storybook-static-k5
+        run: |
+          pnpm exec playwright test \
+            --config packages/design-system/playwright.config.ts \
+            --project=desktop-light \
+            --grep "x-charts"
+
+      - name: Upload diff artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x-charts-compare-results
+          path: |
+            packages/design-system/src/__visual__/test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  generate-baseline:
+    name: Generate Linux baseline (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Storybook (K5 scoped)
+        run: pnpm exec storybook build --config-dir .storybook-k5 --output-dir storybook-static-k5
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Regenerate Linux baseline (--update-snapshots)
+        env:
+          PW_STORYBOOK_STATIC_DIR: storybook-static-k5
+        run: |
+          pnpm exec playwright test \
+            --config packages/design-system/playwright.config.ts \
+            --project=desktop-light \
+            --grep "x-charts" \
+            --update-snapshots
+
+      - name: Upload Linux baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: x-charts-linux-baseline
+          path: packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts
+          if-no-files-found: error
+          retention-days: 30
