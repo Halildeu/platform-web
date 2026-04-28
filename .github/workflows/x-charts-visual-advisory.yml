@@ -68,15 +68,14 @@ jobs:
         run: pnpm exec storybook build --config-dir .storybook-k5 --output-dir storybook-static-k5
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
 
-      - name: Compare against committed baseline
+      - name: Compare against committed baseline (3 browsers)
         env:
           PW_STORYBOOK_STATIC_DIR: storybook-static-k5
         run: |
           pnpm exec playwright test \
             --config packages/design-system/playwright.config.ts \
-            --project=desktop-light \
             --grep "x-charts"
 
       - name: Upload diff artifacts
@@ -116,15 +115,14 @@ jobs:
         run: pnpm exec storybook build --config-dir .storybook-k5 --output-dir storybook-static-k5
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
 
-      - name: Regenerate Linux baseline (--update-snapshots)
+      - name: Regenerate Linux baseline (3 browsers, --update-snapshots)
         env:
           PW_STORYBOOK_STATIC_DIR: storybook-static-k5
         run: |
           pnpm exec playwright test \
             --config packages/design-system/playwright.config.ts \
-            --project=desktop-light \
             --grep "x-charts" \
             --update-snapshots
 
