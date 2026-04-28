@@ -1,19 +1,18 @@
 import React from 'react';
-import { ShellSidebar } from '../ShellSidebar';
-import { SidebarProvider } from '../../../components/app-sidebar';
+import { ShellSidebar } from './ShellSidebar';
 
+// SidebarProvider import removed — no longer exported from app-sidebar
+// (ShellSidebar manages its own context internally).
 export default {
   title: 'Patterns/ShellSidebar',
   component: ShellSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story: React.FC) => (
-      <SidebarProvider>
-        <div className="flex h-screen">
-          <Story />
-          <div className="flex-1 p-8 text-text-secondary">Content area</div>
-        </div>
-      </SidebarProvider>
+      <div className="flex h-screen">
+        <Story />
+        <div className="flex-1 p-8 text-text-secondary">Content area</div>
+      </div>
     ),
   ],
 };
