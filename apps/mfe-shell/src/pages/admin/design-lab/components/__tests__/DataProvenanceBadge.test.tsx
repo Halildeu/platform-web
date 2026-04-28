@@ -9,9 +9,17 @@ describe('DataProvenanceBadge', () => {
     expect(document.body).toBeTruthy();
   });
 
-  it.each(['live', 'ci', 'derived', 'simulated'] as const)('renders %s level', (level) => {
-    const { container } = render(<DataProvenanceBadge level={level} />);
-    expect(container.querySelector('span')).toBeTruthy();
+  it.each(['live', 'ci', 'derived', 'simulated', 'no_data'] as const)(
+    'renders %s level',
+    (level) => {
+      const { container } = render(<DataProvenanceBadge level={level} />);
+      expect(container.querySelector('span')).toBeTruthy();
+    },
+  );
+
+  it('renders no_data with explicit "Veri yok" label (W1.5 fake guarantee)', () => {
+    const { getByText } = render(<DataProvenanceBadge level="no_data" />);
+    expect(getByText('Veri yok')).toBeTruthy();
   });
 
   it('applies custom className', () => {

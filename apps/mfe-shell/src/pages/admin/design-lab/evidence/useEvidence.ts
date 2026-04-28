@@ -265,6 +265,29 @@ export function useEvidenceData(): EvidenceRegistry {
 }
 
 /**
+ * K2-2 helper: Get provenance level for a specific evidence section.
+ * Falls back to 'no_data' when registry has no provenance field or section is missing.
+ *
+ * Usage:
+ *   const provenance = getEvidenceProvenance(registry, 'visual_regression');
+ *   <DataProvenanceBadge level={provenance} />
+ */
+export function getEvidenceProvenance(
+  registry: EvidenceRegistry | null | undefined,
+  key:
+    | 'visual_regression'
+    | 'security'
+    | 'benchmarks'
+    | 'coverage'
+    | 'compatibility'
+    | 'tests'
+    | 'docs_truth',
+): EvidenceProvenance {
+  if (!registry?.provenance) return 'no_data';
+  return registry.provenance[key] ?? 'no_data';
+}
+
+/**
  * Check if evidence is available (not fallback).
  */
 export function useEvidenceAvailable(): boolean {

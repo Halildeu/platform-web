@@ -2,7 +2,7 @@ import React from 'react';
 import { ShieldAlert, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { Text } from '@mfe/design-system';
 import { DataProvenanceBadge } from './DataProvenanceBadge';
-import { useEvidence, FALLBACK_REGISTRY } from '../evidence/useEvidence';
+import { useEvidence, FALLBACK_REGISTRY, getEvidenceProvenance } from '../evidence/useEvidence';
 import type { EvidenceStatus } from '../evidence/useEvidence';
 
 /* ------------------------------------------------------------------ */
@@ -29,13 +29,43 @@ interface SecurityCheck {
   status: ConfigStatus;
 }
 
-/** Static check definitions — status is overridden from evidence at runtime */
-const CHECK_DEFS: Array<{ name: string; description: string; derivedFrom: string; evidenceKey: string }> = [
-  { name: 'CodeQL', description: 'Statik kod analizi', derivedFrom: '.github/workflows/codeql.yml', evidenceKey: 'codeql' },
-  { name: 'Secret Scan', description: 'Gizli bilgi taramasi', derivedFrom: '.github/workflows/secret-scan.yml', evidenceKey: 'secret_scan' },
-  { name: 'Dependency Scan', description: 'Bagimlililk guvenlik taramasi', derivedFrom: '.github/workflows/security-guardrails.yml', evidenceKey: 'trivy' },
-  { name: 'SBOM', description: 'Yazilim malzeme listesi', derivedFrom: '.github/workflows/security-guardrails.yml', evidenceKey: 'sbom' },
-  { name: 'Guardrails', description: 'Guvenlik koruma raylari', derivedFrom: '.github/workflows/security-guardrails.yml', evidenceKey: 'guardrails' },
+/** Static check definitions — derivedFrom paths aligned with active workflows (K2-2). */
+const CHECK_DEFS: Array<{
+  name: string;
+  description: string;
+  derivedFrom: string;
+  evidenceKey: string;
+}> = [
+  {
+    name: 'CodeQL',
+    description: 'Statik kod analizi',
+    derivedFrom: '.github/workflows/codeql.yml',
+    evidenceKey: 'codeql',
+  },
+  {
+    name: 'Secret Scan',
+    description: 'Gizli bilgi taramasi (gitleaks)',
+    derivedFrom: '.github/workflows/gate-secrets.yml',
+    evidenceKey: 'secret_scan',
+  },
+  {
+    name: 'Dependency Scan',
+    description: 'Bagimlililk guvenlik taramasi (OSV)',
+    derivedFrom: '.github/workflows/gate-osv-scan.yml',
+    evidenceKey: 'trivy',
+  },
+  {
+    name: 'SBOM',
+    description: 'Yazilim malzeme listesi (henuz yapilandirilmadi)',
+    derivedFrom: '(no active workflow)',
+    evidenceKey: 'sbom',
+  },
+  {
+    name: 'Guardrails',
+    description: 'Guvenlik koruma raylari (henuz yapilandirilmadi)',
+    derivedFrom: '(no active workflow)',
+    evidenceKey: 'guardrails',
+  },
 ];
 
 function mapEvidenceStatus(status: EvidenceStatus): ConfigStatus {
@@ -45,30 +75,31 @@ function mapEvidenceStatus(status: EvidenceStatus): ConfigStatus {
   return 'missing';
 }
 
-const STATUS_CONFIG: Record<ConfigStatus, { icon: React.ReactNode; badge: string; label: string }> = {
-  configured: {
-    icon: <CheckCircle2 className="h-4 w-4 text-state-success-text" />,
-    badge: 'bg-state-success-bg text-state-success-text dark:bg-state-success-text/30 dark:text-state-success-text',
-    label: 'Yapilandirildi',
-  },
-  missing: {
-    icon: <XCircle className="h-4 w-4 text-state-danger-text" />,
-    badge: 'bg-state-danger-bg text-state-danger-text dark:bg-state-danger-text/30 dark:text-state-danger-text',
-    label: 'Eksik',
-  },
-  no_data: {
-    icon: <HelpCircle className="h-4 w-4 text-text-disabled" />,
-    badge: 'bg-surface-muted text-text-subtle dark:bg-surface-inverse/30 dark:text-text-disabled',
-    label: 'Veri yok',
-  },
-};
+const STATUS_CONFIG: Record<ConfigStatus, { icon: React.ReactNode; badge: string; label: string }> =
+  {
+    configured: {
+      icon: <CheckCircle2 className="h-4 w-4 text-state-success-text" />,
+      badge:
+        'bg-state-success-bg text-state-success-text dark:bg-state-success-text/30 dark:text-state-success-text',
+      label: 'Yapilandirildi',
+    },
+    missing: {
+      icon: <XCircle className="h-4 w-4 text-state-danger-text" />,
+      badge:
+        'bg-state-danger-bg text-state-danger-text dark:bg-state-danger-text/30 dark:text-state-danger-text',
+      label: 'Eksik',
+    },
+    no_data: {
+      icon: <HelpCircle className="h-4 w-4 text-text-disabled" />,
+      badge: 'bg-surface-muted text-text-subtle dark:bg-surface-inverse/30 dark:text-text-disabled',
+      label: 'Veri yok',
+    },
+  };
 
 export function SecurityPosture() {
   const evidenceState = useEvidence();
   const securityEvidence =
-    evidenceState.status === 'loaded'
-      ? evidenceState.data.security
-      : FALLBACK_REGISTRY.security;
+    evidenceState.status === 'loaded' ? evidenceState.data.security : FALLBACK_REGISTRY.security;
   const evidenceAvailable = evidenceState.status === 'loaded';
 
   // Build checks from evidence
@@ -76,12 +107,18 @@ export function SecurityPosture() {
     const ev = securityEvidence[def.evidenceKey];
     const status: ConfigStatus = ev
       ? mapEvidenceStatus(ev.status as EvidenceStatus)
-      : evidenceAvailable ? 'missing' : 'no_data';
+      : evidenceAvailable
+        ? 'missing'
+        : 'no_data';
     return { name: def.name, description: def.description, derivedFrom: def.derivedFrom, status };
   });
 
   const configuredCount = checks.filter((s) => s.status === 'configured').length;
-  const provenanceLevel = evidenceAvailable ? 'ci' as const : 'derived' as const;
+  // K2-2: provenance registry'den (evidence.provenance.security). Fallback no_data.
+  const provenanceLevel = getEvidenceProvenance(
+    evidenceState.status === 'loaded' ? evidenceState.data : null,
+    'security',
+  );
 
   return (
     <div className="rounded-2xl border border-border-subtle bg-surface-default p-5">
@@ -93,11 +130,13 @@ export function SecurityPosture() {
           </Text>
           <DataProvenanceBadge level={provenanceLevel} />
         </div>
-        <div className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-          configuredCount === checks.length
-            ? 'bg-state-success-bg text-state-success-text dark:bg-state-success-text/30 dark:text-state-success-text'
-            : 'bg-state-warning-bg text-state-warning-text dark:bg-state-warning-text/30 dark:text-state-warning-text'
-        }`}>
+        <div
+          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+            configuredCount === checks.length
+              ? 'bg-state-success-bg text-state-success-text dark:bg-state-success-text/30 dark:text-state-success-text'
+              : 'bg-state-warning-bg text-state-warning-text dark:bg-state-warning-text/30 dark:text-state-warning-text'
+          }`}
+        >
           {configuredCount}/{checks.length} yapilandirildi
         </div>
       </div>
@@ -115,7 +154,9 @@ export function SecurityPosture() {
                   {config.icon}
                   <Text className="text-xs font-semibold text-text-primary">{check.name}</Text>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.badge}`}>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${config.badge}`}
+                >
                   {config.label}
                 </span>
               </div>
@@ -132,11 +173,14 @@ export function SecurityPosture() {
 
       {!evidenceAvailable && (
         <Text variant="secondary" className="mt-3 text-[10px]">
-          Evidence registry bulunamadi — <code className="rounded-xs bg-surface-muted px-1">npm run collect:evidence</code> calistirin.
+          Evidence registry bulunamadi —{' '}
+          <code className="rounded-xs bg-surface-muted px-1">npm run collect:evidence</code>{' '}
+          calistirin.
         </Text>
       )}
       <Text variant="secondary" className="mt-1 text-[10px]">
-        Yapilandirildi = dosya repoda mevcut. Gercek basarili/basarisiz durumu CI calisma sonuclarindan gelir.
+        Yapilandirildi = dosya repoda mevcut. Gercek basarili/basarisiz durumu CI calisma
+        sonuclarindan gelir.
       </Text>
     </div>
   );
