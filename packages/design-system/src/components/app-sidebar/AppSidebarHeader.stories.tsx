@@ -2,7 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarHeader } from './AppSidebarHeader';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 
 const meta: Meta<typeof AppSidebarHeader> = {
   title: 'Components/Navigation/AppSidebarHeader',
@@ -17,7 +17,9 @@ const meta: Meta<typeof AppSidebarHeader> = {
   decorators: [
     (Story) => (
       <div style={{ height: 400, display: 'flex' }}>
-        <AppSidebar><Story /></AppSidebar>
+        <AppSidebar>
+          <Story />
+        </AppSidebar>
       </div>
     ),
   ],
@@ -33,15 +35,29 @@ export const WithLogo: Story = {
   render: () => (
     <AppSidebarHeader
       title="Design Lab"
-      logo={<span style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--action-primary)', color: 'var(--surface-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>DL</span>}
+      logo={
+        <span
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 6,
+            background: 'var(--action-primary)',
+            color: 'var(--surface-default)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 13,
+          }}
+        >
+          DL
+        </span>
+      }
     />
   ),
 };
 
 export const WithAction: Story = {
-  render: () => (
-    <AppSidebarHeader title="App" action={<AppSidebar.Trigger />} />
-  ),
+  render: () => <AppSidebarHeader title="App" action={<AppSidebar.Trigger />} />,
 };
 
 export const TitleOnly: Story = {
@@ -53,9 +69,7 @@ export const SubtitleOnly: Story = {
 };
 
 export const Interactive: Story = {
-  render: () => (
-    <AppSidebarHeader title="Interactive" action={<AppSidebar.Trigger />} />
-  ),
+  render: () => <AppSidebarHeader title="Interactive" action={<AppSidebar.Trigger />} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByLabelText('Collapse sidebar');

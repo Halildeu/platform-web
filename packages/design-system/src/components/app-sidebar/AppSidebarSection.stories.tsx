@@ -2,7 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarSection } from './AppSidebarSection';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 
 const meta: Meta<typeof AppSidebarSection> = {
   title: 'Components/Navigation/AppSidebarSection',
@@ -18,7 +18,11 @@ const meta: Meta<typeof AppSidebarSection> = {
   decorators: [
     (Story) => (
       <div style={{ height: 400, display: 'flex' }}>
-        <AppSidebar><AppSidebar.Nav><Story /></AppSidebar.Nav></AppSidebar>
+        <AppSidebar>
+          <AppSidebar.Nav>
+            <Story />
+          </AppSidebar.Nav>
+        </AppSidebar>
       </div>
     ),
   ],
