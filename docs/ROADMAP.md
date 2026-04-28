@@ -565,4 +565,75 @@ threadId `019dd3c3-f710-7583-ab3f-549173f3dbd8` — REVISE absorbed:
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite) closure log eklendi._
+## §17 Storybook Full Build Green Sprint (2026-04-28, seans 7)
+
+**3 PR ile Storybook full build hang investigation TAMAMLANDI** — 21+ dk hang yerine 9 saniye build.
+
+| PR  | Konu                                                                      | Sonuç                |
+| --- | ------------------------------------------------------------------------- | -------------------- |
+| #60 | Storybook RCA Phase 1+2 (addons confirmed as cause)                       | ✅ merged            |
+| #61 | Storybook RCA Phase 3 + 3 story bug fixes (design-token + 4 import paths) | ✅ merged `c9fa0777` |
+| #62 | Storybook full build green (\`@storybook/test\` rename + viteFinal alias) | ✅ merged `3a66326b` |
+
+### Investigation timeline (multi-PR)
+
+| Phase | Test                                                           | Yerel                                         | CI            | Bulgu                            |
+| ----- | -------------------------------------------------------------- | --------------------------------------------- | ------------- | -------------------------------- |
+| 1     | Full config (5 addons + 229 stories + autodocs + react-docgen) | 36+ dk hang                                   | 25 dk timeout | Yapısal hang                     |
+| 2     | Zero addons                                                    | ✅ build                                      | —             | Addon family is the cause        |
+| 3.1   | \`storybook-design-token\` only                                | 26+ dk hang                                   | —             | design-token suspect             |
+| Fix-1 | design-token kaldır                                            | 7s fail (4 import bug)                        | —             | path bug'lar revealed            |
+| Fix-2 | Path düzelt                                                    | 7s fail (1 missing export)                    | —             | SidebarProvider broken decorator |
+| Fix-3 | SidebarProvider kaldır                                         | 9s fail (1 unresolved \`@mfe/design-system\`) | —             | x-charts peerDep alias gerek     |
+| Fix-4 | viteFinal alias + \`@storybook/test\` rename                   | **✅ 9s success**                             | —             | **TAM ÇÖZÜM**                    |
+
+### Root cause özeti (4 katmanlı)
+
+1. **\`storybook-design-token\` addon (PR #61)** — Vite plugin Storybook 10 + builder-vite 8 + rolldown 1.0 ile deadlock yapıyor 229-story scope üzerinde. Addon Storybook 10 için unmaintained. Tokens runtime'da yine render edilir; sadece docs panel kayıp.
+
+2. **Path bug'lar (PR #61)** — \`ShellHeader.stories.tsx\`, \`ShellSidebar.stories.tsx\` relative import path'leri yanlıştı (\`../X\` → \`./X\`). Storybook 9'dan migration kalıntısı.
+
+3. **\`@storybook/test\` deprecated (PR #62)** — Storybook 10'da test utilities \`@storybook/test\` yerine \`storybook/test\` (no @ prefix) altında. 11 app-sidebar story'sinde stale import.
+
+4. **\`@mfe/design-system\` peerDep (PR #62)** — \`x-\*\` paketleri \`@mfe/design-system\`'i peerDependency olarak bildiriyor (\`cn\`, \`Spinner\`, \`Text\` için). Storybook ana config'de alias yoktu. Aynı sorun K5 v3'te scoped config'le çözülmüştü; root config'e de aynı alias eklendi.
+
+### Verification
+
+\`\`\`bash
+$ pnpm exec storybook build
+┌ Building storybook v10.3.5
+│
+● Building preview..
+│ Vite v8.0.7 building client environment for production...
+│ ✓ 3132 modules transformed
+│ Vite ✓ built in 4.08s
+│
+└ Storybook build completed successfully
+
+# Total 9 seconds (vs 21+ minute hang).
+
+\`\`\`
+
+### Bu seansda toplam 7 PR
+
+| PR  | Konu                                            |
+| --- | ----------------------------------------------- |
+| #56 | K5 hard gate                                    |
+| #57 | K5 browser matrix (39 PNG, 3 browser)           |
+| #58 | K5 composite (54 PNG, KPICard + ChartDashboard) |
+| #59 | ROADMAP §16 closure                             |
+| #60 | Storybook RCA Phase 1+2                         |
+| #61 | Storybook RCA Phase 3 + 3 bug fix               |
+| #62 | Storybook full build green                      |
+
+### Sıradaki
+
+- M4 story coverage %95 (deadline 2026-05-03, 90 component multi-saat)
+- F5 K3-3 AI test generation hardening (multi-iter, 1-2 hafta)
+- F5 K3-4 Adaptive components v2 progressions (2-3 hafta)
+- Sprint A/B/C/D, K9/K10, W3-W8 (uzun vade)
+- Süreç boşlukları (mfe-suggestions stub, manifest auto-update, vs.)
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı) closure log eklendi._
