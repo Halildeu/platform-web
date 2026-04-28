@@ -37,12 +37,15 @@ on:
 
 jobs:
   compare-baseline:
-    name: Compare against committed baseline (advisory)
+    name: Compare against committed baseline
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Advisory until follow-up sprint — failures do NOT block merge.
-    continue-on-error: true
+    # Hard gate: K5 v3 PR #54 verified Linux baseline + Linux compare =
+    # pixel match. continue-on-error removed so visual regression now
+    # blocks merge. If a chart change is intentional, regenerate baseline
+    # via `gh workflow run x-charts-visual-advisory.yml -f mode=baseline`
+    # then download artifact + commit (see PR #54 description).
 
     steps:
       - name: Checkout
