@@ -39,3 +39,10 @@ jobs:
 
       - name: Type check (workspace root)
         run: pnpm run -w lint || echo "Lint warnings tolerated (Faz 19.6 baseline; 19.8'de tighten)"
+
+      - name: M4 play function runtime verification (vitest)
+        # Hard-block: 11 enriched stories' play functions must pass at runtime.
+        # Closes the "fake test" risk surfaced after PR #64 (storybook build is
+        # compile-only; this step actually runs play() in jsdom via composeStories).
+        # Fast (~1s) and scoped — does not pull in the rest of the test suite.
+        run: pnpm --filter @mfe/design-system exec vitest run src/__tests__/m4-play-verify.test.tsx
