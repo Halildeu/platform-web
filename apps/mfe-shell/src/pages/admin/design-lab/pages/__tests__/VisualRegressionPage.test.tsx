@@ -9,9 +9,57 @@ vi.mock('../../DesignLabProvider', () => ({
     t: (key: string) => key,
     index: {
       items: [
-        { name: 'Button', kind: 'component', availability: 'exported', lifecycle: 'stable', group: 'general', subgroup: 'actions', taxonomyGroupId: 'general', taxonomySubgroup: 'actions', importStatement: '', whereUsed: [], tags: [], demoMode: 'live', description: '', sectionIds: [], qualityGates: [] },
-        { name: 'Select', kind: 'component', availability: 'exported', lifecycle: 'beta', group: 'general', subgroup: 'inputs', taxonomyGroupId: 'general', taxonomySubgroup: 'inputs', importStatement: '', whereUsed: [], tags: [], demoMode: 'live', description: '', sectionIds: [], qualityGates: [] },
-        { name: 'Modal', kind: 'component', availability: 'exported', lifecycle: 'stable', group: 'general', subgroup: 'overlays', taxonomyGroupId: 'general', taxonomySubgroup: 'overlays', importStatement: '', whereUsed: [], tags: [], demoMode: 'live', description: '', sectionIds: [], qualityGates: [] },
+        {
+          name: 'Button',
+          kind: 'component',
+          availability: 'exported',
+          lifecycle: 'stable',
+          group: 'general',
+          subgroup: 'actions',
+          taxonomyGroupId: 'general',
+          taxonomySubgroup: 'actions',
+          importStatement: '',
+          whereUsed: [],
+          tags: [],
+          demoMode: 'live',
+          description: '',
+          sectionIds: [],
+          qualityGates: [],
+        },
+        {
+          name: 'Select',
+          kind: 'component',
+          availability: 'exported',
+          lifecycle: 'beta',
+          group: 'general',
+          subgroup: 'inputs',
+          taxonomyGroupId: 'general',
+          taxonomySubgroup: 'inputs',
+          importStatement: '',
+          whereUsed: [],
+          tags: [],
+          demoMode: 'live',
+          description: '',
+          sectionIds: [],
+          qualityGates: [],
+        },
+        {
+          name: 'Modal',
+          kind: 'component',
+          availability: 'exported',
+          lifecycle: 'stable',
+          group: 'general',
+          subgroup: 'overlays',
+          taxonomyGroupId: 'general',
+          taxonomySubgroup: 'overlays',
+          importStatement: '',
+          whereUsed: [],
+          tags: [],
+          demoMode: 'live',
+          description: '',
+          sectionIds: [],
+          qualityGates: [],
+        },
       ],
       pages: { currentFamilies: [] },
       recipes: { currentFamilies: [] },
@@ -22,7 +70,9 @@ vi.mock('../../DesignLabProvider', () => ({
 }));
 
 vi.mock('../../components/DataProvenanceBadge', () => ({
-  DataProvenanceBadge: ({ level }: { level: string }) => <span data-testid="provenance-badge">{level}</span>,
+  DataProvenanceBadge: ({ level }: { level: string }) => (
+    <span data-testid="provenance-badge">{level}</span>
+  ),
 }));
 
 vi.mock('../../evidence/useEvidence', () => ({
@@ -39,12 +89,18 @@ vi.mock('../../evidence/useEvidence', () => ({
     tests: {},
     benchmarks: { workflow_exists: false, threshold_enforced: false, last_run: null, results: {} },
   },
+  // K2-2: getEvidenceProvenance helper — test mock no_data döndürür
+  getEvidenceProvenance: () => 'no_data',
 }));
 
 import VisualRegressionPage from '../VisualRegressionPage';
 
 function renderPage() {
-  return render(<MemoryRouter><VisualRegressionPage /></MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <VisualRegressionPage />
+    </MemoryRouter>,
+  );
 }
 
 describe('VisualRegressionPage', () => {

@@ -17,6 +17,8 @@ vi.mock('../../evidence/useEvidence', () => ({
       guardrails: { workflow_exists: false, status: 'no_data' },
     },
   },
+  // K2-2: getEvidenceProvenance helper — test mock no_data döndürür
+  getEvidenceProvenance: () => 'no_data',
 }));
 
 import { SecurityPosture } from '../SecurityPosture';
