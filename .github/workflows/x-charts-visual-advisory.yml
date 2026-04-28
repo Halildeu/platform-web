@@ -1,5 +1,19 @@
 name: x-charts Visual Advisory
 
+# Two distinct job paths:
+#
+#   compare-baseline: runs on pull_request — checks committed Linux
+#                     baselines against fresh snapshots. Advisory until
+#                     the K5 hard-gate sprint.
+#
+#   generate-baseline: runs on workflow_dispatch — produces fresh Linux
+#                      baselines and uploads them as an artifact.
+#                      Maintainers download and commit the artifact to
+#                      update the baseline. NEVER auto-commits.
+#
+# Storybook is built statically on every job to avoid dev-mode lazy
+# compile timing variance.
+
 on:
   pull_request:
     paths:
@@ -9,15 +23,24 @@ on:
       - 'packages/design-system/playwright.config.ts'
       - '.storybook/**'
       - '.github/workflows/x-charts-visual-advisory.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'baseline = regenerate Linux baselines and upload artifact'
+        required: true
+        default: 'baseline'
+        type: choice
+        options:
+          - baseline
 
 jobs:
-  x-charts-visual:
-    name: x-charts Visual (advisory)
+  compare-baseline:
+    name: Compare against committed baseline (advisory)
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    # K5 PR — advisory mode. Failures do NOT block merge.
-    # Hard gate planned for follow-up sprint after 1-2 weeks baseline soak.
+    timeout-minutes: 25
+    # Advisory until follow-up sprint — failures do NOT block merge.
     continue-on-error: true
-    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -36,23 +59,74 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Storybook (static)
+        run: pnpm exec storybook build --output-dir storybook-static
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run x-charts visual baseline
+      - name: Compare against committed baseline
+        env:
+          PW_STORYBOOK_STATIC: '1'
         run: |
           pnpm exec playwright test \
             --config packages/design-system/playwright.config.ts \
             --project=desktop-light \
             --grep "x-charts"
 
-      - name: Upload visual artifacts
+      - name: Upload diff artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: x-charts-visual-results
+          name: x-charts-compare-results
           path: |
             packages/design-system/src/__visual__/test-results
-            packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts
           if-no-files-found: warn
           retention-days: 14
+
+  generate-baseline:
+    name: Generate Linux baseline (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Storybook (static)
+        run: pnpm exec storybook build --output-dir storybook-static
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Regenerate Linux baseline (--update-snapshots)
+        env:
+          PW_STORYBOOK_STATIC: '1'
+        run: |
+          pnpm exec playwright test \
+            --config packages/design-system/playwright.config.ts \
+            --project=desktop-light \
+            --grep "x-charts" \
+            --update-snapshots
+
+      - name: Upload Linux baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: x-charts-linux-baseline
+          path: packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts
+          if-no-files-found: error
+          retention-days: 30

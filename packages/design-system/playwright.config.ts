@@ -42,11 +42,25 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  webServer: {
-    command: 'npm run storybook',
-    cwd: monorepoRoot,
-    port: 6006,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  // PW_STORYBOOK_STATIC=1 → serve a pre-built Storybook from the
+  // `storybook-static` directory at the monorepo root using Python's
+  // built-in HTTP server (no extra dependency needed on Ubuntu runners).
+  // Default (dev mode) keeps the developer ergonomics of `npm run
+  // storybook` for local snapshot work.
+  webServer:
+    process.env.PW_STORYBOOK_STATIC === '1'
+      ? {
+          command: 'python3 -m http.server 6006 --directory storybook-static',
+          cwd: monorepoRoot,
+          port: 6006,
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        }
+      : {
+          command: 'npm run storybook',
+          cwd: monorepoRoot,
+          port: 6006,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
 });

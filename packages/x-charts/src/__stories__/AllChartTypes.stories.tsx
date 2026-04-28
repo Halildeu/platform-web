@@ -2,7 +2,9 @@
  * Storybook Stories: All Chart Types
  *
  * Visual catalog of every chart type supported by @mfe/x-charts.
- * Each story renders a REAL chart with sample data.
+ * Each story renders a REAL chart with sample data, wrapped in a
+ * fixed-size container with a stable data-testid so visual regression
+ * tests can locate the rendered chart deterministically.
  *
  * @see contract P3-D DoD: "Storybook: all chart type stories"
  */
@@ -30,6 +32,29 @@ const values1 = [320, 332, 301, 334, 390, 330];
 const values2 = [220, 182, 191, 234, 290, 330];
 
 /* ------------------------------------------------------------------ */
+/*  Visual-test wrapper                                                */
+/*                                                                     */
+/*  Fixed 640x360 container so visual snapshots are deterministic      */
+/*  across viewports, and a data-testid hook for Playwright to wait    */
+/*  for the chart container before screenshotting.                     */
+/* ------------------------------------------------------------------ */
+
+const VISUAL_BOX_STYLE: React.CSSProperties = {
+  width: 640,
+  height: 360,
+  // Background so charts render against the same surface in all themes.
+  background: '#ffffff',
+};
+
+function VisualBox(props: { id: string; children: React.ReactNode }) {
+  return (
+    <div data-testid={`x-charts-${props.id}`} style={VISUAL_BOX_STYLE}>
+      {props.children}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Stories                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -39,211 +64,244 @@ export default {
 };
 
 export const BarChart = () => (
-  <BarChartComp
-    data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
-    title="Aylık Gelir"
-    showValues
-    showGrid
-    size="lg"
-  />
+  <VisualBox id="bar-chart">
+    <BarChartComp
+      data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
+      title="Aylık Gelir"
+      showValues
+      showGrid
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const LineChart = () => (
-  <LineChartComp
-    series={[
-      { name: 'Seri A', data: values1 },
-      { name: 'Seri B', data: values2 },
-    ]}
-    labels={categories}
-    title="Trend Analizi"
-    showDots
-    showLegend
-    size="lg"
-  />
+  <VisualBox id="line-chart">
+    <LineChartComp
+      series={[
+        { name: 'Seri A', data: values1 },
+        { name: 'Seri B', data: values2 },
+      ]}
+      labels={categories}
+      title="Trend Analizi"
+      showDots
+      showLegend
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const AreaChart = () => (
-  <AreaChartComp
-    series={[
-      { name: 'Gelir', data: values1 },
-      { name: 'Gider', data: values2 },
-    ]}
-    labels={categories}
-    title="Kümülatif Gösterim"
-    stacked
-    showLegend
-    size="lg"
-  />
+  <VisualBox id="area-chart">
+    <AreaChartComp
+      series={[
+        { name: 'Gelir', data: values1 },
+        { name: 'Gider', data: values2 },
+      ]}
+      labels={categories}
+      title="Kümülatif Gösterim"
+      stacked
+      showLegend
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const PieChart = () => (
-  <PieChartComp
-    data={categories.slice(0, 5).map((c, i) => ({ label: c, value: values1[i] }))}
-    title="Oran Dağılımı"
-    showLabels
-    showPercentage
-    donut
-    size="lg"
-  />
+  <VisualBox id="pie-chart">
+    <PieChartComp
+      data={categories.slice(0, 5).map((c, i) => ({ label: c, value: values1[i] }))}
+      title="Oran Dağılımı"
+      showLabels
+      showPercentage
+      donut
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const ScatterChart = () => (
-  <ScatterChartComp
-    data={values1.map((v, i) => ({ x: v, y: values2[i], label: categories[i] }))}
-    title="Korelasyon"
-    xLabel="Seri A"
-    yLabel="Seri B"
-    size="lg"
-  />
+  <VisualBox id="scatter-chart">
+    <ScatterChartComp
+      data={values1.map((v, i) => ({ x: v, y: values2[i], label: categories[i] }))}
+      title="Korelasyon"
+      xLabel="Seri A"
+      yLabel="Seri B"
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const GaugeChart = () => (
-  <GaugeChartComp
-    value={72}
-    min={0}
-    max={100}
-    title="Performans"
-    thresholds={[
-      { value: 30, color: '#ef4444' },
-      { value: 70, color: '#f59e0b' },
-      { value: 100, color: '#22c55e' },
-    ]}
-    size="lg"
-  />
+  <VisualBox id="gauge-chart">
+    <GaugeChartComp
+      value={72}
+      min={0}
+      max={100}
+      title="Performans"
+      thresholds={[
+        { value: 30, color: '#ef4444' },
+        { value: 70, color: '#f59e0b' },
+        { value: 100, color: '#22c55e' },
+      ]}
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const RadarChart = () => (
-  <RadarChartComp
-    indicators={[
-      { name: 'Satış', max: 100 },
-      { name: 'Pazarlama', max: 100 },
-      { name: 'Teknoloji', max: 100 },
-      { name: 'Destek', max: 100 },
-      { name: 'Geliştirme', max: 100 },
-    ]}
-    series={[
-      { name: 'Ekip A', values: [85, 70, 95, 60, 80] },
-      { name: 'Ekip B', values: [65, 90, 70, 85, 55] },
-    ]}
-    title="Performans Profili"
-    showLegend
-    size="lg"
-  />
+  <VisualBox id="radar-chart">
+    <RadarChartComp
+      indicators={[
+        { name: 'Satış', max: 100 },
+        { name: 'Pazarlama', max: 100 },
+        { name: 'Teknoloji', max: 100 },
+        { name: 'Destek', max: 100 },
+        { name: 'Geliştirme', max: 100 },
+      ]}
+      series={[
+        { name: 'Ekip A', values: [85, 70, 95, 60, 80] },
+        { name: 'Ekip B', values: [65, 90, 70, 85, 55] },
+      ]}
+      title="Performans Profili"
+      showLegend
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const TreemapChart = () => (
-  <TreemapChartComp
-    data={[
-      {
-        name: 'Satış', value: 100,
-        children: [
-          { name: 'Online', value: 60 },
-          { name: 'Mağaza', value: 40 },
-        ],
-      },
-      {
-        name: 'Pazarlama', value: 80,
-        children: [
-          { name: 'Dijital', value: 50 },
-          { name: 'Basılı', value: 30 },
-        ],
-      },
-    ]}
-    title="Departman Bütçesi"
-    size="lg"
-  />
+  <VisualBox id="treemap-chart">
+    <TreemapChartComp
+      data={[
+        {
+          name: 'Satış',
+          value: 100,
+          children: [
+            { name: 'Online', value: 60 },
+            { name: 'Mağaza', value: 40 },
+          ],
+        },
+        {
+          name: 'Pazarlama',
+          value: 80,
+          children: [
+            { name: 'Dijital', value: 50 },
+            { name: 'Basılı', value: 30 },
+          ],
+        },
+      ]}
+      title="Departman Bütçesi"
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const HeatmapChart = () => (
-  <HeatmapChartComp
-    data={[
-      [0, 0, 10], [0, 1, 22], [0, 2, 28],
-      [1, 0, 35], [1, 1, 42], [1, 2, 18],
-      [2, 0, 15], [2, 1, 30], [2, 2, 45],
-      [3, 0, 50], [3, 1, 12], [3, 2, 33],
-      [4, 0, 25], [4, 1, 38], [4, 2, 20],
-    ]}
-    xLabels={['Pzt', 'Sal', 'Çar', 'Per', 'Cum']}
-    yLabels={['Sabah', 'Öğle', 'Akşam']}
-    title="Yoğunluk Matrisi"
-    showValues
-    size="lg"
-  />
+  <VisualBox id="heatmap-chart">
+    <HeatmapChartComp
+      data={[
+        [0, 0, 10],
+        [0, 1, 22],
+        [0, 2, 28],
+        [1, 0, 35],
+        [1, 1, 42],
+        [1, 2, 18],
+        [2, 0, 15],
+        [2, 1, 30],
+        [2, 2, 45],
+        [3, 0, 50],
+        [3, 1, 12],
+        [3, 2, 33],
+        [4, 0, 25],
+        [4, 1, 38],
+        [4, 2, 20],
+      ]}
+      xLabels={['Pzt', 'Sal', 'Çar', 'Per', 'Cum']}
+      yLabels={['Sabah', 'Öğle', 'Akşam']}
+      title="Yoğunluk Matrisi"
+      showValues
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const WaterfallChart = () => (
-  <WaterfallChartComp
-    data={[
-      { label: 'Başlangıç', value: 1000 },
-      { label: 'Gelir', value: 300 },
-      { label: 'Hizmet', value: 200 },
-      { label: 'Gider', value: -150 },
-      { label: 'Vergi', value: -100 },
-      { label: 'Sonuç', value: 1250 },
-    ]}
-    title="Gelir Akışı"
-    showValues
-    size="lg"
-  />
+  <VisualBox id="waterfall-chart">
+    <WaterfallChartComp
+      data={[
+        { label: 'Başlangıç', value: 1000 },
+        { label: 'Gelir', value: 300 },
+        { label: 'Hizmet', value: 200 },
+        { label: 'Gider', value: -150 },
+        { label: 'Vergi', value: -100 },
+        { label: 'Sonuç', value: 1250 },
+      ]}
+      title="Gelir Akışı"
+      showValues
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const FunnelChart = () => (
-  <FunnelChartComp
-    data={[
-      { label: 'Ziyaret', value: 5000 },
-      { label: 'Kayıt', value: 3000 },
-      { label: 'Deneme', value: 1500 },
-      { label: 'Satın Alma', value: 500 },
-    ]}
-    title="Dönüşüm Hunisi"
-    showConversion
-    size="lg"
-  />
+  <VisualBox id="funnel-chart">
+    <FunnelChartComp
+      data={[
+        { label: 'Ziyaret', value: 5000 },
+        { label: 'Kayıt', value: 3000 },
+        { label: 'Deneme', value: 1500 },
+        { label: 'Satın Alma', value: 500 },
+      ]}
+      title="Dönüşüm Hunisi"
+      showConversion
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const SankeyChart = () => (
-  <SankeyChartComp
-    nodes={[
-      { name: 'Kaynak A' },
-      { name: 'Kaynak B' },
-      { name: 'Hedef X' },
-      { name: 'Hedef Y' },
-    ]}
-    links={[
-      { source: 'Kaynak A', target: 'Hedef X', value: 30 },
-      { source: 'Kaynak A', target: 'Hedef Y', value: 20 },
-      { source: 'Kaynak B', target: 'Hedef X', value: 10 },
-      { source: 'Kaynak B', target: 'Hedef Y', value: 40 },
-    ]}
-    title="Akış Diyagramı"
-    size="lg"
-  />
+  <VisualBox id="sankey-chart">
+    <SankeyChartComp
+      nodes={[{ name: 'Kaynak A' }, { name: 'Kaynak B' }, { name: 'Hedef X' }, { name: 'Hedef Y' }]}
+      links={[
+        { source: 'Kaynak A', target: 'Hedef X', value: 30 },
+        { source: 'Kaynak A', target: 'Hedef Y', value: 20 },
+        { source: 'Kaynak B', target: 'Hedef X', value: 10 },
+        { source: 'Kaynak B', target: 'Hedef Y', value: 40 },
+      ]}
+      title="Akış Diyagramı"
+      size="lg"
+    />
+  </VisualBox>
 );
 
 export const SunburstChart = () => (
-  <SunburstChartComp
-    data={[
-      {
-        name: 'Türkiye',
-        children: [
-          {
-            name: 'İstanbul',
-            children: [
-              { name: 'Kadıköy', value: 50 },
-              { name: 'Beşiktaş', value: 30 },
-            ],
-          },
-          {
-            name: 'Ankara',
-            children: [
-              { name: 'Çankaya', value: 40 },
-              { name: 'Keçiören', value: 20 },
-            ],
-          },
-        ],
-      },
-    ]}
-    title="Hiyerarşik Dağılım"
-    size="lg"
-  />
+  <VisualBox id="sunburst-chart">
+    <SunburstChartComp
+      data={[
+        {
+          name: 'Türkiye',
+          children: [
+            {
+              name: 'İstanbul',
+              children: [
+                { name: 'Kadıköy', value: 50 },
+                { name: 'Beşiktaş', value: 30 },
+              ],
+            },
+            {
+              name: 'Ankara',
+              children: [
+                { name: 'Çankaya', value: 40 },
+                { name: 'Keçiören', value: 20 },
+              ],
+            },
+          ],
+        },
+      ]}
+      title="Hiyerarşik Dağılım"
+      size="lg"
+    />
+  </VisualBox>
 );
