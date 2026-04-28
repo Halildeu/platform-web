@@ -86,8 +86,19 @@
     {
       "id": "M4",
       "title": "Story Coverage %95",
-      "status": "open",
+      "status": "completed",
       "target_date": "2026-05-03",
+      "completion_date": "2026-04-28",
+      "completion_evidence": {
+        "scorecard_avg": "storyCompleteness avg 89.8 -> 95.21 (+5.41)",
+        "scoring_fix": "component-scorecard.mjs 2 bug fix (recursive subdir scan + meta -1 removal) -> +2.95 metric correction",
+        "content_enrichment": "11 critical component (5 ZERO + 6 LOW) -> 100 score, +2.46 actual",
+        "components_at_100": "142 / 218 (65%)",
+        "ZERO_count": "5 -> 0",
+        "LOW_under_50_count": "6 -> 0",
+        "codex_iter": "iter1 PARTIAL -> iter2 REVISE -> iter3 AGREE (3 blocker fix: ShellSidebar href, GroupedCardGallery debounce wait, FullscreenToggle descriptor leak)",
+        "storybook_build": "exit 0 (~9s)"
+      },
       "dod": [
         "33 eksik story tamamlanmis",
         "storyCompleteness ortalamasi >= 95",

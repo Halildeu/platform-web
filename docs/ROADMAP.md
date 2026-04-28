@@ -628,7 +628,6 @@ $ pnpm exec storybook build
 
 ### Sıradaki
 
-- M4 story coverage %95 (deadline 2026-05-03, 90 component multi-saat)
 - F5 K3-3 AI test generation hardening (multi-iter, 1-2 hafta)
 - F5 K3-4 Adaptive components v2 progressions (2-3 hafta)
 - Sprint A/B/C/D, K9/K10, W3-W8 (uzun vade)
@@ -636,4 +635,114 @@ $ pnpm exec storybook build
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı) closure log eklendi._
+## §18 M4 Story Coverage %95 Sprint (2026-04-28, seans 8)
+
+### Hedef
+
+`docs/quality-sprint/project.manifest.v1.json` M4 DoD:
+
+- 33 eksik story tamamlanmış
+- storyCompleteness ortalaması ≥ 95
+- Her story: en az 2 variant (default + edge case)
+
+Deadline: 2026-05-03 (5 gün). Initial state: avg 89.8, 5 ZERO + 6 LOW component, 90 component <95.
+
+### Strateji
+
+İki paralel track:
+
+1. **Scoring algorithm bug fix** — 2 bağımsız bug `packages/design-system/scripts/ci/component-scorecard.mjs:scoreStory`
+2. **Story enrichment** — 11 critical component (5 ZERO + 6 LOW) → 100 score
+
+### Track 1 — Scoring Algorithm Bug Fix
+
+**Bug A (subdir tarama)** — `scoreStory` 1-level subdir scan ediyordu, ama 5 component (`advanced/data-grid/filter-builder/Filter*Row.stories.tsx`) 2-level deep idi → `0` score (false negative, story var ama bulunamıyor).
+
+Fix: `findStoryFileRecursive(rootDir, name, maxDepth=4)` — recursive walk, `__tests__` ve `node_modules` skip.
+
+**Bug B (`storyExports - 1`)** — `storyExports = matches.length - 1` "for meta" diyordu, ama 214/214 story `const meta` (no export); regex `export\s+const\s+\w+` zaten meta'yı yakalamıyor. `-1` her stories'i 6 puan eksik veriyordu.
+
+Fix: `-1` kaldırıldı.
+
+Kazanım: 89.8 → **92.75** (+2.95) — pure metric correction (bug fix), artificial inflation değil.
+
+### Track 2 — 11 Critical Component Story Enrichment
+
+**5 ZERO** (advanced/data-grid/filter-builder/):
+
+| Component           | Önce | Sonra | Eklenen                                     |
+| ------------------- | ---- | ----- | ------------------------------------------- |
+| FilterBuilderPanel  | 0→42 | 100   | 6 export, argTypes, decorator, play (Apply) |
+| FilterCombinatorRow | 0→52 | 100   | 5 export, argTypes, play (AND/VEYA toggle)  |
+| FilterConditionRow  | 0→52 | 100   | 6 export, argTypes, play (column dropdown)  |
+| FilterGroupNode     | 0→52 | 100   | 6 export, argTypes, play (Add rule btn)     |
+| FilterValueEditor   | 0→70 | 100   | 7 export, argTypes, play (text input)       |
+
+**6 LOW** (mid score 36-52):
+
+| Component          | Önce  | Sonra | Eklenen                                                          |
+| ------------------ | ----- | ----- | ---------------------------------------------------------------- |
+| GroupedCardGallery | 36→42 | 100   | 6 export, argTypes, decorator, play (debounce search)            |
+| HoverDescription   | 42→48 | 100   | 6 export, argTypes, decorator, play (portal hover)               |
+| FullscreenToggle   | 42→48 | 100   | 6 export, argTypes, decorator, play (FS API stub)                |
+| ShellHeader        | 42→48 | 100   | 6 export, argTypes, decorator, play ([data-active])              |
+| ShellSidebar       | 46→52 | 100   | 6 export, argTypes, decorator, play (button branch+aria-current) |
+| GallerySearchBar   | 46→52 | 100   | 6 export, argTypes, decorator, play (clear button)               |
+
+ShellSidebar ek bonus: mevcut story `currentPath` (yanlış API) kullanıyordu → `activeKey`'e düzeltildi (types.ts ile uyumlu).
+
+### Codex Adversarial Iter
+
+**Iter 1 — PARTIAL**: 4 play function smoke-test seviyesinde (ShellSidebar/FullscreenToggle/ShellHeader/GroupedCardGallery). Real interaction değil.
+
+**Iter 2 — REVISE**: 3 blocker tespit edildi:
+
+- ShellSidebar: NAV_ITEMS `href` içeriyor → AppSidebarNavItem anchor branch render → `onClick` bağlanmaz → `onNavigate` çalışmaz
+- GroupedCardGallery: `findByText('Bordro Raporu')` immediate resolve → 300ms debounce beklenmeyen
+- FullscreenToggle: `document.fullscreenElement` descriptor restore yok → leak
+
+**Iter 3 — AGREE**: 3 blocker fix edildi:
+
+- ShellSidebar Interactive: `CLICKABLE_NAV` lokal definition (href'siz) → button branch → `userEvent.click` → `aria-current="page"` assert
+- GroupedCardGallery: `waitFor(() => Gelir Tablosu yok, timeout: 1500)` ile debounce'u dolaylı ama doğru bekleme
+- FullscreenToggle: `Object.getOwnPropertyDescriptor` save → try/finally restore (test isolation)
+
+### Sonuç
+
+| Metric                    | Önce  | Sonra     | Δ         |
+| ------------------------- | ----- | --------- | --------- |
+| storyCompleteness avg     | 89.8  | **95.21** | **+5.41** |
+| ZERO score component      | 5     | 0         | -5        |
+| LOW score (<50) component | 6     | 0         | -6        |
+| 11 target component       | mixed | 11×100    | —         |
+| Component count           | 218   | 218       | 0         |
+
+**Metric correction breakdown:**
+
+- 89.8 → 92.75 (+2.95) — scoring fix (real bug, not inflation)
+- 92.75 → 95.21 (+2.46) — actual content enrichment (11 component → 100)
+
+### Verification
+
+```bash
+# Scorecard
+$ node packages/design-system/scripts/ci/component-scorecard.mjs --json
+avg storyCompleteness: 95.21
+total: 218
+
+# Storybook full build
+$ npx storybook build --config-dir .storybook
+└ Storybook build completed successfully (exit 0, ~9s)
+```
+
+### Sıradaki
+
+- F5 K3-3 AI test generation hardening (multi-iter, 1-2 hafta)
+- F5 K3-4 Adaptive components v2 progressions (2-3 hafta)
+- M5 Quality Gate Escalation (deadline 2026-06-30, M2 dependency)
+- M2 A11y Compliance Gate (deadline 2026-05-03, blocked by 58 component a11y test)
+- Sprint A/B/C/D, K9/K10, W3-W8 (uzun vade)
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE) closure log eklendi._
