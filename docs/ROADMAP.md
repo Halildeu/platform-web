@@ -338,4 +338,66 @@ rg "@sentry/react@10\.50\.0" pnpm-lock.yaml          ✓ (exact resolution)
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 sprint K1+K2+K3 closure + §13 sprint K7+K8+GHA-bumps closure log eklendi._
+## §14 Sprint A0 + A2 + Storybook + K5 Attempt (2026-04-28, seans 4)
+
+**Bu seansta 3 PR merged + 1 PR DRAFT (K5 blocker):**
+
+| PR  | Konu                                                                             | Sonuç                                                  |
+| --- | -------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| #49 | A0 web-playwright workflow repair (`web/` path archaeology + pnpm v10 alignment) | ✅ merged `07af3faa`                                   |
+| #50 | A2 install-stack bumps (setup-node v6 + cache v5 + pnpm/action-setup v6, 8 wf)   | ✅ merged `6e9aadf6`                                   |
+| #51 | Storybook fix (6 stories.tsx parse errors + lint-staged --no-warn-ignored)       | ✅ merged `b4ea36e4`                                   |
+| #52 | K5 charts visual baseline                                                        | ⚠️ **DRAFT** — Storybook Vite production build CI hang |
+
+### Closed dependabot PRs (this seans)
+
+| PR  | Konu                     | Sebep                   |
+| --- | ------------------------ | ----------------------- |
+| #21 | pnpm/action-setup 4 → 6  | Superseded by A2 PR #50 |
+| #22 | actions/cache 4 → 5      | Superseded by A2 PR #50 |
+| #23 | actions/setup-node 4 → 6 | Superseded by A2 PR #50 |
+
+### Codex MCP istişaresi (extension of `019dd3c3-...` thread)
+
+3 ek iter:
+
+4. A0 detayed plan — REVISE (web-playwright self-hosted job korunmalı, pnpm exec over npx, pw-local kept) → AGREE
+5. K5 plan — REVISE (component-isolation, x-charts stories, mevcut **visual** pattern) → AGREE
+6. K5 v2 — REVISE (Mac baseline + advisory red CI fake; Linux-first + 2-job split; static Storybook build) → AGREE
+
+### K5 BLOCKER detail (`workflow_dispatch` run `25054093464`)
+
+\`pnpm exec storybook build --output-dir storybook-static\` (Storybook v10.3.5 + builder-vite + 5 addons) **CI'da 25-minute timeout'a kadar hang** oldu. Last log: \`Vite v8.0.7 building client environment for production\` then 24 dakika silence then cancel. Dev mode alternatifi de fail (story başına 1-2 dk lazy compile, page.goto 30s timeout fail).
+
+**Bu blocker K5'i bu seansta tamamlanamaz hâle getirdi.** PR #52 v2 revize content (stories+spec+config+workflow) committed; sadece Linux baseline PNG'leri eksik.
+
+### Açılması gereken sprint: \"Storybook CI build optimization\"
+
+Detay PR #52 yorumunda. Olası rotalar:
+
+1. \`NODE_OPTIONS=--max-old-space-size=4096\` (memory pressure)
+2. Addon disable matrix (hangi addon Vite production hang'inin nedeni)
+3. Storybook v10 → v9 fallback
+4. Storybook dev mode + warm-up wait + persistent server (production build atla)
+
+K5 v3 ancak bu sprint sonuçlandığında devam edebilir.
+
+### Aktif workflow yüzeyi (this seans değişimi)
+
+- A0: web-playwright-{smoke,nightly}.yml — \`web/\` path → root, pnpm v10 alignment
+- A2: 8 workflow → \`setup-node@v6\` + \`cache@v5\` + \`pnpm/action-setup@v6\`
+- Storybook: \`npm run storybook\` artık çalışıyor (\`http://localhost:6006/\`, 759ms manager + 156ms preview)
+
+### Sıradaki (gelecek seans)
+
+- **Storybook CI build optimization** sprint (K5 önkoşulu)
+- Sonrası **K5 v3** (Linux baseline gen + compare-baseline yeşil + merge)
+- **F5 K3-3** AI test generation hardening (orta-uzun vade, multi-iter)
+- **F5 K3-4** Adaptive components v2 progressions (orta-uzun vade, 2-3 hafta)
+- Sprint A: Dark mode polish
+- Sprint B: F8 AI Runtime aktive
+- Sprint C: F6 Public Docs Portal
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3 closure, §13 K7+K8+GHA-bumps closure, §14 A0+A2+Storybook+K5-attempt closure log eklendi._
