@@ -24,10 +24,7 @@ const toTestIdSuffix = (value: string) =>
     .replace(/^-+|-+$/g, '');
 
 /** Resolve active key from current path — longest prefix match. */
-function resolveActiveKey(
-  items: ShellHeaderNavItem[],
-  currentPath: string,
-): string | null {
+function resolveActiveKey(items: ShellHeaderNavItem[], currentPath: string): string | null {
   const normalizedPath = currentPath || '/';
   const sorted = [...items].sort((a, b) => b.key.length - a.key.length);
   const match = sorted.find((item) =>
@@ -74,10 +71,7 @@ export const ShellHeader: React.FC<ShellHeaderProps> = ({
   blur = true,
   className,
 }) => {
-  const activeKey = useMemo(
-    () => resolveActiveKey(navItems, currentPath),
-    [currentPath, navItems],
-  );
+  const activeKey = useMemo(() => resolveActiveKey(navItems, currentPath), [currentPath, navItems]);
 
   const menuBarItems = useMemo(
     () =>
@@ -92,8 +86,7 @@ export const ShellHeader: React.FC<ShellHeaderProps> = ({
         { currentValue: activeKey ?? undefined },
       ).map((item) => ({
         ...item,
-        itemClassName:
-          'min-h-0! rounded-full! px-3! py-1! text-xs! font-medium!',
+        itemClassName: 'min-h-0! rounded-full! px-3! py-1! text-xs! font-medium!',
         activeClassName:
           'border-[var(--accent-primary-hover)]! bg-[var(--accent-primary)]! text-[var(--action-primary-text)]! shadow-xs!',
       })),
@@ -132,9 +125,9 @@ export const ShellHeader: React.FC<ShellHeaderProps> = ({
       </div>
 
       {/* End slot */}
-      {endSlot && (
-        <div className="flex shrink-0 items-center gap-3">{endSlot}</div>
-      )}
+      {endSlot && <div className="flex shrink-0 items-center gap-3">{endSlot}</div>}
     </HeaderBar>
   );
 };
+
+ShellHeader.displayName = 'ShellHeader';
