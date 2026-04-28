@@ -735,14 +735,49 @@ $ npx storybook build --config-dir .storybook
 └ Storybook build completed successfully (exit 0, ~9s)
 ```
 
+### Supplementary — fake test risk closure (PR #65 + #66)
+
+Kullanıcı feedback: PR #64 doğrulamasında "fake bir işlem istemiyorum" — Storybook
+build (compile) play function'ları çalıştırmaz, "çalıştırılmayan test → YASAK"
+(CLAUDE.md HARD RULE).
+
+**PR #65** (`test(quality): m4 play function runtime verification`):
+
+- `packages/design-system/src/__tests__/m4-play-verify.test.tsx` — vitest +
+  `composeStories` (Storybook 10 API) ile 11 stories'in `Interactive` variant'ında
+  `Interactive.run()` çağırarak play function'ı runtime'da koşturuyor.
+- İlk deneme 11/11 FAIL: `render() + Interactive.run()` çakışması, "NotFoundError".
+- Düzeltme: `Interactive.run()` kendi render'ını yapıyor, manuel render kaldırıldı.
+- Lokal: **11/11 passed, 1.04s**.
+
+**PR #66** (`ci(quality): m4 play function runtime verification step`):
+
+- `.github/workflows/ci-web-check.yml` job sonuna step eklendi:
+  `pnpm --filter @mfe/design-system exec vitest run src/__tests__/m4-play-verify.test.tsx`
+- **Hard-block** — vitest fail → workflow fail → PR mergeable değil.
+- Self-validating PR: kendi step'inin diff'i kendi CI run'ında koştu.
+- CI ubuntu-latest: **11/11 passed, 2.09s** (lokal + CI iki kanıt).
+
+Sonuç: M4 closure artık compile-only değil, **lokal + CI runtime-doğrulanmış**.
+
+### Bu seansın 3 PR'ı
+
+| PR  | Konu                                                               |
+| --- | ------------------------------------------------------------------ |
+| #64 | M4 story coverage 95% — scoring fix + 11 component enrichment      |
+| #65 | M4 play function runtime verification (11 stories, lokal kanıt)    |
+| #66 | CI vitest step — regression check otomatik (lokal + CI çift kanıt) |
+
 ### Sıradaki
 
 - F5 K3-3 AI test generation hardening (multi-iter, 1-2 hafta)
 - F5 K3-4 Adaptive components v2 progressions (2-3 hafta)
 - M5 Quality Gate Escalation (deadline 2026-06-30, M2 dependency)
-- M2 A11y Compliance Gate (deadline 2026-05-03, blocked by 58 component a11y test)
+- M2 A11y Compliance Gate (deadline 2026-05-03, K1-M2a PR #38 ile gate aktif;
+  manifesto status refresh + 58 component a11y test M5 backlog'una taşıma gerekli)
 - Sprint A/B/C/D, K9/K10, W3-W8 (uzun vade)
+- Süreç: lokal worktree git db desync (`mcp__ccd_session__spawn_task` chip ile takip)
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE) closure log eklendi._
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE; PR #65 + #66 ile fake-test risk runtime-doğrulanmış kapatıldı) closure log eklendi._
