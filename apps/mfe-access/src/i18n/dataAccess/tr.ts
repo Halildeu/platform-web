@@ -36,6 +36,7 @@ const tr: Record<string, string> = {
   'dataAccess.assign.orgIdPlaceholder': 'örn. 1',
   'dataAccess.assign.scopeRefLabel': 'Hedef ID',
   'dataAccess.assign.scopeRefPlaceholder': 'örn. 1001',
+  'dataAccess.assign.scopeRefManualHint': 'Liste boş — manuel ID girilebilir (master data ETL henüz koşmamış olabilir).',
   'dataAccess.assign.kindLabel': 'Kapsam Türü',
   'dataAccess.assign.cancel': 'İptal',
   'dataAccess.assign.submit': 'Atama Yap',
