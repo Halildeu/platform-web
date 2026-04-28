@@ -231,15 +231,15 @@ AI-native yeteneklerle rakipleri gec. MCP v2 (20+ tool), AI-powered testing, int
 
 ### Tamamlanma Kriterleri
 
-| Kriter              | Olcum                                                   | Hedef                 | Durum    |
-| ------------------- | ------------------------------------------------------- | --------------------- | -------- |
-| MCP tools           | Unique tool count                                       | ≥ 20                  | ✅ 21/20 |
-| CLI komutlari       | Smoke test PASS count                                   | ≥ 10                  | ✅       |
-| Grounding           | Halusinasyon orani                                      | 0% (catalog-verified) | ✅       |
-| AI test generation  | Uretilen testler compile + %95+ PASS                    | ✅                    | 🟡       |
-| Adaptive components | useAdaptiveLayout + SmartDashboard v2 + AdaptiveForm v2 | ✅                    | ⬜       |
-| Privacy             | Zero external data transmission audit                   | ✅                    | ⬜       |
-| Fallback            | AI off → standard behavior testi                        | ✅                    | ⬜       |
+| Kriter              | Olcum                                                   | Hedef                 | Durum                                                                            |
+| ------------------- | ------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------- |
+| MCP tools           | Unique tool count                                       | ≥ 20                  | ✅ 21/20                                                                         |
+| CLI komutlari       | Smoke test PASS count                                   | ≥ 10                  | ✅                                                                               |
+| Grounding           | Halusinasyon orani                                      | 0% (catalog-verified) | ✅                                                                               |
+| AI test generation  | Uretilen testler compile + %95+ PASS                    | ✅                    | 🟡                                                                               |
+| Adaptive components | useAdaptiveLayout + SmartDashboard v2 + AdaptiveForm v2 | ✅                    | ⬜                                                                               |
+| Privacy             | Zero external data transmission audit                   | ✅                    | ⬜                                                                               |
+| Fallback            | AI off → standard behavior testi                        | ✅                    | ✅ K3-1 (useAdaptiveLayout.fallback 7/7 + AdaptiveForm.fallback 9/9, 2026-04-28) |
 
 ### F5 Drift Guardlari (CI Gates)
 
