@@ -29,11 +29,32 @@ function findComponents() {
   return components;
 }
 
+// SKIP patterns aligned with scorecard / generate-depth-tests discovery
+// (K1-M2a, 2026-04-28). Excludes: .figma.tsx (Figma references), .stories.tsx,
+// .test.tsx, .visual.tsx, .browser.tsx, .d.ts, index.tsx (barrel), types.tsx.
+const FILE_SKIP_PATTERNS = [
+  /\.figma\.tsx$/,
+  /\.stories\.tsx?$/,
+  /\.test\.tsx?$/,
+  /\.visual\.tsx?$/,
+  /\.browser\.tsx?$/,
+  /\.d\.tsx?$/,
+];
+const FILE_SKIP_NAMES = new Set(['index.tsx', 'types.tsx']);
+const DIR_SKIP_NAMES = new Set(['__tests__', '__visual__', 'node_modules']);
+
+function isComponentFile(name) {
+  if (!name.endsWith('.tsx')) return false;
+  if (FILE_SKIP_NAMES.has(name)) return false;
+  if (FILE_SKIP_PATTERNS.some((p) => p.test(name))) return false;
+  return true;
+}
+
 function walkDir(d, topDir, results) {
   for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
-    if (entry.isDirectory() && entry.name !== '__tests__' && entry.name !== 'node_modules') {
+    if (entry.isDirectory() && !DIR_SKIP_NAMES.has(entry.name)) {
       walkDir(path.join(d, entry.name), topDir, results);
-    } else if (entry.name.endsWith('.tsx') && !entry.name.includes('.stories.') && !entry.name.includes('.test.')) {
+    } else if (entry.isFile() && isComponentFile(entry.name)) {
       results.push({ name: entry.name.replace('.tsx', ''), dir: topDir, path: path.relative(SRC, path.join(d, entry.name)) });
     }
   }

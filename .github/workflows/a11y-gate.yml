@@ -1,0 +1,46 @@
+name: A11y Coverage Gate
+
+# K1-M2a (Wave 3.4 + Quality-Sprint M2) — design-system a11y test coverage CI gate.
+# Threshold: 70% of components must have axe-core a11y tests.
+# Discovery aligned with scorecard (excludes .figma.tsx, .stories.tsx, .test.tsx, etc).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/design-system/src/**'
+      - 'packages/design-system/scripts/ci/a11y-gate.mjs'
+      - '.github/workflows/a11y-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  a11y-gate:
+    name: A11y Coverage Gate (>=70%)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12'
+
+      - name: Setup pnpm (version from package.json packageManager)
+        uses: pnpm/action-setup@v4
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run a11y coverage gate
+        run: node packages/design-system/scripts/ci/a11y-gate.mjs --ci

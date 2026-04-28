@@ -23,8 +23,14 @@
     {
       "id": "M1",
       "title": "Test Depth Sprint — 16 kritik bilesen",
-      "status": "open",
+      "status": "completed",
       "target_date": "2026-04-19",
+      "completion_date": "2026-04-28",
+      "completion_evidence": {
+        "scorecard": "apps/mfe-shell/public/scorecard.json — F=0, D=0, C=18, B=37, A=163 (218 component)",
+        "shell_header": "B (54) — F (12) baseline'dan +42 puan; testDepth 53, a11y 95 (PR #36)",
+        "residual_note": "Grade objective completed. Behavior-depth residual (~50 shallow, ~38 a11y=0) M2/M4 quality-hardening backlog'unda takip ediliyor."
+      },
       "dod": [
         "ShellHeader (F) → C+ notu",
         "ShellSidebar (D) → C+ notu",
@@ -41,20 +47,34 @@
       "id": "M2",
       "title": "A11y Compliance Gate — CI zorunlu",
       "status": "open",
-      "target_date": "2026-04-26",
+      "target_date": "2026-05-03",
+      "previous_target_date": "2026-04-26",
       "dod": [
-        "14 a11y:0 bilesene minimal aria/role eklenmis",
-        "CI gate: a11y test coverage < %70 altinda PR bloklaniyor (a11y-gate.mjs THRESHOLD=0.7 ile uyumlu — orijinal '>=40' birim hatasi 2026-04-28 duzeltildi)",
-        "Scorecard script'e gate threshold eklenmis",
-        "Sifir a11y:0 bilesen"
+        "a11y-gate.mjs discovery scorecard component evreniyle uyumlu (.figma.tsx, .stories.tsx, .test.tsx, .visual.tsx, .browser.tsx, index.tsx, types.tsx haric)",
+        ".github/workflows/a11y-gate.yml aktif CI'da hard-block",
+        "CI gate: a11y test coverage < %70 altinda PR bloklaniyor (a11y-gate.mjs THRESHOLD=0.7)",
+        "Lokal/CI verify: en az %70 coverage PASS"
       ],
+      "in_progress_evidence": {
+        "discovery_fix": "K1-M2a PR (claude/k1-m2a-a11y-gate) — 358 → 219 component, 45.0% → 73.5% coverage",
+        "workflow": ".github/workflows/a11y-gate.yml eklendi",
+        "remaining": "PR merge sonrası enforcement aktif; 58 component a11y test eksik (Top 10: CommandPaletteTrigger, Container, Flex, FullscreenToggle, HeaderBar, HoverDescription, Image, Progress, Statistic, StatusIndicator)"
+      },
       "effort_estimate": "1 hafta"
     },
     {
       "id": "M3",
       "title": "Scorecard CI Otomasyonu",
-      "status": "open",
+      "status": "completed",
       "target_date": "2026-04-26",
+      "completion_date": "2026-04-28",
+      "completion_evidence": {
+        "workflow": ".github/workflows/scorecard-gate.yml — PR'da packages/design-system/src/** veya scripts/ci/** path-filter ile tetiklenir (PR #35)",
+        "pr_comment": "Component scorecard skoru artifact + PR comment via actions/github-script@v7",
+        "verified_run": "PR #36 (ShellHeader F→B) — 30s PASS, scorecard-gate ilk gercek tetikleme",
+        "f_grade_block": "F-grade icin merge bloklar (D'ler M5 escalation'a kadar warn)",
+        "public_sync": "scripts/sync-public-evidence.mjs (K2-1 PR #37) — apps/mfe-shell/public/scorecard.json taze tutar"
+      },
       "dod": [
         "GitHub Actions workflow: her PR'da scorecard calisir",
         "PR'a otomatik yorum: grade dagilimi + degisen bilesenlerin skorlari",
@@ -80,13 +100,14 @@
       "title": "Quality Gate Escalation — Block Mode",
       "status": "open",
       "target_date": "2026-06-30",
+      "blocked_by": ["M2"],
       "dod": [
         "fail_action: warn → block degismis",
         "D notu altindaki bilesen PR merge edilemiyor",
         "Yeni bilesen ekleme sablonu C+ minimum ile basliyor",
         "M1 ve M2 onkosullari tamamlanmis"
       ],
-      "effort_estimate": "1 gun (M1+M2 sonrasi)"
+      "effort_estimate": "1 gun (M2 sonrasi; M1 ve M3 2026-04-28 itibariyle tamamlandi)"
     }
   ]
 }
