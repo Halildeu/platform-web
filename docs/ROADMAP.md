@@ -506,4 +506,63 @@ threadId `019dd3c3-f710-7583-ab3f-549173f3dbd8` — REVISE absorbed:
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3 closure, §13 K7+K8+GHA-bumps closure, §14 A0+A2+Storybook+K5-attempt closure, §15 K5-v3+Storybook-scoped-fix closure log eklendi._
+## §16 K5 Tamamlama Sprint'i — Hard Gate + Browser Matrix + Composite (2026-04-28, seans 6)
+
+**3 PR merged ile K5 visual baseline ailesi tamamlandı:**
+
+| PR  | Konu                                                                | Sonuç                |
+| --- | ------------------------------------------------------------------- | -------------------- |
+| #56 | K5 hard gate (continue-on-error: true → false)                      | ✅ merged `3bb81e13` |
+| #57 | K5 browser matrix (chromium + firefox + webkit, 39 PNG)             | ✅ merged `877ad6c3` |
+| #58 | K5 composite snapshots (KPICard 3 + ChartDashboard 2, 54 PNG total) | ✅ merged `f1cf5148` |
+
+### K5 ailesi nihai durumu
+
+| Boyut                  | Detay                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| Story coverage         | 18 stories: 13 atomic charts + 5 composite (KPICard 3 + ChartDashboard 2)                    |
+| Browser matrix         | desktop-light (Chrome) + desktop-firefox + desktop-webkit (Safari)                           |
+| Total baseline         | 18 stories × 3 browsers = **54 PNG** (~1 MB)                                                 |
+| Gate mode              | **HARD** — visual regression PR merge'i bloklar                                              |
+| Recovery               | `gh workflow run x-charts-visual-advisory.yml -f mode=baseline` + artifact download + commit |
+| Excluded (intentional) | DrillDownDemo + CrossFilterDemo (interactive state machines, deterministic değil)            |
+
+### Determinism stack
+
+- `.storybook-k5/main.ts` — minimal scoped config (3 stories, 0 addons, no docgen)
+- `viteFinal alias` for `@mfe/design-system` (x-charts peerDep çözümü)
+- VisualBox wrapper: fixed-size container + `data-testid` hook (her story dosyasında)
+- `hasChartSurface` flag — DOM-only stories (StatWidgets, KPICard Default/WithTrend) canvas/svg geometry guard'ını skip eder
+- `page.emulateMedia({ reducedMotion: 'reduce' })` BEFORE goto + CSS `transition: none; animation: none`
+- 1s settle + maxDiffPixelRatio: 0.02
+
+### CI infrastructure
+
+- 2 job split: `compare-baseline` (PR, hard gate) + `generate-baseline` (workflow_dispatch only, baseline regen aracı)
+- Storybook static build (scoped) <2 dk CI'da (vs full Storybook 25 dk timeout hang)
+- Playwright 3 browser (chromium + firefox + webkit) install --with-deps
+- Linux baseline only (Mac PNG kaynak DEĞİL)
+
+### Bu sprint'in kanıt-zinciri (fake test değil)
+
+| Adım                       | Run/Commit      | Sonuç                                                |
+| -------------------------- | --------------- | ---------------------------------------------------- |
+| K5 hard gate compare       | run 25064629080 | ✅ Step 'Compare against committed baseline' success |
+| K5 browser matrix generate | run 25066426189 | ✅ 39 PNG artifact upload                            |
+| K5 browser matrix commit   | `ea9e3393`      | ✅                                                   |
+| K5 browser matrix compare  | post-push run   | ✅ 8/8                                               |
+| K5 composite generate      | run 25067613466 | ✅ 54 PNG artifact upload                            |
+| K5 composite commit        | `69d9e0d2`      | ✅                                                   |
+| K5 composite compare       | post-push run   | ✅ 8/8 hard gate green                               |
+
+### Sıradaki
+
+- **Full Storybook hang RCA** (ayrı sprint, multi-iter): `--debug-webpack` log + addon disable bisect (suspect order: react-docgen-typescript, storybook-design-token, addon-docs)
+- **M4 story coverage %95** (deadline 2026-05-03, 5 gün): 33 story eklemek gerek (multi-saat)
+- **F5 K3-3** AI test generation hardening (multi-iter)
+- **F5 K3-4** Adaptive components v2 progressions (2-3 hafta)
+- Sprint A/B/C/D, K9/K10, W3-W8 (uzun vade)
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite) closure log eklendi._
