@@ -2,7 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarSeparator } from './AppSidebarSeparator';
-import { expect, within } from '@storybook/test';
+import { expect, within } from 'storybook/test';
 
 const meta: Meta<typeof AppSidebarSeparator> = {
   title: 'Components/Navigation/AppSidebarSeparator',

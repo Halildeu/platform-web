@@ -2,7 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarNav } from './AppSidebarNav';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 
 const meta: Meta<typeof AppSidebarNav> = {
   title: 'Components/Navigation/AppSidebarNav',
@@ -15,7 +15,9 @@ const meta: Meta<typeof AppSidebarNav> = {
   decorators: [
     (Story) => (
       <div style={{ height: 400, display: 'flex' }}>
-        <AppSidebar><Story /></AppSidebar>
+        <AppSidebar>
+          <Story />
+        </AppSidebar>
       </div>
     ),
   ],
@@ -53,7 +55,11 @@ export const WithGroups: Story = {
 };
 
 export const Empty: Story = {
-  render: () => <AppSidebarNav><span /></AppSidebarNav>,
+  render: () => (
+    <AppSidebarNav>
+      <span />
+    </AppSidebarNav>
+  ),
 };
 
 export const CustomClass: Story = {

@@ -2,10 +2,12 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarGroup } from './AppSidebarGroup';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 
 const FolderIcon = () => (
-  <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16"><path d="M1 3h5l2 2h7v9H1V3z" /></svg>
+  <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+    <path d="M1 3h5l2 2h7v9H1V3z" />
+  </svg>
 );
 
 const meta: Meta<typeof AppSidebarGroup> = {
@@ -22,7 +24,11 @@ const meta: Meta<typeof AppSidebarGroup> = {
   decorators: [
     (Story) => (
       <div style={{ height: 400, display: 'flex' }}>
-        <AppSidebar><AppSidebar.Nav><Story /></AppSidebar.Nav></AppSidebar>
+        <AppSidebar>
+          <AppSidebar.Nav>
+            <Story />
+          </AppSidebar.Nav>
+        </AppSidebar>
       </div>
     ),
   ],
@@ -58,7 +64,14 @@ export const CollapsedByDefault: Story = {
 
 export const WithAction: Story = {
   render: () => (
-    <AppSidebarGroup label="With Action" action={<button type="button" style={{ fontSize: 10 }}>+</button>}>
+    <AppSidebarGroup
+      label="With Action"
+      action={
+        <button type="button" style={{ fontSize: 10 }}>
+          +
+        </button>
+      }
+    >
       <AppSidebar.NavItem label="Item" />
     </AppSidebarGroup>
   ),

@@ -2,10 +2,12 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarNavItem } from './AppSidebarNavItem';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 
 const HomeIcon = () => (
-  <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16"><path d="M8 1L1 7h2v6h4V9h2v4h4V7h2L8 1z" /></svg>
+  <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
+    <path d="M8 1L1 7h2v6h4V9h2v4h4V7h2L8 1z" />
+  </svg>
 );
 
 const meta: Meta<typeof AppSidebarNavItem> = {
@@ -23,7 +25,11 @@ const meta: Meta<typeof AppSidebarNavItem> = {
   decorators: [
     (Story) => (
       <div style={{ height: 400, display: 'flex' }}>
-        <AppSidebar><AppSidebar.Nav><Story /></AppSidebar.Nav></AppSidebar>
+        <AppSidebar>
+          <AppSidebar.Nav>
+            <Story />
+          </AppSidebar.Nav>
+        </AppSidebar>
       </div>
     ),
   ],
@@ -48,7 +54,19 @@ export const WithBadge: Story = {
     <AppSidebarNavItem
       icon={<HomeIcon />}
       label="Notifications"
-      badge={<span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 9999, background: 'var(--state-success-bg)', color: 'var(--state-success-text)' }}>5</span>}
+      badge={
+        <span
+          style={{
+            fontSize: 10,
+            padding: '1px 6px',
+            borderRadius: 9999,
+            background: 'var(--state-success-bg)',
+            color: 'var(--state-success-text)',
+          }}
+        >
+          5
+        </span>
+      }
     />
   ),
 };

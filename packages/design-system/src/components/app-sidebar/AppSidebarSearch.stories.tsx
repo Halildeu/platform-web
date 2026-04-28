@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarSearch } from './AppSidebarSearch';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 
 const meta: Meta<typeof AppSidebarSearch> = {
   title: 'Components/Navigation/AppSidebarSearch',
@@ -17,7 +17,9 @@ const meta: Meta<typeof AppSidebarSearch> = {
   decorators: [
     (Story) => (
       <div style={{ height: 400, display: 'flex' }}>
-        <AppSidebar><Story /></AppSidebar>
+        <AppSidebar>
+          <Story />
+        </AppSidebar>
       </div>
     ),
   ],

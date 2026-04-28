@@ -2,7 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { AppSidebar } from './AppSidebar';
 import { AppSidebarTrigger } from './AppSidebarTrigger';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 
 const meta: Meta<typeof AppSidebarTrigger> = {
   title: 'Components/Navigation/AppSidebarTrigger',
@@ -17,7 +17,9 @@ const meta: Meta<typeof AppSidebarTrigger> = {
       <div style={{ height: 400, display: 'flex' }}>
         <AppSidebar>
           <AppSidebar.Header action={<Story />} />
-          <AppSidebar.Nav><AppSidebar.NavItem label="Home" /></AppSidebar.Nav>
+          <AppSidebar.Nav>
+            <AppSidebar.NavItem label="Home" />
+          </AppSidebar.Nav>
         </AppSidebar>
       </div>
     ),

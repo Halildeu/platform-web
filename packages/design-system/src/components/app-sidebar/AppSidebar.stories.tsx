@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within, userEvent } from '@storybook/test';
+import { expect, within, userEvent } from 'storybook/test';
 import { AppSidebar } from './AppSidebar';
 
 /* ------------------------------------------------------------------ */
@@ -40,7 +40,9 @@ const FolderIcon = () => (
 const HelpIcon = () => (
   <svg viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
     <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    <text x="8" y="11" textAnchor="middle" fontSize="9" fill="currentColor">?</text>
+    <text x="8" y="11" textAnchor="middle" fontSize="9" fill="currentColor">
+      ?
+    </text>
   </svg>
 );
 
@@ -56,7 +58,11 @@ const meta: Meta<typeof AppSidebar> = {
     layout: 'fullscreen',
   },
   argTypes: {
-    defaultMode: { control: 'select', options: ['expanded', 'collapsed'], description: 'Initial sidebar mode' },
+    defaultMode: {
+      control: 'select',
+      options: ['expanded', 'collapsed'],
+      description: 'Initial sidebar mode',
+    },
     collapsedWidth: { control: 'number', description: 'Width when collapsed (px)' },
     expandedWidth: { control: 'number', description: 'Width when expanded (px)' },
     resizable: { control: 'boolean', description: 'Enable drag-to-resize' },
@@ -116,10 +122,7 @@ export const Default: Story = {
 export const Collapsed: Story = {
   render: () => (
     <AppSidebar defaultMode="collapsed">
-      <AppSidebar.Header
-        logo={<HomeIcon />}
-        action={<AppSidebar.Trigger />}
-      />
+      <AppSidebar.Header logo={<HomeIcon />} action={<AppSidebar.Trigger />} />
       <AppSidebar.Nav>
         <AppSidebar.NavItem icon={<HomeIcon />} label="Dashboard" tooltip="Dashboard" active />
         <AppSidebar.NavItem icon={<UsersIcon />} label="Team" tooltip="Team" />
@@ -144,9 +147,7 @@ export const WithSearch: Story = {
       { icon: <FileIcon />, label: 'Documents' },
       { icon: <SettingsIcon />, label: 'Settings' },
     ];
-    const filtered = items.filter((item) =>
-      item.label.toLowerCase().includes(query.toLowerCase()),
-    );
+    const filtered = items.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()));
 
     return (
       <AppSidebar>
@@ -201,26 +202,41 @@ export const NestedItems: Story = {
 /* ================================================================== */
 
 const StableBadge = () => (
-  <span style={{
-    fontSize: 10, padding: '1px 6px', borderRadius: 9999,
-    background: 'var(--status-success-subtle))', color: 'var(--status-success))',
-  }}>
+  <span
+    style={{
+      fontSize: 10,
+      padding: '1px 6px',
+      borderRadius: 9999,
+      background: 'var(--status-success-subtle))',
+      color: 'var(--status-success))',
+    }}
+  >
     stable
   </span>
 );
 const BetaBadge = () => (
-  <span style={{
-    fontSize: 10, padding: '1px 6px', borderRadius: 9999,
-    background: 'var(--status-warning-subtle)', color: 'var(--status-warning)',
-  }}>
+  <span
+    style={{
+      fontSize: 10,
+      padding: '1px 6px',
+      borderRadius: 9999,
+      background: 'var(--status-warning-subtle)',
+      color: 'var(--status-warning)',
+    }}
+  >
     beta
   </span>
 );
 const DeprecatedBadge = () => (
-  <span style={{
-    fontSize: 10, padding: '1px 6px', borderRadius: 9999,
-    background: 'var(--status-error-subtle)', color: 'var(--status-error))',
-  }}>
+  <span
+    style={{
+      fontSize: 10,
+      padding: '1px 6px',
+      borderRadius: 9999,
+      background: 'var(--status-error-subtle)',
+      color: 'var(--status-error))',
+    }}
+  >
     deprecated
   </span>
 );
@@ -232,7 +248,12 @@ export const WithBadges: Story = {
       <AppSidebar.Nav>
         <AppSidebar.NavItem icon={<HomeIcon />} label="Button" badge={<StableBadge />} active />
         <AppSidebar.NavItem icon={<ChartIcon />} label="SmartDashboard" badge={<BetaBadge />} />
-        <AppSidebar.NavItem icon={<FileIcon />} label="LegacyTable" badge={<DeprecatedBadge />} disabled />
+        <AppSidebar.NavItem
+          icon={<FileIcon />}
+          label="LegacyTable"
+          badge={<DeprecatedBadge />}
+          disabled
+        />
         <AppSidebar.NavItem icon={<UsersIcon />} label="Avatar" badge={<StableBadge />} />
         <AppSidebar.NavItem icon={<FolderIcon />} label="AILayoutBuilder" badge={<BetaBadge />} />
       </AppSidebar.Nav>
@@ -277,7 +298,11 @@ export const WithGroups: Story = {
 export const Resizable: Story = {
   render: () => (
     <AppSidebar resizable minWidth={180} maxWidth={450}>
-      <AppSidebar.Header title="Design Lab" subtitle="Drag edge to resize" action={<AppSidebar.Trigger />} />
+      <AppSidebar.Header
+        title="Design Lab"
+        subtitle="Drag edge to resize"
+        action={<AppSidebar.Trigger />}
+      />
       <AppSidebar.Nav>
         <AppSidebar.NavItem icon={<HomeIcon />} label="Dashboard" active />
         <AppSidebar.NavItem icon={<UsersIcon />} label="Team" />
@@ -303,12 +328,20 @@ export const KitchenSink: Story = {
           title="Design Lab"
           subtitle="v2.4.0 — Enterprise"
           logo={
-            <span style={{
-              width: 28, height: 28, borderRadius: 6,
-              background: 'var(--action-primary))', color: 'var(--surface-default)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 700,
-            }}>
+            <span
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                background: 'var(--action-primary))',
+                color: 'var(--surface-default)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
               DL
             </span>
           }
@@ -344,21 +377,39 @@ export const KitchenSink: Story = {
 
           <AppSidebar.Separator />
 
-          <AppSidebar.Group label="Administration" icon={<SettingsIcon />} collapsible defaultOpen={false}>
+          <AppSidebar.Group
+            label="Administration"
+            icon={<SettingsIcon />}
+            collapsible
+            defaultOpen={false}
+          >
             <AppSidebar.NavItem icon={<UsersIcon />} label="Team Members" />
             <AppSidebar.NavItem icon={<SettingsIcon />} label="Settings" />
-            <AppSidebar.NavItem icon={<HelpIcon />} label="Legacy Config" badge={<DeprecatedBadge />} disabled />
+            <AppSidebar.NavItem
+              icon={<HelpIcon />}
+              label="Legacy Config"
+              badge={<DeprecatedBadge />}
+              disabled
+            />
           </AppSidebar.Group>
         </AppSidebar.Nav>
 
         <AppSidebar.Footer>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px' }}>
-            <span style={{
-              width: 24, height: 24, borderRadius: '50%',
-              background: 'var(--action-primary))', color: 'var(--surface-default)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, fontWeight: 600,
-            }}>
+            <span
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: 'var(--action-primary))',
+                color: 'var(--surface-default)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 600,
+              }}
+            >
               HK
             </span>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Halil K.</span>
