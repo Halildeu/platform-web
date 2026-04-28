@@ -1,0 +1,36 @@
+name: CodeQL Analysis
+
+# Faz 19.x — security gate üçlüsü (gate-secrets + gate-osv-scan + codeql)
+# Migrated from .github/workflows-legacy/codeql.yml on 2026-04-28.
+# Self-contained: GitHub native CodeQL action, no pnpm/npm dependency, no external secrets.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'
