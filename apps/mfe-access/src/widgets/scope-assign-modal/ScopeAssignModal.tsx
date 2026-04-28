@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Button } from '@mfe/design-system';
 import { useGrantDataAccessScope } from '../../features/data-access/model/use-data-access-scopes.model';
+import { useMasterData } from '../../features/data-access/model/use-master-data.model';
 import { buildScopeRef } from '../../features/data-access/lib/scopeRefBuilder';
 import {
   SCOPE_KIND_I18N_KEY,
@@ -43,6 +44,14 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
 
   const grantMutation = useGrantDataAccessScope();
 
+  // 2026-04-29: Master data dropdown — backend
+  // /api/v1/master-data/{companies|projects|branches|departments}'dan
+  // çekilir. Boş list (ETL henüz koşmamış / table missing) durumunda
+  // manuel ID input fallback gösterilir.
+  const masterDataQuery = useMasterData(scopeKind, open);
+  const masterDataItems = masterDataQuery.data ?? [];
+  const hasMasterData = masterDataItems.length > 0;
+
   React.useEffect(() => {
     if (open) {
       setScopeKind(initialKind ?? 'COMPANY');
@@ -50,6 +59,12 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
       setFieldError(null);
     }
   }, [open, initialKind]);
+
+  // scopeKind değişince scopeRef seçimini sıfırla (eski kind'tan kalan ID
+  // yeni kind için anlamsız).
+  React.useEffect(() => {
+    setScopeRef('');
+  }, [scopeKind]);
 
   const resetForm = React.useCallback(() => {
     setUserId('');
@@ -210,14 +225,45 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
 
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           {t('dataAccess.assign.scopeRefLabel')}
-          <input
-            type="text"
-            value={scopeRef}
-            onChange={(e) => setScopeRef(e.target.value)}
-            placeholder={t('dataAccess.assign.scopeRefPlaceholder')}
-            className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm"
-            data-testid="scope-assign-modal-scope-ref"
-          />
+          {hasMasterData ? (
+            <select
+              value={scopeRef}
+              onChange={(e) => setScopeRef(e.target.value)}
+              className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm"
+              data-testid="scope-assign-modal-scope-ref"
+            >
+              <option value="">{t('dataAccess.assign.scopeRefPlaceholder')}</option>
+              {masterDataItems.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.name || `#${item.id}`}{!item.status ? ' (pasif)' : ''}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <>
+              {/* Master data boş (ETL henüz koşmamış veya tablo yok). Manuel
+                  ID input fallback. masterDataQuery.isLoading: spinner yerine
+                  disabled placeholder. */}
+              <input
+                type="text"
+                value={scopeRef}
+                onChange={(e) => setScopeRef(e.target.value)}
+                placeholder={
+                  masterDataQuery.isLoading
+                    ? '...'
+                    : t('dataAccess.assign.scopeRefPlaceholder')
+                }
+                disabled={masterDataQuery.isLoading}
+                className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm disabled:opacity-50"
+                data-testid="scope-assign-modal-scope-ref"
+              />
+              {!masterDataQuery.isLoading && (
+                <span className="text-xs text-text-subtle">
+                  {t('dataAccess.assign.scopeRefManualHint')}
+                </span>
+              )}
+            </>
+          )}
           {fieldError?.field === 'scopeRef' ? (
             <span className="text-xs text-text-error">{fieldError.message}</span>
           ) : null}

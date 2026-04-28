@@ -36,6 +36,7 @@ const ru: Record<string, string> = {
   'dataAccess.assign.orgIdPlaceholder': 'напр. 1',
   'dataAccess.assign.scopeRefLabel': 'Целевой ID',
   'dataAccess.assign.scopeRefPlaceholder': 'напр. 1001',
+  'dataAccess.assign.scopeRefManualHint': 'Список пуст — можно ввести ID вручную (master data ETL мог еще не запуститься).',
   'dataAccess.assign.kindLabel': 'Тип области',
   'dataAccess.assign.cancel': 'Отмена',
   'dataAccess.assign.submit': 'Назначить',
