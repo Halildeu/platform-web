@@ -12,7 +12,7 @@ import { mergeConfig } from 'vite';
  * x-charts AllChartTypes story rendered, so this dedicated config
  * scopes everything down to the minimum:
  *
- *   - one story file (AllChartTypes)
+ *   - explicit story list (atomic + composite)
  *   - zero addons
  *   - autodocs: false
  *   - reactDocgen: false (skip TS prop-table generation)
@@ -20,13 +20,21 @@ import { mergeConfig } from 'vite';
  *
  * Full Storybook hang RCA tracked separately (#52 thread); K5 should
  * not block on it.
+ *
+ * Excluded by design (interactive/non-deterministic):
+ *   - CrossFilterDemo.stories.tsx (filter state)
+ *   - DrillDownDemo.stories.tsx (drill state)
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = path.resolve(__dirname, '..');
 
 const config: StorybookConfig = {
-  stories: ['../packages/x-charts/src/__stories__/AllChartTypes.stories.tsx'],
+  stories: [
+    '../packages/x-charts/src/__stories__/AllChartTypes.stories.tsx',
+    '../packages/x-charts/src/__stories__/KPICard.stories.tsx',
+    '../packages/x-charts/src/__stories__/ChartDashboard.stories.tsx',
+  ],
   addons: [],
   framework: {
     name: '@storybook/react-vite',
