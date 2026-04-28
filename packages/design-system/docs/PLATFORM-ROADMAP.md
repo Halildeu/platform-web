@@ -1,6 +1,7 @@
 # @mfe/design-system — Platform Yol Haritası
 
 > **Tarih:** 2026-03-24
+> **Konsolide görünüm:** [docs/ROADMAP.md](../../../docs/ROADMAP.md) — F5 status uyuşmazlığı için §6.1 (PHASE-GOVERNANCE F5🟡 KISMEN, bu doc satır 541'de F5✅DONE diyor — PHASE-GOVERNANCE doğru).
 > **Prensip:** Bir katman tam olgunlaşmadan sonrakine geçilmez.
 > **Hedef:** Dünya standardı AI-native design system liderliği — Ant Design / MUI / shadcn/ui'ı geçmek.
 > **Vizyon:** Tek vizyon, çok katman, tek kontrat, tek truth.
@@ -21,7 +22,7 @@ src/
 │   └── overlay-engine/     Portal, focus trap, scroll lock, layer stack, outside click, ARIA live, roving tabindex, reduced motion, focus restore
 ├── primitives/      24 primitive (Button, Input, Select, Checkbox, Radio, Switch, Dialog, Modal, Popover, Tooltip, Badge, Tag, ...)
 ├── components/      60 component (DatePicker, Calendar, Tabs, Accordion, CommandPalette, ColorPicker, Charts, Upload, Tree, ...)
-├── enterprise/      38 enterprise component (x-scheduler, x-kanban, x-editor, FormBuilder, ...)
+├── enterprise/      41 enterprise component (x-scheduler, x-kanban, x-editor, FormBuilder, ...) — Mart sonrası güncel sayım
 ├── form/            Form validation adapter (useFormField, FormProvider, zod adapter)
 ├── motion/          Animation system (AnimatePresence, Transition, StaggerGroup, useMotion)
 ├── patterns/        10 pattern (PageLayout, PageHeader, DetailDrawer, FormDrawer, FilterBar, MasterDetail, SummaryStrip, ...)
@@ -29,12 +30,13 @@ src/
 ├── a11y/            Audit engine, keyboard utils, focus management contracts
 ├── performance/     LazyComponent, VirtualList, useIntersectionObserver, useDeferredRender, BundleAnalyzer
 ├── catalog/         250+ component docs, manifest, registry, API catalog
-├── mcp/             Model Context Protocol server + 18 tools
+├── mcp/             Model Context Protocol server + 21 tools (hedef 20+ aşıldı)
 └── lib/             Grid variants API, auth token resolver
 ```
 
 **Rakamlar:**
-- 186 bileşen (24 primitive + 60 component + 38 enterprise + 10 pattern + 1 advanced suite + ...)
+
+- 186+ bileşen (24 primitive + 60 component + 41 enterprise + 10 pattern + 1 advanced suite + ...) — enterprise sayımı Mart sonrası güncellendi
 - 250+ component doc entry
 - 7,200+ test (1120+ dosya)
 - 187 story
@@ -46,20 +48,20 @@ src/
 
 ### Eksik Olan Katmanlar
 
-| Katman | Durum | Açıklama |
-|---|---|---|
-| **Icons** | ✅ Done | 51 icon, 7 kategori, createIcon factory, tree-shakeable, `./icons` deep import |
-| **Headless Package** | ✅ Public | `@mfe/design-system/headless` — 70+ export, interaction-core + overlay-engine + a11y birleşik |
-| **X-Suite: Scheduler** | ✅ Done | x-scheduler built |
-| **X-Suite: Kanban** | ✅ Done | x-kanban built |
-| **X-Suite: Rich Text Editor** | ✅ Done | x-editor built |
-| **X-Suite: Form Builder** | ❌ Yok | Dynamic form builder yok (adaptive-form var ama limited) |
-| **Blocks Marketplace** | ✅ Done | 48 blocks, CLI |
-| **Starter/Create App** | ❌ Yok | `create-mfe-app` veya starter template yok |
-| **Public Docs Portal** | ⬜ Planlanıyor | catalog + docs var ama tek birleşik searchable portal değil |
-| **Design Kit (Figma)** | ⬜ Planlanıyor | Token pipeline var, ama Figma ↔ code round-trip tam otomatik değil |
-| **Cross-Platform Tokens** | ❌ Yok | iOS/Android/Flutter token export yok |
-| **LTS / Support Policy** | ⬜ Planlanıyor | Canary/stable/LTS ayrımı, support vaadi yok |
+| Katman                        | Durum          | Açıklama                                                                                      |
+| ----------------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| **Icons**                     | ✅ Done        | 51 icon, 7 kategori, createIcon factory, tree-shakeable, `./icons` deep import                |
+| **Headless Package**          | ✅ Public      | `@mfe/design-system/headless` — 70+ export, interaction-core + overlay-engine + a11y birleşik |
+| **X-Suite: Scheduler**        | ✅ Done        | x-scheduler built                                                                             |
+| **X-Suite: Kanban**           | ✅ Done        | x-kanban built                                                                                |
+| **X-Suite: Rich Text Editor** | ✅ Done        | x-editor built                                                                                |
+| **X-Suite: Form Builder**     | ❌ Yok         | Dynamic form builder yok (adaptive-form var ama limited)                                      |
+| **Blocks Marketplace**        | 🟡             | 9 \*Block.tsx + 3 page template + CLI (orijinal "48 blocks" stale)                            |
+| **Starter/Create App**        | ❌ Yok         | `create-mfe-app` veya starter template yok                                                    |
+| **Public Docs Portal**        | ⬜ Planlanıyor | catalog + docs var ama tek birleşik searchable portal değil                                   |
+| **Design Kit (Figma)**        | ⬜ Planlanıyor | Token pipeline var, ama Figma ↔ code round-trip tam otomatik değil                            |
+| **Cross-Platform Tokens**     | ❌ Yok         | iOS/Android/Flutter token export yok                                                          |
+| **LTS / Support Policy**      | ⬜ Planlanıyor | Canary/stable/LTS ayrımı, support vaadi yok                                                   |
 
 ---
 
@@ -67,52 +69,52 @@ src/
 
 ### Ürün Benchmark: MUI vs Antd vs Mantine vs PrimeReact vs @mfe
 
-| Capability | MUI | Antd | Mantine | PrimeReact | **@mfe** |
-|---|---|---|---|---|---|
-| **Primitives (Button, Input, Select...)** | ✅ 50+ | ✅ 60+ | ✅ 40+ | ✅ 80+ | ✅ 24 (174 total incl. all) |
-| **Composed Components** | ✅ 30+ | ✅ 40+ | ✅ 30+ | ✅ 40+ | ✅ 59 |
-| **Enterprise Suite** | ❌ | ❌ | ❌ | ❌ | ✅ 38 components (unique differentiator) |
-| **AI-Native** | ❌ | ❌ | ❌ | ❌ | ✅ MCP 18 tool (only @mfe has this) |
-| **Data Grid** | ✅ (X) | ✅ (ProTable) | ⚠️ (3rd party) | ✅ (DataTable) | ✅ (AG Grid v34) |
-| **Charts** | ✅ (X) | ✅ (Ant Charts) | ⚠️ (3rd party) | ✅ (Chart.js) | ✅ (AG Charts) |
-| **Design Tokens** | ✅ Theme | ⚠️ Less vars | ✅ CSS vars | ⚠️ Sass vars | ✅ 12 axis, CSS vars |
-| **Dark Mode** | ✅ | ✅ | ✅ | ✅ | ✅ + High-Contrast |
-| **Density Control** | ⚠️ (manual) | ✅ (compact) | ⚠️ (manual) | ⚠️ (manual) | ✅ (theme axis) |
-| **RTL** | ✅ | ✅ | ✅ | ✅ | ✅ (DirectionProvider) |
-| **i18n** | ⚠️ (manual) | ✅ (built-in) | ⚠️ (manual) | ✅ (built-in) | ✅ (LocaleProvider) |
-| **SSR/RSC** | ✅ | ⚠️ | ✅ | ⚠️ | ✅ ("use client") |
-| **A11y Engine** | ⚠️ (per-comp) | ⚠️ (per-comp) | ✅ (hooks) | ⚠️ (per-comp) | ✅ (centralized) |
-| **Overlay Engine** | ⚠️ (Popper) | ⚠️ (rc-trigger) | ✅ (Floating UI) | ⚠️ (per-comp) | ✅ (centralized) |
-| **Keyboard Contracts** | ⚠️ (per-comp) | ⚠️ (per-comp) | ⚠️ (per-comp) | ⚠️ (per-comp) | ✅ (WAI-ARIA) |
-| **Component Contracts** | ❌ | ❌ | ⚠️ | ❌ | ✅ (typed) |
-| **Slot Pattern** | ✅ | ❌ | ⚠️ | ❌ | ✅ |
-| **Access Control** | ❌ | ❌ | ❌ | ❌ | ✅ (4-level) |
-| **Scheduler** | ✅ (X) | ⚠️ (ProScheduler) | ❌ | ✅ (FullCalendar) | ✅ (x-scheduler) |
-| **Kanban** | ❌ | ❌ | ❌ | ✅ | ✅ (x-kanban) |
-| **Rich Text Editor** | ❌ | ❌ | ✅ (Tiptap) | ✅ (Editor) | ✅ (x-editor) |
-| **Form Builder** | ❌ | ✅ (ProForm) | ✅ (form hooks) | ❌ | ⚠️ (adaptive-form) |
-| **Icons** | ✅ (Material) | ✅ (Ant Icons) | ✅ (Tabler) | ✅ (PrimeIcons) | ✅ (51 icon, tree-shakeable) |
-| **CLI / Scaffold** | ❌ | ✅ (umi) | ❌ | ❌ | ✅ (scaffold-component) |
-| **Codemods** | ✅ | ✅ | ❌ | ❌ | ✅ |
-| **Docs Portal** | ✅ | ✅ | ✅ | ✅ | ⚠️ (internal) |
-| **Figma Kit** | ✅ | ✅ | ✅ | ✅ | ⚠️ (tokens only) |
-| **Storybook** | ✅ | ✅ | ❌ (own) | ✅ | ✅ |
+| Capability                                | MUI           | Antd              | Mantine          | PrimeReact        | **@mfe**                                              |
+| ----------------------------------------- | ------------- | ----------------- | ---------------- | ----------------- | ----------------------------------------------------- |
+| **Primitives (Button, Input, Select...)** | ✅ 50+        | ✅ 60+            | ✅ 40+           | ✅ 80+            | ✅ 24 (174 total incl. all)                           |
+| **Composed Components**                   | ✅ 30+        | ✅ 40+            | ✅ 30+           | ✅ 40+            | ✅ 59                                                 |
+| **Enterprise Suite**                      | ❌            | ❌                | ❌               | ❌                | ✅ 38 components (unique differentiator)              |
+| **AI-Native**                             | ❌            | ❌                | ❌               | ❌                | ✅ MCP 21 tool (hedef 20+ aşıldı; only @mfe has this) |
+| **Data Grid**                             | ✅ (X)        | ✅ (ProTable)     | ⚠️ (3rd party)   | ✅ (DataTable)    | ✅ (AG Grid v34)                                      |
+| **Charts**                                | ✅ (X)        | ✅ (Ant Charts)   | ⚠️ (3rd party)   | ✅ (Chart.js)     | ✅ (AG Charts)                                        |
+| **Design Tokens**                         | ✅ Theme      | ⚠️ Less vars      | ✅ CSS vars      | ⚠️ Sass vars      | ✅ 12 axis, CSS vars                                  |
+| **Dark Mode**                             | ✅            | ✅                | ✅               | ✅                | ✅ + High-Contrast                                    |
+| **Density Control**                       | ⚠️ (manual)   | ✅ (compact)      | ⚠️ (manual)      | ⚠️ (manual)       | ✅ (theme axis)                                       |
+| **RTL**                                   | ✅            | ✅                | ✅               | ✅                | ✅ (DirectionProvider)                                |
+| **i18n**                                  | ⚠️ (manual)   | ✅ (built-in)     | ⚠️ (manual)      | ✅ (built-in)     | ✅ (LocaleProvider)                                   |
+| **SSR/RSC**                               | ✅            | ⚠️                | ✅               | ⚠️                | ✅ ("use client")                                     |
+| **A11y Engine**                           | ⚠️ (per-comp) | ⚠️ (per-comp)     | ✅ (hooks)       | ⚠️ (per-comp)     | ✅ (centralized)                                      |
+| **Overlay Engine**                        | ⚠️ (Popper)   | ⚠️ (rc-trigger)   | ✅ (Floating UI) | ⚠️ (per-comp)     | ✅ (centralized)                                      |
+| **Keyboard Contracts**                    | ⚠️ (per-comp) | ⚠️ (per-comp)     | ⚠️ (per-comp)    | ⚠️ (per-comp)     | ✅ (WAI-ARIA)                                         |
+| **Component Contracts**                   | ❌            | ❌                | ⚠️               | ❌                | ✅ (typed)                                            |
+| **Slot Pattern**                          | ✅            | ❌                | ⚠️               | ❌                | ✅                                                    |
+| **Access Control**                        | ❌            | ❌                | ❌               | ❌                | ✅ (4-level)                                          |
+| **Scheduler**                             | ✅ (X)        | ⚠️ (ProScheduler) | ❌               | ✅ (FullCalendar) | ✅ (x-scheduler)                                      |
+| **Kanban**                                | ❌            | ❌                | ❌               | ✅                | ✅ (x-kanban)                                         |
+| **Rich Text Editor**                      | ❌            | ❌                | ✅ (Tiptap)      | ✅ (Editor)       | ✅ (x-editor)                                         |
+| **Form Builder**                          | ❌            | ✅ (ProForm)      | ✅ (form hooks)  | ❌                | ⚠️ (adaptive-form)                                    |
+| **Icons**                                 | ✅ (Material) | ✅ (Ant Icons)    | ✅ (Tabler)      | ✅ (PrimeIcons)   | ✅ (51 icon, tree-shakeable)                          |
+| **CLI / Scaffold**                        | ❌            | ✅ (umi)          | ❌               | ❌                | ✅ (scaffold-component)                               |
+| **Codemods**                              | ✅            | ✅                | ❌               | ❌                | ✅                                                    |
+| **Docs Portal**                           | ✅            | ✅                | ✅               | ✅                | ⚠️ (internal)                                         |
+| **Figma Kit**                             | ✅            | ✅                | ✅               | ✅                | ⚠️ (tokens only)                                      |
+| **Storybook**                             | ✅            | ✅                | ❌ (own)         | ✅                | ✅                                                    |
 
 ### Foundation Benchmark: Radix vs React Aria vs Base UI vs @mfe/internal
 
-| Capability | Radix | React Aria | Base UI | **@mfe internal** |
-|---|---|---|---|---|
-| **Headless Primitives** | ✅ 28 | ✅ 40+ | ✅ 20+ | ⚠️ (hooks, not components) |
-| **State Machines** | ✅ | ✅ | ⚠️ | ⚠️ (semantic-intent) |
-| **Focus Management** | ✅ | ✅ | ✅ | ✅ |
-| **Keyboard Navigation** | ✅ | ✅ | ✅ | ✅ (contracts) |
-| **Overlay/Portal** | ✅ | ✅ | ✅ | ✅ |
-| **Roving Tabindex** | ✅ | ✅ | ⚠️ | ✅ |
-| **ARIA Live** | ⚠️ | ✅ | ⚠️ | ✅ |
-| **Scroll Lock** | ✅ | ✅ | ✅ | ✅ |
-| **SSR Safe** | ✅ | ✅ | ✅ | ✅ |
-| **Public Package** | ✅ | ✅ | ✅ | ✅ (`./headless` deep import) |
-| **Tree Shaking** | ✅ | ✅ | ✅ | ✅ (15 entry points, code splitting) |
+| Capability              | Radix | React Aria | Base UI | **@mfe internal**                    |
+| ----------------------- | ----- | ---------- | ------- | ------------------------------------ |
+| **Headless Primitives** | ✅ 28 | ✅ 40+     | ✅ 20+  | ⚠️ (hooks, not components)           |
+| **State Machines**      | ✅    | ✅         | ⚠️      | ⚠️ (semantic-intent)                 |
+| **Focus Management**    | ✅    | ✅         | ✅      | ✅                                   |
+| **Keyboard Navigation** | ✅    | ✅         | ✅      | ✅ (contracts)                       |
+| **Overlay/Portal**      | ✅    | ✅         | ✅      | ✅                                   |
+| **Roving Tabindex**     | ✅    | ✅         | ⚠️      | ✅                                   |
+| **ARIA Live**           | ⚠️    | ✅         | ⚠️      | ✅                                   |
+| **Scroll Lock**         | ✅    | ✅         | ✅      | ✅                                   |
+| **SSR Safe**            | ✅    | ✅         | ✅      | ✅                                   |
+| **Public Package**      | ✅    | ✅         | ✅      | ✅ (`./headless` deep import)        |
+| **Tree Shaking**        | ✅    | ✅         | ✅      | ✅ (15 entry points, code splitting) |
 
 ---
 
@@ -142,23 +144,24 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 
 ### Bugünden Hedefe — Eşleştirme
 
-| Hedef Paket | Bugünkü Kaynak | Değişiklik |
-|---|---|---|
-| `@mfe/tokens` | `src/tokens/` + `src/theme/core/semantic-theme.ts` | Ayrı paket olarak çıkar |
-| `@mfe/icons` | `src/icons/` (51 icons, 7 categories) | ✅ Deep import `./icons` hazır |
-| `@mfe/headless` | `src/internal/interaction-core/` + `src/internal/overlay-engine/` + `src/a11y/` | Public paket olarak ürünleştir |
-| `@mfe/ui` | `src/primitives/` + `src/components/` + `src/patterns/` + `src/providers/` | Ana styled library |
-| `@mfe/x-grid` | `src/advanced/data-grid/` | Zaten ayrı export var, tam bağımsız paket yap |
-| `@mfe/x-charts` | `src/components/charts/` | Ayrı paket |
-| `@mfe/x-workflow` | Yok | Scheduler + Kanban + Gantt (F4'te) |
-| `@mfe/blocks` | `src/patterns/` (kısmen) | Template + block seti (F5'te) |
-| `@mfe/create-app` | Yok | Starter generator (F6'da) |
+| Hedef Paket       | Bugünkü Kaynak                                                                  | Değişiklik                                    |
+| ----------------- | ------------------------------------------------------------------------------- | --------------------------------------------- |
+| `@mfe/tokens`     | `src/tokens/` + `src/theme/core/semantic-theme.ts`                              | Ayrı paket olarak çıkar                       |
+| `@mfe/icons`      | `src/icons/` (51 icons, 7 categories)                                           | ✅ Deep import `./icons` hazır                |
+| `@mfe/headless`   | `src/internal/interaction-core/` + `src/internal/overlay-engine/` + `src/a11y/` | Public paket olarak ürünleştir                |
+| `@mfe/ui`         | `src/primitives/` + `src/components/` + `src/patterns/` + `src/providers/`      | Ana styled library                            |
+| `@mfe/x-grid`     | `src/advanced/data-grid/`                                                       | Zaten ayrı export var, tam bağımsız paket yap |
+| `@mfe/x-charts`   | `src/components/charts/`                                                        | Ayrı paket                                    |
+| `@mfe/x-workflow` | Yok                                                                             | Scheduler + Kanban + Gantt (F4'te)            |
+| `@mfe/blocks`     | `src/patterns/` (kısmen)                                                        | Template + block seti (F5'te)                 |
+| `@mfe/create-app` | Yok                                                                             | Starter generator (F6'da)                     |
 
 ---
 
 ## Faz Planı — Sert Sınırlar
 
 ### Geçiş Kuralı
+
 > Bir faz "DONE" olmadan sonraki faza geçilmez.
 > "DONE" = tüm done criteria sağlanmış + release gate yeşil + doc güncel.
 
@@ -169,6 +172,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Amaç:** Build, test, publish pipeline'ı her zaman yeşil. Hiçbir yeni feature eklenmez.
 
 **Kapsam:**
+
 - [x] Type regression fix (Checkbox/Radio `error` type)
 - [x] `@ts-nocheck` temizliği (TablePagination, variants.api)
 - [x] Canonical release gate (`pre-release-check.mjs` — 14 gate, 13/13 pass)
@@ -182,6 +186,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - [ ] Visual regression baseline oluştur (F3'e taşındı)
 
 **Done Criteria:**
+
 ```
 ✅ npx vitest run                    → 5,321 test PASS
 ✅ npm run build                     → 0 error
@@ -200,6 +205,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Amaç:** Monolitik paketi mantıksal ürün ailelerine ayır. Henüz fiziksel paket ayrımı değil — önce internal boundary'ler sertleşir.
 
 **Kapsam:**
+
 1. **Barrel export refactor** — `src/index.ts`'deki `export *` yerine explicit named exports
 2. **Internal boundary enforcement** — ESLint `no-restricted-imports` ile katmanlar arası bağımlılık kuralı
 3. **Token isolation** — `src/tokens/` hiçbir React import'u barındırmaz
@@ -208,6 +214,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 6. **Package.json exports genişlet** — her katman için ayrı deep import path
 
 **Hedef exports:**
+
 ```json
 {
   ".": "/* full barrel — backward compat */",
@@ -224,6 +231,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 ```
 
 **Done Criteria:**
+
 ```
 ✅ ESLint boundary rules → 0 cross-layer violation
 ✅ Deep imports work     → import { Button } from '@mfe/design-system/primitives'
@@ -243,6 +251,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Kapsam:**
 
 #### 2a. Token Maturity ✅ DONE
+
 - [x] Token build pipeline (`scripts/build-tokens.mjs`) — CSS + JSON otomatik üretim
 - [x] `npm run build:tokens` script eklendi
 - [x] Tema axis'lerine `contrastRatio` eklendi (standard / aa / aaa)
@@ -250,6 +259,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - [ ] Figma ↔ Code round-trip sync (F6'ya taşındı — tooling gerektiriyor)
 
 #### 2b. Icon System ✅ DONE
+
 - [x] SVG icon seti — 51 icon, 7 kategori (action, navigation, status, communication, data, user, ui)
 - [x] `createIcon` factory + `<Icon size={} label={} />` API
 - [x] Tree-shakeable — her icon ayrı dosya, individual import
@@ -257,6 +267,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - [x] 38 test (base component + factory + 21 icon smoke + barrel exports)
 
 #### 2c. Headless Hooks Kataloğu ✅ DONE
+
 - [x] Mevcut `interaction-core` + `overlay-engine` → `@mfe/design-system/headless` olarak birleştirildi (70+ export)
 - [x] 8 headless hook oluşturuldu:
   - `useCombobox` — combobox state machine (open/close, filter, highlight, select)
@@ -270,12 +281,14 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - [x] Tüm hooks test edildi (headless-hooks.test.ts)
 
 #### 2d. A11y Depth ✅ DONE
+
 - [x] axe-core `expectNoA11yViolations()` assertions in ALL contract tests (24+ files)
 - [x] 0 critical/serious a11y violations
 - [ ] Focus order audit (tab sequence doğrulama) — F6'ya taşındı
 - [ ] Screen reader test matrix — F6'ya taşındı
 
 **Done Criteria (güncellenmiş — gerçek metriklerle hizalı):**
+
 ```
 ✅ Token build pipeline     → CSS + JSON + TS otomatik üretim
 ✅ Icon count               → 51 icon (7 kategori), tree-shakeable, createIcon factory, 95/95 stories
@@ -283,6 +296,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 ✅ axe-core assertions       → 0 critical/serious a11y violation (tüm contract testlerde)
 ✅ Tüm F0+F1 gate'leri      → hâlâ yeşil
 ```
+
 > ℹ️ Orijinal hedefler (200+ icon, 10+ hook) aşağı çekildi — mevcut set kullanım ihtiyacını karşılıyor. Genişleme F4+'da yapılacak.
 
 **F2 Kuralı:** Yeni styled component eklenmez. Foundation katmanı doyurulur.
@@ -296,18 +310,20 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Kapsam:**
 
 #### 3a. Component Contract Doygunluğu ✅ DONE
+
 24+ contract test dosyası, tüm aileler kapsanmış:
 
-| Aile | Contract Test Dosyaları | Durum |
-|---|---|---|
-| **Form Fields** | Input, Select, Checkbox, Radio, Switch, DatePicker, SearchInput, Combobox, Slider, Rating | ✅ |
-| **Navigation** | Tabs, Breadcrumb, Steps, Pagination | ✅ |
-| **Data Display** | Badge, Tag | ✅ |
-| **Overlay** | Dialog, Modal, Popover, Tooltip, Dropdown | ✅ |
-| **Feedback** | Alert, Spinner | ✅ |
-| **Core** | Button | ✅ |
+| Aile             | Contract Test Dosyaları                                                                   | Durum |
+| ---------------- | ----------------------------------------------------------------------------------------- | ----- |
+| **Form Fields**  | Input, Select, Checkbox, Radio, Switch, DatePicker, SearchInput, Combobox, Slider, Rating | ✅    |
+| **Navigation**   | Tabs, Breadcrumb, Steps, Pagination                                                       | ✅    |
+| **Data Display** | Badge, Tag                                                                                | ✅    |
+| **Overlay**      | Dialog, Modal, Popover, Tooltip, Dropdown                                                 | ✅    |
+| **Feedback**     | Alert, Spinner                                                                            | ✅    |
+| **Core**         | Button                                                                                    | ✅    |
 
 #### 3b. Visual Regression ✅ INFRA DONE
+
 - [x] Playwright config (playwright.config.ts)
 - [x] 4 visual test dosyası oluşturuldu:
   - `primitives.visual.ts` — 12 primitive screenshot testi
@@ -318,12 +334,14 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - [ ] Baseline snapshot'lar (Storybook aktif olduğunda `--update-snapshots` ile oluşturulacak)
 
 #### 3c. Deprecated API Removal (v2.0.0)
+
 - [ ] Codemod'u tüm consumer app'lerde çalıştır
 - [ ] 107 deprecated annotation'ı temizle
 - [ ] v2.0.0 yayınla (breaking change)
 - [ ] Migration guide güncelle
 
 #### 3d. Eksik Core Component'ler ✅ DONE
+
 - [x] `Drawer` — generic side panel (left/right/top/bottom, sm/md/lg/full)
 - [x] `Autocomplete` — Input + dropdown suggestions (async search, keyboard nav)
 - [x] `InputNumber` — numeric input with increment/decrement, step, precision
@@ -331,6 +349,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - [ ] `Checkbox Group` — F4'e taşındı
 
 **Done Criteria:**
+
 ```
 ✅ Contract tests        → 1120+ dosya, 95/95 component kapsama
 ✅ Visual regression     → Playwright + 447 visual tests (149 scenarios × 3 browsers)
@@ -351,6 +370,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Kapsam:**
 
 #### 4A. Form Validation Adapter (Hafta 1-3)
+
 - `@mfe/design-system/form` deep import
 - `useFormField()` hook — react-hook-form + zod adapter
 - `FormProvider`, `createFormSchema()` — Zod schema builder
@@ -358,6 +378,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - 15+ form recipe
 
 #### 4B. Motion & Animation System (Hafta 2-4)
+
 - `@mfe/design-system/motion` deep import
 - `AnimatePresence`, `Transition`, `StaggerGroup`, `useMotion()`
 - Overlay entegrasyonu (Modal, Dialog, Drawer, Popover, Tooltip)
@@ -365,11 +386,13 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - `prefers-reduced-motion` saygı
 
 #### 4C. RTL & Logical CSS Migration (Hafta 3-5)
+
 - Physical → logical CSS (84+ bileşen)
 - ESLint `no-physical-properties` rule
 - RTL visual regression (50+ snapshot)
 
 #### 4D. Enterprise X Suite (Hafta 4-12)
+
 - **X-Grid:** 30+ recipe, server-side, export
 - **X-Charts:** 10+ chart type, theme-aware
 - **Scheduler:** Haftalık/aylık/günlük + event CRUD
@@ -378,6 +401,7 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 - **FormBuilder:** JSON schema → form render + drag-drop
 
 **Done Criteria:**
+
 ```
 ✅ Form    → useFormField + FormProvider + 30+ test
 ✅ Motion  → AnimatePresence + overlay entegre + reduced-motion
@@ -396,12 +420,14 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Amaç:** AI-native yeteneklerle rakipleri geç. Hiçbir rakibin olmadığı boyutta liderlik kur.
 
 **Kapsam:**
+
 - **AI Developer Copilot:** MCP v2 (20+ tool), `npx @mfe/ds copilot` CLI, VS Code extension
 - **AI-Powered Testing:** Contract test generation, a11y test generation, visual scenario generation
 - **Intelligent Runtime:** `useAdaptiveLayout()`, SmartDashboard v2, AdaptiveForm v2, ContextAwareTooltip
 - **Privacy-first:** Tüm adaptasyon client-side, zero external data
 
 **Done Criteria:**
+
 ```
 ✅ MCP tools      → 20+ tool, catalog-verified, 0% halüsinasyon
 ✅ CLI            → 10+ komut smoke test PASS
@@ -419,11 +445,13 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Amaç:** Blocks marketplace + public docs portal + Figma round-trip.
 
 **Kapsam:**
+
 - **Blocks Marketplace:** 30+ block, `npx @mfe/ds add` CLI (shadcn DX)
 - **Docs Portal:** Astro/Starlight, API reference, playground, search, versioned, TR+EN
 - **Figma Round-Trip:** Bidirectional token sync, GitHub Actions otomasyonu
 
 **Done Criteria:**
+
 ```
 ✅ Blocks         → 30+ block, CLI çalışıyor, themed + a11y
 ✅ Docs portal    → public URL, %100 API covered, Lighthouse 95+
@@ -437,12 +465,14 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Amaç:** Enterprise-grade release channels, migration automation, governance.
 
 **Kapsam:**
+
 - **Release Channels:** Canary (her commit) → Stable (haftalık) → LTS (3 aylık)
 - **Migration Automation:** `npx @mfe/ds migrate` AST codemod engine
 - **RFC Process:** Template + 7 gün review + 2 approver
 - **Adoption Telemetry:** Opt-in anonymous analytics + Design Lab dashboard
 
 **Done Criteria:**
+
 ```
 ✅ LTS release    → en az 1 LTS version
 ✅ Migration CLI  → dry-run + 50+ transform PASS
@@ -457,11 +487,13 @@ Dependency Rule (TEK YÖNLÜ — asla yukarı bağımlılık olmaz):
 **Amaç:** AI ile design system kullanım kalitesini otomatik denetle, pattern öner. Dünya-ilk yetenekler.
 
 **Kapsam:**
+
 - **AI Design Review:** PR review bot, anti-pattern detection, fix suggestion, quality score
 - **Predictive Intelligence:** Usage pattern analysis, component combination patterns, bundle prediction
 - **AI Accessibility Guardian:** Runtime a11y monitoring, screen reader simulation, contrast auto-fix
 
 **Done Criteria:**
+
 ```
 ✅ PR review bot   → False positive ≤ %5
 ✅ Pattern detect   → ≥ 10 anti-pattern türü
@@ -498,18 +530,18 @@ Hafta: 1       4       8      12      16      20      24      28      32      36
 
 Bizi MUI/Antd'den farklı ve üstün kılacak 10 capability:
 
-| # | Capability | MUI/Antd | Biz | Fark |
-|---|---|---|---|---|
-| 1 | **Enterprise Semantics** (access control, audit, approval) | ❌ | ✅ | Rakiplerde access control yok |
-| 2 | **Centralized Interaction Core** (keyboard, focus, event guard) | ⚠️ per-comp | ✅ centralized | Tutarlılık garantisi |
-| 3 | **Centralized Overlay Engine** (portal, focus trap, scroll lock) | ⚠️ per-comp | ✅ centralized | Daha az bug, daha az bundle |
-| 4 | **Component Contract System** (typed, auditable) | ❌ | ✅ | API tutarlılığı otomatik |
-| 5 | **10-Axis Theme System** (appearance, density, radius, motion, ...) | ⚠️ 2-3 axis | ✅ 10 axis | Çok daha granüler customization |
-| 6 | **Slot Pattern** (sub-element override) | ⚠️ MUI only | ✅ | Composition gücü |
-| 7 | **Headless + Styled Same Roof** | ❌ | ✅ (F2) | Tek ekosistemde iki kullanım |
-| 8 | **Migration Tooling** (codemod, audit, deprecation plan) | ⚠️ | ✅ | Upgrade güveni |
-| 9 | **Enterprise X Suite** (Grid + Charts + Scheduler + Kanban + Editor) | ⚠️ MUI X only | ✅ (F4) | Tek çatı altında tüm ağır yüzeyler |
-| 10 | **MCP Integration** (AI-powered component discovery) | ❌ | ✅ | AI-native tasarım sistemi |
+| #   | Capability                                                           | MUI/Antd      | Biz            | Fark                               |
+| --- | -------------------------------------------------------------------- | ------------- | -------------- | ---------------------------------- |
+| 1   | **Enterprise Semantics** (access control, audit, approval)           | ❌            | ✅             | Rakiplerde access control yok      |
+| 2   | **Centralized Interaction Core** (keyboard, focus, event guard)      | ⚠️ per-comp   | ✅ centralized | Tutarlılık garantisi               |
+| 3   | **Centralized Overlay Engine** (portal, focus trap, scroll lock)     | ⚠️ per-comp   | ✅ centralized | Daha az bug, daha az bundle        |
+| 4   | **Component Contract System** (typed, auditable)                     | ❌            | ✅             | API tutarlılığı otomatik           |
+| 5   | **10-Axis Theme System** (appearance, density, radius, motion, ...)  | ⚠️ 2-3 axis   | ✅ 10 axis     | Çok daha granüler customization    |
+| 6   | **Slot Pattern** (sub-element override)                              | ⚠️ MUI only   | ✅             | Composition gücü                   |
+| 7   | **Headless + Styled Same Roof**                                      | ❌            | ✅ (F2)        | Tek ekosistemde iki kullanım       |
+| 8   | **Migration Tooling** (codemod, audit, deprecation plan)             | ⚠️            | ✅             | Upgrade güveni                     |
+| 9   | **Enterprise X Suite** (Grid + Charts + Scheduler + Kanban + Editor) | ⚠️ MUI X only | ✅ (F4)        | Tek çatı altında tüm ağır yüzeyler |
+| 10  | **MCP Integration** (AI-powered component discovery)                 | ❌            | ✅             | AI-native tasarım sistemi          |
 
 ---
 
@@ -537,13 +569,14 @@ HER ZAMAN:
 **F1 ✅ DONE** — Package Topology (15 deep imports, ESLint boundaries, layer isolation)
 **F2 ✅ DONE** — Foundation Completion (token pipeline, 51 icons, 8 headless hooks, axe-core)
 **F3 ✅ DONE** — Core Completeness (0 deprecated, 120+ contract, 7,200+ tests, v2.0.0 ready)
-**F4 ✅ DONE** — Gap Closer & Enterprise Suite (form, motion, enterprise/, 38 enterprise components)
-**F5 ✅ DONE** — AI-First Leapfrog (MCP 18 tools, AI testing, intelligent runtime)
-**F6 ⬜ SIRADA** — DX & Ecosystem (blocks, docs, Figma round-trip)
-**F7 ⬜ BEKLİYOR** — Commercial Hardening (LTS, migration, RFC)
-**F8 ⬜ BEKLİYOR** — AI Runtime Intelligence (design review, prediction, a11y guardian)
+**F4 ✅ DONE** — Gap Closer & Enterprise Suite (form, motion, enterprise/, 41 enterprise components — Mart sonrası güncel sayım)
+**F5 🟡 KISMEN** — AI-First Leapfrog (MCP 21 tools — hedef aşıldı, AI testing kısmen, intelligent runtime SEED'lendi: useAdaptiveLayout + AdaptiveForm; kalan: VS Code ext, privacy audit, fallback test, v2 progressions)
+**F6 🟡 KISMEN** — DX & Ecosystem (Astro/Starlight portal scaffold mevcut, Figma sync scriptleri var, 9 \*Block.tsx + 3 template; kalan: portal içerik + CI entegrasyonu + API ref auto)
+**F7 🟡 KISMEN** — Commercial Hardening (LTS policy + RFC template + semver check + migration tooling mevcut; kalan: gerçek LTS release, npm dist-tag, tamamlanmış RFC)
+**F8 🟡 BAŞLADI** — AI Runtime Intelligence (intelligence/ source + 3 CI script seed: pr-design-review, component-predictor, a11y-guardian; gate enforcement aktif değil)
 
 ### Rakamlar (F5 Baseline)
+
 ```
 Test Dosyası:    430+        → Hedef F8: 500+
 Test Sayısı:     7,200+      → Hedef F8: 7,500+

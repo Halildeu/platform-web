@@ -44,7 +44,7 @@
       "target_date": "2026-04-26",
       "dod": [
         "14 a11y:0 bilesene minimal aria/role eklenmis",
-        "CI gate: a11y >= 40 altinda PR bloklaniyor",
+        "CI gate: a11y test coverage < %70 altinda PR bloklaniyor (a11y-gate.mjs THRESHOLD=0.7 ile uyumlu — orijinal '>=40' birim hatasi 2026-04-28 duzeltildi)",
         "Scorecard script'e gate threshold eklenmis",
         "Sifir a11y:0 bilesen"
       ],
