@@ -97,7 +97,9 @@
         "ZERO_count": "5 -> 0",
         "LOW_under_50_count": "6 -> 0",
         "codex_iter": "iter1 PARTIAL -> iter2 REVISE -> iter3 AGREE (3 blocker fix: ShellSidebar href, GroupedCardGallery debounce wait, FullscreenToggle descriptor leak)",
-        "storybook_build": "exit 0 (~9s)"
+        "storybook_build": "exit 0 (~9s)",
+        "play_function_runtime": "PR #65 lokal vitest 11/11 passed (1.04s) + PR #66 CI vitest 11/11 passed (2.09s) — fake-test risk runtime-doğrulanmış kapatıldı",
+        "ci_hard_block": ".github/workflows/ci-web-check.yml M4 play verification step (vitest fail -> workflow fail -> PR not mergeable)"
       },
       "dod": [
         "33 eksik story tamamlanmis",
