@@ -90,13 +90,20 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   //   2) Render'da `catalog = catalogQuery.data` sadece (fallback yok).
   //   3) Catalog henüz yüklenmediyse module/action/report bölümleri ve explain
   //      butonları render edilmesin (loading UI).
+  // 2026-04-29 fix: drawer her açıldığında catalog yüklenir (mode=view +
+  // mode=create). Eski koşul `mode === 'view' && isPersistedRoleId` Yeni Rol
+  // modal'ında reports/modules/actions render edilmemesine sebep oluyordu —
+  // catalog null kalıyor, fallback yok. Artık catalog drawer açılır açılmaz
+  // gelir; race condition (84-92 satır yorumundaki fallback kilitlenmesi)
+  // catalogQuery.data null kontrolüyle render layer'da zaten güvende
+  // (442+ satırda `catalog?.reports ?? []` pattern'i).
   const catalogQuery = useQuery({
     queryKey: ['permission-catalog'],
     queryFn: async () => {
       const res = await api.get('/v1/authz/catalog');
       return res.data as Catalog;
     },
-    enabled: open && mode === 'view' && isPersistedRoleId(role?.id),
+    enabled: open,
     staleTime: 120_000,
   });
 
