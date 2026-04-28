@@ -54,7 +54,7 @@ jobs:
       # K2 (Wave 1.1) — Docker build context'ine taze evidence + scorecard yaz.
       # GHCR image içine baked olur, Design Lab Truth Plane production'da güncel kalır.
       - name: Setup Node.js 22 (for evidence sync)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22.12'
 
