@@ -1,6 +1,6 @@
 import React from 'react';
-import { ShellHeader } from '../ShellHeader';
-import type { ShellHeaderNavItem } from '../types';
+import { ShellHeader } from './ShellHeader';
+import type { ShellHeaderNavItem } from './types';
 
 export default {
   title: 'Patterns/ShellHeader',
@@ -28,14 +28,13 @@ export const WithSlots = () => (
     navItems={NAV_ITEMS}
     currentPath="/"
     onNavigate={(path) => console.log('Navigate:', path)}
-    startSlot={<div className="flex items-center gap-2 px-2 text-sm font-bold text-action-primary">Logo</div>}
-    endSlot={<div className="flex items-center gap-2 px-2 text-xs text-text-secondary">User Menu</div>}
+    startSlot={
+      <div className="flex items-center gap-2 px-2 text-sm font-bold text-action-primary">Logo</div>
+    }
+    endSlot={
+      <div className="flex items-center gap-2 px-2 text-xs text-text-secondary">User Menu</div>
+    }
   />
 );
 
-export const EmptyNavigation = () => (
-  <ShellHeader
-    navItems={[]}
-    currentPath="/"
-  />
-);
+export const EmptyNavigation = () => <ShellHeader navItems={[]} currentPath="/" />;
