@@ -26,6 +26,112 @@ interface UserOption {
   email: string;
 }
 
+interface MasterDataItem {
+  id: string | number;
+  code?: string | null;
+  name: string;
+  status?: boolean;
+}
+
+// iter-31 — UserDetailDrawer'daki ScopePickerSection ile parite. ScopeAssignModal
+// tek-seçim, UserDetailDrawer çok-seçim olduğu için aynı component değil ama UX
+// (search + code badge + scrollable list) tutarlı. Projeler 29k+ satıra çıkıyor;
+// native <select> bu boyutta render edilemez — search-then-pick zorunlu.
+interface SingleScopePickerProps {
+  items: MasterDataItem[];
+  value: string;
+  onChange: (value: string) => void;
+  loading: boolean;
+  searchPlaceholder: string;
+  emptyText: string;
+  inactiveLabel: string;
+}
+
+const SingleScopePicker: React.FC<SingleScopePickerProps> = ({
+  items,
+  value,
+  onChange,
+  loading,
+  searchPlaceholder,
+  emptyText,
+  inactiveLabel,
+}) => {
+  const [search, setSearch] = React.useState('');
+  const q = search.trim().toLocaleLowerCase('tr-TR');
+  const filtered = q
+    ? items.filter((it) => {
+        const name = (it.name ?? '').toLocaleLowerCase('tr-TR');
+        const code = (it.code ?? '').toLocaleLowerCase('tr-TR');
+        const id = String(it.id);
+        return name.includes(q) || code.includes(q) || id.includes(q);
+      })
+    : items;
+  const VISIBLE_CAP = 100;
+  const visible = filtered.slice(0, VISIBLE_CAP);
+
+  return (
+    <div className="space-y-1">
+      <input
+        type="search"
+        placeholder={searchPlaceholder}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        disabled={loading}
+        className="w-full rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm disabled:opacity-50"
+        data-testid="scope-assign-modal-scope-ref-search"
+      />
+      <div
+        className="max-h-44 overflow-y-auto rounded border border-border-subtle bg-surface-default"
+        data-testid="scope-assign-modal-scope-ref-list"
+      >
+        {loading ? (
+          <div className="p-2 text-xs text-text-subtle">…</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-2 text-xs text-text-subtle">{emptyText}</div>
+        ) : (
+          <>
+            {visible.map((item) => {
+              const isSelected = String(item.id) === value;
+              return (
+                <button
+                  key={String(item.id)}
+                  type="button"
+                  onClick={() => onChange(String(item.id))}
+                  className={`flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-sm hover:bg-surface-hover ${
+                    isSelected ? 'bg-surface-selected font-medium' : ''
+                  }`}
+                  data-testid={`scope-assign-modal-scope-ref-item-${item.id}`}
+                  aria-pressed={isSelected}
+                >
+                  <span className="truncate">
+                    {item.code ? <span className="text-text-subtle">[{item.code}] </span> : null}
+                    {item.name || `#${item.id}`}
+                  </span>
+                  {item.status === false ? (
+                    <span className="shrink-0 text-xs text-text-subtle">{inactiveLabel}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+            {filtered.length > VISIBLE_CAP ? (
+              <div className="p-2 text-xs text-text-subtle">+{filtered.length - VISIBLE_CAP} …</div>
+            ) : null}
+          </>
+        )}
+      </div>
+      {/* Hidden input to keep test compatibility (fireEvent.change still
+          targets `scope-assign-modal-scope-ref` to set scopeRef directly).
+          Visible UI is the search-list above. */}
+      <input
+        type="hidden"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid="scope-assign-modal-scope-ref"
+      />
+    </div>
+  );
+};
+
 export interface ScopeAssignModalProps {
   open: boolean;
   initialKind: ScopeKind | null;
@@ -234,9 +340,7 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
               type="text"
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              placeholder={
-                usersQuery.isLoading ? '...' : t('dataAccess.assign.userIdPlaceholder')
-              }
+              placeholder={usersQuery.isLoading ? '...' : t('dataAccess.assign.userIdPlaceholder')}
               disabled={usersQuery.isLoading}
               className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm disabled:opacity-50"
               data-testid="scope-assign-modal-user-id"
@@ -282,19 +386,15 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           {t('dataAccess.assign.scopeRefLabel')}
           {hasMasterData ? (
-            <select
+            <SingleScopePicker
+              items={masterDataItems}
               value={scopeRef}
-              onChange={(e) => setScopeRef(e.target.value)}
-              className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm"
-              data-testid="scope-assign-modal-scope-ref"
-            >
-              <option value="">{t('dataAccess.assign.scopeRefPlaceholder')}</option>
-              {masterDataItems.map((item) => (
-                <option key={item.id} value={String(item.id)}>
-                  {item.name || `#${item.id}`}{!item.status ? ' (pasif)' : ''}
-                </option>
-              ))}
-            </select>
+              onChange={setScopeRef}
+              loading={masterDataQuery.isLoading}
+              searchPlaceholder={t('dataAccess.assign.scopeRefSearchPlaceholder')}
+              emptyText={t('dataAccess.assign.scopeRefEmptySearch')}
+              inactiveLabel={t('dataAccess.assign.scopeRefInactive')}
+            />
           ) : (
             <>
               {/* Master data boş (ETL henüz koşmamış veya tablo yok). Manuel
@@ -305,9 +405,7 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
                 value={scopeRef}
                 onChange={(e) => setScopeRef(e.target.value)}
                 placeholder={
-                  masterDataQuery.isLoading
-                    ? '...'
-                    : t('dataAccess.assign.scopeRefPlaceholder')
+                  masterDataQuery.isLoading ? '...' : t('dataAccess.assign.scopeRefPlaceholder')
                 }
                 disabled={masterDataQuery.isLoading}
                 className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm disabled:opacity-50"

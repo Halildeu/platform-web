@@ -36,7 +36,11 @@ const en: Record<string, string> = {
   'dataAccess.assign.orgIdPlaceholder': 'e.g. 1',
   'dataAccess.assign.scopeRefLabel': 'Target ID',
   'dataAccess.assign.scopeRefPlaceholder': 'e.g. 1001',
-  'dataAccess.assign.scopeRefManualHint': 'List is empty — manual ID entry allowed (master data ETL may not have run yet).',
+  'dataAccess.assign.scopeRefSearchPlaceholder': 'Search by name, code or ID...',
+  'dataAccess.assign.scopeRefEmptySearch': 'No results match the search.',
+  'dataAccess.assign.scopeRefInactive': '(inactive)',
+  'dataAccess.assign.scopeRefManualHint':
+    'List is empty — manual ID entry allowed (master data ETL may not have run yet).',
   'dataAccess.assign.kindLabel': 'Scope Kind',
   'dataAccess.assign.cancel': 'Cancel',
   'dataAccess.assign.submit': 'Assign',
