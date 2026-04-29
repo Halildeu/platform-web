@@ -116,6 +116,7 @@ export function PermissionProvider({
         scopes: { companyIds: [], projectIds: [], warehouseIds: [], branchIds: [] },
       });
       setInitialized(true);
+      setSessionExpired(false);
       return;
     }
 
@@ -154,14 +155,21 @@ export function PermissionProvider({
       // Don't set initialized=true when disabled — ProtectedRoute should
       // keep showing loading until auth init completes and enables us.
       setAuthz(null);
+      setSessionExpired(false);
       setLoading(false);
       return undefined;
     }
 
-    // If parent provides pre-fetched data, use it instead of fetching
+    // If parent provides pre-fetched data, use it instead of fetching.
+    // Codex 019dd818 iter-6 PARTIAL: re-auth recovery yolu — shell yeni
+    // initialData verdiğinde sessionExpired flag'i de sıfırlanmalı, aksi
+    // halde 401 sonrası fresh authz gelse bile useZanzibarAccess'i
+    // sessionExpired short-circuit ile 'disabled'/'session_expired' kalır.
     if (initialData) {
       setAuthz(initialData);
       setInitialized(true);
+      setSessionExpired(false);
+      lastVersionRef.current = initialData.authzVersion ?? null;
     } else {
       loadAuthz();
     }

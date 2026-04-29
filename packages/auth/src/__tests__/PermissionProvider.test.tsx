@@ -206,4 +206,55 @@ describe('PermissionProvider — Codex 019dd818 iter-4 (B-prime) sessionExpired'
     expect(result.current.authz).not.toBeNull();
     expect(result.current.isSuperAdmin()).toBe(false); // mockAuthzMe.superAdmin=false
   });
+
+  // Codex 019dd818 iter-6 PARTIAL blocker fix: re-auth recovery via initialData.
+  // Senaryo: /me 401 → sessionExpired=true → shell re-login + fresh initialData
+  // Provider initialData branch'inde sessionExpired'i sıfırlamalı.
+  it('clears sessionExpired when shell provides fresh initialData after 401', async () => {
+    const httpGet = vi.fn().mockRejectedValue({ response: { status: 401 } });
+    const freshAuthz: AuthzMeResponse = {
+      ...mockAuthzMe,
+      superAdmin: true,
+      authzVersion: 99,
+    };
+
+    // useState driver: initialData null'dan freshAuthz'e geçiş simüle.
+    function HostWithInitialData() {
+      const [initialData, setInitialData] = React.useState<AuthzMeResponse | null>(null);
+      const captureRef = React.useRef<{ trigger: () => void }>({ trigger: () => {} });
+      captureRef.current.trigger = () => setInitialData(freshAuthz);
+      // Expose trigger via window for the test to call.
+      (window as unknown as { __recoveryTrigger?: () => void }).__recoveryTrigger = () =>
+        captureRef.current.trigger();
+      return (
+        <PermissionProvider httpGet={httpGet} initialData={initialData}>
+          <Probe />
+        </PermissionProvider>
+      );
+    }
+
+    let captured: ReturnType<typeof usePermissions> | null = null;
+    function Probe() {
+      captured = usePermissions();
+      return null;
+    }
+
+    const { rerender } = renderHook(() => null, {
+      wrapper: () => <HostWithInitialData />,
+    });
+
+    // İlk render: initialData=null → /me çağrılır → 401 → sessionExpired=true
+    await waitFor(() => expect(captured?.sessionExpired).toBe(true));
+    expect(captured?.authz).toBeNull();
+
+    // Shell re-login: trigger fresh initialData.
+    await act(async () => {
+      (window as unknown as { __recoveryTrigger?: () => void }).__recoveryTrigger?.();
+    });
+    rerender();
+
+    await waitFor(() => expect(captured?.sessionExpired).toBe(false));
+    expect(captured?.authz).not.toBeNull();
+    expect(captured?.isSuperAdmin()).toBe(true);
+  });
 });
