@@ -155,20 +155,38 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     const reps: Record<string, string> = {};
     const pgs: Record<string, string> = {};
 
-    // Init from fetched granules if available
+    // 2026-04-29 fix: backend GET /v1/roles/{id} legacy `policies` format
+    // (AccessModulePolicyDto: {moduleKey, level}) döner; `permissions` array
+    // genellikle boş veya numeric ID liste — granule shape (type/key/grant)
+    // YOK. Eski parser yalnızca granule.type'a baktığı için legacy policies
+    // hiç parse edilmiyor → modüller "—" boş + save sonrası eski permissionlar
+    // silinir (kullanıcı 2026-04-29 ADMIN drawer şikayeti).
+    //
+    // Fix: typed granules (g.type set) varsa onları kullan; yoksa role.policies
+    // legacy mapping ile moduleGrants'ı doldur. Backend granule endpoint return
+    // edene kadar save zinciri eski permissionları silmez.
     const granules = roleGranulesQuery.data;
+    let typedGranulesFound = false;
     if (granules && granules.length > 0) {
       for (const g of granules) {
-        switch (g.type?.toUpperCase()) {
-          case 'MODULE': mods[g.key] = g.grant; break;
-          case 'ACTION': acts[g.key] = g.grant; break;
-          case 'REPORT': reps[g.key] = g.grant; break;
-          case 'PAGE': pgs[g.key] = g.grant; break;
+        const gAny = g as { type?: string; key?: string; grant?: string };
+        if (gAny.type) {
+          typedGranulesFound = true;
+          switch (gAny.type.toUpperCase()) {
+            case 'MODULE': if (gAny.key) mods[gAny.key] = gAny.grant ?? 'NONE'; break;
+            case 'ACTION': if (gAny.key) acts[gAny.key] = gAny.grant ?? 'ALLOW'; break;
+            case 'REPORT': if (gAny.key) reps[gAny.key] = gAny.grant ?? 'VIEW'; break;
+            case 'PAGE':   if (gAny.key) pgs[gAny.key]  = gAny.grant ?? 'ALLOW'; break;
+          }
         }
       }
-    } else {
-      // Fallback to legacy policies
-      for (const p of role.policies) { mods[p.moduleKey] = p.level; }
+    }
+
+    if (!typedGranulesFound && Array.isArray(role.policies)) {
+      // Legacy fallback: backend hâlâ policies (moduleKey/level) shape dönüyor
+      for (const p of role.policies) {
+        if (p.moduleKey && p.level) mods[p.moduleKey] = p.level;
+      }
     }
 
     setModuleGrants(mods);
