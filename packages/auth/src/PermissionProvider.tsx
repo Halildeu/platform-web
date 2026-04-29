@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
-import type { AuthzMeResponse, AccessLevel, GrantResult } from './types';
+import type { AuthzMeResponse, AccessLevel } from './types';
 import { fetchAuthzMe, fetchAuthzVersion } from './api';
 
 interface PermissionContextValue {
@@ -47,7 +47,7 @@ const PermissionContext = createContext<PermissionContextValue>({
 interface PermissionProviderProps {
   children: React.ReactNode;
   /** HTTP GET function (from shared-http or axios) */
-  httpGet: (url: string) => Promise<{ data: any }>;
+  httpGet: (url: string) => Promise<{ data: unknown }>;
   /** If true, all permissions are granted (dev/permitAll mode) */
   permitAll?: boolean;
   /** If false, authz isteği atılmaz; token beklenir. */
@@ -77,16 +77,26 @@ export function PermissionProvider({
         userId: 'dev-user',
         superAdmin: true,
         allowedModules: [
-          'USER_MANAGEMENT', 'ACCESS', 'AUDIT', 'REPORT',
-          'WAREHOUSE', 'PURCHASE', 'THEME',
+          'USER_MANAGEMENT',
+          'ACCESS',
+          'AUDIT',
+          'REPORT',
+          'WAREHOUSE',
+          'PURCHASE',
+          'THEME',
         ],
         allowedCompanyIds: [],
         allowedProjectIds: [],
         allowedWarehouseIds: [],
         roles: ['Süper Admin'],
         modules: {
-          USER_MANAGEMENT: 'MANAGE', ACCESS: 'MANAGE', AUDIT: 'MANAGE',
-          REPORT: 'MANAGE', WAREHOUSE: 'MANAGE', PURCHASE: 'MANAGE', THEME: 'MANAGE',
+          USER_MANAGEMENT: 'MANAGE',
+          ACCESS: 'MANAGE',
+          AUDIT: 'MANAGE',
+          REPORT: 'MANAGE',
+          WAREHOUSE: 'MANAGE',
+          PURCHASE: 'MANAGE',
+          THEME: 'MANAGE',
         },
         actions: {},
         reports: {},
@@ -156,49 +166,48 @@ export function PermissionProvider({
     return undefined;
   }, [loadAuthz, httpGet, permitAll, enabled, cacheTtl, initialData]);
 
-  const value = useMemo<PermissionContextValue>(() => ({
-    authz,
-    initialized,
-    loading,
-    hasModule: (module: string) => {
-      if (permitAll || authz?.superAdmin) return true;
-      // Prefer new modules map, fallback to legacy allowedModules
-      if (authz?.modules && Object.keys(authz.modules).length > 0) {
-        const level = authz.modules[module];
-        return level === 'VIEW' || level === 'MANAGE';
-      }
-      return authz?.allowedModules?.includes(module) ?? false;
-    },
-    getModuleLevel: (module: string): AccessLevel => {
-      if (permitAll || authz?.superAdmin) return 'MANAGE';
-      return (authz?.modules?.[module] as AccessLevel) ?? 'NONE';
-    },
-    isActionAllowed: (action: string) => {
-      if (permitAll || authz?.superAdmin) return true;
-      return authz?.actions?.[action] === 'ALLOW';
-    },
-    isActionDenied: (action: string) => {
-      return authz?.actions?.[action] === 'DENY';
-    },
-    canViewReport: (report: string) => {
-      if (permitAll || authz?.superAdmin) return true;
-      const grant = authz?.reports?.[report];
-      return grant === 'ALLOW';
-    },
-    getUserRoles: () => authz?.roles ?? [],
-    isSuperAdmin: () => permitAll || (authz?.superAdmin ?? false),
-    canAccessCompany: (companyId: number) => {
-      if (permitAll || authz?.superAdmin) return true;
-      return authz?.allowedCompanyIds?.includes(companyId) ?? false;
-    },
-    refresh: loadAuthz,
-  }), [authz, initialized, loading, permitAll, loadAuthz]);
-
-  return (
-    <PermissionContext.Provider value={value}>
-      {children}
-    </PermissionContext.Provider>
+  const value = useMemo<PermissionContextValue>(
+    () => ({
+      authz,
+      initialized,
+      loading,
+      hasModule: (module: string) => {
+        if (permitAll || authz?.superAdmin) return true;
+        // Prefer new modules map, fallback to legacy allowedModules
+        if (authz?.modules && Object.keys(authz.modules).length > 0) {
+          const level = authz.modules[module];
+          return level === 'VIEW' || level === 'MANAGE';
+        }
+        return authz?.allowedModules?.includes(module) ?? false;
+      },
+      getModuleLevel: (module: string): AccessLevel => {
+        if (permitAll || authz?.superAdmin) return 'MANAGE';
+        return (authz?.modules?.[module] as AccessLevel) ?? 'NONE';
+      },
+      isActionAllowed: (action: string) => {
+        if (permitAll || authz?.superAdmin) return true;
+        return authz?.actions?.[action] === 'ALLOW';
+      },
+      isActionDenied: (action: string) => {
+        return authz?.actions?.[action] === 'DENY';
+      },
+      canViewReport: (report: string) => {
+        if (permitAll || authz?.superAdmin) return true;
+        const grant = authz?.reports?.[report];
+        return grant === 'ALLOW';
+      },
+      getUserRoles: () => authz?.roles ?? [],
+      isSuperAdmin: () => permitAll || (authz?.superAdmin ?? false),
+      canAccessCompany: (companyId: number) => {
+        if (permitAll || authz?.superAdmin) return true;
+        return authz?.allowedCompanyIds?.includes(companyId) ?? false;
+      },
+      refresh: loadAuthz,
+    }),
+    [authz, initialized, loading, permitAll, loadAuthz],
   );
+
+  return <PermissionContext.Provider value={value}>{children}</PermissionContext.Provider>;
 }
 
 /**

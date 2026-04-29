@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import type { ExplainResponse, ExplainScopeType } from './types';
 
 interface UseExplainPermissionOptions {
-  httpPost: (url: string, body: any) => Promise<{ data: any }>;
+  httpPost: (url: string, body: unknown) => Promise<{ data: unknown }>;
 }
 
 /**

@@ -37,7 +37,7 @@ export interface ExplainPermissionModalProps {
    * Kept as a prop so mfe-access (React Query axios wrapper) and mfe-shell
    * (same wrapper) stay decoupled from this package's transport choice.
    */
-  httpPost: (url: string, body: unknown) => Promise<{ data: any }>;
+  httpPost: (url: string, body: unknown) => Promise<{ data: unknown }>;
   /** i18n translate function (passed from host). */
   t: (key: string, params?: Record<string, unknown>) => string;
 }
@@ -75,7 +75,10 @@ export const ExplainPermissionModal: React.FC<ExplainPermissionModalProps> = ({
   const [scopeError, setScopeError] = React.useState<string | null>(null);
   // Persisted scope that was actually submitted — used by the auto-refetch
   // effect below when target changes while a scope is active.
-  const [appliedScope, setAppliedScope] = React.useState<{ type: ExplainScopeType; refId: number } | null>(null);
+  const [appliedScope, setAppliedScope] = React.useState<{
+    type: ExplainScopeType;
+    refId: number;
+  } | null>(null);
 
   // Reset scope picker state whenever the modal opens or the target changes —
   // otherwise a scope from a previous permission drawer leaks into the next
@@ -141,10 +144,9 @@ export const ExplainPermissionModal: React.FC<ExplainPermissionModalProps> = ({
     label: t(`access.explainModal.scopeType${st}`),
   }));
 
-  const deniedScopeType =
-    result?.reason === 'NO_SCOPE' ? result.details.scopeType ?? null : null;
+  const deniedScopeType = result?.reason === 'NO_SCOPE' ? (result.details.scopeType ?? null) : null;
   const deniedScopeRefId =
-    result?.reason === 'NO_SCOPE' ? result.details.scopeRefId ?? null : null;
+    result?.reason === 'NO_SCOPE' ? (result.details.scopeRefId ?? null) : null;
 
   return (
     <Modal
@@ -207,9 +209,7 @@ export const ExplainPermissionModal: React.FC<ExplainPermissionModalProps> = ({
                     <span className="text-text-subtle">
                       {t('access.explainModal.sourceRoleLabel')}:
                     </span>
-                    <span className="font-medium text-text-primary">
-                      {result.details.roleName}
-                    </span>
+                    <span className="font-medium text-text-primary">{result.details.roleName}</span>
                   </>
                 )}
 
@@ -250,9 +250,7 @@ export const ExplainPermissionModal: React.FC<ExplainPermissionModalProps> = ({
                 className="flex flex-wrap items-center gap-2 text-sm"
                 data-testid="explain-modal-user-roles"
               >
-                <span className="text-text-subtle">
-                  {t('access.explainModal.userRolesLabel')}:
-                </span>
+                <span className="text-text-subtle">{t('access.explainModal.userRolesLabel')}:</span>
                 {result.userRoles.map((r) => (
                   <Badge key={r} variant="info" size="sm">
                     {r}
@@ -272,9 +270,7 @@ export const ExplainPermissionModal: React.FC<ExplainPermissionModalProps> = ({
             <div className="mb-2 font-medium text-text-primary">
               {t('access.explainModal.scopeSectionTitle')}
             </div>
-            <p className="mb-3 text-xs text-text-subtle">
-              {t('access.explainModal.scopeHelp')}
-            </p>
+            <p className="mb-3 text-xs text-text-subtle">{t('access.explainModal.scopeHelp')}</p>
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-text-subtle">

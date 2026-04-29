@@ -15,7 +15,7 @@ interface ZanzibarGateProps {
   /** Fallback during async server check (default: null = render nothing) */
   loadingFallback?: React.ReactNode;
   /** HTTP POST function for server checks */
-  httpPost?: (url: string, body: any) => Promise<{ data: any }>;
+  httpPost?: (url: string, body: unknown) => Promise<{ data: unknown }>;
   /**
    * Faz 4 Explain UX: reason shown as tooltip when access is 'disabled'.
    * Consumer typically passes a short i18n string like
