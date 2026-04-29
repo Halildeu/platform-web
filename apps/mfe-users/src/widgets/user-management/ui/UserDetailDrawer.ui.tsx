@@ -82,6 +82,16 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const [dirty, setDirty] = useState(false);
 
   // --- Queries (all hooks MUST be above any early return) ---
+  // 2026-04-29 fix: kullanıcı feedback "users da sınırlı roller görünüyor"
+  // (sadece 5 fallback rol). Backend /v1/roles 16 rol dönerken frontend
+  // catch'e düşüp hardcoded FALLBACK_ROLE_OPTIONS gösteriyordu (network/parse
+  // failure'da bile 5 rol kafa karıştırıcı).
+  //
+  // Yeni davranış:
+  // 1. /v1/roles HTTP 200 + items array → tüm rolleri göster (DB'den ne gelirse)
+  // 2. Fail (network/parse) → BOŞ list + console.warn (UI "rol yüklenemedi"
+  //    mesajı gösterebilir). Hardcoded fallback yalnız son çare olarak
+  //    user.role'ü içerir (en azından mevcut atama görünür).
   const rolesQuery = useQuery({
     queryKey: ['roles-list'],
     queryFn: async () => {
@@ -89,8 +99,18 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         const res = await api.get('/v1/roles');
         const data = res.data as any;
         const items = data?.items ?? data?.content ?? data ?? [];
-        return (Array.isArray(items) ? items : []).map((r: any) => ({ id: r.id, name: r.name })) as RoleOption[];
-      } catch {
+        const parsed = (Array.isArray(items) ? items : [])
+          .map((r: any) => ({ id: r.id, name: r.name }))
+          .filter((r: any) => r.id != null && r.name) as RoleOption[];
+        if (parsed.length > 0) {
+          return parsed;
+        }
+        // Empty array → backend roller henüz seedlenmemiş veya filter
+        // tüm rolleri elemiş; fallback'e geç (kullanıcı yine de mevcut
+        // atamasını görsün).
+        return resolveFallbackRoleOptions(user?.role);
+      } catch (err) {
+        console.warn('[UserDetailDrawer] /v1/roles fetch failed, using fallback', err);
         return resolveFallbackRoleOptions(user?.role);
       }
     },
