@@ -36,7 +36,7 @@ export function useBatchZanzibarAccess(
   relation: string,
   objectType: string,
   objectIds: string[],
-  httpPost?: (url: string, body: any) => Promise<{ data: any }>
+  httpPost?: (url: string, body: unknown) => Promise<{ data: unknown }>,
 ): BatchZanzibarAccessResult {
   const { initialized, isSuperAdmin, hasModule, canViewReport, isActionAllowed } = usePermissions();
   const [serverResults, setServerResults] = useState<BatchCheckItem[]>([]);
@@ -113,7 +113,7 @@ export function useBatchZanzibarAccess(
               relation,
               allowed: false,
               reason: 'error' as const,
-            }))
+            })),
           );
         }
       })
@@ -121,7 +121,9 @@ export function useBatchZanzibarAccess(
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [needsServerKey, relation, objectType, httpPost]);
 
   // Phase 3: Merge coarse + server results
@@ -132,10 +134,18 @@ export function useBatchZanzibarAccess(
       if (item.allowed) {
         const level: ZanzibarAccessLevel =
           relation.includes('manage') || relation.includes('edit') ? 'full' : 'readonly';
-        merged.set(item.objectId, { objectId: item.objectId, access: level, reason: item.reason ?? 'granted' });
+        merged.set(item.objectId, {
+          objectId: item.objectId,
+          access: level,
+          reason: item.reason ?? 'granted',
+        });
       } else {
         const access: ZanzibarAccessLevel = item.reason === 'blocked' ? 'disabled' : 'hidden';
-        merged.set(item.objectId, { objectId: item.objectId, access, reason: item.reason ?? 'denied' });
+        merged.set(item.objectId, {
+          objectId: item.objectId,
+          access,
+          reason: item.reason ?? 'denied',
+        });
       }
     }
 

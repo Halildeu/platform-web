@@ -30,14 +30,18 @@ export function useZanzibarAccess(
   relation: string,
   objectType: string,
   objectId: string,
-  httpPost?: (url: string, body: any) => Promise<{ data: any }>
+  httpPost?: (url: string, body: unknown) => Promise<{ data: unknown }>,
 ): ZanzibarAccessResult {
-  const { authz, initialized, isSuperAdmin, hasModule, canViewReport, isActionAllowed } = usePermissions();
+  const { initialized, isSuperAdmin, hasModule, canViewReport, isActionAllowed } = usePermissions();
   const [serverResult, setServerResult] = useState<CheckResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   // Phase 1: Coarse gate — quick decision from /me cache (no network)
-  const coarseResult = useMemo((): { access: ZanzibarAccessLevel | null; skip: boolean; reason: string } => {
+  const coarseResult = useMemo((): {
+    access: ZanzibarAccessLevel | null;
+    skip: boolean;
+    reason: string;
+  } => {
     if (!initialized) return { access: null, skip: true, reason: 'loading' };
     if (isSuperAdmin()) return { access: 'full', skip: true, reason: 'superadmin' };
 
@@ -48,7 +52,8 @@ export function useZanzibarAccess(
       if (!canViewReport(objectId)) return { access: 'hidden', skip: true, reason: 'no_report' };
     }
     if (objectType === 'action') {
-      if (!isActionAllowed(objectId)) return { access: 'disabled', skip: true, reason: 'denied_action' };
+      if (!isActionAllowed(objectId))
+        return { access: 'disabled', skip: true, reason: 'denied_action' };
       return { access: 'full', skip: true, reason: 'action_allowed' };
     }
 
@@ -74,7 +79,9 @@ export function useZanzibarAccess(
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [coarseResult.skip, relation, objectType, objectId, httpPost]);
 
   // Phase 3: Map to ZanzibarAccessLevel
@@ -101,10 +108,11 @@ export function useZanzibarAccess(
 
     // Server check completed — map reason to access level
     if (serverResult.allowed) {
-      const level: ZanzibarAccessLevel =
-        relation.includes('manage') ? 'full' :
-        relation.includes('edit') ? 'full' :
-        'readonly';
+      const level: ZanzibarAccessLevel = relation.includes('manage')
+        ? 'full'
+        : relation.includes('edit')
+          ? 'full'
+          : 'readonly';
       return { access: level, loading: false, reason: serverResult.reason ?? 'granted' };
     }
 
