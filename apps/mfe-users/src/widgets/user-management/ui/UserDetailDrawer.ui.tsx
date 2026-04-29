@@ -161,15 +161,35 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     enabled: open && !!user,
   });
 
-  // Scope data from core-data-service
+  // Codex 019dda1c iter-28c: scope picker source endpoints retargeted to
+  // permission-service MasterDataController (/api/v1/master-data/{...}).
+  // Pre-iter-28c the drawer hit /v1/{companies,projects,warehouses,branches}
+  // expecting a non-existent core-data-service stub — every query 404'd,
+  // the catch silently returned [], and the four scope tabs rendered as
+  // empty lists with the misleading "scope atanmadan kullanıcı veri
+  // göremez" placeholder. The real master-data live in workcube_mikrolink
+  // and are exposed by permission-service's MasterDataController, which
+  // returns a flat List<MasterDataItem> ({id, name, status}) — no
+  // pagination wrapper, so we drop the unwrapList helper here.
+  //
+  // Endpoint mapping mirrors mfe-access ScopeAssignModal:
+  //   companies   → /v1/master-data/companies
+  //   projects    → /v1/master-data/projects
+  //   branches    → /v1/master-data/branches
+  //   warehouses  → /v1/master-data/departments
+  //     (the system contract treats DEPOT as the workcube DEPARTMENTS
+  //      table; the UI label "Depolar" is a downstream naming choice
+  //      preserved across both drawers.)
+  type MasterDataItem = { id: number; name: string; status?: boolean };
   const companiesQuery = useQuery({
     queryKey: ['scope-companies'],
     queryFn: async () => {
       try {
-        const res = await api.get('/v1/companies');
-        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
-          (c) => ({ id: c.id, name: c.name }),
-        ) as ScopeEntity[];
+        const res = await api.get('/v1/master-data/companies');
+        return ((res.data as MasterDataItem[]) ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+        })) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
@@ -181,10 +201,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryKey: ['scope-projects'],
     queryFn: async () => {
       try {
-        const res = await api.get('/v1/projects');
-        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
-          (p) => ({ id: p.id, name: p.name }),
-        ) as ScopeEntity[];
+        const res = await api.get('/v1/master-data/projects');
+        return ((res.data as MasterDataItem[]) ?? []).map((p) => ({
+          id: p.id,
+          name: p.name,
+        })) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
@@ -196,10 +217,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryKey: ['scope-warehouses'],
     queryFn: async () => {
       try {
-        const res = await api.get('/v1/warehouses');
-        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
-          (w) => ({ id: w.id, name: w.name }),
-        ) as ScopeEntity[];
+        const res = await api.get('/v1/master-data/departments');
+        return ((res.data as MasterDataItem[]) ?? []).map((w) => ({
+          id: w.id,
+          name: w.name,
+        })) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
@@ -211,10 +233,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryKey: ['scope-branches'],
     queryFn: async () => {
       try {
-        const res = await api.get('/v1/branches');
-        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
-          (b) => ({ id: b.id, name: b.name }),
-        ) as ScopeEntity[];
+        const res = await api.get('/v1/master-data/branches');
+        return ((res.data as MasterDataItem[]) ?? []).map((b) => ({
+          id: b.id,
+          name: b.name,
+        })) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
