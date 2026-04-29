@@ -19,6 +19,8 @@ import { useChordNavigation } from '../shortcuts/useChordNavigation';
 import { ChordOverlay } from '../shortcuts/ChordOverlay';
 import { MobileBottomBar } from './MobileBottomBar';
 
+import { buildSafeLoginRedirect } from './buildSafeLoginRedirect';
+
 /* ------------------------------------------------------------------ */
 /*  ShellLayout — Main application layout with header, sidebar, routes */
 /* ------------------------------------------------------------------ */
@@ -170,19 +172,7 @@ export const ShellLayout: React.FC = () => {
       if (window.location.pathname.startsWith('/login')) return;
       // Episode dedupe
       if (sessionExpiredToastIdRef.current) return;
-      const buildSafeLoginRedirect = (): string => {
-        const { pathname, search, hash } = window.location;
-        const current = `${pathname || '/'}${search || ''}${hash || ''}`;
-        const isSafePath =
-          current.startsWith('/') &&
-          !current.startsWith('//') &&
-          !/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(current);
-        const safePath = isSafePath ? current : '/';
-        const redirect =
-          safePath.startsWith('/login') || safePath.startsWith('/register') ? '/' : safePath;
-        return `/login?redirect=${encodeURIComponent(redirect)}`;
-      };
-      const ctaUrl = buildSafeLoginRedirect();
+      const ctaUrl = buildSafeLoginRedirect(window.location);
       const id = pushWarningToast(t('auth.session.expired'), {
         title: t('auth.session.expired'),
         content: (
@@ -219,6 +209,16 @@ export const ShellLayout: React.FC = () => {
       window.removeEventListener('app:auth:unauthorized', handler);
     };
   }, [dispatch, pushWarningToast, t, token]);
+
+  /* Codex 019dd818 iter-10 PARTIAL ek bulgu: token yenilendiğinde
+   * sessionExpiredToastIdRef reset edilmeli — aksi halde Keycloak refresh
+   * race condition'da eski persistent toast id kalır, sonraki gerçek
+   * session-expired event'leri no-op olur. */
+  useEffect(() => {
+    if (token) {
+      sessionExpiredToastIdRef.current = null;
+    }
+  }, [token]);
 
   /* Session expiry handler */
   useEffect(() => {
