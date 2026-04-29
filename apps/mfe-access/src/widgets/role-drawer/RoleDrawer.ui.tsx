@@ -343,6 +343,24 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setDirty(true);
   };
 
+  // 2026-04-29: tree pattern — kullanıcı feedback "raporlar inline aşağı doğru
+  // açılsın tek tek, rol bazlı yetki". Üç seviye:
+  //   NONE → granule yok (hide on save)
+  //   VIEW → görüntüleyebilir
+  //   MANAGE → tam yetki
+  // Eski toggleReport (ALLOW toggle) yerine setReportLevel(key, level).
+  const setReportLevel = (key: string, level: 'NONE' | 'VIEW' | 'MANAGE') => {
+    setReportGrants(prev => {
+      if (level === 'NONE') {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: level };
+    });
+    setDirty(true);
+  };
+
   const toggleReport = (key: string) => {
     setReportGrants(prev => {
       if (prev[key]) { const next = { ...prev }; delete next[key]; return next; }
@@ -448,27 +466,87 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
         <hr className="border-border-subtle" />
 
-        {/* --- RAPORLAR --- */}
+        {/* --- RAPORLAR (tree pattern: modül-gruplu accordion + 3-level select) --- */}
+        {/* 2026-04-29 redesign: kullanıcı feedback "raporlar inline aşağı doğru
+            açılsın tek tek, rol bazlı yetki". Eski düz checkbox listesi yerine
+            modül başlığı altında raporlar grouplu, her birine NONE/VIEW/MANAGE
+            select. Mevcut catalog?.reports zaten {key,label,module}; reportGrants
+            level value'su 'VIEW'|'MANAGE'|undefined. */}
         <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">{t('access.drawer.reportsTitle')}</h3>
-        <div className="flex flex-col gap-2">
-          {(catalog?.reports ?? []).map(report => (
-            <div key={report.key} className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2">
-              <Checkbox label={report.label}
-                checked={!!reportGrants[report.key]}
-                onChange={() => toggleReport(report.key)} size="sm"
-                description={report.module} />
-              <button
-                type="button"
-                onClick={() => setExplainTarget({ type: 'REPORT', key: report.key, label: report.label })}
-                aria-label={t('access.explainModal.triggerAria', { label: report.label })}
-                title={t('access.explainModal.triggerTitle')}
-                data-testid={`explain-trigger-report-${report.key}`}
-                className="flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle text-xs text-text-subtle hover:bg-surface-default hover:text-text-primary"
-              >
-                ?
-              </button>
-            </div>
-          ))}
+        <div className="flex flex-col gap-3">
+          {(() => {
+            // Group reports by module key (preserves catalog ordering)
+            const grouped = new Map<string, typeof catalog.reports>();
+            for (const report of catalog?.reports ?? []) {
+              const arr = grouped.get(report.module) ?? [];
+              arr.push(report);
+              grouped.set(report.module, arr);
+            }
+            return Array.from(grouped.entries()).map(([moduleKey, reports]) => {
+              // Modül label catalog.modules'tan (varsa) — fallback raw key
+              const moduleLabel = catalog?.modules?.find(m => m.key === moduleKey)?.label ?? moduleKey;
+              const activeCount = reports.filter(r => !!reportGrants[r.key]).length;
+              return (
+                <details
+                  key={moduleKey}
+                  className="rounded-xl border border-border-subtle bg-surface-muted/30"
+                  open={activeCount > 0}
+                  data-testid={`report-module-group-${moduleKey}`}
+                >
+                  <summary className="flex cursor-pointer items-center justify-between rounded-xl px-4 py-2 text-sm font-medium hover:bg-surface-muted/60">
+                    <span>
+                      <span className="font-semibold">{moduleLabel}</span>
+                      <span className="ml-2 text-xs text-text-subtle">({moduleKey})</span>
+                    </span>
+                    <span className="text-xs text-text-subtle">
+                      {activeCount > 0
+                        ? t('access.drawer.reportsActiveCount', { active: activeCount, total: reports.length })
+                        : t('access.drawer.reportsTotal', { total: reports.length })}
+                    </span>
+                  </summary>
+                  <div className="flex flex-col gap-1 px-4 py-2">
+                    {reports.map(report => {
+                      const currentLevel = (reportGrants[report.key] === 'MANAGE'
+                        ? 'MANAGE'
+                        : reportGrants[report.key] === 'VIEW'
+                          ? 'VIEW'
+                          : reportGrants[report.key]
+                            ? 'VIEW' // legacy 'ALLOW' default → VIEW
+                            : 'NONE') as 'NONE' | 'VIEW' | 'MANAGE';
+                      return (
+                        <div
+                          key={report.key}
+                          className="flex items-center justify-between gap-2 rounded-md bg-surface-default px-3 py-1.5"
+                        >
+                          <span className="flex-1 text-sm">{report.label}</span>
+                          <select
+                            value={currentLevel}
+                            onChange={(e) => setReportLevel(report.key, e.target.value as 'NONE' | 'VIEW' | 'MANAGE')}
+                            className="rounded border border-border-subtle bg-surface-muted px-2 py-0.5 text-xs"
+                            data-testid={`report-level-${report.key}`}
+                          >
+                            <option value="NONE">{t('access.drawer.reportLevel.none')}</option>
+                            <option value="VIEW">{t('access.drawer.reportLevel.view')}</option>
+                            <option value="MANAGE">{t('access.drawer.reportLevel.manage')}</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setExplainTarget({ type: 'REPORT', key: report.key, label: report.label })}
+                            aria-label={t('access.explainModal.triggerAria', { label: report.label })}
+                            title={t('access.explainModal.triggerTitle')}
+                            data-testid={`explain-trigger-report-${report.key}`}
+                            className="flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle text-xs text-text-subtle hover:bg-surface-default hover:text-text-primary"
+                          >
+                            ?
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              );
+            });
+          })()}
         </div>
 
         <hr className="border-border-subtle" />
