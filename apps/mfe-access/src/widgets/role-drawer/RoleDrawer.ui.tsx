@@ -49,6 +49,14 @@ interface CatalogReport {
   key: string;
   label: string;
   module: string;
+  /**
+   * Codex 019dda1c iter-26: Türkçe UI grouping label, mirrors the source
+   * dashboard JSON's `category` (e.g. "İnsan Kaynakları" / "Finans"). Used
+   * by the drawer to group report selects into category accordions instead
+   * of generic module accordions. Optional for backward compatibility —
+   * legacy catalog rows without category fall back to `module` for grouping.
+   */
+  category?: string;
 }
 interface CatalogPage {
   key: string;
@@ -358,7 +366,14 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       for (const [key, grant] of Object.entries(actionGrants)) {
         granules.push({ type: 'action', key, grant });
       }
+      // Codex 019dda1c iter-26: catalog'da olmayan stale rapor key'lerini
+      // payload'a koyma. Eski group keys (HR_REPORTS, FINANCE_REPORTS, vs.)
+      // catalog'dan kaldırıldı; UI'da görünmüyor ama Effect B parse'ında
+      // önceki granule fetch'ten state'e gelmiş olabilirler. Save anında
+      // backend'e geri göndermek bu legacy rows'u canlı tutar.
+      const validReportKeys = new Set((catalog?.reports ?? []).map((r) => r.key));
       for (const [key, grant] of Object.entries(reportGrants)) {
+        if (!validReportKeys.has(key)) continue;
         granules.push({ type: 'report', key, grant });
       }
       for (const [key, grant] of Object.entries(pageGrants)) {
@@ -546,10 +561,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // NONE seçilirse o modüle ait tüm reportGrants entry'leri silinir
   // (drawer kapanışta NONE rapor entry zaten payload'a girmez).
   // VIEW/MANAGE seçilirse her rapor için aynı level set edilir.
-  const setReportGroupLevel = (moduleKey: string, level: 'NONE' | 'VIEW' | 'MANAGE') => {
+  const setReportGroupLevel = (groupKey: string, level: 'NONE' | 'VIEW' | 'MANAGE') => {
     setReportGrants((prev) => {
       const next = { ...prev };
-      const reports = catalog?.reports.filter((r) => r.module === moduleKey) ?? [];
+      // Codex 019dda1c iter-26: bulk filter must match the same `category ??
+      // module` key the drawer renders by, otherwise category-grouped
+      // reports won't all flip when the bulk dropdown is changed.
+      const reports = catalog?.reports.filter((r) => (r.category ?? r.module) === groupKey) ?? [];
       for (const r of reports) {
         if (level === 'NONE') {
           delete next[r.key];
@@ -711,17 +729,29 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         </h3>
         <div className="flex flex-col gap-3">
           {(() => {
-            // Group reports by module key (preserves catalog ordering)
+            // Codex 019dda1c iter-26: drawer report section now groups by
+            // `category` (Turkish UI label like "İnsan Kaynakları" / "Finans")
+            // when the catalog row exposes one. Falls back to `module`
+            // (enum key like "REPORT" / "USER_MANAGEMENT") for legacy catalog
+            // rows that haven't been re-baselined to category yet.
             const grouped = new Map<string, typeof catalog.reports>();
             for (const report of catalog?.reports ?? []) {
-              const arr = grouped.get(report.module) ?? [];
+              const groupKey = report.category ?? report.module;
+              const arr = grouped.get(groupKey) ?? [];
               arr.push(report);
-              grouped.set(report.module, arr);
+              grouped.set(groupKey, arr);
             }
-            return Array.from(grouped.entries()).map(([moduleKey, reports]) => {
-              // Modül label catalog.modules'tan (varsa) — fallback raw key
-              const moduleLabel =
-                catalog?.modules?.find((m) => m.key === moduleKey)?.label ?? moduleKey;
+            return Array.from(grouped.entries()).map(([groupKey, reports]) => {
+              // Group label resolution:
+              //   1. If groupKey came from `category`, use it directly (it's
+              //      already a Turkish user-facing label).
+              //   2. Otherwise (legacy `module` fallback), look up the module
+              //      label in catalog.modules.
+              //   3. Last resort: render the raw key.
+              const isCategory = reports.some((r) => r.category === groupKey);
+              const moduleLabel = isCategory
+                ? groupKey
+                : (catalog?.modules?.find((m) => m.key === groupKey)?.label ?? groupKey);
               const activeCount = reports.filter((r) => !!reportGrants[r.key]).length;
 
               // Codex 019dda05 iter-25 + kullanıcı feature: bulk-select header
@@ -746,15 +776,15 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
               return (
                 <details
-                  key={moduleKey}
+                  key={groupKey}
                   className="rounded-xl border border-border-subtle bg-surface-muted/30"
                   open={activeCount > 0}
-                  data-testid={`report-module-group-${moduleKey}`}
+                  data-testid={`report-module-group-${groupKey}`}
                 >
                   <summary className="flex cursor-pointer items-center justify-between rounded-xl px-4 py-2 text-sm font-medium hover:bg-surface-muted/60">
                     <span>
                       <span className="font-semibold">{moduleLabel}</span>
-                      <span className="ml-2 text-xs text-text-subtle">({moduleKey})</span>
+                      <span className="ml-2 text-xs text-text-subtle">({groupKey})</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-text-subtle">
@@ -777,10 +807,10 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                           e.stopPropagation();
                           const v = e.target.value as 'NONE' | 'VIEW' | 'MANAGE' | 'MIXED';
                           if (v === 'MIXED') return; // MIXED placeholder, no-op
-                          setReportGroupLevel(moduleKey, v);
+                          setReportGroupLevel(groupKey, v);
                         }}
                         className="rounded border border-border-subtle bg-surface-default px-2 py-0.5 text-xs font-normal"
-                        data-testid={`report-group-level-${moduleKey}`}
+                        data-testid={`report-group-level-${groupKey}`}
                         aria-label={t('access.drawer.reportsBulkLevelAria', {
                           module: moduleLabel,
                         })}
