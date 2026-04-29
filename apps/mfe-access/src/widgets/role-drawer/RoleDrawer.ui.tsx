@@ -165,25 +165,42 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     // Fix: typed granules (g.type set) varsa onları kullan; yoksa role.policies
     // legacy mapping ile moduleGrants'ı doldur. Backend granule endpoint return
     // edene kadar save zinciri eski permissionları silmez.
+    // 2026-04-29 v2 (kullanıcı şikayeti devam): roleGranulesQuery.data
+    // backend GET /v1/roles/{id} response → policies array (AccessModulePolicy
+    // {moduleKey, moduleLabel, level}) döner. v1 fix sadece typed granule
+    // (type/key/grant) parse ediyordu, eğer typed yoksa role.policies (props,
+    // listeden gelen) fallback. Ama canlı /v1/roles/{id} **da** policies
+    // shape döndüğü için query data legacy parse edilmeli — props.policies
+    // listede summary olabilir, detail policies query'den gelir.
+    //
+    // Bu fix: granules array hem typed hem legacy policies shape kabul eder.
     const granules = roleGranulesQuery.data;
-    let typedGranulesFound = false;
+    let dataConsumed = false;
     if (granules && granules.length > 0) {
       for (const g of granules) {
-        const gAny = g as { type?: string; key?: string; grant?: string };
+        const gAny = g as {
+          type?: string; key?: string; grant?: string;
+          moduleKey?: string; level?: string;
+        };
         if (gAny.type) {
-          typedGranulesFound = true;
+          // Typed granule shape (type/key/grant)
+          dataConsumed = true;
           switch (gAny.type.toUpperCase()) {
             case 'MODULE': if (gAny.key) mods[gAny.key] = gAny.grant ?? 'NONE'; break;
             case 'ACTION': if (gAny.key) acts[gAny.key] = gAny.grant ?? 'ALLOW'; break;
             case 'REPORT': if (gAny.key) reps[gAny.key] = gAny.grant ?? 'VIEW'; break;
             case 'PAGE':   if (gAny.key) pgs[gAny.key]  = gAny.grant ?? 'ALLOW'; break;
           }
+        } else if (gAny.moduleKey && gAny.level) {
+          // Legacy policy shape (AccessModulePolicyDto): module + level only
+          dataConsumed = true;
+          mods[gAny.moduleKey] = gAny.level;
         }
       }
     }
 
-    if (!typedGranulesFound && Array.isArray(role.policies)) {
-      // Legacy fallback: backend hâlâ policies (moduleKey/level) shape dönüyor
+    if (!dataConsumed && Array.isArray(role.policies)) {
+      // Last-resort fallback: query data hiç dönmedi, props.policies kullan
       for (const p of role.policies) {
         if (p.moduleKey && p.level) mods[p.moduleKey] = p.level;
       }
