@@ -212,14 +212,22 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // duplicate-check rejection (P1.7 Codex verdict).
   const [userSearchValue, setUserSearchValue] = React.useState('');
 
-  // Init from role granules (fetch full 5-type permission list)
+  // Codex 019dda05 iter-25: drawer's source-of-truth is the typed read
+  // endpoint `GET /v1/roles/{id}/granules` (companion to the existing
+  // `PUT /v1/roles/{id}/granules`). Pre-iter-25 the drawer parsed
+  // `GET /v1/roles/{id}` (RoleDto), which exposes only a per-MODULE
+  // summary in `policies`. ACTION/REPORT granules were filtered out per
+  // STORY-0318/OI-03 contract, producing the read-after-write regression
+  // where REPORT/EYLEM selects rendered "Yetki Yok" after a successful
+  // save round-trip. The new endpoint returns every granule-shape row
+  // (MODULE/ACTION/REPORT) in typed `{type, key, grant}` form.
   const roleGranulesQuery = useQuery({
     queryKey: ['role-granules', role?.id],
     queryFn: async () => {
       if (!isPersistedRoleId(role?.id)) return null;
-      const res = await api.get(`/v1/roles/${role!.id}`);
-      const data = res.data as { policies?: unknown[]; permissions?: unknown[] };
-      return (data?.policies ?? data?.permissions ?? []) as Granule[];
+      const res = await api.get(`/v1/roles/${role!.id}/granules`);
+      const data = res.data as { granules?: Granule[] };
+      return (data?.granules ?? []) as Granule[];
     },
     enabled: open && mode === 'view' && !!role && isPersistedRoleId(role?.id),
   });
@@ -244,15 +252,19 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // (only if the data actually carries entries). Crucially, this effect does
   // NOT clear state when granules is undefined/empty — it only fills.
   //
-  // Codex 019dd9d6 iter-20 (semantic tightening + deps narrow):
-  //   - `written` (renamed from `consumed`) is now ONLY true when at least
-  //     one recognizable AND writable entry was actually placed into one of
-  //     the four buckets. Old `consumed=true` set on bare `g.type` presence
-  //     could let an unknown type or action-only typed payload overwrite the
-  //     module-grant state with `{}`, blanking the drawer.
-  //   - Deps narrowed to [role?.id, roleGranulesQuery.data]: object-ref re-
-  //     renders of the same role no longer re-trigger this effect (which
-  //     could double-call setDirty(false) right after a user edit).
+  // Codex 019dda05 iter-25: roleGranulesQuery now returns the typed shape
+  // `{type, key, grant}` from `GET /v1/roles/{id}/granules`. The legacy
+  // `{moduleKey, level}` (AccessModulePolicyDto) parse branch is removed —
+  // the new endpoint never emits that shape, so the branch is dead code
+  // and keeping it would mask future regressions on the typed contract.
+  //
+  // Earlier iter-20 invariants preserved:
+  //   - `written` is ONLY true when at least one recognizable AND writable
+  //     entry was actually placed into a bucket. Unknown types and missing
+  //     keys no-op rather than blanking module-grant state with `{}`.
+  //   - Deps `[role?.id, roleGranulesQuery.data]`: object-ref re-renders of
+  //     the same role don't re-trigger this effect (avoids spurious
+  //     setDirty(false) calls right after a user edit).
   React.useEffect(() => {
     if (!role) return;
     const granules = roleGranulesQuery.data;
@@ -267,44 +279,35 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         type?: string;
         key?: string;
         grant?: string;
-        moduleKey?: string;
-        level?: string;
       };
-      if (gAny.type) {
-        switch (gAny.type.toUpperCase()) {
-          case 'MODULE':
-            if (gAny.key) {
-              mods[gAny.key] = gAny.grant ?? 'NONE';
-              written = true;
-            }
-            break;
-          case 'ACTION':
-            if (gAny.key) {
-              acts[gAny.key] = gAny.grant ?? 'ALLOW';
-              written = true;
-            }
-            break;
-          case 'REPORT':
-            if (gAny.key) {
-              reps[gAny.key] = gAny.grant ?? 'VIEW';
-              written = true;
-            }
-            break;
-          case 'PAGE':
-            if (gAny.key) {
-              pgs[gAny.key] = gAny.grant ?? 'ALLOW';
-              written = true;
-            }
-            break;
-          // unknown type → no-op, `written` remains false unless another
-          // entry in this batch contributes a real grant.
-        }
-      } else if (gAny.moduleKey && gAny.level) {
-        // Legacy policy shape (AccessModulePolicyDto: {moduleKey, moduleLabel,
-        // level, lastUpdatedAt, updatedBy}). Backend GET /v1/roles/{id}
-        // currently returns this shape — drawer must accept it.
-        mods[gAny.moduleKey] = gAny.level;
-        written = true;
+      if (!gAny.type) continue;
+      switch (gAny.type.toUpperCase()) {
+        case 'MODULE':
+          if (gAny.key) {
+            mods[gAny.key] = gAny.grant ?? 'NONE';
+            written = true;
+          }
+          break;
+        case 'ACTION':
+          if (gAny.key) {
+            acts[gAny.key] = gAny.grant ?? 'ALLOW';
+            written = true;
+          }
+          break;
+        case 'REPORT':
+          if (gAny.key) {
+            reps[gAny.key] = gAny.grant ?? 'VIEW';
+            written = true;
+          }
+          break;
+        case 'PAGE':
+          if (gAny.key) {
+            pgs[gAny.key] = gAny.grant ?? 'ALLOW';
+            written = true;
+          }
+          break;
+        // unknown type → no-op, `written` remains false unless another
+        // entry in this batch contributes a real grant.
       }
     }
     if (!written) return; // no writable entry in granules — preserve lazy/Effect-A state
@@ -534,6 +537,31 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setDirty(true);
   };
 
+  // Codex 019dda05 iter-25 + 2026-04-29 kullanıcı feature isteği: "ana
+  // kategoride toplu yetki + inline tek tek". Modül header'ından bir
+  // bulk select dropdown ile o modüle ait TÜM raporları aynı level'a
+  // setlemek. Bireysel rapor select'leri korunur — kullanıcı bulk
+  // sonrası tek-tek override edebilir.
+  //
+  // NONE seçilirse o modüle ait tüm reportGrants entry'leri silinir
+  // (drawer kapanışta NONE rapor entry zaten payload'a girmez).
+  // VIEW/MANAGE seçilirse her rapor için aynı level set edilir.
+  const setReportGroupLevel = (moduleKey: string, level: 'NONE' | 'VIEW' | 'MANAGE') => {
+    setReportGrants((prev) => {
+      const next = { ...prev };
+      const reports = catalog?.reports.filter((r) => r.module === moduleKey) ?? [];
+      for (const r of reports) {
+        if (level === 'NONE') {
+          delete next[r.key];
+        } else {
+          next[r.key] = level;
+        }
+      }
+      return next;
+    });
+    setDirty(true);
+  };
+
   const togglePage = (key: string) => {
     setPageGrants((prev) => {
       if (prev[key]) {
@@ -695,6 +723,27 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
               const moduleLabel =
                 catalog?.modules?.find((m) => m.key === moduleKey)?.label ?? moduleKey;
               const activeCount = reports.filter((r) => !!reportGrants[r.key]).length;
+
+              // Codex 019dda05 iter-25 + kullanıcı feature: bulk-select header
+              // dropdown'u. Modül içindeki TÜM raporların effektif level'i
+              // hesaplanır:
+              //   - hepsi aynı (NONE / VIEW / MANAGE) → o level
+              //   - karışık → 'MIXED' (placeholder, kullanıcı override için)
+              // Legacy 'ALLOW' grant değeri 'VIEW' olarak normalize edilir
+              // (bireysel select'le aynı kontrat).
+              const normalizedLevels: ('NONE' | 'VIEW' | 'MANAGE')[] = reports.map((r) => {
+                const raw = reportGrants[r.key];
+                if (raw === 'MANAGE') return 'MANAGE';
+                if (raw === 'VIEW') return 'VIEW';
+                if (raw) return 'VIEW'; // legacy 'ALLOW' → VIEW
+                return 'NONE';
+              });
+              const firstLevel = normalizedLevels[0] ?? 'NONE';
+              const allSame = normalizedLevels.every((l) => l === firstLevel);
+              const bulkLevel: 'NONE' | 'VIEW' | 'MANAGE' | 'MIXED' = allSame
+                ? firstLevel
+                : 'MIXED';
+
               return (
                 <details
                   key={moduleKey}
@@ -707,14 +756,45 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                       <span className="font-semibold">{moduleLabel}</span>
                       <span className="ml-2 text-xs text-text-subtle">({moduleKey})</span>
                     </span>
-                    <span className="text-xs text-text-subtle">
-                      {activeCount > 0
-                        ? t('access.drawer.reportsActiveCount', {
-                            active: activeCount,
-                            total: reports.length,
-                          })
-                        : t('access.drawer.reportsTotal', { total: reports.length })}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-text-subtle">
+                        {activeCount > 0
+                          ? t('access.drawer.reportsActiveCount', {
+                              active: activeCount,
+                              total: reports.length,
+                            })
+                          : t('access.drawer.reportsTotal', { total: reports.length })}
+                      </span>
+                      {/*
+                        Bulk-level select (modül header'ı). onClick
+                        stopPropagation ile <details> toggle'ını engeller
+                        (select açılırken accordion kapanmasın).
+                      */}
+                      <select
+                        value={bulkLevel}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const v = e.target.value as 'NONE' | 'VIEW' | 'MANAGE' | 'MIXED';
+                          if (v === 'MIXED') return; // MIXED placeholder, no-op
+                          setReportGroupLevel(moduleKey, v);
+                        }}
+                        className="rounded border border-border-subtle bg-surface-default px-2 py-0.5 text-xs font-normal"
+                        data-testid={`report-group-level-${moduleKey}`}
+                        aria-label={t('access.drawer.reportsBulkLevelAria', {
+                          module: moduleLabel,
+                        })}
+                      >
+                        <option value="NONE">{t('access.drawer.reportLevel.none')}</option>
+                        <option value="VIEW">{t('access.drawer.reportLevel.view')}</option>
+                        <option value="MANAGE">{t('access.drawer.reportLevel.manage')}</option>
+                        {bulkLevel === 'MIXED' && (
+                          <option value="MIXED" disabled>
+                            {t('access.drawer.reportsBulkMixed')}
+                          </option>
+                        )}
+                      </select>
+                    </div>
                   </summary>
                   <div className="flex flex-col gap-1 px-4 py-2">
                     {reports.map((report) => {
