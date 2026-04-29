@@ -418,7 +418,6 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
               { key: 'HR_REPORTS', label: 'İK Raporları', module: 'USER_MANAGEMENT' },
               { key: 'FINANCE_REPORTS', label: 'Finans Raporları', module: 'USER_MANAGEMENT' },
             ],
-            pages: [],
           },
         };
       }
@@ -474,7 +473,6 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
               { key: 'HR_REPORTS', label: 'İK Raporları', module: 'USER_MANAGEMENT' },
               { key: 'PAYROLL_REPORTS', label: 'Bordro Raporları', module: 'USER_MANAGEMENT' },
             ],
-            pages: [],
           },
         };
       }
@@ -557,7 +555,6 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
                 category: 'Finans',
               },
             ],
-            pages: [],
           },
         };
       }
