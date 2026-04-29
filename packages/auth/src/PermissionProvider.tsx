@@ -208,6 +208,26 @@ export function PermissionProvider({
     return undefined;
   }, [loadAuthz, httpGet, permitAll, enabled, cacheTtl, initialData]);
 
+  // Codex 019dd818 iter-7 (B-prime PR-2a): shared-http 401 event listener.
+  // PR-1 sadece /me ve /version 401'ı yakalıyor. Object-level /authz/check,
+  // /batch-check veya başka API 401 verdiğinde shared-http interceptor
+  // window.dispatchEvent('app:auth:unauthorized') yapar; provider de bu
+  // event'i dinleyerek cache'i 60s poll'a kadar beklemeden invalidate eder.
+  // Guard: permitAll/enabled=false → bootstrap noise'unu ignore et.
+  useEffect(() => {
+    if (permitAll || !enabled || typeof window === 'undefined') return undefined;
+
+    const handler = () => {
+      console.warn('[PermissionProvider] app:auth:unauthorized event — invalidating cache');
+      setAuthz(null);
+      setSessionExpired(true);
+      setInitialized(true);
+      lastVersionRef.current = null;
+    };
+    window.addEventListener('app:auth:unauthorized', handler);
+    return () => window.removeEventListener('app:auth:unauthorized', handler);
+  }, [permitAll, enabled]);
+
   const value = useMemo<PermissionContextValue>(
     () => ({
       authz,

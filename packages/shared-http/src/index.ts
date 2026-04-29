@@ -79,7 +79,14 @@ const INITIAL_401_GRACE_MS = 5_000;
 let initialUnauthorizedIgnored = false;
 let lastGlobalToast: { message: string; at: number } | null = null;
 
-const AUTH_STORAGE_KEYS = ['token', 'user', 'tokenExpiresAt', 'shell_auth_state', 'serban.shell.authState', 'shell-auth-sync'];
+const AUTH_STORAGE_KEYS = [
+  'token',
+  'user',
+  'tokenExpiresAt',
+  'shell_auth_state',
+  'serban.shell.authState',
+  'shell-auth-sync',
+];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const clearPersistedAuth = () => {
@@ -96,9 +103,9 @@ const clearPersistedAuth = () => {
 const dispatchGlobalToast = (message: string) => {
   const now = Date.now();
   if (
-    lastGlobalToast
-    && lastGlobalToast.message === message
-    && now - lastGlobalToast.at < GLOBAL_TOAST_DEDUPE_MS
+    lastGlobalToast &&
+    lastGlobalToast.message === message &&
+    now - lastGlobalToast.at < GLOBAL_TOAST_DEDUPE_MS
   ) {
     return;
   }
@@ -126,8 +133,7 @@ const redirectToLogin = () => {
   }
   authRedirectInProgress = true;
   const { location } = window;
-  const current =
-    `${location.pathname ?? ''}${location.search ?? ''}${location.hash ?? ''}` || '/';
+  const current = `${location.pathname ?? ''}${location.search ?? ''}${location.hash ?? ''}` || '/';
   const isOnLogin = location.pathname?.startsWith('/login');
   const redirect = isOnLogin ? '/' : current;
   const target = `/login?redirect=${encodeURIComponent(redirect)}`;
@@ -169,7 +175,9 @@ const handleForbidden = () => {
 };
 
 const handleProfileMissing = () => {
-  dispatchGlobalToast('Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.');
+  dispatchGlobalToast(
+    'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.',
+  );
 };
 
 const extractErrorCode = (error: AxiosError): string | null => {
@@ -311,6 +319,25 @@ const installInterceptors = (client: AxiosInstance) => {
       if (status === 401 && !isPermitAllMode()) {
         handleUnauthorized('http-401');
         unauthorizedHandler?.(error);
+        // Codex 019dd818 iter-7 (B-prime PR-2a): global event dispatch for
+        // 401 — auth provider + shell UX listener'lar event'i dinler. Unauthorized
+        // handler no-op olsa bile (mfe-access/audit registerUnauthorizedHandler
+        // override pattern) event çıkar. Event detail sanitize: sadece status,
+        // method, url (path-only), timestamp; header/token/body YOK.
+        if (typeof window !== 'undefined') {
+          const method = (error.config?.method ?? 'get').toUpperCase();
+          const url = typeof error.config?.url === 'string' ? error.config.url : undefined;
+          window.dispatchEvent(
+            new CustomEvent('app:auth:unauthorized', {
+              detail: {
+                status: 401,
+                method,
+                url,
+                timestamp: Date.now(),
+              },
+            }),
+          );
+        }
         return Promise.reject(error);
       }
       if (status === 403) {

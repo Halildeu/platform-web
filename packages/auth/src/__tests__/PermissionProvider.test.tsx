@@ -207,6 +207,63 @@ describe('PermissionProvider — Codex 019dd818 iter-4 (B-prime) sessionExpired'
     expect(result.current.isSuperAdmin()).toBe(false); // mockAuthzMe.superAdmin=false
   });
 
+  // Codex 019dd818 iter-7 (B-prime PR-2a): global app:auth:unauthorized listener
+  it('sets sessionExpired=true when shared-http app:auth:unauthorized event fires', async () => {
+    const httpGet = vi.fn().mockResolvedValue({ data: mockAuthzMe });
+
+    const { result } = renderHook(() => usePermissions(), {
+      wrapper: createWrapper(httpGet),
+    });
+
+    // Initial /me OK → authz populate, sessionExpired=false
+    await waitFor(() => expect(result.current.initialized).toBe(true));
+    expect(result.current.sessionExpired).toBe(false);
+    expect(result.current.authz).not.toBeNull();
+
+    // Object-level 401 simulate: shared-http event dispatch
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('app:auth:unauthorized', {
+          detail: { status: 401, method: 'POST', url: '/v1/authz/check', timestamp: Date.now() },
+        }),
+      );
+    });
+
+    // Provider listener tetiklendi → cache invalidate
+    await waitFor(() => expect(result.current.sessionExpired).toBe(true));
+    expect(result.current.authz).toBeNull();
+    expect(result.current.isSuperAdmin()).toBe(false);
+  });
+
+  it('ignores app:auth:unauthorized when permitAll=true', async () => {
+    function PermitAllWrapper({ children }: { children: React.ReactNode }) {
+      return (
+        <PermissionProvider httpGet={vi.fn()} permitAll>
+          {children}
+        </PermissionProvider>
+      );
+    }
+
+    const { result } = renderHook(() => usePermissions(), { wrapper: PermitAllWrapper });
+
+    // permitAll → authz populate (dev fixture), sessionExpired=false
+    await waitFor(() => expect(result.current.initialized).toBe(true));
+    expect(result.current.isSuperAdmin()).toBe(true);
+
+    // Event dispatch
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('app:auth:unauthorized', {
+          detail: { status: 401, method: 'GET', url: '/v1/authz/me', timestamp: Date.now() },
+        }),
+      );
+    });
+
+    // Provider event'i ignore etmeli (permitAll guard)
+    expect(result.current.sessionExpired).toBe(false);
+    expect(result.current.isSuperAdmin()).toBe(true);
+  });
+
   // Codex 019dd818 iter-6 PARTIAL blocker fix: re-auth recovery via initialData.
   // Senaryo: /me 401 → sessionExpired=true → shell re-login + fresh initialData
   // Provider initialData branch'inde sessionExpired'i sıfırlamalı.
