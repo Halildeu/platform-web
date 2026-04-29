@@ -58,16 +58,16 @@ interface CatalogReport {
    */
   category?: string;
 }
-interface CatalogPage {
-  key: string;
-  label: string;
-  module: string;
-}
+// Codex 019dda1c iter-27: PAGE granule type retired in V10/TB-21 backend
+// migration. Frontend kept dead state and a SAYFALAR render section that
+// would crash the save mutation if the catalog ever returned a page entry
+// (backend's PermissionType enum no longer contains PAGE; valueOf would
+// throw IllegalArgumentException → 500). CatalogPage and pages field
+// removed; the matching state, effects, and render section follow.
 interface Catalog {
   modules: CatalogModule[];
   actions: CatalogAction[];
   reports: CatalogReport[];
-  pages: CatalogPage[];
 }
 interface RoleMember {
   userId: number;
@@ -91,7 +91,6 @@ const buildFallbackCatalog = (role: AccessRole | null): Catalog => ({
   })),
   actions: [],
   reports: [],
-  pages: [],
 });
 
 const RoleDrawer: React.FC<RoleDrawerProps> = ({
@@ -208,7 +207,6 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   );
   const [actionGrants, setActionGrants] = React.useState<Record<string, string>>({});
   const [reportGrants, setReportGrants] = React.useState<Record<string, string>>({});
-  const [pageGrants, setPageGrants] = React.useState<Record<string, string>>({});
   const [dirty, setDirty] = React.useState(false);
   const [, setSelectedUser] = React.useState<AutocompleteOption | null>(null);
   const [userSearchOptions, setUserSearchOptions] = React.useState<AutocompleteOption[]>([]);
@@ -250,7 +248,6 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setModuleGrants(initialModsFromRole(role));
     setActionGrants({});
     setReportGrants({});
-    setPageGrants({});
     setDirty(false);
     // Use role.id (string) instead of role (object ref) so re-renders with the
     // same role identity don't trigger a state reset (the previous race vector).
@@ -280,7 +277,6 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     const mods: Record<string, string> = {};
     const acts: Record<string, string> = {};
     const reps: Record<string, string> = {};
-    const pgs: Record<string, string> = {};
     let written = false;
     for (const g of granules) {
       const gAny = g as {
@@ -308,12 +304,10 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
             written = true;
           }
           break;
-        case 'PAGE':
-          if (gAny.key) {
-            pgs[gAny.key] = gAny.grant ?? 'ALLOW';
-            written = true;
-          }
-          break;
+        // PAGE case removed in iter-27: backend PermissionType enum has no
+        // PAGE value (V10/TB-21 retired the type). If a stale tuple ever
+        // shows up with type='PAGE' the unknown-type fallthrough below
+        // ignores it safely.
         // unknown type → no-op, `written` remains false unless another
         // entry in this batch contributes a real grant.
       }
@@ -322,7 +316,6 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setModuleGrants(mods);
     setActionGrants(acts);
     setReportGrants(reps);
-    setPageGrants(pgs);
     setDirty(false);
   }, [role?.id, roleGranulesQuery.data]);
 
@@ -376,9 +369,8 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         if (!validReportKeys.has(key)) continue;
         granules.push({ type: 'report', key, grant });
       }
-      for (const [key, grant] of Object.entries(pageGrants)) {
-        granules.push({ type: 'page', key, grant });
-      }
+      // PAGE granules removed in iter-27 — backend rejects them at
+      // validateAndNormalize (PermissionType enum has no PAGE value).
       await api.put(`/v1/roles/${role!.id}/granules`, { permissions: granules });
     },
     onSuccess: () => {
@@ -576,18 +568,6 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         }
       }
       return next;
-    });
-    setDirty(true);
-  };
-
-  const togglePage = (key: string) => {
-    setPageGrants((prev) => {
-      if (prev[key]) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      return { ...prev, [key]: 'ALLOW' };
     });
     setDirty(true);
   };
@@ -885,30 +865,6 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
             });
           })()}
         </div>
-
-        <hr className="border-border-subtle" />
-
-        {/* --- SAYFALAR (only rendered when catalog has pages) --- */}
-        {(catalog?.pages ?? []).length > 0 && (
-          <>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
-              {t('access.drawer.pagesTitle')}
-            </h3>
-            <div className="flex flex-col gap-2">
-              {catalog!.pages.map((page) => (
-                <Checkbox
-                  key={page.key}
-                  label={page.label}
-                  checked={!!pageGrants[page.key]}
-                  onChange={() => togglePage(page.key)}
-                  size="sm"
-                  description={page.module}
-                />
-              ))}
-            </div>
-            <hr className="border-border-subtle" />
-          </>
-        )}
 
         {/* --- ATANMIŞ KİŞİLER --- */}
         <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
