@@ -170,7 +170,34 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   });
 
   // --- Granule state ---
-  const [moduleGrants, setModuleGrants] = React.useState<Record<string, string>>({});
+  //
+  // Codex 019dd927 iter-19 (state-replace race fix): initialize state lazily
+  // from props.role.policies on mount instead of starting from an empty {}.
+  //
+  // Bug observed (2026-04-29): drawer briefly renders with correct values
+  // (initial render), then state replaces with empty `{}` — every module
+  // shows "—" even when role.policies has valid data. React fiber inspection
+  // confirmed: hook 21-24 (moduleGrants/actionGrants/reportGrants/pageGrants)
+  // = `{}` despite role props having {moduleKey:"USER_MANAGEMENT",level:"VIEW"}
+  // and roleGranulesQuery.data carrying matching data. The previous useEffect
+  // pattern was racing with React's commit phase: setModuleGrants(mods) calls
+  // were either dropped or overwritten before paint.
+  //
+  // Fix: useState lazy initializer reads role.policies once on mount. The
+  // sync useEffect below then reconciles with roleGranulesQuery.data when it
+  // arrives. Initial render is GUARANTEED to have populated mods — no race.
+  const initialModsFromRole = React.useCallback((r: AccessRole | null): Record<string, string> => {
+    const mods: Record<string, string> = {};
+    if (r && Array.isArray(r.policies)) {
+      for (const p of r.policies) {
+        if (p.moduleKey && p.level) mods[p.moduleKey] = p.level;
+      }
+    }
+    return mods;
+  }, []);
+  const [moduleGrants, setModuleGrants] = React.useState<Record<string, string>>(() =>
+    initialModsFromRole(role),
+  );
   const [actionGrants, setActionGrants] = React.useState<Record<string, string>>({});
   const [reportGrants, setReportGrants] = React.useState<Record<string, string>>({});
   const [pageGrants, setPageGrants] = React.useState<Record<string, string>>({});
@@ -197,98 +224,67 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     enabled: open && mode === 'view' && !!role && isPersistedRoleId(role?.id),
   });
 
+  // Codex 019dd927 iter-19: parse useEffect rewritten as TWO separate effects.
+  //
+  // Effect A: when role.id changes (drawer reopened with different role), reset
+  // grants to props-derived initial. Replaces old single useEffect's reset
+  // semantics that previously raced with React's commit phase.
   React.useEffect(() => {
     if (!role) return;
+    setModuleGrants(initialModsFromRole(role));
+    setActionGrants({});
+    setReportGrants({});
+    setPageGrants({});
+    setDirty(false);
+    // Use role.id (string) instead of role (object ref) so re-renders with the
+    // same role identity don't trigger a state reset (the previous race vector).
+  }, [role?.id, initialModsFromRole]);
+
+  // Effect B: when granules query data arrives, parse it and overwrite grants
+  // (only if the data actually carries entries). Crucially, this effect does
+  // NOT clear state when granules is undefined/empty — it only fills.
+  React.useEffect(() => {
+    if (!role) return;
+    const granules = roleGranulesQuery.data;
+    if (!granules || granules.length === 0) return;
     const mods: Record<string, string> = {};
     const acts: Record<string, string> = {};
     const reps: Record<string, string> = {};
     const pgs: Record<string, string> = {};
-
-    // 2026-04-29 fix: backend GET /v1/roles/{id} legacy `policies` format
-    // (AccessModulePolicyDto: {moduleKey, level}) döner; `permissions` array
-    // genellikle boş veya numeric ID liste — granule shape (type/key/grant)
-    // YOK. Eski parser yalnızca granule.type'a baktığı için legacy policies
-    // hiç parse edilmiyor → modüller "—" boş + save sonrası eski permissionlar
-    // silinir (kullanıcı 2026-04-29 ADMIN drawer şikayeti).
-    //
-    // Fix: typed granules (g.type set) varsa onları kullan; yoksa role.policies
-    // legacy mapping ile moduleGrants'ı doldur. Backend granule endpoint return
-    // edene kadar save zinciri eski permissionları silmez.
-    // 2026-04-29 v2 (kullanıcı şikayeti devam): roleGranulesQuery.data
-    // backend GET /v1/roles/{id} response → policies array (AccessModulePolicy
-    // {moduleKey, moduleLabel, level}) döner. v1 fix sadece typed granule
-    // (type/key/grant) parse ediyordu, eğer typed yoksa role.policies (props,
-    // listeden gelen) fallback. Ama canlı /v1/roles/{id} **da** policies
-    // shape döndüğü için query data legacy parse edilmeli — props.policies
-    // listede summary olabilir, detail policies query'den gelir.
-    //
-    // Bu fix: granules array hem typed hem legacy policies shape kabul eder.
-    const granules = roleGranulesQuery.data;
-
-    console.log('[RoleDrawer DEBUG] effect fire', {
-      roleId: role.id,
-      granulesShape: Array.isArray(granules)
-        ? { length: granules.length, sample: granules[0] }
-        : { type: typeof granules, value: granules },
-      propsPoliciesShape: Array.isArray(role.policies)
-        ? { length: role.policies.length, sample: role.policies[0] }
-        : { type: typeof role.policies, value: role.policies },
-    });
-    let dataConsumed = false;
-    if (granules && granules.length > 0) {
-      for (const g of granules) {
-        const gAny = g as {
-          type?: string;
-          key?: string;
-          grant?: string;
-          moduleKey?: string;
-          level?: string;
-        };
-
-        console.log('[RoleDrawer DEBUG] iter g', {
-          hasType: !!gAny.type,
-          moduleKey: gAny.moduleKey,
-          level: gAny.level,
-          keys: Object.keys(g as object),
-        });
-        if (gAny.type) {
-          // Typed granule shape (type/key/grant)
-          dataConsumed = true;
-          switch (gAny.type.toUpperCase()) {
-            case 'MODULE':
-              if (gAny.key) mods[gAny.key] = gAny.grant ?? 'NONE';
-              break;
-            case 'ACTION':
-              if (gAny.key) acts[gAny.key] = gAny.grant ?? 'ALLOW';
-              break;
-            case 'REPORT':
-              if (gAny.key) reps[gAny.key] = gAny.grant ?? 'VIEW';
-              break;
-            case 'PAGE':
-              if (gAny.key) pgs[gAny.key] = gAny.grant ?? 'ALLOW';
-              break;
-          }
-        } else if (gAny.moduleKey && gAny.level) {
-          // Legacy policy shape (AccessModulePolicyDto): module + level only
-          dataConsumed = true;
-          mods[gAny.moduleKey] = gAny.level;
+    let consumed = false;
+    for (const g of granules) {
+      const gAny = g as {
+        type?: string;
+        key?: string;
+        grant?: string;
+        moduleKey?: string;
+        level?: string;
+      };
+      if (gAny.type) {
+        consumed = true;
+        switch (gAny.type.toUpperCase()) {
+          case 'MODULE':
+            if (gAny.key) mods[gAny.key] = gAny.grant ?? 'NONE';
+            break;
+          case 'ACTION':
+            if (gAny.key) acts[gAny.key] = gAny.grant ?? 'ALLOW';
+            break;
+          case 'REPORT':
+            if (gAny.key) reps[gAny.key] = gAny.grant ?? 'VIEW';
+            break;
+          case 'PAGE':
+            if (gAny.key) pgs[gAny.key] = gAny.grant ?? 'ALLOW';
+            break;
         }
+      } else if (gAny.moduleKey && gAny.level) {
+        // Legacy policy shape (AccessModulePolicyDto: {moduleKey, moduleLabel,
+        // level, lastUpdatedAt, updatedBy}). Backend GET /v1/roles/{id}
+        // currently returns this shape — drawer must accept it.
+        consumed = true;
+        mods[gAny.moduleKey] = gAny.level;
       }
     }
-
-    if (!dataConsumed && Array.isArray(role.policies)) {
-      // Last-resort fallback: query data hiç dönmedi, props.policies kullan
-      for (const p of role.policies) {
-        if (p.moduleKey && p.level) mods[p.moduleKey] = p.level;
-      }
-    }
-
-    console.log('[RoleDrawer DEBUG] after parse', {
-      dataConsumed,
-      modsKeys: Object.keys(mods),
-      modsSize: Object.keys(mods).length,
-      mods,
-    });
+    if (!consumed) return; // granules array contained no recognizable shape
     setModuleGrants(mods);
     setActionGrants(acts);
     setReportGrants(reps);
