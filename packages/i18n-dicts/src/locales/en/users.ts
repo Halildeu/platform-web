@@ -140,14 +140,18 @@ const users = {
 
   // Phase 2: Multi-role + tabbed scope
   'users.detail.section.roles': 'Roles',
-  'users.detail.section.roles.description': 'Assign multiple roles to the user. Permissions are the union of all assigned roles.',
+  'users.detail.section.roles.description':
+    'Assign multiple roles to the user. Permissions are the union of all assigned roles.',
   'users.detail.section.scopes': 'Data Access',
-  'users.detail.section.scopes.description': 'Without scope assignment, the user cannot see any data.',
+  'users.detail.section.scopes.description':
+    'Without scope assignment, the user cannot see any data.',
   'users.detail.scopes.companies': 'Companies',
   'users.detail.scopes.projects': 'Projects',
   'users.detail.scopes.warehouses': 'Warehouses',
   'users.detail.scopes.branches': 'Branches',
   'users.detail.scopes.selectAll': 'Select All',
+  'users.detail.scopes.searchPlaceholder': 'Search by name or code...',
+  'users.detail.scopes.searchEmpty': 'No results matching "{query}".',
   'users.detail.save': 'Save',
   'users.detail.saving': 'Saving...',
   'users.detail.cancel': 'Cancel',
