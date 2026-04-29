@@ -17,20 +17,23 @@ const RolesPage: React.FC = () => {
   const [drawerMode, setDrawerMode] = React.useState<'view' | 'create'>('view');
   const { t, ready, formatNumber, formatDate } = useAccessI18n();
 
-  const defaultFilters = React.useMemo(() => ({
-    search: '',
-    moduleKey: 'ALL',
-    level: 'ALL' as const,
-  }), []);
+  const defaultFilters = React.useMemo(
+    () => ({
+      search: '',
+      moduleKey: 'ALL',
+      level: 'ALL' as const,
+    }),
+    [],
+  );
 
   const {
     roles,
     modules,
-    total,
+    total: _total, // unused — pagination total reserved for future grid footer
     cloneRole,
     createRoleMutation,
     deleteRoleMutation,
-    roleCloneMutation,
+    roleCloneMutation: _roleCloneMutation, // unused — clone exposed via cloneRole helper above
     updateRolePermissionsMutation,
   } = useAccessRoles(defaultFilters);
 
@@ -104,7 +107,20 @@ const RolesPage: React.FC = () => {
         </div>
       </PageLayout>
 
+      {/*
+        Codex 019dd9d6 iter-20 (lifecycle remount fix): RoleDrawer is always
+        rendered by this parent (open prop only toggles internal visibility),
+        so the drawer's useState lazy initializer would only fire on the FIRST
+        page mount when role=null — never on subsequent role selections. That
+        defeated iter-19's race fix because Effect A reset and Effect B parse
+        could still interleave on cached catalog/granules responses.
+        Force remount via key whenever the selected role changes (or the drawer
+        is in create mode). This makes useState lazy init re-run with the
+        actual role.policies on every drawer open, eliminating the parent-side
+        race vector.
+      */}
       <RoleDrawer
+        key={drawerMode === 'create' ? 'create' : (selectedRole?.id ?? 'closed')}
         open={Boolean(selectedRole) || drawerMode === 'create'}
         mode={drawerMode}
         role={selectedRole}
