@@ -124,8 +124,7 @@ const common = {
   'shell.shortcuts.commandPaletteSoon.description':
     'Komut paleti entegrasyonu SP2-2 görevinde tamamlanacak.',
   'shell.shortcuts.refreshDisabled.title': 'Yenileme kısayolu devre dışı',
-  'shell.shortcuts.refreshDisabled.description':
-    'MFE yenileme deneyimi üzerinde çalışıyoruz.',
+  'shell.shortcuts.refreshDisabled.description': 'MFE yenileme deneyimi üzerinde çalışıyoruz.',
 
   // G-Chord navigation
   'shell.chord.hint': 'Gitmek icin bir tus basin...',
@@ -287,6 +286,7 @@ const common = {
   // Session
   'auth.session.expired': 'Oturum süreniz doldu',
   'auth.session.expired.description': 'Lütfen tekrar giriş yapın.',
+  'auth.session.expired.cta': 'Yeniden giriş yap',
   'auth.session.validating': 'Oturum doğrulanıyor...',
 };
 

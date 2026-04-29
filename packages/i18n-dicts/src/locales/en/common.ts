@@ -268,6 +268,7 @@ const common = {
   // Session
   'auth.session.expired': 'Your session has expired',
   'auth.session.expired.description': 'Please sign in again.',
+  'auth.session.expired.cta': 'Sign in again',
   'auth.session.validating': 'Validating session...',
 };
 

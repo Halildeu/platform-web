@@ -227,6 +227,7 @@ const common = {
 
   'auth.session.expired': 'Ihre Sitzung ist abgelaufen',
   'auth.session.expired.description': 'Bitte melden Sie sich erneut an.',
+  'auth.session.expired.cta': 'Erneut anmelden',
   'auth.session.validating': 'Sitzung wird überprüft...',
 };
 
