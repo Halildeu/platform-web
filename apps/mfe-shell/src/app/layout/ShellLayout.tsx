@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/store.hooks';
 import { useThemeContext } from '../theme/theme-context.provider';
@@ -152,6 +152,73 @@ export const ShellLayout: React.FC = () => {
       window.removeEventListener('app:toast', handleToast as EventListener);
     };
   }, [dispatch, pushRuntimeToast]);
+
+  /* Codex 019dd818 iter-7 (B-prime PR-2b): app:auth:unauthorized event listener.
+   *
+   * shared-http interceptor 401 yakaladığında window event dispatch eder
+   * (PR-2a). Burada:
+   *  - Sadece token varken + login route'ta değilken işle (bootstrap noise guard)
+   *  - Episode başına TEK persistent toast (5sn time-window dedupe değil)
+   *  - CTA: same-origin path guard ile /login?redirect=<current>
+   */
+  const sessionExpiredToastIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      // Bootstrap noise guard
+      if (!token) return;
+      if (window.location.pathname.startsWith('/login')) return;
+      // Episode dedupe
+      if (sessionExpiredToastIdRef.current) return;
+      const buildSafeLoginRedirect = (): string => {
+        const { pathname, search, hash } = window.location;
+        const current = `${pathname || '/'}${search || ''}${hash || ''}`;
+        const isSafePath =
+          current.startsWith('/') &&
+          !current.startsWith('//') &&
+          !/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(current);
+        const safePath = isSafePath ? current : '/';
+        const redirect =
+          safePath.startsWith('/login') || safePath.startsWith('/register') ? '/' : safePath;
+        return `/login?redirect=${encodeURIComponent(redirect)}`;
+      };
+      const ctaUrl = buildSafeLoginRedirect();
+      const id = pushWarningToast(t('auth.session.expired'), {
+        title: t('auth.session.expired'),
+        content: (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm">{t('auth.session.expired.description')}</span>
+            <a
+              href={ctaUrl}
+              className="text-sm font-medium underline underline-offset-2 text-action-primary-text hover:opacity-90"
+              data-testid="session-expired-relogin-cta"
+            >
+              {t('auth.session.expired.cta')}
+            </a>
+          </div>
+        ),
+        persistent: true,
+        onCancel: () => {
+          sessionExpiredToastIdRef.current = null;
+        },
+      });
+      sessionExpiredToastIdRef.current = id;
+      dispatch(
+        pushNotification({
+          message: t('auth.session.expired'),
+          description: t('auth.session.expired.description'),
+          type: 'warning',
+          priority: 'high',
+          pinned: true,
+          meta: { source: 'auth-session-expired-event' },
+        }),
+      );
+    };
+    window.addEventListener('app:auth:unauthorized', handler);
+    return () => {
+      window.removeEventListener('app:auth:unauthorized', handler);
+    };
+  }, [dispatch, pushWarningToast, t, token]);
 
   /* Session expiry handler */
   useEffect(() => {

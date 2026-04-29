@@ -121,7 +121,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   );
 
   // Zanzibar object-level access check: can current user edit the ACCESS module?
-  const { access: editAccess } = useZanzibarAccess('can_edit', 'module', 'ACCESS');
+  // Codex 019dd818 iter-7 (B-prime PR-2b): reason field session_expired ile
+  // authn unknown'ı authz deny'den ayır — UX'te "yetkin yok" yerine "oturum yenile".
+  const { access: editAccess, reason: editReason } = useZanzibarAccess(
+    'can_edit',
+    'module',
+    'ACCESS',
+  );
 
   // --- Catalog query ---
   // Codex CNS thread 019d9a28 Tur 14-15: persisted role için fallback YASAK.
@@ -831,7 +837,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
             loading={saveGranulesMutation.isPending}
             disabled={!dirty}
             access={editAccess}
-            accessReason={editAccess !== 'full' ? t('access.drawer.noEditPermission') : undefined}
+            accessReason={
+              editAccess !== 'full'
+                ? editReason === 'session_expired'
+                  ? t('auth.session.expired')
+                  : t('access.drawer.noEditPermission')
+                : undefined
+            }
           >
             {t('common.save')}
           </Button>

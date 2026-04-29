@@ -149,8 +149,7 @@ const common = {
 
   'shell.theme.errors.loadThemes': 'No se pudieron cargar los temas.',
   'shell.theme.errors.loadRegistry': 'No se pudo cargar el registro de temas.',
-  'shell.theme.errors.selectPersonalTheme':
-    'Selecciona un tema personal para editar los colores.',
+  'shell.theme.errors.selectPersonalTheme': 'Selecciona un tema personal para editar los colores.',
   'shell.theme.errors.selectPersonalThemeFirst': 'Selecciona primero un tema personal.',
   'shell.theme.errors.personalThemeLimit': 'Puedes crear hasta 3 temas personales.',
   'shell.theme.errors.copyFailed': 'No se pudo copiar el tema.',
@@ -227,6 +226,7 @@ const common = {
 
   'auth.session.expired': 'Tu sesión ha expirado',
   'auth.session.expired.description': 'Vuelve a iniciar sesión.',
+  'auth.session.expired.cta': 'Iniciar sesión de nuevo',
   'auth.session.validating': 'Validando sesión...',
 };
 

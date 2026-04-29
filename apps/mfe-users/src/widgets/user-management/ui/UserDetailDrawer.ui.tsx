@@ -64,9 +64,12 @@ const resolveFallbackRoleOptions = (currentRole: string | undefined): RoleOption
 const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user }) => {
   const { t, locale } = useUsersI18n();
   const queryClient = useQueryClient();
-  const { hasModule, isSuperAdmin } = usePermissions();
+  const { hasModule, isSuperAdmin, sessionExpired } = usePermissions();
   const isAdmin = isSuperAdmin();
-  const canEdit = isAdmin || hasModule('USER_MANAGEMENT');
+  // Codex 019dd818 iter-7 (B-prime PR-2b): sessionExpired durumunda canEdit
+  // false olur — kullanıcı authn unknown'ı authz deny gibi görmesin. Shell
+  // toast 'Oturum yenile' CTA gösterir; burada kontrolleri disabled tutmak yeterli.
+  const canEdit = !sessionExpired && (isAdmin || hasModule('USER_MANAGEMENT'));
 
   const storedScope = useMemo(() => {
     try {
