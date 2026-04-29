@@ -243,6 +243,16 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // Effect B: when granules query data arrives, parse it and overwrite grants
   // (only if the data actually carries entries). Crucially, this effect does
   // NOT clear state when granules is undefined/empty — it only fills.
+  //
+  // Codex 019dd9d6 iter-20 (semantic tightening + deps narrow):
+  //   - `written` (renamed from `consumed`) is now ONLY true when at least
+  //     one recognizable AND writable entry was actually placed into one of
+  //     the four buckets. Old `consumed=true` set on bare `g.type` presence
+  //     could let an unknown type or action-only typed payload overwrite the
+  //     module-grant state with `{}`, blanking the drawer.
+  //   - Deps narrowed to [role?.id, roleGranulesQuery.data]: object-ref re-
+  //     renders of the same role no longer re-trigger this effect (which
+  //     could double-call setDirty(false) right after a user edit).
   React.useEffect(() => {
     if (!role) return;
     const granules = roleGranulesQuery.data;
@@ -251,7 +261,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     const acts: Record<string, string> = {};
     const reps: Record<string, string> = {};
     const pgs: Record<string, string> = {};
-    let consumed = false;
+    let written = false;
     for (const g of granules) {
       const gAny = g as {
         type?: string;
@@ -261,36 +271,49 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         level?: string;
       };
       if (gAny.type) {
-        consumed = true;
         switch (gAny.type.toUpperCase()) {
           case 'MODULE':
-            if (gAny.key) mods[gAny.key] = gAny.grant ?? 'NONE';
+            if (gAny.key) {
+              mods[gAny.key] = gAny.grant ?? 'NONE';
+              written = true;
+            }
             break;
           case 'ACTION':
-            if (gAny.key) acts[gAny.key] = gAny.grant ?? 'ALLOW';
+            if (gAny.key) {
+              acts[gAny.key] = gAny.grant ?? 'ALLOW';
+              written = true;
+            }
             break;
           case 'REPORT':
-            if (gAny.key) reps[gAny.key] = gAny.grant ?? 'VIEW';
+            if (gAny.key) {
+              reps[gAny.key] = gAny.grant ?? 'VIEW';
+              written = true;
+            }
             break;
           case 'PAGE':
-            if (gAny.key) pgs[gAny.key] = gAny.grant ?? 'ALLOW';
+            if (gAny.key) {
+              pgs[gAny.key] = gAny.grant ?? 'ALLOW';
+              written = true;
+            }
             break;
+          // unknown type → no-op, `written` remains false unless another
+          // entry in this batch contributes a real grant.
         }
       } else if (gAny.moduleKey && gAny.level) {
         // Legacy policy shape (AccessModulePolicyDto: {moduleKey, moduleLabel,
         // level, lastUpdatedAt, updatedBy}). Backend GET /v1/roles/{id}
         // currently returns this shape — drawer must accept it.
-        consumed = true;
         mods[gAny.moduleKey] = gAny.level;
+        written = true;
       }
     }
-    if (!consumed) return; // granules array contained no recognizable shape
+    if (!written) return; // no writable entry in granules — preserve lazy/Effect-A state
     setModuleGrants(mods);
     setActionGrants(acts);
     setReportGrants(reps);
     setPageGrants(pgs);
     setDirty(false);
-  }, [role, roleGranulesQuery.data]);
+  }, [role?.id, roleGranulesQuery.data]);
 
   // --- User search handler ---
   // Threshold 3 (P1.7 user feedback): 2-char queries return too many matches in
@@ -342,6 +365,10 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
+      // Codex 019dd9d6 iter-20: drawer's own source-of-truth (role-granules
+      // detail query) must also be invalidated so the next reopen pulls fresh
+      // server state instead of stale cached data parsed by Effect B.
+      queryClient.invalidateQueries({ queryKey: ['role-granules', role?.id] });
       setDirty(false);
       pushToast('success', t('access.notifications.permissionSaveSuccess'));
     },

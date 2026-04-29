@@ -248,4 +248,175 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
     // All should be NONE since neither props.policies nor granules has entries
     expect(values.every((v) => !v || v === 'NONE')).toBe(true);
   });
+
+  // ---------------------------------------------------------------------------
+  // iter-20 (Codex 019dd9d6 REVISE absorb): additional lifecycle + semantic
+  // tightening guards. Each addresses a critical blocker raised in the iter-19
+  // post-impl review.
+  // ---------------------------------------------------------------------------
+
+  it('iter-20: closed→open lifecycle — null role mount sonrası role assign edildiğinde policies render olur', async () => {
+    // Production'da RolesPage.ui.tsx parent her zaman <RoleDrawer/> render
+    // ediyor; selectedRole başta null. Eski tasarımda useState lazy init
+    // SADECE bu null mount'ta çalışıyor, sonraki role assign'da artık
+    // çalışmıyor — iter-19'un asıl race vector. Effect A bu transition'ı
+    // role?.id değişimini yakalayarak handle etmeli.
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const baseProps = {
+      open: true,
+      mode: 'view' as const,
+      onClose: () => undefined,
+      t: (key: string) => key,
+      formatNumber: (n: number) => String(n),
+      formatDate: () => '',
+    };
+    const { rerender } = render(
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        React.createElement(RoleDrawerWrapper, {
+          ...baseProps,
+          role: null,
+        } as React.ComponentProps<typeof RoleDrawerWrapper>),
+      ),
+    );
+
+    // Now simulate parent assigning the role (mimics user clicking a row in
+    // the grid). Effect A should fire on role?.id change null→"10" and reset
+    // module grants to props initial.
+    rerender(
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        React.createElement(RoleDrawerWrapper, {
+          ...baseProps,
+          role: buildRole(),
+        } as React.ComponentProps<typeof RoleDrawerWrapper>),
+      ),
+    );
+
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(
+      () => {
+        expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0);
+      },
+      { timeout: 3_000 },
+    );
+
+    const selects = drawer.querySelectorAll<HTMLSelectElement>('select');
+    const values = Array.from(selects).map((s) => s.value);
+    expect(
+      values.includes('VIEW') && values.includes('MANAGE'),
+      `iter-20 closed→open lifecycle: role assign sonrası policies render olmadı. Values: ${JSON.stringify(values)}`,
+    ).toBe(true);
+  });
+
+  it('iter-20: close→reopen aynı role — state contamine olmaz', async () => {
+    // Same role.id, two separate mount cycles (parent-side key remount
+    // simulation). Both should end up with the same filled state via lazy
+    // init or Effect A.
+    const r1 = renderDrawer(buildRole());
+    const drawer1 = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer1.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+    const values1 = Array.from(drawer1.querySelectorAll<HTMLSelectElement>('select')).map(
+      (s) => s.value,
+    );
+    expect(values1.includes('VIEW')).toBe(true);
+    r1.unmount();
+
+    // Reopen
+    renderDrawer(buildRole());
+    const drawer2 = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer2.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+    const values2 = Array.from(drawer2.querySelectorAll<HTMLSelectElement>('select')).map(
+      (s) => s.value,
+    );
+    expect(values2.includes('VIEW')).toBe(true);
+    expect(values2.includes('MANAGE')).toBe(true);
+  });
+
+  it('iter-20: typed + legacy mixed shape granules birlikte parse edilir', async () => {
+    // Backend, transition döneminde, hem typed (`{type, key, grant}`) hem
+    // legacy (`{moduleKey, level}`) entry içeren bir `policies` array dönerse
+    // her ikisi de mods bucket'ına yazılmalı.
+    (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (url === '/v1/authz/catalog') return { data: buildCatalog() };
+      if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
+      if (url.match(/^\/v1\/roles\/\d+$/)) {
+        return {
+          data: {
+            policies: [
+              { type: 'MODULE', key: 'ACCESS', grant: 'MANAGE' },
+              { moduleKey: 'PURCHASE', level: 'VIEW' },
+            ],
+            permissions: [],
+          },
+        };
+      }
+      return { data: {} };
+    });
+
+    renderDrawer(buildRole({ policies: [] })); // props boş; sadece Effect B üzerinden gelmeli
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+    // Allow Effect B flush
+    await new Promise((r) => setTimeout(r, 100));
+
+    const values = Array.from(drawer.querySelectorAll<HTMLSelectElement>('select')).map(
+      (s) => s.value,
+    );
+    expect(
+      values.includes('MANAGE') && values.includes('VIEW'),
+      `iter-20 mixed shape: typed (ACCESS=MANAGE) ve legacy (PURCHASE=VIEW) entry parse edilmedi. Values: ${JSON.stringify(values)}`,
+    ).toBe(true);
+  });
+
+  it('iter-20: unknown partial typed payload — written=false → lazy init state preserve', async () => {
+    // Critical Blocker 2: eski `consumed=true` davranışı `g.type` görür görmez
+    // set ediyordu; unknown type'lar (`{type:"BANANA", key:"X"}`) modülleri
+    // `{}` ile ezerdi. Yeni `written` semantiği: yalnızca tanınan VE yazılan
+    // entry varsa overwrite et; hepsi unknown ise lazy init state korunsun.
+    (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (url === '/v1/authz/catalog') return { data: buildCatalog() };
+      if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
+      if (url.match(/^\/v1\/roles\/\d+$/)) {
+        return {
+          data: {
+            // Sadece unknown type ve missing-key entry'ler — Effect B written=false
+            // dönmeli, props.policies'ten gelen lazy init state korunmalı.
+            policies: [
+              { type: 'BANANA', key: 'X' },
+              { type: 'MODULE' /* missing key → no write */ },
+            ],
+            permissions: [],
+          },
+        };
+      }
+      return { data: {} };
+    });
+
+    renderDrawer(); // default buildRole — props.policies USER_MANAGEMENT=VIEW + PURCHASE=MANAGE
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+    await new Promise((r) => setTimeout(r, 100));
+
+    const values = Array.from(drawer.querySelectorAll<HTMLSelectElement>('select')).map(
+      (s) => s.value,
+    );
+    // Lazy init state preserve: VIEW + MANAGE props.policies'ten gelmiş olmalı
+    expect(
+      values.includes('VIEW') && values.includes('MANAGE'),
+      `iter-20 unknown partial: Effect B written=false guard çalışmıyor; lazy init state ezildi. Values: ${JSON.stringify(values)}`,
+    ).toBe(true);
+  });
 });
