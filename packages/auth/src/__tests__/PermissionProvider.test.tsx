@@ -50,7 +50,8 @@ describe('PermissionProvider version-based refresh', () => {
   });
 
   it('does NOT call /me when version unchanged', async () => {
-    const httpGet = vi.fn()
+    const httpGet = vi
+      .fn()
       .mockResolvedValueOnce({ data: mockAuthzMe }) // initial /me
       .mockResolvedValueOnce({ data: { authzVersion: 5 } }); // /version poll — same
 
@@ -64,7 +65,9 @@ describe('PermissionProvider version-based refresh', () => {
     expect(httpGet).toHaveBeenCalledTimes(1);
 
     // Advance timer to trigger version poll
-    await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
 
     // Should have called /version but NOT /me again
     expect(httpGet).toHaveBeenCalledTimes(2);
@@ -73,7 +76,8 @@ describe('PermissionProvider version-based refresh', () => {
 
   it('calls /me when version changes', async () => {
     const updatedAuthz = { ...mockAuthzMe, authzVersion: 6 };
-    const httpGet = vi.fn()
+    const httpGet = vi
+      .fn()
       .mockResolvedValueOnce({ data: mockAuthzMe }) // initial /me (v5)
       .mockResolvedValueOnce({ data: { authzVersion: 6 } }) // /version poll — changed!
       .mockResolvedValueOnce({ data: updatedAuthz }); // full /me refresh
@@ -84,14 +88,17 @@ describe('PermissionProvider version-based refresh', () => {
 
     await waitFor(() => expect(result.current.initialized).toBe(true));
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
 
     // Should have: /me (initial) + /version (poll) + /me (refresh) = 3 calls
     await waitFor(() => expect(httpGet).toHaveBeenCalledTimes(3));
   });
 
   it('falls back to full /me refresh when /version errors', async () => {
-    const httpGet = vi.fn()
+    const httpGet = vi
+      .fn()
       .mockResolvedValueOnce({ data: mockAuthzMe }) // initial /me
       .mockRejectedValueOnce(new Error('network error')) // /version fails
       .mockResolvedValueOnce({ data: mockAuthzMe }); // fallback /me
@@ -102,9 +109,101 @@ describe('PermissionProvider version-based refresh', () => {
 
     await waitFor(() => expect(result.current.initialized).toBe(true));
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(1100); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
 
     // fetchAuthzVersion returns -1 on error → triggers full /me
     await waitFor(() => expect(httpGet).toHaveBeenCalledTimes(3));
+  });
+});
+
+describe('PermissionProvider — Codex 019dd818 iter-4 (B-prime) sessionExpired', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sets sessionExpired=true when initial /me returns 401', async () => {
+    const httpGet = vi.fn().mockRejectedValue({
+      response: { status: 401 },
+      message: 'Unauthorized',
+    });
+
+    const { result } = renderHook(() => usePermissions(), {
+      wrapper: createWrapper(httpGet),
+    });
+
+    await waitFor(() => expect(result.current.initialized).toBe(true));
+    expect(result.current.sessionExpired).toBe(true);
+    expect(result.current.authz).toBeNull();
+    expect(result.current.isSuperAdmin()).toBe(false);
+    expect(result.current.hasModule('USER_MANAGEMENT')).toBe(false);
+  });
+
+  it('sets sessionExpired=true when /version polling returns 401', async () => {
+    const httpGet = vi
+      .fn()
+      .mockResolvedValueOnce({ data: mockAuthzMe }) // initial /me OK
+      .mockRejectedValueOnce({ response: { status: 401 } }); // /version 401
+
+    const { result } = renderHook(() => usePermissions(), {
+      wrapper: createWrapper(httpGet, 1000),
+    });
+
+    await waitFor(() => expect(result.current.initialized).toBe(true));
+    expect(result.current.sessionExpired).toBe(false); // önce false
+    expect(result.current.authz).not.toBeNull();
+
+    // poll cycle
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
+
+    await waitFor(() => expect(result.current.sessionExpired).toBe(true));
+    expect(result.current.authz).toBeNull();
+    expect(result.current.isSuperAdmin()).toBe(false);
+  });
+
+  it('does NOT set sessionExpired for 5xx errors', async () => {
+    const httpGet = vi.fn().mockRejectedValue({
+      response: { status: 503 },
+      message: 'Service Unavailable',
+    });
+
+    const { result } = renderHook(() => usePermissions(), {
+      wrapper: createWrapper(httpGet),
+    });
+
+    // 5xx hata: ProtectedRoute loading'de tutar (initialized false, error log).
+    // sessionExpired SET EDİLMEZ (Codex iter-4 talebi: sadece authn-unknown için).
+    await waitFor(() => expect(httpGet).toHaveBeenCalled(), { timeout: 1000 });
+    expect(result.current.sessionExpired).toBe(false);
+  });
+
+  it('clears sessionExpired when subsequent /me succeeds', async () => {
+    const httpGet = vi
+      .fn()
+      .mockRejectedValueOnce({ response: { status: 401 } }) // ilk /me 401
+      .mockResolvedValueOnce({ data: { authzVersion: 5 } }) // /version OK
+      .mockResolvedValueOnce({ data: mockAuthzMe }); // /me success
+
+    const { result } = renderHook(() => usePermissions(), {
+      wrapper: createWrapper(httpGet, 1000),
+    });
+
+    await waitFor(() => expect(result.current.sessionExpired).toBe(true));
+
+    // Bir sonraki poll cycle'da version değişmiş gibi davran → /me re-fetch
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
+
+    await waitFor(() => expect(result.current.sessionExpired).toBe(false));
+    expect(result.current.authz).not.toBeNull();
+    expect(result.current.isSuperAdmin()).toBe(false); // mockAuthzMe.superAdmin=false
   });
 });

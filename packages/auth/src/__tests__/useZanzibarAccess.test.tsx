@@ -189,4 +189,24 @@ describe('useZanzibarAccess — server check', () => {
     expect(result.current.access).toBe('readonly');
     expect(result.current.reason).toBe('no_server_check');
   });
+
+  // Codex 019dd818 iter-4 (B-prime): session_expired propagation
+  it('object-level check 401 → "disabled" with session_expired reason', async () => {
+    const { wrapper } = createWrapper();
+    const httpPost = vi.fn().mockRejectedValue({
+      response: { status: 401 },
+      message: 'Unauthorized',
+    });
+
+    const { result } = renderHook(
+      () => useZanzibarAccess('can_view', 'report', 'HR_REPORTS', httpPost),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    // Codex iter-4: 'blocked' (authz deny) ile aynı 'disabled' UX seviyesi,
+    // ama reason='session_expired' consumer'ın "oturum yenile" mesajı göstermesini sağlar.
+    expect(result.current.access).toBe('disabled');
+    expect(result.current.reason).toBe('session_expired');
+  });
 });

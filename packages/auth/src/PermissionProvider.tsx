@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import type { AuthzMeResponse, AccessLevel } from './types';
 import { fetchAuthzMe, fetchAuthzVersion } from './api';
+import { isUnauthorizedError } from './errors';
 
 interface PermissionContextValue {
   /** Current user's authorization data */
@@ -9,6 +10,15 @@ interface PermissionContextValue {
   initialized: boolean;
   /** Whether currently loading */
   loading: boolean;
+  /**
+   * True when the latest /me or /version call returned 401.
+   *
+   * Codex 019dd818 iter-4 (B-prime focused semantic fix): authn/session
+   * bozuk olduğunda eski authz cache'i KULLANILMAZ; consumer "yetkin yok"
+   * değil "oturum yenile" UX'i üretmeli (PR-2 shell). useZanzibarAccess
+   * sessionExpired true ise reason='session_expired' döner.
+   */
+  sessionExpired: boolean;
   /** Check if user has access to a module */
   hasModule: (module: string) => boolean;
   /** Get module access level (VIEW | MANAGE | NONE) */
@@ -33,6 +43,7 @@ const PermissionContext = createContext<PermissionContextValue>({
   authz: null,
   initialized: false,
   loading: false,
+  sessionExpired: false,
   hasModule: () => false,
   getModuleLevel: () => 'NONE',
   isActionAllowed: () => false,
@@ -69,6 +80,7 @@ export function PermissionProvider({
   const [authz, setAuthz] = useState<AuthzMeResponse | null>(initialData ?? null);
   const [initialized, setInitialized] = useState(!!initialData);
   const [loading, setLoading] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const lastVersionRef = React.useRef<number | null>(initialData?.authzVersion ?? null);
 
   const loadAuthz = useCallback(async () => {
@@ -112,14 +124,25 @@ export function PermissionProvider({
       const data = await fetchAuthzMe(httpGet);
       setAuthz(data);
       setInitialized(true);
+      setSessionExpired(false);
       if (data.authzVersion != null) {
         lastVersionRef.current = data.authzVersion;
       }
     } catch (err) {
+      // Codex 019dd818 iter-4 (B-prime): 401 = session expired (authn unknown),
+      // farklı semantik authz deny'den. Stale authz cache kullanma — sessionExpired
+      // flag'i ile consumer'lar "oturum yenile" UX'i üretsin.
+      if (isUnauthorizedError(err)) {
+        console.warn('[PermissionProvider] /v1/authz/me 401 — session expired');
+        setAuthz(null);
+        setSessionExpired(true);
+        setInitialized(true);
+        lastVersionRef.current = null;
+        return;
+      }
+      // Network/5xx/unknown — transient. ProtectedRoute loading spinner gösterir,
+      // periodic refresh (60s) veya initialData ile recover edilir.
       console.error('[PermissionProvider] Failed to fetch authz:', err);
-      // Do NOT set initialized=true on failure — keep loading state so
-      // ProtectedRoute shows loading spinner instead of redirecting to unauthorized.
-      // The periodic refresh (60s) or initialData from AuthBootstrapper will recover.
       setAuthz(null);
     } finally {
       setLoading(false);
@@ -156,8 +179,19 @@ export function PermissionProvider({
           if (lastVersionRef.current === null || serverVersion !== lastVersionRef.current) {
             await loadAuthz();
           }
-        } catch {
-          // Silently skip — next poll will retry
+        } catch (err) {
+          // Codex 019dd818 iter-4 (B-prime): 401 from /version artık silent skip
+          // değil — session expired sinyali olarak işle. fetchAuthzVersion 401'ı
+          // propagate ediyor (5xx/network -1'e fallback ediyor).
+          if (isUnauthorizedError(err)) {
+            console.warn('[PermissionProvider] /v1/authz/version 401 — session expired');
+            setAuthz(null);
+            setSessionExpired(true);
+            setInitialized(true);
+            lastVersionRef.current = null;
+            return;
+          }
+          // Other errors silent skip — next poll will retry
         }
       };
       const interval = setInterval(pollVersion, cacheTtl);
@@ -171,6 +205,7 @@ export function PermissionProvider({
       authz,
       initialized,
       loading,
+      sessionExpired,
       hasModule: (module: string) => {
         if (permitAll || authz?.superAdmin) return true;
         // Prefer new modules map, fallback to legacy allowedModules
@@ -204,7 +239,7 @@ export function PermissionProvider({
       },
       refresh: loadAuthz,
     }),
-    [authz, initialized, loading, permitAll, loadAuthz],
+    [authz, initialized, loading, sessionExpired, permitAll, loadAuthz],
   );
 
   return <PermissionContext.Provider value={value}>{children}</PermissionContext.Provider>;

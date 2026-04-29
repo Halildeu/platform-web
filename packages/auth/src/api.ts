@@ -6,6 +6,7 @@ import type {
   BatchCheckResponse,
   BatchCheckItem,
 } from './types';
+import { isUnauthorizedError, isServerError } from './errors';
 
 /**
  * Fetch current user's authorization context from backend.
@@ -13,7 +14,7 @@ import type {
  * Retries up to 2 times on 5xx errors (Hibernate session race condition).
  */
 export async function fetchAuthzMe(
-  httpGet: (url: string) => Promise<{ data: AuthzMeResponse }>
+  httpGet: (url: string) => Promise<{ data: AuthzMeResponse }>,
 ): Promise<AuthzMeResponse> {
   const MAX_RETRIES = 2;
   let lastError: unknown;
@@ -30,7 +31,7 @@ export async function fetchAuthzMe(
         throw err;
       }
       // Wait before retry: 500ms, then 1000ms
-      await new Promise(r => setTimeout(r, (attempt + 1) * 500));
+      await new Promise((r) => setTimeout(r, (attempt + 1) * 500));
     }
   }
 
@@ -40,14 +41,28 @@ export async function fetchAuthzMe(
 /**
  * Lightweight version check for cache invalidation polling.
  * Frontend calls this instead of full /me to detect permission changes.
+ *
+ * Codex 019dd818 iter-4 (B-prime): 401 must NOT be swallowed. Returning -1
+ * triggered an unconditional /me re-fetch which then 401'ed again — semantik
+ * "session expired" sinyalini kaybediyordu. 401 propagate edilir; PermissionProvider
+ * `isUnauthorizedError(err)` true ise sessionExpired state'ini set eder.
+ *
+ * Network/5xx hata ise -1 fallback korunur (transient, retry next poll).
  */
 export async function fetchAuthzVersion(
-  httpGet: (url: string) => Promise<{ data: { authzVersion: number } }>
+  httpGet: (url: string) => Promise<{ data: { authzVersion: number } }>,
 ): Promise<number> {
   try {
     const { data } = await httpGet('/v1/authz/version');
     return data.authzVersion;
-  } catch {
+  } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      throw err;
+    }
+    // Network/5xx/unknown — keep silent fallback so polling doesn't break.
+    if (isServerError(err) || typeof (err as { response?: unknown })?.response === 'undefined') {
+      return -1;
+    }
     return -1;
   }
 }
@@ -58,7 +73,7 @@ export async function fetchAuthzVersion(
  */
 export async function checkPermission(
   httpPost: (url: string, body: CheckRequest) => Promise<{ data: CheckResponse }>,
-  request: CheckRequest
+  request: CheckRequest,
 ): Promise<CheckResponse> {
   const { data } = await httpPost('/v1/authz/check', request);
   return data;
@@ -70,7 +85,7 @@ export async function checkPermission(
  */
 export async function checkPermissionBatch(
   httpPost: (url: string, body: BatchCheckRequest) => Promise<{ data: BatchCheckResponse }>,
-  checks: CheckRequest[]
+  checks: CheckRequest[],
 ): Promise<BatchCheckItem[]> {
   const { data } = await httpPost('/v1/authz/batch-check', { checks });
   return data.results;

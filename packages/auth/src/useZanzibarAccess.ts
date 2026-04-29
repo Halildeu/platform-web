@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useState } from 'react';
 import { usePermissions } from './PermissionProvider';
 import { checkPermission } from './api';
+import { isUnauthorizedError } from './errors';
 import type { ZanzibarAccessLevel, CheckResponse } from './types';
 
 interface ZanzibarAccessResult {
@@ -32,7 +33,8 @@ export function useZanzibarAccess(
   objectId: string,
   httpPost?: (url: string, body: unknown) => Promise<{ data: unknown }>,
 ): ZanzibarAccessResult {
-  const { initialized, isSuperAdmin, hasModule, canViewReport, isActionAllowed } = usePermissions();
+  const { initialized, sessionExpired, isSuperAdmin, hasModule, canViewReport, isActionAllowed } =
+    usePermissions();
   const [serverResult, setServerResult] = useState<CheckResponse | null>(null);
   const [, setLoading] = useState(false);
 
@@ -43,6 +45,11 @@ export function useZanzibarAccess(
     reason: string;
   } => {
     if (!initialized) return { access: null, skip: true, reason: 'loading' };
+    // Codex 019dd818 iter-4 (B-prime): session expired authn-unknown — eski cache'e
+    // göre 'hidden/disabled' çıkarmak yanlış UX. 'disabled' + reason 'session_expired'
+    // konsumer'ların (RoleDrawer/UserDetailDrawer/ZanzibarGate) bu nedeni okuyup
+    // "yetkin yok" yerine "oturum yenile" mesajı gösterebilmesini sağlar.
+    if (sessionExpired) return { access: 'disabled', skip: true, reason: 'session_expired' };
     if (isSuperAdmin()) return { access: 'full', skip: true, reason: 'superadmin' };
 
     if (objectType === 'module') {
@@ -59,7 +66,16 @@ export function useZanzibarAccess(
 
     // Coarse gate can't resolve — need server check
     return { access: null, skip: false, reason: '' };
-  }, [initialized, isSuperAdmin, hasModule, canViewReport, isActionAllowed, objectType, objectId]);
+  }, [
+    initialized,
+    sessionExpired,
+    isSuperAdmin,
+    hasModule,
+    canViewReport,
+    isActionAllowed,
+    objectType,
+    objectId,
+  ]);
 
   // Phase 2: Object-level server check (only if coarse gate didn't resolve)
   useEffect(() => {
@@ -73,8 +89,16 @@ export function useZanzibarAccess(
       .then((res) => {
         if (!cancelled) setServerResult(res);
       })
-      .catch(() => {
-        if (!cancelled) setServerResult({ allowed: false, reason: 'error' });
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // Codex 019dd818 iter-4 (B-prime): 401 server check'inden geldiğinde
+        // 'error' reason'u yerine 'session_expired' işaretle — consumer aynı
+        // semantiği okuyabilsin.
+        if (isUnauthorizedError(err)) {
+          setServerResult({ allowed: false, reason: 'session_expired' });
+          return;
+        }
+        setServerResult({ allowed: false, reason: 'error' });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -116,8 +140,12 @@ export function useZanzibarAccess(
       return { access: level, loading: false, reason: serverResult.reason ?? 'granted' };
     }
 
-    // Denied — distinguish blocked (disabled) from no_relation (hidden)
-    const access: ZanzibarAccessLevel = serverResult.reason === 'blocked' ? 'disabled' : 'hidden';
+    // Denied — distinguish blocked (disabled), session_expired (disabled),
+    // and no_relation (hidden). 'session_expired' Codex 019dd818 iter-4 (B-prime).
+    const access: ZanzibarAccessLevel =
+      serverResult.reason === 'blocked' || serverResult.reason === 'session_expired'
+        ? 'disabled'
+        : 'hidden';
     return { access, loading: false, reason: serverResult.reason ?? 'denied' };
   }, [coarseResult, initialized, httpPost, serverResult, relation]);
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { checkPermission, checkPermissionBatch } from '../api';
+import { checkPermission, checkPermissionBatch, fetchAuthzVersion, fetchAuthzMe } from '../api';
 
 describe('checkPermission — reason-aware (CNS-20260411-005)', () => {
   it('returns full CheckResponse with reason', async () => {
@@ -57,7 +57,7 @@ describe('checkPermission — reason-aware (CNS-20260411-005)', () => {
     const httpPost = vi.fn().mockRejectedValue(new Error('network error'));
 
     await expect(
-      checkPermission(httpPost, { relation: 'can_view', objectType: 'report', objectId: 'X' })
+      checkPermission(httpPost, { relation: 'can_view', objectType: 'report', objectId: 'X' }),
     ).rejects.toThrow('network error');
   });
 });
@@ -67,9 +67,27 @@ describe('checkPermissionBatch', () => {
     const httpPost = vi.fn().mockResolvedValue({
       data: {
         results: [
-          { allowed: true, reason: 'granted', relation: 'can_view', objectType: 'report', objectId: 'HR' },
-          { allowed: false, reason: 'blocked', relation: 'can_edit', objectType: 'report', objectId: 'FIN' },
-          { allowed: false, reason: 'no_relation', relation: 'can_manage', objectType: 'module', objectId: 'X' },
+          {
+            allowed: true,
+            reason: 'granted',
+            relation: 'can_view',
+            objectType: 'report',
+            objectId: 'HR',
+          },
+          {
+            allowed: false,
+            reason: 'blocked',
+            relation: 'can_edit',
+            objectType: 'report',
+            objectId: 'FIN',
+          },
+          {
+            allowed: false,
+            reason: 'no_relation',
+            relation: 'can_manage',
+            objectType: 'module',
+            objectId: 'X',
+          },
         ],
       },
     });
@@ -103,5 +121,58 @@ describe('checkPermissionBatch', () => {
 
     const results = await checkPermissionBatch(httpPost, []);
     expect(results).toHaveLength(0);
+  });
+});
+
+describe('fetchAuthzVersion — Codex 019dd818 iter-4 (B-prime) 401 propagate', () => {
+  it('propagates 401 (no -1 fallback)', async () => {
+    const httpGet = vi.fn().mockRejectedValue({
+      response: { status: 401 },
+      message: 'Unauthorized',
+    });
+
+    await expect(fetchAuthzVersion(httpGet)).rejects.toMatchObject({
+      response: { status: 401 },
+    });
+  });
+
+  it('returns -1 for 5xx (transient retry next poll)', async () => {
+    const httpGet = vi.fn().mockRejectedValue({
+      response: { status: 503 },
+      message: 'Service Unavailable',
+    });
+
+    const result = await fetchAuthzVersion(httpGet);
+    expect(result).toBe(-1);
+  });
+
+  it('returns -1 for network error (no response)', async () => {
+    const httpGet = vi.fn().mockRejectedValue(new Error('Network Error'));
+
+    const result = await fetchAuthzVersion(httpGet);
+    expect(result).toBe(-1);
+  });
+
+  it('returns version on success', async () => {
+    const httpGet = vi.fn().mockResolvedValue({
+      data: { authzVersion: 42 },
+    });
+
+    const result = await fetchAuthzVersion(httpGet);
+    expect(result).toBe(42);
+  });
+});
+
+describe('fetchAuthzMe — 401 propagation (no retry)', () => {
+  it('propagates 401 immediately (no retry)', async () => {
+    const httpGet = vi.fn().mockRejectedValue({
+      response: { status: 401 },
+    });
+
+    await expect(fetchAuthzMe(httpGet)).rejects.toMatchObject({
+      response: { status: 401 },
+    });
+    // Only 1 attempt — 4xx should not retry (existing 5xx-only retry policy).
+    expect(httpGet).toHaveBeenCalledTimes(1);
   });
 });
