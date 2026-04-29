@@ -1,24 +1,23 @@
-import React, { useEffect, useCallback } from "react";
-import { BrowserRouter, useLocation } from "react-router-dom";
-import { useAppDispatch, useAppSelector } from "../store/store.hooks";
-import { useThemeContext } from "../theme/theme-context.provider";
-import { useToast, useBreakpoint } from "@mfe/design-system";
-import { useShellCommonI18n } from "../i18n";
-import { useShellShortcuts } from "../shortcuts/useShellShortcuts.model";
-import { fetchProducts } from "../../features/products/model/products.slice";
+import React, { useEffect, useCallback } from 'react';
+import { BrowserRouter, useLocation } from 'react-router-dom';
+import { useAppDispatch, useAppSelector } from '../store/store.hooks';
+import { useThemeContext } from '../theme/theme-context.provider';
+import { useToast, useBreakpoint } from '@mfe/design-system';
+import { useShellCommonI18n } from '../i18n';
+import { useShellShortcuts } from '../shortcuts/useShellShortcuts.model';
+import { fetchProducts } from '../../features/products/model/products.slice';
 import {
   pushNotification,
   toggleOpen,
-} from "../../features/notifications/model/notifications.slice";
-import { logout } from "../../features/auth/model/auth.slice";
-import { Sidebar } from "./Sidebar";
-import AuditSummaryStrip from "./AuditSummaryStrip";
-import { ShellHeaderNew, BreadcrumbStrip } from "./header";
-import { RouteTracker } from "../router/RouteTracker";
-import { AppRouter } from "../router/AppRouter";
-import { useChordNavigation } from "../shortcuts/useChordNavigation";
-import { ChordOverlay } from "../shortcuts/ChordOverlay";
-import { MobileBottomBar } from "./MobileBottomBar";
+} from '../../features/notifications/model/notifications.slice';
+import { Sidebar } from './Sidebar';
+import AuditSummaryStrip from './AuditSummaryStrip';
+import { ShellHeaderNew, BreadcrumbStrip } from './header';
+import { RouteTracker } from '../router/RouteTracker';
+import { AppRouter } from '../router/AppRouter';
+import { useChordNavigation } from '../shortcuts/useChordNavigation';
+import { ChordOverlay } from '../shortcuts/ChordOverlay';
+import { MobileBottomBar } from './MobileBottomBar';
 
 /* ------------------------------------------------------------------ */
 /*  ShellLayout — Main application layout with header, sidebar, routes */
@@ -33,8 +32,7 @@ const ShellChrome: React.FC = () => {
   const location = useLocation();
   const { isBelow } = useBreakpoint();
   const isMobile = isBelow('md');
-  const showAuditSummary =
-    initialized && location.pathname.startsWith("/audit");
+  const showAuditSummary = initialized && location.pathname.startsWith('/audit');
   const { isPending: chordPending, activeChords } = useChordNavigation();
 
   return (
@@ -99,14 +97,20 @@ export const ShellLayout: React.FC = () => {
 
   /* Runtime toast handler (custom events from remote modules) */
   const pushRuntimeToast = useCallback(
-    (
-      type: "success" | "info" | "warning" | "error" | "loading",
-      message: string,
-    ) => {
-      const duration = type === "loading" ? 0 : 4500;
-      if (type === "success") { pushSuccessToast(message, { duration }); return; }
-      if (type === "warning") { pushWarningToast(message, { duration }); return; }
-      if (type === "error") { pushErrorToast(message, { duration }); return; }
+    (type: 'success' | 'info' | 'warning' | 'error' | 'loading', message: string) => {
+      const duration = type === 'loading' ? 0 : 4500;
+      if (type === 'success') {
+        pushSuccessToast(message, { duration });
+        return;
+      }
+      if (type === 'warning') {
+        pushWarningToast(message, { duration });
+        return;
+      }
+      if (type === 'error') {
+        pushErrorToast(message, { duration });
+        return;
+      }
       // "loading" falls through to info since toast API has no loading variant
       pushInfoToast(message, { duration });
     },
@@ -114,33 +118,28 @@ export const ShellLayout: React.FC = () => {
   );
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
     const handleToast = (event: Event) => {
       const detail = (
-        event as CustomEvent<
-          { type?: string; text?: string; open?: boolean } | undefined
-        >
+        event as CustomEvent<{ type?: string; text?: string; open?: boolean } | undefined>
       ).detail;
-      const message =
-        typeof detail?.text === "string" ? detail.text.trim() : "";
+      const message = typeof detail?.text === 'string' ? detail.text.trim() : '';
       if (!message) return;
       const type =
-        detail?.type === "success" ||
-        detail?.type === "info" ||
-        detail?.type === "warning" ||
-        detail?.type === "error" ||
-        detail?.type === "loading"
+        detail?.type === 'success' ||
+        detail?.type === 'info' ||
+        detail?.type === 'warning' ||
+        detail?.type === 'error' ||
+        detail?.type === 'loading'
           ? detail.type
-          : "info";
+          : 'info';
       dispatch(
         pushNotification({
           message,
           type,
           priority:
-            detail?.open === true || type === "warning" || type === "error"
-              ? "high"
-              : "normal",
-          meta: { source: "app:toast", open: detail?.open === true },
+            detail?.open === true || type === 'warning' || type === 'error' ? 'high' : 'normal',
+          meta: { source: 'app:toast', open: detail?.open === true },
         }),
       );
       pushRuntimeToast(type, message);
@@ -148,9 +147,9 @@ export const ShellLayout: React.FC = () => {
         dispatch(toggleOpen(true));
       }
     };
-    window.addEventListener("app:toast", handleToast as EventListener);
+    window.addEventListener('app:toast', handleToast as EventListener);
     return () => {
-      window.removeEventListener("app:toast", handleToast as EventListener);
+      window.removeEventListener('app:toast', handleToast as EventListener);
     };
   }, [dispatch, pushRuntimeToast]);
 
@@ -159,18 +158,6 @@ export const ShellLayout: React.FC = () => {
     if (!token || !expiresAt) return;
     const now = Date.now();
     const remaining = expiresAt - now;
-    const sendSessionExpiredNotification = () => {
-      dispatch(
-        pushNotification({
-          message: t("auth.session.expired"),
-          description: t("auth.session.expired.description"),
-          type: "warning",
-          priority: "high",
-          pinned: true,
-          meta: { source: "session-expired" },
-        }),
-      );
-    };
     if (remaining <= 0) {
       // Token expire oldu — Keycloak refresh yapacak (onTokenExpired handler).
       // Logout YAPMIYORUZ — refresh başarılı olursa kullanıcı fark etmez.
