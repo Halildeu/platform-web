@@ -33,6 +33,13 @@ interface RoleOption {
 }
 interface ScopeEntity {
   id: number;
+  /**
+   * Codex 019dda1c iter-30: optional natural code (PROJECT_NUMBER,
+   * COMPANY_SHORT_CODE, SPECIAL_CODE) shown alongside the name so admins
+   * can disambiguate similarly-titled rows. Null when the entity has no
+   * natural code (e.g. BRANCH).
+   */
+  code?: string | null;
   name: string;
 }
 
@@ -180,7 +187,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   //     (the system contract treats DEPOT as the workcube DEPARTMENTS
   //      table; the UI label "Depolar" is a downstream naming choice
   //      preserved across both drawers.)
-  type MasterDataItem = { id: number; name: string; status?: boolean };
+  // Codex 019dda1c iter-30: backend now emits an optional `code` field
+  // (PROJECT_NUMBER, COMPANY_SHORT_CODE, SPECIAL_CODE) per master-data
+  // item. Pipe it through the ScopeEntity mapping so the drawer can
+  // render "[code] name" disambiguation alongside the checkbox label.
+  type MasterDataItem = { id: number; code?: string | null; name: string; status?: boolean };
   const companiesQuery = useQuery({
     queryKey: ['scope-companies'],
     queryFn: async () => {
@@ -188,6 +199,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         const res = await api.get('/v1/master-data/companies');
         return ((res.data as MasterDataItem[]) ?? []).map((c) => ({
           id: c.id,
+          code: c.code ?? null,
           name: c.name,
         })) as ScopeEntity[];
       } catch {
@@ -204,6 +216,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         const res = await api.get('/v1/master-data/projects');
         return ((res.data as MasterDataItem[]) ?? []).map((p) => ({
           id: p.id,
+          code: p.code ?? null,
           name: p.name,
         })) as ScopeEntity[];
       } catch {
@@ -220,6 +233,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         const res = await api.get('/v1/master-data/departments');
         return ((res.data as MasterDataItem[]) ?? []).map((w) => ({
           id: w.id,
+          code: w.code ?? null,
           name: w.name,
         })) as ScopeEntity[];
       } catch {
@@ -236,6 +250,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         const res = await api.get('/v1/master-data/branches');
         return ((res.data as MasterDataItem[]) ?? []).map((b) => ({
           id: b.id,
+          code: b.code ?? null,
           name: b.name,
         })) as ScopeEntity[];
       } catch {
@@ -377,11 +392,28 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const warehouses = warehousesQuery.data ?? [];
   const branches = branchesQuery.data ?? [];
 
-  const scopeCheckboxList = (
-    items: ScopeEntity[],
-    selected: number[],
-    setter: React.Dispatch<React.SetStateAction<number[]>>,
-  ) => {
+  // Codex 019dda1c iter-30: scope picker section refactored into a
+  // dedicated component so each tab can hold its own search state
+  // (helper functions can't useState — Rules of Hooks). Search filters
+  // by both code and name (case-insensitive). "Tümünü Seç" still toggles
+  // ALL items in the dataset, not just the filtered subset, so an admin
+  // doesn't accidentally clear unselected rows by typing a search query.
+  // Code prefix rendered in monospace before the name when present.
+  const ScopePickerSection: React.FC<{
+    items: ScopeEntity[];
+    selected: number[];
+    setter: React.Dispatch<React.SetStateAction<number[]>>;
+  }> = ({ items, selected, setter }) => {
+    const [search, setSearch] = React.useState('');
+    const q = search.trim().toLocaleLowerCase('tr-TR');
+    const filtered = q
+      ? items.filter(
+          (i) =>
+            (i.name ?? '').toLocaleLowerCase('tr-TR').includes(q) ||
+            (i.code ?? '').toLocaleLowerCase('tr-TR').includes(q),
+        )
+      : items;
+
     const allSelected = items.length > 0 && items.every((i) => selected.includes(i.id));
     const noneSelected = items.every((i) => !selected.includes(i.id));
     const toggleAll = () => {
@@ -392,8 +424,19 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       }
       setDirty(true);
     };
+
     return (
       <div className="flex flex-col gap-2 mt-2">
+        {items.length > 0 && (
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('users.detail.scopes.searchPlaceholder')}
+            className="w-full rounded border border-border-subtle bg-surface-default px-3 py-1.5 text-sm placeholder:text-text-subtle focus:border-border-default focus:outline-none"
+            data-testid="scope-search-input"
+          />
+        )}
         {items.length > 1 && (
           <Checkbox
             label={t('users.detail.scopes.selectAll')}
@@ -403,10 +446,26 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             disabled={!canEdit}
           />
         )}
-        {items.map((item) => (
+        {q && filtered.length === 0 && (
+          <p className="text-xs text-text-subtle italic">
+            {t('users.detail.scopes.searchEmpty', { query: search })}
+          </p>
+        )}
+        {filtered.map((item) => (
           <Checkbox
             key={item.id}
-            label={item.name}
+            label={
+              item.code ? (
+                <span>
+                  <span className="mr-2 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-text-subtle">
+                    {item.code}
+                  </span>
+                  {item.name}
+                </span>
+              ) : (
+                item.name
+              )
+            }
             checked={selected.includes(item.id)}
             onChange={() => toggleScope(setter, item.id)}
             disabled={!canEdit}
@@ -415,6 +474,13 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       </div>
     );
   };
+
+  // Backward-compat wrapper so existing scopeTabs entries keep their shape.
+  const scopeCheckboxList = (
+    items: ScopeEntity[],
+    selected: number[],
+    setter: React.Dispatch<React.SetStateAction<number[]>>,
+  ) => <ScopePickerSection items={items} selected={selected} setter={setter} />;
 
   const scopeTabs = [
     {

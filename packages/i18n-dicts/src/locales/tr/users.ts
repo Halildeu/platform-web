@@ -139,7 +139,8 @@ const users = {
 
   // Faz 2: Multi-role + tabbed scope
   'users.detail.section.roles': 'Roller',
-  'users.detail.section.roles.description': 'Kullanıcıya birden fazla rol atayabilirsiniz. İzinler rollerin birleşimidir.',
+  'users.detail.section.roles.description':
+    'Kullanıcıya birden fazla rol atayabilirsiniz. İzinler rollerin birleşimidir.',
   'users.detail.section.scopes': 'Veri Erişimi',
   'users.detail.section.scopes.description': 'Scope atanmadan kullanıcı hiçbir veri göremez.',
   'users.detail.scopes.companies': 'Şirketler',
@@ -147,6 +148,8 @@ const users = {
   'users.detail.scopes.warehouses': 'Depolar',
   'users.detail.scopes.branches': 'Şubeler',
   'users.detail.scopes.selectAll': 'Tümünü Seç',
+  'users.detail.scopes.searchPlaceholder': 'İsim veya kod ile ara...',
+  'users.detail.scopes.searchEmpty': '"{query}" ile eşleşen sonuç bulunamadı.',
   'users.detail.save': 'Kaydet',
   'users.detail.saving': 'Kaydediliyor...',
   'users.detail.cancel': 'Vazgeç',
