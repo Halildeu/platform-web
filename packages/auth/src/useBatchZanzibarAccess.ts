@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useState } from 'react';
 import { usePermissions } from './PermissionProvider';
 import { checkPermissionBatch } from './api';
+import { isUnauthorizedError } from './errors';
 import type { ZanzibarAccessLevel, CheckRequest, BatchCheckItem } from './types';
 
 export interface BatchAccessEntry {
@@ -38,7 +39,8 @@ export function useBatchZanzibarAccess(
   objectIds: string[],
   httpPost?: (url: string, body: unknown) => Promise<{ data: unknown }>,
 ): BatchZanzibarAccessResult {
-  const { initialized, isSuperAdmin, hasModule, canViewReport, isActionAllowed } = usePermissions();
+  const { initialized, sessionExpired, isSuperAdmin, hasModule, canViewReport, isActionAllowed } =
+    usePermissions();
   const [serverResults, setServerResults] = useState<BatchCheckItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -49,6 +51,17 @@ export function useBatchZanzibarAccess(
 
     if (!initialized) {
       return { resolved: resolvedMap, needsServer: objectIds };
+    }
+
+    // Codex 019dd818 iter-4 (B-prime): session expired authn-unknown — tüm
+    // objectId'ler için 'disabled' + reason 'session_expired'. Server check'e
+    // gitmiyoruz; consumer (RoleDrawer/UserDetailDrawer/ZanzibarGate) bu
+    // reason'u okuyup "oturum yenile" UX'i gösterir (PR-2 shell).
+    if (sessionExpired) {
+      for (const objectId of objectIds) {
+        resolvedMap.set(objectId, { objectId, access: 'disabled', reason: 'session_expired' });
+      }
+      return { resolved: resolvedMap, needsServer: [] };
     }
 
     for (const objectId of objectIds) {
@@ -79,7 +92,16 @@ export function useBatchZanzibarAccess(
     }
 
     return { resolved: resolvedMap, needsServer: serverNeeded };
-  }, [initialized, isSuperAdmin, hasModule, canViewReport, isActionAllowed, objectType, objectIds]);
+  }, [
+    initialized,
+    sessionExpired,
+    isSuperAdmin,
+    hasModule,
+    canViewReport,
+    isActionAllowed,
+    objectType,
+    objectIds,
+  ]);
 
   // Stable key for needsServer — triggers effect when ID set changes (not just length)
   const needsServerKey = useMemo(() => needsServer.join(','), [needsServer]);
@@ -104,18 +126,22 @@ export function useBatchZanzibarAccess(
       .then((results) => {
         if (!cancelled) setServerResults(results);
       })
-      .catch(() => {
-        if (!cancelled) {
-          setServerResults(
-            needsServer.map((objectId) => ({
-              objectId,
-              objectType,
-              relation,
-              allowed: false,
-              reason: 'error' as const,
-            })),
-          );
-        }
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // Codex 019dd818 iter-4 (B-prime): batch 401 → tüm entries
+        // session_expired ile işaretle (provider'ın sessionExpired state'i
+        // /me veya /version 401 yakalandığında zaten true'ya dönecek; bu
+        // race-condition guard).
+        const reason = isUnauthorizedError(err) ? 'session_expired' : 'error';
+        setServerResults(
+          needsServer.map((objectId) => ({
+            objectId,
+            objectType,
+            relation,
+            allowed: false,
+            reason,
+          })),
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -140,7 +166,9 @@ export function useBatchZanzibarAccess(
           reason: item.reason ?? 'granted',
         });
       } else {
-        const access: ZanzibarAccessLevel = item.reason === 'blocked' ? 'disabled' : 'hidden';
+        // 'blocked' (deny) ve 'session_expired' (Codex iter-4) ikisi de 'disabled'.
+        const access: ZanzibarAccessLevel =
+          item.reason === 'blocked' || item.reason === 'session_expired' ? 'disabled' : 'hidden';
         merged.set(item.objectId, {
           objectId: item.objectId,
           access,

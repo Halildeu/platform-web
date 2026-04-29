@@ -16,9 +16,9 @@ export interface AuthzMeResponse {
 
   // STORY-0318: Enhanced fields
   roles?: string[];
-  modules?: Record<string, AccessLevel>;     // key → "VIEW" | "MANAGE"
-  actions?: Record<string, GrantResult>;     // key → "ALLOW" | "DENY"
-  reports?: Record<string, GrantResult>;     // key → "ALLOW" | "DENY"
+  modules?: Record<string, AccessLevel>; // key → "VIEW" | "MANAGE"
+  actions?: Record<string, GrantResult>; // key → "ALLOW" | "DENY"
+  reports?: Record<string, GrantResult>; // key → "ALLOW" | "DENY"
   scopes?: ScopeAssignment;
 
   // P0: Cache invalidation version (CNS-20260410-001)
@@ -45,8 +45,21 @@ export interface CheckRequest {
   objectId: string;
 }
 
-/** Reason for check result — CNS-20260411-005: Codex MODIFY (reason field mandatory). */
-export type CheckReason = 'granted' | 'blocked' | 'no_relation' | 'not_found' | 'error';
+/**
+ * Reason for check result — CNS-20260411-005: Codex MODIFY (reason field mandatory).
+ *
+ * 'session_expired' Codex 019dd818 iter-4 (B-prime focused semantic fix): authn
+ * unknown (gateway 401) durumunda authz deny ('blocked') ile aynı UX'e düşmesin
+ * diye ayrı reason. Frontend-tarafında üretilir; backend bu kelimeyi response'ta
+ * dönmez — useZanzibarAccess catch'inde 401 yakalandığında inject edilir.
+ */
+export type CheckReason =
+  | 'granted'
+  | 'blocked'
+  | 'no_relation'
+  | 'not_found'
+  | 'error'
+  | 'session_expired';
 
 export interface CheckResponse {
   allowed: boolean;
