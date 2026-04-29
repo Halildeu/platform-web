@@ -1,5 +1,7 @@
 import React from 'react';
 import { Modal, Button } from '@mfe/design-system';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@mfe/shared-http';
 import { useGrantDataAccessScope } from '../../features/data-access/model/use-data-access-scopes.model';
 import { useMasterData } from '../../features/data-access/model/use-master-data.model';
 import { buildScopeRef } from '../../features/data-access/lib/scopeRefBuilder';
@@ -17,6 +19,12 @@ import { pushToast } from '../../shared/notifications';
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+interface UserOption {
+  id: string;
+  fullName: string;
+  email: string;
+}
 
 export interface ScopeAssignModalProps {
   open: boolean;
@@ -51,6 +59,35 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
   const masterDataQuery = useMasterData(scopeKind, open);
   const masterDataItems = masterDataQuery.data ?? [];
   const hasMasterData = masterDataItems.length > 0;
+
+  // 2026-04-29: User picker dropdown — kullanıcı feedback "user'dan
+  // atanmalı". Mevcut user listesi user-service /api/v1/users'tan çekilir
+  // (sayfa boyutu 100 — pagination scope picker tek seferlik yeterli).
+  const usersQuery = useQuery({
+    queryKey: ['scope-modal-users'],
+    queryFn: async (): Promise<UserOption[]> => {
+      try {
+        const res = await api.get('/v1/users', { params: { pageSize: 100 } });
+        const items = (res.data?.items ?? res.data?.content ?? []) as Array<{
+          id: string | number;
+          fullName?: string;
+          name?: string;
+          email?: string;
+        }>;
+        return items.map((u) => ({
+          id: String(u.id),
+          fullName: u.fullName ?? u.name ?? '',
+          email: u.email ?? '',
+        }));
+      } catch {
+        return [];
+      }
+    },
+    enabled: open,
+    staleTime: 60_000,
+  });
+  const userOptions = usersQuery.data ?? [];
+  const hasUserOptions = userOptions.length > 0;
 
   React.useEffect(() => {
     if (open) {
@@ -178,14 +215,33 @@ const ScopeAssignModal: React.FC<ScopeAssignModalProps> = ({
 
         <label className="flex flex-col gap-1 text-xs text-text-secondary">
           {t('dataAccess.assign.userIdLabel')}
-          <input
-            type="text"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            placeholder={t('dataAccess.assign.userIdPlaceholder')}
-            className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm"
-            data-testid="scope-assign-modal-user-id"
-          />
+          {hasUserOptions ? (
+            <select
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm"
+              data-testid="scope-assign-modal-user-id"
+            >
+              <option value="">{t('dataAccess.assign.userIdPlaceholder')}</option>
+              {userOptions.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.fullName ? `${u.fullName} (${u.email})` : u.email || `#${u.id}`}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder={
+                usersQuery.isLoading ? '...' : t('dataAccess.assign.userIdPlaceholder')
+              }
+              disabled={usersQuery.isLoading}
+              className="rounded border border-border-subtle bg-surface-default px-2 py-1 text-sm disabled:opacity-50"
+              data-testid="scope-assign-modal-user-id"
+            />
+          )}
           {fieldError?.field === 'userId' ? (
             <span className="text-xs text-text-error">{fieldError.message}</span>
           ) : null}
