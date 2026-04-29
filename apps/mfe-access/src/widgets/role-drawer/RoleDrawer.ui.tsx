@@ -224,6 +224,16 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     //
     // Bu fix: granules array hem typed hem legacy policies shape kabul eder.
     const granules = roleGranulesQuery.data;
+
+    console.log('[RoleDrawer DEBUG] effect fire', {
+      roleId: role.id,
+      granulesShape: Array.isArray(granules)
+        ? { length: granules.length, sample: granules[0] }
+        : { type: typeof granules, value: granules },
+      propsPoliciesShape: Array.isArray(role.policies)
+        ? { length: role.policies.length, sample: role.policies[0] }
+        : { type: typeof role.policies, value: role.policies },
+    });
     let dataConsumed = false;
     if (granules && granules.length > 0) {
       for (const g of granules) {
@@ -234,6 +244,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
           moduleKey?: string;
           level?: string;
         };
+
+        console.log('[RoleDrawer DEBUG] iter g', {
+          hasType: !!gAny.type,
+          moduleKey: gAny.moduleKey,
+          level: gAny.level,
+          keys: Object.keys(g as object),
+        });
         if (gAny.type) {
           // Typed granule shape (type/key/grant)
           dataConsumed = true;
@@ -266,6 +283,12 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       }
     }
 
+    console.log('[RoleDrawer DEBUG] after parse', {
+      dataConsumed,
+      modsKeys: Object.keys(mods),
+      modsSize: Object.keys(mods).length,
+      mods,
+    });
     setModuleGrants(mods);
     setActionGrants(acts);
     setReportGrants(reps);
