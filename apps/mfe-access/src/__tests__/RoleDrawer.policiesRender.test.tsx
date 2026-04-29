@@ -520,6 +520,105 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
     expect(groupSelect!.value).toBe('MANAGE');
   });
 
+  it('iter-26: catalog category field ile rapor grouping kategori-bazlı çalışır', async () => {
+    // Codex 019dda1c iter-26: backend catalog şimdi `category` field
+    // döndürüyor ("İnsan Kaynakları" / "Finans"). Drawer eski module-bazlı
+    // grouping yerine `category ?? module` ile gruplar; header'da kategori
+    // adı görünür, bulk dropdown sadece o kategorideki raporları etkiler.
+    (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (url === '/v1/authz/catalog') {
+        return {
+          data: {
+            modules: [{ key: 'REPORT', label: 'Raporlama', levels: ['VIEW', 'MANAGE'] }],
+            actions: [],
+            reports: [
+              {
+                key: 'HR_ANALYTICS',
+                label: 'İK Analitik Dashboard',
+                module: 'REPORT',
+                category: 'İnsan Kaynakları',
+              },
+              {
+                key: 'HR_PAYROLL_TRENDS',
+                label: 'Bordro Trendleri',
+                module: 'REPORT',
+                category: 'İnsan Kaynakları',
+              },
+              {
+                key: 'FIN_ANALYTICS',
+                label: 'Finans Analitik Dashboard',
+                module: 'REPORT',
+                category: 'Finans',
+              },
+              {
+                key: 'FIN_RATIOS',
+                label: 'Finansal Oran Analizi',
+                module: 'REPORT',
+                category: 'Finans',
+              },
+            ],
+            pages: [],
+          },
+        };
+      }
+      if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
+      if (url.match(/^\/v1\/roles\/\d+\/granules$/)) {
+        return { data: { roleId: 10, granules: [] } };
+      }
+      return { data: {} };
+    });
+
+    renderDrawer(buildRole({ policies: [] }));
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+
+    // Drawer iki bulk-select dropdown render etmeli (İnsan Kaynakları + Finans)
+    const hrGroup = drawer.querySelector<HTMLSelectElement>(
+      '[data-testid="report-group-level-İnsan Kaynakları"]',
+    );
+    const finGroup = drawer.querySelector<HTMLSelectElement>(
+      '[data-testid="report-group-level-Finans"]',
+    );
+    expect(hrGroup, 'İnsan Kaynakları header bulk dropdown rendered').toBeTruthy();
+    expect(finGroup, 'Finans header bulk dropdown rendered').toBeTruthy();
+    expect(hrGroup!.value).toBe('NONE');
+    expect(finGroup!.value).toBe('NONE');
+
+    // İnsan Kaynakları bulk'ını MANAGE yap
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(hrGroup!, { target: { value: 'MANAGE' } });
+
+    // İnsan Kaynakları altındaki 2 rapor MANAGE olmalı
+    await waitFor(
+      () => {
+        const hrAnalytics = drawer.querySelector<HTMLSelectElement>(
+          '[data-testid="report-level-HR_ANALYTICS"]',
+        );
+        const hrPayroll = drawer.querySelector<HTMLSelectElement>(
+          '[data-testid="report-level-HR_PAYROLL_TRENDS"]',
+        );
+        expect(hrAnalytics?.value).toBe('MANAGE');
+        expect(hrPayroll?.value).toBe('MANAGE');
+      },
+      { timeout: 2_000 },
+    );
+
+    // KRITIK: Finans kategorisi etkilenmemiş olmalı (cross-category leak guard)
+    const finAnalytics = drawer.querySelector<HTMLSelectElement>(
+      '[data-testid="report-level-FIN_ANALYTICS"]',
+    );
+    const finRatios = drawer.querySelector<HTMLSelectElement>(
+      '[data-testid="report-level-FIN_RATIOS"]',
+    );
+    expect(finAnalytics!.value).toBe('NONE');
+    expect(finRatios!.value).toBe('NONE');
+
+    // Finans bulk dropdown hâlâ NONE göstermeli
+    expect(finGroup!.value).toBe('NONE');
+  });
+
   it('iter-20: unknown partial typed payload — written=false → lazy init state preserve', async () => {
     // Critical Blocker 2: eski `consumed=true` davranışı `g.type` görür görmez
     // set ediyordu; unknown type'lar (`{type:"BANANA", key:"X"}`) modülleri
