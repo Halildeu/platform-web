@@ -9,9 +9,12 @@ import {
   updateUserRole,
   updateUser,
   revokeUserModuleAccess,
+  grantSuperAdmin,
+  revokeSuperAdmin,
   RequestScope,
   UsersApiResponse,
   UserMutationAck,
+  SuperAdminMutationResponse,
 } from '../../../entities/user/api/users.api';
 import { UsersFilters, UsersQueryParams } from './user-management.types';
 
@@ -66,9 +69,10 @@ export const useUserDetailQuery = (
 export const useUserMutations = (scope?: RequestScope) => {
   const queryClient = useQueryClient();
 
-  const invalidateUsers = () => queryClient.invalidateQueries({
-    predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === USERS_QUERY_KEY,
-  });
+  const invalidateUsers = () =>
+    queryClient.invalidateQueries({
+      predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === USERS_QUERY_KEY,
+    });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
@@ -77,8 +81,30 @@ export const useUserMutations = (scope?: RequestScope) => {
   });
 
   const updateModuleMutation = useMutation({
-    mutationFn: ({ userId, moduleKey, level, performedBy, companyId, allowGlobalScope }: { userId: string; moduleKey: string; level: UserModuleAccessLevel; performedBy?: string; companyId?: string; allowGlobalScope?: boolean }) =>
-      updateUserModuleAccess({ userId, moduleKey, level, performedBy, companyId, allowGlobalScope, scope }),
+    mutationFn: ({
+      userId,
+      moduleKey,
+      level,
+      performedBy,
+      companyId,
+      allowGlobalScope,
+    }: {
+      userId: string;
+      moduleKey: string;
+      level: UserModuleAccessLevel;
+      performedBy?: string;
+      companyId?: string;
+      allowGlobalScope?: boolean;
+    }) =>
+      updateUserModuleAccess({
+        userId,
+        moduleKey,
+        level,
+        performedBy,
+        companyId,
+        allowGlobalScope,
+        scope,
+      }),
     onSuccess: () => invalidateUsers(),
   });
 
@@ -88,20 +114,51 @@ export const useUserMutations = (scope?: RequestScope) => {
     onSuccess: () => invalidateUsers(),
   });
 
-  const toggleStatusMutation = useMutation<UserMutationAck, Error, { userId: string; enabled: boolean }>({
+  const toggleStatusMutation = useMutation<
+    UserMutationAck,
+    Error,
+    { userId: string; enabled: boolean }
+  >({
     mutationFn: ({ userId, enabled }: { userId: string; enabled: boolean }) =>
       toggleUserStatus({ userId, enabled, scope }),
     onSuccess: () => invalidateUsers(),
   });
 
   const updateSessionTimeoutMutation = useMutation({
-    mutationFn: ({ userId, sessionTimeoutMinutes }: { userId: string; sessionTimeoutMinutes: number }) =>
-      updateUser({ userId, payload: { sessionTimeoutMinutes }, scope }),
+    mutationFn: ({
+      userId,
+      sessionTimeoutMinutes,
+    }: {
+      userId: string;
+      sessionTimeoutMinutes: number;
+    }) => updateUser({ userId, payload: { sessionTimeoutMinutes }, scope }),
     onSuccess: () => invalidateUsers(),
   });
 
   const resetPasswordMutation = useMutation({
     mutationFn: ({ email }: { email: string }) => triggerPasswordReset({ email }),
+  });
+
+  // Codex 019dda1c iter-33: super-admin grant/revoke. Both mutations
+  // invalidate the users query so UI re-renders with the latest role
+  // assignment; the response.bootstrapWarning (if any) is surfaced via
+  // toast in the calling action — see UserActions.ui.tsx.
+  const grantSuperAdminMutation = useMutation<
+    SuperAdminMutationResponse,
+    Error,
+    { userId: string }
+  >({
+    mutationFn: ({ userId }) => grantSuperAdmin({ userId, scope }),
+    onSuccess: () => invalidateUsers(),
+  });
+
+  const revokeSuperAdminMutation = useMutation<
+    SuperAdminMutationResponse,
+    Error,
+    { userId: string }
+  >({
+    mutationFn: ({ userId }) => revokeSuperAdmin({ userId, scope }),
+    onSuccess: () => invalidateUsers(),
   });
 
   return {
@@ -111,5 +168,7 @@ export const useUserMutations = (scope?: RequestScope) => {
     toggleStatusMutation,
     updateSessionTimeoutMutation,
     resetPasswordMutation,
+    grantSuperAdminMutation,
+    revokeSuperAdminMutation,
   };
 };

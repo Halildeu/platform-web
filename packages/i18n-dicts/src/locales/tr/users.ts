@@ -96,6 +96,15 @@ const users = {
   'users.actions.resetPassword.success': 'Parola sıfırlama bağlantısı gönderildi.',
   'users.actions.status.success': 'Kullanıcı durumu güncellendi.',
   'users.notifications.activation.description': 'Audit ID: {auditId}',
+  // iter-33 super-admin grant/revoke
+  'users.actions.superAdmin.grant': 'Süper Admin Yap',
+  'users.actions.superAdmin.revoke': 'Süper Admin Kaldır',
+  'users.actions.superAdmin.grant.success': 'Kullanıcı süper admin olarak atandı.',
+  'users.actions.superAdmin.grant.alreadySuccess': 'Kullanıcı zaten süper admindi (no-op).',
+  'users.actions.superAdmin.revoke.success': 'Süper admin yetkisi kaldırıldı.',
+  'users.actions.superAdmin.revoke.alreadySuccess': 'Kullanıcı zaten süper admin değildi (no-op).',
+  'users.actions.superAdmin.bootstrapWarning':
+    'Bu hesap bootstrap admin listesinde — pod restart sonrası yetki yeniden atanacak.',
 
   // Detay çekmecesi – başlıklar & bölümler
   'users.detail.title': 'Kullanıcı Detayı',

@@ -4,9 +4,7 @@ import type { ApiInstance } from '@mfe/shared-http';
 import { PaginatedResponse, UserDetail, UserSummary } from '@mfe/shared-types';
 import type { UserModuleAccessLevel, UserModulePermission } from '@mfe/shared-types';
 import { UsersQueryParams } from '../../../features/user-management/model/user-management.types';
-import {
-  registerTokenResolver as registerSharedTokenResolver,
-} from '../lib/token-resolver.lib';
+import { registerTokenResolver as registerSharedTokenResolver } from '../lib/token-resolver.lib';
 import { getShellServices } from '../../../app/services/shell-services';
 
 const API_BASE_URL = getGatewayBaseUrl();
@@ -25,7 +23,8 @@ const getFetchBaseUrl = () => {
 
 const buildGatewayUrl = (resourcePath: string) => `${API_BASE_URL}${resourcePath}`;
 
-const buildFetchGatewayUrl = (resourcePath: string) => `${getFetchBaseUrl()}${buildGatewayUrl(resourcePath)}`;
+const buildFetchGatewayUrl = (resourcePath: string) =>
+  `${getFetchBaseUrl()}${buildGatewayUrl(resourcePath)}`;
 
 const resolveHttpClient = (): ApiInstance => {
   try {
@@ -144,7 +143,9 @@ const toStringOrFallback = (value: unknown, fallback = ''): string => {
   return fallback;
 };
 
-const buildEmptyUsersResponse = (params: UsersQueryParams = {}): PaginatedResponse<UserSummary> => ({
+const buildEmptyUsersResponse = (
+  params: UsersQueryParams = {},
+): PaginatedResponse<UserSummary> => ({
   items: [],
   total: 0,
   page: params.page ?? 1,
@@ -246,16 +247,21 @@ const isRuntimeTestProfile = (profile: LightweightUserProfile | null): boolean =
   const fullName = profile.fullName?.trim().toLowerCase() ?? '';
   const displayName = profile.displayName?.trim().toLowerCase() ?? '';
 
-  return email === 'runtime@test.local'
-    || fullName === 'runtime test user'
-    || displayName === 'runtime test user';
+  return (
+    email === 'runtime@test.local' ||
+    fullName === 'runtime test user' ||
+    displayName === 'runtime test user'
+  );
 };
 
 const shouldUseDevUsersFallback = (): boolean => {
   const devFallbackDisabled = parseRuntimeBoolean(
-    readRuntimeEnv('VITE_USERS_DISABLE_DEV_FALLBACK') ?? readRuntimeEnv('USERS_DISABLE_DEV_FALLBACK'),
+    readRuntimeEnv('VITE_USERS_DISABLE_DEV_FALLBACK') ??
+      readRuntimeEnv('USERS_DISABLE_DEV_FALLBACK'),
   );
-  const authMode = (readRuntimeEnv('VITE_AUTH_MODE') ?? readRuntimeEnv('AUTH_MODE') ?? '').trim().toLowerCase();
+  const authMode = (readRuntimeEnv('VITE_AUTH_MODE') ?? readRuntimeEnv('AUTH_MODE') ?? '')
+    .trim()
+    .toLowerCase();
   const fakeAuthEnabled = parseRuntimeBoolean(
     readRuntimeEnv('VITE_ENABLE_FAKE_AUTH') ?? readRuntimeEnv('ENABLE_FAKE_AUTH'),
   );
@@ -378,7 +384,10 @@ const sortMockUsers = (items: UserDetail[], sort?: string): UserDetail[] => {
     return [...items];
   }
 
-  const [firstSort] = sort.split(';').map((segment) => segment.trim()).filter(Boolean);
+  const [firstSort] = sort
+    .split(';')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
   if (!firstSort) {
     return [...items];
   }
@@ -426,7 +435,8 @@ const buildMockUsersResponse = (params: UsersQueryParams = {}): UsersApiResponse
         search.length === 0 ||
         item.fullName.toLocaleLowerCase('tr').includes(search) ||
         item.email.toLocaleLowerCase('tr').includes(search);
-      const matchesStatus = !params.status || params.status === 'ALL' || item.status === params.status;
+      const matchesStatus =
+        !params.status || params.status === 'ALL' || item.status === params.status;
       const matchesRole = !params.role || params.role === 'ALL' || item.role === params.role;
       const matchesModuleKey =
         !params.moduleKey ||
@@ -436,7 +446,9 @@ const buildMockUsersResponse = (params: UsersQueryParams = {}): UsersApiResponse
         params.moduleLevel === 'ALL' ||
         item.modulePermissions.some((permission) => permission.level === params.moduleLevel);
 
-      return matchesSearch && matchesStatus && matchesRole && matchesModuleKey && matchesModuleLevel;
+      return (
+        matchesSearch && matchesStatus && matchesRole && matchesModuleKey && matchesModuleLevel
+      );
     }),
     params.sort,
   );
@@ -467,14 +479,17 @@ const buildMockUsersResponse = (params: UsersQueryParams = {}): UsersApiResponse
 };
 
 const buildMockUserDetail = (user: { id: string; email: string }): UserDetail => {
-  const matched = MOCK_USER_DETAILS.find((item) => item.id === user.id || item.email === user.email);
+  const matched = MOCK_USER_DETAILS.find(
+    (item) => item.id === user.id || item.email === user.email,
+  );
   if (matched) {
     return matched;
   }
   return buildFallbackUserDetail(user);
 };
 
-const shouldUseFetchTransportStub = (): boolean => typeof fetch === 'function' && typeof document === 'undefined';
+const shouldUseFetchTransportStub = (): boolean =>
+  typeof fetch === 'function' && typeof document === 'undefined';
 
 const isProfileMissingPayload = (payload: unknown): boolean => {
   if (!payload || typeof payload !== 'object') {
@@ -486,7 +501,10 @@ const isProfileMissingPayload = (payload: unknown): boolean => {
   );
 };
 
-const detectProfileMissingFromResponse = async (response: { clone?: () => Response; json?: () => Promise<unknown> }) => {
+const detectProfileMissingFromResponse = async (response: {
+  clone?: () => Response;
+  json?: () => Promise<unknown>;
+}) => {
   try {
     if (typeof response.clone === 'function') {
       return isProfileMissingPayload(await response.clone().json());
@@ -500,9 +518,7 @@ const detectProfileMissingFromResponse = async (response: { clone?: () => Respon
   return false;
 };
 
-const buildFallbackUserDetail = (
-  user: { id: string; email: string },
-): UserDetail => ({
+const buildFallbackUserDetail = (user: { id: string; email: string }): UserDetail => ({
   id: user.id,
   email: user.email,
   fullName: user.email,
@@ -533,7 +549,9 @@ type ControlledAccessRequestConfig = {
 
 const SCOPE_STORAGE_KEY = 'halo.scope';
 
-export const registerTokenResolver = (resolver?: Parameters<typeof registerSharedTokenResolver>[0]) => {
+export const registerTokenResolver = (
+  resolver?: Parameters<typeof registerSharedTokenResolver>[0],
+) => {
   registerSharedTokenResolver(resolver);
 };
 
@@ -615,6 +633,18 @@ const reportError = (context: string, parsed: ParsedError) => {
   });
 };
 
+// AG Grid SSRM/aggregation params arrive at runtime but aren't part of the
+// canonical UsersQueryParams interface. Cast once to a typed extension so
+// the per-property reads stay narrow.
+type ExtendedQueryParams = UsersQueryParams & {
+  rowGroupCols?: string;
+  groupKeys?: string;
+  valueCols?: string;
+  pivotMode?: string;
+  pivotCols?: string;
+  multiSearch?: string;
+};
+
 const buildQueryString = (params: UsersQueryParams) => {
   const qs = new URLSearchParams();
   if (params.search) qs.set('search', params.search);
@@ -624,15 +654,16 @@ const buildQueryString = (params: UsersQueryParams) => {
   if (params.role && params.role !== 'ALL') qs.set('role', params.role);
   if (params.page) qs.set('page', params.page.toString());
   if (params.pageSize != null) qs.set('pageSize', params.pageSize.toString());
+  const extended = params as ExtendedQueryParams;
   // Server-side grouping params
-  if ((params as any).rowGroupCols) qs.set('rowGroupCols', (params as any).rowGroupCols);
-  if ((params as any).groupKeys) qs.set('groupKeys', (params as any).groupKeys);
+  if (extended.rowGroupCols) qs.set('rowGroupCols', extended.rowGroupCols);
+  if (extended.groupKeys) qs.set('groupKeys', extended.groupKeys);
   // Server-side aggregation + pivot params
-  if ((params as any).valueCols) qs.set('valueCols', (params as any).valueCols);
-  if ((params as any).pivotMode) qs.set('pivotMode', (params as any).pivotMode);
-  if ((params as any).pivotCols) qs.set('pivotCols', (params as any).pivotCols);
+  if (extended.valueCols) qs.set('valueCols', extended.valueCols);
+  if (extended.pivotMode) qs.set('pivotMode', extended.pivotMode);
+  if (extended.pivotCols) qs.set('pivotCols', extended.pivotCols);
   // Multi-value search (from filter builder bulk paste)
-  if ((params as any).multiSearch) qs.set('multiSearch', (params as any).multiSearch);
+  if (extended.multiSearch) qs.set('multiSearch', extended.multiSearch);
   const queryString = qs.toString();
   return queryString ? `?${queryString}` : '';
 };
@@ -662,7 +693,9 @@ const mergeHeaders = (scope?: RequestScope) => {
   return headers;
 };
 
-const buildControlledAccessRequestConfig = (scope?: RequestScope): ControlledAccessRequestConfig => ({
+const buildControlledAccessRequestConfig = (
+  scope?: RequestScope,
+): ControlledAccessRequestConfig => ({
   headers: mergeHeaders(scope),
   __suppressGlobalForbiddenToast: true,
   __suppressGlobalProfileMissingToast: true,
@@ -751,8 +784,9 @@ const normalizeUsersResponse = (
   return {
     items,
     total: typeof payload.total === 'number' ? payload.total : items.length,
-    page: typeof payload.page === 'number' ? payload.page : params.page ?? 1,
-    pageSize: typeof payload.pageSize === 'number' ? payload.pageSize : params.pageSize ?? items.length,
+    page: typeof payload.page === 'number' ? payload.page : (params.page ?? 1),
+    pageSize:
+      typeof payload.pageSize === 'number' ? payload.pageSize : (params.pageSize ?? items.length),
     meta: { reason: 'success' },
   };
 };
@@ -785,10 +819,16 @@ const normalizeUserDetail = (
 
   const activeAssignments = assignments.filter((assignment) => assignment?.active !== false);
 
-  const assignmentMap = new Map<string, UserModulePermission & { moduleMetadata?: Record<string, string> }>();
+  const assignmentMap = new Map<
+    string,
+    UserModulePermission & { moduleMetadata?: Record<string, string> }
+  >();
 
   activeAssignments.forEach((assignment) => {
-    const moduleKeyRaw = toStringOrFallback(assignment.moduleKey ?? assignment.key ?? assignment.module, '').trim();
+    const moduleKeyRaw = toStringOrFallback(
+      assignment.moduleKey ?? assignment.key ?? assignment.module,
+      '',
+    ).trim();
     const moduleKey = moduleKeyRaw ? moduleKeyRaw.toUpperCase() : undefined;
 
     const permissions: string[] = Array.isArray(assignment.permissions)
@@ -797,13 +837,18 @@ const normalizeUserDetail = (
           .map((code: string) => code.toUpperCase())
       : [];
 
-    const permissionLevel = deriveModuleLevelFromPermissions(moduleKey, permissions, assignment.roleName);
+    const permissionLevel = deriveModuleLevelFromPermissions(
+      moduleKey,
+      permissions,
+      assignment.roleName,
+    );
 
     if (!moduleKey) {
       return;
     }
 
-    const moduleLabel = assignment.moduleLabel ?? assignment.label ?? assignment.moduleName ?? moduleKey;
+    const moduleLabel =
+      assignment.moduleLabel ?? assignment.label ?? assignment.moduleName ?? moduleKey;
 
     assignmentMap.set(moduleKey, {
       moduleKey,
@@ -855,9 +900,7 @@ const normalizeUserDetail = (
     lastLoginAt: (userData.lastLogin ?? userData.lastLoginAt ?? null) as string | null,
     createdAt: (userData.createDate ?? userData.createdAt ?? null) as string | null,
     sessionTimeoutMinutes:
-      typeof userData.sessionTimeoutMinutes === 'number'
-        ? userData.sessionTimeoutMinutes
-        : 15,
+      typeof userData.sessionTimeoutMinutes === 'number' ? userData.sessionTimeoutMinutes : 15,
     modulePermissions: ensureAdminUserModulePermission(modulePermissions, userData.role),
   };
 };
@@ -873,9 +916,7 @@ const ensureAdminUserModulePermission = (
   const permissions = [...modulePermissions];
   const targetKey = 'USER_MANAGEMENT';
 
-  const existingIndex = permissions.findIndex(
-    (permission) => permission.moduleKey === targetKey,
-  );
+  const existingIndex = permissions.findIndex((permission) => permission.moduleKey === targetKey);
 
   if (existingIndex >= 0) {
     const existing = permissions[existingIndex];
@@ -916,7 +957,9 @@ const deriveModuleLevelFromPermissions = (
     }
   }
 
-  if (normalizedPermissions.some((code) => code.startsWith('MANAGE_') || code.startsWith('APPROVE_'))) {
+  if (
+    normalizedPermissions.some((code) => code.startsWith('MANAGE_') || code.startsWith('APPROVE_'))
+  ) {
     return 'MANAGE';
   }
   if (normalizedPermissions.some((code) => code.startsWith('EDIT_'))) {
@@ -927,7 +970,11 @@ const deriveModuleLevelFromPermissions = (
   }
 
   if (normalizedRole) {
-    if (normalizedRole.includes('MANAGER') || normalizedRole.includes('OPERATOR') || normalizedRole.includes('ADMIN')) {
+    if (
+      normalizedRole.includes('MANAGER') ||
+      normalizedRole.includes('OPERATOR') ||
+      normalizedRole.includes('ADMIN')
+    ) {
       return 'MANAGE';
     }
     if (normalizedRole.includes('EDITOR')) {
@@ -955,9 +1002,12 @@ export const fetchUsers = async (
   if (shouldUseFetchTransportStub()) {
     const headers = mergeHeaders(scope) as Record<string, string>;
     try {
-      const response = await fetch(`${buildFetchGatewayUrl(USERS_RESOURCE_PATH)}${buildQueryString(params)}`, {
-        headers,
-      });
+      const response = await fetch(
+        `${buildFetchGatewayUrl(USERS_RESOURCE_PATH)}${buildQueryString(params)}`,
+        {
+          headers,
+        },
+      );
       if (!response.ok) {
         if (UNAUTHORIZED_STATUS.has(response.status)) {
           const reason =
@@ -1073,15 +1123,17 @@ export const fetchUsers = async (
 
         return {
           id: String(user.id ?? ''),
-          fullName: toStringOrFallback(user.name ?? user.fullName ?? user.email, 'Bilinmeyen Kullanıcı'),
+          fullName: toStringOrFallback(
+            user.name ?? user.fullName ?? user.email,
+            'Bilinmeyen Kullanıcı',
+          ),
           email: toStringOrFallback(user.email, ''),
           role,
           status: user.enabled === false ? 'INACTIVE' : 'ACTIVE',
           lastLoginAt: (user.lastLogin ?? user.lastLoginAt ?? null) as string | null,
           createdAt: (user.createDate ?? user.createdAt ?? null) as string | null,
-          sessionTimeoutMinutes: typeof user.sessionTimeoutMinutes === 'number'
-            ? user.sessionTimeoutMinutes
-            : 15,
+          sessionTimeoutMinutes:
+            typeof user.sessionTimeoutMinutes === 'number' ? user.sessionTimeoutMinutes : 15,
           modulePermissions,
         };
       })
@@ -1090,8 +1142,9 @@ export const fetchUsers = async (
   return {
     items,
     total: typeof payload.total === 'number' ? payload.total : items.length,
-    page: typeof payload.page === 'number' ? payload.page : params.page ?? 1,
-    pageSize: typeof payload.pageSize === 'number' ? payload.pageSize : params.pageSize ?? items.length,
+    page: typeof payload.page === 'number' ? payload.page : (params.page ?? 1),
+    pageSize:
+      typeof payload.pageSize === 'number' ? payload.pageSize : (params.pageSize ?? items.length),
     meta: { reason: 'success' },
   };
 };
@@ -1203,9 +1256,11 @@ type UpdateUserPayload = {
   sessionTimeoutMinutes?: number;
 };
 
-export const updateUser = async (
-  args: { userId: string; payload: UpdateUserPayload; scope?: RequestScope },
-) => {
+export const updateUser = async (args: {
+  userId: string;
+  payload: UpdateUserPayload;
+  scope?: RequestScope;
+}) => {
   try {
     const client = resolveHttpClient();
     const response = await client.put(
@@ -1221,9 +1276,11 @@ export const updateUser = async (
   }
 };
 
-export const updateUserRole = async (
-  args: { userId: string; role: string; scope?: RequestScope },
-) => updateUser({ userId: args.userId, payload: { role: args.role }, scope: args.scope });
+export const updateUserRole = async (args: {
+  userId: string;
+  role: string;
+  scope?: RequestScope;
+}) => updateUser({ userId: args.userId, payload: { role: args.role }, scope: args.scope });
 
 const mapLevelToRole = (moduleKey: string, level: UserModuleAccessLevel): string => {
   const moduleRoles = MODULE_LEVEL_ROLE_MAP[moduleKey] ?? MODULE_LEVEL_ROLE_MAP.USER_MANAGEMENT;
@@ -1234,9 +1291,15 @@ const mapLevelToRole = (moduleKey: string, level: UserModuleAccessLevel): string
   return roleName;
 };
 
-export const updateUserModuleAccess = async (
-  args: { userId: string; moduleKey: string; level: UserModuleAccessLevel; performedBy?: string; companyId?: string; allowGlobalScope?: boolean; scope?: RequestScope },
-) => {
+export const updateUserModuleAccess = async (args: {
+  userId: string;
+  moduleKey: string;
+  level: UserModuleAccessLevel;
+  performedBy?: string;
+  companyId?: string;
+  allowGlobalScope?: boolean;
+  scope?: RequestScope;
+}) => {
   const contextScope = args.scope ?? getStoredScope();
   const targetCompanyId = args.companyId;
   const payload: Record<string, unknown> = {
@@ -1263,9 +1326,11 @@ export const updateUserModuleAccess = async (
   }
 };
 
-export const revokeUserModuleAccess = async (
-  args: { assignmentId: string; performedBy?: string; scope?: RequestScope },
-) => {
+export const revokeUserModuleAccess = async (args: {
+  assignmentId: string;
+  performedBy?: string;
+  scope?: RequestScope;
+}) => {
   if (!args.assignmentId) {
     throw new Error('Atama bilgisi bulunamadı.');
   }
@@ -1283,9 +1348,11 @@ export const revokeUserModuleAccess = async (
   }
 };
 
-export const toggleUserStatus = async (
-  args: { userId: string; enabled: boolean; scope?: RequestScope },
-): Promise<UserMutationAck> => {
+export const toggleUserStatus = async (args: {
+  userId: string;
+  enabled: boolean;
+  scope?: RequestScope;
+}): Promise<UserMutationAck> => {
   try {
     const client = resolveHttpClient();
     const response = await client.put(
@@ -1301,9 +1368,59 @@ export const toggleUserStatus = async (
   }
 };
 
-export const triggerPasswordReset = async (
-  args: { email: string },
-) => {
+// Codex 019dda1c iter-33 — super-admin grant/revoke. Backend lives at
+// /api/v1/permissions/super-admin/users/{userId} (gateway routes[10]
+// /api/v1/permissions/** → permission-service). Authorization is enforced
+// server-side via ScopeContextHolder.superAdmin(); a non-super-admin caller
+// gets 403 even if the UI item somehow reached them.
+export interface SuperAdminMutationResponse {
+  userId: number;
+  granted?: boolean;
+  revoked?: boolean;
+  alreadyHadGrant?: boolean;
+  hadActiveGrant?: boolean;
+  remainingActiveAdmins?: number;
+  bootstrapWarning?: string;
+}
+
+export const grantSuperAdmin = async (args: {
+  userId: string;
+  scope?: RequestScope;
+}): Promise<SuperAdminMutationResponse> => {
+  try {
+    const client = resolveHttpClient();
+    const response = await client.post(
+      `${PERMISSIONS_RESOURCE_PATH}/super-admin/users/${encodeURIComponent(args.userId)}`,
+      {},
+      { headers: mergeHeaders(args.scope) },
+    );
+    return response.data as SuperAdminMutationResponse;
+  } catch (error: unknown) {
+    const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
+    reportError('Süper admin atama', parsed);
+    throw new Error(parsed.message);
+  }
+};
+
+export const revokeSuperAdmin = async (args: {
+  userId: string;
+  scope?: RequestScope;
+}): Promise<SuperAdminMutationResponse> => {
+  try {
+    const client = resolveHttpClient();
+    const response = await client.delete(
+      `${PERMISSIONS_RESOURCE_PATH}/super-admin/users/${encodeURIComponent(args.userId)}`,
+      { headers: mergeHeaders(args.scope) },
+    );
+    return response.data as SuperAdminMutationResponse;
+  } catch (error: unknown) {
+    const parsed = await parseErrorResponse(isAxiosError(error) ? error : undefined);
+    reportError('Süper admin kaldırma', parsed);
+    throw new Error(parsed.message);
+  }
+};
+
+export const triggerPasswordReset = async (args: { email: string }) => {
   try {
     const client = resolveHttpClient();
     const response = await client.post(
