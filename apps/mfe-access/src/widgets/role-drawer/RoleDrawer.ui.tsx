@@ -168,6 +168,42 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     enabled: open && mode === 'view' && !!role,
   });
 
+  // Codex 019dda1c iter-28b: member display fix. Backend
+  // /v1/roles/{id}/members only emits {userId, assignedAt}; rendering
+  // "Kullanıcı #{userId}" produces an unhelpful UI. Fetch user info
+  // from user-service /v1/users/{id} for every member in a single
+  // batched useQuery (Promise.all). useQueries with a dynamic queries
+  // array length would trigger a "Rendered more hooks" React violation
+  // when the members list grows from 0 → N across role transitions,
+  // so we keep a fixed hook count and recompute the batch by
+  // member-ids key. React Query caches by queryKey so adding/removing
+  // members only invalidates the batch entry. Hooks must live above
+  // the `if (!role) return null` early-return below to satisfy Rules
+  // of Hooks across role={null} → role={...} transitions.
+  const membersList = membersQuery.data ?? [];
+  const memberIdsKey = membersList.map((m) => m.userId).join(',');
+  const memberInfoQuery = useQuery({
+    queryKey: ['role-member-info-batch', memberIdsKey],
+    queryFn: async () => {
+      const results = await Promise.all(
+        membersList.map((m) =>
+          api
+            .get(`/v1/users/${m.userId}`)
+            .then((res) => res.data as Record<string, unknown>)
+            .catch(() => null),
+        ),
+      );
+      const map: Record<number, Record<string, unknown> | null> = {};
+      membersList.forEach((m, idx) => {
+        map[m.userId] = results[idx];
+      });
+      return map;
+    },
+    enabled: membersList.length > 0,
+    staleTime: 60_000,
+    retry: false,
+  });
+
   // --- Granule state ---
   //
   // Codex 019dd927 iter-19 (state-replace race fix): initialize state lazily
@@ -469,6 +505,23 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   const persistedRole = isPersistedRoleId(role?.id);
   const catalog = persistedRole ? (catalogQuery.data ?? null) : buildFallbackCatalog(role);
   const members = membersQuery.data ?? [];
+
+  type UserInfo = {
+    id?: number;
+    fullName?: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
+  const memberDisplayName = (info: UserInfo | null | undefined, userId: number): string => {
+    if (info?.fullName && info.fullName.trim()) return info.fullName;
+    if (info?.name && info.name.trim()) return info.name;
+    const composed = [info?.firstName, info?.lastName].filter(Boolean).join(' ').trim();
+    if (composed) return composed;
+    if (info?.email && info.email.trim()) return info.email;
+    return `Kullanıcı #${userId}`;
+  };
 
   // Persisted role + catalog henüz yüklenmedi (veya hata): loading/error state
   // — module/explain listesi render edilmesin, yanlış key kilitlenmesin.
@@ -989,31 +1042,42 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
           {t('access.drawer.membersTitle')} ({members.length})
         </h3>
         <div className="flex flex-col gap-2">
-          {members.map((member) => (
-            <div
-              key={member.userId}
-              className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2"
-            >
-              <span className="text-sm text-text-primary">Kullanıcı #{member.userId}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    confirm(
-                      t('access.notifications.memberRemoveConfirm', {
-                        userName: `#${member.userId}`,
-                      }),
-                    )
-                  ) {
-                    removeMemberMutation.mutate(member.userId);
-                  }
-                }}
-                className="text-xs text-state-danger-text hover:underline"
+          {members.map((member) => {
+            const info = memberInfoQuery.data?.[member.userId];
+            const displayName = memberDisplayName(info, member.userId);
+            // Email shown as a secondary line when the primary display
+            // name is something other than the email itself (avoids
+            // duplicate rendering for users without a fullName).
+            const showEmailLine = !!info?.email && info.email !== displayName;
+            return (
+              <div
+                key={member.userId}
+                className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2"
               >
-                Kaldır
-              </button>
-            </div>
-          ))}
+                <div className="flex flex-col">
+                  <span className="text-sm text-text-primary">{displayName}</span>
+                  {showEmailLine && <span className="text-xs text-text-subtle">{info!.email}</span>}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        t('access.notifications.memberRemoveConfirm', {
+                          userName: displayName,
+                        }),
+                      )
+                    ) {
+                      removeMemberMutation.mutate(member.userId);
+                    }
+                  }}
+                  className="text-xs text-state-danger-text hover:underline"
+                >
+                  Kaldır
+                </button>
+              </div>
+            );
+          })}
           {members.length === 0 && (
             <p className="text-xs text-text-subtle">Henüz atanmış kişi yok.</p>
           )}
