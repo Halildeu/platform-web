@@ -36,7 +36,11 @@ const ar: Record<string, string> = {
   'dataAccess.assign.orgIdPlaceholder': 'مثال: 1',
   'dataAccess.assign.scopeRefLabel': 'المعرف المستهدف',
   'dataAccess.assign.scopeRefPlaceholder': 'مثال: 1001',
-  'dataAccess.assign.scopeRefManualHint': 'القائمة فارغة - يمكن إدخال المعرف يدويا (قد لا يكون ETL البيانات الرئيسية قد عمل بعد).',
+  'dataAccess.assign.scopeRefSearchPlaceholder': 'البحث بالاسم أو الرمز أو المعرف...',
+  'dataAccess.assign.scopeRefEmptySearch': 'لا توجد نتائج مطابقة للبحث.',
+  'dataAccess.assign.scopeRefInactive': '(غير نشط)',
+  'dataAccess.assign.scopeRefManualHint':
+    'القائمة فارغة - يمكن إدخال المعرف يدويا (قد لا يكون ETL البيانات الرئيسية قد عمل بعد).',
   'dataAccess.assign.kindLabel': 'نوع النطاق',
   'dataAccess.assign.cancel': 'إلغاء',
   'dataAccess.assign.submit': 'تعيين',
