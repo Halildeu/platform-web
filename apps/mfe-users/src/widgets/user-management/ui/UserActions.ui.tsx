@@ -13,12 +13,21 @@ interface UserActionsProps {
 }
 
 const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
-  const { resetPasswordMutation, toggleStatusMutation } = useUserMutations();
+  const {
+    resetPasswordMutation,
+    toggleStatusMutation,
+    grantSuperAdminMutation,
+    revokeSuperAdminMutation,
+  } = useUserMutations();
   const { hasModule, isSuperAdmin } = usePermissions();
   const hasPermission = (perm: string | string[] | undefined) => {
     if (!perm || isSuperAdmin()) return true;
     return hasModule('USER_MANAGEMENT');
   };
+  // Codex 019dda1c iter-33: super-admin grant/revoke items only visible to
+  // current super-admins. Backend enforces the same check (403 on non-super-
+  // admin); this UI guard avoids surfacing a button that always errors.
+  const callerIsSuperAdmin = isSuperAdmin();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
@@ -68,21 +77,73 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
             : t('users.actions.toggleStatus.enable'),
         onClick: async () => {
           try {
-            const result = await toggleStatusMutation.mutateAsync({ userId: user.id, enabled: nextEnabled });
+            const result = await toggleStatusMutation.mutateAsync({
+              userId: user.id,
+              enabled: nextEnabled,
+            });
             const auditId = result?.auditId;
-            pushToast('success', t('users.actions.status.success'), auditId
-              ? {
-                description: t('users.notifications.activation.description', { auditId }),
-                meta: {
-                  auditId,
-                  route: '/audit/events',
-                  action: 'users.toggle_activation',
-                  userId: user.id,
-                  targetStatus: nextEnabled ? 'ACTIVE' : 'INACTIVE',
-                },
-                openInCenter: true,
-              }
-              : undefined);
+            pushToast(
+              'success',
+              t('users.actions.status.success'),
+              auditId
+                ? {
+                    description: t('users.notifications.activation.description', { auditId }),
+                    meta: {
+                      auditId,
+                      route: '/audit/events',
+                      action: 'users.toggle_activation',
+                      userId: user.id,
+                      targetStatus: nextEnabled ? 'ACTIVE' : 'INACTIVE',
+                    },
+                    openInCenter: true,
+                  }
+                : undefined,
+            );
+          } catch (error: unknown) {
+            pushToast('error', (error as Error).message);
+          }
+        },
+      });
+    }
+
+    if (callerIsSuperAdmin) {
+      menu.push({
+        key: 'grant-super-admin',
+        label: t('users.actions.superAdmin.grant'),
+        onClick: async () => {
+          try {
+            const result = await grantSuperAdminMutation.mutateAsync({ userId: user.id });
+            const successMsg = result.alreadyHadGrant
+              ? t('users.actions.superAdmin.grant.alreadySuccess')
+              : t('users.actions.superAdmin.grant.success');
+            pushToast(
+              'success',
+              successMsg,
+              result.bootstrapWarning
+                ? { description: t('users.actions.superAdmin.bootstrapWarning') }
+                : undefined,
+            );
+          } catch (error: unknown) {
+            pushToast('error', (error as Error).message);
+          }
+        },
+      });
+      menu.push({
+        key: 'revoke-super-admin',
+        label: t('users.actions.superAdmin.revoke'),
+        onClick: async () => {
+          try {
+            const result = await revokeSuperAdminMutation.mutateAsync({ userId: user.id });
+            const successMsg = result.hadActiveGrant
+              ? t('users.actions.superAdmin.revoke.success')
+              : t('users.actions.superAdmin.revoke.alreadySuccess');
+            pushToast(
+              'success',
+              successMsg,
+              result.bootstrapWarning
+                ? { description: t('users.actions.superAdmin.bootstrapWarning') }
+                : undefined,
+            );
           } catch (error: unknown) {
             pushToast('error', (error as Error).message);
           }
@@ -91,7 +152,19 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
     }
 
     return menu;
-  }, [hasPermission, onSelect, resetPasswordMutation, toggleStatusMutation, user.email, user.id, user.status]);
+  }, [
+    hasPermission,
+    onSelect,
+    resetPasswordMutation,
+    toggleStatusMutation,
+    grantSuperAdminMutation,
+    revokeSuperAdminMutation,
+    callerIsSuperAdmin,
+    user.email,
+    user.id,
+    user.status,
+    t,
+  ]);
 
   return (
     <div className="relative inline-block" ref={containerRef}>
@@ -115,10 +188,10 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
       >
         {t('users.actions.menuLabel')}
       </button>
-      {open
-        && menuPosition
-        && typeof document !== 'undefined'
-        && createPortal(
+      {open &&
+        menuPosition &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <div
             className="fixed z-50 w-48 rounded-2xl border border-border-subtle bg-surface-default p-1 text-sm shadow-xl"
             style={{ top: menuPosition.top, left: menuPosition.left }}

@@ -96,6 +96,15 @@ const users = {
   'users.actions.resetPassword.success': 'Password reset link has been sent.',
   'users.actions.status.success': 'User status has been updated.',
   'users.notifications.activation.description': 'Audit ID: {auditId}',
+  // iter-33 super-admin grant/revoke
+  'users.actions.superAdmin.grant': 'Make Super Admin',
+  'users.actions.superAdmin.revoke': 'Revoke Super Admin',
+  'users.actions.superAdmin.grant.success': 'User is now a super admin.',
+  'users.actions.superAdmin.grant.alreadySuccess': 'User was already a super admin (no-op).',
+  'users.actions.superAdmin.revoke.success': 'Super admin privilege revoked.',
+  'users.actions.superAdmin.revoke.alreadySuccess': 'User was not a super admin (no-op).',
+  'users.actions.superAdmin.bootstrapWarning':
+    'This account is in the bootstrap admin list — privilege will be re-asserted at next pod restart.',
 
   // Detail drawer – titles & sections
   'users.detail.title': 'User Details',
