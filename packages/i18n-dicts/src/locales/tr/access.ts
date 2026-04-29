@@ -1,6 +1,7 @@
 const access = {
   'access.layout.title': 'Rol & Policy Yönetimi',
-  'access.layout.description': 'Modül bazlı yetki setlerini görüntüleyin, değişiklik yapın ve audit geçmişini takip edin.',
+  'access.layout.description':
+    'Modül bazlı yetki setlerini görüntüleyin, değişiklik yapın ve audit geçmişini takip edin.',
   'access.breadcrumb.management': 'Yönetim',
   'access.breadcrumb.access': 'Erişim',
   'access.breadcrumb.roles': 'Roller',
@@ -35,7 +36,8 @@ const access = {
   'access.variants.updated': 'Varyant güncellendi.',
   'access.variants.deleted': 'Varyant silindi.',
   'access.variants.deleteConfirm.title': 'Varyantı sil',
-  'access.variants.deleteConfirm.content': 'Seçili varyant kalıcı olarak silinecek. Devam etmek istiyor musunuz?',
+  'access.variants.deleteConfirm.content':
+    'Seçili varyant kalıcı olarak silinecek. Devam etmek istiyor musunuz?',
   'access.variants.deleteConfirm.ok': 'Sil',
   'access.variants.deleteConfirm.cancel': 'Vazgeç',
 
@@ -65,7 +67,8 @@ const access = {
   'access.notifications.cloneError': 'Rol klonlanamadı.',
   'access.notifications.cloneMissingSelection': 'Klonlamak için bir rol seçmelisiniz.',
   'access.notifications.bulkSuccess.title': 'Toplu yetki güncellendi',
-  'access.notifications.bulkSuccess.description': 'Toplam {count} rol güncellendi. Audit ID: {auditId}',
+  'access.notifications.bulkSuccess.description':
+    'Toplam {count} rol güncellendi. Audit ID: {auditId}',
   'access.notifications.bulkNoop': 'Seçili roller zaten bu yetki seviyesine sahip.',
 
   'access.clone.modal.title': 'Rolü klonla',
@@ -78,7 +81,8 @@ const access = {
   'access.clone.descriptionLabel': 'Açıklama',
   'access.clone.descriptionPlaceholder': 'Opsiyonel açıklama ekleyin',
   'access.clone.copyMemberCount': 'Üye sayısını kopyala',
-  'access.clone.copyMemberTooltip': 'Klonlanan rol için mevcut üye sayısını koruyun. Varsayılan değer 0 olacaktır.',
+  'access.clone.copyMemberTooltip':
+    'Klonlanan rol için mevcut üye sayısını koruyun. Varsayılan değer 0 olacaktır.',
   'access.clone.okText': 'Oluştur',
   'access.clone.cancelText': 'Vazgeç',
 
@@ -94,7 +98,8 @@ const access = {
   'access.bulk.cancelText': 'Vazgeç',
 
   'access.registry.title': 'Permission registry anlık görüntüsü',
-  'access.registry.subtitle': 'Kaynak sürüm {version}. CI bu tabloyu kanonik registry ile senkron tutar.',
+  'access.registry.subtitle':
+    'Kaynak sürüm {version}. CI bu tabloyu kanonik registry ile senkron tutar.',
   'access.registry.summary.active': 'Aktif izinler',
   'access.registry.summary.deprecated': 'Kaldırılacak izinler',
   'access.registry.legend': 'Oluşturulma zamanı: {generatedAt}',
@@ -121,10 +126,12 @@ const access = {
   'access.create.nameMinLength': 'Rol adı en az 3 karakter olmalıdır.',
   'access.create.submitText': 'Oluştur',
   'access.delete.title': 'Rolü Sil',
-  'access.delete.message': '"{roleName}" rolünü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
+  'access.delete.message':
+    '"{roleName}" rolünü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
   'access.delete.confirmText': 'Sil',
   'access.delete.systemRoleWarning': 'Sistem rolleri silinemez.',
-  'access.delete.memberWarning': 'Bu rolde {count} aktif üye bulunmaktadır. Silme işlemi tüm atamalarını kaldıracaktır.',
+  'access.delete.memberWarning':
+    'Bu rolde {count} aktif üye bulunmaktadır. Silme işlemi tüm atamalarını kaldıracaktır.',
   'access.notifications.createSuccess': 'Rol başarıyla oluşturuldu.',
   'access.notifications.createError': 'Rol oluşturulurken hata oluştu.',
   'access.notifications.deleteSuccess': 'Rol başarıyla silindi.',
@@ -133,7 +140,8 @@ const access = {
   // Drawer dirty state
   'access.drawer.unsavedChanges': 'Kaydedilmemiş değişiklikler',
   'access.drawer.discardConfirm': 'Değişiklikleri at',
-  'access.drawer.discardMessage': 'Kaydedilmemiş yetki değişiklikleri var. Çıkmak istediğinize emin misiniz?',
+  'access.drawer.discardMessage':
+    'Kaydedilmemiş yetki değişiklikleri var. Çıkmak istediğinize emin misiniz?',
 
   // Company scope
   'access.scope.superAdmin': 'Süper Admin',
@@ -174,7 +182,8 @@ const access = {
   'access.notifications.memberAlreadyExists': '{{userName}} bu role zaten ekli.',
   'access.notifications.memberRemoveSuccess': 'Kullanıcı rolden kaldırıldı.',
   'access.notifications.memberRemoveError': 'Kullanıcı kaldırılamadı.',
-  'access.notifications.memberRemoveConfirm': '"{userName}" kullanıcısını bu rolden kaldırmak istediğinize emin misiniz?',
+  'access.notifications.memberRemoveConfirm':
+    '"{userName}" kullanıcısını bu rolden kaldırmak istediğinize emin misiniz?',
 
   // User search (member add)
   'access.drawer.userSearchPlaceholder': 'Kullanıcı adı veya e-posta ile arayın',
@@ -200,6 +209,8 @@ const access = {
   'access.drawer.reportLevel.none': 'Yetki Yok',
   'access.drawer.reportLevel.view': 'Görüntüle',
   'access.drawer.reportLevel.manage': 'Tam Yetki',
+  'access.drawer.reportsBulkLevelAria': '{module} modülündeki tüm raporlar için toplu yetki',
+  'access.drawer.reportsBulkMixed': 'Karışık',
   'access.drawer.pagesTitle': 'Sayfalar',
   'access.drawer.membersTitle': 'Atanmış Kişiler',
   'access.drawer.allowLabel': 'İzin',
@@ -225,7 +236,8 @@ const access = {
 
   // P1.9 NO_SCOPE scope picker
   'access.explainModal.scopeSectionTitle': 'Kapsam kontrolü (opsiyonel)',
-  'access.explainModal.scopeHelp': 'Belirli bir şirket/proje/depo/şube için erişimi doğrulamak isterseniz kapsam türü ve ID girin.',
+  'access.explainModal.scopeHelp':
+    'Belirli bir şirket/proje/depo/şube için erişimi doğrulamak isterseniz kapsam türü ve ID girin.',
   'access.explainModal.scopeTypeLabel': 'Kapsam türü',
   'access.explainModal.scopeTypePlaceholder': 'Kapsam türü seçin',
   'access.explainModal.scopeRefIdLabel': 'Kapsam ID',

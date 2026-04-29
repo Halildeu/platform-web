@@ -146,6 +146,27 @@ beforeEach(() => {
   (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
     if (url === '/v1/authz/catalog') return { data: buildCatalog() };
     if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
+    // Codex 019dda05 iter-25: drawer source-of-truth artık typed read endpoint
+    // /v1/roles/{id}/granules. RoleDto (/v1/roles/{id}) sadece module summary
+    // döndürdüğü için ACTION/REPORT granules orada yok.
+    if (url.match(/^\/v1\/roles\/\d+\/granules$/)) {
+      const role = buildRole();
+      const idMatch = url.match(/^\/v1\/roles\/(\d+)\/granules$/);
+      const roleId = idMatch ? Number(idMatch[1]) : 10;
+      return {
+        data: {
+          roleId,
+          granules: (role.policies ?? []).map((p) => ({
+            type: 'MODULE',
+            key: p.moduleKey,
+            grant: p.level,
+          })),
+        },
+      };
+    }
+    // Legacy /v1/roles/{id} (RoleDto) — drawer bunu artık çağırmamalı, ama
+    // mevcut testlerdeki diğer çağrılar (örn. members) için geriye dönük
+    // mock yine de policies döner.
     if (url.match(/^\/v1\/roles\/\d+$/)) {
       return {
         data: {
@@ -341,33 +362,33 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
     expect(values2.includes('MANAGE')).toBe(true);
   });
 
-  it('iter-20: typed + legacy mixed shape granules birlikte parse edilir', async () => {
-    // Backend, transition döneminde, hem typed (`{type, key, grant}`) hem
-    // legacy (`{moduleKey, level}`) entry içeren bir `policies` array dönerse
-    // her ikisi de mods bucket'ına yazılmalı.
+  it('iter-25: yeni endpoint /v1/roles/{id}/granules typed entries döner ve drawer state populated', async () => {
+    // Codex 019dda05 iter-25 read-after-write fix: backend GET /granules
+    // typed shape döner. Drawer Effect B bu shape'i parse eder, MODULE
+    // entries paralel render edilir. (Eski iter-20 mixed shape testinin
+    // yerini aldı — typed-only kontrat artık tek geçerli yol.)
     (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
       if (url === '/v1/authz/catalog') return { data: buildCatalog() };
       if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
-      if (url.match(/^\/v1\/roles\/\d+$/)) {
+      if (url.match(/^\/v1\/roles\/\d+\/granules$/)) {
         return {
           data: {
-            policies: [
+            roleId: 10,
+            granules: [
               { type: 'MODULE', key: 'ACCESS', grant: 'MANAGE' },
-              { moduleKey: 'PURCHASE', level: 'VIEW' },
+              { type: 'MODULE', key: 'PURCHASE', grant: 'VIEW' },
             ],
-            permissions: [],
           },
         };
       }
       return { data: {} };
     });
 
-    renderDrawer(buildRole({ policies: [] })); // props boş; sadece Effect B üzerinden gelmeli
+    renderDrawer(buildRole({ policies: [] })); // props boş; sadece /granules endpoint
     const drawer = await screen.findByTestId('role-drawer');
     await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
       timeout: 3_000,
     });
-    // Allow Effect B flush
     await new Promise((r) => setTimeout(r, 100));
 
     const values = Array.from(drawer.querySelectorAll<HTMLSelectElement>('select')).map(
@@ -375,8 +396,128 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
     );
     expect(
       values.includes('MANAGE') && values.includes('VIEW'),
-      `iter-20 mixed shape: typed (ACCESS=MANAGE) ve legacy (PURCHASE=VIEW) entry parse edilmedi. Values: ${JSON.stringify(values)}`,
+      `iter-25 typed read endpoint: ACCESS=MANAGE + PURCHASE=VIEW parse edilmedi. Values: ${JSON.stringify(values)}`,
     ).toBe(true);
+  });
+
+  it('iter-25: read-after-write — REPORT granules yeni endpoint üzerinden render edilir', async () => {
+    // Pre-iter-25'te /v1/roles/{id} (RoleDto) ACTION/REPORT granules'i
+    // FİLTRELİYORDU (line 388-392 backend comment). iter-25 sonrası
+    // /granules typed endpoint hepsini döndürür. Bu test REPORT entries'in
+    // drawer açılışında bireysel select'lerde görünür olduğunu doğrular —
+    // kullanıcı 2026-04-29 raporu: "raporlar kaydolmuyor".
+    (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (url === '/v1/authz/catalog') {
+        return {
+          data: {
+            modules: [
+              { key: 'USER_MANAGEMENT', label: 'Kullanıcı Yönetimi', levels: ['VIEW', 'MANAGE'] },
+            ],
+            actions: [],
+            reports: [
+              { key: 'HR_REPORTS', label: 'İK Raporları', module: 'USER_MANAGEMENT' },
+              { key: 'FINANCE_REPORTS', label: 'Finans Raporları', module: 'USER_MANAGEMENT' },
+            ],
+            pages: [],
+          },
+        };
+      }
+      if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
+      if (url.match(/^\/v1\/roles\/\d+\/granules$/)) {
+        return {
+          data: {
+            roleId: 10,
+            granules: [
+              { type: 'MODULE', key: 'USER_MANAGEMENT', grant: 'VIEW' },
+              { type: 'REPORT', key: 'HR_REPORTS', grant: 'MANAGE' },
+              { type: 'REPORT', key: 'FINANCE_REPORTS', grant: 'VIEW' },
+            ],
+          },
+        };
+      }
+      return { data: {} };
+    });
+
+    renderDrawer(buildRole({ policies: [] }));
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+    await new Promise((r) => setTimeout(r, 100));
+
+    const hrReport = drawer.querySelector<HTMLSelectElement>(
+      '[data-testid="report-level-HR_REPORTS"]',
+    );
+    const financeReport = drawer.querySelector<HTMLSelectElement>(
+      '[data-testid="report-level-FINANCE_REPORTS"]',
+    );
+    expect(hrReport, 'HR_REPORTS select rendered').toBeTruthy();
+    expect(financeReport, 'FINANCE_REPORTS select rendered').toBeTruthy();
+    expect(hrReport!.value).toBe('MANAGE');
+    expect(financeReport!.value).toBe('VIEW');
+  });
+
+  it('iter-25: bulk-select header dropdown — modül grup için tüm raporlar aynı level alır', async () => {
+    // Kullanıcı feature isteği (2026-04-29): "ana kategoride toplu seçim
+    // alanı olacak". Modül header'ında bulk dropdown MANAGE seçilince
+    // modüle ait TÜM raporlar MANAGE olur. allSame = true, dropdown
+    // MANAGE göstermeli (MIXED placeholder kalkmalı).
+    (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (url === '/v1/authz/catalog') {
+        return {
+          data: {
+            modules: [
+              { key: 'USER_MANAGEMENT', label: 'Kullanıcı Yönetimi', levels: ['VIEW', 'MANAGE'] },
+            ],
+            actions: [],
+            reports: [
+              { key: 'HR_REPORTS', label: 'İK Raporları', module: 'USER_MANAGEMENT' },
+              { key: 'PAYROLL_REPORTS', label: 'Bordro Raporları', module: 'USER_MANAGEMENT' },
+            ],
+            pages: [],
+          },
+        };
+      }
+      if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
+      if (url.match(/^\/v1\/roles\/\d+\/granules$/)) {
+        return { data: { roleId: 10, granules: [] } };
+      }
+      return { data: {} };
+    });
+
+    renderDrawer(buildRole({ policies: [] }));
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+
+    const groupSelect = drawer.querySelector<HTMLSelectElement>(
+      '[data-testid="report-group-level-USER_MANAGEMENT"]',
+    );
+    expect(groupSelect, 'Bulk-level select header dropdown rendered').toBeTruthy();
+    expect(groupSelect!.value).toBe('NONE');
+
+    // Bulk select'i MANAGE'e değiştir (React change event ile)
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(groupSelect!, { target: { value: 'MANAGE' } });
+
+    // Bireysel rapor select'leri MANAGE olmuş olmalı
+    await waitFor(
+      () => {
+        const hr = drawer.querySelector<HTMLSelectElement>(
+          '[data-testid="report-level-HR_REPORTS"]',
+        );
+        const payroll = drawer.querySelector<HTMLSelectElement>(
+          '[data-testid="report-level-PAYROLL_REPORTS"]',
+        );
+        expect(hr?.value).toBe('MANAGE');
+        expect(payroll?.value).toBe('MANAGE');
+      },
+      { timeout: 2_000 },
+    );
+
+    // Bulk dropdown da MANAGE göstermeli (allSame = true)
+    expect(groupSelect!.value).toBe('MANAGE');
   });
 
   it('iter-20: unknown partial typed payload — written=false → lazy init state preserve', async () => {

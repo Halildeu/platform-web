@@ -1,6 +1,7 @@
 const access = {
   'access.layout.title': 'Role & Policy Management',
-  'access.layout.description': 'Inspect module permissions, adjust access rules, and keep track of audit activity.',
+  'access.layout.description':
+    'Inspect module permissions, adjust access rules, and keep track of audit activity.',
   'access.breadcrumb.management': 'Administration',
   'access.breadcrumb.access': 'Access',
   'access.breadcrumb.roles': 'Roles',
@@ -35,7 +36,8 @@ const access = {
   'access.variants.updated': 'View updated.',
   'access.variants.deleted': 'View deleted.',
   'access.variants.deleteConfirm.title': 'Delete view',
-  'access.variants.deleteConfirm.content': 'The selected view will be permanently deleted. Continue?',
+  'access.variants.deleteConfirm.content':
+    'The selected view will be permanently deleted. Continue?',
   'access.variants.deleteConfirm.ok': 'Delete',
   'access.variants.deleteConfirm.cancel': 'Cancel',
 
@@ -78,12 +80,14 @@ const access = {
   'access.clone.descriptionLabel': 'Description',
   'access.clone.descriptionPlaceholder': 'Add a short description (optional)',
   'access.clone.copyMemberCount': 'Copy member count',
-  'access.clone.copyMemberTooltip': 'Keep the existing member count for the cloned role. By default the role starts with zero members.',
+  'access.clone.copyMemberTooltip':
+    'Keep the existing member count for the cloned role. By default the role starts with zero members.',
   'access.clone.okText': 'Create',
   'access.clone.cancelText': 'Cancel',
 
   'access.bulk.modal.title': 'Bulk permission update',
-  'access.bulk.info': 'You are about to update the same module permission for {count} selected roles.',
+  'access.bulk.info':
+    'You are about to update the same module permission for {count} selected roles.',
   'access.bulk.moduleLabel': 'Module',
   'access.bulk.moduleRequired': 'Select a module.',
   'access.bulk.levelLabel': 'Permission level',
@@ -94,7 +98,8 @@ const access = {
   'access.bulk.cancelText': 'Cancel',
 
   'access.registry.title': 'Permission registry snapshot',
-  'access.registry.subtitle': 'Source version {version}. CI keeps this table in sync with the canonical registry.',
+  'access.registry.subtitle':
+    'Source version {version}. CI keeps this table in sync with the canonical registry.',
   'access.registry.summary.active': 'Active permissions',
   'access.registry.summary.deprecated': 'Deprecated permissions',
   'access.registry.legend': 'Last generated: {generatedAt}',
@@ -121,10 +126,12 @@ const access = {
   'access.create.nameMinLength': 'Role name must be at least 3 characters.',
   'access.create.submitText': 'Create',
   'access.delete.title': 'Delete Role',
-  'access.delete.message': 'Are you sure you want to delete "{roleName}"? This action cannot be undone.',
+  'access.delete.message':
+    'Are you sure you want to delete "{roleName}"? This action cannot be undone.',
   'access.delete.confirmText': 'Delete',
   'access.delete.systemRoleWarning': 'System roles cannot be deleted.',
-  'access.delete.memberWarning': 'This role has {count} active members. Deleting will remove all their assignments.',
+  'access.delete.memberWarning':
+    'This role has {count} active members. Deleting will remove all their assignments.',
   'access.notifications.createSuccess': 'Role created successfully.',
   'access.notifications.createError': 'Failed to create role.',
   'access.notifications.deleteSuccess': 'Role deleted successfully.',
@@ -133,7 +140,8 @@ const access = {
   // Drawer dirty state
   'access.drawer.unsavedChanges': 'Unsaved changes',
   'access.drawer.discardConfirm': 'Discard changes',
-  'access.drawer.discardMessage': 'You have unsaved permission changes. Are you sure you want to leave?',
+  'access.drawer.discardMessage':
+    'You have unsaved permission changes. Are you sure you want to leave?',
 
   // Company scope
   'access.scope.superAdmin': 'Super Admin',
@@ -174,7 +182,8 @@ const access = {
   'access.notifications.memberAlreadyExists': '{{userName}} is already assigned to this role.',
   'access.notifications.memberRemoveSuccess': 'User removed from role.',
   'access.notifications.memberRemoveError': 'Failed to remove user.',
-  'access.notifications.memberRemoveConfirm': 'Are you sure you want to remove "{userName}" from this role?',
+  'access.notifications.memberRemoveConfirm':
+    'Are you sure you want to remove "{userName}" from this role?',
 
   // User search (member add)
   'access.drawer.userSearchPlaceholder': 'Search by name or email',
@@ -200,6 +209,8 @@ const access = {
   'access.drawer.reportLevel.none': 'No Access',
   'access.drawer.reportLevel.view': 'View',
   'access.drawer.reportLevel.manage': 'Manage',
+  'access.drawer.reportsBulkLevelAria': 'Bulk grant for all reports in module {module}',
+  'access.drawer.reportsBulkMixed': 'Mixed',
   'access.drawer.pagesTitle': 'Pages',
   'access.drawer.membersTitle': 'Assigned Users',
   'access.drawer.allowLabel': 'Allow',
@@ -225,7 +236,8 @@ const access = {
 
   // P1.9 NO_SCOPE scope picker
   'access.explainModal.scopeSectionTitle': 'Scope check (optional)',
-  'access.explainModal.scopeHelp': 'To verify access against a specific company / project / warehouse / branch, pick a scope type and enter its ID.',
+  'access.explainModal.scopeHelp':
+    'To verify access against a specific company / project / warehouse / branch, pick a scope type and enter its ID.',
   'access.explainModal.scopeTypeLabel': 'Scope type',
   'access.explainModal.scopeTypePlaceholder': 'Select scope type',
   'access.explainModal.scopeRefIdLabel': 'Scope ID',
