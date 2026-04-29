@@ -1,14 +1,6 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Autocomplete,
-  Badge,
-  Button,
-  Checkbox,
-  DetailDrawer,
-  TextInput,
-} from '@mfe/design-system';
+import { Alert, Autocomplete, Badge, Button, DetailDrawer, TextInput } from '@mfe/design-system';
 import type { AutocompleteOption } from '@mfe/design-system';
 import { usePermissions, useZanzibarAccess } from '@mfe/auth';
 import type { AccessRole, AccessLevel } from '../../features/access-management/model/access.types';
@@ -513,15 +505,48 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setDirty(true);
   };
 
-  const toggleAction = (key: string, grant: 'ALLOW' | 'DENY') => {
+  // Codex 019dda1c iter-27 (C): individual action level setter — 3-state
+  // (NONE / ALLOW / DENY). Replaces the legacy two-checkbox toggle so action
+  // selects can match the report select pattern (single dropdown). DENY is
+  // only meaningful when {@code action.deniable === true}; the render layer
+  // hides the option for non-deniable actions, but this setter still accepts
+  // it as a no-op safety net.
+  const setActionLevel = (key: string, level: 'NONE' | 'ALLOW' | 'DENY') => {
     setActionGrants((prev) => {
-      const current = prev[key];
-      if (current === grant) {
-        const next = { ...prev };
+      const next = { ...prev };
+      if (level === 'NONE') {
         delete next[key];
-        return next;
+      } else {
+        next[key] = level;
       }
-      return { ...prev, [key]: grant };
+      return next;
+    });
+    setDirty(true);
+  };
+
+  // Codex 019dda1c iter-27 (C): bulk-select for an action module group.
+  // Mirrors setReportGroupLevel from iter-25/26: header dropdown sets every
+  // action in the module to the chosen level. DENY is only applied to
+  // actions whose {@code deniable} flag is true; non-deniable actions get
+  // ALLOW instead (or stay NONE if the bulk choice is NONE), so the user
+  // never sees a confusing "some changed, some didn't" partial state.
+  const setActionGroupLevel = (moduleKey: string, level: 'NONE' | 'ALLOW' | 'DENY') => {
+    setActionGrants((prev) => {
+      const next = { ...prev };
+      const acts = catalog?.actions.filter((a) => a.module === moduleKey) ?? [];
+      for (const a of acts) {
+        if (level === 'NONE') {
+          delete next[a.key];
+        } else if (level === 'DENY' && !a.deniable) {
+          // Non-deniable action under a DENY bulk: fall back to ALLOW so the
+          // group ends in a coherent state (all entries explicitly allowed
+          // except deniable rows that the user wanted denied).
+          next[a.key] = 'ALLOW';
+        } else {
+          next[a.key] = level;
+        }
+      }
+      return next;
     });
     setDirty(true);
   };
@@ -644,56 +669,149 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
         <hr className="border-border-subtle" />
 
-        {/* --- AKSİYONLAR --- */}
+        {/* --- EYLEMLER (Codex 019dda1c iter-27 C: module-grouped + bulk select) --- */}
+        {/* Pattern mirrors RAPORLAR section: each module gets an accordion;
+            header has a 3-state bulk dropdown (NONE/ALLOW/DENY); individual
+            actions are select dropdowns. DENY option is hidden for actions
+            whose deniable=false. Bulk DENY hides if the group has any
+            non-deniable action — UI never offers a half-applied state. */}
         <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
           {t('access.drawer.actionsTitle')}
         </h3>
-        <div className="flex flex-col gap-2">
-          {(catalog?.actions ?? []).map((action) => {
-            const grant = actionGrants[action.key];
-            const isAllow = grant === 'ALLOW';
-            const isDeny = grant === 'DENY';
-            return (
-              <div
-                key={action.key}
-                className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2"
-              >
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-text-primary">{action.label}</span>
-                  <span className="text-xs text-text-subtle">{action.module}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExplainTarget({ type: 'ACTION', key: action.key, label: action.label })
-                    }
-                    aria-label={t('access.explainModal.triggerAria', { label: action.label })}
-                    title={t('access.explainModal.triggerTitle')}
-                    data-testid={`explain-trigger-action-${action.key}`}
-                    className="flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle text-xs text-text-subtle hover:bg-surface-default hover:text-text-primary"
-                  >
-                    ?
-                  </button>
-                  <Checkbox
-                    label={t('access.drawer.allowLabel')}
-                    checked={isAllow}
-                    onChange={() => toggleAction(action.key, 'ALLOW')}
-                    size="sm"
-                  />
-                  {action.deniable && (
-                    <Checkbox
-                      label={t('access.drawer.denyLabel')}
-                      checked={isDeny}
-                      onChange={() => toggleAction(action.key, 'DENY')}
-                      size="sm"
-                      className={isDeny ? 'text-state-danger-text' : ''}
-                    />
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex flex-col gap-3">
+          {(() => {
+            // Group actions by module key (preserves catalog ordering)
+            const grouped = new Map<string, typeof catalog.actions>();
+            for (const action of catalog?.actions ?? []) {
+              const arr = grouped.get(action.module) ?? [];
+              arr.push(action);
+              grouped.set(action.module, arr);
+            }
+            return Array.from(grouped.entries()).map(([moduleKey, actions]) => {
+              const moduleLabel =
+                catalog?.modules?.find((m) => m.key === moduleKey)?.label ?? moduleKey;
+              const activeCount = actions.filter((a) => !!actionGrants[a.key]).length;
+              const allDeniable = actions.every((a) => a.deniable);
+
+              // Bulk-level computation — 3-state with MIXED placeholder.
+              const levels: ('NONE' | 'ALLOW' | 'DENY')[] = actions.map((a) => {
+                const raw = actionGrants[a.key];
+                if (raw === 'DENY') return 'DENY';
+                if (raw === 'ALLOW') return 'ALLOW';
+                return 'NONE';
+              });
+              const firstLevel = levels[0] ?? 'NONE';
+              const allSame = levels.every((l) => l === firstLevel);
+              const bulkLevel: 'NONE' | 'ALLOW' | 'DENY' | 'MIXED' = allSame ? firstLevel : 'MIXED';
+
+              return (
+                <details
+                  key={moduleKey}
+                  className="rounded-xl border border-border-subtle bg-surface-muted/30"
+                  open={activeCount > 0}
+                  data-testid={`action-module-group-${moduleKey}`}
+                >
+                  <summary className="flex cursor-pointer items-center justify-between rounded-xl px-4 py-2 text-sm font-medium hover:bg-surface-muted/60">
+                    <span>
+                      <span className="font-semibold">{moduleLabel}</span>
+                      <span className="ml-2 text-xs text-text-subtle">({moduleKey})</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-text-subtle">
+                        {activeCount > 0
+                          ? t('access.drawer.actionsActiveCount', {
+                              active: activeCount,
+                              total: actions.length,
+                            })
+                          : t('access.drawer.actionsTotal', { total: actions.length })}
+                      </span>
+                      <select
+                        value={bulkLevel}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const v = e.target.value as 'NONE' | 'ALLOW' | 'DENY' | 'MIXED';
+                          if (v === 'MIXED') return;
+                          setActionGroupLevel(moduleKey, v);
+                        }}
+                        className="rounded border border-border-subtle bg-surface-default px-2 py-0.5 text-xs font-normal"
+                        data-testid={`action-group-level-${moduleKey}`}
+                        aria-label={t('access.drawer.actionsBulkLevelAria', {
+                          module: moduleLabel,
+                        })}
+                      >
+                        <option value="NONE">{t('access.drawer.actionsLevel.none')}</option>
+                        <option value="ALLOW">{t('access.drawer.actionsLevel.allow')}</option>
+                        {/* DENY only if every action in this group is deniable. */}
+                        {allDeniable && (
+                          <option value="DENY">{t('access.drawer.actionsLevel.deny')}</option>
+                        )}
+                        {bulkLevel === 'MIXED' && (
+                          <option value="MIXED" disabled>
+                            {t('access.drawer.actionsBulkMixed')}
+                          </option>
+                        )}
+                      </select>
+                    </div>
+                  </summary>
+                  <div className="flex flex-col gap-1 px-4 py-2">
+                    {actions.map((action) => {
+                      const raw = actionGrants[action.key];
+                      const currentLevel: 'NONE' | 'ALLOW' | 'DENY' =
+                        raw === 'DENY' ? 'DENY' : raw === 'ALLOW' ? 'ALLOW' : 'NONE';
+                      return (
+                        <div
+                          key={action.key}
+                          className="flex items-center justify-between gap-2 rounded-md bg-surface-default px-3 py-1.5"
+                        >
+                          <span className="flex-1 text-sm">{action.label}</span>
+                          <select
+                            value={currentLevel}
+                            onChange={(e) =>
+                              setActionLevel(
+                                action.key,
+                                e.target.value as 'NONE' | 'ALLOW' | 'DENY',
+                              )
+                            }
+                            className={
+                              currentLevel === 'DENY'
+                                ? 'rounded border border-state-danger-border bg-state-danger-surface px-2 py-0.5 text-xs text-state-danger-text'
+                                : 'rounded border border-border-subtle bg-surface-muted px-2 py-0.5 text-xs'
+                            }
+                            data-testid={`action-level-${action.key}`}
+                          >
+                            <option value="NONE">{t('access.drawer.actionsLevel.none')}</option>
+                            <option value="ALLOW">{t('access.drawer.actionsLevel.allow')}</option>
+                            {action.deniable && (
+                              <option value="DENY">{t('access.drawer.actionsLevel.deny')}</option>
+                            )}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExplainTarget({
+                                type: 'ACTION',
+                                key: action.key,
+                                label: action.label,
+                              })
+                            }
+                            aria-label={t('access.explainModal.triggerAria', {
+                              label: action.label,
+                            })}
+                            title={t('access.explainModal.triggerTitle')}
+                            data-testid={`explain-trigger-action-${action.key}`}
+                            className="flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle text-xs text-text-subtle hover:bg-surface-default hover:text-text-primary"
+                          >
+                            ?
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              );
+            });
+          })()}
         </div>
 
         <hr className="border-border-subtle" />
