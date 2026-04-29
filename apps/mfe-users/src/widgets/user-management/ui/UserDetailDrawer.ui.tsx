@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
-import { PERMISSIONS } from '../../../features/user-management/lib/permissions.constants';
 import { usePermissions } from '@mfe/auth';
-import { DetailDrawer, Tabs, Checkbox, Button, Badge } from '@mfe/design-system';
+import { DetailDrawer, Tabs, Checkbox } from '@mfe/design-system';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
 import { pushToast } from '../../../shared/notifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,7 +17,8 @@ const badgeToneClass: Record<string, string> = {
   warning: 'border-state-warning-border bg-state-warning-bg text-state-warning-text',
   error: 'border-state-danger-border bg-state-danger-bg text-state-danger-text',
 };
-const getBadgeClass = (tone: string) => `${badgeBaseClass} ${badgeToneClass[tone] ?? badgeToneClass.default}`;
+const getBadgeClass = (tone: string) =>
+  `${badgeBaseClass} ${badgeToneClass[tone] ?? badgeToneClass.default}`;
 
 interface UserDetailDrawerProps {
   open: boolean;
@@ -27,8 +27,14 @@ interface UserDetailDrawerProps {
 }
 
 // --- Role & Scope types ---
-interface RoleOption { id: number; name: string; }
-interface ScopeEntity { id: number; name: string; }
+interface RoleOption {
+  id: number;
+  name: string;
+}
+interface ScopeEntity {
+  id: number;
+  name: string;
+}
 
 const FALLBACK_ROLE_OPTIONS: RoleOption[] = [
   { id: 1, name: 'ADMIN' },
@@ -38,13 +44,17 @@ const FALLBACK_ROLE_OPTIONS: RoleOption[] = [
   { id: 5, name: 'WAREHOUSE_OPERATOR' },
 ];
 
-const FALLBACK_ROLE_ID_BY_NAME: Record<string, number> = FALLBACK_ROLE_OPTIONS.reduce<Record<string, number>>((acc, role) => {
+const FALLBACK_ROLE_ID_BY_NAME: Record<string, number> = FALLBACK_ROLE_OPTIONS.reduce<
+  Record<string, number>
+>((acc, role) => {
   acc[role.name] = role.id;
   return acc;
 }, {});
 
 const resolveFallbackRoleOptions = (currentRole: string | undefined): RoleOption[] => {
-  const normalizedRole = String(currentRole ?? '').trim().toUpperCase();
+  const normalizedRole = String(currentRole ?? '')
+    .trim()
+    .toUpperCase();
   if (!normalizedRole || FALLBACK_ROLE_ID_BY_NAME[normalizedRole]) {
     return FALLBACK_ROLE_OPTIONS;
   }
@@ -54,8 +64,7 @@ const resolveFallbackRoleOptions = (currentRole: string | undefined): RoleOption
 const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user }) => {
   const { t, locale } = useUsersI18n();
   const queryClient = useQueryClient();
-  const { hasModule, isSuperAdmin, authz } = usePermissions();
-  const currentUserId = authz?.userId ?? null;
+  const { hasModule, isSuperAdmin } = usePermissions();
   const isAdmin = isSuperAdmin();
   const canEdit = isAdmin || hasModule('USER_MANAGEMENT');
 
@@ -63,7 +72,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem('halo.scope') : null;
       return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
+    } catch {
+      return {};
+    }
   }, []);
 
   const { toggleStatusMutation, updateSessionTimeoutMutation } = useUserMutations({
@@ -92,16 +103,26 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // 2. Fail (network/parse) → BOŞ list + console.warn (UI "rol yüklenemedi"
   //    mesajı gösterebilir). Hardcoded fallback yalnız son çare olarak
   //    user.role'ü içerir (en azından mevcut atama görünür).
+  // Generic API list payload — Spring's Page<T> shape (`content`) or
+  // raw arrays (no envelope). Helper unwraps both into a typed item list.
+  type ListPayload<T> = T[] | { items?: T[]; content?: T[] };
+  const unwrapList = <T,>(data: unknown): T[] => {
+    if (Array.isArray(data)) return data as T[];
+    const envelope = data as { items?: T[]; content?: T[] } | null | undefined;
+    return envelope?.items ?? envelope?.content ?? [];
+  };
+
   const rolesQuery = useQuery({
     queryKey: ['roles-list'],
     queryFn: async () => {
       try {
         const res = await api.get('/v1/roles');
-        const data = res.data as any;
-        const items = data?.items ?? data?.content ?? data ?? [];
-        const parsed = (Array.isArray(items) ? items : [])
-          .map((r: any) => ({ id: r.id, name: r.name }))
-          .filter((r: any) => r.id != null && r.name) as RoleOption[];
+        const items = unwrapList<{ id?: number | string; name?: string }>(
+          res.data as ListPayload<unknown>,
+        );
+        const parsed = items
+          .map((r) => ({ id: r.id as number, name: r.name ?? '' }))
+          .filter((r) => r.id != null && r.name) as RoleOption[];
         if (parsed.length > 0) {
           return parsed;
         }
@@ -122,9 +143,15 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get(`/v1/authz/users/${user!.id}/roles`);
-        return (res.data as any[]).map((r: any) => r.roleId as number);
+        const rows = (res.data as Array<{ roleId: number }>) ?? [];
+        return rows.map((r) => r.roleId);
       } catch {
-        const fallbackRoleId = FALLBACK_ROLE_ID_BY_NAME[String(user?.role ?? '').trim().toUpperCase()];
+        const fallbackRoleId =
+          FALLBACK_ROLE_ID_BY_NAME[
+            String(user?.role ?? '')
+              .trim()
+              .toUpperCase()
+          ];
         return fallbackRoleId ? [fallbackRoleId] : [];
       }
     },
@@ -137,10 +164,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get('/v1/companies');
-        const data = res.data as any;
-        const items = data?.items ?? data?.content ?? data ?? [];
-        return (Array.isArray(items) ? items : []).map((c: any) => ({ id: c.id, name: c.name })) as ScopeEntity[];
-      } catch { return [] as ScopeEntity[]; }
+        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
+          (c) => ({ id: c.id, name: c.name }),
+        ) as ScopeEntity[];
+      } catch {
+        return [] as ScopeEntity[];
+      }
     },
     enabled: open,
     staleTime: 60_000,
@@ -150,10 +179,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get('/v1/projects');
-        const data = res.data as any;
-        const items = data?.items ?? data?.content ?? data ?? [];
-        return (Array.isArray(items) ? items : []).map((p: any) => ({ id: p.id, name: p.name })) as ScopeEntity[];
-      } catch { return [] as ScopeEntity[]; }
+        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
+          (p) => ({ id: p.id, name: p.name }),
+        ) as ScopeEntity[];
+      } catch {
+        return [] as ScopeEntity[];
+      }
     },
     enabled: open,
     staleTime: 60_000,
@@ -163,10 +194,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get('/v1/warehouses');
-        const data = res.data as any;
-        const items = data?.items ?? data?.content ?? data ?? [];
-        return (Array.isArray(items) ? items : []).map((w: any) => ({ id: w.id, name: w.name })) as ScopeEntity[];
-      } catch { return [] as ScopeEntity[]; }
+        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
+          (w) => ({ id: w.id, name: w.name }),
+        ) as ScopeEntity[];
+      } catch {
+        return [] as ScopeEntity[];
+      }
     },
     enabled: open,
     staleTime: 60_000,
@@ -176,10 +209,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get('/v1/branches');
-        const data = res.data as any;
-        const items = data?.items ?? data?.content ?? data ?? [];
-        return (Array.isArray(items) ? items : []).map((b: any) => ({ id: b.id, name: b.name })) as ScopeEntity[];
-      } catch { return [] as ScopeEntity[]; }
+        return unwrapList<{ id: number; name: string }>(res.data as ListPayload<unknown>).map(
+          (b) => ({ id: b.id, name: b.name }),
+        ) as ScopeEntity[];
+      } catch {
+        return [] as ScopeEntity[];
+      }
     },
     enabled: open,
     staleTime: 60_000,
@@ -191,12 +226,17 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get(`/v1/roles/users/${user!.id}/scopes`);
-        const data = res.data as any;
+        const data = res.data as {
+          companyIds?: number[];
+          projectIds?: number[];
+          warehouseIds?: number[];
+          branchIds?: number[];
+        } | null;
         return {
-          companyIds: (data?.companyIds ?? []) as number[],
-          projectIds: (data?.projectIds ?? []) as number[],
-          warehouseIds: (data?.warehouseIds ?? []) as number[],
-          branchIds: (data?.branchIds ?? []) as number[],
+          companyIds: data?.companyIds ?? [],
+          projectIds: data?.projectIds ?? [],
+          warehouseIds: data?.warehouseIds ?? [],
+          branchIds: data?.branchIds ?? [],
         };
       } catch {
         return { companyIds: [], projectIds: [], warehouseIds: [], branchIds: [] };
@@ -249,17 +289,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const handleSave = () => assignMutation.mutate();
 
   const toggleRole = (roleId: number) => {
-    setSelectedRoleIds(prev =>
-      prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]
+    setSelectedRoleIds((prev) =>
+      prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId],
     );
     setDirty(true);
   };
 
-  const toggleScope = (
-    setter: React.Dispatch<React.SetStateAction<number[]>>,
-    id: number,
-  ) => {
-    setter(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleScope = (setter: React.Dispatch<React.SetStateAction<number[]>>, id: number) => {
+    setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     setDirty(true);
   };
 
@@ -273,22 +310,37 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     }
     if (user.sessionTimeoutMinutes === nextValue) return;
     try {
-      await updateSessionTimeoutMutation.mutateAsync({ userId: user.id, sessionTimeoutMinutes: nextValue });
+      await updateSessionTimeoutMutation.mutateAsync({
+        userId: user.id,
+        sessionTimeoutMinutes: nextValue,
+      });
       pushToast('success', t('users.detail.sessionTimeout.updated'));
-    } catch { pushToast('error', t('users.detail.sessionTimeout.updateFailed')); }
+    } catch {
+      pushToast('error', t('users.detail.sessionTimeout.updateFailed'));
+    }
   };
 
   const formattedLastLogin = useMemo(() => {
     if (!user?.lastLoginAt) return t('shell.header.neverLoggedIn');
     try {
       const date = new Date(user.lastLoginAt);
-      const localeMap: Record<string, string> = { tr: 'tr-TR', en: 'en-US', de: 'de-DE', es: 'es-ES' };
+      const localeMap: Record<string, string> = {
+        tr: 'tr-TR',
+        en: 'en-US',
+        de: 'de-DE',
+        es: 'es-ES',
+      };
       return date.toLocaleString(localeMap[locale] ?? undefined);
-    } catch { return String(user?.lastLoginAt ?? ''); }
+    } catch {
+      return String(user?.lastLoginAt ?? '');
+    }
   }, [user?.lastLoginAt, locale, t]);
 
   const statusToneMap: Record<string, string> = {
-    ACTIVE: 'success', INACTIVE: 'default', INVITED: 'warning', SUSPENDED: 'error',
+    ACTIVE: 'success',
+    INACTIVE: 'default',
+    INVITED: 'warning',
+    SUSPENDED: 'error',
   };
 
   if (!user) return null;
@@ -299,14 +351,18 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const warehouses = warehousesQuery.data ?? [];
   const branches = branchesQuery.data ?? [];
 
-  const scopeCheckboxList = (items: ScopeEntity[], selected: number[], setter: React.Dispatch<React.SetStateAction<number[]>>) => {
-    const allSelected = items.length > 0 && items.every(i => selected.includes(i.id));
-    const noneSelected = items.every(i => !selected.includes(i.id));
+  const scopeCheckboxList = (
+    items: ScopeEntity[],
+    selected: number[],
+    setter: React.Dispatch<React.SetStateAction<number[]>>,
+  ) => {
+    const allSelected = items.length > 0 && items.every((i) => selected.includes(i.id));
+    const noneSelected = items.every((i) => !selected.includes(i.id));
     const toggleAll = () => {
       if (allSelected) {
         setter([]);
       } else {
-        setter(items.map(i => i.id));
+        setter(items.map((i) => i.id));
       }
       setDirty(true);
     };
@@ -321,7 +377,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             disabled={!canEdit}
           />
         )}
-        {items.map(item => (
+        {items.map((item) => (
           <Checkbox
             key={item.id}
             label={item.name}
@@ -335,10 +391,26 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   };
 
   const scopeTabs = [
-    { key: 'companies', label: t('users.detail.scopes.companies'), content: scopeCheckboxList(companies, selectedCompanyIds, setSelectedCompanyIds) },
-    { key: 'projects', label: t('users.detail.scopes.projects'), content: scopeCheckboxList(projects, selectedProjectIds, setSelectedProjectIds) },
-    { key: 'warehouses', label: t('users.detail.scopes.warehouses'), content: scopeCheckboxList(warehouses, selectedWarehouseIds, setSelectedWarehouseIds) },
-    { key: 'branches', label: t('users.detail.scopes.branches'), content: scopeCheckboxList(branches, selectedBranchIds, setSelectedBranchIds) },
+    {
+      key: 'companies',
+      label: t('users.detail.scopes.companies'),
+      content: scopeCheckboxList(companies, selectedCompanyIds, setSelectedCompanyIds),
+    },
+    {
+      key: 'projects',
+      label: t('users.detail.scopes.projects'),
+      content: scopeCheckboxList(projects, selectedProjectIds, setSelectedProjectIds),
+    },
+    {
+      key: 'warehouses',
+      label: t('users.detail.scopes.warehouses'),
+      content: scopeCheckboxList(warehouses, selectedWarehouseIds, setSelectedWarehouseIds),
+    },
+    {
+      key: 'branches',
+      label: t('users.detail.scopes.branches'),
+      content: scopeCheckboxList(branches, selectedBranchIds, setSelectedBranchIds),
+    },
   ];
 
   return (
@@ -348,7 +420,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       width={520}
       title={`${user.fullName}`}
       extra={
-        <button type="button" onClick={onClose} className="text-sm font-semibold text-text-secondary hover:text-text-primary">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm font-semibold text-text-secondary hover:text-text-primary"
+        >
           {t('shell.launcher.close')}
         </button>
       }
@@ -356,47 +432,82 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       <div className="flex flex-col gap-6">
         {/* Profile Section */}
         <section>
-          <h3 className="text-base font-semibold text-text-primary">{t('users.detail.section.profile')}</h3>
+          <h3 className="text-base font-semibold text-text-primary">
+            {t('users.detail.section.profile')}
+          </h3>
           <dl className="flex flex-col mt-3 gap-3 rounded-2xl border border-border-subtle bg-surface-muted p-4 text-sm">
             <div className="flex items-start justify-between gap-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">{t('users.grid.columns.email')}</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+                {t('users.grid.columns.email')}
+              </dt>
               <dd className="text-text-primary">{user.email}</dd>
             </div>
             <div className="flex items-start justify-between gap-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">{t('users.grid.columns.status')}</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+                {t('users.grid.columns.status')}
+              </dt>
               <dd className="flex items-center gap-3">
-                <span className={getBadgeClass(statusToneMap[user.status] ?? 'default')}>{user.status}</span>
+                <span className={getBadgeClass(statusToneMap[user.status] ?? 'default')}>
+                  {user.status}
+                </span>
                 {canEdit && (
                   <button
-                    type="button" role="switch" aria-checked={user.status === 'ACTIVE'}
+                    type="button"
+                    role="switch"
+                    aria-checked={user.status === 'ACTIVE'}
                     disabled={toggleStatusMutation.isPending}
                     onClick={async () => {
                       try {
                         const nextEnabled = user.status !== 'ACTIVE';
-                        await toggleStatusMutation.mutateAsync({ userId: user.id, enabled: nextEnabled });
+                        await toggleStatusMutation.mutateAsync({
+                          userId: user.id,
+                          enabled: nextEnabled,
+                        });
                         pushToast('success', t('users.actions.status.success'));
-                      } catch (e: unknown) { pushToast('error', (e as Error).message); }
+                      } catch (e: unknown) {
+                        pushToast('error', (e as Error).message);
+                      }
                     }}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${user.status === 'ACTIVE' ? 'bg-action-primary' : 'bg-border-subtle'}`}
                   >
-                    <span className="inline-block h-5 w-5 transform rounded-full bg-surface-default transition"
-                      style={{ transform: user.status === 'ACTIVE' ? 'translateX(20px)' : 'translateX(2px)' }} />
+                    <span
+                      className="inline-block h-5 w-5 transform rounded-full bg-surface-default transition"
+                      style={{
+                        transform:
+                          user.status === 'ACTIVE' ? 'translateX(20px)' : 'translateX(2px)',
+                      }}
+                    />
                   </button>
                 )}
               </dd>
             </div>
             <div className="flex items-start justify-between gap-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">{t('users.grid.columns.sessionTimeoutMinutes')}</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+                {t('users.grid.columns.sessionTimeoutMinutes')}
+              </dt>
               <dd>
                 {canEdit ? (
                   <div className="flex items-center gap-2">
-                    <input type="number" min={1} max={1440} value={sessionTimeoutMinutes}
-                      onChange={e => setSessionTimeoutMinutes(Number(e.target.value))}
-                      className="w-20 rounded-xl border border-border-subtle px-3 py-1.5 text-sm" />
-                    <button type="button" onClick={handleSessionTimeoutSave}
-                      disabled={updateSessionTimeoutMutation.isPending || sessionTimeoutMinutes === (user.sessionTimeoutMinutes ?? 15)}
-                      className="rounded-xl bg-action-primary px-3 py-1.5 text-xs font-semibold text-action-primary-text disabled:opacity-50">
-                      {updateSessionTimeoutMutation.isPending ? '...' : t('users.detail.sessionTimeout.save')}
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      value={sessionTimeoutMinutes}
+                      onChange={(e) => setSessionTimeoutMinutes(Number(e.target.value))}
+                      className="w-20 rounded-xl border border-border-subtle px-3 py-1.5 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSessionTimeoutSave}
+                      disabled={
+                        updateSessionTimeoutMutation.isPending ||
+                        sessionTimeoutMinutes === (user.sessionTimeoutMinutes ?? 15)
+                      }
+                      className="rounded-xl bg-action-primary px-3 py-1.5 text-xs font-semibold text-action-primary-text disabled:opacity-50"
+                    >
+                      {updateSessionTimeoutMutation.isPending
+                        ? '...'
+                        : t('users.detail.sessionTimeout.save')}
                     </button>
                   </div>
                 ) : (
@@ -405,7 +516,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
               </dd>
             </div>
             <div className="flex items-start justify-between gap-4">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">{t('users.grid.columns.lastLoginAt')}</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-text-subtle">
+                {t('users.grid.columns.lastLoginAt')}
+              </dt>
               <dd className="text-text-secondary">{formattedLastLogin}</dd>
             </div>
           </dl>
@@ -415,11 +528,17 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
 
         {/* Roles Section — Multi-select checkboxes */}
         <section>
-          <h3 className="text-base font-semibold text-text-primary">{t('users.detail.section.roles')}</h3>
-          <p className="text-xs text-text-subtle mt-1">{t('users.detail.section.roles.description')}</p>
+          <h3 className="text-base font-semibold text-text-primary">
+            {t('users.detail.section.roles')}
+          </h3>
+          <p className="text-xs text-text-subtle mt-1">
+            {t('users.detail.section.roles.description')}
+          </p>
           <div className="mt-3 flex flex-col gap-2">
-            {rolesQuery.isLoading && <span className="text-xs text-text-subtle">{t('users.detail.loadingRoles')}</span>}
-            {roles.map(role => (
+            {rolesQuery.isLoading && (
+              <span className="text-xs text-text-subtle">{t('users.detail.loadingRoles')}</span>
+            )}
+            {roles.map((role) => (
               <Checkbox
                 key={role.id}
                 label={role.name}
@@ -432,7 +551,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
               <span className="text-xs text-text-subtle">{t('users.detail.noRolesDefined')}</span>
             )}
             {dirty && selectedRoleIds.length === 0 && (
-              <span className="text-xs text-state-danger-text">{t('users.detail.noRolesWarning')}</span>
+              <span className="text-xs text-state-danger-text">
+                {t('users.detail.noRolesWarning')}
+              </span>
             )}
           </div>
         </section>
@@ -441,8 +562,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
 
         {/* Scope Section — Tabbed */}
         <section>
-          <h3 className="text-base font-semibold text-text-primary">{t('users.detail.section.scopes')}</h3>
-          <p className="text-xs text-text-subtle mt-1">{t('users.detail.section.scopes.description')}</p>
+          <h3 className="text-base font-semibold text-text-primary">
+            {t('users.detail.section.scopes')}
+          </h3>
+          <p className="text-xs text-text-subtle mt-1">
+            {t('users.detail.section.scopes.description')}
+          </p>
           <div className="mt-3">
             <Tabs items={scopeTabs} variant="line" size="sm" />
           </div>
@@ -453,13 +578,19 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         {/* Footer — Save */}
         {canEdit && (
           <div className="flex items-center justify-end gap-3">
-            <button type="button" onClick={onClose}
-              className="rounded-xl border border-border-subtle px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-muted">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-border-subtle px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-muted"
+            >
               {t('users.detail.cancel')}
             </button>
-            <button type="button" onClick={handleSave}
+            <button
+              type="button"
+              onClick={handleSave}
               disabled={!dirty || assignMutation.isPending || selectedRoleIds.length === 0}
-              className="rounded-xl bg-action-primary px-4 py-2 text-sm font-semibold text-action-primary-text shadow-xs hover:opacity-90 disabled:opacity-50">
+              className="rounded-xl bg-action-primary px-4 py-2 text-sm font-semibold text-action-primary-text shadow-xs hover:opacity-90 disabled:opacity-50"
+            >
               {assignMutation.isPending ? t('users.detail.saving') : t('users.detail.save')}
             </button>
           </div>

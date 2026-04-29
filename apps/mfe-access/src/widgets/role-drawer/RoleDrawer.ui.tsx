@@ -1,10 +1,17 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Autocomplete, Badge, Button, Checkbox, DetailDrawer, Select, Switch, TextInput } from '@mfe/design-system';
+import {
+  Alert,
+  Autocomplete,
+  Badge,
+  Button,
+  Checkbox,
+  DetailDrawer,
+  TextInput,
+} from '@mfe/design-system';
 import type { AutocompleteOption } from '@mfe/design-system';
 import { usePermissions, useZanzibarAccess } from '@mfe/auth';
 import type { AccessRole, AccessLevel } from '../../features/access-management/model/access.types';
-import { getPermissions } from '../../entities/permissions/api/permissions.api';
 import { api } from '@mfe/shared-http';
 import { pushToast } from '../../shared/notifications';
 import { ExplainPermissionModal } from '../explain-modal/ExplainPermissionModal';
@@ -14,26 +21,57 @@ interface RoleDrawerProps {
   mode: 'view' | 'create';
   role: AccessRole | null;
   onClose: () => void;
+  /** Reserved API hook (legacy onSave handler — replaced by saveGranulesMutation). */
   onSavePermissions?: (roleId: string, permissionIds: string[]) => Promise<void>;
   onCreateRole?: (values: { name: string; description?: string }) => Promise<void>;
+  /** Reserved API hook (legacy loading flag — saveGranulesMutation.isPending replaces). */
   savingPermissions?: boolean;
   creatingRole?: boolean;
   t: (key: string, params?: Record<string, unknown>) => string;
   formatNumber: (value: number) => string;
+  /** Reserved formatter prop — unused after explain-modal carved out date rendering. */
   formatDate: (value: Date | number, options?: Intl.DateTimeFormatOptions) => string;
 }
 
 // --- Types for permission catalog ---
-interface CatalogModule { key: string; label: string; levels: string[]; }
-interface CatalogAction { key: string; label: string; module: string; deniable: boolean; }
-interface CatalogReport { key: string; label: string; module: string; }
-interface CatalogPage { key: string; label: string; module: string; }
-interface Catalog { modules: CatalogModule[]; actions: CatalogAction[]; reports: CatalogReport[]; pages: CatalogPage[]; }
-interface RoleMember { userId: number; assignedAt?: string; }
-interface Granule { type: string; key: string; grant: string; }
+interface CatalogModule {
+  key: string;
+  label: string;
+  levels: string[];
+}
+interface CatalogAction {
+  key: string;
+  label: string;
+  module: string;
+  deniable: boolean;
+}
+interface CatalogReport {
+  key: string;
+  label: string;
+  module: string;
+}
+interface CatalogPage {
+  key: string;
+  label: string;
+  module: string;
+}
+interface Catalog {
+  modules: CatalogModule[];
+  actions: CatalogAction[];
+  reports: CatalogReport[];
+  pages: CatalogPage[];
+}
+interface RoleMember {
+  userId: number;
+  assignedAt?: string;
+}
+interface Granule {
+  type: string;
+  key: string;
+  grant: string;
+}
 
 const LEVEL_OPTIONS: AccessLevel[] = ['NONE', 'VIEW', 'MANAGE'];
-const levelVariant: Record<string, 'info' | 'warning' | 'error' | 'muted'> = { VIEW: 'info', MANAGE: 'error', NONE: 'muted' };
 
 const isPersistedRoleId = (value: string | undefined) => /^\d+$/.test(String(value ?? ''));
 
@@ -49,8 +87,14 @@ const buildFallbackCatalog = (role: AccessRole | null): Catalog => ({
 });
 
 const RoleDrawer: React.FC<RoleDrawerProps> = ({
-  open, mode, role, onClose, onSavePermissions, onCreateRole,
-  savingPermissions, creatingRole, t, formatNumber, formatDate,
+  open,
+  mode,
+  role,
+  onClose,
+  onCreateRole,
+  creatingRole,
+  t,
+  formatNumber,
 }) => {
   const queryClient = useQueryClient();
   const [createName, setCreateName] = React.useState('');
@@ -66,8 +110,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
   // Current user for the explain call (admin debugging own permission set; STORY-0318 §6).
   const { authz } = usePermissions();
-  const currentUserId =
-    (authz as { userId?: string | number } | null | undefined)?.userId ?? null;
+  const currentUserId = (authz as { userId?: string | number } | null | undefined)?.userId ?? null;
 
   // Stable httpPost reference — ExplainPermissionModal (now from @mfe/auth)
   // takes httpPost as a prop. Inline arrow would recreate explain() identity
@@ -126,7 +169,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   const [reportGrants, setReportGrants] = React.useState<Record<string, string>>({});
   const [pageGrants, setPageGrants] = React.useState<Record<string, string>>({});
   const [dirty, setDirty] = React.useState(false);
-  const [selectedUser, setSelectedUser] = React.useState<AutocompleteOption | null>(null);
+  const [, setSelectedUser] = React.useState<AutocompleteOption | null>(null);
   const [userSearchOptions, setUserSearchOptions] = React.useState<AutocompleteOption[]>([]);
   const [userSearchLoading, setUserSearchLoading] = React.useState(false);
   // Raw input text for the user search Autocomplete, kept separate from
@@ -142,7 +185,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     queryFn: async () => {
       if (!isPersistedRoleId(role?.id)) return null;
       const res = await api.get(`/v1/roles/${role!.id}`);
-      const data = res.data as any;
+      const data = res.data as { policies?: unknown[]; permissions?: unknown[] };
       return (data?.policies ?? data?.permissions ?? []) as Granule[];
     },
     enabled: open && mode === 'view' && !!role && isPersistedRoleId(role?.id),
@@ -179,17 +222,28 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     if (granules && granules.length > 0) {
       for (const g of granules) {
         const gAny = g as {
-          type?: string; key?: string; grant?: string;
-          moduleKey?: string; level?: string;
+          type?: string;
+          key?: string;
+          grant?: string;
+          moduleKey?: string;
+          level?: string;
         };
         if (gAny.type) {
           // Typed granule shape (type/key/grant)
           dataConsumed = true;
           switch (gAny.type.toUpperCase()) {
-            case 'MODULE': if (gAny.key) mods[gAny.key] = gAny.grant ?? 'NONE'; break;
-            case 'ACTION': if (gAny.key) acts[gAny.key] = gAny.grant ?? 'ALLOW'; break;
-            case 'REPORT': if (gAny.key) reps[gAny.key] = gAny.grant ?? 'VIEW'; break;
-            case 'PAGE':   if (gAny.key) pgs[gAny.key]  = gAny.grant ?? 'ALLOW'; break;
+            case 'MODULE':
+              if (gAny.key) mods[gAny.key] = gAny.grant ?? 'NONE';
+              break;
+            case 'ACTION':
+              if (gAny.key) acts[gAny.key] = gAny.grant ?? 'ALLOW';
+              break;
+            case 'REPORT':
+              if (gAny.key) reps[gAny.key] = gAny.grant ?? 'VIEW';
+              break;
+            case 'PAGE':
+              if (gAny.key) pgs[gAny.key] = gAny.grant ?? 'ALLOW';
+              break;
           }
         } else if (gAny.moduleKey && gAny.level) {
           // Legacy policy shape (AccessModulePolicyDto): module + level only
@@ -219,16 +273,21 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // onSearch by 250ms (design-system/Autocomplete.tsx:188), so no extra debounce
   // here. Queries shorter than 3 chars clear the dropdown.
   const handleUserSearch = React.useCallback(async (query: string) => {
-    if (query.length < 3) { setUserSearchOptions([]); return; }
+    if (query.length < 3) {
+      setUserSearchOptions([]);
+      return;
+    }
     setUserSearchLoading(true);
     try {
       const res = await api.get('/v1/users', { params: { search: query, pageSize: 10 } });
       const items = res.data?.items ?? res.data?.content ?? [];
       setUserSearchOptions(
-        items.map((u: { id: string | number; fullName?: string; name?: string; email?: string }) => ({
-          value: String(u.id),
-          label: `${u.fullName ?? u.name ?? ''} (${u.email ?? ''})`.trim(),
-        })),
+        items.map(
+          (u: { id: string | number; fullName?: string; name?: string; email?: string }) => ({
+            value: String(u.id),
+            label: `${u.fullName ?? u.name ?? ''} (${u.email ?? ''})`.trim(),
+          }),
+        ),
       );
     } catch {
       setUserSearchOptions([]);
@@ -301,7 +360,10 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
   // Reset on mode change
   React.useEffect(() => {
-    if (mode === 'create') { setCreateName(''); setCreateDesc(''); }
+    if (mode === 'create') {
+      setCreateName('');
+      setCreateDesc('');
+    }
   }, [mode, open]);
 
   const handleCreate = async () => {
@@ -314,13 +376,32 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     return (
       <DetailDrawer open={open} onClose={onClose} title={t('access.create.title')} size="lg">
         <div className="flex flex-col gap-5 p-1">
-          <TextInput label={t('access.create.nameLabel')} placeholder={t('access.create.namePlaceholder')}
-            value={createName} onValueChange={setCreateName} autoFocus fullWidth />
-          <TextInput label={t('access.create.descriptionLabel')} placeholder={t('access.create.descriptionPlaceholder')}
-            value={createDesc} onValueChange={setCreateDesc} fullWidth />
+          <TextInput
+            label={t('access.create.nameLabel')}
+            placeholder={t('access.create.namePlaceholder')}
+            value={createName}
+            onValueChange={setCreateName}
+            autoFocus
+            fullWidth
+          />
+          <TextInput
+            label={t('access.create.descriptionLabel')}
+            placeholder={t('access.create.descriptionPlaceholder')}
+            value={createDesc}
+            onValueChange={setCreateDesc}
+            fullWidth
+          />
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={onClose}>{t('access.clone.cancelText')}</Button>
-            <Button onClick={handleCreate} loading={creatingRole} disabled={createName.trim().length < 3}>{t('access.create.submitText')}</Button>
+            <Button variant="secondary" onClick={onClose}>
+              {t('access.clone.cancelText')}
+            </Button>
+            <Button
+              onClick={handleCreate}
+              loading={creatingRole}
+              disabled={createName.trim().length < 3}
+            >
+              {t('access.create.submitText')}
+            </Button>
           </div>
         </div>
       </DetailDrawer>
@@ -332,9 +413,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // Codex Tur 15 verdict: persisted role → backend catalog zorunlu, fallback yok.
   // non-persisted (new role create) akışında fallback `role.policies` kullanılabilir.
   const persistedRole = isPersistedRoleId(role?.id);
-  const catalog = persistedRole
-    ? (catalogQuery.data ?? null)
-    : buildFallbackCatalog(role);
+  const catalog = persistedRole ? (catalogQuery.data ?? null) : buildFallbackCatalog(role);
   const members = membersQuery.data ?? [];
 
   // Persisted role + catalog henüz yüklenmedi (veya hata): loading/error state
@@ -350,7 +429,10 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       >
         <div className="flex flex-col gap-3 py-6">
           {catalogQuery.isError ? (
-            <Alert variant="error" title={t('access.drawer.catalogErrorTitle') || 'Katalog yüklenemedi'}>
+            <Alert
+              variant="error"
+              title={t('access.drawer.catalogErrorTitle') || 'Katalog yüklenemedi'}
+            >
               {String(catalogQuery.error ?? 'Unknown error')}
             </Alert>
           ) : (
@@ -365,14 +447,18 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
   // --- Helpers ---
   const setModule = (key: string, level: string) => {
-    setModuleGrants(prev => ({ ...prev, [key]: level }));
+    setModuleGrants((prev) => ({ ...prev, [key]: level }));
     setDirty(true);
   };
 
   const toggleAction = (key: string, grant: 'ALLOW' | 'DENY') => {
-    setActionGrants(prev => {
+    setActionGrants((prev) => {
       const current = prev[key];
-      if (current === grant) { const next = { ...prev }; delete next[key]; return next; }
+      if (current === grant) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
       return { ...prev, [key]: grant };
     });
     setDirty(true);
@@ -385,7 +471,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   //   MANAGE → tam yetki
   // Eski toggleReport (ALLOW toggle) yerine setReportLevel(key, level).
   const setReportLevel = (key: string, level: 'NONE' | 'VIEW' | 'MANAGE') => {
-    setReportGrants(prev => {
+    setReportGrants((prev) => {
       if (level === 'NONE') {
         const next = { ...prev };
         delete next[key];
@@ -396,17 +482,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setDirty(true);
   };
 
-  const toggleReport = (key: string) => {
-    setReportGrants(prev => {
-      if (prev[key]) { const next = { ...prev }; delete next[key]; return next; }
-      return { ...prev, [key]: 'ALLOW' };
-    });
-    setDirty(true);
-  };
-
   const togglePage = (key: string) => {
-    setPageGrants(prev => {
-      if (prev[key]) { const next = { ...prev }; delete next[key]; return next; }
+    setPageGrants((prev) => {
+      if (prev[key]) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
       return { ...prev, [key]: 'ALLOW' };
     });
     setDirty(true);
@@ -414,28 +496,47 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
   return (
     <DetailDrawer
-      open={open} onClose={onClose} title={role.name}
+      open={open}
+      onClose={onClose}
+      title={role.name}
       subtitle={role.description || t('access.drawer.noDescription')}
       tags={
         <div className="flex gap-2">
-          {role.isSystemRole && <Badge variant="default" size="sm">{t('access.drawer.systemRole')}</Badge>}
-          <Badge variant="info" size="sm">{formatNumber(role.memberCount)} {t('access.drawer.members')}</Badge>
-          {dirty && <Badge variant="warning" size="sm">{t('access.drawer.unsavedChanges')}</Badge>}
+          {role.isSystemRole && (
+            <Badge variant="default" size="sm">
+              {t('access.drawer.systemRole')}
+            </Badge>
+          )}
+          <Badge variant="info" size="sm">
+            {formatNumber(role.memberCount)} {t('access.drawer.members')}
+          </Badge>
+          {dirty && (
+            <Badge variant="warning" size="sm">
+              {t('access.drawer.unsavedChanges')}
+            </Badge>
+          )}
         </div>
       }
       size="lg"
     >
       <div className="flex flex-col gap-5">
         {/* --- MODÜLLER --- */}
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">{t('access.drawer.modulesTitle')}</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
+          {t('access.drawer.modulesTitle')}
+        </h3>
         <div className="flex flex-col gap-2">
-          {(catalog?.modules ?? []).map(mod => (
-            <div key={mod.key} className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-3">
+          {(catalog?.modules ?? []).map((mod) => (
+            <div
+              key={mod.key}
+              className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-3"
+            >
               <span className="text-sm font-medium text-text-primary">{mod.label}</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setExplainTarget({ type: 'MODULE', key: mod.key, label: mod.label })}
+                  onClick={() =>
+                    setExplainTarget({ type: 'MODULE', key: mod.key, label: mod.label })
+                  }
                   aria-label={t('access.explainModal.triggerAria', { label: mod.label })}
                   title={t('access.explainModal.triggerTitle')}
                   data-testid={`explain-trigger-module-${mod.key}`}
@@ -446,10 +547,16 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                 <select
                   className="rounded-lg border border-border-subtle bg-surface-default px-3 py-1.5 text-sm"
                   value={moduleGrants[mod.key] ?? 'NONE'}
-                  onChange={e => setModule(mod.key, e.target.value)}
+                  onChange={(e) => setModule(mod.key, e.target.value)}
                 >
-                  {LEVEL_OPTIONS.map(level => (
-                    <option key={level} value={level}>{level === 'NONE' ? '—' : level === 'VIEW' ? t('access.drawer.levelView') : t('access.drawer.levelManage')}</option>
+                  {LEVEL_OPTIONS.map((level) => (
+                    <option key={level} value={level}>
+                      {level === 'NONE'
+                        ? '—'
+                        : level === 'VIEW'
+                          ? t('access.drawer.levelView')
+                          : t('access.drawer.levelManage')}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -460,14 +567,19 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         <hr className="border-border-subtle" />
 
         {/* --- AKSİYONLAR --- */}
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">{t('access.drawer.actionsTitle')}</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
+          {t('access.drawer.actionsTitle')}
+        </h3>
         <div className="flex flex-col gap-2">
-          {(catalog?.actions ?? []).map(action => {
+          {(catalog?.actions ?? []).map((action) => {
             const grant = actionGrants[action.key];
             const isAllow = grant === 'ALLOW';
             const isDeny = grant === 'DENY';
             return (
-              <div key={action.key} className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2">
+              <div
+                key={action.key}
+                className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2"
+              >
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-text-primary">{action.label}</span>
                   <span className="text-xs text-text-subtle">{action.module}</span>
@@ -475,7 +587,9 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => setExplainTarget({ type: 'ACTION', key: action.key, label: action.label })}
+                    onClick={() =>
+                      setExplainTarget({ type: 'ACTION', key: action.key, label: action.label })
+                    }
                     aria-label={t('access.explainModal.triggerAria', { label: action.label })}
                     title={t('access.explainModal.triggerTitle')}
                     data-testid={`explain-trigger-action-${action.key}`}
@@ -483,7 +597,12 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                   >
                     ?
                   </button>
-                  <Checkbox label={t('access.drawer.allowLabel')} checked={isAllow} onChange={() => toggleAction(action.key, 'ALLOW')} size="sm" />
+                  <Checkbox
+                    label={t('access.drawer.allowLabel')}
+                    checked={isAllow}
+                    onChange={() => toggleAction(action.key, 'ALLOW')}
+                    size="sm"
+                  />
                   {action.deniable && (
                     <Checkbox
                       label={t('access.drawer.denyLabel')}
@@ -507,7 +626,9 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
             modül başlığı altında raporlar grouplu, her birine NONE/VIEW/MANAGE
             select. Mevcut catalog?.reports zaten {key,label,module}; reportGrants
             level value'su 'VIEW'|'MANAGE'|undefined. */}
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">{t('access.drawer.reportsTitle')}</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
+          {t('access.drawer.reportsTitle')}
+        </h3>
         <div className="flex flex-col gap-3">
           {(() => {
             // Group reports by module key (preserves catalog ordering)
@@ -519,8 +640,9 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
             }
             return Array.from(grouped.entries()).map(([moduleKey, reports]) => {
               // Modül label catalog.modules'tan (varsa) — fallback raw key
-              const moduleLabel = catalog?.modules?.find(m => m.key === moduleKey)?.label ?? moduleKey;
-              const activeCount = reports.filter(r => !!reportGrants[r.key]).length;
+              const moduleLabel =
+                catalog?.modules?.find((m) => m.key === moduleKey)?.label ?? moduleKey;
+              const activeCount = reports.filter((r) => !!reportGrants[r.key]).length;
               return (
                 <details
                   key={moduleKey}
@@ -535,19 +657,24 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                     </span>
                     <span className="text-xs text-text-subtle">
                       {activeCount > 0
-                        ? t('access.drawer.reportsActiveCount', { active: activeCount, total: reports.length })
+                        ? t('access.drawer.reportsActiveCount', {
+                            active: activeCount,
+                            total: reports.length,
+                          })
                         : t('access.drawer.reportsTotal', { total: reports.length })}
                     </span>
                   </summary>
                   <div className="flex flex-col gap-1 px-4 py-2">
-                    {reports.map(report => {
-                      const currentLevel = (reportGrants[report.key] === 'MANAGE'
-                        ? 'MANAGE'
-                        : reportGrants[report.key] === 'VIEW'
-                          ? 'VIEW'
-                          : reportGrants[report.key]
-                            ? 'VIEW' // legacy 'ALLOW' default → VIEW
-                            : 'NONE') as 'NONE' | 'VIEW' | 'MANAGE';
+                    {reports.map((report) => {
+                      const currentLevel = (
+                        reportGrants[report.key] === 'MANAGE'
+                          ? 'MANAGE'
+                          : reportGrants[report.key] === 'VIEW'
+                            ? 'VIEW'
+                            : reportGrants[report.key]
+                              ? 'VIEW' // legacy 'ALLOW' default → VIEW
+                              : 'NONE'
+                      ) as 'NONE' | 'VIEW' | 'MANAGE';
                       return (
                         <div
                           key={report.key}
@@ -556,7 +683,12 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                           <span className="flex-1 text-sm">{report.label}</span>
                           <select
                             value={currentLevel}
-                            onChange={(e) => setReportLevel(report.key, e.target.value as 'NONE' | 'VIEW' | 'MANAGE')}
+                            onChange={(e) =>
+                              setReportLevel(
+                                report.key,
+                                e.target.value as 'NONE' | 'VIEW' | 'MANAGE',
+                              )
+                            }
                             className="rounded border border-border-subtle bg-surface-muted px-2 py-0.5 text-xs"
                             data-testid={`report-level-${report.key}`}
                           >
@@ -566,8 +698,16 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                           </select>
                           <button
                             type="button"
-                            onClick={() => setExplainTarget({ type: 'REPORT', key: report.key, label: report.label })}
-                            aria-label={t('access.explainModal.triggerAria', { label: report.label })}
+                            onClick={() =>
+                              setExplainTarget({
+                                type: 'REPORT',
+                                key: report.key,
+                                label: report.label,
+                              })
+                            }
+                            aria-label={t('access.explainModal.triggerAria', {
+                              label: report.label,
+                            })}
                             title={t('access.explainModal.triggerTitle')}
                             data-testid={`explain-trigger-report-${report.key}`}
                             className="flex h-6 w-6 items-center justify-center rounded-full border border-border-subtle text-xs text-text-subtle hover:bg-surface-default hover:text-text-primary"
@@ -589,13 +729,19 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         {/* --- SAYFALAR (only rendered when catalog has pages) --- */}
         {(catalog?.pages ?? []).length > 0 && (
           <>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">{t('access.drawer.pagesTitle')}</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
+              {t('access.drawer.pagesTitle')}
+            </h3>
             <div className="flex flex-col gap-2">
-              {catalog!.pages.map(page => (
-                <Checkbox key={page.key} label={page.label}
+              {catalog!.pages.map((page) => (
+                <Checkbox
+                  key={page.key}
+                  label={page.label}
                   checked={!!pageGrants[page.key]}
-                  onChange={() => togglePage(page.key)} size="sm"
-                  description={page.module} />
+                  onChange={() => togglePage(page.key)}
+                  size="sm"
+                  description={page.module}
+                />
               ))}
             </div>
             <hr className="border-border-subtle" />
@@ -607,18 +753,34 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
           {t('access.drawer.membersTitle')} ({members.length})
         </h3>
         <div className="flex flex-col gap-2">
-          {members.map(member => (
-            <div key={member.userId} className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2">
+          {members.map((member) => (
+            <div
+              key={member.userId}
+              className="flex items-center justify-between rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-2"
+            >
               <span className="text-sm text-text-primary">Kullanıcı #{member.userId}</span>
-              <button type="button" onClick={() => {
-                  if (confirm(t('access.notifications.memberRemoveConfirm', { userName: `#${member.userId}` }))) {
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(
+                      t('access.notifications.memberRemoveConfirm', {
+                        userName: `#${member.userId}`,
+                      }),
+                    )
+                  ) {
                     removeMemberMutation.mutate(member.userId);
                   }
                 }}
-                className="text-xs text-state-danger-text hover:underline">Kaldır</button>
+                className="text-xs text-state-danger-text hover:underline"
+              >
+                Kaldır
+              </button>
             </div>
           ))}
-          {members.length === 0 && <p className="text-xs text-text-subtle">Henüz atanmış kişi yok.</p>}
+          {members.length === 0 && (
+            <p className="text-xs text-text-subtle">Henüz atanmış kişi yok.</p>
+          )}
 
           {/* Kişi ekle — P1.7: auto-add on selection, no button.
               Autocomplete.onChange fires on BOTH typing and explicit selection
@@ -635,12 +797,12 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
               value={userSearchValue}
               onChange={(val) => {
                 setUserSearchValue(val);
-                const matched = userSearchOptions.find(o => o.value === val);
+                const matched = userSearchOptions.find((o) => o.value === val);
                 setSelectedUser(matched ?? null);
-                if (!matched) return;                          // typing in progress
-                if (addMemberMutation.isPending) return;        // previous add still running
+                if (!matched) return; // typing in progress
+                if (addMemberMutation.isPending) return; // previous add still running
                 const userId = Number(matched.value);
-                if (members.some(m => m.userId === userId)) {
+                if (members.some((m) => m.userId === userId)) {
                   pushToast(
                     'warning',
                     t('access.notifications.memberAlreadyExists', { userName: matched.label }),
@@ -661,7 +823,9 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
         {/* --- FOOTER --- */}
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose}>{t('access.clone.cancelText')}</Button>
+          <Button variant="secondary" onClick={onClose}>
+            {t('access.clone.cancelText')}
+          </Button>
           <Button
             onClick={() => saveGranulesMutation.mutate()}
             loading={saveGranulesMutation.isPending}
