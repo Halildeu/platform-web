@@ -178,7 +178,7 @@ describe('Popover — arrow', () => {
 
 describe('Popover — access control', () => {
   it('access="hidden" iken render etmez', () => {
-    const { container: _container } = render(
+    const { container } = render(
       <Popover trigger={<button>Open</button>} content="Content" access="hidden" disablePortal />,
     );
     expect(container.innerHTML).toBe('');
@@ -236,7 +236,7 @@ describe('Popover — a11y', () => {
 
 describe('Popover — edge cases', () => {
   it('className forwarding calisir', () => {
-    const { container: _container } = render(
+    const { container } = render(
       <Popover
         trigger={<button>Open</button>}
         content="Content"
@@ -395,7 +395,7 @@ describe('Popover — overlay-engine integration', () => {
 
 describe('Popover — a11y', () => {
   it('has no axe violations', async () => {
-    const { container: _container } = render(
+    const { container } = render(
       <Popover trigger={<button>Open</button>} content="Popover content" open disablePortal />,
     );
     await expectNoA11yViolations(container);
@@ -408,7 +408,7 @@ describe('Popover — a11y', () => {
 
 describe('Popover — quality signals', () => {
   it('handles keyboard and focus events via fireEvent', () => {
-    const { container: _container } = render(
+    const { container } = render(
       <div role="textbox" tabIndex={0} data-testid="focusable">
         Content
       </div>,

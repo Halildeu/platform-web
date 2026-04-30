@@ -11,6 +11,9 @@ import {
 // useFocusTrap covers autoFocus + restoreFocus + Tab/Shift+Tab
 // wrap-around. Replaces useFocusRestore + manual panel.focus().
 import { useFocusTrap } from '../../internal/overlay-engine/focus-trap';
+// Codex 019dde4e iter-47a — sibling isolation symmetric with
+// FormDrawer + DetailDrawer iter-47a.
+import { useSiblingIsolation } from '../../internal/overlay-engine/sibling-isolation';
 import { cn } from '../../utils/cn';
 
 /* ------------------------------------------------------------------ */
@@ -138,6 +141,13 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
     const descriptionId = useId();
 
     const isHorizontal = placement === 'left' || placement === 'right';
+
+    /* ---- overlay-engine: sibling isolation (iter-47a) ---- */
+    useSiblingIsolation({
+      active: open && !disableFocusTrap,
+      layerId,
+      panelRef,
+    });
 
     /* ---- overlay-engine: scroll lock ---- */
     useScrollLock(open);

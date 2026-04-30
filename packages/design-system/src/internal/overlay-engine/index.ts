@@ -27,14 +27,14 @@ export {
   type OverlaySide,
   type OverlayAlign,
   type OverlayPosition,
-} from "../OverlayPositioning";
+} from '../OverlayPositioning';
 
 export {
   OverlaySurface,
   premiumOverlayPanelClassName,
   premiumOverlayCloseButtonClassName,
   type OverlayCloseReason,
-} from "../OverlaySurface";
+} from '../OverlaySurface';
 
 // Layer Stack — z-index management
 export {
@@ -46,7 +46,7 @@ export {
   resetLayerStack,
   Z_INDEX_BASE,
   type ZIndexLayer,
-} from "./layer-stack";
+} from './layer-stack';
 
 // Focus Trap — keyboard focus containment
 export {
@@ -54,7 +54,7 @@ export {
   FocusTrap,
   type UseFocusTrapOptions,
   type FocusTrapProps,
-} from "./focus-trap";
+} from './focus-trap';
 
 // Scroll Lock — body scroll prevention
 export {
@@ -63,22 +63,13 @@ export {
   unlockScroll,
   getScrollLockCount,
   resetScrollLock,
-} from "./scroll-lock";
+} from './scroll-lock';
 
 // Outside Click — click-away detection
-export {
-  useOutsideClick,
-  useEscapeKey,
-  type UseOutsideClickOptions,
-} from "./outside-click";
+export { useOutsideClick, useEscapeKey, type UseOutsideClickOptions } from './outside-click';
 
 // ARIA Live — screen reader announcements
-export {
-  announce,
-  useAnnounce,
-  AriaLiveRegion,
-  type AriaLivePoliteness,
-} from "./aria-live";
+export { announce, useAnnounce, AriaLiveRegion, type AriaLivePoliteness } from './aria-live';
 
 // Roving Tabindex — keyboard navigation in groups
 export {
@@ -86,29 +77,31 @@ export {
   type UseRovingTabindexOptions,
   type RovingTabindexReturn,
   type RovingDirection,
-} from "./roving-tabindex";
+} from './roving-tabindex';
 
 // Portal — React portal wrapper (legacy)
-export {
-  Portal,
-  usePortal as useLegacyPortal,
-  type PortalProps,
-} from "./portal";
+export { Portal, usePortal as useLegacyPortal, type PortalProps } from './portal';
 
 // Portal — Standardized portal hook (new)
-export {
-  usePortal,
-  type UsePortalOptions,
-} from "./usePortal";
+export { usePortal, type UsePortalOptions } from './usePortal';
 
 // Portal Provider — Global portal configuration
-export {
-  PortalProvider,
-  usePortalConfig,
-} from "./PortalProvider";
+export { PortalProvider, usePortalConfig } from './PortalProvider';
 
 // Focus Restore — save/restore focus for overlays
-export { useFocusRestore } from "./useFocusRestore";
+export { useFocusRestore } from './useFocusRestore';
+
+// Sibling Isolation — inert background siblings while overlay is open
+// Codex 019dde4e iter-47a — engine helpers + React hook with WeakMap
+// ref-count + root-level containing-subtree exclusion. Sibling
+// isolation makes screen readers and Tab order treat the rest of the
+// page as background while a modal-style overlay is open.
+export {
+  acquireSiblingIsolation,
+  releaseSiblingIsolation,
+  useSiblingIsolation,
+  type SiblingIsolationRecord,
+} from './sibling-isolation';
 
 // Reduced Motion — motion preference
 export {
@@ -116,4 +109,4 @@ export {
   prefersReducedMotion,
   motionDuration,
   REDUCED_MOTION_CLASS,
-} from "./reduced-motion";
+} from './reduced-motion';

@@ -66,7 +66,7 @@ describe('Drawer — basic render', () => {
   });
 
   it('does not render footer section when footer is not provided', () => {
-    const { container: _container } = render(
+    const { container } = render(
       <Drawer open onClose={vi.fn()}>
         <p>Body</p>
       </Drawer>,
@@ -483,7 +483,7 @@ describe('Drawer — edge cases', () => {
 
 describe('Drawer — a11y', () => {
   it('has no axe violations', async () => {
-    const { container: _container } = render(
+    const { container } = render(
       <Drawer open onClose={vi.fn()} title="Test Drawer">
         <p>Drawer content</p>
       </Drawer>,

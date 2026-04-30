@@ -12,6 +12,8 @@ import {
 // wrap-around. Replaces the prior accidental focus containment that
 // could leak Tab from the close button to the address bar.
 import { useFocusTrap } from '../../internal/overlay-engine/focus-trap';
+// Codex 019dde4e iter-47a — symmetric with FormDrawer iter-47a.
+import { useSiblingIsolation } from '../../internal/overlay-engine/sibling-isolation';
 import { resolveAccessState, type AccessControlledProps } from '../../internal/access-controller';
 /* ------------------------------------------------------------------ */
 /*  DetailDrawer — Read-only detail panel (wider, with sections)       */
@@ -129,6 +131,13 @@ export const DetailDrawer = React.forwardRef<HTMLDivElement, DetailDrawerProps>(
       restoreFocus: !disableFocusTrap,
     });
     const layerId = useId();
+
+    /* ---- overlay-engine: sibling isolation (iter-47a) ---- */
+    useSiblingIsolation({
+      active: open && !disableFocusTrap,
+      layerId,
+      panelRef,
+    });
 
     /* ---- overlay-engine: scroll lock ---- */
     useScrollLock(open);
