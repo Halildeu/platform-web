@@ -110,23 +110,17 @@ describe('DetailDrawer — sections', () => {
 
 describe('DetailDrawer — header slots', () => {
   it('actions render eder', () => {
-    render(
-      <DetailDrawer {...defaultProps} actions={<button>Edit</button>} />,
-    );
+    render(<DetailDrawer {...defaultProps} actions={<button>Edit</button>} />);
     expect(screen.getByText('Edit')).toBeInTheDocument();
   });
 
   it('tags render eder', () => {
-    render(
-      <DetailDrawer {...defaultProps} tags={<span>Active</span>} />,
-    );
+    render(<DetailDrawer {...defaultProps} tags={<span>Active</span>} />);
     expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
   it('footer render eder', () => {
-    render(
-      <DetailDrawer {...defaultProps} footer={<button>Save</button>} />,
-    );
+    render(<DetailDrawer {...defaultProps} footer={<button>Save</button>} />);
     expect(screen.getByText('Save')).toBeInTheDocument();
   });
 });
@@ -204,7 +198,9 @@ describe('DetailDrawer — Faz 6 contract: loading state', () => {
   it('children olarak loading spinner render edilebilir', () => {
     render(
       <DetailDrawer {...defaultProps}>
-        <div data-testid="loading-spinner" role="status">Yukleniyor...</div>
+        <div data-testid="loading-spinner" role="status">
+          Yukleniyor...
+        </div>
       </DetailDrawer>,
     );
     expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
@@ -232,7 +228,11 @@ describe('DetailDrawer — Faz 6 contract: empty content', () => {
 
   it('title ve subtitle olmadan da render edilebilir (ReactNode title)', () => {
     render(
-      <DetailDrawer open={true} onClose={vi.fn()} title={<span data-testid="custom-title">Ozel Baslik</span>} />,
+      <DetailDrawer
+        open={true}
+        onClose={vi.fn()}
+        title={<span data-testid="custom-title">Ozel Baslik</span>}
+      />,
     );
     expect(screen.getByTestId('custom-title')).toBeInTheDocument();
   });
@@ -345,9 +345,7 @@ describe('DetailDrawer — Faz 3: keyboard & a11y', () => {
 
   it('scroll lock: body overflow hidden when drawer is open', () => {
     const onClose = vi.fn();
-    const { unmount } = render(
-      <DetailDrawer open onClose={onClose} title="Scroll Lock" />,
-    );
+    const { unmount } = render(<DetailDrawer open onClose={onClose} title="Scroll Lock" />);
     expect(document.body.style.overflow).toBe('hidden');
 
     unmount();
@@ -389,7 +387,10 @@ describe('DetailDrawer — focus restore', () => {
           </button>
           <DetailDrawer
             open={open}
-            onClose={() => { setOpen(false); onClose(); }}
+            onClose={() => {
+              setOpen(false);
+              onClose();
+            }}
             title="Focus Test"
           >
             <button>Inside</button>
@@ -432,5 +433,97 @@ describe('DetailDrawer — a11y', () => {
       </DetailDrawer>,
     );
     await expectNoA11yViolations(container);
+  });
+
+  it('leading slot ile a11y ihlali yok (dekoratif aria-hidden icon)', async () => {
+    const { container } = render(
+      <DetailDrawer
+        open
+        onClose={vi.fn()}
+        title="Role: ADMIN"
+        subtitle="System role"
+        leading={<span aria-hidden="true">L</span>}
+      >
+        <p>Content</p>
+      </DetailDrawer>,
+    );
+    await expectNoA11yViolations(container);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Codex 019dde0c iter-44 — leading slot (decorative leading visual) */
+/* ------------------------------------------------------------------ */
+
+describe('DetailDrawer — leading slot', () => {
+  it('leading prop verildiginde slot render edilir', () => {
+    render(<DetailDrawer {...defaultProps} leading={<span data-testid="leading-slot">L</span>} />);
+    expect(screen.getByTestId('leading-slot')).toBeInTheDocument();
+  });
+
+  it('leading yokken layout regresyonu yok (kontrat assertion, snapshot degil)', () => {
+    render(
+      <DetailDrawer
+        {...defaultProps}
+        subtitle="alt"
+        tags={<span data-testid="tag-slot">T</span>}
+      />,
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Drawer Title')).toBeInTheDocument();
+    expect(screen.getByText('alt')).toBeInTheDocument();
+    expect(screen.getByTestId('tag-slot')).toBeInTheDocument();
+    expect(screen.getByLabelText('Close drawer')).toBeInTheDocument();
+    // Backward-compat probe: leading wrapper olmamali
+    const dialog = screen.getByRole('dialog');
+    const wrappers = dialog.querySelectorAll('.shrink-0.mt-0\\.5');
+    expect(wrappers.length).toBe(0);
+  });
+
+  it('leading + title + subtitle + tags birlikte render olur', () => {
+    render(
+      <DetailDrawer
+        {...defaultProps}
+        subtitle="alt"
+        leading={<span data-testid="leading-slot">L</span>}
+        tags={<span data-testid="tag-slot">T</span>}
+      />,
+    );
+    expect(screen.getByTestId('leading-slot')).toBeInTheDocument();
+    expect(screen.getByText('Drawer Title')).toBeInTheDocument();
+    expect(screen.getByText('alt')).toBeInTheDocument();
+    expect(screen.getByTestId('tag-slot')).toBeInTheDocument();
+  });
+
+  it('leading slot actions/close button yerini etkilemez (sag tarafta kalir)', () => {
+    render(
+      <DetailDrawer
+        {...defaultProps}
+        leading={<span data-testid="leading-slot">L</span>}
+        actions={<button>Edit</button>}
+      />,
+    );
+    expect(screen.getByTestId('leading-slot')).toBeInTheDocument();
+    expect(screen.getByText('Edit')).toBeInTheDocument();
+    expect(screen.getByLabelText('Close drawer')).toBeInTheDocument();
+  });
+
+  it('aria-label string title ile atanir (leading slot bunu degistirmemeli)', () => {
+    render(<DetailDrawer {...defaultProps} leading={<span data-testid="leading-slot">L</span>} />);
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', 'Drawer Title');
+  });
+
+  it('outer header items-start + justify-between kontrati korunur', () => {
+    const { container } = render(
+      <DetailDrawer
+        {...defaultProps}
+        subtitle="alt"
+        leading={<span data-testid="leading-slot">L</span>}
+      />,
+    );
+    // Outer header satirinda items-start + justify-between hala bulunmali
+    // (close button sag ust top-aligned kalmasi icin).
+    const outerHeader = container.querySelector('.flex.items-start.justify-between.gap-3');
+    expect(outerHeader).not.toBeNull();
   });
 });

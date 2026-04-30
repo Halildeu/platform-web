@@ -73,6 +73,12 @@ vi.mock('@mfe/design-system', async () => {
     Checkbox: () => React.createElement('input', { type: 'checkbox' }),
     DetailDrawer: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
       open ? React.createElement('aside', { 'data-testid': 'role-drawer' }, children) : null,
+    // iter-44 — IconShield decorative leading icon for RoleDrawer header.
+    // Stub returns a passthrough span so existing assertions on grid
+    // policies still pass; leading-slot DOM is exercised in the
+    // dedicated `widgets/role-drawer/__tests__/RoleDrawer.leadingIcon.spec.tsx`.
+    IconShield: () =>
+      React.createElement('span', { 'data-testid': 'icon-shield', 'aria-hidden': 'true' }),
     TextInput: () => React.createElement('input'),
   };
 });
