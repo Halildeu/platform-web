@@ -570,11 +570,68 @@ function getImprovements(scores) {
   return improvements;
 }
 
+// ── Provenance / canonicalId / status (Faz 21.6 PR-B) ──
+/**
+ * Build a registry mapping x-charts component names → canonical IDs.
+ *
+ * Faz 21.6 PR-B (Codex iter-20 AGREE): x-charts wrappers are the canonical
+ * source of truth for chart taxonomy. Any DS chart wrapper sharing the same
+ * name (BarChart, LineChart, AreaChart, PieChart, FunnelChart, GaugeChart,
+ * RadarChart, TreemapChart, WaterfallChart) is a legacy entry whose
+ * canonicalId points to the corresponding x-charts wrapper.
+ */
+function buildCanonicalRegistry(allComponents) {
+  const registry = new Map();
+  for (const cmp of allComponents) {
+    if (cmp.packageId === 'x-charts') {
+      registry.set(cmp.name, `@mfe/x-charts/${cmp.name}`);
+    }
+  }
+  return registry;
+}
+
+/**
+ * Compute provenance metadata (canonicalId, status, replacedBy) for a single
+ * component. Codex iter-20 absorb: legacy entries point canonicalId to the
+ * canonical TARGET (x-charts), not to DS itself.
+ *
+ * Cases:
+ *   - x-charts component → status='canonical', canonicalId='@mfe/x-charts/<name>', replacedBy=null
+ *   - DS component duplicating an x-charts name → status='legacy',
+ *     canonicalId='@mfe/x-charts/<name>', replacedBy='@mfe/x-charts/<name>'
+ *   - DS unique component (Button, OrgChart, ControlChart, etc.) →
+ *     status='canonical', canonicalId='@mfe/design-system/<name>', replacedBy=null
+ */
+function computeProvenance(cmp, canonicalRegistry) {
+  if (cmp.packageId === 'x-charts') {
+    return {
+      canonicalId: `@mfe/x-charts/${cmp.name}`,
+      status: 'canonical',
+      replacedBy: null,
+    };
+  }
+  const xcCanonical = canonicalRegistry.get(cmp.name);
+  if (xcCanonical) {
+    return {
+      canonicalId: xcCanonical,
+      status: 'legacy',
+      replacedBy: xcCanonical,
+    };
+  }
+  return {
+    canonicalId: `@mfe/${cmp.packageId}/${cmp.name}`,
+    status: 'canonical',
+    replacedBy: null,
+  };
+}
+
 // ── Public API for tests ──
 export {
   SCAN_PACKAGES,
   findComponentsInPackage,
   findAllComponents,
+  buildCanonicalRegistry,
+  computeProvenance,
   scoreAPI,
   scoreTestDepth,
   scoreA11y,
@@ -607,6 +664,16 @@ if (!isMainModule) {
   console.log('📊 Component Scorecard System\n');
 
   const allComponents = findAllComponents(targetDir, targetPackage);
+
+  // Faz 21.6 PR-B: build canonical registry BEFORE scoring (uses ALL components,
+  // not just targetComponent-filtered). Even when --component <name> is set,
+  // we still need x-charts entries to resolve provenance for the requested DS
+  // component. So we always pass `null` to findAllComponents for the registry.
+  const fullRegistrySource = findAllComponents(null, null);
+  const canonicalRegistry = buildCanonicalRegistry(fullRegistrySource);
+
+  const isCanonicalOnly = args.includes('--canonical-only');
+
   const scorecards = [];
 
   for (const cmp of allComponents) {
@@ -645,6 +712,11 @@ if (!isMainModule) {
 
     const grade = getGrade(totalScore);
     const improvements = getImprovements(scores);
+    const provenance = computeProvenance(cmp, canonicalRegistry);
+
+    // Faz 21.6 PR-B: --canonical-only filter applied here so output schema and
+    // CI gate counts both honor it.
+    if (isCanonicalOnly && provenance.status !== 'canonical') continue;
 
     scorecards.push({
       name,
@@ -652,6 +724,9 @@ if (!isMainModule) {
       dir,
       packageId,       // Faz 21.6 PR-A
       packageName,     // Faz 21.6 PR-A
+      canonicalId: provenance.canonicalId,  // Faz 21.6 PR-B
+      status: provenance.status,             // Faz 21.6 PR-B
+      replacedBy: provenance.replacedBy,     // Faz 21.6 PR-B
       lineCount,
       scores,
       totalScore,
@@ -710,6 +785,13 @@ if (!isMainModule) {
     const pct = Math.round((count / scorecards.length) * 100);
     console.log(`  ${gradeColors[g]}${g} (${gradeLabels[g]})\x1b[0m ${bar} ${count} (${pct}%)`);
   }
+
+  // Status distribution (Faz 21.6 PR-B)
+  const statusStats = { canonical: 0, legacy: 0 };
+  for (const sc of scorecards) statusStats[sc.status]++;
+  console.log('\nStatus Distribution:');
+  console.log(`  \x1b[32mCanonical\x1b[0m: ${statusStats.canonical}`);
+  console.log(`  \x1b[31mLegacy\x1b[0m:    ${statusStats.legacy}`);
 
   // Package breakdown (Faz 21.6 PR-A)
   const pkgStats = {};
