@@ -1,0 +1,142 @@
+name: x-charts Quality Gates
+
+# Faz 21.4-F — first wave of CONTRACT v2.1 §8 CI gates.
+# 3/8 declared gates activated here (chart-spec-validation, xss-sanitization,
+# memory-leak). Each runs an existing dedicated test file as a hard block.
+#
+# Out-of-scope for this wave (each will land in a follow-up PR-F2..F4):
+#   - bundle-size-check   (size-limit run; bundle artifact + threshold)
+#   - a11y-axe-audit      (axe-core in Storybook test runner)
+#   - contrast-ratio-check (Storybook addon-a11y or token diff check)
+#   - visual-regression   (Chromatic / Playwright snapshot)
+#   - tree-shaking-verify (rollup analyze + per-export size check)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/x-charts/**'
+      - '.github/workflows/x-charts-quality-gates.yml'
+      - 'pnpm-lock.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/x-charts/**'
+      - '.github/workflows/x-charts-quality-gates.yml'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chart-spec-validation:
+    name: chart-spec-validation (CONTRACT §8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Run chart-spec validation tests (hard block)
+        run: |
+          pnpm --filter @mfe/x-charts exec vitest run \
+            src/__tests__/spec-transform.contract.test.tsx \
+            --reporter=verbose
+
+  xss-sanitization-check:
+    name: xss-sanitization-check (CONTRACT §8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Run XSS sanitization tests (hard block)
+        run: |
+          pnpm --filter @mfe/x-charts exec vitest run \
+            src/__tests__/security.contract.test.tsx \
+            --reporter=verbose
+
+  memory-leak-test:
+    name: memory-leak-test (CONTRACT §8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Run memory leak tests (hard block)
+        run: |
+          pnpm --filter @mfe/x-charts exec vitest run \
+            src/__tests__/memory-leak.test.tsx \
+            --reporter=verbose
+
+  chart-component-baseline:
+    name: chart-component-baseline (PR-D regression guard)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The smoke test file ships in PR-D (#103); until that PR merges to
+    # main this job has nothing to run. The guard below skips the job
+    # cleanly (no failure) when the file is absent, so PR-F (#106) can
+    # land before #103 without producing a red status. After #103
+    # merges, the file will be present in subsequent runs and the job
+    # automatically becomes a hard block.
+    if: hashFiles('packages/x-charts/src/__tests__/chart-components-smoke.test.tsx') != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Run 13-chart smoke + option-shape contract (hard block)
+        run: |
+          pnpm --filter @mfe/x-charts exec vitest run \
+            src/__tests__/chart-components-smoke.test.tsx \
+            --reporter=verbose
