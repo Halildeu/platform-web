@@ -68,6 +68,118 @@ const resolveFallbackRoleOptions = (currentRole: string | undefined): RoleOption
   return [...FALLBACK_ROLE_OPTIONS, { id: FALLBACK_ROLE_OPTIONS.length + 1, name: normalizedRole }];
 };
 
+// Codex 019ddd5b iter-37 — human-readable role labels and descriptions.
+// Pre-iter-37 the drawer rendered raw UPPER_SNAKE_CASE identifiers
+// ("USER_VIEWER", "ROLE_MANAGE") which mix admin notation with end-user
+// notation. The mapping below pairs each known role with a Turkish label
+// and a one-line description. Unknown roles fall through to the raw
+// identifier so a freshly-introduced role still shows up.
+type RoleMeta = { label: string; description: string };
+type RoleLabelDict = Record<string, RoleMeta>;
+const ROLE_LABELS_TR: RoleLabelDict = {
+  ADMIN: { label: 'Yönetici', description: 'Tüm modüllerde tam yetki — sistem yöneticisi' },
+  USER_MANAGER: {
+    label: 'Kullanıcı Yöneticisi',
+    description: 'Kullanıcı oluşturma, rol atama, hesap güvenliği işlemleri',
+  },
+  USER_MANAGE: {
+    label: 'Kullanıcı Yönetimi (eski)',
+    description: 'Eski rol — yeni atamalar için USER_MANAGER kullanın',
+  },
+  USER_VIEWER: {
+    label: 'Kullanıcı Görüntüleyici',
+    description: 'Kullanıcı listesini okur; değişiklik yapamaz',
+  },
+  ROLE_MANAGE: { label: 'Rol Yönetimi', description: 'Rol oluşturma, granül izin düzenleme' },
+  REPORT_MANAGER: {
+    label: 'Rapor Yöneticisi',
+    description: 'Tüm raporları görür, yönetir, paylaşır',
+  },
+  REPORT_VIEWER: { label: 'Rapor Görüntüleyici', description: 'Atanmış raporları görür' },
+  FINANCE_MANAGER: {
+    label: 'Finans Yöneticisi',
+    description: 'Finans modülü tam erişim — onay yetkili',
+  },
+  FINANCE_VIEWER: {
+    label: 'Finans Görüntüleyici',
+    description: 'Finans verilerini okur, değişiklik yapamaz',
+  },
+  WAREHOUSE_OPERATOR: {
+    label: 'Depo Operatörü',
+    description: 'Stok hareketleri, sayım, transfer işlemleri',
+  },
+  PURCHASE_MANAGER: {
+    label: 'Satınalma Yöneticisi',
+    description: 'Satınalma siparişleri ve onay yetkisi',
+  },
+  AUDIT_READ: {
+    label: 'Denetim Görüntüleyici',
+    description: 'Audit log ve aktivite takip ekranlarına erişim',
+  },
+  SYSTEM_CONFIGURE: {
+    label: 'Sistem Yapılandırma',
+    description: 'Sistem ayarları, modül konfigürasyonu',
+  },
+  PERMISSION_MANAGE: {
+    label: 'İzin Yönetimi (eski)',
+    description: 'Eski rol — yeni atamalar için ROLE_MANAGE kullanın',
+  },
+  VARIANT_SCOPE_CANARY: {
+    label: 'Varyant Canary (test)',
+    description: 'Yalnızca test/canary kapsamı için',
+  },
+  FULL_ACCESS_EXTRA: { label: 'Tam Erişim (eski)', description: 'Eski genişletilmiş erişim rolü' },
+};
+const ROLE_LABELS_EN: RoleLabelDict = {
+  ADMIN: { label: 'Administrator', description: 'Full access across every module — system admin' },
+  USER_MANAGER: {
+    label: 'User Manager',
+    description: 'Create users, assign roles, manage account security',
+  },
+  USER_MANAGE: {
+    label: 'User Management (legacy)',
+    description: 'Legacy role — use USER_MANAGER for new assignments',
+  },
+  USER_VIEWER: { label: 'User Viewer', description: 'Reads the user list; cannot make changes' },
+  ROLE_MANAGE: { label: 'Role Management', description: 'Create roles, edit granule permissions' },
+  REPORT_MANAGER: {
+    label: 'Report Manager',
+    description: 'Sees, manages, and shares every report',
+  },
+  REPORT_VIEWER: { label: 'Report Viewer', description: 'Sees assigned reports' },
+  FINANCE_MANAGER: {
+    label: 'Finance Manager',
+    description: 'Full finance module access — approval authority',
+  },
+  FINANCE_VIEWER: {
+    label: 'Finance Viewer',
+    description: 'Reads finance data; cannot make changes',
+  },
+  WAREHOUSE_OPERATOR: {
+    label: 'Warehouse Operator',
+    description: 'Stock movements, counts, transfers',
+  },
+  PURCHASE_MANAGER: {
+    label: 'Purchase Manager',
+    description: 'Purchase orders and approval authority',
+  },
+  AUDIT_READ: { label: 'Audit Viewer', description: 'Access to audit log and activity screens' },
+  SYSTEM_CONFIGURE: {
+    label: 'System Configuration',
+    description: 'System settings, module configuration',
+  },
+  PERMISSION_MANAGE: {
+    label: 'Permission Management (legacy)',
+    description: 'Legacy role — use ROLE_MANAGE for new assignments',
+  },
+  VARIANT_SCOPE_CANARY: { label: 'Variant Canary (test)', description: 'Test/canary scope only' },
+  FULL_ACCESS_EXTRA: { label: 'Full Access (legacy)', description: 'Legacy expanded-access role' },
+};
+const resolveRoleMeta = (rawName: string, locale: string): RoleMeta => {
+  const dict = locale === 'en' ? ROLE_LABELS_EN : ROLE_LABELS_TR;
+  return dict[rawName] ?? { label: rawName, description: '' };
+};
+
 const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user }) => {
   const { t, locale } = useUsersI18n();
   const queryClient = useQueryClient();
@@ -112,6 +224,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([]);
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number>(15);
   const [dirty, setDirty] = useState(false);
+  // iter-37 — role list search. Only renders when there are >6 roles
+  // (below that threshold the list is readable as-is).
+  const [roleSearch, setRoleSearch] = useState('');
 
   // --- Queries (all hooks MUST be above any early return) ---
   // 2026-04-29 fix: kullanıcı feedback "users da sınırlı roller görünüyor"
@@ -434,6 +549,19 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   if (!user) return null;
 
   const roles = rolesQuery.data ?? [];
+  // iter-37 — filter the role list against the search query. Match against
+  // both the human-readable label and the raw identifier.
+  const filteredRoles = roleSearch.trim()
+    ? roles.filter((r) => {
+        const q = roleSearch.trim().toLocaleLowerCase('tr-TR');
+        const meta = resolveRoleMeta(r.name, locale);
+        return (
+          r.name.toLocaleLowerCase('tr-TR').includes(q) ||
+          meta.label.toLocaleLowerCase('tr-TR').includes(q) ||
+          meta.description.toLocaleLowerCase('tr-TR').includes(q)
+        );
+      })
+    : roles;
   const companies = companiesQuery.data ?? [];
   const projects = projectsQuery.data ?? [];
   const warehouses = warehousesQuery.data ?? [];
@@ -736,27 +864,63 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
 
         <hr className="border-border-subtle" />
 
-        {/* Roles Section — Multi-select checkboxes */}
+        {/* iter-37 Roles section — search + human-readable labels.
+            Pre-iter-37 we rendered raw UPPER_SNAKE_CASE for 16 roles with
+            no search and no description. Codex 019ddd5b note: subtitle
+            avoids overpromising "Roller ve İzinler" since the user atanır
+            rol, izinler türetilir. */}
         <section>
           <h3 className="text-base font-semibold text-text-primary">
             {t('users.detail.section.roles')}
           </h3>
           <p className="text-xs text-text-subtle mt-1">
-            {t('users.detail.section.roles.description')}
+            {t('users.detail.section.roles.subtitle')}
           </p>
+          {roles.length > 6 && (
+            <input
+              type="search"
+              value={roleSearch}
+              onChange={(e) => setRoleSearch(e.target.value)}
+              placeholder={t('users.detail.roles.searchPlaceholder')}
+              className="mt-3 w-full rounded border border-border-subtle bg-surface-default px-3 py-1.5 text-sm placeholder:text-text-subtle focus:border-border-default focus:outline-none"
+              data-testid="roles-search-input"
+            />
+          )}
           <div className="mt-3 flex flex-col gap-2">
             {rolesQuery.isLoading && (
               <span className="text-xs text-text-subtle">{t('users.detail.loadingRoles')}</span>
             )}
-            {roles.map((role) => (
-              <Checkbox
-                key={role.id}
-                label={role.name}
-                checked={selectedRoleIds.includes(role.id)}
-                onChange={() => toggleRole(role.id)}
-                disabled={!canEdit}
-              />
-            ))}
+            {filteredRoles.map((role) => {
+              const meta = resolveRoleMeta(role.name, locale);
+              return (
+                <Checkbox
+                  key={role.id}
+                  label={
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-text-primary">
+                        {meta.label}
+                        {meta.label !== role.name && (
+                          <span className="ml-2 font-mono text-xs text-text-subtle">
+                            ({role.name})
+                          </span>
+                        )}
+                      </span>
+                      {meta.description && (
+                        <span className="text-xs text-text-subtle">{meta.description}</span>
+                      )}
+                    </div>
+                  }
+                  checked={selectedRoleIds.includes(role.id)}
+                  onChange={() => toggleRole(role.id)}
+                  disabled={!canEdit}
+                />
+              );
+            })}
+            {roleSearch && filteredRoles.length === 0 && roles.length > 0 && (
+              <span className="text-xs text-text-subtle italic">
+                {t('users.detail.roles.searchEmpty', { query: roleSearch })}
+              </span>
+            )}
             {roles.length === 0 && !rolesQuery.isLoading && (
               <span className="text-xs text-text-subtle">{t('users.detail.noRolesDefined')}</span>
             )}
@@ -776,7 +940,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             {t('users.detail.section.scopes')}
           </h3>
           <p className="text-xs text-text-subtle mt-1">
-            {t('users.detail.section.scopes.description')}
+            {t('users.detail.section.scopes.subtitle')}
           </p>
           <div className="mt-3">
             <Tabs items={scopeTabs} variant="line" size="sm" />
