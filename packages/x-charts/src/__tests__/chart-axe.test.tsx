@@ -38,6 +38,7 @@ import { WaterfallChart } from '../WaterfallChart';
 import { FunnelChart } from '../FunnelChart';
 import { SankeyChart } from '../SankeyChart';
 import { SunburstChart } from '../SunburstChart';
+import { __resetThemeStoreForTests } from '../theme/themeReactiveStore';
 
 const { setOptionMock, dispatchMock } = vi.hoisted(() => ({
   setOptionMock: vi.fn(),
@@ -76,6 +77,10 @@ const originalResizeObserver = (globalThis as { ResizeObserver?: typeof ResizeOb
 const originalMatchMedia = window.matchMedia;
 
 beforeEach(() => {
+  document.documentElement.removeAttribute('data-appearance');
+  document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('data-mode');
+  __resetThemeStoreForTests();
   (globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver =
     ResizeObserverPolyfill as unknown as typeof ResizeObserver;
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -91,6 +96,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  document.documentElement.removeAttribute('data-appearance');
+  document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('data-mode');
+  __resetThemeStoreForTests();
   (globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver =
     originalResizeObserver;
   window.matchMedia = originalMatchMedia;
@@ -232,12 +241,31 @@ const charts = [
 describe.each(charts)(
   '$name — axe-core gate (Faz 21.5-B PR-B3a, serious+critical zero)',
   ({ name, element }) => {
-    it(`[${name}] has no serious/critical axe violations`, async () => {
+    it(`[${name}] has no serious/critical axe violations (default theme)`, async () => {
       const { container } = render(element());
       const violations = await runAxeStrict(container);
       expect(
         violations,
-        `${name} produced serious/critical axe violations: ${violations.map((v) => `${v.id} (${v.impact})`).join(', ')}`,
+        `${name} (default) produced serious/critical axe violations: ${violations
+          .map((v) => `${v.id} (${v.impact})`)
+          .join(', ')}`,
+      ).toEqual([]);
+    });
+
+    // Faz 21.5-B PR-B3b: high-contrast surface aktivasyonu sonrası shell
+    // markup ve a11y kontratı bozulmamalı. Decal injection option-level
+    // olduğu için DOM tree değişmez; yine de regresyon gate'i olarak
+    // axe.run her chart için HC mode'da da koşulur.
+    it(`[${name}] has no serious/critical axe violations (high-contrast theme)`, async () => {
+      document.documentElement.setAttribute('data-appearance', 'high-contrast');
+      __resetThemeStoreForTests();
+      const { container } = render(element());
+      const violations = await runAxeStrict(container);
+      expect(
+        violations,
+        `${name} (high-contrast) produced serious/critical axe violations: ${violations
+          .map((v) => `${v.id} (${v.impact})`)
+          .join(', ')}`,
       ).toEqual([]);
     });
   },

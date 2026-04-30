@@ -9,7 +9,8 @@
 import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
-import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeSeries } from './utils/data-validation';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -62,6 +63,16 @@ export interface LineChartProps {
   className?: string;
   /** Callback fired when a data point (marker) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override.
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -110,6 +121,8 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
     description,
     className,
     onDataPointClick,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -119,7 +132,10 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
-  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+  });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
@@ -205,6 +221,7 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
               ? `Line chart: ${escapeHtml(title)}`
               : 'Line chart',
         },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
     } as EChartsOption;
   }, [
@@ -221,6 +238,8 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
     description,
     onDataPointClick,
     isEmpty,
+    decalEnabled,
+    decalPatterns,
   ]);
 
   const handleClick = useCallback(
@@ -238,7 +257,7 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
-    theme,
+    theme: themeObject,
     respectReducedMotion: true,
     onClick: onDataPointClick ? handleClick : undefined,
   });

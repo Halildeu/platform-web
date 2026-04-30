@@ -13,7 +13,8 @@ import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
-import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -70,6 +71,16 @@ export interface SankeyChartProps {
   onNodeClick?: (params: { name: string; data: unknown }) => void;
   /** Additional class name. */
   className?: string;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override.
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -129,6 +140,8 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
     animate = true,
     onNodeClick,
     className,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -137,7 +150,10 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
   const isEmpty = !nodes || nodes.length === 0 || !links || links.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
-  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+  });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
@@ -236,6 +252,7 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
         label: {
           description: title ? `Sankey diagram: ${escapeHtml(title)}` : 'Sankey diagram',
         },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
     } as EChartsOption;
   }, [
@@ -254,6 +271,8 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
     animate,
     onNodeClick,
     isEmpty,
+    decalEnabled,
+    decalPatterns,
   ]);
 
   const handleClick = useCallback(
@@ -269,7 +288,7 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
-    theme,
+    theme: themeObject,
     respectReducedMotion: true,
     onClick: onNodeClick ? handleClick : undefined,
   });

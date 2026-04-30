@@ -11,7 +11,8 @@ import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
-import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -66,6 +67,16 @@ export interface GaugeChartProps {
   animate?: boolean;
   /** Additional class name. */
   className?: string;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override.
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -131,6 +142,8 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
     valueFormatter,
     animate = true,
     className,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -140,7 +153,10 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
   const safeValue = sanitizeNumber(value);
   const fmt = valueFormatter ?? formatCompact;
 
-  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+  });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
@@ -222,6 +238,7 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
         label: {
           description: title ? `Gauge chart: ${escapeHtml(title)}` : 'Gauge chart',
         },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
     } as EChartsOption;
   }, [
@@ -240,11 +257,13 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
     animate,
     height,
     isEmpty,
+    decalEnabled,
+    decalPatterns,
   ]);
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
-    theme,
+    theme: themeObject,
     respectReducedMotion: true,
   });
 

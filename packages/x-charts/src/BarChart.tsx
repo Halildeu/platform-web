@@ -9,7 +9,8 @@
 import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
-import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -62,6 +63,16 @@ export interface BarChartProps {
   series?: { field: string; name: string; color?: string }[];
   /** Callback fired when a data point (bar) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals (data-appearance / data-theme / media)
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override (visual differentiation beyond color).
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -110,6 +121,8 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
     className,
     series: seriesDef,
     onDataPointClick,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -121,7 +134,10 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
   const hasMultiSeries = seriesDef && seriesDef.length > 0;
   const fmt = valueFormatter ?? formatCompact;
 
-  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+  });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
@@ -229,6 +245,7 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
               ? `Bar chart: ${escapeHtml(title)}`
               : 'Bar chart',
         },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
     } as EChartsOption;
   }, [
@@ -247,6 +264,8 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
     isEmpty,
     isHorizontal,
     hasMultiSeries,
+    decalEnabled,
+    decalPatterns,
   ]);
 
   const handleClick = useCallback(
@@ -266,7 +285,7 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
-    theme,
+    theme: themeObject,
     respectReducedMotion: true,
     onClick: onDataPointClick ? handleClick : undefined,
   });
