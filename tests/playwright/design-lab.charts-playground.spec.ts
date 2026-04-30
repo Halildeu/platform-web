@@ -29,6 +29,11 @@ const CHART_PLAYGROUND_ROUTES: Array<{ slug: string; previewTestId: string }> = 
   { slug: 'suggest-chart', previewTestId: 'design-lab-chart-preview-suggest-chart' },
   { slug: 'chart-description', previewTestId: 'design-lab-chart-preview-chart-description' },
   { slug: 'nl-to-chart', previewTestId: 'design-lab-chart-preview-nl-to-chart' },
+  { slug: 'lttb', previewTestId: 'design-lab-chart-preview-lttb' },
+  { slug: 'progressive-render', previewTestId: 'design-lab-chart-preview-progressive-render' },
+  { slug: 'lazy-chart', previewTestId: 'design-lab-chart-preview-lazy-chart' },
+  { slug: 'lru-cache', previewTestId: 'design-lab-chart-preview-lru-cache' },
+  { slug: 'code-split', previewTestId: 'design-lab-chart-preview-code-split' },
 ];
 
 test.describe('Design Lab chart playground (QLTY-DL-CHART-PLAYGROUND-01)', () => {
