@@ -26,6 +26,11 @@ ARG VITE_FRONTEND_PUBLIC_ORIGIN=https://ai.acik.com
 ARG VITE_GATEWAY_URL=https://ai.acik.com
 ARG VITE_AUTH_MODE=keycloak
 ARG AG_GRID_LICENSE_KEY=""
+# iter-50 Step 3.1 (Codex 019dded6): build-info.json sentinel için explicit
+# SHA/REF — `.git` kontekste güvenmek riskli (Docker build context çoğu
+# zaman .dockerignore git'i hariç tutar; CI'da git context yok).
+ARG BUILD_SHA=""
+ARG BUILD_REF=""
 
 ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM} \
@@ -34,7 +39,9 @@ ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_GATEWAY_URL=${VITE_GATEWAY_URL} \
     VITE_AUTH_MODE=${VITE_AUTH_MODE} \
     AG_GRID_LICENSE_KEY=${AG_GRID_LICENSE_KEY} \
-    VITE_AG_GRID_LICENSE_KEY=${AG_GRID_LICENSE_KEY}
+    VITE_AG_GRID_LICENSE_KEY=${AG_GRID_LICENSE_KEY} \
+    BUILD_SHA=${BUILD_SHA} \
+    BUILD_REF=${BUILD_REF}
 
 WORKDIR /app
 
