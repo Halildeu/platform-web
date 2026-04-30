@@ -1,26 +1,14 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
-import { ChartDashboard } from "../ChartDashboard";
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { ChartDashboard } from '../ChartDashboard';
 
 /* ------------------------------------------------------------------ */
-/*  Mocks                                                              */
+/*  Tests — uses x-charts internal cn (no DS runtime mock).            */
 /* ------------------------------------------------------------------ */
 
-vi.mock("@mfe/design-system", () => ({
-  cn: (...args: unknown[]) =>
-    args
-      .flat(Infinity)
-      .filter((v) => typeof v === "string")
-      .join(" "),
-}));
-
-/* ------------------------------------------------------------------ */
-/*  Tests                                                              */
-/* ------------------------------------------------------------------ */
-
-describe("ChartDashboard", () => {
-  it("renders children in grid", () => {
+describe('ChartDashboard', () => {
+  it('renders children in grid', () => {
     render(
       <ChartDashboard>
         <ChartDashboard.Item>
@@ -32,12 +20,12 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    expect(screen.getByText("Card A")).toBeInTheDocument();
-    expect(screen.getByText("Card B")).toBeInTheDocument();
+    expect(screen.getByText('Card A')).toBeInTheDocument();
+    expect(screen.getByText('Card B')).toBeInTheDocument();
   });
 
-  it("applies correct column count", () => {
-    const { container } = render(
+  it('applies correct column count', () => {
+    render(
       <ChartDashboard columns={4}>
         <ChartDashboard.Item>
           <div>A</div>
@@ -45,12 +33,12 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const grid = screen.getByTestId("chart-dashboard");
+    const grid = screen.getByTestId('chart-dashboard');
     // columns=4 maps to "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-    expect(grid.className).toContain("lg:grid-cols-4");
+    expect(grid.className).toContain('lg:grid-cols-4');
   });
 
-  it("uses default 3 columns", () => {
+  it('uses default 3 columns', () => {
     render(
       <ChartDashboard>
         <ChartDashboard.Item>
@@ -59,11 +47,11 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const grid = screen.getByTestId("chart-dashboard");
-    expect(grid.className).toContain("lg:grid-cols-3");
+    const grid = screen.getByTestId('chart-dashboard');
+    expect(grid.className).toContain('lg:grid-cols-3');
   });
 
-  it("ChartDashboard.Item applies span", () => {
+  it('ChartDashboard.Item applies span', () => {
     render(
       <ChartDashboard>
         <ChartDashboard.Item span={2}>
@@ -72,12 +60,12 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const items = screen.getAllByTestId("chart-dashboard-item");
+    const items = screen.getAllByTestId('chart-dashboard-item');
     // span=2 maps to "col-span-1 sm:col-span-2"
-    expect(items[0].className).toContain("sm:col-span-2");
+    expect(items[0].className).toContain('sm:col-span-2');
   });
 
-  it("ChartDashboard.Item applies rowSpan", () => {
+  it('ChartDashboard.Item applies rowSpan', () => {
     render(
       <ChartDashboard>
         <ChartDashboard.Item rowSpan={2}>
@@ -86,11 +74,11 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const items = screen.getAllByTestId("chart-dashboard-item");
-    expect(items[0].className).toContain("row-span-2");
+    const items = screen.getAllByTestId('chart-dashboard-item');
+    expect(items[0].className).toContain('row-span-2');
   });
 
-  it("applies gap size", () => {
+  it('applies gap size', () => {
     render(
       <ChartDashboard gap="lg">
         <ChartDashboard.Item>
@@ -99,11 +87,11 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const grid = screen.getByTestId("chart-dashboard");
-    expect(grid.className).toContain("gap-6");
+    const grid = screen.getByTestId('chart-dashboard');
+    expect(grid.className).toContain('gap-6');
   });
 
-  it("uses default md gap", () => {
+  it('uses default md gap', () => {
     render(
       <ChartDashboard>
         <ChartDashboard.Item>
@@ -112,11 +100,11 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const grid = screen.getByTestId("chart-dashboard");
-    expect(grid.className).toContain("gap-4");
+    const grid = screen.getByTestId('chart-dashboard');
+    expect(grid.className).toContain('gap-4');
   });
 
-  it("applies className", () => {
+  it('applies className', () => {
     render(
       <ChartDashboard className="dashboard-custom">
         <ChartDashboard.Item>
@@ -125,11 +113,11 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const grid = screen.getByTestId("chart-dashboard");
-    expect(grid.className).toContain("dashboard-custom");
+    const grid = screen.getByTestId('chart-dashboard');
+    expect(grid.className).toContain('dashboard-custom');
   });
 
-  it("renders grid class on the container", () => {
+  it('renders grid class on the container', () => {
     render(
       <ChartDashboard>
         <ChartDashboard.Item>
@@ -138,7 +126,7 @@ describe("ChartDashboard", () => {
       </ChartDashboard>,
     );
 
-    const grid = screen.getByTestId("chart-dashboard");
-    expect(grid.className).toContain("grid");
+    const grid = screen.getByTestId('chart-dashboard');
+    expect(grid.className).toContain('grid');
   });
 });

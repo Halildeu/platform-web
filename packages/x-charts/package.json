@@ -44,7 +44,6 @@
     "zustand": "^5.0.8"
   },
   "peerDependencies": {
-    "@mfe/design-system": "*",
     "react": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {

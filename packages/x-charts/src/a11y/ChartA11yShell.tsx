@@ -23,7 +23,7 @@
  *   ```
  */
 import React from 'react';
-import { cn } from '@mfe/design-system';
+import { cn } from '../utils/cn';
 import type { UseChartA11yResult } from './useChartA11y';
 
 const VISUALLY_HIDDEN_STYLE: React.CSSProperties = {

@@ -13,8 +13,14 @@ pnpm add @mfe/x-charts
 Peer dependencies:
 
 ```bash
-pnpm add @mfe/design-system echarts
+pnpm add echarts react react-dom
 ```
+
+> `@mfe/x-charts` does not depend on `@mfe/design-system` at runtime.
+> Visual primitives required by chart wrappers (`cn`, internal `Text`,
+> internal `Spinner`) live locally in `src/utils` and `src/components`.
+> This keeps the package graph acyclic so the design-system chart entries
+> can shim around `@mfe/x-charts` without creating a cycle.
 
 ## Quick Start
 
@@ -64,28 +70,29 @@ export function SalesDashboard() {
 
 ## Available Components
 
-| Component | Description | Engine |
-|-----------|-------------|--------|
-| `BarChart` | Vertical / horizontal bar charts | ECharts |
-| `LineChart` | Line and area charts | ECharts |
-| `AreaChart` | Stacked / gradient area charts | ECharts |
-| `PieChart` | Pie and donut charts | ECharts |
-| `ScatterChart` | Scatter / bubble charts | ECharts |
-| `SparklineChart` | Inline mini charts for tables and cards | ECharts |
-| `FunnelChart` | Funnel / conversion charts | ECharts |
-| `WaterfallChart` | Waterfall (bridge) charts | ECharts |
-| `GaugeChart` | Gauge / speedometer charts | ECharts |
-| `RadarChart` | Radar / spider charts | ECharts |
-| `TreemapChart` | Treemap hierarchical charts | ECharts |
-| `SunburstChart` | Sunburst hierarchical charts | ECharts |
-| `SankeyChart` | Sankey flow diagrams | ECharts |
-| `HeatmapChart` | Heatmap matrix charts | ECharts |
-| `KPICard` | Key performance indicator card with trend | — |
-| `ChartDashboard` | Grid layout for chart + KPI composition | — |
+| Component        | Description                               | Engine  |
+| ---------------- | ----------------------------------------- | ------- |
+| `BarChart`       | Vertical / horizontal bar charts          | ECharts |
+| `LineChart`      | Line and area charts                      | ECharts |
+| `AreaChart`      | Stacked / gradient area charts            | ECharts |
+| `PieChart`       | Pie and donut charts                      | ECharts |
+| `ScatterChart`   | Scatter / bubble charts                   | ECharts |
+| `SparklineChart` | Inline mini charts for tables and cards   | ECharts |
+| `FunnelChart`    | Funnel / conversion charts                | ECharts |
+| `WaterfallChart` | Waterfall (bridge) charts                 | ECharts |
+| `GaugeChart`     | Gauge / speedometer charts                | ECharts |
+| `RadarChart`     | Radar / spider charts                     | ECharts |
+| `TreemapChart`   | Treemap hierarchical charts               | ECharts |
+| `SunburstChart`  | Sunburst hierarchical charts              | ECharts |
+| `SankeyChart`    | Sankey flow diagrams                      | ECharts |
+| `HeatmapChart`   | Heatmap matrix charts                     | ECharts |
+| `KPICard`        | Key performance indicator card with trend | —       |
+| `ChartDashboard` | Grid layout for chart + KPI composition   | —       |
 
 ## Accessibility
 
 All charts meet WCAG AA:
+
 - Keyboard navigation (tab, arrow, enter)
 - Data table fallback for screen readers
 - Colorblind-safe palettes (4.5:1 contrast minimum)
@@ -93,10 +100,10 @@ All charts meet WCAG AA:
 
 ## Hooks
 
-| Hook | Description |
-|------|-------------|
+| Hook                   | Description                            |
+| ---------------------- | -------------------------------------- |
 | `useChartInteractions` | Adds zoom, pan, and brush to any chart |
-| `useRealTimeData` | Streams data updates into chart state |
+| `useRealTimeData`      | Streams data updates into chart state  |
 
 ## Bundle Size
 

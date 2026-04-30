@@ -1,5 +1,5 @@
-import React from "react";
-import { cn } from "@mfe/design-system";
+import React from 'react';
+import { cn } from './utils/cn';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -11,7 +11,7 @@ export interface ChartDashboardProps {
   /** Number of columns. @default 3 */
   columns?: 1 | 2 | 3 | 4;
   /** Gap size between items. @default "md" */
-  gap?: "sm" | "md" | "lg";
+  gap?: 'sm' | 'md' | 'lg';
   /** Additional class name. */
   className?: string;
 }
@@ -32,28 +32,28 @@ export interface ChartDashboardItemProps {
 /* ------------------------------------------------------------------ */
 
 const GAP_MAP: Record<string, string> = {
-  sm: "gap-2",
-  md: "gap-4",
-  lg: "gap-6",
+  sm: 'gap-2',
+  md: 'gap-4',
+  lg: 'gap-6',
 };
 
 const COL_MAP: Record<number, string> = {
-  1: "grid-cols-1",
-  2: "grid-cols-1 sm:grid-cols-2",
-  3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-  4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
+  1: 'grid-cols-1',
+  2: 'grid-cols-1 sm:grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+  4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
 };
 
 const SPAN_MAP: Record<number, string> = {
-  1: "col-span-1",
-  2: "col-span-1 sm:col-span-2",
-  3: "col-span-1 sm:col-span-2 lg:col-span-3",
-  4: "col-span-1 sm:col-span-2 lg:col-span-4",
+  1: 'col-span-1',
+  2: 'col-span-1 sm:col-span-2',
+  3: 'col-span-1 sm:col-span-2 lg:col-span-3',
+  4: 'col-span-1 sm:col-span-2 lg:col-span-4',
 };
 
 const ROW_SPAN_MAP: Record<number, string> = {
-  1: "row-span-1",
-  2: "row-span-2",
+  1: 'row-span-1',
+  2: 'row-span-2',
 };
 
 /* ------------------------------------------------------------------ */
@@ -71,7 +71,7 @@ function ChartDashboardItem({
       className={cn(
         SPAN_MAP[span],
         ROW_SPAN_MAP[rowSpan],
-        "min-w-0", // prevent overflow
+        'min-w-0', // prevent overflow
         className,
       )}
       data-testid="chart-dashboard-item"
@@ -81,7 +81,7 @@ function ChartDashboardItem({
   );
 }
 
-ChartDashboardItem.displayName = "ChartDashboardItem";
+ChartDashboardItem.displayName = 'ChartDashboardItem';
 
 /* ------------------------------------------------------------------ */
 /*  ChartDashboard                                                     */
@@ -90,12 +90,12 @@ ChartDashboardItem.displayName = "ChartDashboardItem";
 export function ChartDashboard({
   children,
   columns = 3,
-  gap = "md",
+  gap = 'md',
   className,
 }: ChartDashboardProps) {
   return (
     <div
-      className={cn("grid text-text-primary", COL_MAP[columns], GAP_MAP[gap], className)}
+      className={cn('grid text-text-primary', COL_MAP[columns], GAP_MAP[gap], className)}
       data-testid="chart-dashboard"
     >
       {children}
@@ -103,7 +103,7 @@ export function ChartDashboard({
   );
 }
 
-ChartDashboard.displayName = "ChartDashboard";
+ChartDashboard.displayName = 'ChartDashboard';
 
 /** Sub-component for individual dashboard grid items. */
 ChartDashboard.Item = ChartDashboardItem;
