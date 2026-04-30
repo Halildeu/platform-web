@@ -25,6 +25,9 @@ import {
   FunnelChart,
   SankeyChart,
   SunburstChart,
+  KPICard,
+  SparklineChart,
+  ChartDashboard,
 } from '@mfe/x-charts';
 
 const categories = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'];
@@ -352,6 +355,72 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             title={chartName}
             size="lg"
           />
+        </PreviewBox>
+      );
+
+    case 'kpi-card':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <div className="flex h-full w-full items-center justify-center p-4">
+            <KPICard
+              title="Revenue"
+              value="$128,500"
+              trend={{ direction: 'up', value: '+12.5%', positive: true }}
+              chart={<SparklineChart data={values1} type="area" />}
+            />
+          </div>
+        </PreviewBox>
+      );
+
+    case 'sparkline-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-4">
+            <div className="flex w-full max-w-md items-center gap-3 text-xs text-text-secondary">
+              <span className="w-20 shrink-0">line</span>
+              <div className="flex-1">
+                <SparklineChart data={values1} type="line" />
+              </div>
+            </div>
+            <div className="flex w-full max-w-md items-center gap-3 text-xs text-text-secondary">
+              <span className="w-20 shrink-0">area</span>
+              <div className="flex-1">
+                <SparklineChart data={values1} type="area" />
+              </div>
+            </div>
+            <div className="flex w-full max-w-md items-center gap-3 text-xs text-text-secondary">
+              <span className="w-20 shrink-0">bar</span>
+              <div className="flex-1">
+                <SparklineChart data={values1} type="bar" />
+              </div>
+            </div>
+          </div>
+        </PreviewBox>
+      );
+
+    case 'chart-dashboard':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <ChartDashboard columns={{ sm: 1, md: 2, lg: 3 }} gap={12}>
+            <KPICard
+              title="Revenue"
+              value="$128K"
+              trend={{ direction: 'up', value: '+12%', positive: true }}
+              chart={<SparklineChart data={values1} type="area" />}
+            />
+            <KPICard
+              title="Users"
+              value="12,847"
+              trend={{ direction: 'up', value: '+3.2%', positive: true }}
+              chart={<SparklineChart data={values2} type="line" />}
+            />
+            <KPICard
+              title="Errors"
+              value="42"
+              trend={{ direction: 'down', value: '-18%', positive: true }}
+              chart={<SparklineChart data={[20, 18, 15, 12, 10, 8, 6]} type="bar" />}
+            />
+          </ChartDashboard>
         </PreviewBox>
       );
 
