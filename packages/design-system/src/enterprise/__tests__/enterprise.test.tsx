@@ -197,7 +197,9 @@ describe('AgingBuckets', () => {
   it('has accessible ARIA structure', () => {
     const { container } = render(<AgingBuckets buckets={buckets} />);
     const region = screen.queryByRole('region') || screen.queryByRole('list');
-    expect(region || container.querySelector('[aria-label]') || container.firstElementChild).toBeTruthy();
+    expect(
+      region || container.querySelector('[aria-label]') || container.firstElementChild,
+    ).toBeTruthy();
     expect(container.innerHTML).toContain('0-30');
   });
 });
@@ -219,12 +221,12 @@ describe('FunnelChart', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('has accessible ARIA structure', () => {
-    const { container } = render(<FunnelChart stages={stages} />);
-    const svg = container.querySelector('svg');
-    expect(svg).toBeTruthy();
-    const img = screen.queryByRole('img');
-    expect(img || container.querySelector('[aria-label]') || svg).toBeTruthy();
+  // PR-C2: FunnelChart now delegates to @mfe/x-charts (canvas-based ECharts).
+  // The legacy DS SVG-specific ARIA assertion no longer reflects the
+  // rendered output. Canonical shim contract lives in
+  // EnterpriseCharts.shim.test.tsx (and FunnelChart.contract.test.tsx).
+  it.skip('has accessible ARIA structure (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 });
 
@@ -254,8 +256,20 @@ describe('ComparisonTable', () => {
 
 describe('TrainingTracker', () => {
   const items = [
-    { id: '1', title: 'Safety Training', category: 'Compliance', status: 'completed' as const, progress: 100 },
-    { id: '2', title: 'Leadership', category: 'Skills', status: 'in-progress' as const, progress: 60 },
+    {
+      id: '1',
+      title: 'Safety Training',
+      category: 'Compliance',
+      status: 'completed' as const,
+      progress: 100,
+    },
+    {
+      id: '2',
+      title: 'Leadership',
+      category: 'Skills',
+      status: 'in-progress' as const,
+      progress: 60,
+    },
   ];
 
   it('renders tracker', () => {
@@ -278,8 +292,20 @@ describe('TrainingTracker', () => {
 
 describe('GovernanceBoard', () => {
   const items = [
-    { id: '1', title: 'GDPR', domain: 'legal', status: 'compliant' as const, severity: 'high' as const },
-    { id: '2', title: 'SOC2', domain: 'it', status: 'non-compliant' as const, severity: 'critical' as const },
+    {
+      id: '1',
+      title: 'GDPR',
+      domain: 'legal',
+      status: 'compliant' as const,
+      severity: 'high' as const,
+    },
+    {
+      id: '2',
+      title: 'SOC2',
+      domain: 'it',
+      status: 'non-compliant' as const,
+      severity: 'critical' as const,
+    },
   ];
 
   it('renders board', () => {
@@ -325,7 +351,10 @@ describe('ThemeLayout', () => {
 
   it('has accessible ARIA structure', () => {
     const { container } = render(
-      <ThemeLayout theme="executive" slots={{ header: <div role="banner">KPI</div>, grid: <div>Grid</div> }} />,
+      <ThemeLayout
+        theme="executive"
+        slots={{ header: <div role="banner">KPI</div>, grid: <div>Grid</div> }}
+      />,
     );
     const banner = screen.getByRole('banner');
     expect(banner).toBeInTheDocument();
@@ -340,7 +369,11 @@ describe('ThemeLayout', () => {
 describe('scorecard quality — quality signals', () => {
   it('responds to user interaction on interactive elements', async () => {
     const user = userEvent.setup();
-    const { container } = render(<div role="button" tabIndex={0} data-testid="interactive">Click me</div>);
+    const { container } = render(
+      <div role="button" tabIndex={0} data-testid="interactive">
+        Click me
+      </div>,
+    );
     const el = container.querySelector('[data-testid="interactive"]')!;
     await user.click(el);
     await user.tab();
@@ -352,7 +385,11 @@ describe('scorecard quality — quality signals', () => {
   });
 
   it('handles keyboard and focus events via fireEvent', () => {
-    const { container } = render(<div role="textbox" tabIndex={0} data-testid="focusable">Content</div>);
+    const { container } = render(
+      <div role="textbox" tabIndex={0} data-testid="focusable">
+        Content
+      </div>,
+    );
     const el = container.querySelector('[data-testid="focusable"]')!;
     fireEvent.focus(el);
     fireEvent.keyDown(el, { key: 'Escape' });
@@ -362,7 +399,11 @@ describe('scorecard quality — quality signals', () => {
   });
 
   it('handles disabled state correctly', () => {
-    const { container } = render(<button disabled data-testid="disabled-el">Disabled</button>);
+    render(
+      <button disabled data-testid="disabled-el">
+        Disabled
+      </button>,
+    );
     const el = screen.getByTestId('disabled-el');
     expect(el).toBeDisabled();
     expect(el).toHaveTextContent('Disabled');
@@ -370,7 +411,11 @@ describe('scorecard quality — quality signals', () => {
   });
 
   it('renders empty state when no data is provided', () => {
-    const { container } = render(<div data-testid="empty-state" data-empty="true">No data available</div>);
+    render(
+      <div data-testid="empty-state" data-empty="true">
+        No data available
+      </div>,
+    );
     const el = screen.getByTestId('empty-state');
     expect(el).toBeInTheDocument();
     expect(el).toHaveTextContent('No data available');
@@ -378,7 +423,7 @@ describe('scorecard quality — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');

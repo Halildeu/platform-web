@@ -91,14 +91,12 @@ describe('DateRangePicker', () => {
 });
 
 describe('TreemapChart', () => {
-  it('renders items as SVG rects', () => {
-    const items = [
-      { id: '1', label: 'A', value: 100 },
-      { id: '2', label: 'B', value: 60 },
-      { id: '3', label: 'C', value: 30 },
-    ];
-    const { container } = render(<TreemapChart items={items} />);
-    expect(container.querySelector('svg')).toBeTruthy();
+  // PR-C2: TreemapChart now delegates to @mfe/x-charts. Legacy DS
+  // SVG <rect> + aria-label assertions no longer reflect the rendered
+  // output. Canonical shim contract lives in EnterpriseCharts.shim.test.tsx
+  // (and TreemapChart.contract.test.tsx).
+  it.skip('renders items as SVG rects (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 
   it('has no accessibility violations', async () => {
@@ -110,35 +108,37 @@ describe('TreemapChart', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('has accessible ARIA structure', () => {
-    const items = [
-      { id: '1', label: 'A', value: 100 },
-      { id: '2', label: 'B', value: 60 },
-    ];
-    render(<TreemapChart items={items} />);
-    const img = screen.getByRole('img');
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('aria-label', 'Treemap chart');
+  it.skip('has accessible ARIA structure (legacy DS aria-label — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 });
 
 describe('SankeyDiagram', () => {
   it('renders nodes and links', () => {
-    const nodes = [{ id: 'a', label: 'Source' }, { id: 'b', label: 'Target' }];
+    const nodes = [
+      { id: 'a', label: 'Source' },
+      { id: 'b', label: 'Target' },
+    ];
     const links = [{ source: 'a', target: 'b', value: 100 }];
     const { container } = render(<SankeyDiagram nodes={nodes} links={links} />);
     expect(container.querySelector('svg')).toBeTruthy();
   });
 
   it('has no accessibility violations', async () => {
-    const nodes = [{ id: 'a', label: 'Source' }, { id: 'b', label: 'Target' }];
+    const nodes = [
+      { id: 'a', label: 'Source' },
+      { id: 'b', label: 'Target' },
+    ];
     const links = [{ source: 'a', target: 'b', value: 100 }];
     const { container } = render(<SankeyDiagram nodes={nodes} links={links} />);
     await expectNoA11yViolations(container);
   });
 
   it('has accessible ARIA structure', () => {
-    const nodes = [{ id: 'a', label: 'Source' }, { id: 'b', label: 'Target' }];
+    const nodes = [
+      { id: 'a', label: 'Source' },
+      { id: 'b', label: 'Target' },
+    ];
     const links = [{ source: 'a', target: 'b', value: 100 }];
     render(<SankeyDiagram nodes={nodes} links={links} />);
     const img = screen.getByRole('img');
@@ -148,27 +148,27 @@ describe('SankeyDiagram', () => {
 });
 
 describe('RadarChart', () => {
-  it('renders axes and series', () => {
-    const axes = [{ key: 'a', label: 'Speed' }, { key: 'b', label: 'Power' }, { key: 'c', label: 'Skill' }];
-    const series = [{ label: 'Player 1', values: { a: 80, b: 60, c: 90 } }];
-    const { container } = render(<RadarChart axes={axes} series={series} />);
-    expect(container.querySelector('svg')).toBeTruthy();
+  // PR-C2: RadarChart now delegates to @mfe/x-charts. Legacy DS SVG
+  // axes/series + aria-label assertions no longer reflect the rendered
+  // output. Canonical shim contract lives in EnterpriseCharts.shim.test.tsx
+  // (and RadarChart.contract.test.tsx).
+  it.skip('renders axes and series (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 
   it('has no accessibility violations', async () => {
-    const axes = [{ key: 'a', label: 'Speed' }, { key: 'b', label: 'Power' }, { key: 'c', label: 'Skill' }];
+    const axes = [
+      { key: 'a', label: 'Speed' },
+      { key: 'b', label: 'Power' },
+      { key: 'c', label: 'Skill' },
+    ];
     const series = [{ label: 'Player 1', values: { a: 80, b: 60, c: 90 } }];
     const { container } = render(<RadarChart axes={axes} series={series} />);
     await expectNoA11yViolations(container);
   });
 
-  it('has accessible ARIA structure', () => {
-    const axes = [{ key: 'a', label: 'Speed' }, { key: 'b', label: 'Power' }, { key: 'c', label: 'Skill' }];
-    const series = [{ label: 'Player 1', values: { a: 80, b: 60, c: 90 } }];
-    render(<RadarChart axes={axes} series={series} />);
-    const img = screen.getByRole('img');
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('aria-label', 'Radar chart');
+  it.skip('has accessible ARIA structure (legacy DS aria-label — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 });
 
@@ -179,7 +179,10 @@ describe('ProcessFlow', () => {
       { id: '2', type: 'task' as const, label: 'Process' },
       { id: '3', type: 'end' as const, label: 'Done' },
     ];
-    const edges = [{ from: '1', to: '2' }, { from: '2', to: '3' }];
+    const edges = [
+      { from: '1', to: '2' },
+      { from: '2', to: '3' },
+    ];
     const { container } = render(<ProcessFlow nodes={nodes} edges={edges} />);
     expect(container.textContent).toContain('Begin');
   });
@@ -218,17 +221,13 @@ describe('ValueStream', () => {
   });
 
   it('has no accessibility violations', async () => {
-    const steps = [
-      { id: '1', label: 'Cut', processTime: 10, waitTime: 30 },
-    ];
+    const steps = [{ id: '1', label: 'Cut', processTime: 10, waitTime: 30 }];
     const { container } = render(<ValueStream steps={steps} />);
     await expectNoA11yViolations(container);
   });
 
   it('has accessible ARIA structure', () => {
-    const steps = [
-      { id: '1', label: 'Cut', processTime: 10, waitTime: 30 },
-    ];
+    const steps = [{ id: '1', label: 'Cut', processTime: 10, waitTime: 30 }];
     render(<ValueStream steps={steps} />);
     const figure = screen.getByRole('figure');
     expect(figure).toBeInTheDocument();
@@ -247,17 +246,13 @@ describe('StatusTimeline', () => {
   });
 
   it('has no accessibility violations', async () => {
-    const events = [
-      { id: '1', status: 'Created', timestamp: '2026-01-01T10:00:00Z' },
-    ];
+    const events = [{ id: '1', status: 'Created', timestamp: '2026-01-01T10:00:00Z' }];
     const { container } = render(<StatusTimeline events={events} />);
     await expectNoA11yViolations(container);
   });
 
   it('has accessible ARIA structure', () => {
-    const events = [
-      { id: '1', status: 'Created', timestamp: '2026-01-01T10:00:00Z' },
-    ];
+    const events = [{ id: '1', status: 'Created', timestamp: '2026-01-01T10:00:00Z' }];
     render(<StatusTimeline events={events} />);
     const group = screen.getByRole('group');
     expect(group).toBeInTheDocument();
@@ -268,7 +263,12 @@ describe('StatusTimeline', () => {
 describe('NotificationCenter', () => {
   it('renders notifications', () => {
     const items = [
-      { id: '1', title: 'Build complete', type: 'success' as const, timestamp: '2026-03-23T10:00:00Z' },
+      {
+        id: '1',
+        title: 'Build complete',
+        type: 'success' as const,
+        timestamp: '2026-03-23T10:00:00Z',
+      },
     ];
     const { container } = render(<NotificationCenter notifications={items} />);
     expect(container.textContent).toContain('Build complete');
@@ -276,7 +276,12 @@ describe('NotificationCenter', () => {
 
   it('has no accessibility violations', async () => {
     const items = [
-      { id: '1', title: 'Build complete', type: 'success' as const, timestamp: '2026-03-23T10:00:00Z' },
+      {
+        id: '1',
+        title: 'Build complete',
+        type: 'success' as const,
+        timestamp: '2026-03-23T10:00:00Z',
+      },
     ];
     const { container } = render(<NotificationCenter notifications={items} />);
     await expectNoA11yViolations(container);
@@ -284,7 +289,12 @@ describe('NotificationCenter', () => {
 
   it('has accessible ARIA structure', () => {
     const items = [
-      { id: '1', title: 'Build complete', type: 'success' as const, timestamp: '2026-03-23T10:00:00Z' },
+      {
+        id: '1',
+        title: 'Build complete',
+        type: 'success' as const,
+        timestamp: '2026-03-23T10:00:00Z',
+      },
     ];
     render(<NotificationCenter notifications={items} />);
     const region = screen.getByRole('region');
@@ -346,17 +356,13 @@ describe('FilterPresets', () => {
   });
 
   it('has no accessibility violations', async () => {
-    const presets = [
-      { id: '1', name: 'Active Only', filters: { status: 'active' } },
-    ];
+    const presets = [{ id: '1', name: 'Active Only', filters: { status: 'active' } }];
     const { container } = render(<FilterPresets presets={presets} onSelect={vi.fn()} />);
     await expectNoA11yViolations(container);
   });
 
   it('has accessible ARIA structure', () => {
-    const presets = [
-      { id: '1', name: 'Active Only', filters: { status: 'active' } },
-    ];
+    const presets = [{ id: '1', name: 'Active Only', filters: { status: 'active' } }];
     render(<FilterPresets presets={presets} onSelect={vi.fn()} />);
     const toolbar = screen.getByRole('toolbar');
     expect(toolbar).toBeInTheDocument();
@@ -366,9 +372,7 @@ describe('FilterPresets', () => {
 
 describe('DataExportDialog', () => {
   it('renders when open', () => {
-    const { container } = render(
-      <DataExportDialog open onClose={vi.fn()} onExport={vi.fn()} />,
-    );
+    const { container } = render(<DataExportDialog open onClose={vi.fn()} onExport={vi.fn()} />);
     expect(container.firstElementChild).toBeTruthy();
   });
   it('does not render when closed', () => {
@@ -379,9 +383,7 @@ describe('DataExportDialog', () => {
   });
 
   it('has no accessibility violations', async () => {
-    const { container } = render(
-      <DataExportDialog open onClose={vi.fn()} onExport={vi.fn()} />,
-    );
+    const { container } = render(<DataExportDialog open onClose={vi.fn()} onExport={vi.fn()} />);
     await expectNoA11yViolations(container);
   });
 
@@ -401,7 +403,11 @@ describe('DataExportDialog', () => {
 describe('scorecard quality — quality signals', () => {
   it('responds to user interaction on interactive elements', async () => {
     const user = userEvent.setup();
-    const { container } = render(<div role="button" tabIndex={0} data-testid="interactive">Click me</div>);
+    const { container } = render(
+      <div role="button" tabIndex={0} data-testid="interactive">
+        Click me
+      </div>,
+    );
     const el = container.querySelector('[data-testid="interactive"]')!;
     await user.click(el);
     await user.tab();
@@ -413,7 +419,11 @@ describe('scorecard quality — quality signals', () => {
   });
 
   it('handles keyboard and focus events via fireEvent', () => {
-    const { container } = render(<div role="textbox" tabIndex={0} data-testid="focusable">Content</div>);
+    const { container } = render(
+      <div role="textbox" tabIndex={0} data-testid="focusable">
+        Content
+      </div>,
+    );
     const el = container.querySelector('[data-testid="focusable"]')!;
     fireEvent.focus(el);
     fireEvent.keyDown(el, { key: 'Escape' });
@@ -423,7 +433,11 @@ describe('scorecard quality — quality signals', () => {
   });
 
   it('handles disabled state correctly', () => {
-    const { container } = render(<button disabled data-testid="disabled-el">Disabled</button>);
+    render(
+      <button disabled data-testid="disabled-el">
+        Disabled
+      </button>,
+    );
     const el = screen.getByTestId('disabled-el');
     expect(el).toBeDisabled();
     expect(el).toHaveTextContent('Disabled');
@@ -431,7 +445,7 @@ describe('scorecard quality — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');
