@@ -17,6 +17,8 @@ import {
   SCAN_PACKAGES,
   findComponentsInPackage,
   findAllComponents,
+  buildCanonicalRegistry,
+  computeProvenance,
 } from '../../../scripts/ci/component-scorecard.mjs';
 
 const X_CHARTS_CANONICAL = [
@@ -169,5 +171,141 @@ describe('findAllComponents — multi-package + filter', () => {
   it('--package <unknown> returns empty', () => {
     const filtered = findAllComponents(null, 'no-such-package');
     expect(filtered).toHaveLength(0);
+  });
+});
+
+/* ---------------------------------------------------------------- */
+/*  Faz 21.6 PR-B — provenance (canonicalId/status/replacedBy)      */
+/* ---------------------------------------------------------------- */
+
+const DUPLICATE_NAMES = [
+  'BarChart',
+  'LineChart',
+  'AreaChart',
+  'PieChart',
+  'FunnelChart',
+  'GaugeChart',
+  'RadarChart',
+  'TreemapChart',
+  'WaterfallChart',
+];
+
+describe('buildCanonicalRegistry', () => {
+  it('maps every x-charts component name to its canonical x-charts id', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    expect(registry.size).toBe(13);
+    for (const name of X_CHARTS_CANONICAL) {
+      expect(registry.get(name)).toBe(`@mfe/x-charts/${name}`);
+    }
+  });
+
+  it('does not include design-system components', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    expect(registry.has('Button')).toBe(false);
+    expect(registry.has('OrgChart')).toBe(false);
+    expect(registry.has('ControlChart')).toBe(false);
+  });
+});
+
+describe('computeProvenance — x-charts entries', () => {
+  it('every x-charts entry → status="canonical", canonicalId="@mfe/x-charts/<name>", replacedBy=null', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    const xc = all.filter((c: { packageId: string }) => c.packageId === 'x-charts');
+    expect(xc).toHaveLength(13);
+    xc.forEach((cmp: { name: string }) => {
+      const p = computeProvenance(cmp, registry);
+      expect(p.status).toBe('canonical');
+      expect(p.canonicalId).toBe(`@mfe/x-charts/${cmp.name}`);
+      expect(p.replacedBy).toBeNull();
+    });
+  });
+});
+
+describe('computeProvenance — DS legacy duplicates', () => {
+  it('the 9 duplicate DS chart names → status="legacy"', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    for (const dupName of DUPLICATE_NAMES) {
+      const dsCmp = all.find(
+        (c: { packageId: string; name: string }) =>
+          c.packageId === 'design-system' && c.name === dupName,
+      );
+      expect(dsCmp, `DS ${dupName} should exist in scan`).toBeDefined();
+      const p = computeProvenance(dsCmp!, registry);
+      expect(p.status).toBe('legacy');
+      expect(p.canonicalId).toBe(`@mfe/x-charts/${dupName}`);
+      expect(p.replacedBy).toBe(`@mfe/x-charts/${dupName}`);
+    }
+  });
+
+  it('legacy canonicalId === replacedBy (point to canonical target)', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    for (const dupName of DUPLICATE_NAMES) {
+      const dsCmp = all.find(
+        (c: { packageId: string; name: string }) =>
+          c.packageId === 'design-system' && c.name === dupName,
+      );
+      const p = computeProvenance(dsCmp!, registry);
+      expect(p.canonicalId).toBe(p.replacedBy);
+    }
+  });
+});
+
+describe('computeProvenance — DS unique components', () => {
+  it('DS components without x-charts duplicate → status="canonical", DS canonicalId, replacedBy=null', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    const samples = ['ControlChart', 'OrgChart', 'BulletChart', 'ParetoChart', 'HistogramChart'];
+    for (const name of samples) {
+      const cmp = all.find(
+        (c: { packageId: string; name: string }) =>
+          c.packageId === 'design-system' && c.name === name,
+      );
+      expect(cmp, `DS unique ${name} should exist`).toBeDefined();
+      const p = computeProvenance(cmp!, registry);
+      expect(p.status).toBe('canonical');
+      expect(p.canonicalId).toBe(`@mfe/design-system/${name}`);
+      expect(p.replacedBy).toBeNull();
+    }
+  });
+});
+
+describe('Codex iter-20 pinned counts', () => {
+  // findAllComponents returns RAW scan (no lineCount<15 post-filter applied).
+  // The main scorecard loop applies that filter, so scorecard.json on disk has
+  // 1 fewer entry. Both numbers are pinned: raw scan invariant + post-filter
+  // invariant (the latter via integration scorecard.json check).
+  it('raw scan total is 232 (218 DS raw + 13 x-charts + 1 small-file passthrough)', () => {
+    const all = findAllComponents(null, null);
+    expect(all).toHaveLength(232);
+  });
+
+  it('raw scan canonical count is 223 (legacy=9, canonical=223 → total 232)', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    let canonicalCount = 0;
+    for (const cmp of all) {
+      const p = computeProvenance(cmp, registry);
+      if (p.status === 'canonical') canonicalCount++;
+    }
+    expect(canonicalCount).toBe(223);
+  });
+
+  it('legacy count is exactly 9 — the duplicate chart names (lineCount-independent)', () => {
+    const all = findAllComponents(null, null);
+    const registry = buildCanonicalRegistry(all);
+    const legacy = all
+      .map((cmp: unknown) => ({
+        cmp,
+        prov: computeProvenance(cmp, registry),
+      }))
+      .filter((row: { prov: { status: string } }) => row.prov.status === 'legacy');
+    expect(legacy).toHaveLength(9);
+    const legacyNames = legacy.map(({ cmp }: { cmp: { name: string } }) => cmp.name).sort();
+    expect(legacyNames).toEqual([...DUPLICATE_NAMES].sort());
   });
 });
