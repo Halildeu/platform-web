@@ -6,19 +6,20 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from "react";
-import { cn } from "@mfe/design-system";
-import { useEChartsRenderer } from "./renderers";
-import { buildDesignLabEChartsTheme } from "./theme/DesignLabEChartsTheme";
-import { formatCompact } from "./utils/formatters";
-import { sanitizeDataPoints } from "./utils/data-validation";
-import type { EChartsOption } from "./renderers/echarts-imports";
+import React, { useMemo, useCallback } from 'react';
+import { cn } from '@mfe/design-system';
+import { useEChartsRenderer } from './renderers';
+import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { formatCompact } from './utils/formatters';
+import { sanitizeDataPoints } from './utils/data-validation';
+import { useChartA11y } from './a11y/useChartA11y';
+import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type ChartSize = "sm" | "md" | "lg";
+export type ChartSize = 'sm' | 'md' | 'lg';
 
 export type ChartDataPoint = {
   label: string;
@@ -36,7 +37,7 @@ export interface BarChartProps {
   /** Data points to render as bars. */
   data: ChartDataPoint[];
   /** Bar orientation. @default "vertical" */
-  orientation?: "vertical" | "horizontal";
+  orientation?: 'vertical' | 'horizontal';
   /** Visual size variant. @default "md" */
   size?: ChartSize;
   /** Show value labels on bars. @default false */
@@ -70,8 +71,16 @@ export interface BarChartProps {
 const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
 
 const DEFAULT_PALETTE = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -79,231 +88,316 @@ const DEFAULT_PALETTE = [
 /* ------------------------------------------------------------------ */
 
 const escapeHtml = (t: string): string =>
-  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
-  function BarChart(
-    {
-      data,
-      orientation = "vertical",
-      size = "md",
-      showValues = false,
-      showGrid = true,
-      showLegend = false,
-      valueFormatter,
-      animate = true,
-      colors,
-      title,
-      description,
-      className,
-      series: seriesDef,
-      onDataPointClick,
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const height = SIZE_HEIGHT[size];
-    const safeData = useMemo(() => sanitizeDataPoints(data), [data]);
-    const isEmpty = safeData.length === 0;
-    const isHorizontal = orientation === "horizontal";
-    const hasMultiSeries = seriesDef && seriesDef.length > 0;
-    const fmt = valueFormatter ?? formatCompact;
+export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function BarChart(
+  {
+    data,
+    orientation = 'vertical',
+    size = 'md',
+    showValues = false,
+    showGrid = true,
+    showLegend = false,
+    valueFormatter,
+    animate = true,
+    colors,
+    title,
+    description,
+    className,
+    series: seriesDef,
+    onDataPointClick,
+    ...rest
+  },
+  forwardedRef,
+) {
+  const height = SIZE_HEIGHT[size];
+  const safeData = useMemo(() => sanitizeDataPoints(data), [data]);
+  const isEmpty = safeData.length === 0;
+  const isHorizontal = orientation === 'horizontal';
+  const hasMultiSeries = seriesDef && seriesDef.length > 0;
+  const fmt = valueFormatter ?? formatCompact;
 
-    const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
 
-    const option = useMemo((): EChartsOption | null => {
-      if (isEmpty) return null;
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty) return null;
 
-      const palette = colors ?? DEFAULT_PALETTE;
+    const palette = colors ?? DEFAULT_PALETTE;
 
-      const categoryAxis = {
-        type: "category" as const,
-        data: safeData.map((d) => d.label),
-        axisLabel: { fontSize: 11 },
-        axisTick: { alignWithLabel: true },
-      };
+    const categoryAxis = {
+      type: 'category' as const,
+      data: safeData.map((d) => d.label),
+      axisLabel: { fontSize: 11 },
+      axisTick: { alignWithLabel: true },
+    };
 
-      const valueAxis = {
-        type: "value" as const,
-        axisLabel: {
-          fontSize: 11,
-          formatter: (v: number) => fmt(v),
-        },
-        splitLine: {
-          show: showGrid,
-          lineStyle: { type: "dashed" as const },
-        },
-      };
+    const valueAxis = {
+      type: 'value' as const,
+      axisLabel: {
+        fontSize: 11,
+        formatter: (v: number) => fmt(v),
+      },
+      splitLine: {
+        show: showGrid,
+        lineStyle: { type: 'dashed' as const },
+      },
+    };
 
-      const echartsSeriesList = hasMultiSeries
-        ? seriesDef!.map((s, i) => ({
-            type: "bar" as const,
-            name: s.name,
-            data: safeData.map((d) => (d as Record<string, unknown>)[s.field] as number ?? 0),
-            itemStyle: { color: s.color ?? palette[i % palette.length] },
+    const echartsSeriesList = hasMultiSeries
+      ? seriesDef!.map((s, i) => ({
+          type: 'bar' as const,
+          name: s.name,
+          data: safeData.map((d) => ((d as Record<string, unknown>)[s.field] as number) ?? 0),
+          itemStyle: { color: s.color ?? palette[i % palette.length] },
+          label: showValues
+            ? {
+                show: true,
+                position: isHorizontal ? 'right' : ('top' as const),
+                formatter: valueFormatter ? (p: { value: number }) => fmt(p.value) : undefined,
+                fontSize: 11,
+              }
+            : { show: false },
+          cursor: onDataPointClick ? 'pointer' : 'default',
+        }))
+      : [
+          {
+            type: 'bar' as const,
+            name: title ?? 'Value',
+            data: safeData.map((d, i) => ({
+              value: d.value,
+              itemStyle: { color: d.color ?? palette[i % palette.length] },
+            })),
             label: showValues
               ? {
                   show: true,
-                  position: isHorizontal ? "right" : "top" as const,
-                  formatter: valueFormatter
-                    ? (p: { value: number }) => fmt(p.value)
-                    : undefined,
+                  position: isHorizontal ? ('right' as const) : ('top' as const),
+                  formatter: valueFormatter ? (p: { value: number }) => fmt(p.value) : undefined,
                   fontSize: 11,
                 }
               : { show: false },
-            cursor: onDataPointClick ? "pointer" : "default",
-          }))
-        : [
-            {
-              type: "bar" as const,
-              name: title ?? "Value",
-              data: safeData.map((d, i) => ({
-                value: d.value,
-                itemStyle: { color: d.color ?? palette[i % palette.length] },
-              })),
-              label: showValues
-                ? {
-                    show: true,
-                    position: isHorizontal ? ("right" as const) : ("top" as const),
-                    formatter: valueFormatter
-                      ? (p: { value: number }) => fmt(p.value)
-                      : undefined,
-                    fontSize: 11,
-                  }
-                : { show: false },
-              cursor: onDataPointClick ? "pointer" : "default",
-            },
-          ];
-
-      return {
-        animation: animate,
-        animationDuration: animate ? 500 : 0,
-        animationEasing: "cubicOut",
-        title: title
-          ? {
-              text: escapeHtml(title),
-              subtext: description ? escapeHtml(description) : undefined,
-              left: "center",
-              textStyle: { fontSize: 16, fontWeight: 600 },
-              subtextStyle: { fontSize: 13 },
-            }
-          : undefined,
-        tooltip: {
-          trigger: "axis",
-          confine: true,
-          axisPointer: { type: "shadow" },
-          valueFormatter: (v: unknown) => fmt(v as number),
-        },
-        legend: {
-          show: showLegend || hasMultiSeries,
-          bottom: 0,
-          icon: "roundRect",
-          itemWidth: 12,
-          itemHeight: 8,
-          textStyle: { fontSize: 12 },
-        },
-        grid: {
-          top: title ? 60 : 24,
-          right: 16,
-          bottom: showLegend || hasMultiSeries ? 48 : 24,
-          left: 16,
-          containLabel: true,
-        },
-        xAxis: isHorizontal ? valueAxis : categoryAxis,
-        yAxis: isHorizontal ? categoryAxis : valueAxis,
-        series: echartsSeriesList,
-        aria: {
-          enabled: true,
-          label: {
-            description: description
-              ? escapeHtml(description)
-              : title
-                ? `Bar chart: ${escapeHtml(title)}`
-                : "Bar chart",
+            cursor: onDataPointClick ? 'pointer' : 'default',
           },
-        },
-      } as EChartsOption;
-    }, [
-      data, orientation, showValues, showGrid, showLegend,
-      valueFormatter, animate, colors, title, description,
-      seriesDef, onDataPointClick, isEmpty, isHorizontal, hasMultiSeries,
-    ]);
+        ];
 
-    const handleClick = useCallback(
-      (params: unknown) => {
-        if (!onDataPointClick) return;
-        const p = params as { data: unknown; name: string; value: number; dataIndex: number };
-        const raw = typeof p.data === "object" && p.data !== null ? p.data as Record<string, unknown> : {};
-        onDataPointClick({
-          datum: { ...raw, label: p.name, value: p.value },
-          value: typeof p.value === "number" ? p.value : (raw.value as number),
-          label: p.name,
-        });
+    return {
+      animation: animate,
+      animationDuration: animate ? 500 : 0,
+      animationEasing: 'cubicOut',
+      title: title
+        ? {
+            text: escapeHtml(title),
+            subtext: description ? escapeHtml(description) : undefined,
+            left: 'center',
+            textStyle: { fontSize: 16, fontWeight: 600 },
+            subtextStyle: { fontSize: 13 },
+          }
+        : undefined,
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        axisPointer: { type: 'shadow' },
+        valueFormatter: (v: unknown) => fmt(v as number),
       },
-      [onDataPointClick],
-    );
-
-    const { containerRef } = useEChartsRenderer({
-      option: option ?? ({} as EChartsOption),
-      theme,
-      respectReducedMotion: true,
-      onClick: onDataPointClick ? handleClick : undefined,
-    });
-
-    const setRefs = useCallback(
-      (node: HTMLDivElement | null) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
-        else if (forwardedRef)
-          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      legend: {
+        show: showLegend || hasMultiSeries,
+        bottom: 0,
+        icon: 'roundRect',
+        itemWidth: 12,
+        itemHeight: 8,
+        textStyle: { fontSize: 12 },
       },
-      [forwardedRef, containerRef],
-    );
-
-    /* ---- empty state ---- */
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            "inline-flex items-center justify-center text-sm text-[var(--text-secondary)]",
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label={title ?? "Bar chart -- no data"}
-          data-testid="bar-chart-empty"
-          {...rest}
-        >
-          Veri yok
-        </div>
-      );
-    }
-
-    return (
-      <div
-        ref={setRefs}
-        className={cn("w-full", className)}
-        style={{ height, width: "100%" }}
-        role="img"
-        aria-label={
-          description
+      grid: {
+        top: title ? 60 : 24,
+        right: 16,
+        bottom: showLegend || hasMultiSeries ? 48 : 24,
+        left: 16,
+        containLabel: true,
+      },
+      xAxis: isHorizontal ? valueAxis : categoryAxis,
+      yAxis: isHorizontal ? categoryAxis : valueAxis,
+      series: echartsSeriesList,
+      aria: {
+        enabled: true,
+        label: {
+          description: description
             ? escapeHtml(description)
             : title
               ? `Bar chart: ${escapeHtml(title)}`
-              : "Bar chart"
-        }
-        data-testid="bar-chart"
-        {...rest}
-      />
-    );
-  },
-);
+              : 'Bar chart',
+        },
+      },
+    } as EChartsOption;
+  }, [
+    data,
+    orientation,
+    showValues,
+    showGrid,
+    showLegend,
+    valueFormatter,
+    animate,
+    colors,
+    title,
+    description,
+    seriesDef,
+    onDataPointClick,
+    isEmpty,
+    isHorizontal,
+    hasMultiSeries,
+  ]);
 
-BarChart.displayName = "BarChart";
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onDataPointClick) return;
+      const p = params as { data: unknown; name: string; value: number; dataIndex: number };
+      const raw =
+        typeof p.data === 'object' && p.data !== null ? (p.data as Record<string, unknown>) : {};
+      onDataPointClick({
+        datum: { ...raw, label: p.name, value: p.value },
+        value: typeof p.value === 'number' ? p.value : (raw.value as number),
+        label: p.name,
+      });
+    },
+    [onDataPointClick],
+  );
+
+  const { containerRef, instance } = useEChartsRenderer({
+    option: option ?? ({} as EChartsOption),
+    theme,
+    respectReducedMotion: true,
+    onClick: onDataPointClick ? handleClick : undefined,
+  });
+
+  // Faz 21.5-B PR-B1 (Codex iter-7): default-on a11y composer.
+  // Wraps the chart with role="region", keyboard navigation
+  // (Tab/Arrow/Home/End/Enter/Escape), live announcements, and a
+  // visually-hidden data table fallback so screen readers can read
+  // the data even when ECharts canvas is opaque.
+  const a11y = useChartA11y({
+    chartType: 'bar',
+    data: useMemo(
+      () =>
+        safeData.map((d) => ({
+          label: d.label,
+          value: d.value,
+        })),
+      [safeData],
+    ),
+    title,
+    description,
+    valueFormatter: fmt,
+    echartsInstance: instance,
+  });
+  const tablePayload = a11y.renderHiddenDataTable();
+
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [forwardedRef, containerRef],
+  );
+
+  /* ---- empty state ---- */
+  if (isEmpty) {
+    return (
+      <div
+        ref={forwardedRef}
+        className={cn(
+          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
+        role="img"
+        aria-label={a11y.ariaLabel}
+        data-testid="bar-chart-empty"
+        {...rest}
+      >
+        Veri yok
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('relative w-full', className)} {...rest}>
+      {/*
+          Visually-hidden data table fallback (Codex iter-7 default-on
+          a11y). Place BEFORE the chart so screen readers reach the
+          structured data when they encounter the aria-describedby
+          target.
+        */}
+      <table
+        id={tablePayload.id}
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          margin: -1,
+          padding: 0,
+          overflow: 'hidden',
+          clip: 'rect(0,0,0,0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        }}
+        aria-hidden={false}
+      >
+        <caption>{tablePayload.caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{tablePayload.headers[0]}</th>
+            <th scope="col">{tablePayload.headers[1]}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tablePayload.rows.map((row, idx) => (
+            <tr key={idx}>
+              <td>{row.label}</td>
+              <td>{row.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* aria-live announcement region for keyboard navigation. */}
+      <div
+        id={a11y.liveRegionId}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          margin: -1,
+          padding: 0,
+          overflow: 'hidden',
+          clip: 'rect(0,0,0,0)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {a11y.liveMessage}
+      </div>
+
+      {/*
+          Chart container — receives `containerProps` from useChartA11y
+          (role="region", tabIndex=0, aria-label, aria-describedby,
+          keyboard handlers). Maintains backwards-compat data-testid.
+        */}
+      <div
+        ref={setRefs}
+        style={{ height, width: '100%' }}
+        data-testid="bar-chart"
+        {...a11y.containerProps}
+      />
+    </div>
+  );
+});
+
+BarChart.displayName = 'BarChart';
 
 export default BarChart;
