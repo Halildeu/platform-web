@@ -3,7 +3,11 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, waitFor, fireEvent, screen } from '@testing-library/react';
-import type { GridVariant, _GridVariantState, VariantIntegrationProps } from '../VariantIntegration';
+import type {
+  GridVariant,
+  _GridVariantState,
+  VariantIntegrationProps,
+} from '../VariantIntegration';
 import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
 import userEvent from '@testing-library/user-event';
 
@@ -26,7 +30,13 @@ const makeVariant = (overrides: Partial<GridVariant> = {}): GridVariant => ({
   id: 'v-001',
   gridId: GRID_ID,
   name: 'Genel Görünüm',
-  state: { columnState: MOCK_COLUMN_STATE, filterModel: {}, sortModel: [], pivotMode: false, quickFilterText: '' },
+  state: {
+    columnState: MOCK_COLUMN_STATE,
+    filterModel: {},
+    sortModel: [],
+    pivotMode: false,
+    quickFilterText: '',
+  },
   isDefault: false,
   isGlobal: true,
   isGlobalDefault: true,
@@ -67,12 +77,18 @@ const INCOMPATIBLE_VARIANT = makeVariant({
 /*  Mock grid-variants API                                             */
 /* ------------------------------------------------------------------ */
 
-const mockFetch = vi.fn<() => Promise<GridVariant[]>>().mockResolvedValue([GLOBAL_VARIANT, PERSONAL_VARIANT]);
-const mockCreate = vi.fn<(p: unknown) => Promise<GridVariant>>().mockResolvedValue(PERSONAL_VARIANT);
+const mockFetch = vi
+  .fn<() => Promise<GridVariant[]>>()
+  .mockResolvedValue([GLOBAL_VARIANT, PERSONAL_VARIANT]);
+const mockCreate = vi
+  .fn<(p: unknown) => Promise<GridVariant>>()
+  .mockResolvedValue(PERSONAL_VARIANT);
 const mockUpdate = vi.fn<(p: unknown) => Promise<GridVariant>>().mockResolvedValue(GLOBAL_VARIANT);
 const mockClone = vi.fn<(p: unknown) => Promise<GridVariant>>().mockResolvedValue(PERSONAL_VARIANT);
 const mockDelete = vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
-const mockPreference = vi.fn<(p: unknown) => Promise<GridVariant>>().mockResolvedValue(PERSONAL_VARIANT);
+const mockPreference = vi
+  .fn<(p: unknown) => Promise<GridVariant>>()
+  .mockResolvedValue(PERSONAL_VARIANT);
 const mockCompare = vi.fn((a: GridVariant, b: GridVariant) => (a.name > b.name ? 1 : -1));
 
 vi.mock('../../../lib/grid-variants', () => ({
@@ -249,6 +265,69 @@ describe('VariantIntegration', () => {
       });
     });
 
+    // iter-35 — empty-state UX. Pre-iter-35 the <select> was disabled when
+    // the variants list was empty, so end users clicked "— Variant —" and
+    // nothing happened (the user-reported screenshot bug). Two affordances:
+    //  1. select stays interactive and exposes a clickable
+    //     "+ Yeni Varyant Oluştur" item plus a non-clickable hint.
+    //  2. the manager-toggle button promotes to a primary-styled
+    //     "+ Oluştur" labeled button next to the select.
+    it('keeps the select INTERACTIVE in empty state (iter-35)', async () => {
+      mockFetch.mockResolvedValue([]);
+      const { container } = renderVariant();
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+      const selectEl = container.querySelector('select') as HTMLSelectElement | null;
+      expect(selectEl, 'variant select should render').not.toBeNull();
+      expect(selectEl!.disabled, 'select must NOT be disabled when variants is []').toBe(false);
+    });
+
+    it('shows the empty-hint + create-new option in empty state (iter-35)', async () => {
+      mockFetch.mockResolvedValue([]);
+      const { container } = renderVariant();
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+      const selectEl = container.querySelector('select') as HTMLSelectElement | null;
+      expect(selectEl).not.toBeNull();
+      const optionTexts = Array.from(selectEl!.options).map((o) => o.text);
+      // hint exists (substring match — TR or EN labels both pass)
+      expect(optionTexts.some((t) => /varyant yok|saved variants/i.test(t))).toBe(true);
+      // create-new exists (the actionable item)
+      expect(optionTexts.some((t) => /\+\s+(Yeni Varyant|Create New Variant)/i.test(t))).toBe(true);
+    });
+
+    it('promotes manager-toggle to a labeled "Olustur" button in empty state (iter-35)', async () => {
+      mockFetch.mockResolvedValue([]);
+      const { container } = renderVariant();
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+      const toggle = container.querySelector(
+        '[data-testid="variant-manage-toggle"]',
+      ) as HTMLButtonElement | null;
+      expect(toggle, 'manage toggle button should render').not.toBeNull();
+      // Empty state surfaces a visible label inside the button. The test
+      // fixture provides messages.variantNewButtonLabel = "Yeni Görünüm",
+      // so we assert against that custom label rather than the default.
+      expect(toggle!.textContent ?? '').toMatch(/Yeni Görünüm|Olu[şs]tur|Create/i);
+    });
+
+    it('keeps the manager-toggle as a plain icon button when variants exist (iter-35)', async () => {
+      // [GLOBAL_VARIANT, PERSONAL_VARIANT] is the default beforeEach setup.
+      const { container } = renderVariant();
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalled();
+      });
+      const toggle = container.querySelector(
+        '[data-testid="variant-manage-toggle"]',
+      ) as HTMLButtonElement | null;
+      expect(toggle).not.toBeNull();
+      // Non-empty state: button has icon only, no "Olustur" label.
+      expect(toggle!.textContent ?? '').not.toMatch(/Olu[şs]tur|Create/i);
+    });
+
     it('has no accessibility violations', async () => {
       const { container } = renderVariant();
       await waitFor(() => {
@@ -403,10 +482,7 @@ describe('VariantIntegration', () => {
 
   describe('Auto-Apply Priority', () => {
     it('applies user selected variant first (highest priority)', async () => {
-      mockFetch.mockResolvedValue([
-        GLOBAL_VARIANT,
-        { ...PERSONAL_VARIANT, isUserSelected: true },
-      ]);
+      mockFetch.mockResolvedValue([GLOBAL_VARIANT, { ...PERSONAL_VARIANT, isUserSelected: true }]);
       const gridApi = createMockGridApi();
       renderVariant({ gridApi });
       await waitFor(() => {
@@ -426,9 +502,7 @@ describe('VariantIntegration', () => {
     });
 
     it('falls back to global default when no user selection', async () => {
-      mockFetch.mockResolvedValue([
-        { ...GLOBAL_VARIANT, isGlobalDefault: true },
-      ]);
+      mockFetch.mockResolvedValue([{ ...GLOBAL_VARIANT, isGlobalDefault: true }]);
       renderVariant();
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalled();
@@ -523,7 +597,11 @@ describe('VariantIntegration', () => {
 describe('VariantIntegration — quality signals', () => {
   it('responds to user interaction on interactive elements', async () => {
     const user = userEvent.setup();
-    const { container } = render(<div role="button" tabIndex={0} data-testid="interactive">Click me</div>);
+    const { container } = render(
+      <div role="button" tabIndex={0} data-testid="interactive">
+        Click me
+      </div>,
+    );
     const el = container.querySelector('[data-testid="interactive"]')!;
     await user.click(el);
     await user.tab();
@@ -535,7 +613,11 @@ describe('VariantIntegration — quality signals', () => {
   });
 
   it('handles keyboard and focus events via fireEvent', () => {
-    const { container } = render(<div role="textbox" tabIndex={0} data-testid="focusable">Content</div>);
+    const { container } = render(
+      <div role="textbox" tabIndex={0} data-testid="focusable">
+        Content
+      </div>,
+    );
     const el = container.querySelector('[data-testid="focusable"]')!;
     fireEvent.focus(el);
     fireEvent.keyDown(el, { key: 'Escape' });
@@ -545,12 +627,20 @@ describe('VariantIntegration — quality signals', () => {
   });
 
   it('uses semantic roles for accessibility', () => {
-    const { container } = render(
+    render(
       <div>
-        <nav role="navigation" aria-label="test nav"><a href="#" role="link">Link</a></nav>
-        <main role="main"><section role="region" aria-label="content">Content</section></main>
+        <nav role="navigation" aria-label="test nav">
+          <a href="#" role="link">
+            Link
+          </a>
+        </nav>
+        <main role="main">
+          <section role="region" aria-label="content">
+            Content
+          </section>
+        </main>
         <footer role="contentinfo">Footer</footer>
-      </div>
+      </div>,
     );
     expect(screen.getByRole('navigation')).toBeInTheDocument();
     expect(screen.getByRole('link')).toBeInTheDocument();
