@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Card, CardHeader, CardBody } from "@mfe/design-system";
-import { Badge } from "@mfe/design-system";
-import { PieChart } from "@mfe/design-system";
+import React, { useEffect, useState, useCallback } from 'react';
+import { Card, CardHeader, CardBody } from '@mfe/design-system';
+import { Badge } from '@mfe/design-system';
+import { PieChart } from '@mfe/x-charts';
 
-const COCKPIT_URL = "/cockpit-api";
+const COCKPIT_URL = '/cockpit-api';
 
 interface IntakeData {
   items: { id: string; title?: string; bucket?: string; status?: string }[];
@@ -11,12 +11,12 @@ interface IntakeData {
 }
 
 const BUCKET_COLORS: Record<string, string> = {
-  TICKET: "var(--action-primary)",
-  PROJECT: "var(--action-primary)",
-  BUG: "var(--state-danger-text)",
-  TECH_DEBT: "var(--state-warning-text)",
-  ENHANCEMENT: "var(--state-success-text)",
-  RESEARCH: "var(--state-info-text)",
+  TICKET: 'var(--action-primary)',
+  PROJECT: 'var(--action-primary)',
+  BUG: 'var(--state-danger-text)',
+  TECH_DEBT: 'var(--state-warning-text)',
+  ENHANCEMENT: 'var(--state-success-text)',
+  RESEARCH: 'var(--state-info-text)',
 };
 
 export const WorkIntakeWidget: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
@@ -30,20 +30,27 @@ export const WorkIntakeWidget: React.FC<{ onRefresh?: () => void }> = ({ onRefre
       setData(await res.json());
       setError(null);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed");
+      setError(err instanceof Error ? err.message : 'Failed');
     }
   }, []);
 
-  useEffect(() => { fetch_(); }, [fetch_]);
-  useEffect(() => { if (onRefresh) fetch_(); }, [onRefresh, fetch_]);
+  useEffect(() => {
+    fetch_();
+  }, [fetch_]);
+  useEffect(() => {
+    if (onRefresh) fetch_();
+  }, [onRefresh, fetch_]);
 
   if (error || !data) {
     return (
       <Card variant="outlined">
-        <CardHeader title="Work Intake" action={error ? <Badge variant="error">Offline</Badge> : undefined} />
+        <CardHeader
+          title="Work Intake"
+          action={error ? <Badge variant="error">Offline</Badge> : undefined}
+        />
         <CardBody>
-          <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-            {error || "Loading..."}
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            {error || 'Loading...'}
           </span>
         </CardBody>
       </Card>
@@ -52,24 +59,21 @@ export const WorkIntakeWidget: React.FC<{ onRefresh?: () => void }> = ({ onRefre
 
   const bucketCounts: Record<string, number> = {};
   data.items.forEach((item) => {
-    const b = item.bucket || "OTHER";
+    const b = item.bucket || 'OTHER';
     bucketCounts[b] = (bucketCounts[b] || 0) + 1;
   });
 
   const chartData = Object.entries(bucketCounts).map(([label, value]) => ({
     label,
     value,
-    color: BUCKET_COLORS[label] || "var(--text-subtle)",
+    color: BUCKET_COLORS[label] || 'var(--text-subtle)',
   }));
 
   const total = data.items.length;
 
   return (
     <Card variant="outlined">
-      <CardHeader
-        title="Work Intake"
-        action={<Badge variant="info">{total} items</Badge>}
-      />
+      <CardHeader title="Work Intake" action={<Badge variant="info">{total} items</Badge>} />
       <CardBody>
         {chartData.length > 0 ? (
           <PieChart
@@ -78,14 +82,10 @@ export const WorkIntakeWidget: React.FC<{ onRefresh?: () => void }> = ({ onRefre
             donut
             showLegend
             showPercentage
-            innerLabel={
-              <span style={{ fontSize: 20, fontWeight: 700 }}>{total}</span>
-            }
+            innerLabel={<span style={{ fontSize: 20, fontWeight: 700 }}>{total}</span>}
           />
         ) : (
-          <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-            No work items
-          </span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No work items</span>
         )}
       </CardBody>
     </Card>

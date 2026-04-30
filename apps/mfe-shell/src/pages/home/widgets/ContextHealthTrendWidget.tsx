@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
-import { Card, CardHeader, CardBody } from "@mfe/design-system";
-import { Badge } from "@mfe/design-system";
-import { LineChart } from "@mfe/design-system";
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Card, CardHeader, CardBody } from '@mfe/design-system';
+import { Badge } from '@mfe/design-system';
+import { LineChart } from '@mfe/x-charts';
 
-const COCKPIT_URL = "/cockpit-api";
+const COCKPIT_URL = '/cockpit-api';
 const MAX_POINTS = 20;
 const POLL_INTERVAL = 30_000;
 
@@ -46,20 +46,19 @@ export const ContextHealthTrendWidget: React.FC = () => {
   }, [fetch_]);
 
   const labels = history.map((h) =>
-    new Date(h.ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+    new Date(h.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
   );
 
   const series = [
     {
-      name: "Health Score",
+      name: 'Health Score',
       data: history.map((h) => h.score),
-      color: "var(--state-success-text))",
+      color: 'var(--state-success-text))',
     },
   ];
 
-  const trendDir = history.length >= 2
-    ? history[history.length - 1].score - history[history.length - 2].score
-    : 0;
+  const trendDir =
+    history.length >= 2 ? history[history.length - 1].score - history[history.length - 2].score : 0;
 
   return (
     <Card variant="outlined">
@@ -67,7 +66,9 @@ export const ContextHealthTrendWidget: React.FC = () => {
         title="Context Health Trend"
         action={
           current ? (
-            <Badge variant={current.score >= 90 ? "success" : current.score >= 70 ? "warning" : "error"}>
+            <Badge
+              variant={current.score >= 90 ? 'success' : current.score >= 70 ? 'warning' : 'error'}
+            >
               {current.score}/100
             </Badge>
           ) : undefined
@@ -75,11 +76,17 @@ export const ContextHealthTrendWidget: React.FC = () => {
       />
       <CardBody>
         {history.length < 2 ? (
-          <div style={{ textAlign: "center", padding: 24 }}>
-            <div style={{ fontSize: 48, fontWeight: 800, color: current ? "var(--state-success-text))" : "var(--text-secondary)" }}>
-              {current?.score ?? "—"}
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <div
+              style={{
+                fontSize: 48,
+                fontWeight: 800,
+                color: current ? 'var(--state-success-text))' : 'var(--text-secondary)',
+              }}
+            >
+              {current?.score ?? '—'}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
               Trend data collecting... ({history.length}/2 points)
             </div>
           </div>
@@ -95,9 +102,14 @@ export const ContextHealthTrendWidget: React.FC = () => {
           />
         )}
         {trendDir !== 0 && (
-          <div style={{ textAlign: "center", marginTop: 8 }}>
-            <span style={{ fontSize: 12, color: trendDir > 0 ? "var(--state-success-text))" : "var(--state-danger-text))" }}>
-              {trendDir > 0 ? "▲" : "▼"} {Math.abs(trendDir)} pts
+          <div style={{ textAlign: 'center', marginTop: 8 }}>
+            <span
+              style={{
+                fontSize: 12,
+                color: trendDir > 0 ? 'var(--state-success-text))' : 'var(--state-danger-text))',
+              }}
+            >
+              {trendDir > 0 ? '▲' : '▼'} {Math.abs(trendDir)} pts
             </span>
           </div>
         )}

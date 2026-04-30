@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Card, CardHeader, CardBody } from "@mfe/design-system";
-import { Badge } from "@mfe/design-system";
-import { BarChart } from "@mfe/design-system";
+import React, { useEffect, useState, useCallback } from 'react';
+import { Card, CardHeader, CardBody } from '@mfe/design-system';
+import { Badge } from '@mfe/design-system';
+import { BarChart } from '@mfe/x-charts';
 
-const COCKPIT_URL = "/cockpit-api";
+const COCKPIT_URL = '/cockpit-api';
 
 interface ExtItem {
   extension_id: string;
@@ -26,20 +26,27 @@ export const ExtensionHealthWidget: React.FC<{ onRefresh?: () => void }> = ({ on
       setExtensions(json.items || []);
       setError(null);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed");
+      setError(err instanceof Error ? err.message : 'Failed');
     }
   }, []);
 
-  useEffect(() => { fetch_(); }, [fetch_]);
-  useEffect(() => { if (onRefresh) fetch_(); }, [onRefresh, fetch_]);
+  useEffect(() => {
+    fetch_();
+  }, [fetch_]);
+  useEffect(() => {
+    if (onRefresh) fetch_();
+  }, [onRefresh, fetch_]);
 
   if (error || extensions.length === 0) {
     return (
       <Card variant="outlined">
-        <CardHeader title="Extensions" action={error ? <Badge variant="error">Offline</Badge> : undefined} />
+        <CardHeader
+          title="Extensions"
+          action={error ? <Badge variant="error">Offline</Badge> : undefined}
+        />
         <CardBody>
-          <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-            {error || "Loading..."}
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            {error || 'Loading...'}
           </span>
         </CardBody>
       </Card>
@@ -50,16 +57,20 @@ export const ExtensionHealthWidget: React.FC<{ onRefresh?: () => void }> = ({ on
   const total = extensions.length;
 
   const chartData = extensions.slice(0, 12).map((ext) => ({
-    label: ext.extension_id.replace("PRJ-", "").slice(0, 12),
+    label: ext.extension_id.replace('PRJ-', '').slice(0, 12),
     value: ext.enabled !== false ? 1 : 0,
-    color: ext.enabled !== false ? "var(--state-success-text)" : "var(--state-danger-text)",
+    color: ext.enabled !== false ? 'var(--state-success-text)' : 'var(--state-danger-text)',
   }));
 
   return (
     <Card variant="outlined">
       <CardHeader
         title="Extensions"
-        action={<Badge variant={enabled === total ? "success" : "warning"}>{enabled}/{total}</Badge>}
+        action={
+          <Badge variant={enabled === total ? 'success' : 'warning'}>
+            {enabled}/{total}
+          </Badge>
+        }
       />
       <CardBody>
         <BarChart

@@ -37,7 +37,7 @@
       "availability": "exported",
       "lifecycle": "stable",
       "kind": "component",
-      "importStatement": "import { LineChart } from '@mfe/design-system';",
+      "importStatement": "import { LineChart } from '@mfe/x-charts';",
       "whereUsed": []
     },
     {
@@ -227,7 +227,7 @@
       "availability": "exported",
       "lifecycle": "stable",
       "kind": "component",
-      "importStatement": "import { PieChart } from '@mfe/design-system';",
+      "importStatement": "import { PieChart } from '@mfe/x-charts';",
       "whereUsed": []
     }
   ]
