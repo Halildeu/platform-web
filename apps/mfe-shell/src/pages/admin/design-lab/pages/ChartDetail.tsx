@@ -41,7 +41,7 @@ interface ChartMeta {
   name: string;
   description: string;
   importPath: string;
-  tier: 'core' | 'enterprise';
+  tier: 'core' | 'enterprise' | 'interaction' | 'ai' | 'perf';
   props: ChartProp[];
   sampleCode: string;
   features: string[];
@@ -869,6 +869,135 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
 />`,
     features: ['drill-down', 'tooltip', 'responsive', 'animation'],
     a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  /* ---- Interaction & Composition (Faz 21.4-B) ---- */
+
+  'kpi-card': {
+    id: 'kpi-card',
+    name: 'KPICard',
+    description:
+      'Single-value KPI display with optional trend indicator and inline sparkline. Composable with any x-charts mini chart.',
+    importPath: "import { KPICard } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'title',
+        type: 'string',
+        required: true,
+        default: '—',
+        description: 'KPI title (e.g. "Revenue")',
+      },
+      {
+        name: 'value',
+        type: 'string | number',
+        required: true,
+        default: '—',
+        description: 'Primary KPI value',
+      },
+      {
+        name: 'trend',
+        type: '{ direction: "up" | "down"; value: string; positive: boolean }',
+        required: false,
+        default: 'undefined',
+        description: 'Trend indicator with direction + delta',
+      },
+      {
+        name: 'chart',
+        type: 'ReactNode',
+        required: false,
+        default: 'undefined',
+        description: 'Inline sparkline (slot)',
+      },
+    ],
+    sampleCode: `<KPICard
+  title="Revenue"
+  value="$128,500"
+  trend={{ direction: "up", value: "+12.5%", positive: true }}
+  chart={<SparklineChart data={[10, 12, 8, 15, 13, 17, 20]} type="area" />}
+/>`,
+    features: ['composable', 'sparkline-slot', 'trend-indicator', 'theme-aware'],
+    a11y: ['aria-label', 'screen-reader-friendly'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'sparkline-chart': {
+    id: 'sparkline-chart',
+    name: 'SparklineChart',
+    description:
+      'Compact inline mini chart (line / area / bar) for table cells, KPI cards, and dense dashboards. No axes, no tooltip — pure data shape.',
+    importPath: "import { SparklineChart } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'data',
+        type: 'number[]',
+        required: true,
+        default: '[]',
+        description: 'Numeric data series',
+      },
+      {
+        name: 'type',
+        type: '"line" | "area" | "bar"',
+        required: false,
+        default: '"line"',
+        description: 'Visual variant',
+      },
+      {
+        name: 'color',
+        type: 'string',
+        required: false,
+        default: 'theme',
+        description: 'Stroke / fill color override',
+      },
+    ],
+    sampleCode: `<SparklineChart
+  data={[10, 12, 8, 15, 13, 17, 20]}
+  type="area"
+/>`,
+    features: ['inline', 'no-axes', 'theme-aware', 'lightweight'],
+    a11y: ['aria-hidden-by-default', 'expose-via-parent-aria-label'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'chart-dashboard': {
+    id: 'chart-dashboard',
+    name: 'ChartDashboard',
+    description:
+      'Multi-chart grid layout with responsive breakpoints. Composes KPI cards, sparklines, and full-size charts into a single dashboard surface.',
+    importPath: "import { ChartDashboard } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'children',
+        type: 'ReactNode',
+        required: true,
+        default: '—',
+        description: 'Charts and KPI cards composed inside the grid',
+      },
+      {
+        name: 'columns',
+        type: 'number | { sm?: number; md?: number; lg?: number }',
+        required: false,
+        default: '{ sm: 1, md: 2, lg: 3 }',
+        description: 'Grid column count per breakpoint',
+      },
+      {
+        name: 'gap',
+        type: 'number | string',
+        required: false,
+        default: '16',
+        description: 'Gap between dashboard cells (px or CSS value)',
+      },
+    ],
+    sampleCode: `<ChartDashboard columns={{ sm: 1, md: 2, lg: 3 }} gap={16}>
+  <KPICard title="Revenue" value="$128K" />
+  <KPICard title="Users" value="12,847" />
+  <BarChart data={[{ label: "A", value: 100 }]} />
+</ChartDashboard>`,
+    features: ['responsive-grid', 'composition', 'breakpoint-aware'],
+    a11y: ['landmark-region', 'logical-order'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
 };
