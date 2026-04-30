@@ -16,6 +16,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { echarts, registerECharts } from './echarts-imports';
 import type { ECharts, EChartsOption } from './echarts-imports';
+import { useChartsLocale } from '../i18n/locale-store';
+import { registerEChartsLocale } from '../i18n/echarts-locale';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -83,6 +85,15 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
   // Ensure ECharts modules are registered
   registerECharts();
 
+  // Faz 21.5-A1: bind ECharts to the active charts locale. The
+  // wrapper of every chart inherits this automatically — no per-chart
+  // wiring required. When the shell switches language and calls
+  // setChartsLocale(...), useChartsLocale fires a re-render here, the
+  // dep on echartsLocaleKey changes, and the init effect re-creates
+  // the ECharts instance with the new locale string.
+  const currentLocale = useChartsLocale();
+  const echartsLocaleKey = registerEChartsLocale(currentLocale) ?? 'EN';
+
   // Init / Dispose
   useEffect(() => {
     const container = containerRef.current;
@@ -92,6 +103,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     const instance = echarts.init(container, theme, {
       renderer,
       useDirtyRect: true, // Performance: only redraw changed areas
+      locale: echartsLocaleKey,
     });
 
     instanceRef.current = instance;
@@ -119,7 +131,9 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
       instanceRef.current = null;
       setIsReady(false);
     };
-  }, [renderer, theme]);
+    // Faz 21.5-A1: re-init when the active charts locale flips so
+    // ECharts re-resolves toolbox/legend/dataZoom strings.
+  }, [renderer, theme, echartsLocaleKey]);
 
   // Option update
   useEffect(() => {
