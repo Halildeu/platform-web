@@ -2,6 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { FormDrawer } from './FormDrawer';
 import { Button } from '../../primitives/button/Button';
+import { Avatar } from '../../primitives/avatar/Avatar';
 
 const meta: Meta<typeof FormDrawer> = {
   title: 'Patterns/FormDrawer',
@@ -26,11 +27,33 @@ const FormContent = () => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
     <div>
       <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>Ad</label>
-      <input type="text" placeholder="Adinizi girin" style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-default)', fontSize: 14 }} />
+      <input
+        type="text"
+        placeholder="Adinizi girin"
+        style={{
+          width: '100%',
+          padding: '8px 12px',
+          borderRadius: 8,
+          border: '1px solid var(--border-default)',
+          fontSize: 14,
+        }}
+      />
     </div>
     <div>
-      <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>E-posta</label>
-      <input type="email" placeholder="ornek@mail.com" style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-default)', fontSize: 14 }} />
+      <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+        E-posta
+      </label>
+      <input
+        type="email"
+        placeholder="ornek@mail.com"
+        style={{
+          width: '100%',
+          padding: '8px 12px',
+          borderRadius: 8,
+          border: '1px solid var(--border-default)',
+          fontSize: 14,
+        }}
+      />
     </div>
   </div>
 );
@@ -43,9 +66,21 @@ export const Default: Story = {
     subtitle: 'Kullanici bilgilerini girin.',
     children: <FormContent />,
     footer: (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border-subtle)' }}>
-        <Button variant="ghost" size="sm">Iptal</Button>
-        <Button variant="primary" size="sm">Kaydet</Button>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 8,
+          padding: '12px 16px',
+          borderTop: '1px solid var(--border-subtle)',
+        }}
+      >
+        <Button variant="ghost" size="sm">
+          Iptal
+        </Button>
+        <Button variant="primary" size="sm">
+          Kaydet
+        </Button>
       </div>
     ),
   },
@@ -82,6 +117,48 @@ export const LeftPlacement: Story = {
     title: 'Sol Taraftan',
     placement: 'left',
     children: <FormContent />,
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ position: 'relative', height: 500, overflow: 'hidden' }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+/**
+ * Codex 019dddf4 iter-43 — `leading` slot accepts any leading content.
+ * Most common consumer is a user avatar (initials/photo); the slot is
+ * named `leading` (LTR-neutral) rather than `avatar` so it can also
+ * hold an icon, status badge, or thumbnail in other contexts.
+ */
+export const WithLeadingAvatar: Story = {
+  args: {
+    open: true,
+    onClose: () => {},
+    title: 'Halil Kocoglu',
+    subtitle: 'halil@example.com',
+    leading: <Avatar initials="HK" size="lg" />,
+    children: <FormContent />,
+    footer: (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 8,
+          padding: '12px 16px',
+          borderTop: '1px solid var(--border-subtle)',
+        }}
+      >
+        <Button variant="ghost" size="sm">
+          Iptal
+        </Button>
+        <Button variant="primary" size="sm">
+          Kaydet
+        </Button>
+      </div>
+    ),
   },
   decorators: [
     (Story) => (

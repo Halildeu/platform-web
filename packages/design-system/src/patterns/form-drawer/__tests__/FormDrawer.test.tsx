@@ -106,9 +106,7 @@ describe('FormDrawer — placement', () => {
 
 describe('FormDrawer — footer', () => {
   it('footer render eder', () => {
-    render(
-      <FormDrawer {...defaultProps} footer={<button>Submit</button>} />,
-    );
+    render(<FormDrawer {...defaultProps} footer={<button>Submit</button>} />);
     expect(screen.getByText('Submit')).toBeInTheDocument();
   });
 
@@ -149,9 +147,7 @@ describe('FormDrawer — interaction', () => {
 
   it('backdrop tiklandiginda onClose cagrilir', () => {
     const onClose = vi.fn();
-    const { container } = render(
-      <FormDrawer {...defaultProps} onClose={onClose} />,
-    );
+    const { container } = render(<FormDrawer {...defaultProps} onClose={onClose} />);
     const backdrop = container.querySelector('[aria-hidden]');
     fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -176,9 +172,7 @@ describe('FormDrawer — interaction', () => {
 
   it('closeOnEscape=false durumunda Escape onClose cagirmaz', () => {
     const onClose = vi.fn();
-    render(
-      <FormDrawer {...defaultProps} onClose={onClose} closeOnEscape={false} />,
-    );
+    render(<FormDrawer {...defaultProps} onClose={onClose} closeOnEscape={false} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -301,26 +295,14 @@ describe('FormDrawer — Faz 6 contract: submit/cancel callbacks', () => {
 
   it('close butonu (X) onClose cagrilir — footer mevcutken de calisir', () => {
     const onClose = vi.fn();
-    render(
-      <FormDrawer
-        {...defaultProps}
-        onClose={onClose}
-        footer={<button>Kaydet</button>}
-      />,
-    );
+    render(<FormDrawer {...defaultProps} onClose={onClose} footer={<button>Kaydet</button>} />);
     fireEvent.click(screen.getByLabelText('Close drawer'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('Escape tusu onClose cagrilir — footer mevcutken de calisir', () => {
     const onClose = vi.fn();
-    render(
-      <FormDrawer
-        {...defaultProps}
-        onClose={onClose}
-        footer={<button>Kaydet</button>}
-      />,
-    );
+    render(<FormDrawer {...defaultProps} onClose={onClose} footer={<button>Kaydet</button>} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -412,12 +394,7 @@ describe('FormDrawer — Faz 6 contract: custom footer', () => {
   });
 
   it('footer icerisinde link render edilebilir', () => {
-    render(
-      <FormDrawer
-        {...defaultProps}
-        footer={<a href="#help">Yardim</a>}
-      />,
-    );
+    render(<FormDrawer {...defaultProps} footer={<a href="#help">Yardim</a>} />);
     expect(screen.getByText('Yardim')).toBeInTheDocument();
     expect(screen.getByText('Yardim').tagName).toBe('A');
   });
@@ -655,12 +632,7 @@ describe('FormDrawer — interaction: submit flow', () => {
     const onClose = vi.fn();
 
     render(
-      <FormDrawer
-        open
-        onClose={onClose}
-        title="X Close Test"
-        footer={<button>Kaydet</button>}
-      >
+      <FormDrawer open onClose={onClose} title="X Close Test" footer={<button>Kaydet</button>}>
         <input placeholder="Alan" />
       </FormDrawer>,
     );
@@ -714,7 +686,9 @@ describe('FormDrawer — interaction: submit flow', () => {
     await user.type(screen.getByPlaceholderText('Kategori'), 'Genel');
 
     expect((screen.getByPlaceholderText('Baslik') as HTMLInputElement).value).toBe('Test Baslik');
-    expect((screen.getByPlaceholderText('Aciklama') as HTMLInputElement).value).toBe('Test Aciklama');
+    expect((screen.getByPlaceholderText('Aciklama') as HTMLInputElement).value).toBe(
+      'Test Aciklama',
+    );
     expect((screen.getByPlaceholderText('Kategori') as HTMLInputElement).value).toBe('Genel');
 
     await user.click(screen.getByText('Gonder'));
@@ -738,7 +712,10 @@ describe('FormDrawer — focus restore', () => {
           </button>
           <FormDrawer
             open={open}
-            onClose={() => { setOpen(false); onClose(); }}
+            onClose={() => {
+              setOpen(false);
+              onClose();
+            }}
             title="Focus Test"
           >
             <input placeholder="Field" />
@@ -770,6 +747,59 @@ describe('FormDrawer — focus restore', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Codex 019dddf4 iter-43 — leading slot (avatar/icon/badge)         */
+/* ------------------------------------------------------------------ */
+
+describe('FormDrawer — leading slot', () => {
+  it('leading prop verildiginde slot render edilir', () => {
+    render(<FormDrawer {...defaultProps} leading={<span data-testid="leading-slot">HK</span>} />);
+    expect(screen.getByTestId('leading-slot')).toBeInTheDocument();
+    expect(screen.getByTestId('leading-slot')).toHaveTextContent('HK');
+  });
+
+  it('leading slot title ile birlikte gosterilir (subtitle yokken)', () => {
+    render(<FormDrawer {...defaultProps} leading={<span data-testid="leading-slot">A</span>} />);
+    expect(screen.getByTestId('leading-slot')).toBeInTheDocument();
+    expect(screen.getByText('Form Title')).toBeInTheDocument();
+  });
+
+  it('leading slot subtitle ile birlikte gosterilir (iki satirli baslik)', () => {
+    render(
+      <FormDrawer
+        {...defaultProps}
+        subtitle="alt baslik"
+        leading={<span data-testid="leading-slot">A</span>}
+      />,
+    );
+    expect(screen.getByTestId('leading-slot')).toBeInTheDocument();
+    expect(screen.getByText('Form Title')).toBeInTheDocument();
+    expect(screen.getByText('alt baslik')).toBeInTheDocument();
+  });
+
+  it('leading verilmediginde slot render edilmez (backward-compat)', () => {
+    render(<FormDrawer {...defaultProps} />);
+    // Title hala render olmalı, leading wrapper olmamalı
+    expect(screen.getByText('Form Title')).toBeInTheDocument();
+    // Leading varsa shrink-0 mt-0.5 wrapper'ı olur; yokken bu klası hiçbir
+    // element tasimaz (backward-compat sanity).
+    const dialog = screen.getByRole('dialog');
+    const wrappers = dialog.querySelectorAll('.shrink-0.mt-0\\.5');
+    expect(wrappers.length).toBe(0);
+  });
+
+  it('leading slot close button yerini etkilemez (sag tarafta kalir)', () => {
+    render(<FormDrawer {...defaultProps} leading={<span data-testid="leading-slot">A</span>} />);
+    expect(screen.getByLabelText('Close drawer')).toBeInTheDocument();
+    expect(screen.getByTestId('leading-slot')).toBeInTheDocument();
+  });
+
+  it('aria-label string title ile atanir (leading slot bunu degistirmemeli)', () => {
+    render(<FormDrawer {...defaultProps} leading={<span data-testid="leading-slot">A</span>} />);
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', 'Form Title');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  A11y — axe-core                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -777,6 +807,21 @@ describe('FormDrawer — a11y', () => {
   it('has no accessibility violations', async () => {
     const { container } = render(
       <FormDrawer open onClose={vi.fn()} title="Form Title">
+        <input placeholder="Name" />
+      </FormDrawer>,
+    );
+    await expectNoA11yViolations(container);
+  });
+
+  it('leading slot ile a11y ihlali yok', async () => {
+    const { container } = render(
+      <FormDrawer
+        open
+        onClose={vi.fn()}
+        title="Halil Kocoglu"
+        subtitle="halil@example.com"
+        leading={<span aria-hidden="true">HK</span>}
+      >
         <input placeholder="Name" />
       </FormDrawer>,
     );
