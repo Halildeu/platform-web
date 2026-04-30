@@ -294,7 +294,15 @@ const UsersGrid: React.FC<UsersGridProps> = ({
 
   const gridOptions = useMemo<GridOptions<UserSummary>>(
     () => ({
-      cellSelection: true,
+      // Codex 019dde93 iter-48b — `cellSelection: true` removed.
+      // ag-grid v34 owns the dblclick channel for cell-range extension
+      // when this flag is on, suppressing both `onRowDoubleClicked`
+      // AND `onCellDoubleClicked` events. iter-48's DS-level handler
+      // composition + dedupe + guard remain in place; they activate
+      // ONLY once ag-grid actually fires the events. Drawer-on-row-
+      // doubleclick is the entity contract here; spreadsheet-style
+      // range selection is not a UsersGrid feature (CSV export uses
+      // /api/users/export server endpoint, not selected cells).
       multiSortKey: 'ctrl',
       rowGroupPanelShow: 'always',
       // AG Grid v34: cacheBlockSize sadece serverSide row modelde geçerli

@@ -142,7 +142,11 @@ const RolesGrid: React.FC<RolesGridProps> = ({
 
   const gridOptions = React.useMemo(
     () => ({
-      cellSelection: true,
+      // Codex 019dde93 iter-48b — symmetric with UsersGrid.
+      // `cellSelection: true` suppresses ag-grid v34 dblclick events
+      // because the flag dedicates dblclick to cell-range extension.
+      // RoleDrawer is opened via row-dblclick contract; cell-range
+      // selection is not a feature here.
       multiSortKey: 'ctrl' as const,
     }),
     [],
