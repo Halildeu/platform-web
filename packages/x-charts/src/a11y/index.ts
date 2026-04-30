@@ -24,3 +24,7 @@ export type {
   ChartA11yContainerProps,
   HiddenDataTablePayload,
 } from './useChartA11y';
+
+// Faz 21.5-B PR-B2 — internal shell component that pairs with the hook.
+export { ChartA11yShell } from './ChartA11yShell';
+export type { ChartA11yShellProps } from './ChartA11yShell';

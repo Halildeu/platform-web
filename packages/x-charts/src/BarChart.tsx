@@ -12,7 +12,7 @@ import { useEChartsRenderer } from './renderers';
 import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
-import { useChartA11y } from './a11y/useChartA11y';
+import { ChartA11yShell, useChartA11y } from './a11y';
 import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
@@ -276,22 +276,18 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
   // (Tab/Arrow/Home/End/Enter/Escape), live announcements, and a
   // visually-hidden data table fallback so screen readers can read
   // the data even when ECharts canvas is opaque.
+  const a11yData = useMemo(
+    () => safeData.map((d) => ({ label: d.label, value: d.value })),
+    [safeData],
+  );
   const a11y = useChartA11y({
     chartType: 'bar',
-    data: useMemo(
-      () =>
-        safeData.map((d) => ({
-          label: d.label,
-          value: d.value,
-        })),
-      [safeData],
-    ),
+    data: a11yData,
     title,
     description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });
-  const tablePayload = a11y.renderHiddenDataTable();
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
@@ -324,77 +320,14 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
   }
 
   return (
-    <div className={cn('relative w-full', className)} {...rest}>
-      {/*
-          Visually-hidden data table fallback (Codex iter-7 default-on
-          a11y). Place BEFORE the chart so screen readers reach the
-          structured data when they encounter the aria-describedby
-          target.
-        */}
-      <table
-        id={tablePayload.id}
-        style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          margin: -1,
-          padding: 0,
-          overflow: 'hidden',
-          clip: 'rect(0,0,0,0)',
-          whiteSpace: 'nowrap',
-          border: 0,
-        }}
-        aria-hidden={false}
-      >
-        <caption>{tablePayload.caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{tablePayload.headers[0]}</th>
-            <th scope="col">{tablePayload.headers[1]}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tablePayload.rows.map((row, idx) => (
-            <tr key={idx}>
-              <td>{row.label}</td>
-              <td>{row.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* aria-live announcement region for keyboard navigation. */}
-      <div
-        id={a11y.liveRegionId}
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        style={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          margin: -1,
-          padding: 0,
-          overflow: 'hidden',
-          clip: 'rect(0,0,0,0)',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {a11y.liveMessage}
-      </div>
-
-      {/*
-          Chart container — receives `containerProps` from useChartA11y
-          (role="region", tabIndex=0, aria-label, aria-describedby,
-          keyboard handlers). Maintains backwards-compat data-testid.
-        */}
-      <div
-        ref={setRefs}
-        style={{ height, width: '100%' }}
-        data-testid="bar-chart"
-        {...a11y.containerProps}
-      />
-    </div>
+    <ChartA11yShell
+      a11y={a11y}
+      className={className}
+      height={height}
+      testId="bar-chart"
+      setRefs={setRefs}
+      {...rest}
+    />
   );
 });
 

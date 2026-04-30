@@ -6,19 +6,20 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from "react";
-import { cn } from "@mfe/design-system";
-import { useEChartsRenderer } from "./renderers";
-import { buildDesignLabEChartsTheme } from "./theme/DesignLabEChartsTheme";
-import { formatCompact } from "./utils/formatters";
-import { sanitizeSeries } from "./utils/data-validation";
-import type { EChartsOption } from "./renderers/echarts-imports";
+import React, { useMemo, useCallback } from 'react';
+import { cn } from '@mfe/design-system';
+import { useEChartsRenderer } from './renderers';
+import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { formatCompact } from './utils/formatters';
+import { sanitizeSeries } from './utils/data-validation';
+import { ChartA11yShell, useChartA11y } from './a11y';
+import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type ChartSize = "sm" | "md" | "lg";
+export type ChartSize = 'sm' | 'md' | 'lg';
 
 export type ChartSeries = {
   name: string;
@@ -70,8 +71,16 @@ export interface LineChartProps {
 const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
 
 const DEFAULT_PALETTE = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -79,202 +88,225 @@ const DEFAULT_PALETTE = [
 /* ------------------------------------------------------------------ */
 
 const escapeHtml = (t: string): string =>
-  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(
-  function LineChart(
-    {
-      series: seriesData,
-      labels,
-      size = "md",
-      showDots = true,
-      showGrid = true,
-      showLegend = false,
-      showArea = false,
-      curved = false,
-      valueFormatter,
-      animate = true,
-      title,
-      description,
-      className,
-      onDataPointClick,
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const height = SIZE_HEIGHT[size];
-    const safeSeries = useMemo(() => sanitizeSeries(seriesData), [seriesData]);
-    const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
-    const fmt = valueFormatter ?? formatCompact;
+export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(function LineChart(
+  {
+    series: seriesData,
+    labels,
+    size = 'md',
+    showDots = true,
+    showGrid = true,
+    showLegend = false,
+    showArea = false,
+    curved = false,
+    valueFormatter,
+    animate = true,
+    title,
+    description,
+    className,
+    onDataPointClick,
+    ...rest
+  },
+  forwardedRef,
+) {
+  const height = SIZE_HEIGHT[size];
+  const safeSeries = useMemo(() => sanitizeSeries(seriesData), [seriesData]);
+  const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
+  const fmt = valueFormatter ?? formatCompact;
 
-    const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
 
-    const option = useMemo((): EChartsOption | null => {
-      if (isEmpty) return null;
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty) return null;
 
-      const palette = DEFAULT_PALETTE;
+    const palette = DEFAULT_PALETTE;
 
-      const echartsSeriesList = safeSeries.map((s, i) => ({
-        type: "line" as const,
-        name: s.name,
-        data: s.data,
-        smooth: curved,
-        symbol: showDots ? "circle" : "none",
-        symbolSize: showDots ? 6 : 0,
-        lineStyle: { color: s.color ?? palette[i % palette.length], width: 2 },
-        itemStyle: { color: s.color ?? palette[i % palette.length] },
-        areaStyle: showArea
-          ? { color: s.color ?? palette[i % palette.length], opacity: 0.18 }
-          : undefined,
-        emphasis: {
-          focus: "series" as const,
-          itemStyle: { borderWidth: 2 },
-        },
-        cursor: onDataPointClick ? "pointer" : "default",
-      }));
-
-      return {
-        animation: animate,
-        animationDuration: animate ? 500 : 0,
-        animationEasing: "cubicOut",
-        title: title
-          ? {
-              text: escapeHtml(title),
-              subtext: description ? escapeHtml(description) : undefined,
-              left: "center",
-              textStyle: { fontSize: 16, fontWeight: 600 },
-              subtextStyle: { fontSize: 13 },
-            }
-          : undefined,
-        tooltip: {
-          trigger: "axis",
-          confine: true,
-          valueFormatter: (v: unknown) => fmt(v as number),
-        },
-        legend: {
-          show: showLegend || safeSeries.length > 1,
-          bottom: 0,
-          icon: "roundRect",
-          itemWidth: 12,
-          itemHeight: 8,
-          textStyle: { fontSize: 12 },
-        },
-        grid: {
-          top: title ? 60 : 24,
-          right: 16,
-          bottom: showLegend || safeSeries.length > 1 ? 48 : 24,
-          left: 16,
-          containLabel: true,
-        },
-        xAxis: {
-          type: "category",
-          data: labels,
-          boundaryGap: false,
-          axisLabel: { fontSize: 11 },
-        },
-        yAxis: {
-          type: "value",
-          axisLabel: {
-            fontSize: 11,
-            formatter: (v: number) => fmt(v),
-          },
-          splitLine: {
-            show: showGrid,
-            lineStyle: { type: "dashed" as const },
-          },
-        },
-        series: echartsSeriesList,
-        aria: {
-          enabled: true,
-          label: {
-            description: description
-              ? escapeHtml(description)
-              : title
-                ? `Line chart: ${escapeHtml(title)}`
-                : "Line chart",
-          },
-        },
-      } as EChartsOption;
-    }, [
-      seriesData, labels, showDots, showGrid, showLegend,
-      showArea, curved, valueFormatter, animate, title,
-      description, onDataPointClick, isEmpty,
-    ]);
-
-    const handleClick = useCallback(
-      (params: unknown) => {
-        if (!onDataPointClick) return;
-        const p = params as { seriesName: string; name: string; value: number; dataIndex: number };
-        onDataPointClick({
-          datum: { seriesName: p.seriesName, label: p.name, value: p.value },
-          value: p.value,
-          label: p.name,
-        });
+    const echartsSeriesList = safeSeries.map((s, i) => ({
+      type: 'line' as const,
+      name: s.name,
+      data: s.data,
+      smooth: curved,
+      symbol: showDots ? 'circle' : 'none',
+      symbolSize: showDots ? 6 : 0,
+      lineStyle: { color: s.color ?? palette[i % palette.length], width: 2 },
+      itemStyle: { color: s.color ?? palette[i % palette.length] },
+      areaStyle: showArea
+        ? { color: s.color ?? palette[i % palette.length], opacity: 0.18 }
+        : undefined,
+      emphasis: {
+        focus: 'series' as const,
+        itemStyle: { borderWidth: 2 },
       },
-      [onDataPointClick],
-    );
+      cursor: onDataPointClick ? 'pointer' : 'default',
+    }));
 
-    const { containerRef } = useEChartsRenderer({
-      option: option ?? ({} as EChartsOption),
-      theme,
-      respectReducedMotion: true,
-      onClick: onDataPointClick ? handleClick : undefined,
-    });
-
-    const setRefs = useCallback(
-      (node: HTMLDivElement | null) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
-        else if (forwardedRef)
-          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    return {
+      animation: animate,
+      animationDuration: animate ? 500 : 0,
+      animationEasing: 'cubicOut',
+      title: title
+        ? {
+            text: escapeHtml(title),
+            subtext: description ? escapeHtml(description) : undefined,
+            left: 'center',
+            textStyle: { fontSize: 16, fontWeight: 600 },
+            subtextStyle: { fontSize: 13 },
+          }
+        : undefined,
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        valueFormatter: (v: unknown) => fmt(v as number),
       },
-      [forwardedRef, containerRef],
-    );
-
-    /* ---- empty state ---- */
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            "inline-flex items-center justify-center text-sm text-[var(--text-secondary)]",
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label={title ?? "Line chart -- no data"}
-          data-testid="line-chart-empty"
-          {...rest}
-        >
-          Veri yok
-        </div>
-      );
-    }
-
-    return (
-      <div
-        ref={setRefs}
-        className={cn("w-full", className)}
-        style={{ height, width: "100%" }}
-        role="img"
-        aria-label={
-          description
+      legend: {
+        show: showLegend || safeSeries.length > 1,
+        bottom: 0,
+        icon: 'roundRect',
+        itemWidth: 12,
+        itemHeight: 8,
+        textStyle: { fontSize: 12 },
+      },
+      grid: {
+        top: title ? 60 : 24,
+        right: 16,
+        bottom: showLegend || safeSeries.length > 1 ? 48 : 24,
+        left: 16,
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        boundaryGap: false,
+        axisLabel: { fontSize: 11 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          fontSize: 11,
+          formatter: (v: number) => fmt(v),
+        },
+        splitLine: {
+          show: showGrid,
+          lineStyle: { type: 'dashed' as const },
+        },
+      },
+      series: echartsSeriesList,
+      aria: {
+        enabled: true,
+        label: {
+          description: description
             ? escapeHtml(description)
             : title
               ? `Line chart: ${escapeHtml(title)}`
-              : "Line chart"
-        }
-        data-testid="line-chart"
-        {...rest}
-      />
-    );
-  },
-);
+              : 'Line chart',
+        },
+      },
+    } as EChartsOption;
+  }, [
+    seriesData,
+    labels,
+    showDots,
+    showGrid,
+    showLegend,
+    showArea,
+    curved,
+    valueFormatter,
+    animate,
+    title,
+    description,
+    onDataPointClick,
+    isEmpty,
+  ]);
 
-LineChart.displayName = "LineChart";
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onDataPointClick) return;
+      const p = params as { seriesName: string; name: string; value: number; dataIndex: number };
+      onDataPointClick({
+        datum: { seriesName: p.seriesName, label: p.name, value: p.value },
+        value: p.value,
+        label: p.name,
+      });
+    },
+    [onDataPointClick],
+  );
+
+  const { containerRef, instance } = useEChartsRenderer({
+    option: option ?? ({} as EChartsOption),
+    theme,
+    respectReducedMotion: true,
+    onClick: onDataPointClick ? handleClick : undefined,
+  });
+
+  // Faz 21.5-B PR-B2: default-on a11y. Adapt LineChart's series-based
+  // shape (multiple series × N points) into the hook's flat
+  // {label, value} format. Picks the first series' values aligned
+  // with x-axis labels — matches what a screen-reader user expects
+  // when traversing the primary trend with arrow keys.
+  const a11yData = useMemo(
+    () =>
+      labels.map((label, i) => ({
+        label,
+        value: safeSeries[0]?.data[i] ?? 0,
+      })),
+    [labels, safeSeries],
+  );
+  const a11y = useChartA11y({
+    chartType: 'line',
+    data: a11yData,
+    title,
+    description,
+    valueFormatter: fmt,
+    echartsInstance: instance,
+  });
+
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [forwardedRef, containerRef],
+  );
+
+  /* ---- empty state ---- */
+  if (isEmpty) {
+    return (
+      <div
+        ref={forwardedRef}
+        className={cn(
+          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
+        role="img"
+        aria-label={a11y.ariaLabel}
+        data-testid="line-chart-empty"
+        {...rest}
+      >
+        Veri yok
+      </div>
+    );
+  }
+
+  return (
+    <ChartA11yShell
+      a11y={a11y}
+      className={className}
+      height={height}
+      testId="line-chart"
+      setRefs={setRefs}
+      {...rest}
+    />
+  );
+});
+
+LineChart.displayName = 'LineChart';
 
 export default LineChart;

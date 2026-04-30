@@ -6,12 +6,13 @@
  *
  * @migration AG Charts → ECharts (P1, chart-viz-engine-selection D-001)
  */
-import React, { useMemo, useCallback } from "react";
-import { cn } from "@mfe/design-system";
-import { useEChartsRenderer } from "./renderers";
-import { formatCompact } from "./utils/formatters";
-import { sanitizeNumber } from "./utils/data-validation";
-import type { EChartsOption } from "./renderers/echarts-imports";
+import React, { useMemo, useCallback } from 'react';
+import { cn } from '@mfe/design-system';
+import { useEChartsRenderer } from './renderers';
+import { ChartA11yShell, useChartA11y } from './a11y';
+import { formatCompact } from './utils/formatters';
+import { sanitizeNumber } from './utils/data-validation';
+import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -25,7 +26,7 @@ export type ScatterDataPoint = {
   color?: string;
 };
 
-export type ChartSize = "sm" | "md" | "lg";
+export type ChartSize = 'sm' | 'md' | 'lg';
 
 export interface ScatterChartProps {
   /** Data points for the scatter plot. */
@@ -69,21 +70,24 @@ const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
 /* ------------------------------------------------------------------ */
 
 const getCSSVar = (v: string, fb: string): string => {
-  if (typeof document === "undefined") return fb;
+  if (typeof document === 'undefined') return fb;
   return getComputedStyle(document.documentElement).getPropertyValue(v).trim() || fb;
 };
 
 const escapeHtml = (t: string): string =>
-  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const getDefaultPalette = (): string[] => [
-  getCSSVar("--action-primary", "#3b82f6"),
-  getCSSVar("--state-success-text", "#22c55e"),
-  getCSSVar("--state-warning-text", "#f59e0b"),
-  getCSSVar("--state-error-text", "#ef4444"),
-  getCSSVar("--state-info-text", "#06b6d4"),
-  getCSSVar("--action-secondary", "#8b5cf6"),
-  "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+  getCSSVar('--action-primary', '#3b82f6'),
+  getCSSVar('--state-success-text', '#22c55e'),
+  getCSSVar('--state-warning-text', '#f59e0b'),
+  getCSSVar('--state-error-text', '#ef4444'),
+  getCSSVar('--state-info-text', '#06b6d4'),
+  getCSSVar('--action-secondary', '#8b5cf6'),
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -94,7 +98,7 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
   function ScatterChart(
     {
       data,
-      size = "md",
+      size = 'md',
       showGrid = true,
       showLegend = false,
       title,
@@ -106,19 +110,20 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       xLabel,
       yLabel,
       bubble = false,
-      noDataText = "Veri yok",
+      noDataText = 'Veri yok',
       ...rest
     },
     forwardedRef,
   ) {
     const height = SIZE_HEIGHT[size];
-    const safeData = useMemo(() =>
-      (data ?? []).map(d => ({
-        ...d,
-        x: sanitizeNumber(d.x),
-        y: sanitizeNumber(d.y),
-        size: d.size != null ? sanitizeNumber(d.size) : undefined,
-      })),
+    const safeData = useMemo(
+      () =>
+        (data ?? []).map((d) => ({
+          ...d,
+          x: sanitizeNumber(d.x),
+          y: sanitizeNumber(d.y),
+          size: d.size != null ? sanitizeNumber(d.size) : undefined,
+        })),
       [data],
     );
     const isEmpty = safeData.length === 0;
@@ -128,11 +133,11 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       if (isEmpty) return null;
 
       const palette = colors ?? getDefaultPalette();
-      const fontFamily = getCSSVar("--font-family-sans", "Inter, system-ui, sans-serif");
-      const textPrimary = getCSSVar("--text-primary", "#1a1a2e");
-      const textSecondary = getCSSVar("--text-secondary", "#6b7280");
-      const borderDefault = getCSSVar("--border-default", "#e5e7eb");
-      const bgMuted = getCSSVar("--bg-muted", "#f9fafb");
+      const fontFamily = getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
+      const textPrimary = getCSSVar('--text-primary', '#1a1a2e');
+      const textSecondary = getCSSVar('--text-secondary', '#6b7280');
+      const borderDefault = getCSSVar('--border-default', '#e5e7eb');
+      const bgMuted = getCSSVar('--bg-muted', '#f9fafb');
 
       // Transform data: [x, y, size?, label?, color?]
       const scatterData = safeData.map((d, i) => ({
@@ -152,25 +157,25 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       return {
         animation: animate,
         animationDuration: animate ? 500 : 0,
-        animationEasing: "cubicOut",
+        animationEasing: 'cubicOut',
         title: title
           ? {
               text: escapeHtml(title),
               subtext: description ? escapeHtml(description) : undefined,
-              left: "center",
+              left: 'center',
               textStyle: { fontFamily, color: textPrimary, fontSize: 16, fontWeight: 600 },
               subtextStyle: { fontFamily, color: textSecondary, fontSize: 13 },
             }
           : undefined,
         tooltip: {
-          trigger: "item",
+          trigger: 'item',
           confine: true,
           textStyle: { fontFamily, fontSize: 13 },
           formatter: (params: unknown) => {
             const p = params as { value: number[]; name: string };
             const xVal = fmt(p.value[0]);
             const yVal = fmt(p.value[1]);
-            const label = p.name && !p.name.startsWith("Point ") ? ` — ${escapeHtml(p.name)}` : "";
+            const label = p.name && !p.name.startsWith('Point ') ? ` — ${escapeHtml(p.name)}` : '';
             return `(${escapeHtml(xVal)}, ${escapeHtml(yVal)})${label}`;
           },
         },
@@ -178,7 +183,7 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           show: showLegend,
           bottom: 0,
           textStyle: { fontFamily, color: textPrimary, fontSize: 12 },
-          icon: "circle",
+          icon: 'circle',
           itemWidth: 10,
           itemHeight: 10,
         },
@@ -190,9 +195,9 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           containLabel: true,
         },
         xAxis: {
-          type: "value",
+          type: 'value',
           name: xLabel,
-          nameLocation: "center",
+          nameLocation: 'center',
           nameGap: 28,
           nameTextStyle: { fontFamily, color: textSecondary, fontSize: 12 },
           axisLine: { lineStyle: { color: borderDefault } },
@@ -205,13 +210,13 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           },
           splitLine: {
             show: showGrid,
-            lineStyle: { color: bgMuted, type: "dashed" as const },
+            lineStyle: { color: bgMuted, type: 'dashed' as const },
           },
         },
         yAxis: {
-          type: "value",
+          type: 'value',
           name: yLabel,
-          nameLocation: "center",
+          nameLocation: 'center',
           nameGap: 40,
           nameTextStyle: { fontFamily, color: textSecondary, fontSize: 12 },
           axisLine: { show: false },
@@ -224,20 +229,20 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           },
           splitLine: {
             show: showGrid,
-            lineStyle: { color: bgMuted, type: "dashed" as const },
+            lineStyle: { color: bgMuted, type: 'dashed' as const },
           },
         },
         series: [
           {
-            type: "scatter",
+            type: 'scatter',
             data: scatterData,
             symbolSize: symbolSizeFn,
             itemStyle: {
               color: palette[0],
             },
             emphasis: {
-              focus: "self",
-              itemStyle: { shadowBlur: 10, shadowColor: "rgba(0,0,0,0.2)" },
+              focus: 'self',
+              itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' },
             },
           },
         ],
@@ -248,23 +253,57 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
               ? escapeHtml(description)
               : title
                 ? `Scatter chart: ${escapeHtml(title)}`
-                : "Scatter chart",
+                : 'Scatter chart',
           },
         },
       } as EChartsOption;
-    }, [data, showGrid, showLegend, valueFormatter, animate, colors, title, description, xLabel, yLabel, bubble, isEmpty]);
+    }, [
+      data,
+      showGrid,
+      showLegend,
+      valueFormatter,
+      animate,
+      colors,
+      title,
+      description,
+      xLabel,
+      yLabel,
+      bubble,
+      isEmpty,
+    ]);
 
     // Use centralized renderer hook
-    const { containerRef, isReady } = useEChartsRenderer({
+    const { containerRef, instance } = useEChartsRenderer({
       option: option ?? ({} as EChartsOption),
       respectReducedMotion: true,
+    });
+
+    // Faz 21.5-B PR-B2: default-on a11y. ScatterChart is 2D — flatten
+    // each point to {label: explicit-label-or-coordinate, value: y}
+    // for SR consumption. The hidden table shows label + y-value;
+    // x-coordinates surface only via tooltip (ECharts handles them).
+    const a11yData = useMemo(
+      () =>
+        safeData.map((d, i) => ({
+          label: d.label ?? `Point ${i + 1} (${d.x}, ${d.y})`,
+          value: d.y,
+        })),
+      [safeData],
+    );
+    const a11y = useChartA11y({
+      chartType: 'scatter',
+      data: a11yData,
+      title,
+      description,
+      valueFormatter: fmt,
+      echartsInstance: instance,
     });
 
     // Merge refs
     const setRefs = useCallback(
       (node: HTMLDivElement | null) => {
         (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
+        if (typeof forwardedRef === 'function') forwardedRef(node);
         else if (forwardedRef)
           (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       },
@@ -277,12 +316,12 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
         <div
           ref={forwardedRef}
           className={cn(
-            "inline-flex items-center justify-center text-sm text-[var(--text-secondary)]",
+            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
             className,
           )}
           style={{ height }}
           role="img"
-          aria-label={title ?? "Scatter chart — no data"}
+          aria-label={a11y.ariaLabel}
           data-testid="scatter-chart-empty"
           {...rest}
         >
@@ -292,25 +331,18 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
     }
 
     return (
-      <div
-        ref={setRefs}
-        className={cn("w-full", className)}
-        style={{ height, width: "100%" }}
-        role="img"
-        aria-label={
-          description
-            ? escapeHtml(description)
-            : title
-              ? `Scatter chart: ${escapeHtml(title)}`
-              : "Scatter chart"
-        }
-        data-testid="scatter-chart"
+      <ChartA11yShell
+        a11y={a11y}
+        className={className}
+        height={height}
+        testId="scatter-chart"
+        setRefs={setRefs}
         {...rest}
       />
     );
   },
 );
 
-ScatterChart.displayName = "ScatterChart";
+ScatterChart.displayName = 'ScatterChart';
 
 export default ScatterChart;

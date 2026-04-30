@@ -7,19 +7,20 @@
  *
  * @migration SVG -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from "react";
-import { cn } from "@mfe/design-system";
-import { useEChartsRenderer } from "./renderers";
-import { buildDesignLabEChartsTheme } from "./theme/DesignLabEChartsTheme";
-import { formatCompact } from "./utils/formatters";
-import { sanitizeNumber } from "./utils/data-validation";
-import type { EChartsOption } from "./renderers/echarts-imports";
+import React, { useMemo, useCallback } from 'react';
+import { cn } from '@mfe/design-system';
+import { useEChartsRenderer } from './renderers';
+import { ChartA11yShell, useChartA11y } from './a11y';
+import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { formatCompact } from './utils/formatters';
+import { sanitizeNumber } from './utils/data-validation';
+import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type ChartSize = "sm" | "md" | "lg";
+export type ChartSize = 'sm' | 'md' | 'lg';
 
 export type GaugeThreshold = {
   /** Threshold boundary value. */
@@ -74,8 +75,16 @@ export interface GaugeChartProps {
 const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
 
 const DEFAULT_PALETTE = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -83,7 +92,7 @@ const DEFAULT_PALETTE = [
 /* ------------------------------------------------------------------ */
 
 const escapeHtml = (t: string): string =>
-  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
  * Normalize threshold values into ECharts axisLine color stops (0-1 range).
@@ -98,191 +107,203 @@ function buildAxisLineColors(
   if (range <= 0) return [[1, DEFAULT_PALETTE[0]]];
 
   const sorted = [...thresholds].sort((a, b) => a.value - b.value);
-  return sorted.map((t) => [
-    Math.min(Math.max((t.value - min) / range, 0), 1),
-    t.color,
-  ]);
+  return sorted.map((t) => [Math.min(Math.max((t.value - min) / range, 0), 1), t.color]);
 }
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(
-  function GaugeChart(
-    {
-      value,
-      min = 0,
-      max = 100,
-      title,
-      size = "md",
-      thresholds,
-      startAngle = 225,
-      endAngle = -45,
-      showProgress = false,
-      pointer,
-      splitNumber = 10,
-      showAxisLabel = true,
-      valueFormatter,
-      animate = true,
-      className,
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const height = SIZE_HEIGHT[size];
-    const isEmpty = value == null;
-    const safeValue = sanitizeNumber(value);
-    const fmt = valueFormatter ?? formatCompact;
+export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(function GaugeChart(
+  {
+    value,
+    min = 0,
+    max = 100,
+    title,
+    size = 'md',
+    thresholds,
+    startAngle = 225,
+    endAngle = -45,
+    showProgress = false,
+    pointer,
+    splitNumber = 10,
+    showAxisLabel = true,
+    valueFormatter,
+    animate = true,
+    className,
+    ...rest
+  },
+  forwardedRef,
+) {
+  const height = SIZE_HEIGHT[size];
+  const isEmpty = value == null;
+  const safeValue = sanitizeNumber(value);
+  const fmt = valueFormatter ?? formatCompact;
 
-    const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
 
-    const option = useMemo((): EChartsOption | null => {
-      if (isEmpty) return null;
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty) return null;
 
-      const axisLineColors = thresholds?.length
-        ? buildAxisLineColors(thresholds, min, max)
-        : [
-            [0.6, "#22c55e"],
-            [0.8, "#f59e0b"],
-            [1, "#ef4444"],
-          ] as [number, string][];
+    const axisLineColors = thresholds?.length
+      ? buildAxisLineColors(thresholds, min, max)
+      : ([
+          [0.6, '#22c55e'],
+          [0.8, '#f59e0b'],
+          [1, '#ef4444'],
+        ] as [number, string][]);
 
-      return {
-        animation: animate,
-        animationDuration: animate ? 500 : 0,
-        animationEasing: "cubicOut",
-        series: [
-          {
-            type: "gauge" as const,
-            min,
-            max,
-            startAngle,
-            endAngle,
-            splitNumber,
-            data: [{ value: safeValue, name: title ?? "" }],
-            progress: {
-              show: showProgress,
-              width: 12,
-            },
-            axisLine: {
-              lineStyle: {
-                width: 16,
-                color: axisLineColors,
-              },
-            },
-            pointer: {
-              length: pointer?.length ?? "60%",
-              width: pointer?.width ?? 5,
-              itemStyle: pointer?.color
-                ? { color: pointer.color }
-                : undefined,
-            },
-            axisTick: {
-              show: true,
-              distance: -20,
-              length: 6,
-              lineStyle: { color: "#999", width: 1 },
-            },
-            splitLine: {
-              show: true,
-              distance: -24,
-              length: 12,
-              lineStyle: { color: "#999", width: 2 },
-            },
-            axisLabel: {
-              show: showAxisLabel,
-              distance: 30,
-              fontSize: 11,
-              formatter: (v: number) => escapeHtml(fmt(v)),
-            },
-            detail: {
-              valueAnimation: animate,
-              formatter: (v: number) => escapeHtml(fmt(v)),
-              fontSize: Math.round(height * 0.08),
-              fontWeight: 600,
-              offsetCenter: [0, "40%"],
-              color: "inherit",
-            },
-            title: title
-              ? {
-                  show: true,
-                  offsetCenter: [0, "60%"],
-                  fontSize: 13,
-                  color: "var(--text-secondary, #666)",
-                }
-              : { show: false },
+    return {
+      animation: animate,
+      animationDuration: animate ? 500 : 0,
+      animationEasing: 'cubicOut',
+      series: [
+        {
+          type: 'gauge' as const,
+          min,
+          max,
+          startAngle,
+          endAngle,
+          splitNumber,
+          data: [{ value: safeValue, name: title ?? '' }],
+          progress: {
+            show: showProgress,
+            width: 12,
           },
-        ],
-        aria: {
-          enabled: true,
-          label: {
-            description: title
-              ? `Gauge chart: ${escapeHtml(title)}`
-              : "Gauge chart",
+          axisLine: {
+            lineStyle: {
+              width: 16,
+              color: axisLineColors,
+            },
           },
+          pointer: {
+            length: pointer?.length ?? '60%',
+            width: pointer?.width ?? 5,
+            itemStyle: pointer?.color ? { color: pointer.color } : undefined,
+          },
+          axisTick: {
+            show: true,
+            distance: -20,
+            length: 6,
+            lineStyle: { color: '#999', width: 1 },
+          },
+          splitLine: {
+            show: true,
+            distance: -24,
+            length: 12,
+            lineStyle: { color: '#999', width: 2 },
+          },
+          axisLabel: {
+            show: showAxisLabel,
+            distance: 30,
+            fontSize: 11,
+            formatter: (v: number) => escapeHtml(fmt(v)),
+          },
+          detail: {
+            valueAnimation: animate,
+            formatter: (v: number) => escapeHtml(fmt(v)),
+            fontSize: Math.round(height * 0.08),
+            fontWeight: 600,
+            offsetCenter: [0, '40%'],
+            color: 'inherit',
+          },
+          title: title
+            ? {
+                show: true,
+                offsetCenter: [0, '60%'],
+                fontSize: 13,
+                color: 'var(--text-secondary, #666)',
+              }
+            : { show: false },
         },
-      } as EChartsOption;
-    }, [
-      value, min, max, title, thresholds, startAngle, endAngle,
-      showProgress, pointer, splitNumber, showAxisLabel,
-      fmt, animate, height, isEmpty,
-    ]);
-
-    const { containerRef } = useEChartsRenderer({
-      option: option ?? ({} as EChartsOption),
-      theme,
-      respectReducedMotion: true,
-    });
-
-    const setRefs = useCallback(
-      (node: HTMLDivElement | null) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
-        else if (forwardedRef)
-          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      ],
+      aria: {
+        enabled: true,
+        label: {
+          description: title ? `Gauge chart: ${escapeHtml(title)}` : 'Gauge chart',
+        },
       },
-      [forwardedRef, containerRef],
-    );
+    } as EChartsOption;
+  }, [
+    value,
+    min,
+    max,
+    title,
+    thresholds,
+    startAngle,
+    endAngle,
+    showProgress,
+    pointer,
+    splitNumber,
+    showAxisLabel,
+    fmt,
+    animate,
+    height,
+    isEmpty,
+  ]);
 
-    /* ---- empty state ---- */
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            "inline-flex items-center justify-center text-sm text-[var(--text-secondary)]",
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label={title ?? "Gauge chart -- no data"}
-          data-testid="gauge-chart-empty"
-          {...rest}
-        >
-          Veri yok
-        </div>
-      );
-    }
+  const { containerRef, instance } = useEChartsRenderer({
+    option: option ?? ({} as EChartsOption),
+    theme,
+    respectReducedMotion: true,
+  });
 
+  // Faz 21.5-B PR-B2: default-on a11y. Gauge has a single value
+  // (no series) → emit one virtual data point for the SR data table.
+  const a11yData = useMemo(
+    () => (isEmpty ? [] : [{ label: title ?? 'Value', value: safeValue }]),
+    [isEmpty, title, safeValue],
+  );
+  const a11y = useChartA11y({
+    chartType: 'gauge',
+    data: a11yData,
+    title,
+    valueFormatter: fmt,
+    echartsInstance: instance,
+  });
+
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [forwardedRef, containerRef],
+  );
+
+  /* ---- empty state ---- */
+  if (isEmpty) {
     return (
       <div
-        ref={setRefs}
-        className={cn("w-full", className)}
-        style={{ height, width: "100%" }}
+        ref={forwardedRef}
+        className={cn(
+          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
         role="img"
-        aria-label={
-          title
-            ? `Gauge chart: ${escapeHtml(title)}`
-            : "Gauge chart"
-        }
-        data-testid="gauge-chart"
+        aria-label={a11y.ariaLabel}
+        data-testid="gauge-chart-empty"
         {...rest}
-      />
+      >
+        Veri yok
+      </div>
     );
-  },
-);
+  }
 
-GaugeChart.displayName = "GaugeChart";
+  return (
+    <ChartA11yShell
+      a11y={a11y}
+      className={className}
+      height={height}
+      testId="gauge-chart"
+      setRefs={setRefs}
+      {...rest}
+    />
+  );
+});
+
+GaugeChart.displayName = 'GaugeChart';
 
 export default GaugeChart;
