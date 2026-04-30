@@ -84,6 +84,7 @@ const shared = {
     'ag-charts-enterprise',
     '@mfe/shared-http',
     '@mfe/shared-types',
+    '@mfe/x-charts',
     '@tanstack/react-query',
     '@dnd-kit/core',
     '@dnd-kit/sortable',
