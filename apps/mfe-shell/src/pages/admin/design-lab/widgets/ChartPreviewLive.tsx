@@ -118,8 +118,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showDots={isOn(toggles, 'showDots', true)}
             showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
-            smooth={isOn(toggles, 'curved', false)}
-            area={isOn(toggles, 'showArea', false)}
+            curved={isOn(toggles, 'curved', false)}
+            showArea={isOn(toggles, 'showArea', false)}
             animate={isOn(toggles, 'animate', true)}
             size="lg"
           />
