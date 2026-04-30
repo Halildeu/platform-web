@@ -1,7 +1,16 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -93,6 +102,131 @@ function writeManifest(origin, remotes) {
     path.join(outputDir, 'single-domain-manifest.json'),
     `${JSON.stringify(manifest, null, 2)}\n`,
     'utf8',
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* iter-50 Step 2 — build-info.json sentinel                          */
+/*                                                                     */
+/* Codex 019dded6 sertleştirme: artifact identity + deploy reachability*/
+/* için stabil, primary verify kaynağı. HTTP 200'de döndüğünde         */
+/* deploy chain'in son halkası (host nginx serve) doğrulanmış olur.   */
+/*                                                                     */
+/* sha priority: build-arg → GITHUB_SHA → git rev-parse HEAD → unknown */
+/* assets[] / remotes[].assets[] post-build dizin tarama ile dolar.   */
+/* imageDigest CI'da tag-resolve sonrası boş bırakılabilir.           */
+/* ------------------------------------------------------------------ */
+
+function resolveBuildSha() {
+  // 1. Açık build arg (en güçlü)
+  const explicit = (process.env.BUILD_SHA || process.env.WEB_BUILD_SHA || '').trim();
+  if (explicit) return explicit;
+
+  // 2. GitHub Actions native env
+  const githubSha = (process.env.GITHUB_SHA || '').trim();
+  if (githubSha) return githubSha;
+
+  // 3. Local git (dev veya ad-hoc build)
+  try {
+    const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+      cwd: webRoot,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
+    });
+    if (result.status === 0) {
+      const value = (result.stdout || '').trim();
+      if (value) return value;
+    }
+  } catch {
+    /* ignore — fall through */
+  }
+
+  // 4. Last-resort sentinel
+  return 'unknown';
+}
+
+function resolveBuildRef() {
+  return (
+    (process.env.BUILD_REF || process.env.GITHUB_REF_NAME || process.env.GITHUB_REF || '').trim() ||
+    'unknown'
+  );
+}
+
+function listAssetsIn(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => /\.(js|css|map|json)$/i.test(f)).sort();
+}
+
+function findRootEntry(distDir) {
+  const indexHtml = path.join(distDir, 'index.html');
+  if (!existsSync(indexHtml)) return null;
+  const html = readFileSync(indexHtml, 'utf8');
+  // Vite: <script type="module" crossorigin src="/assets/index-XXXXXX.js"></script>
+  const match = html.match(/\/assets\/(index-[A-Za-z0-9_-]+\.js)/);
+  return match ? match[1] : null;
+}
+
+function writeBuildInfo(origin, remotes, sha) {
+  const shortSha = sha === 'unknown' ? 'unknown' : sha.slice(0, 7);
+  const rootEntry = findRootEntry(outputDir);
+  const rootAssets = listAssetsIn(path.join(outputDir, 'assets'));
+  const remoteEntries = remotes.map(({ app, slug }) => ({
+    app,
+    slug,
+    remoteEntry: `${origin}/remotes/${slug}/remoteEntry.js`,
+    assets: listAssetsIn(path.join(outputDir, 'remotes', slug, 'assets')),
+  }));
+
+  const buildInfo = {
+    sha,
+    shortSha,
+    ref: resolveBuildRef(),
+    image: process.env.BUILD_IMAGE || '',
+    imageDigest: process.env.BUILD_IMAGE_DIGEST || '',
+    buildTime: new Date().toISOString(),
+    origin,
+    rootEntry,
+    assets: rootAssets,
+    remotes: remoteEntries,
+  };
+
+  writeFileSync(
+    path.join(outputDir, 'build-info.json'),
+    `${JSON.stringify(buildInfo, null, 2)}\n`,
+    'utf8',
+  );
+
+  // Inject window.__BUILD_SHA__ for runtime correlation (secondary signal;
+  // primary verify source is the build-info.json HTTP fetch).
+  //
+  // CodeQL flagged the prior `existsSync → readFileSync` pattern as TOCTOU
+  // (file may change between check and use). Single try/readFileSync keeps
+  // the operation atomic at the syscall level; ENOENT just means we skipped
+  // index.html injection (build never produced it), which is fine for the
+  // sentinel — primary signal is build-info.json above.
+  const indexHtmlPath = path.join(outputDir, 'index.html');
+  let original = null;
+  try {
+    original = readFileSync(indexHtmlPath, 'utf8');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      console.log(`[ubuntu] window.__BUILD_SHA__ inject skipped: ${indexHtmlPath} not present`);
+    } else {
+      throw err;
+    }
+  }
+  if (original !== null) {
+    const marker = '<!-- __BUILD_SHA_INJECTED__ -->';
+    if (!original.includes(marker)) {
+      const safeSha = JSON.stringify(shortSha);
+      const injectedScript = `${marker}\n  <script>window.__BUILD_SHA__ = ${safeSha};</script>`;
+      const replaced = original.replace('</head>', `  ${injectedScript}\n  </head>`);
+      writeFileSync(indexHtmlPath, replaced, 'utf8');
+    }
+  }
+
+  console.log(
+    `[ubuntu] wrote build-info.json (sha=${shortSha}, rootEntry=${rootEntry ?? 'n/a'}, remotes=${remoteEntries.length})`,
   );
 }
 
@@ -286,5 +420,9 @@ for (const remote of coreRemotes) {
 console.log(`[ubuntu] merged ${mergedCount} MFE asset files to root /assets/`);
 
 writeManifest(publicOrigin, coreRemotes);
+
+// iter-50 Step 2 — build-info.json sentinel + window.__BUILD_SHA__ injection.
+// MUST run after writeManifest so root /assets/ merge is finalized.
+writeBuildInfo(publicOrigin, coreRemotes, resolveBuildSha());
 
 console.log(`[ubuntu] assembled single-domain bundle at ${outputDir}`);
