@@ -14,10 +14,14 @@
  * - getFilterModel() / setFilterModel()
  * - getAdvancedFilterModel() / setAdvancedFilterModel()
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../../internal/access-controller';
-import type { GridApi, ColumnState, AdvancedFilterModel } from "ag-grid-community";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../../internal/access-controller';
+import type { GridApi, ColumnState, AdvancedFilterModel } from 'ag-grid-community';
 import {
   fetchGridVariants,
   createGridVariant,
@@ -26,12 +30,12 @@ import {
   deleteGridVariant,
   updateVariantPreference,
   compareGridVariants,
-} from "../../lib/grid-variants";
-import { cn } from "../../utils/cn";
-import { useAccordion } from "../../headless/hooks/useAccordion";
-import { IconSettings } from "../../icons/user/IconSettings";
-import { IconClose } from "../../icons/action/IconClose";
-import { IconSave } from "../../icons/action/IconSave";
+} from '../../lib/grid-variants';
+import { cn } from '../../utils/cn';
+import { useAccordion } from '../../headless/hooks/useAccordion';
+import { IconSettings } from '../../icons/user/IconSettings';
+import { IconClose } from '../../icons/action/IconClose';
+import { IconSave } from '../../icons/action/IconSave';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -72,6 +76,9 @@ export interface VariantIntegrationMessages {
   variantNamePlaceholder?: string;
   variantModalTitle?: string;
   defaultVariantName?: string;
+  // iter-35 — empty-state affordances inside the toolbar selector
+  variantsEmptyHintLabel?: string; // disabled hint shown inside the listbox
+  variantsCreateNewLabel?: string; // clickable "+ Yeni Varyant Oluştur" item
   // Section headers
   personalVariantsTitle?: string;
   globalVariantsTitle?: string;
@@ -167,14 +174,18 @@ function collectGridState<RowData>(api: GridApi<RowData>): GridVariantState {
         sortIndex: c.sortIndex,
       })),
     pivotMode: api.isPivotMode?.() ?? false,
-    quickFilterText: (api.getGridOption?.("quickFilterText") as string) ?? "",
-    paginationPageSize: (api.getGridOption?.("paginationPageSize") as number) ?? undefined,
+    quickFilterText: (api.getGridOption?.('quickFilterText') as string) ?? '',
+    paginationPageSize: (api.getGridOption?.('paginationPageSize') as number) ?? undefined,
   };
 }
 
 function applyVariantState<RowData>(api: GridApi<RowData>, state: GridVariantState): void {
   if (state.columnState && Array.isArray(state.columnState)) {
-    api.applyColumnState?.({ state: state.columnState as ColumnState[], applyOrder: true, defaultState: { hide: false } });
+    api.applyColumnState?.({
+      state: state.columnState as ColumnState[],
+      applyOrder: true,
+      defaultState: { hide: false },
+    });
   }
   // Always apply filter model — null/undefined/{} clears existing filters
   api.setFilterModel?.(state.filterModel ?? null);
@@ -184,28 +195,28 @@ function applyVariantState<RowData>(api: GridApi<RowData>, state: GridVariantSta
     // Clear advanced filter if variant has none
     api.setAdvancedFilterModel?.(null as unknown as AdvancedFilterModel);
   }
-  if (typeof state.pivotMode === "boolean") {
-    api.setGridOption?.("pivotMode", state.pivotMode);
+  if (typeof state.pivotMode === 'boolean') {
+    api.setGridOption?.('pivotMode', state.pivotMode);
   }
-  if (typeof state.quickFilterText === "string") {
-    api.setGridOption?.("quickFilterText", state.quickFilterText);
+  if (typeof state.quickFilterText === 'string') {
+    api.setGridOption?.('quickFilterText', state.quickFilterText);
   }
-  if (typeof state.paginationPageSize === "number" && state.paginationPageSize > 0) {
-    api.setGridOption?.("paginationPageSize", state.paginationPageSize);
+  if (typeof state.paginationPageSize === 'number' && state.paginationPageSize > 0) {
+    api.setGridOption?.('paginationPageSize', state.paginationPageSize);
   }
   // Refresh SSRM after applying variant state so filters/sort take effect
-  const rowModelType = api.getGridOption?.("rowModelType");
-  if (rowModelType === "serverSide") {
+  const rowModelType = api.getGridOption?.('rowModelType');
+  if (rowModelType === 'serverSide') {
     api.refreshServerSide?.({ purge: true });
   }
 }
 
-function dispatchVariantToast(type: "error" | "success" | "warning" | "info", text: string): void {
-  if (typeof window === "undefined") {
+function dispatchVariantToast(type: 'error' | 'success' | 'warning' | 'info', text: string): void {
+  if (typeof window === 'undefined') {
     return;
   }
   try {
-    window.dispatchEvent(new CustomEvent("app:toast", { detail: { type, text } }));
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { type, text } }));
   } catch {
     // ignore toast dispatch failures in non-browser or test runtimes
   }
@@ -223,11 +234,17 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
       viewBox="0 0 12 12"
       fill="none"
       className={cn(
-        "shrink-0 transition-[rotate] duration-(--motion-duration-fast)",
-        expanded && "rotate-90",
+        'shrink-0 transition-[rotate] duration-(--motion-duration-fast)',
+        expanded && 'rotate-90',
       )}
     >
-      <path d="M4.5 2.5L8 6L4.5 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M4.5 2.5L8 6L4.5 9.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -236,7 +253,7 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Grid variant manager for saving, loading, and switching named column/filter configurations. 
+/** Grid variant manager for saving, loading, and switching named column/filter configurations.
  * @example
  * ```tsx
  * <VariantIntegration />
@@ -258,18 +275,20 @@ export const VariantIntegration = <RowData = unknown,>({
   accessReason,
 }: VariantIntegrationProps<RowData>): React.ReactElement => {
   const accessState = resolveAccessState(access);
-  if (accessState.isHidden) return <></> as unknown as React.ReactElement;
+  if (accessState.isHidden) return (<></>) as unknown as React.ReactElement;
   // ── Core state ─────────────────────────────────────────────────────
   const [variants, setVariants] = useState<GridVariant[]>([]);
-  const [internalActiveId, setInternalActiveId] = useState<string | null>(controlledVariantId ?? null);
+  const [internalActiveId, setInternalActiveId] = useState<string | null>(
+    controlledVariantId ?? null,
+  );
   const [loading, setLoading] = useState(false);
-  const [newVariantName, setNewVariantName] = useState("");
+  const [newVariantName, setNewVariantName] = useState('');
   const [showManager, setShowManager] = useState(false);
   const appliedRef = useRef<string | null>(null);
 
   // ── Manager panel state ────────────────────────────────────────────
   const [renamingVariantId, setRenamingVariantId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  const [renameValue, setRenameValue] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
@@ -281,11 +300,17 @@ export const VariantIntegration = <RowData = unknown,>({
 
   // ── Derived lists ──────────────────────────────────────────────────
   const personalVariants = useMemo(
-    () => variants.filter((v) => !v.isGlobal).sort(compareGridVariants as (a: GridVariant, b: GridVariant) => number),
+    () =>
+      variants
+        .filter((v) => !v.isGlobal)
+        .sort(compareGridVariants as (a: GridVariant, b: GridVariant) => number),
     [variants],
   );
   const globalVariants = useMemo(
-    () => variants.filter((v) => v.isGlobal).sort(compareGridVariants as (a: GridVariant, b: GridVariant) => number),
+    () =>
+      variants
+        .filter((v) => v.isGlobal)
+        .sort(compareGridVariants as (a: GridVariant, b: GridVariant) => number),
     [variants],
   );
 
@@ -346,8 +371,8 @@ export const VariantIntegration = <RowData = unknown,>({
         setShowManager(false);
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [showManager]);
 
   // ── Handlers ───────────────────────────────────────────────────────
@@ -357,8 +382,8 @@ export const VariantIntegration = <RowData = unknown,>({
       const variant = variants.find((v) => v.id === variantId);
       if (!variant || !gridApi) return;
       const previousActiveId = activeId;
-      const previousVariant = previousActiveId
-        ? variants.find((item) => item.id === previousActiveId) ?? null
+      const _previousVariant = previousActiveId
+        ? (variants.find((item) => item.id === previousActiveId) ?? null)
         : null;
 
       applyVariantState(gridApi, variant.state);
@@ -371,10 +396,20 @@ export const VariantIntegration = <RowData = unknown,>({
       } catch {
         // Preference sync failed (e.g. 401) — keep variant applied locally.
         // updateVariantPreference already falls back to localStorage.
-        dispatchVariantToast("warning", m.variantPreferenceUpdateFailedLabel ?? "Varyant tercihi sunucuya kaydedilemedi");
+        dispatchVariantToast(
+          'warning',
+          m.variantPreferenceUpdateFailedLabel ?? 'Varyant tercihi sunucuya kaydedilemedi',
+        );
       }
     },
-    [activeId, gridApi, gridId, m.variantPreferenceUpdateFailedLabel, onActiveVariantChange, variants],
+    [
+      activeId,
+      gridApi,
+      gridId,
+      m.variantPreferenceUpdateFailedLabel,
+      onActiveVariantChange,
+      variants,
+    ],
   );
 
   const handleClear = useCallback(() => {
@@ -384,9 +419,9 @@ export const VariantIntegration = <RowData = unknown,>({
     if (gridApi) {
       gridApi.setFilterModel?.(null);
       gridApi.setAdvancedFilterModel?.(null as unknown as AdvancedFilterModel);
-      gridApi.setGridOption?.("quickFilterText", "");
-      const rowModelType = gridApi.getGridOption?.("rowModelType");
-      if (rowModelType === "serverSide") {
+      gridApi.setGridOption?.('quickFilterText', '');
+      const rowModelType = gridApi.getGridOption?.('rowModelType');
+      if (rowModelType === 'serverSide') {
         gridApi.refreshServerSide?.({ purge: true });
       }
     }
@@ -416,9 +451,9 @@ export const VariantIntegration = <RowData = unknown,>({
 
   const handleCreate = useCallback(async () => {
     if (!gridApi) return;
-    setPendingAction("create");
+    setPendingAction('create');
     const state = collectGridState(gridApi);
-    const name = newVariantName.trim() || (m.defaultVariantName ?? "Adsiz Varyant");
+    const name = newVariantName.trim() || (m.defaultVariantName ?? 'Adsiz Varyant');
     try {
       const created = await createGridVariant({
         gridId,
@@ -429,18 +464,26 @@ export const VariantIntegration = <RowData = unknown,>({
         isGlobal: false,
         isGlobalDefault: false,
       });
-      if (created && typeof created === "object" && "id" in created) {
+      if (created && typeof created === 'object' && 'id' in created) {
         setInternalActiveId((created as { id: string }).id);
         onActiveVariantChange?.((created as { id: string }).id);
       }
-      setNewVariantName("");
+      setNewVariantName('');
       await loadVariants();
     } catch {
       // silent
     } finally {
       setPendingAction(null);
     }
-  }, [gridApi, gridId, gridSchemaVersion, newVariantName, m.defaultVariantName, onActiveVariantChange, loadVariants]);
+  }, [
+    gridApi,
+    gridId,
+    gridSchemaVersion,
+    newVariantName,
+    m.defaultVariantName,
+    onActiveVariantChange,
+    loadVariants,
+  ]);
 
   const handleDelete = useCallback(
     async (variantId: string) => {
@@ -567,29 +610,41 @@ export const VariantIntegration = <RowData = unknown,>({
 
     if (v.id === activeId) {
       badges.push(
-        <span key="sel" className="rounded-xs bg-action-primary/15 px-1 py-0.5 text-[10px] font-medium text-action-primary">
-          {m.selectedTagLabel ?? "Secili"}
+        <span
+          key="sel"
+          className="rounded-xs bg-action-primary/15 px-1 py-0.5 text-[10px] font-medium text-action-primary"
+        >
+          {m.selectedTagLabel ?? 'Secili'}
         </span>,
       );
     }
     if (v.isUserDefault) {
       badges.push(
-        <span key="ud" className="rounded-xs bg-state-warning-bg px-1 py-0.5 text-[10px] font-medium text-state-warning-text">
-          {m.personalDefaultTagLabel ?? "Varsayilan"}
+        <span
+          key="ud"
+          className="rounded-xs bg-state-warning-bg px-1 py-0.5 text-[10px] font-medium text-state-warning-text"
+        >
+          {m.personalDefaultTagLabel ?? 'Varsayilan'}
         </span>,
       );
     }
     if (v.isGlobal && v.isGlobalDefault) {
       badges.push(
-        <span key="gd" className="rounded-xs bg-state-success-bg px-1 py-0.5 text-[10px] font-medium text-state-success-text">
-          {m.globalPublicDefaultTagLabel ?? "G. Varsayilan"}
+        <span
+          key="gd"
+          className="rounded-xs bg-state-success-bg px-1 py-0.5 text-[10px] font-medium text-state-success-text"
+        >
+          {m.globalPublicDefaultTagLabel ?? 'G. Varsayilan'}
         </span>,
       );
     }
     if (v.isCompatible === false) {
       badges.push(
-        <span key="ic" className="rounded-xs bg-state-danger-bg px-1 py-0.5 text-[10px] font-medium text-state-danger-text">
-          {m.incompatibleTagLabel ?? "Uyumsuz"}
+        <span
+          key="ic"
+          className="rounded-xs bg-state-danger-bg px-1 py-0.5 text-[10px] font-medium text-state-danger-text"
+        >
+          {m.incompatibleTagLabel ?? 'Uyumsuz'}
         </span>,
       );
     }
@@ -611,10 +666,10 @@ export const VariantIntegration = <RowData = unknown,>({
       <div
         key={v.id}
         className={cn(
-          "rounded-md border transition-colors",
+          'rounded-md border transition-colors',
           isActive
-            ? "border-action-primary/30 bg-action-primary/5"
-            : "border-transparent hover:bg-surface-muted",
+            ? 'border-action-primary/30 bg-action-primary/5'
+            : 'border-transparent hover:bg-surface-muted',
         )}
       >
         {/* Collapsed row — h-8 compact */}
@@ -632,8 +687,8 @@ export const VariantIntegration = <RowData = unknown,>({
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleRename(v.id);
-                  if (e.key === "Escape") setRenamingVariantId(null);
+                  if (e.key === 'Enter') handleRename(v.id);
+                  if (e.key === 'Escape') setRenamingVariantId(null);
                   e.stopPropagation();
                 }}
                 onBlur={() => handleRename(v.id)}
@@ -662,12 +717,12 @@ export const VariantIntegration = <RowData = unknown,>({
         </div>
 
         {/* Expanded detail panel — accordion content */}
-        <div {...panelProps} className={cn("overflow-hidden", !itemState.isExpanded && "hidden")}>
+        <div {...panelProps} className={cn('overflow-hidden', !itemState.isExpanded && 'hidden')}>
           {confirmDeleteId === v.id ? (
             /* Delete confirmation */
             <div className="flex items-center gap-2 border-t border-border-subtle/50 px-2 py-2">
               <span className="flex-1 text-xs text-state-error-text">
-                {m.deleteVariantConfirmationLabel ?? "Silmek istediginize emin misiniz?"}
+                {m.deleteVariantConfirmationLabel ?? 'Silmek istediginize emin misiniz?'}
               </span>
               <button
                 type="button"
@@ -675,14 +730,14 @@ export const VariantIntegration = <RowData = unknown,>({
                 onClick={() => handleDelete(v.id)}
                 disabled={isBusy}
               >
-                {m.menuDeleteLabel ?? "Sil"}
+                {m.menuDeleteLabel ?? 'Sil'}
               </button>
               <button
                 type="button"
                 className="rounded-xs bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-text-secondary hover:bg-surface-raised"
                 onClick={() => setConfirmDeleteId(null)}
               >
-                {m.cancelLabel ?? "Iptal"}
+                {m.cancelLabel ?? 'Iptal'}
               </button>
             </div>
           ) : (
@@ -693,9 +748,9 @@ export const VariantIntegration = <RowData = unknown,>({
                 <ActionBtn
                   onClick={() => handleSave(v.id)}
                   disabled={isBusy}
-                  title={m.saveCurrentLayoutTitle ?? "Mevcut durumu kaydet"}
+                  title={m.saveCurrentLayoutTitle ?? 'Mevcut durumu kaydet'}
                 >
-                  {m.saveCurrentStateLabel ?? "Kaydet"}
+                  {m.saveCurrentStateLabel ?? 'Kaydet'}
                 </ActionBtn>
               )}
 
@@ -706,14 +761,11 @@ export const VariantIntegration = <RowData = unknown,>({
                   disabled={isBusy}
                   variant="active"
                 >
-                  {m.menuUnsetDefaultLabel ?? "Varsayilani Kaldir"}
+                  {m.menuUnsetDefaultLabel ?? 'Varsayilani Kaldir'}
                 </ActionBtn>
               ) : (
-                <ActionBtn
-                  onClick={() => handleSetDefault(v.id, true)}
-                  disabled={isBusy}
-                >
-                  {m.menuSetDefaultLabel ?? "Varsayilan Yap"}
+                <ActionBtn onClick={() => handleSetDefault(v.id, true)} disabled={isBusy}>
+                  {m.menuSetDefaultLabel ?? 'Varsayilan Yap'}
                 </ActionBtn>
               )}
 
@@ -724,9 +776,9 @@ export const VariantIntegration = <RowData = unknown,>({
                     <ActionBtn
                       onClick={() => handlePromoteToGlobal(v.id)}
                       disabled={isBusy}
-                      title={m.moveToGlobalTitle ?? "Paylasilan varyantlara tasi"}
+                      title={m.moveToGlobalTitle ?? 'Paylasilan varyantlara tasi'}
                     >
-                      {m.menuMoveToGlobalLabel ?? "Globale Tasi"}
+                      {m.menuMoveToGlobalLabel ?? 'Globale Tasi'}
                     </ActionBtn>
                   )}
                   <ActionBtn
@@ -736,14 +788,14 @@ export const VariantIntegration = <RowData = unknown,>({
                     }}
                     disabled={isBusy}
                   >
-                    {m.menuRenameLabel ?? "Yeniden Adlandir"}
+                    {m.menuRenameLabel ?? 'Yeniden Adlandir'}
                   </ActionBtn>
                   <ActionBtn
                     onClick={() => setConfirmDeleteId(v.id)}
                     disabled={isBusy}
                     variant="danger"
                   >
-                    {m.menuDeleteLabel ?? "Sil"}
+                    {m.menuDeleteLabel ?? 'Sil'}
                   </ActionBtn>
                 </>
               )}
@@ -752,41 +804,37 @@ export const VariantIntegration = <RowData = unknown,>({
               {!isPersonal && (
                 <>
                   {/* Clone to personal — everyone can do this */}
-                  <ActionBtn
-                    onClick={() => handleClone(v.id)}
-                    disabled={isBusy}
-                  >
+                  <ActionBtn onClick={() => handleClone(v.id)} disabled={isBusy}>
                     Kopya Al
                   </ActionBtn>
 
                   {/* Set/Unset global default — requires promote permission */}
-                  {canPromoteToGlobal && (
-                    v.isGlobalDefault ? (
+                  {canPromoteToGlobal &&
+                    (v.isGlobalDefault ? (
                       <ActionBtn
                         onClick={() => handleSetGlobalDefault(v.id, false)}
                         disabled={isBusy}
                         variant="active"
                       >
-                        {m.menuUnsetGlobalDefaultLabel ?? "G. Varsayilani Kaldir"}
+                        {m.menuUnsetGlobalDefaultLabel ?? 'G. Varsayilani Kaldir'}
                       </ActionBtn>
                     ) : (
                       <ActionBtn
                         onClick={() => handleSetGlobalDefault(v.id, true)}
                         disabled={isBusy}
                       >
-                        {m.menuSetGlobalDefaultLabel ?? "G. Varsayilan Yap"}
+                        {m.menuSetGlobalDefaultLabel ?? 'G. Varsayilan Yap'}
                       </ActionBtn>
-                    )
-                  )}
+                    ))}
 
                   {/* Demote to personal */}
                   {canDemoteToPersonal && (
                     <ActionBtn
                       onClick={() => handleDemoteToPersonal(v.id)}
                       disabled={isBusy}
-                      title={m.moveToPersonalTitle ?? "Kisisele tasi"}
+                      title={m.moveToPersonalTitle ?? 'Kisisele tasi'}
                     >
-                      {m.menuMoveToPersonalLabel ?? "Kisisele Tasi"}
+                      {m.menuMoveToPersonalLabel ?? 'Kisisele Tasi'}
                     </ActionBtn>
                   )}
 
@@ -799,7 +847,7 @@ export const VariantIntegration = <RowData = unknown,>({
                       }}
                       disabled={isBusy}
                     >
-                      {m.menuRenameLabel ?? "Yeniden Adlandir"}
+                      {m.menuRenameLabel ?? 'Yeniden Adlandir'}
                     </ActionBtn>
                   )}
 
@@ -810,7 +858,7 @@ export const VariantIntegration = <RowData = unknown,>({
                       disabled={isBusy}
                       variant="danger"
                     >
-                      {m.menuDeleteLabel ?? "Sil"}
+                      {m.menuDeleteLabel ?? 'Sil'}
                     </ActionBtn>
                   )}
                 </>
@@ -824,41 +872,81 @@ export const VariantIntegration = <RowData = unknown,>({
 
   // ── Render ─────────────────────────────────────────────────────────
 
+  // iter-35 \u2014 empty-state UX. Pre-iter-35 the <select> was disabled when no
+  // variants existed, so end users clicked "\u2014 Variant \u2014" and nothing
+  // happened ("son kullan\u0131c\u0131 bunun ne oldu\u011funu anlam\u0131yor"). Two coupled
+  // affordances now make the empty state self-explaining:
+  //   1. Listbox carries an inline disabled hint + a clickable
+  //      "+ Yeni Varyant Olu\u015ftur" item (sentinel value CREATE_NEW_VALUE).
+  //   2. Toolbar's gear button promotes to a primary-styled "+ Olu\u015ftur"
+  //      label so the action is visible without opening the dropdown.
+  // Either path opens the manage panel, where the existing create form
+  // does the actual work.
+  const CREATE_NEW_VALUE = '__create_new__';
+  const isEmpty = variants.length === 0;
+
   return (
     <div className="relative">
       {/* Variant selector dropdown (inline in toolbar) */}
-      <div className={`flex items-center gap-2 ${accessStyles(accessState.state)}`} data-component="variant-selector" data-access-state={accessState.state} title={accessReason}>
+      <div
+        className={`flex items-center gap-2 ${accessStyles(accessState.state)}`}
+        data-component="variant-selector"
+        data-access-state={accessState.state}
+        data-empty={isEmpty ? 'true' : 'false'}
+        title={accessReason}
+      >
         <select
-          value={activeId ?? ""}
+          value={activeId ?? ''}
           onChange={(e) => {
             const val = e.target.value;
+            if (val === CREATE_NEW_VALUE) {
+              setShowManager(true);
+              // Don't propagate the sentinel into selection state \u2014 keep
+              // value bound to activeId so the select snaps back to the
+              // placeholder once the manage panel opens.
+              return;
+            }
             if (val) handleSelect(val);
             else handleClear();
           }}
-          disabled={loading || variants.length === 0}
+          disabled={loading}
           className="h-8 min-w-[160px] rounded-md border border-border-default bg-surface-default px-2 text-sm text-text-primary"
-          aria-label={m.variantLabel ?? "Grid variant"}
+          aria-label={m.variantLabel ?? 'Grid variant'}
+          data-testid="variant-select"
         >
-          <option value="">{m.variantPlaceholder ?? "\u2014 Variant \u2014"}</option>
-          {personalVariants.length > 0 && (
-            <optgroup label={m.personalVariantsTitle ?? "Kisisel"}>
-              {personalVariants.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.isUserDefault ? " \u2605" : ""}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {globalVariants.length > 0 && (
-            <optgroup label={m.globalVariantsTitle ?? "Paylasilan"}>
-              {globalVariants.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.isGlobalDefault ? " \u2605" : ""}
-                </option>
-              ))}
-            </optgroup>
+          <option value="">{m.variantPlaceholder ?? '\u2014 Variant \u2014'}</option>
+          {isEmpty ? (
+            <>
+              <option value="" disabled>
+                {m.variantsEmptyHintLabel ?? 'Henuz kayitli varyant yok'}
+              </option>
+              <option value={CREATE_NEW_VALUE} data-testid="variant-create-new-option">
+                {`+ ${m.variantsCreateNewLabel ?? 'Yeni Varyant Olustur'}`}
+              </option>
+            </>
+          ) : (
+            <>
+              {personalVariants.length > 0 && (
+                <optgroup label={m.personalVariantsTitle ?? 'Kisisel'}>
+                  {personalVariants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                      {v.isUserDefault ? ' \u2605' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {globalVariants.length > 0 && (
+                <optgroup label={m.globalVariantsTitle ?? 'Paylasilan'}>
+                  {globalVariants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                      {v.isGlobalDefault ? ' \u2605' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </>
           )}
         </select>
 
@@ -868,7 +956,7 @@ export const VariantIntegration = <RowData = unknown,>({
             className="h-8 rounded-md bg-surface-muted px-2 text-xs font-medium text-text-secondary hover:bg-surface-raised"
             onClick={() => handleSave(activeId)}
             disabled={pendingAction === `save-${activeId}`}
-            title={m.saveTitle ?? "Save current state to variant"}
+            title={m.saveTitle ?? 'Save current state to variant'}
           >
             <IconSave size={14} />
           </button>
@@ -877,120 +965,126 @@ export const VariantIntegration = <RowData = unknown,>({
         <button
           ref={toggleRef}
           type="button"
-          className="h-8 rounded-md bg-surface-muted px-2 text-xs font-medium text-text-secondary hover:bg-surface-raised"
+          className={
+            isEmpty
+              ? 'flex h-8 items-center gap-1 rounded-md bg-action-primary px-2.5 text-xs font-medium text-text-inverse hover:brightness-110'
+              : 'h-8 rounded-md bg-surface-muted px-2 text-xs font-medium text-text-secondary hover:bg-surface-raised'
+          }
           onClick={() => setShowManager(!showManager)}
-          title={m.variantModalTitle ?? "Manage variants"}
-          aria-label={m.variantModalTitle ?? "Varyantları yönet"}
+          title={m.variantModalTitle ?? 'Manage variants'}
+          aria-label={m.variantModalTitle ?? 'Varyantları yönet'}
+          data-testid="variant-manage-toggle"
         >
           <IconSettings size={14} />
+          {isEmpty ? <span>{m.variantNewButtonLabel ?? 'Olustur'}</span> : null}
         </button>
       </div>
 
       {/* Variant manager panel — portal to body to avoid overflow clipping */}
-      {showManager && typeof document !== "undefined" && createPortal(
-        <div
-          ref={managerRef}
-          className="fixed z-[9999] w-96 max-h-[70vh] overflow-y-auto rounded-lg border border-border-default bg-surface-default shadow-lg"
-          data-component="variant-manager"
-          onKeyDown={(e) => e.stopPropagation()}
-          onKeyUp={(e) => e.stopPropagation()}
-          style={{
-            top: toggleRef.current
-              ? toggleRef.current.getBoundingClientRect().bottom + 4
-              : 200,
-            left: toggleRef.current
-              ? Math.min(
-                  toggleRef.current.getBoundingClientRect().right - 384, // 384 = w-96
-                  window.innerWidth - 400,
-                )
-              : 100,
-          }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
-            <h3 className="text-sm font-semibold text-text-primary">
-              {m.variantModalTitle ?? "Varyantlar"}
-            </h3>
-            <button
-              type="button"
-              className="flex h-5 w-5 items-center justify-center rounded-xs text-text-disabled hover:text-text-primary"
-              onClick={() => setShowManager(false)}
-              title={m.closeVariantManagerLabel ?? "Kapat"}
-            >
-              <IconClose size={12} />
-            </button>
-          </div>
-
-          {/* Create form — always creates personal */}
-          <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
-            <input
-              type="text"
-              value={newVariantName}
-              onChange={(e) => setNewVariantName(e.target.value)}
-              placeholder={m.variantNamePlaceholder ?? "Varyant adi"}
-              className="h-7 flex-1 rounded-xs border border-border-default bg-surface-default px-2 text-xs outline-hidden focus:border-action-primary"
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Enter") handleCreate();
-              }}
-              onKeyUp={(e) => e.stopPropagation()}
-              onInput={(e) => e.stopPropagation()}
-            />
-            <button
-              type="button"
-              className="h-7 rounded-xs bg-action-primary px-3 text-xs font-medium text-text-inverse hover:brightness-110 disabled:opacity-50"
-              onClick={handleCreate}
-              disabled={pendingAction === "create"}
-            >
-              {m.variantNewButtonLabel ?? "Olustur"}
-            </button>
-          </div>
-
-          {/* Variant sections */}
-          <div className="max-h-80 overflow-y-auto">
-            {/* Personal section */}
-            <div className="px-3 py-2">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-disabled">
-                {m.personalVariantsTitle ?? "Kisisel"}
-              </div>
-              {personalVariants.length === 0 && !loading ? (
-                <p className="py-1 text-xs text-text-disabled">
-                  {m.personalVariantsEmptyLabel ?? "Kisisel varyant yok"}
-                </p>
-              ) : (
-                <div className="flex flex-col gap-0.5">
-                  {personalVariants.map((v, i) => renderVariantRow(v, i))}
-                </div>
-              )}
+      {showManager &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={managerRef}
+            className="fixed z-[9999] w-96 max-h-[70vh] overflow-y-auto rounded-lg border border-border-default bg-surface-default shadow-lg"
+            data-component="variant-manager"
+            onKeyDown={(e) => e.stopPropagation()}
+            onKeyUp={(e) => e.stopPropagation()}
+            style={{
+              top: toggleRef.current ? toggleRef.current.getBoundingClientRect().bottom + 4 : 200,
+              left: toggleRef.current
+                ? Math.min(
+                    toggleRef.current.getBoundingClientRect().right - 384, // 384 = w-96
+                    window.innerWidth - 400,
+                  )
+                : 100,
+            }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2">
+              <h3 className="text-sm font-semibold text-text-primary">
+                {m.variantModalTitle ?? 'Varyantlar'}
+              </h3>
+              <button
+                type="button"
+                className="flex h-5 w-5 items-center justify-center rounded-xs text-text-disabled hover:text-text-primary"
+                onClick={() => setShowManager(false)}
+                title={m.closeVariantManagerLabel ?? 'Kapat'}
+              >
+                <IconClose size={12} />
+              </button>
             </div>
 
-            {/* Divider */}
-            <div className="mx-3 border-t border-border-subtle" />
-
-            {/* Global section */}
-            <div className="px-3 py-2">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-disabled">
-                {m.globalVariantsTitle ?? "Paylasilan"}
-              </div>
-              {globalVariants.length === 0 && !loading ? (
-                <p className="py-1 text-xs text-text-disabled">
-                  {m.globalVariantsEmptyLabel ?? "Paylasilan varyant yok"}
-                </p>
-              ) : (
-                <div className="flex flex-col gap-0.5">
-                  {globalVariants.map((v, i) => renderVariantRow(v, personalVariants.length + i))}
-                </div>
-              )}
+            {/* Create form — always creates personal */}
+            <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
+              <input
+                type="text"
+                value={newVariantName}
+                onChange={(e) => setNewVariantName(e.target.value)}
+                placeholder={m.variantNamePlaceholder ?? 'Varyant adi'}
+                className="h-7 flex-1 rounded-xs border border-border-default bg-surface-default px-2 text-xs outline-hidden focus:border-action-primary"
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') handleCreate();
+                }}
+                onKeyUp={(e) => e.stopPropagation()}
+                onInput={(e) => e.stopPropagation()}
+              />
+              <button
+                type="button"
+                className="h-7 rounded-xs bg-action-primary px-3 text-xs font-medium text-text-inverse hover:brightness-110 disabled:opacity-50"
+                onClick={handleCreate}
+                disabled={pendingAction === 'create'}
+              >
+                {m.variantNewButtonLabel ?? 'Olustur'}
+              </button>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+
+            {/* Variant sections */}
+            <div className="max-h-80 overflow-y-auto">
+              {/* Personal section */}
+              <div className="px-3 py-2">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-disabled">
+                  {m.personalVariantsTitle ?? 'Kisisel'}
+                </div>
+                {personalVariants.length === 0 && !loading ? (
+                  <p className="py-1 text-xs text-text-disabled">
+                    {m.personalVariantsEmptyLabel ?? 'Kisisel varyant yok'}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    {personalVariants.map((v, i) => renderVariantRow(v, i))}
+                  </div>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="mx-3 border-t border-border-subtle" />
+
+              {/* Global section */}
+              <div className="px-3 py-2">
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-disabled">
+                  {m.globalVariantsTitle ?? 'Paylasilan'}
+                </div>
+                {globalVariants.length === 0 && !loading ? (
+                  <p className="py-1 text-xs text-text-disabled">
+                    {m.globalVariantsEmptyLabel ?? 'Paylasilan varyant yok'}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    {globalVariants.map((v, i) => renderVariantRow(v, personalVariants.length + i))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
 
-VariantIntegration.displayName = "VariantIntegration";
+VariantIntegration.displayName = 'VariantIntegration';
 
 /* ------------------------------------------------------------------ */
 /*  Action button (tiny, reused in accordion detail)                   */
@@ -1006,19 +1100,19 @@ function ActionBtn({
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  variant?: "danger" | "active";
+  variant?: 'danger' | 'active';
   title?: string;
 }) {
   return (
     <button
       type="button"
       className={cn(
-        "rounded-xs px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50",
-        variant === "danger"
-          ? "text-state-error-text hover:bg-state-danger-bg"
-          : variant === "active"
-            ? "bg-state-warning-bg text-state-warning-text hover:bg-[var(--state-warning-bg-hover)]"
-            : "text-text-secondary hover:bg-surface-muted",
+        'rounded-xs px-1.5 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-50',
+        variant === 'danger'
+          ? 'text-state-error-text hover:bg-state-danger-bg'
+          : variant === 'active'
+            ? 'bg-state-warning-bg text-state-warning-text hover:bg-[var(--state-warning-bg-hover)]'
+            : 'text-text-secondary hover:bg-surface-muted',
       )}
       onClick={onClick}
       disabled={disabled}

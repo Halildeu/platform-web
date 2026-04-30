@@ -79,6 +79,17 @@ test.describe('iter-34 — drawer disabled bug', () => {
       bodyHead: string;
       ct?: string;
     }[] = [];
+    // Capture every 4xx/5xx response for context — a 401 from any /api/v1
+    // call dispatches a custom event that PermissionProvider listens for
+    // and flips sessionExpired=true (PR #77 wiring). Drawer canEdit then
+    // collapses regardless of authz/me payload.
+    page.on('response', async (resp) => {
+      const status = resp.status();
+      if (status >= 400 && resp.url().includes('/api/v1/')) {
+        const u = resp.url().replace('https://testai.acik.com', '');
+        console.log(`[iter-34] HTTP ${status} from ${u}`);
+      }
+    });
     page.on('response', async (resp) => {
       const url = resp.url();
       if (!url.includes('/api/v1/authz/me') && !url.includes('/api/v1/authz/version')) return;
@@ -165,10 +176,16 @@ test.describe('iter-34 — drawer disabled bug', () => {
     const firstRoleCheckbox = page.locator('section:has(h3) input[type="checkbox"]').first();
     await expect(firstRoleCheckbox).toBeVisible({ timeout: 10_000 });
 
-    // Step 6 — capture both DOM disabled attribute AND computed cursor style.
-    const disabledAttr = await firstRoleCheckbox.evaluate(
-      (el) => (el as HTMLInputElement).disabled,
-    );
+    // iter-34 — give the retry-aware fetchAuthzMe a chance to win the race
+    // (PermissionProvider may still be on the empty-body retry back-off when
+    // the drawer first paints). Poll until disabled flips, with a generous
+    // ceiling.
+    let disabledAttr = true;
+    for (let i = 0; i < 30; i++) {
+      disabledAttr = await firstRoleCheckbox.evaluate((el) => (el as HTMLInputElement).disabled);
+      if (!disabledAttr) break;
+      await page.waitForTimeout(500);
+    }
     const labelEl = firstRoleCheckbox.locator('xpath=ancestor::label').first();
     const cursorStyle = await labelEl.evaluate((el) => window.getComputedStyle(el).cursor);
 
