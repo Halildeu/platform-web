@@ -67,8 +67,12 @@ vi.mock('../../../../features/user-management/model/use-users-query.model', () =
 // Render Checkbox as a real <input type="checkbox" disabled> so we can probe
 // the disabled attribute. Strip everything else on the design-system surface
 // to keep the test narrow.
-vi.mock('@mfe/design-system', () => ({
-  DetailDrawer: ({
+// iter-38 — SUT migrated DetailDrawer → FormDrawer; mock both with the
+// same shell so probe testids stay stable. iter-39 — Skeleton stub.
+// `vi.mock` hoists above all top-level declarations so we declare the
+// shell inline within the factory.
+vi.mock('@mfe/design-system', () => {
+  const drawerShell = ({
     children,
     footer,
     subtitle,
@@ -85,46 +89,53 @@ vi.mock('@mfe/design-system', () => ({
       <div data-testid="drawer-body">{children}</div>
       {footer ? <div data-testid="drawer-footer">{footer}</div> : null}
     </div>
-  ),
-  Tabs: () => <div data-testid="tabs" />,
-  Checkbox: ({
-    label,
-    checked,
-    disabled,
-    onChange,
-  }: {
-    label: React.ReactNode;
-    checked?: boolean;
-    disabled?: boolean;
-    onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  }) => {
-    // iter-37 — labels are React fragments (label + description); probe
-    // the first textual leaf for the role-${name} testid.
-    const probeFirstText = (node: React.ReactNode): string => {
-      if (node == null) return 'unknown';
-      if (typeof node === 'string' || typeof node === 'number') return String(node);
-      if (Array.isArray(node)) {
-        for (const c of node) {
-          const v = probeFirstText(c);
-          if (v && v !== 'unknown') return v;
+  );
+  return {
+    DetailDrawer: drawerShell,
+    FormDrawer: drawerShell,
+    Skeleton: ({ className }: { className?: string }) => (
+      <div data-testid="skeleton" className={className} />
+    ),
+    Tabs: () => <div data-testid="tabs" />,
+    Checkbox: ({
+      label,
+      checked,
+      disabled,
+      onChange,
+    }: {
+      label: React.ReactNode;
+      checked?: boolean;
+      disabled?: boolean;
+      onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    }) => {
+      // iter-37 — labels are React fragments (label + description); probe
+      // the first textual leaf for the role-${name} testid.
+      const probeFirstText = (node: React.ReactNode): string => {
+        if (node == null) return 'unknown';
+        if (typeof node === 'string' || typeof node === 'number') return String(node);
+        if (Array.isArray(node)) {
+          for (const c of node) {
+            const v = probeFirstText(c);
+            if (v && v !== 'unknown') return v;
+          }
+          return 'unknown';
+        }
+        if (React.isValidElement(node)) {
+          const props = node.props as { children?: React.ReactNode };
+          return probeFirstText(props.children);
         }
         return 'unknown';
-      }
-      if (React.isValidElement(node)) {
-        const props = node.props as { children?: React.ReactNode };
-        return probeFirstText(props.children);
-      }
-      return 'unknown';
-    };
-    const labelKey = probeFirstText(label).split('(')[0].trim() || 'unknown';
-    return (
-      <label data-testid={`role-${labelKey}`}>
-        <input type="checkbox" checked={!!checked} disabled={!!disabled} onChange={onChange} />
-        <span>{label}</span>
-      </label>
-    );
-  },
-}));
+      };
+      const labelKey = probeFirstText(label).split('(')[0].trim() || 'unknown';
+      return (
+        <label data-testid={`role-${labelKey}`}>
+          <input type="checkbox" checked={!!checked} disabled={!!disabled} onChange={onChange} />
+          <span>{label}</span>
+        </label>
+      );
+    },
+  };
+});
 
 // ---------- SUT ----------
 

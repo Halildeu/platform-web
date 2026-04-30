@@ -161,6 +161,8 @@ const users = {
   // iter-37 — role list search
   'users.detail.roles.searchPlaceholder': 'Search role name or description...',
   'users.detail.roles.searchEmpty': 'No role matches "{query}".',
+  // iter-39 — section count badge
+  'users.detail.roles.count': '{selected} assigned / {total} total',
   'users.detail.scopes.companies': 'Companies',
   'users.detail.scopes.projects': 'Projects',
   'users.detail.scopes.warehouses': 'Warehouses',
