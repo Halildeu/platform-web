@@ -10,7 +10,10 @@ export default defineConfig({
   },
   test: {
     root: __dirname,
-    include: ['src/**/*.{test,spec}.{ts,tsx,js,jsx}'],
+    include: [
+      'src/**/*.{test,spec}.{ts,tsx,js,jsx}',
+      'scripts/**/__tests__/**/*.{test,spec}.{ts,tsx,js,jsx}',
+    ],
     globals: true,
     environment: 'jsdom',
     css: false,
