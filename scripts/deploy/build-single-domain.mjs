@@ -198,9 +198,24 @@ function writeBuildInfo(origin, remotes, sha) {
 
   // Inject window.__BUILD_SHA__ for runtime correlation (secondary signal;
   // primary verify source is the build-info.json HTTP fetch).
+  //
+  // CodeQL flagged the prior `existsSync → readFileSync` pattern as TOCTOU
+  // (file may change between check and use). Single try/readFileSync keeps
+  // the operation atomic at the syscall level; ENOENT just means we skipped
+  // index.html injection (build never produced it), which is fine for the
+  // sentinel — primary signal is build-info.json above.
   const indexHtmlPath = path.join(outputDir, 'index.html');
-  if (existsSync(indexHtmlPath)) {
-    const original = readFileSync(indexHtmlPath, 'utf8');
+  let original = null;
+  try {
+    original = readFileSync(indexHtmlPath, 'utf8');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      console.log(`[ubuntu] window.__BUILD_SHA__ inject skipped: ${indexHtmlPath} not present`);
+    } else {
+      throw err;
+    }
+  }
+  if (original !== null) {
     const marker = '<!-- __BUILD_SHA_INJECTED__ -->';
     if (!original.includes(marker)) {
       const safeSha = JSON.stringify(shortSha);
