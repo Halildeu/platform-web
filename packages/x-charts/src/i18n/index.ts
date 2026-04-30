@@ -5,5 +5,7 @@ export {
   setChartsLocale,
   getCurrentChartsLocale,
   useChartsLocale,
+  subscribeChartsLocale,
   __resetChartsLocaleStoreForTests,
+  __getChartsLocaleListenerCountForTests,
 } from './locale-store';

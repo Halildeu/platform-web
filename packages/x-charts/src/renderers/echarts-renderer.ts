@@ -153,7 +153,13 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     }
 
     instance.setOption(finalOption, { notMerge, lazyUpdate });
-  }, [option, notMerge, lazyUpdate, respectReducedMotion]);
+    // Codex (PR-A1 second pass): keep `echartsLocaleKey` in this dep
+    // array so a language switch — which forces the init effect to
+    // dispose + re-create the ECharts instance — also replays the
+    // option onto the new instance. Without this, callers whose option
+    // ref is stable across renders (memoised inside chart wrappers)
+    // would render an empty new instance after the locale flip.
+  }, [option, notMerge, lazyUpdate, respectReducedMotion, echartsLocaleKey]);
 
   const resize = useCallback(() => {
     instanceRef.current?.resize();

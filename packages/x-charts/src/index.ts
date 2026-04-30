@@ -293,6 +293,8 @@ export {
   setChartsLocale,
   getCurrentChartsLocale,
   useChartsLocale,
+  subscribeChartsLocale,
   __resetChartsLocaleStoreForTests,
+  __getChartsLocaleListenerCountForTests,
 } from './i18n/locale-store';
 export type { NumberFormatOptions, DateFormatOptions } from './i18n/formatters';

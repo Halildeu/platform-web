@@ -20,7 +20,9 @@ import {
   setChartsLocale,
   getCurrentChartsLocale,
   useChartsLocale,
+  subscribeChartsLocale,
   __resetChartsLocaleStoreForTests,
+  __getChartsLocaleListenerCountForTests,
 } from '../i18n/locale-store';
 import { ECHARTS_LOCALE_MAP } from '../i18n/echarts-locale';
 
@@ -82,50 +84,51 @@ describe('locale-store — useChartsLocale hook', () => {
     expect(screen.getByTestId('probe').textContent).toBe('ar-SA');
   });
 
-  it('does NOT re-render when setChartsLocale receives the current value', () => {
-    let renderCount = 0;
-    const Counter: React.FC = () => {
-      const locale = useChartsLocale();
-      renderCount += 1;
-      return <span data-testid="counter">{locale}</span>;
-    };
-
-    render(<Counter />);
-    const initialRenderCount = renderCount;
-
-    act(() => {
-      setChartsLocale('tr-TR'); // same as initial
+  it('idempotent setChartsLocale: same value does NOT invoke listeners (direct count assert)', () => {
+    // Codex (PR-A1 second pass): React bail-outs on identical state can
+    // mask a removed early-return guard. Subscribe directly through
+    // subscribeChartsLocale and count invocations to pin the real
+    // contract — listeners must NOT be called when the new value
+    // equals the current one.
+    let listenerInvocations = 0;
+    const unsubscribe = subscribeChartsLocale(() => {
+      listenerInvocations += 1;
     });
 
-    // The idempotency guard inside setChartsLocale must short-circuit
-    // before notifying listeners; otherwise a useState(setLocale) call
-    // would trigger React's reconciliation and bump renderCount.
-    expect(renderCount).toBe(initialRenderCount);
+    setChartsLocale('tr-TR'); // same as initial (default)
+    expect(listenerInvocations).toBe(0);
+
+    setChartsLocale('en-US'); // different — listener must fire exactly once
+    expect(listenerInvocations).toBe(1);
+
+    setChartsLocale('en-US'); // same as previous — must NOT fire
+    expect(listenerInvocations).toBe(1);
+
+    unsubscribe();
   });
 
-  it('removes its listener on unmount (no leak)', () => {
-    let renderCount = 0;
-    const Counter: React.FC = () => {
+  it('removes its listener on unmount (direct listener-count assert)', () => {
+    // Codex (PR-A1 second pass): proxying unmount-leak detection via
+    // renderCount is unreliable — leaked listeners on unmounted
+    // components don't bump renderCount. Pin the contract directly via
+    // __getChartsLocaleListenerCountForTests.
+    const initial = __getChartsLocaleListenerCountForTests();
+
+    const Probe: React.FC = () => {
       const locale = useChartsLocale();
-      renderCount += 1;
       return <span>{locale}</span>;
     };
 
-    const { unmount } = render(<Counter />);
-    const renderCountBeforeUnmount = renderCount;
+    const { unmount } = render(<Probe />);
+    expect(__getChartsLocaleListenerCountForTests()).toBe(initial + 1);
 
     unmount();
+    expect(__getChartsLocaleListenerCountForTests()).toBe(initial);
 
-    // After unmount the listener must be detached. A leaking listener
-    // would still call setLocale on the unmounted component, which
-    // React would warn about; here we instead assert the renderCount
-    // does not bump because the listener was removed cleanly.
+    // The store itself is still responsive after unmount.
     act(() => {
       setChartsLocale('en-US');
     });
-
-    expect(renderCount).toBe(renderCountBeforeUnmount);
-    // The store itself is still responsive after unmount.
     expect(getCurrentChartsLocale()).toBe('en-US');
   });
 
