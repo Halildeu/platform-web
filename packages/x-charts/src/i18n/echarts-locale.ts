@@ -97,16 +97,45 @@ const registeredLocales = new Set<string>();
  * Register a locale with ECharts. Safe to call multiple times
  * — duplicate registrations are skipped.
  *
+ * Codex review (PR-A1 second pass) caught the previous implementation
+ * only writing to a tracking Set, never actually calling
+ * `echarts.registerLocale(name, data)`. Without that call ECharts only
+ * knows EN at runtime, so passing `locale: 'TR'` to `echarts.init` was
+ * a silent no-op. This fix wires the real registration.
+ *
  * @param bcp47 - BCP 47 locale code (e.g. 'tr-TR', 'en-US')
  * @returns The ECharts locale key (e.g. 'TR', 'EN') or null if unsupported
  */
 export function registerEChartsLocale(bcp47: string): string | null {
-  const echartsKey = ECHARTS_LOCALE_MAP[bcp47] ?? ECHARTS_LOCALE_MAP[bcp47.split('-')[0] + '-' + bcp47.split('-')[0].toUpperCase()];
+  const echartsKey =
+    ECHARTS_LOCALE_MAP[bcp47] ??
+    ECHARTS_LOCALE_MAP[bcp47.split('-')[0] + '-' + bcp47.split('-')[0].toUpperCase()];
   if (!echartsKey) return null;
   if (registeredLocales.has(echartsKey)) return echartsKey;
 
-  // ECharts registerLocale is on the echarts module — we store the data
-  // and let the renderer apply it via init({ locale })
+  const data = LOCALE_DATA[echartsKey];
+  if (data) {
+    // Lazy import to avoid pulling the echarts module into anyone who only
+    // imports the locale map (e.g. tests, type-only consumers).
+    void import('../renderers/echarts-imports')
+      .then(({ echarts }) => {
+        try {
+          (
+            echarts as unknown as {
+              registerLocale?: (name: string, data: unknown) => void;
+            }
+          ).registerLocale?.(echartsKey, data);
+        } catch {
+          // ECharts swallow — registerLocale throws only on duplicate, which
+          // we guard above with the Set.
+        }
+      })
+      .catch(() => {
+        // Module load failed (probably a non-browser/test environment). The
+        // Set still records the locale; tests can stub the renderer.
+      });
+  }
+
   registeredLocales.add(echartsKey);
   return echartsKey;
 }
