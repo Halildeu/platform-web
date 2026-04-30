@@ -835,6 +835,11 @@ linked-charts + drill-down demo'su.
 ### Linked artifacts
 
 - **PR-A landed**: [#91](https://github.com/Halildeu/platform-web/pull/91) — feat(faz-21-4-a) Design Lab live x-charts (Storybook fixture port; 13 chart.id switch; toggle forwarding; placeholder removed)
+- **PR-B v1 landed**: [#95](https://github.com/Halildeu/platform-web/pull/95) — KPICard / SparklineChart / ChartDashboard
+- **PR-B2 landed**: [#99](https://github.com/Halildeu/platform-web/pull/99) — CrossFilter / chart-container / chart-toolbar + 21 mutation-aware test
+- **PR-B3 landed**: [#100](https://github.com/Halildeu/platform-web/pull/100) — 5 AI hook live demos + 12 mutation-aware test
+- **PR-B4 landed**: [#101](https://github.com/Halildeu/platform-web/pull/101) — 5 perf utility live demos + 12 mutation-aware test (B-series ⇒ **29/29 routes live**)
+- **PR-G doc**: `docs/x-charts-ui-ux-tracker.md` — 13 chart × 8 dimension scorecard, per-chart action items, Faz 21.5 lift roadmap
 - `packages/x-charts/CONTRACT.md` v2 (2026-04-11) — API kontratı + §8 CI gates DoD
 - `packages/x-charts/src/__stories__/AllChartTypes.stories.tsx` — visual regression + Design Lab fixture source-of-truth
 - `docs/01-architecture/f4-enterprise-x-suite/phase-gate-definitions.md` — F4 DoD
@@ -852,4 +857,4 @@ enforce + Design Lab playground'un fake-work durumunu çözme. F4 base'inin
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE; PR #65 + #66 ile fake-test risk runtime-doğrulanmış kapatıldı), §19 Faz 21.4 x-charts CONTRACT v2 enforcement (audit-driven 2026-04-30, PR-A landed #91; PR-B/C/D/E/F pending) closure log eklendi._
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE; PR #65 + #66 ile fake-test risk runtime-doğrulanmış kapatıldı), §19 Faz 21.4 x-charts CONTRACT v2 enforcement (audit-driven 2026-04-30; PR-A #91, PR-B v1 #95, PR-B2 #99, PR-B3 #100, PR-B4 #101 — **29/29 Design Lab route live**; PR-D/E/F pending; PR-G UI/UX tracker doc landed) closure log eklendi._
