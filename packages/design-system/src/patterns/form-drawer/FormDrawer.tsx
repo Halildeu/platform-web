@@ -15,6 +15,11 @@ import {
 // on unmount, AND wrap-around Tab handling — so the explicit
 // useFocusRestore + manual `panelRef.current?.focus()` are both removed.
 import { useFocusTrap } from '../../internal/overlay-engine/focus-trap';
+// Codex 019dde4e iter-47a — sibling isolation: when the drawer is
+// open, the rest of the page becomes background. Native `inert`
+// removes those siblings from focus + a11y tree. Gated on the same
+// `disableFocusTrap` flag so opt-out covers BOTH trap + isolation.
+import { useSiblingIsolation } from '../../internal/overlay-engine/sibling-isolation';
 import { resolveAccessState, type AccessControlledProps } from '../../internal/access-controller';
 
 /* ------------------------------------------------------------------ */
@@ -132,6 +137,18 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
       restoreFocus: !disableFocusTrap,
     });
     const layerId = useId();
+
+    /* ---- overlay-engine: sibling isolation (iter-47a) ---- */
+    // Same gate as focus trap: `disableFocusTrap` covers BOTH the
+    // keyboard trap and the background isolation. Codex 019dde4e
+    // confirmed that the two concerns share the same opt-out
+    // semantics — consumers either go fully modal or take the
+    // escape hatch for both.
+    useSiblingIsolation({
+      active: open && !disableFocusTrap,
+      layerId,
+      panelRef,
+    });
 
     /* ---- overlay-engine: scroll lock ---- */
     useScrollLock(open);
