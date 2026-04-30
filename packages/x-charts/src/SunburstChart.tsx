@@ -135,8 +135,17 @@ function computeMaxDepth(nodes: SunburstNode[], current = 0): number {
  * Auto-generate level configs based on the data tree depth.
  * Distributes the available radius range evenly across levels.
  * Deeper levels get smaller labels to reduce visual clutter.
+ *
+ * Codex iter-9 fix: deep-level fontSize must respect MIN_FONT_SIZE_PX (10).
+ * Old `Math.max(9, 12 - i)` violated a11y minimum at i=3+. We now clamp via
+ * scaleFontSize which guarantees >=10, and apply density multiplier so
+ * compact mode shrinks the base proportionally.
  */
-function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelConfig[] {
+function autoLevels(
+  maxDepth: number,
+  radius: [string, string],
+  densityFontMultiplier: number,
+): SunburstLevelConfig[] {
   const totalLevels = maxDepth + 1;
   const innerPct = parseFloat(radius[0]) || 0;
   const outerPct = parseFloat(radius[1]) || 90;
@@ -147,6 +156,9 @@ function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelCo
   for (let i = 0; i < totalLevels; i++) {
     const r0 = innerPct + step * i;
     const r1 = innerPct + step * (i + 1);
+    // Base font size 12 at root, gradually shrink for deeper levels (12, 11, 10, 10, ...)
+    // scaleFontSize automatically clamps below MIN_FONT_SIZE_PX (10).
+    const baseFontSize = Math.max(10, 12 - i);
     levels.push({
       r0: `${r0.toFixed(1)}%`,
       r1: `${r1.toFixed(1)}%`,
@@ -156,7 +168,7 @@ function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelCo
       },
       label: {
         show: i < 3,
-        fontSize: Math.max(9, 12 - i),
+        fontSize: scaleFontSize(baseFontSize, densityFontMultiplier),
         rotate: i === 0 ? 0 : 'tangential',
       },
     });
@@ -246,7 +258,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
 
       const coloredData = colorizeTopLevel(data);
       const maxDepth = computeMaxDepth(coloredData);
-      const levels = levelsProp ?? autoLevels(maxDepth, radius);
+      const levels = levelsProp ?? autoLevels(maxDepth, radius, densityFontMultiplier);
       const focusValue = resolveHighlightFocus(highlightPolicy);
 
       return {

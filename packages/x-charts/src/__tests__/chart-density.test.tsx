@@ -391,4 +391,66 @@ describe('Density invariants', () => {
       unmount();
     }
   });
+
+  it('SunburstChart deep tree (depth=4) — every level fontSize stays >=10 in compact', () => {
+    // Codex iter-9 fix: previously autoLevels used Math.max(9, 12 - i) which
+    // violated MIN_FONT_SIZE_PX at deep levels. With density-aware autoLevels
+    // every level fontSize must respect the 10px clamp regardless of depth.
+    const deepTree = [
+      {
+        name: 'A',
+        children: [
+          {
+            name: 'A1',
+            children: [
+              {
+                name: 'A1a',
+                children: [
+                  {
+                    name: 'A1a-x',
+                    children: [{ name: 'A1a-x-deep', value: 1 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    document.documentElement.setAttribute('data-density', 'compact');
+    __resetThemeStoreForTests();
+    render(<SunburstChart data={deepTree} density="auto" />);
+    const opt = lastSetOption();
+    const sizes = collectFontSizes(opt);
+    expect(sizes.length).toBeGreaterThan(0);
+    sizes.forEach((fs) => {
+      expect(
+        fs,
+        `SunburstChart deep tree produced fontSize=${fs} below clamp threshold`,
+      ).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+  it('ScatterChart axis nameTextStyle.fontSize and nameGap respect density', () => {
+    // Codex iter-9 fix: axis nameGap/nameTextStyle were hardcoded; must scale.
+    render(<ScatterChart data={[{ x: 1, y: 2 }]} xLabel="X" yLabel="Y" density="comfortable" />);
+    const optComfy = lastSetOption();
+    const xAxisComfy = optComfy.xAxis as { nameGap: number; nameTextStyle: { fontSize: number } };
+    const comfyNameGap = xAxisComfy.nameGap;
+    const comfyNameFontSize = xAxisComfy.nameTextStyle.fontSize;
+    setOptionMock.mockClear();
+
+    render(<ScatterChart data={[{ x: 1, y: 2 }]} xLabel="X" yLabel="Y" density="compact" />);
+    const optCompact = lastSetOption();
+    const xAxisCompact = optCompact.xAxis as {
+      nameGap: number;
+      nameTextStyle: { fontSize: number };
+    };
+
+    // compact must reduce both nameGap (spacing) and nameTextStyle.fontSize
+    expect(xAxisCompact.nameGap).toBeLessThan(comfyNameGap);
+    expect(xAxisCompact.nameTextStyle.fontSize).toBeLessThanOrEqual(comfyNameFontSize);
+    // a11y clamp respected
+    expect(xAxisCompact.nameTextStyle.fontSize).toBeGreaterThanOrEqual(10);
+  });
 });

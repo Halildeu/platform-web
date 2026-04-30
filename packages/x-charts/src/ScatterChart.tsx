@@ -253,14 +253,18 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           type: 'value',
           name: xLabel,
           nameLocation: 'center',
-          nameGap: 28,
-          nameTextStyle: { fontFamily, color: textSecondary, fontSize: 12 },
+          nameGap: scaleSpacing(28, densitySpacingMultiplier),
+          nameTextStyle: {
+            fontFamily,
+            color: textSecondary,
+            fontSize: scaleFontSize(12, densityFontMultiplier),
+          },
           axisLine: { lineStyle: { color: borderDefault } },
           axisTick: { lineStyle: { color: borderDefault } },
           axisLabel: {
             color: textSecondary,
             fontFamily,
-            fontSize: 11,
+            fontSize: scaleFontSize(11, densityFontMultiplier),
             formatter: (v: number) => fmt(v),
           },
           splitLine: {
@@ -272,14 +276,18 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           type: 'value',
           name: yLabel,
           nameLocation: 'center',
-          nameGap: 40,
-          nameTextStyle: { fontFamily, color: textSecondary, fontSize: 12 },
+          nameGap: scaleSpacing(40, densitySpacingMultiplier),
+          nameTextStyle: {
+            fontFamily,
+            color: textSecondary,
+            fontSize: scaleFontSize(12, densityFontMultiplier),
+          },
           axisLine: { show: false },
           axisTick: { show: false },
           axisLabel: {
             color: textSecondary,
             fontFamily,
-            fontSize: 11,
+            fontSize: scaleFontSize(11, densityFontMultiplier),
             formatter: (v: number) => fmt(v),
           },
           splitLine: {
