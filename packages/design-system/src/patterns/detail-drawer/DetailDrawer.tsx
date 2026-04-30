@@ -123,14 +123,15 @@ export const DetailDrawer = React.forwardRef<HTMLDivElement, DetailDrawerProps>(
     _ref,
   ) => {
     const accessState = resolveAccessState(access);
-    // Codex 019dde20 iter-45 — useFocusTrap manages panel ref +
-    // autoFocus + restoreFocus + Tab/Shift+Tab wrap-around.
+    // Codex 019dde60 iter-47b1 — layerId before hooks for layer-aware
+    // gates. Same registration pattern as FormDrawer.
+    const layerId = useId();
     const panelRef = useFocusTrap({
       active: open && !disableFocusTrap,
       autoFocus: !disableFocusTrap,
       restoreFocus: !disableFocusTrap,
+      layerId,
     });
-    const layerId = useId();
 
     /* ---- overlay-engine: sibling isolation (iter-47a) ---- */
     useSiblingIsolation({
@@ -155,7 +156,7 @@ export const DetailDrawer = React.forwardRef<HTMLDivElement, DetailDrawerProps>(
     }, [open, layerId]);
 
     /* ---- overlay-engine: escape key ---- */
-    useEscapeKey(open, onClose);
+    useEscapeKey(open, onClose, { layerId });
 
     // Codex 019dde20 iter-45 — initial panel focus is now handled by
     // useFocusTrap above (autoFocus → first focusable, container

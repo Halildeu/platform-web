@@ -15,7 +15,12 @@ import {
   type AccessLevel,
 } from '../../internal/access-controller';
 import { stateAttrs } from '../../internal/interaction-core';
-import { useOutsideClick, useEscapeKey } from '../../internal/overlay-engine';
+import {
+  useOutsideClick,
+  useEscapeKey,
+  registerLayer,
+  unregisterLayer,
+} from '../../internal/overlay-engine';
 // Codex 019dde3d iter-46 — opt-in focus trap for modal-style popovers.
 // Default popover is non-modal: Tab can leave the popover and click-
 // outside closes it. Consumers building modal-pop-over UX can opt in
@@ -174,10 +179,15 @@ export const Popover = React.forwardRef<HTMLDivElement, PopoverProps>(
     // `resolvedOpen` so the keydown listener attaches only when the
     // feature is opted in AND the popover is open. autoFocus + restore
     // share the same gate.
+    // Codex 019dde60 iter-47b1 — popoverId doubles as the layer id;
+    // already declared above (line 166). Pass it into useFocusTrap so
+    // the Tab gate respects topmost-focus-trap-layer ordering when
+    // enableFocusTrap=true and another modal is stacked on top.
     const focusTrapContainerRef = useFocusTrap({
       active: enableFocusTrap && resolvedOpen,
       autoFocus: enableFocusTrap,
       restoreFocus: enableFocusTrap,
+      layerId: popoverId,
     });
     const openTimerRef = useRef<number | null>(null);
     const closeTimerRef = useRef<number | null>(null);
@@ -291,15 +301,34 @@ export const Popover = React.forwardRef<HTMLDivElement, PopoverProps>(
       [],
     );
 
+    /* ---- overlay-engine: layer-stack registration (iter-47b1) ---- */
+    // Codex 019dde60 iter-47b1 — Popover joins the layer stack so the
+    // dismissal LIFO works for modal-over-popover scenarios. Layer
+    // type 'popover' (semantic split from 'dropdown'; same z-index
+    // band so visual stacking is unchanged). When enableFocusTrap is
+    // true the layer overrides participatesInFocusTrap to true so
+    // it's eligible for the focus-trap gate as well.
+    useEffect(() => {
+      if (!resolvedOpen) return;
+      registerLayer(popoverId, 'popover', {
+        participatesInFocusTrap: enableFocusTrap,
+      });
+      return () => unregisterLayer(popoverId);
+    }, [resolvedOpen, popoverId, enableFocusTrap]);
+
     /* ---- overlay-engine: outside click ---- */
+    // Codex 019dde60 iter-47b1 — pass popoverId so a stacked modal
+    // captures outside-click first; popover stays put underneath.
     useOutsideClick({
       active: resolvedOpen,
       onOutsideClick: () => closePopover(false),
       excludeRefs: [rootRef, panelRef],
+      layerId: popoverId,
     });
 
     /* ---- overlay-engine: escape key ---- */
-    useEscapeKey(resolvedOpen, () => closePopover(true));
+    // Codex 019dde60 iter-47b1 — same gate; LIFO Escape close.
+    useEscapeKey(resolvedOpen, () => closePopover(true), { layerId: popoverId });
 
     useEffect(() => {
       if (!resolvedOpen) {

@@ -131,12 +131,17 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
     // `useFocusRestore` combo, which only set initial focus and didn't
     // trap Tab. The hook's per-keydown DOM scan covers dynamic focusable
     // lists (form fields appearing/disappearing while open).
+    // Codex 019dde60 iter-47b1 — layerId declared before hooks so we
+    // can pass it into useFocusTrap, useSiblingIsolation, and
+    // useEscapeKey. Layer-aware gates fire only when this layer is
+    // the topmost focus-trap / dismissable participant.
+    const layerId = useId();
     const panelRef = useFocusTrap({
       active: open && !disableFocusTrap,
       autoFocus: !disableFocusTrap,
       restoreFocus: !disableFocusTrap,
+      layerId,
     });
-    const layerId = useId();
 
     /* ---- overlay-engine: sibling isolation (iter-47a) ---- */
     // Same gate as focus trap: `disableFocusTrap` covers BOTH the
@@ -154,6 +159,11 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
     useScrollLock(open);
 
     /* ---- overlay-engine: layer-stack registration ---- */
+    // Codex 019dde60 iter-47b1 — layer registers as 'modal' with
+    // default participation flags (focusTrap: true, dismissal: true).
+    // Capability stays stable even if `disableFocusTrap` flips at
+    // runtime; the hook gates inside `useFocusTrap` decide whether
+    // to actually intercept.
     useEffect(() => {
       if (open) {
         registerLayer(layerId, 'modal');
@@ -166,7 +176,7 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
     }, [open, layerId]);
 
     /* ---- overlay-engine: escape key ---- */
-    useEscapeKey(open && closeOnEscape, onClose);
+    useEscapeKey(open && closeOnEscape, onClose, { layerId });
 
     // Codex 019dde20 iter-45 — `useFocusTrap` covers BOTH initial focus
     // (autoFocus → first focusable, or container fallback when none) AND
