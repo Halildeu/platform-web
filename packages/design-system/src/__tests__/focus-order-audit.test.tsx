@@ -248,7 +248,11 @@ describe('Focus order — Modal focus trap', () => {
 
 describe('Focus order — Tabs', () => {
   const tabItems: TabItem[] = [
-    { key: 'tab1', label: 'Overview', content: <button data-testid="panel-btn">Panel Button</button> },
+    {
+      key: 'tab1',
+      label: 'Overview',
+      content: <button data-testid="panel-btn">Panel Button</button>,
+    },
     { key: 'tab2', label: 'Details', content: <span>Details content</span> },
     { key: 'tab3', label: 'Settings', content: <span>Settings content</span> },
   ];
@@ -320,8 +324,16 @@ describe('Focus order — Tabs', () => {
 
 describe('Focus order — Accordion', () => {
   const items: AccordionItem[] = [
-    { value: 'section-1', title: 'Section One', content: <button data-testid="content-btn-1">Content 1 Button</button> },
-    { value: 'section-2', title: 'Section Two', content: <button data-testid="content-btn-2">Content 2 Button</button> },
+    {
+      value: 'section-1',
+      title: 'Section One',
+      content: <button data-testid="content-btn-1">Content 1 Button</button>,
+    },
+    {
+      value: 'section-2',
+      title: 'Section Two',
+      content: <button data-testid="content-btn-2">Content 2 Button</button>,
+    },
     { value: 'section-3', title: 'Section Three', content: <span>Content 3</span> },
   ];
 
@@ -344,9 +356,7 @@ describe('Focus order — Accordion', () => {
   it('Content of open panel is in tab order after its header', async () => {
     const user = userEvent.setup();
 
-    render(
-      <Accordion items={items} defaultValue={['section-1']} ariaLabel="FAQ" />,
-    );
+    render(<Accordion items={items} defaultValue={['section-1']} ariaLabel="FAQ" />);
 
     const triggers = screen.getAllByRole('button');
     triggers[0].focus();
@@ -359,9 +369,7 @@ describe('Focus order — Accordion', () => {
 
   it('Closed panel content is NOT in tab order', () => {
     // All panels are closed by default (destroyOnHidden=true removes them from DOM)
-    render(
-      <Accordion items={items} ariaLabel="FAQ" />,
-    );
+    render(<Accordion items={items} ariaLabel="FAQ" />);
 
     // With destroyOnHidden=true (default), closed panels should not render
     // their content at all — verify no content buttons exist in the DOM
@@ -379,44 +387,51 @@ describe('Focus order — Accordion', () => {
 /* ================================================================== */
 
 describe('Focus order — Drawer', () => {
-  it('Focus moves to drawer content on open', () => {
+  // Codex 019dde3d iter-46 — Drawer adopted useFocusTrap. Focus now
+  // moves to the first focusable INSIDE the panel (close button) on
+  // open, not to the panel itself. Updated assertions to lock the new
+  // contract.
+  it('Focus moves into drawer on open (close button receives autoFocus)', async () => {
     render(
       <Drawer open onClose={() => {}} title="Test Drawer">
         <button data-testid="drawer-action">Drawer Action</button>
       </Drawer>,
     );
+    // Wait for useFocusTrap autoFocus settle (50ms internal timeout)
+    await new Promise((r) => setTimeout(r, 80));
 
-    // Drawer auto-focuses its panel via panelRef.current?.focus()
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
-    // The panel gets focus (tabIndex={-1})
-    expect(document.activeElement).toBe(dialog);
+    // Active element is now the first focusable in DOM order — the
+    // close button — proving the trap captured focus into the panel.
+    const closeBtn = screen.getByLabelText('Close');
+    expect(document.activeElement).toBe(closeBtn);
+    expect(dialog.contains(document.activeElement)).toBe(true);
   });
 
-  it('Tab order stays within drawer when open', async () => {
-    const user = userEvent.setup();
-
+  it('Tab boundary wrap stays within drawer (Tab on last → close button)', async () => {
     render(
       <Drawer open onClose={() => {}} title="Focus Drawer">
         <button data-testid="drawer-btn-1">First</button>
         <button data-testid="drawer-btn-2">Second</button>
       </Drawer>,
     );
+    await new Promise((r) => setTimeout(r, 80));
 
-    const dialog = screen.getByRole('dialog');
-    expect(document.activeElement).toBe(dialog);
-
-    // Tab through drawer content
-    await user.tab();
     const closeBtn = screen.getByLabelText('Close');
+    const btn2 = screen.getByTestId('drawer-btn-2');
+
+    // autoFocus → close button (first focusable in DOM order)
     expect(document.activeElement).toBe(closeBtn);
 
-    await user.tab();
-    const btn1 = screen.getByTestId('drawer-btn-1');
-    expect(document.activeElement).toBe(btn1);
+    // Tab from last (btn2) → wraps to first (close button)
+    btn2.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeBtn);
 
-    await user.tab();
-    const btn2 = screen.getByTestId('drawer-btn-2');
+    // Shift+Tab from close → wraps to last (btn2)
+    closeBtn.focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(btn2);
   });
 
@@ -506,9 +521,9 @@ describe('Focus order — Composite components', () => {
 
     // Tab to first breadcrumb link (Home)
     await user.tab();
-    const links = screen.getAllByRole('button').filter(
-      (el) => el.textContent === 'Home' || el.textContent === 'Products',
-    );
+    const links = screen
+      .getAllByRole('button')
+      .filter((el) => el.textContent === 'Home' || el.textContent === 'Products');
     expect(document.activeElement).toBe(links[0]);
 
     // Tab to second breadcrumb link (Products)
