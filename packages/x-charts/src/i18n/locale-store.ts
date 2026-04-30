@@ -42,10 +42,40 @@ interface LocaleChangeEventDetail {
   origin: number;
 }
 
+/**
+ * Shell I18nManager persists the current locale to
+ * `localStorage['mfe.locale']`. Late-loaded remotes that bundle their
+ * own copy of `@mfe/x-charts` initialise after the shell's locale
+ * change CustomEvent has already fired — they would otherwise sit on
+ * DEFAULT_LOCALE until the next switch. Reading the persisted value
+ * at module-init mirrors shell state into the remote copy.
+ *
+ * Codex iter-2 B2 absorbu — late-loaded remote fix.
+ */
+const SHELL_LOCALE_STORAGE_KEY = 'mfe.locale';
+
 const ORIGIN_ID = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 
-let currentLocale: string = DEFAULT_LOCALE;
+const readShellLocale = (): string => {
+  if (typeof window === 'undefined' || !window.localStorage) return DEFAULT_LOCALE;
+  try {
+    const stored = window.localStorage.getItem(SHELL_LOCALE_STORAGE_KEY);
+    if (typeof stored === 'string' && stored.length > 0) return stored;
+  } catch {
+    // localStorage access denied (Safari private mode, quota, sandboxed iframe)
+    // — fall through to default.
+  }
+  return DEFAULT_LOCALE;
+};
+
+let currentLocale: string = readShellLocale();
 const listeners = new Set<(locale: string) => void>();
+
+// Pre-register the hydrated locale so ECharts has its data ready before
+// the first chart instance calls `echarts.init({ locale })`.
+if (currentLocale !== DEFAULT_LOCALE) {
+  registerEChartsLocale(currentLocale);
+}
 
 const dispatchBroadcast = (locale: string) => {
   if (typeof window === 'undefined' || typeof CustomEvent !== 'function') return;

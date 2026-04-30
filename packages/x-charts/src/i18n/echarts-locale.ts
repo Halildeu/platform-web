@@ -17,15 +17,18 @@
  * Map of BCP 47 locale codes → ECharts locale registration key.
  * ECharts uses uppercase region codes internally.
  */
+/**
+ * Codex iter-2 blocker absorbu: ECHARTS_LOCALE_MAP previously listed
+ * DE/FR/JA/ZH but LOCALE_DATA only had TR/EN — claiming a locale
+ * without data ships a silent default-EN fallback. Map now mirrors
+ * LOCALE_DATA exactly. DE/FR/JA/ZH will land in Faz 21.5 when their
+ * dictionaries are authored. AR added with full data here.
+ */
 export const ECHARTS_LOCALE_MAP: Record<string, string> = {
   'tr-TR': 'TR',
   'en-US': 'EN',
   'en-GB': 'EN',
-  'de-DE': 'DE',
-  'fr-FR': 'FR',
   'ar-SA': 'AR',
-  'ja-JP': 'JA',
-  'zh-CN': 'ZH',
 };
 
 /**
@@ -85,9 +88,36 @@ const EN_LOCALE: EChartsLocaleData = {
   },
 };
 
+/**
+ * Arabic locale (Saudi Arabia primary). Codex iter-2 flagged the
+ * mismatch between ECHARTS_LOCALE_MAP claiming `ar-SA` and
+ * LOCALE_DATA missing AR — `echarts.init({ locale: 'AR' })` would
+ * silently fall back to EN. RTL-aware strings provided here.
+ */
+const AR_LOCALE: EChartsLocaleData = {
+  toolbox: {
+    saveAsImage: { title: 'حفظ كصورة' },
+    dataView: { title: 'عرض البيانات', lang: ['عرض البيانات', 'إغلاق', 'تحديث'] },
+    restore: { title: 'استعادة' },
+    dataZoom: { title: { zoom: 'تكبير', back: 'إعادة تعيين' } },
+  },
+  legend: { selector: { all: 'الكل', inverse: 'عكس' } },
+  series: {
+    typeNames: {
+      bar: 'مخطط شريطي',
+      line: 'مخطط خطي',
+      pie: 'مخطط دائري',
+      scatter: 'مخطط مبعثر',
+      gauge: 'مقياس',
+      radar: 'مخطط رادار',
+    },
+  },
+};
+
 const LOCALE_DATA: Record<string, EChartsLocaleData> = {
   TR: TR_LOCALE,
   EN: EN_LOCALE,
+  AR: AR_LOCALE,
 };
 
 /**  Registered locale keys (track to avoid double-registration). */
@@ -147,4 +177,13 @@ export function registerEChartsLocale(bcp47: string): string | null {
 export function getEChartsLocale(bcp47: string): EChartsLocaleData | null {
   const key = ECHARTS_LOCALE_MAP[bcp47];
   return key ? (LOCALE_DATA[key] ?? null) : null;
+}
+
+/**
+ * Test-only helper. Clears the registeredLocales tracking Set so each
+ * test runs against a clean registration state. Production code must
+ * never call this — duplicate `echarts.registerLocale` calls throw.
+ */
+export function __resetRegisteredLocalesForTests(): void {
+  registeredLocales.clear();
 }

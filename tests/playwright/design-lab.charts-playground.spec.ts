@@ -14,21 +14,42 @@ import { authenticateAndNavigate } from './utils/auth';
 
 const ROOT = '/admin/design-lab/charts';
 
+/**
+ * Codex iter-2 B4 absorbu: spec previously covered only 4 of the 13
+ * core chart wrappers (bar/line/pie/gauge). The 9 chart wrappers below
+ * (area/scatter/radar/treemap/heatmap/waterfall/funnel/sankey/sunburst)
+ * also have ChartPreviewLive switch entries and design-lab routes,
+ * so smoke must include them. Without these the regression gate
+ * misses 9 of the 13 charts the playground claims to host.
+ */
 const CHART_PLAYGROUND_ROUTES: Array<{ slug: string; previewTestId: string }> = [
+  // 13 core chart wrappers
   { slug: 'bar-chart', previewTestId: 'design-lab-chart-preview-bar-chart' },
   { slug: 'line-chart', previewTestId: 'design-lab-chart-preview-line-chart' },
+  { slug: 'area-chart', previewTestId: 'design-lab-chart-preview-area-chart' },
   { slug: 'pie-chart', previewTestId: 'design-lab-chart-preview-pie-chart' },
+  { slug: 'scatter-chart', previewTestId: 'design-lab-chart-preview-scatter-chart' },
   { slug: 'gauge-chart', previewTestId: 'design-lab-chart-preview-gauge-chart' },
+  { slug: 'radar-chart', previewTestId: 'design-lab-chart-preview-radar-chart' },
+  { slug: 'treemap-chart', previewTestId: 'design-lab-chart-preview-treemap-chart' },
+  { slug: 'heatmap-chart', previewTestId: 'design-lab-chart-preview-heatmap-chart' },
+  { slug: 'waterfall-chart', previewTestId: 'design-lab-chart-preview-waterfall-chart' },
+  { slug: 'funnel-chart', previewTestId: 'design-lab-chart-preview-funnel-chart' },
+  { slug: 'sankey-chart', previewTestId: 'design-lab-chart-preview-sankey-chart' },
+  { slug: 'sunburst-chart', previewTestId: 'design-lab-chart-preview-sunburst-chart' },
+  // Composite widgets (PR-B series)
   { slug: 'kpi-card', previewTestId: 'design-lab-chart-preview-kpi-card' },
   { slug: 'sparkline-chart', previewTestId: 'design-lab-chart-preview-sparkline-chart' },
   { slug: 'chart-dashboard', previewTestId: 'design-lab-chart-preview-chart-dashboard' },
   { slug: 'chart-container', previewTestId: 'design-lab-chart-preview-chart-container' },
   { slug: 'chart-toolbar', previewTestId: 'design-lab-chart-preview-chart-toolbar' },
+  // AI hook demos (PR-B3)
   { slug: 'detect-anomalies', previewTestId: 'design-lab-chart-preview-detect-anomalies' },
   { slug: 'identify-trends', previewTestId: 'design-lab-chart-preview-identify-trends' },
   { slug: 'suggest-chart', previewTestId: 'design-lab-chart-preview-suggest-chart' },
   { slug: 'chart-description', previewTestId: 'design-lab-chart-preview-chart-description' },
   { slug: 'nl-to-chart', previewTestId: 'design-lab-chart-preview-nl-to-chart' },
+  // Perf utility demos (PR-B4)
   { slug: 'lttb', previewTestId: 'design-lab-chart-preview-lttb' },
   { slug: 'progressive-render', previewTestId: 'design-lab-chart-preview-progressive-render' },
   { slug: 'lazy-chart', previewTestId: 'design-lab-chart-preview-lazy-chart' },
