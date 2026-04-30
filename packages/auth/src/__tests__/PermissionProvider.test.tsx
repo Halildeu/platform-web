@@ -207,8 +207,12 @@ describe('PermissionProvider — Codex 019dd818 iter-4 (B-prime) sessionExpired'
     expect(result.current.isSuperAdmin()).toBe(false); // mockAuthzMe.superAdmin=false
   });
 
-  // Codex 019dd818 iter-7 (B-prime PR-2a): global app:auth:unauthorized listener
-  it('sets sessionExpired=true when shared-http app:auth:unauthorized event fires', async () => {
+  // Codex 019dd818 iter-7 (B-prime PR-2a) + iter-34: global app:auth:unauthorized listener,
+  // now URL-filtered. Only /authz/me and /authz/version 401s actually mean
+  // "the auth identity is gone." Object-level / per-resource 401s are
+  // ignored to avoid collapsing the global session on a backend mishap
+  // (e.g. variant-service returning 401 instead of 403).
+  it('sets sessionExpired=true when /authz/me 401 fires (auth-critical path)', async () => {
     const httpGet = vi.fn().mockResolvedValue({ data: mockAuthzMe });
 
     const { result } = renderHook(() => usePermissions(), {
@@ -220,7 +224,68 @@ describe('PermissionProvider — Codex 019dd818 iter-4 (B-prime) sessionExpired'
     expect(result.current.sessionExpired).toBe(false);
     expect(result.current.authz).not.toBeNull();
 
-    // Object-level 401 simulate: shared-http event dispatch
+    // Auth-critical 401: /authz/me — listener should collapse session.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('app:auth:unauthorized', {
+          detail: { status: 401, method: 'GET', url: '/v1/authz/me', timestamp: Date.now() },
+        }),
+      );
+    });
+
+    await waitFor(() => expect(result.current.sessionExpired).toBe(true));
+    expect(result.current.authz).toBeNull();
+    expect(result.current.isSuperAdmin()).toBe(false);
+  });
+
+  it('ignores app:auth:unauthorized for non-auth-critical URLs (iter-34)', async () => {
+    // Live capture (Playwright on testai.acik.com 2026-04-30): variant-service
+    // returned HTTP 401 for /api/v1/variants?gridId=mfe-users/users-grid even
+    // though the JWT was valid (Spring's BearerTokenAuthenticationFilter
+    // logged Authenticated=true). The pre-iter-34 listener treated that as a
+    // session expiry and the user-detail drawer's canEdit gate collapsed,
+    // disabling every role checkbox. Filter now requires /authz/me or
+    // /authz/version in the URL before sessionExpired is flipped.
+    const httpGet = vi.fn().mockResolvedValue({ data: { ...mockAuthzMe, superAdmin: true } });
+
+    const { result } = renderHook(() => usePermissions(), {
+      wrapper: createWrapper(httpGet),
+    });
+
+    await waitFor(() => expect(result.current.initialized).toBe(true));
+    expect(result.current.sessionExpired).toBe(false);
+    expect(result.current.isSuperAdmin()).toBe(true);
+
+    // Object-level / per-resource 401: variant-service mishap.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('app:auth:unauthorized', {
+          detail: {
+            status: 401,
+            method: 'GET',
+            url: '/v1/variants?gridId=foo',
+            timestamp: Date.now(),
+          },
+        }),
+      );
+    });
+
+    // sessionExpired must NOT flip; super-admin status preserved.
+    expect(result.current.sessionExpired).toBe(false);
+    expect(result.current.isSuperAdmin()).toBe(true);
+    expect(result.current.authz).not.toBeNull();
+  });
+
+  it('ignores app:auth:unauthorized for /v1/authz/check (object-level 401)', async () => {
+    const httpGet = vi.fn().mockResolvedValue({ data: mockAuthzMe });
+
+    const { result } = renderHook(() => usePermissions(), {
+      wrapper: createWrapper(httpGet),
+    });
+
+    await waitFor(() => expect(result.current.initialized).toBe(true));
+    expect(result.current.sessionExpired).toBe(false);
+
     await act(async () => {
       window.dispatchEvent(
         new CustomEvent('app:auth:unauthorized', {
@@ -229,10 +294,10 @@ describe('PermissionProvider — Codex 019dd818 iter-4 (B-prime) sessionExpired'
       );
     });
 
-    // Provider listener tetiklendi → cache invalidate
-    await waitFor(() => expect(result.current.sessionExpired).toBe(true));
-    expect(result.current.authz).toBeNull();
-    expect(result.current.isSuperAdmin()).toBe(false);
+    // /authz/check is per-tuple authorization; a 401 there is not a session
+    // expiry — it's a per-resource auth fail. Don't collapse globally.
+    expect(result.current.sessionExpired).toBe(false);
+    expect(result.current.authz).not.toBeNull();
   });
 
   it('ignores app:auth:unauthorized when permitAll=true', async () => {
