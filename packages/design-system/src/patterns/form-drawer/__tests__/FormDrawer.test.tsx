@@ -478,29 +478,73 @@ describe('FormDrawer — Faz 3: keyboard & a11y', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('Tab tusu ile fokus drawer icerisinde kalir (focus trap)', async () => {
-    const onClose = vi.fn();
-    const user = userEvent.setup();
+  // Codex 019dde20 iter-45 — STRICT focus trap contract.
+  // Pre-iter-45 this test only checked `dialog.contains(activeElement)`
+  // after 3 tabs; that proved containment by accident (the dialog was
+  // the only focusable container in jsdom) and would silently pass
+  // even when Tab leaks to the address bar. iter-45 wires
+  // `useFocusTrap` to FormDrawer; the assertion now proves the
+  // boundary wrap-around. The close button is the FIRST focusable in
+  // DOM order (header renders before body), so the cycle is
+  // Close → b1 → b2 → Close. Real DOM-order behavior is locked here so
+  // future header/footer changes can't silently re-order without
+  // breaking the contract.
+  it('Tab/Shift+Tab boundary wrap-around (real focus trap)', async () => {
     render(
-      <FormDrawer open onClose={onClose} title="Trap Test">
-        <button>First</button>
-        <button>Second</button>
+      <FormDrawer open onClose={vi.fn()} title="Trap Test">
+        <button data-testid="b1">First inner</button>
+        <button data-testid="b2">Last inner</button>
       </FormDrawer>,
     );
 
-    // Dialog should receive focus on open
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveFocus();
+    // Wait for hook autoFocus (50ms timeout in useFocusTrap)
+    await new Promise((r) => setTimeout(r, 80));
 
-    // Tab through focusable elements — focus must stay inside dialog
-    await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    const closeBtn = screen.getByLabelText('Close drawer');
+    const lastInner = screen.getByTestId('b2');
 
-    await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    // Tab from last → wraps forward to FIRST focusable (close button)
+    lastInner.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeBtn);
 
-    await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    // Shift+Tab from close (first) → wraps backward to LAST inner
+    closeBtn.focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(lastInner);
+  });
+
+  it('autoFocus moves focus into the panel close button when the drawer opens', async () => {
+    render(
+      <FormDrawer open onClose={vi.fn()} title="AutoFocus Test">
+        <button data-testid="first-input">Inside</button>
+      </FormDrawer>,
+    );
+    await new Promise((r) => setTimeout(r, 80));
+    // Header close button is rendered before children in DOM order so
+    // autoFocus lands on it — focus is captured inside the panel which
+    // is the a11y contract; specific landing element is implementation
+    // detail of DOM order. This test asserts the panel captured focus.
+    const closeBtn = screen.getByLabelText('Close drawer');
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it('disableFocusTrap=true skips wrap and autoFocus (escape hatch)', async () => {
+    const before = document.createElement('button');
+    before.textContent = 'Outside';
+    document.body.appendChild(before);
+    before.focus();
+
+    render(
+      <FormDrawer open onClose={vi.fn()} title="No Trap" disableFocusTrap>
+        <button data-testid="b1">Inside</button>
+      </FormDrawer>,
+    );
+    await new Promise((r) => setTimeout(r, 80));
+
+    // With trap disabled, focus stays on the outside trigger (autoFocus skipped)
+    expect(document.activeElement).toBe(before);
+    document.body.removeChild(before);
   });
 
   it('scroll lock: body overflow hidden when drawer is open', () => {
@@ -581,6 +625,14 @@ describe('FormDrawer — interaction: submit flow', () => {
 
     // Dialog acik olmali
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    // Codex 019dde20 iter-45 — useFocusTrap autoFocus runs on a 50ms
+    // setTimeout after activation. Wait past it so focus settles on
+    // the first focusable (close button) BEFORE we start typing into
+    // form fields. Pre-iter-45 the drawer panel itself had focus and
+    // typing-while-autoFocus-fires didn't matter; with the real trap
+    // we need to settle first.
+    await new Promise((r) => setTimeout(r, 80));
 
     // Alanlari doldur
     const nameInput = screen.getByPlaceholderText('Ad');
@@ -680,6 +732,12 @@ describe('FormDrawer — interaction: submit flow', () => {
         <input placeholder="Kategori" />
       </FormDrawer>,
     );
+
+    // Codex 019dde20 iter-45 — wait for useFocusTrap autoFocus settle
+    // before typing (50ms timeout in hook). Without this the autoFocus
+    // setTimeout fires while the user is typing and pulls focus to the
+    // first focusable, splitting the input into two fields.
+    await new Promise((r) => setTimeout(r, 80));
 
     await user.type(screen.getByPlaceholderText('Baslik'), 'Test Baslik');
     await user.type(screen.getByPlaceholderText('Aciklama'), 'Test Aciklama');

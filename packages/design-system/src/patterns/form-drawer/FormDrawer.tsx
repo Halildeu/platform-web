@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useId } from 'react';
+import React, { useEffect, useCallback, useId } from 'react';
 import { cn } from '../../utils/cn';
 import { focusRingClass, stateAttrs } from '../../internal/interaction-core';
 import {
@@ -6,8 +6,15 @@ import {
   registerLayer,
   unregisterLayer,
   useEscapeKey,
-  useFocusRestore,
 } from '../../internal/overlay-engine';
+// Codex 019dde20 iter-45 — switch from `useFocusRestore` (initial-focus
+// only) to `useFocusTrap` which also wraps Tab/Shift+Tab at the panel
+// boundary. Real focus trap replaces the prior accidental containment
+// (panel tabIndex={-1} could let Tab leak from the last focusable to
+// the address bar). useFocusTrap encapsulates: autoFocus, restoreFocus
+// on unmount, AND wrap-around Tab handling — so the explicit
+// useFocusRestore + manual `panelRef.current?.focus()` are both removed.
+import { useFocusTrap } from '../../internal/overlay-engine/focus-trap';
 import { resolveAccessState, type AccessControlledProps } from '../../internal/access-controller';
 
 /* ------------------------------------------------------------------ */
@@ -70,6 +77,14 @@ export interface FormDrawerProps extends AccessControlledProps {
   closeOnEscape?: boolean;
   /** Show loading overlay */
   loading?: boolean;
+  /**
+   * Disable the keyboard focus trap. Default `false` — focus is trapped
+   * within the panel (Tab/Shift+Tab wrap at the boundary, autoFocus on
+   * the first focusable, focus restore on close). Pass `true` ONLY with
+   * an explicit a11y rationale (e.g. integration with an external
+   * focus-management library that takes over). Codex 019dde20 iter-45.
+   */
+  disableFocusTrap?: boolean;
   className?: string;
 }
 
@@ -96,6 +111,7 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
       closeOnBackdrop = true,
       closeOnEscape = true,
       loading = false,
+      disableFocusTrap = false,
       className,
       access,
       accessReason,
@@ -103,7 +119,18 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
     _ref,
   ) => {
     const accessState = resolveAccessState(access);
-    const panelRef = useRef<HTMLDivElement>(null);
+    // Codex 019dde20 iter-45 — useFocusTrap manages: panel ref, autoFocus
+    // on activation, restoreFocus to the previously focused element on
+    // unmount, AND wrap-around Tab/Shift+Tab keydown handling. Replaces
+    // the prior `panelRef = useRef + panelRef.current?.focus()` + bare
+    // `useFocusRestore` combo, which only set initial focus and didn't
+    // trap Tab. The hook's per-keydown DOM scan covers dynamic focusable
+    // lists (form fields appearing/disappearing while open).
+    const panelRef = useFocusTrap({
+      active: open && !disableFocusTrap,
+      autoFocus: !disableFocusTrap,
+      restoreFocus: !disableFocusTrap,
+    });
     const layerId = useId();
 
     /* ---- overlay-engine: scroll lock ---- */
@@ -121,16 +148,13 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
       };
     }, [open, layerId]);
 
-    /* ---- overlay-engine: focus restore ---- */
-    useFocusRestore(open);
-
     /* ---- overlay-engine: escape key ---- */
     useEscapeKey(open && closeOnEscape, onClose);
 
-    /* Focus panel on open */
-    useEffect(() => {
-      if (open) panelRef.current?.focus();
-    }, [open]);
+    // Codex 019dde20 iter-45 — `useFocusTrap` covers BOTH initial focus
+    // (autoFocus → first focusable, or container fallback when none) AND
+    // restoreFocus on deactivation. The previous `useFocusRestore` +
+    // manual `panelRef.current?.focus()` block is removed.
 
     const handleBackdropClick = useCallback(() => {
       if (closeOnBackdrop) onClose();
