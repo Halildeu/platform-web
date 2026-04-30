@@ -11,7 +11,7 @@
 /*  Faz 2.2 — Focus Trap                                               */
 /* ------------------------------------------------------------------ */
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback } from 'react';
 
 /* ---- Focusable element query ---- */
 
@@ -23,14 +23,32 @@ const FOCUSABLE_SELECTOR = [
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
   '[contenteditable="true"]',
-].join(", ");
+].join(', ');
+
+/**
+ * Detects whether an element is visually hidden via CSS or the HTML
+ * `hidden` attribute. Codex 019dde20 iter-45 — replaces the previous
+ * `offsetParent === null` check which depended on browser layout
+ * (jsdom does not run layout, so every element appeared hidden during
+ * tests, breaking trap behavior under unit tests). The new check is
+ * environment-portable: it works in jsdom + browser identically and
+ * matches the real-world cases that should keep elements out of the
+ * Tab cycle.
+ */
+function isHidden(el: HTMLElement): boolean {
+  if (el.hasAttribute('hidden')) return true;
+  if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return true;
+  }
+  return false;
+}
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
   const elements = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
   return elements.filter((el) => {
-    // Filter out hidden elements
-    if (el.offsetParent === null && el.tagName !== "BODY") return false;
-    return !el.closest("[inert]");
+    if (isHidden(el)) return false;
+    return !el.closest('[inert]');
   });
 }
 
@@ -101,7 +119,7 @@ export function useFocusTrap({
         focusable[0].focus();
       } else {
         // If no focusable elements, focus the container itself
-        container.setAttribute("tabindex", "-1");
+        container.setAttribute('tabindex', '-1');
         container.focus();
       }
     }, 50);
@@ -125,7 +143,7 @@ export function useFocusTrap({
   // Tab trap handler
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (!active || event.key !== "Tab") return;
+      if (!active || event.key !== 'Tab') return;
 
       const container = containerRef.current;
       if (!container) return;
@@ -160,8 +178,8 @@ export function useFocusTrap({
   useEffect(() => {
     if (!active) return;
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [active, handleKeyDown]);
 
   return containerRef;
@@ -205,10 +223,14 @@ export const FocusTrap: React.FC<FocusTrapProps> = ({
   const ref = useFocusTrap({ active, autoFocus, restoreFocus, initialFocusRef });
 
   return (
-    <div ref={ref as React.RefObject<HTMLDivElement>} className={className} data-focus-trap={active ? "" : undefined}>
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      className={className}
+      data-focus-trap={active ? '' : undefined}
+    >
       {children}
     </div>
   );
 };
 
-FocusTrap.displayName = "FocusTrap";
+FocusTrap.displayName = 'FocusTrap';

@@ -318,29 +318,59 @@ describe('DetailDrawer — Faz 3: keyboard & a11y', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('Tab tusu ile fokus drawer icerisinde kalir (focus trap)', async () => {
-    const onClose = vi.fn();
-    const user = userEvent.setup();
+  // Codex 019dde20 iter-45 — STRICT focus trap contract symmetric with
+  // FormDrawer iter-45. The close button is the FIRST focusable in DOM
+  // order (header renders before body), so the cycle is
+  // Close → b1 → b2 → Close.
+  it('Tab/Shift+Tab boundary wrap-around (real focus trap)', async () => {
     render(
-      <DetailDrawer open onClose={onClose} title="Trap Test">
-        <button>First</button>
-        <button>Second</button>
+      <DetailDrawer open onClose={vi.fn()} title="Trap Test">
+        <button data-testid="b1">First inner</button>
+        <button data-testid="b2">Last inner</button>
       </DetailDrawer>,
     );
+    await new Promise((r) => setTimeout(r, 80));
 
-    // Dialog should receive focus on open
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveFocus();
+    const closeBtn = screen.getByLabelText('Close drawer');
+    const lastInner = screen.getByTestId('b2');
 
-    // Tab into the close button then inner buttons — focus must stay inside dialog
-    await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    // Tab from last inner → wraps to FIRST focusable (close button)
+    lastInner.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeBtn);
 
-    await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    // Shift+Tab from close (first) → wraps to last inner
+    closeBtn.focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(lastInner);
+  });
 
-    await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
+  it('autoFocus moves focus to the close button (first focusable)', async () => {
+    render(
+      <DetailDrawer open onClose={vi.fn()} title="AutoFocus Test">
+        <button data-testid="first-btn">Inside</button>
+      </DetailDrawer>,
+    );
+    await new Promise((r) => setTimeout(r, 80));
+    const closeBtn = screen.getByLabelText('Close drawer');
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it('disableFocusTrap=true skips wrap and autoFocus (escape hatch)', async () => {
+    const before = document.createElement('button');
+    before.textContent = 'Outside';
+    document.body.appendChild(before);
+    before.focus();
+
+    render(
+      <DetailDrawer open onClose={vi.fn()} title="No Trap" disableFocusTrap>
+        <button data-testid="b1">Inside</button>
+      </DetailDrawer>,
+    );
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(document.activeElement).toBe(before);
+    document.body.removeChild(before);
   });
 
   it('scroll lock: body overflow hidden when drawer is open', () => {

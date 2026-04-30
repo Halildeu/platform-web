@@ -338,19 +338,32 @@ describe('FocusTrap', () => {
     expect(container.querySelector('[data-focus-trap]')).not.toBeInTheDocument();
   });
 
-  it('Tab is prevented when trap is active (traps focus)', () => {
+  it('Tab is prevented when trap is active and focus is at the boundary', () => {
+    // Codex 019dde20 iter-45 — pre-iter-45 this test relied on jsdom's
+    // `offsetParent === null` filtering ALL buttons out, so the empty-
+    // container preventDefault path triggered on every Tab. iter-45
+    // replaced the hidden detection with `getComputedStyle/hidden` so
+    // jsdom now correctly sees the buttons. The hook only preventDefaults
+    // at boundaries (first ← Shift+Tab, last → Tab); middle Tabs pass
+    // through. We assert the boundary behavior here.
     render(
       <FocusTrap active={true} autoFocus={false}>
-        <button type="button">First</button>
-        <button type="button">Last</button>
+        <button type="button" data-testid="first">
+          First
+        </button>
+        <button type="button" data-testid="last">
+          Last
+        </button>
       </FocusTrap>,
     );
 
-    // In jsdom, offsetParent is null so getFocusableElements returns empty.
-    // The focus trap handler still calls preventDefault on Tab to trap focus.
+    // Focus the LAST button; Tab should wrap to first AND prevent default.
+    const last = document.querySelector('[data-testid="last"]') as HTMLButtonElement;
+    last.focus();
     const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-    act(() => { document.dispatchEvent(event); });
-
+    act(() => {
+      document.dispatchEvent(event);
+    });
     expect(event.defaultPrevented).toBe(true);
   });
 
@@ -363,7 +376,9 @@ describe('FocusTrap', () => {
     );
 
     const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-    act(() => { document.dispatchEvent(event); });
+    act(() => {
+      document.dispatchEvent(event);
+    });
 
     expect(event.defaultPrevented).toBe(false);
   });
@@ -621,9 +636,12 @@ describe('OverlaySurface', () => {
       </OverlaySurface>,
     );
     // After unmount delay
-    await waitFor(() => {
-      expect(screen.queryByTestId('overlay-content')).not.toBeInTheDocument();
-    }, { timeout: 500 });
+    await waitFor(
+      () => {
+        expect(screen.queryByTestId('overlay-content')).not.toBeInTheDocument();
+      },
+      { timeout: 500 },
+    );
   });
 
   it('renders dialog role with aria-modal', () => {

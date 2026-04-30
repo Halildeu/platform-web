@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useId } from 'react';
+import React, { useEffect, useCallback, useId } from 'react';
 import { cn } from '../../utils/cn';
 import { focusRingClass, stateAttrs } from '../../internal/interaction-core';
 import {
@@ -6,8 +6,12 @@ import {
   registerLayer,
   unregisterLayer,
   useEscapeKey,
-  useFocusRestore,
 } from '../../internal/overlay-engine';
+// Codex 019dde20 iter-45 — symmetric focus-trap adoption with FormDrawer.
+// useFocusTrap encapsulates autoFocus + restoreFocus + Tab/Shift+Tab
+// wrap-around. Replaces the prior accidental focus containment that
+// could leak Tab from the close button to the address bar.
+import { useFocusTrap } from '../../internal/overlay-engine/focus-trap';
 import { resolveAccessState, type AccessControlledProps } from '../../internal/access-controller';
 /* ------------------------------------------------------------------ */
 /*  DetailDrawer — Read-only detail panel (wider, with sections)       */
@@ -76,6 +80,13 @@ export interface DetailDrawerProps extends AccessControlledProps {
   size?: DetailDrawerSize;
   /** Close on backdrop click */
   closeOnBackdrop?: boolean;
+  /**
+   * Disable the keyboard focus trap. Default `false` — focus is trapped
+   * within the panel (Tab/Shift+Tab wrap at the boundary, autoFocus on
+   * the first focusable, focus restore on close). Pass `true` ONLY with
+   * an explicit a11y rationale. Codex 019dde20 iter-45.
+   */
+  disableFocusTrap?: boolean;
   className?: string;
 }
 
@@ -102,6 +113,7 @@ export const DetailDrawer = React.forwardRef<HTMLDivElement, DetailDrawerProps>(
       footer,
       size = 'lg',
       closeOnBackdrop = true,
+      disableFocusTrap = false,
       className,
       access,
       accessReason,
@@ -109,7 +121,13 @@ export const DetailDrawer = React.forwardRef<HTMLDivElement, DetailDrawerProps>(
     _ref,
   ) => {
     const accessState = resolveAccessState(access);
-    const panelRef = useRef<HTMLDivElement>(null);
+    // Codex 019dde20 iter-45 — useFocusTrap manages panel ref +
+    // autoFocus + restoreFocus + Tab/Shift+Tab wrap-around.
+    const panelRef = useFocusTrap({
+      active: open && !disableFocusTrap,
+      autoFocus: !disableFocusTrap,
+      restoreFocus: !disableFocusTrap,
+    });
     const layerId = useId();
 
     /* ---- overlay-engine: scroll lock ---- */
@@ -127,15 +145,12 @@ export const DetailDrawer = React.forwardRef<HTMLDivElement, DetailDrawerProps>(
       };
     }, [open, layerId]);
 
-    /* ---- overlay-engine: focus restore ---- */
-    useFocusRestore(open);
-
     /* ---- overlay-engine: escape key ---- */
     useEscapeKey(open, onClose);
 
-    useEffect(() => {
-      if (open) panelRef.current?.focus();
-    }, [open]);
+    // Codex 019dde20 iter-45 — initial panel focus is now handled by
+    // useFocusTrap above (autoFocus → first focusable, container
+    // fallback when none). Removing the manual panelRef.focus().
 
     const handleBackdrop = useCallback(() => {
       if (closeOnBackdrop) onClose();
