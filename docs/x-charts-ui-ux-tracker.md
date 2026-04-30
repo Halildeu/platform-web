@@ -27,43 +27,61 @@
 
 ## §2 Sıcaklık haritası — 13 chart × 8 boyut
 
+> **2026-04-30 honest rescore (Codex review).** İlk taslak PR-D landing
+> sonrası Tests sütununu 9'a (production-grade) yükseltmişti. Codex
+> haklı olarak şunu işaretledi: PR-D smoke testleri yalnızca render
+> no-throw + `series.type` literal'ını kontrol ediyor. `label ↔ value
+swap`, multi-series flattening drop, data → series.data mapping
+> mutasyonları hâlâ yakalanamıyor. Honest skor PR-D landing sonrası
+> **6** (önceki **4** → +2 net) — gerçek 9'a ulaşmak için **PR-D2**
+> (deeper mutation tests) + **PR-F2/F3** (axe-core + visual-regression)
+> şart.
+
 | Chart          | Visual | Interact | A11y | Resp | Theme | i18n | Docs | Tests | Avg     |
 | -------------- | ------ | -------- | ---- | ---- | ----- | ---- | ---- | ----- | ------- |
-| BarChart       | 🟡 8   | 🟡 7     | 🟢 9 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **7.1** |
-| LineChart      | 🟡 8   | 🟡 7     | 🟢 9 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **7.1** |
-| AreaChart      | 🟡 8   | 🟡 7     | 🟡 8 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **7.0** |
-| PieChart       | 🟡 8   | 🟡 7     | 🟡 8 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **7.0** |
-| ScatterChart   | 🟡 7   | 🟠 6     | 🟡 7 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.6** |
-| GaugeChart     | 🟢 9   | 🟠 5     | 🟡 7 | 🟡 8 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.9** |
-| RadarChart     | 🟡 8   | 🟠 5     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.5** |
-| TreemapChart   | 🟡 8   | 🟡 7     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.8** |
-| HeatmapChart   | 🟢 9   | 🟠 6     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.8** |
-| WaterfallChart | 🟡 8   | 🟠 6     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.6** |
-| FunnelChart    | 🟡 8   | 🟠 6     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.6** |
-| SankeyChart    | 🟡 8   | 🟠 5     | 🠠 6  | 🟠 6 | 🟢 9  | 🟠 6 | 🟠 6 | 🔴 3  | **6.1** |
-| SunburstChart  | 🟢 9   | 🟡 7     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🔴 4  | **6.9** |
+| BarChart       | 🟡 8   | 🟡 7     | 🟢 9 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.4** |
+| LineChart      | 🟡 8   | 🟡 7     | 🟢 9 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.4** |
+| AreaChart      | 🟡 8   | 🟡 7     | 🟡 8 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.3** |
+| PieChart       | 🟡 8   | 🟡 7     | 🟡 8 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.3** |
+| ScatterChart   | 🟡 7   | 🟠 6     | 🟡 7 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **6.9** |
+| GaugeChart     | 🟢 9   | 🟠 5     | 🟡 7 | 🟡 8 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.1** |
+| RadarChart     | 🟡 8   | 🟠 5     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **6.8** |
+| TreemapChart   | 🟡 8   | 🟡 7     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.0** |
+| HeatmapChart   | 🟢 9   | 🟠 6     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.0** |
+| WaterfallChart | 🟡 8   | 🟠 6     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **6.9** |
+| FunnelChart    | 🟡 8   | 🟠 6     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **6.9** |
+| SankeyChart    | 🟡 8   | 🟠 5     | 🟠 6 | 🟠 6 | 🟢 9  | 🟠 6 | 🟠 6 | 🟠 5  | **6.4** |
+| SunburstChart  | 🟢 9   | 🟡 7     | 🟠 6 | 🟡 7 | 🟢 9  | 🟠 6 | 🟡 7 | 🟠 6  | **7.1** |
 
-**Toplam ortalama (13 chart × 8 boyut): 6.78** — “**Çalışan ama unutulan**” seviyesi.
+**Toplam ortalama (13 chart × 8 boyut): 7.04** — “**Test temelinde
+production-yakını ama derin mutation kapsanması yok**” seviyesi.
 
-> Skorlar `packages/x-charts/CONTRACT.md` v2 + Storybook stories + Design Lab
-> playground görsel kontrolü + jsdom-render karşılaştırmasından **manual
-> rubric** ile çıkarıldı. Kalite gate'leri (PR-F) aktive olunca otomatik
-> skorlamaya geçilecek.
+> Skorlar kaynakları:
+>
+> - `packages/x-charts/CONTRACT.md` v2.1 (PR-E #105 — prop signatures
+>   gerçek export'larla hizalı)
+> - Storybook fixture dosyaları + Design Lab playground görsel kontrolü
+>   (PR-A..B4 #91/95/99/100/101 ile 29/29 route live render)
+> - jsdom-render karşılaştırması + PR-D smoke (#103) `series.type`
+>   contract testi
+> - Codex audit thread `019ddd72-...` (Tests honest rescore source)
+> - Manuel rubric. Kalite gate'leri (PR-F2/F3 = axe + visual regression)
+>   aktive olunca otomatik skorlamaya geçilecek.
 
 ---
 
 ## §3 Boyut bazlı sistemik gap'ler (her chart'ı etkiliyor)
 
-| Boyut          | Skor avg | Sistemik sorun                                                                                                                            | Sorumlu PR               |
-| -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| **Tests**      | 3.9      | 13 chart × 0 unit test (sadece Storybook visual + contract testleri var)                                                                  | **PR-D** (Faz 21.4)      |
-| **i18n**       | 6.0      | `registerEChartsLocale` mevcut ama otomatik aktif değil — locale değişince chart axis number/date formatter güncel locale'i takip etmiyor | **Faz 21.5-i18n**        |
-| **Docs**       | 6.9      | Design Lab playground + API tab var; Storybook MDX dokümantasyon yok, "when to use" rehberi yok                                           | **Faz 21.5-docs**        |
-| **A11y**       | 7.0      | Keyboard navigation BarChart/LineChart'ta var ama Radar/Sankey/Funnel'da düşük; decal patterns 4 chart'ta eksik                           | **Faz 21.5-a11y**        |
-| **Interact**   | 6.4      | Hover tooltip evrensel, ama onDataPointClick wiring her chart'ta değil; brush/zoom sadece Bar/Line'da; drill-down sadece Treemap/Sunburst | **Faz 21.5-interact**    |
-| **Responsive** | 7.0      | sm/md/lg presetleri 13 chart'ta var; **horizontal mode** sm'de sıkışıyor (BarChart); SankeyChart node-overflow taşma                      | **Faz 21.5-responsive**  |
-| **Theme**      | 9.0      | 4 tema (light/dark/HC/print) — sağlam (CONTRACT v2 §2 ✓)                                                                                  | —                        |
-| **Visual**     | 7.9      | ECharts default palette → token-aware palette kısmen bağlı; spacing/typography density-aware değil                                        | **Faz 21.5-visual-tune** |
+| Boyut          | Skor avg | Sistemik sorun                                                                                                                                                                                                                                                                                                                                                                            | Sorumlu PR                                        |
+| -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Tests**      | 5.9      | PR-D landing sonrası 13/13 chart × 2 baseline test (render no-throw + `series.type` literal) + composition layer + cross-cutting contract suite. **Derin mutation tests hâlâ yok**: `label↔value swap`, multi-series flatten drop, data→series.data mapping mutasyonları yakalanmaz. 9'a ulaşmak için **PR-D2** (deeper mutation tests) + **PR-F2/F3** (axe + visual regression) gerekir. | **PR-D** (#103 landed) → **PR-D2** + **PR-F2/F3** |
+| **i18n**       | 6.0      | `registerEChartsLocale` mevcut ama otomatik aktif değil — locale değişince chart axis number/date formatter güncel locale'i takip etmiyor                                                                                                                                                                                                                                                 | **Faz 21.5-i18n**                                 |
+| **Docs**       | 6.9      | Design Lab playground + API tab var; Storybook MDX dokümantasyon yok, "when to use" rehberi yok                                                                                                                                                                                                                                                                                           | **Faz 21.5-docs**                                 |
+| **A11y**       | 7.0      | Keyboard navigation BarChart/LineChart'ta var ama Radar/Sankey/Funnel'da düşük; decal patterns 4 chart'ta eksik                                                                                                                                                                                                                                                                           | **Faz 21.5-a11y**                                 |
+| **Interact**   | 6.4      | Hover tooltip evrensel, ama onDataPointClick wiring her chart'ta değil; brush/zoom sadece Bar/Line'da; drill-down sadece Treemap/Sunburst                                                                                                                                                                                                                                                 | **Faz 21.5-interact**                             |
+| **Responsive** | 7.0      | sm/md/lg presetleri 13 chart'ta var; **horizontal mode** sm'de sıkışıyor (BarChart); SankeyChart node-overflow taşma                                                                                                                                                                                                                                                                      | **Faz 21.5-responsive**                           |
+| **Theme**      | 9.0      | 4 tema (light/dark/HC/print) — sağlam (CONTRACT v2 §2 ✓)                                                                                                                                                                                                                                                                                                                                  | —                                                 |
+| **Visual**     | 7.9      | ECharts default palette → token-aware palette kısmen bağlı; spacing/typography density-aware değil                                                                                                                                                                                                                                                                                        | **Faz 21.5-visual-tune**                          |
 
 ---
 
