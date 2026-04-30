@@ -28,7 +28,11 @@ import {
   KPICard,
   SparklineChart,
   ChartDashboard,
+  ChartContainer,
+  ChartToolbar,
+  useChartInteractions,
 } from '@mfe/x-charts';
+import CrossFilterDemoLive from './CrossFilterDemoLive';
 
 const categories = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'];
 const values1 = [320, 332, 301, 334, 390, 330];
@@ -424,6 +428,43 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
         </PreviewBox>
       );
 
+    case 'chart-container':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <ChartContainer
+            title="Q3 Sales"
+            description="ChartContainer ile sarılmış BarChart — title + description + height slot"
+            height={260}
+          >
+            <BarChart
+              data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
+              showValues
+              showGrid
+              animate={false}
+              size="md"
+            />
+          </ChartContainer>
+        </PreviewBox>
+      );
+
+    case 'chart-toolbar':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <ChartToolbarShowcase chartName={chartName} />
+        </PreviewBox>
+      );
+
+    case 'cross-filter':
+      // Cross-filter demo manages its own height (two stacked charts + reset button).
+      return (
+        <div
+          data-testid={testId}
+          style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
+        >
+          <CrossFilterDemoLive />
+        </div>
+      );
+
     default:
       return (
         <PreviewBox testId={testId} height={height}>
@@ -433,6 +474,48 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
         </PreviewBox>
       );
   }
+};
+
+/* ------------------------------------------------------------------ */
+/*  ChartToolbarShowcase — local hook scope                            */
+/*                                                                     */
+/*  Wires useChartInteractions to ChartToolbar so the demo surfaces    */
+/*  observable state (zoomLevel, brushRange) underneath the toolbar.   */
+/* ------------------------------------------------------------------ */
+
+const ChartToolbarShowcase: React.FC<{ chartName: string }> = ({ chartName }) => {
+  const [interactions] = useChartInteractions({
+    enableZoom: true,
+    enablePan: false,
+    enableBrush: true,
+  });
+
+  return (
+    <div className="space-y-3 p-3">
+      <ChartToolbar interactions={interactions} />
+      <BarChart
+        data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
+        title={chartName}
+        showValues
+        showGrid
+        animate={false}
+        size="md"
+      />
+      <div
+        className="rounded border border-border-subtle bg-surface-muted p-2 text-xs text-text-secondary"
+        data-testid="chart-toolbar-state"
+      >
+        <span className="font-mono">zoomLevel: {interactions.zoomLevel}</span>
+        {interactions.brushRange ? (
+          <span className="ml-3 font-mono">
+            brush: [{interactions.brushRange.start}, {interactions.brushRange.end}]
+          </span>
+        ) : (
+          <span className="ml-3 font-mono">brush: —</span>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default ChartPreviewLive;
