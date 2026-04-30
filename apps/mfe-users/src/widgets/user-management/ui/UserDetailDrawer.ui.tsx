@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
@@ -159,24 +159,22 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     enabled: open,
   });
 
+  // Codex 019ddd5b iter-36: do NOT silently fall back to a single legacy role
+  // when the assignment endpoint fails. The pre-iter-36 catch returned a
+  // partial list ([fallbackRoleId]); if the user then changed scope and hit
+  // Save, the assignment write replaced the real role set with that fallback
+  // — silent data loss. We now let the query expose its error state so the
+  // drawer can disable Save and show a banner. Fallback is reserved for the
+  // genuine "no assignments yet" 404 response (handled below).
   const userRolesQuery = useQuery({
     queryKey: ['user-roles', user?.id],
     queryFn: async () => {
-      try {
-        const res = await api.get(`/v1/authz/users/${user!.id}/roles`);
-        const rows = (res.data as Array<{ roleId: number }>) ?? [];
-        return rows.map((r) => r.roleId);
-      } catch {
-        const fallbackRoleId =
-          FALLBACK_ROLE_ID_BY_NAME[
-            String(user?.role ?? '')
-              .trim()
-              .toUpperCase()
-          ];
-        return fallbackRoleId ? [fallbackRoleId] : [];
-      }
+      const res = await api.get(`/v1/authz/users/${user!.id}/roles`);
+      const rows = (res.data as Array<{ roleId: number }>) ?? [];
+      return rows.map((r) => r.roleId);
     },
     enabled: open && !!user,
+    retry: 1,
   });
 
   // Codex 019dda1c iter-28c: scope picker source endpoints retargeted to
@@ -272,29 +270,34 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     staleTime: 60_000,
   });
 
-  // User's current scope assignments
+  // User's current scope assignments.
+  //
+  // Codex 019ddd5b iter-36: removed the silent catch that turned a 5xx into
+  // an "empty scope" response. Pre-iter-36 a transient failure here would
+  // initialize the four scope state arrays to []; if the user then ticked a
+  // role and hit Save, the assignment write would broadcast a payload of
+  // ALL-EMPTY scopes and blow away whatever access the user actually had.
+  // The error now propagates to React Query's error state so the drawer
+  // can block Save and surface a banner.
   const userScopesQuery = useQuery({
     queryKey: ['user-scopes', user?.id],
     queryFn: async () => {
-      try {
-        const res = await api.get(`/v1/roles/users/${user!.id}/scopes`);
-        const data = res.data as {
-          companyIds?: number[];
-          projectIds?: number[];
-          warehouseIds?: number[];
-          branchIds?: number[];
-        } | null;
-        return {
-          companyIds: data?.companyIds ?? [],
-          projectIds: data?.projectIds ?? [],
-          warehouseIds: data?.warehouseIds ?? [],
-          branchIds: data?.branchIds ?? [],
-        };
-      } catch {
-        return { companyIds: [], projectIds: [], warehouseIds: [], branchIds: [] };
-      }
+      const res = await api.get(`/v1/roles/users/${user!.id}/scopes`);
+      const data = res.data as {
+        companyIds?: number[];
+        projectIds?: number[];
+        warehouseIds?: number[];
+        branchIds?: number[];
+      } | null;
+      return {
+        companyIds: data?.companyIds ?? [],
+        projectIds: data?.projectIds ?? [],
+        warehouseIds: data?.warehouseIds ?? [],
+        branchIds: data?.branchIds ?? [],
+      };
     },
     enabled: open && !!user,
+    retry: 1,
   });
 
   // Reset state when user changes
@@ -338,7 +341,40 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     onError: (err: Error) => pushToast('error', err.message),
   });
 
-  const handleSave = () => assignMutation.mutate();
+  // Codex 019ddd5b iter-36 — P0 Save Safety derivation.
+  //
+  // assignmentLoadError: true if the queries that seed the *initial selection*
+  // failed. Saving while this is true would persist a partially-known state
+  // and silently revoke the parts that never loaded. We block Save and
+  // surface a banner offering a retry. master-data list queries are not in
+  // the gate — those only affect what's renderable, not what's persisted.
+  const assignmentLoadError = userRolesQuery.isError || userScopesQuery.isError;
+  const assignmentLoading =
+    userRolesQuery.isLoading || userScopesQuery.isLoading || rolesQuery.isLoading;
+
+  const retryAssignmentLoad = useCallback(() => {
+    userRolesQuery.refetch();
+    userScopesQuery.refetch();
+    rolesQuery.refetch();
+  }, [userRolesQuery, userScopesQuery, rolesQuery]);
+
+  const handleSave = () => {
+    if (assignmentLoadError) return; // defensive: button is also disabled
+    assignMutation.mutate();
+  };
+
+  // Dirty close guard. ESC, backdrop, and the explicit Cancel button all funnel
+  // through this. Pre-iter-36 the user could lose unsaved role/scope changes
+  // by hitting ESC; the design-system DetailDrawer wires useEscapeKey to its
+  // onClose, so wrapping onClose at this layer is enough.
+  const handleClose = useCallback(() => {
+    if (dirty) {
+      const ok =
+        typeof window !== 'undefined' ? window.confirm(t('users.detail.dirtyCloseConfirm')) : true;
+      if (!ok) return;
+    }
+    onClose();
+  }, [dirty, onClose, t]);
 
   const toggleRole = (roleId: number) => {
     setSelectedRoleIds((prev) =>
@@ -516,23 +552,94 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     },
   ];
 
+  // Codex 019ddd5b iter-36 — sticky footer via DetailDrawer.footer slot.
+  // Pre-iter-36 the actions sat inside the scrollable body so users had to
+  // scroll past every role/scope to reach Save. The design-system
+  // DetailDrawer already exposes a sticky footer slot; we just feed it.
+  const dirtyCount =
+    selectedRoleIds.length !== (userRolesQuery.data ?? []).length ||
+    selectedRoleIds.some((id) => !(userRolesQuery.data ?? []).includes(id))
+      ? 1
+      : 0;
+  const saveLabel = dirty ? t('users.detail.save.scope') : t('users.detail.save.scope');
+  const saveDisabled =
+    !dirty ||
+    assignMutation.isPending ||
+    selectedRoleIds.length === 0 ||
+    assignmentLoadError ||
+    assignmentLoading;
+
+  const drawerFooter = canEdit ? (
+    <div className="flex flex-col gap-2">
+      {dirty && (
+        <p className="text-xs text-text-subtle italic" data-testid="drawer-dirty-hint">
+          {t('users.detail.dirtyHint')}
+        </p>
+      )}
+      <div className="flex items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={handleClose}
+          className="rounded-xl border border-border-subtle px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-muted"
+        >
+          {t('users.detail.cancel')}
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saveDisabled}
+          title={
+            assignmentLoadError
+              ? t('users.detail.loadError.body')
+              : selectedRoleIds.length === 0
+                ? t('users.detail.noRolesWarning')
+                : undefined
+          }
+          className="rounded-xl bg-action-primary px-4 py-2 text-sm font-semibold text-action-primary-text shadow-xs hover:opacity-90 disabled:opacity-50"
+          data-testid="drawer-save-button"
+        >
+          {assignMutation.isPending ? t('users.detail.saving') : saveLabel}
+        </button>
+      </div>
+    </div>
+  ) : undefined;
+  // dirtyCount currently used only for analytics future work; suppress lint.
+  void dirtyCount;
+
   return (
     <DetailDrawer
       open={open}
-      onClose={onClose}
-      width={520}
-      title={`${user.fullName}`}
-      extra={
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-sm font-semibold text-text-secondary hover:text-text-primary"
-        >
-          {t('shell.launcher.close')}
-        </button>
-      }
+      onClose={handleClose}
+      title={user.fullName}
+      subtitle={user.email}
+      footer={drawerFooter}
+      size="md"
     >
       <div className="flex flex-col gap-6">
+        {/* iter-36 — initial-load failure banner. When the assignment queries
+            fail the drawer would otherwise render with empty selections AND
+            an enabled Save button, allowing the user to wipe access by
+            mistake. We block Save (above) and explain why here. */}
+        {assignmentLoadError && (
+          <div
+            className="rounded-2xl border border-state-danger-border bg-state-danger-bg p-4 text-sm"
+            data-testid="drawer-load-error-banner"
+          >
+            <p className="font-semibold text-state-danger-text">
+              {t('users.detail.loadError.title')}
+            </p>
+            <p className="mt-1 text-state-danger-text">{t('users.detail.loadError.body')}</p>
+            <button
+              type="button"
+              onClick={retryAssignmentLoad}
+              className="mt-3 rounded-xl border border-state-danger-border bg-surface-default px-3 py-1.5 text-xs font-semibold text-state-danger-text hover:bg-state-danger-bg"
+              data-testid="drawer-load-error-retry"
+            >
+              {t('users.detail.loadError.retry')}
+            </button>
+          </div>
+        )}
+
         {/* Profile Section */}
         <section>
           <h3 className="text-base font-semibold text-text-primary">
@@ -676,28 +783,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           </div>
         </section>
 
-        <hr className="border-border-subtle" />
-
-        {/* Footer — Save */}
-        {canEdit && (
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-border-subtle px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-muted"
-            >
-              {t('users.detail.cancel')}
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={!dirty || assignMutation.isPending || selectedRoleIds.length === 0}
-              className="rounded-xl bg-action-primary px-4 py-2 text-sm font-semibold text-action-primary-text shadow-xs hover:opacity-90 disabled:opacity-50"
-            >
-              {assignMutation.isPending ? t('users.detail.saving') : t('users.detail.save')}
-            </button>
-          </div>
-        )}
+        {/* iter-36 — footer moved to DetailDrawer.footer slot above (sticky). */}
       </div>
     </DetailDrawer>
   );

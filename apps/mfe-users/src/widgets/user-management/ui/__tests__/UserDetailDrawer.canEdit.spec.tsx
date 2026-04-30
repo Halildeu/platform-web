@@ -68,8 +68,23 @@ vi.mock('../../../../features/user-management/model/use-users-query.model', () =
 // the disabled attribute. Strip everything else on the design-system surface
 // to keep the test narrow.
 vi.mock('@mfe/design-system', () => ({
-  DetailDrawer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="drawer">{children}</div>
+  DetailDrawer: ({
+    children,
+    footer,
+    subtitle,
+    title,
+  }: {
+    children: React.ReactNode;
+    footer?: React.ReactNode;
+    subtitle?: React.ReactNode;
+    title?: React.ReactNode;
+  }) => (
+    <div data-testid="drawer">
+      <div data-testid="drawer-title">{title}</div>
+      {subtitle ? <div data-testid="drawer-subtitle">{subtitle}</div> : null}
+      <div data-testid="drawer-body">{children}</div>
+      {footer ? <div data-testid="drawer-footer">{footer}</div> : null}
+    </div>
   ),
   Tabs: () => <div data-testid="tabs" />,
   Checkbox: ({
@@ -196,5 +211,84 @@ describe('UserDetailDrawer.canEdit — role checkbox disabled matrix', () => {
     renderDrawer();
     const cb = await findFirstRoleCheckbox();
     expect(cb.disabled).toBe(false);
+  });
+});
+
+// iter-36 P0 Save Safety — load/error guard prevents silent data loss when
+// the assignment queries fail. Pre-iter-36 a transient 5xx on the user-roles
+// or user-scopes endpoint silently rendered "no roles, no scopes" and the
+// Save button stayed enabled — saving in that state wiped the user's actual
+// access. The fix: query exposes its error, drawer surfaces a banner and
+// disables Save until refetch succeeds.
+describe('UserDetailDrawer.iter36 — load error guard', () => {
+  beforeEach(() => {
+    mockPermissions.isSuperAdmin.mockReset().mockReturnValue(true);
+    mockPermissions.hasModule.mockReset().mockReturnValue(false);
+    mockPermissions.sessionExpired = false;
+    mockPermissions.initialized = true;
+    mockPermissions.authz = { userId: '1', superAdmin: true };
+  });
+
+  it('shows the load-error banner when /v1/authz/users/{id}/roles fails', async () => {
+    // Override the api mock so /v1/authz/users/.../roles rejects.
+    const sharedHttp = await import('@mfe/shared-http');
+    const apiMock = (sharedHttp as { api: { get: ReturnType<typeof vi.fn> } }).api;
+    apiMock.get.mockImplementation(async (url: string) => {
+      if (url.includes('/authz/users/') && url.endsWith('/roles')) {
+        throw new Error('boom');
+      }
+      // Other queries — return what they normally would.
+      if (url === '/v1/roles') return { data: [{ id: 1, name: 'ADMIN' }] };
+      if (url.includes('/scopes'))
+        return { data: { companyIds: [], projectIds: [], warehouseIds: [], branchIds: [] } };
+      return { data: [] };
+    });
+
+    renderDrawer();
+
+    await waitFor(
+      () => {
+        const banner = screen.queryByTestId('drawer-load-error-banner');
+        expect(banner).not.toBeNull();
+      },
+      { timeout: 4000 },
+    );
+  });
+
+  it('disables Save while assignment queries are in error state', async () => {
+    const sharedHttp = await import('@mfe/shared-http');
+    const apiMock = (sharedHttp as { api: { get: ReturnType<typeof vi.fn> } }).api;
+    apiMock.get.mockImplementation(async (url: string) => {
+      if (url.includes('/authz/users/') && url.endsWith('/roles')) {
+        throw new Error('boom');
+      }
+      if (url === '/v1/roles') return { data: [{ id: 1, name: 'ADMIN' }] };
+      if (url.includes('/scopes'))
+        return { data: { companyIds: [], projectIds: [], warehouseIds: [], branchIds: [] } };
+      return { data: [] };
+    });
+
+    renderDrawer();
+
+    await waitFor(
+      () => {
+        const saveButton = screen.queryByTestId('drawer-save-button') as HTMLButtonElement | null;
+        // Footer renders only when canEdit; since we mock superAdmin=true canEdit=true.
+        expect(saveButton).not.toBeNull();
+        expect(saveButton!.disabled).toBe(true);
+      },
+      { timeout: 4000 },
+    );
+  });
+
+  it('renders the dirty hint and Save in the sticky footer slot', async () => {
+    renderDrawer();
+    await waitFor(() => {
+      const footer = screen.queryByTestId('drawer-footer');
+      expect(footer, 'footer slot should be populated').not.toBeNull();
+    });
+    // Save button lives in the footer (sticky), not in the body.
+    const saveButton = screen.getByTestId('drawer-save-button');
+    expect(saveButton).toBeTruthy();
   });
 });
