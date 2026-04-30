@@ -122,7 +122,7 @@
       "availability": "exported",
       "lifecycle": "stable",
       "kind": "component",
-      "importStatement": "import { AreaChart } from '@mfe/design-system';",
+      "importStatement": "import { AreaChart } from '@mfe/x-charts';",
       "whereUsed": []
     },
     {
@@ -196,7 +196,7 @@
       "availability": "exported",
       "lifecycle": "stable",
       "kind": "component",
-      "importStatement": "import { BarChart } from '@mfe/design-system';",
+      "importStatement": "import { BarChart } from '@mfe/x-charts';",
       "whereUsed": []
     },
     {
@@ -273,9 +273,7 @@
       "lifecycle": "stable",
       "kind": "component",
       "importStatement": "import { CardBody } from '@mfe/design-system';",
-      "whereUsed": [
-        "web/apps/mfe-shell/src/pages/admin/design-lab/examples/registry.ts"
-      ]
+      "whereUsed": ["web/apps/mfe-shell/src/pages/admin/design-lab/examples/registry.ts"]
     }
   ]
 }

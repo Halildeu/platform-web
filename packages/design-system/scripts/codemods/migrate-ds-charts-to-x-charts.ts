@@ -72,7 +72,7 @@ const transform = (file: FileInfo, api: API, _options: Options): string | null =
       mutated = true;
     });
 
-  return mutated ? root.toSource({ quote: 'double' }) : null;
+  return mutated ? root.toSource({ quote: 'single' }) : null;
 };
 
 export default transform;
