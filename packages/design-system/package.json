@@ -213,7 +213,7 @@
     "ag-grid-community": "34.3.1",
     "ag-grid-enterprise": "34.3.1",
     "ag-grid-react": "34.3.1",
-    "axios": "^1.7.7",
+    "axios": "^1.15.2",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.3.1"
   },
