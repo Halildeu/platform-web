@@ -17,7 +17,13 @@ import React, { useEffect, useRef, useCallback } from 'react';
 // at event time so a nested modal doesn't fight the outer modal's
 // trap. Without `layerId` the hook keeps its iter-45 backwards-
 // compatible behavior.
-import { isTopFocusTrapLayer } from './layer-stack';
+//
+// Codex 019ddf17 iter-47b2 — `getRestoreTarget` honors the
+// modal-over-X transfer chain (inherited dropdown opener), and
+// `setLayerRestoreTarget` publishes the captured previousActiveElement
+// so a higher modal can later inherit it. Both calls are no-ops
+// when `layerId` is omitted (legacy callers).
+import { getRestoreTarget, isTopFocusTrapLayer, setLayerRestoreTarget } from './layer-stack';
 
 /* ---- Focusable element query ---- */
 
@@ -115,21 +121,41 @@ export function useFocusTrap({
   // focused twice (transition + unmount). Skips the focus call when
   // the target is no longer in the DOM (e.g. trigger removed by an
   // auto-close in the underlying layer).
+  //
+  // Codex 019ddf17 iter-47b2 — when `layerId` is provided, the
+  // layer-stack restore target wins over the captured
+  // previousActiveElement. This honors the modal-over-X transfer
+  // chain: a modal that opened above a dropdown inherits the
+  // dropdown's opener, so closing the modal returns focus to the
+  // ORIGINAL opener, not the now-invisible dropdown menu item that
+  // triggered it. Falls back to the captured ref if the layer-stack
+  // has no transferred target (single-layer or non-chained case).
   const restoreToPreviousFocus = useCallback(() => {
-    const target = previousFocusRef.current;
+    const layerTarget = layerId ? getRestoreTarget(layerId) : null;
+    const target = layerTarget ?? previousFocusRef.current;
     if (!target) return;
     previousFocusRef.current = null;
     if (target.isConnected) {
       target.focus();
     }
-  }, []);
+  }, [layerId]);
 
-  // Store the previously focused element when trap activates
+  // Store the previously focused element when trap activates. Codex
+  // 019ddf17 iter-47b2 — also publish to layer-stack so a later
+  // modal-over-X can inherit this target if the trap consumer didn't
+  // pass an explicit `restoreTarget` to `registerLayer`. Order
+  // requirement (consumer side): registerLayer first, useFocusTrap
+  // second — both happen synchronously in the open-effect chain so
+  // this just-in-time publish is reliable.
   useEffect(() => {
     if (active && restoreFocus) {
-      previousFocusRef.current = document.activeElement as HTMLElement;
+      const previous = document.activeElement as HTMLElement;
+      previousFocusRef.current = previous;
+      if (layerId) {
+        setLayerRestoreTarget(layerId, previous);
+      }
     }
-  }, [active, restoreFocus]);
+  }, [active, restoreFocus, layerId]);
 
   // Codex 019dde60 iter-47b1 — restore on active=true→false transition
   // (component still mounted). Without this, opener restore breaks for

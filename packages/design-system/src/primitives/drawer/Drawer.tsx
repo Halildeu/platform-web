@@ -153,6 +153,11 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
     useScrollLock(open);
 
     /* ---- overlay-engine: layer-stack registration ---- */
+    // Codex 019ddf17 iter-47b2 — modal layer'a `autoCloseOnHigherLayer`
+    // pass etmeye gerek yok (modal'lar zaten birbirini auto-close
+    // tetiklemez). `restoreTarget` da useFocusTrap zaten
+    // previousActiveElement'i yakalar; modal-over-X transfer chain'i
+    // layer-stack içinde kendiliğinden çözülür.
     useEffect(() => {
       if (open) {
         registerLayer(layerId, 'modal');

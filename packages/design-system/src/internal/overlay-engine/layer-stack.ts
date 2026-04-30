@@ -72,12 +72,36 @@ const DEFAULT_PARTICIPATION: Record<ZIndexLayer, LayerParticipation> = {
 
 /* ---- Layer Stack Manager ---- */
 
+/**
+ * Options accepted by {@link registerLayer}. Codex 019ddf17 iter-47b2 —
+ * extends the previous `Partial<LayerParticipation>` shape with two
+ * additional fields used by the modal-over-X auto-close registry.
+ *
+ * - `autoCloseOnHigherLayer` — when a `modal` or `spotlight` layer
+ *   registers above this entry, the registry calls this callback so the
+ *   underlying dropdown/popover closes automatically (avoids hayalet
+ *   half-open state hidden under the new modal).
+ * - `restoreTarget` — DOM element focus should return to when this
+ *   layer (or a higher modal that absorbed its restore chain) closes.
+ *   Idempotent transfer: if a higher layer registers without an
+ *   explicit `restoreTarget`, it inherits the oldest underlying entry's
+ *   target; the modal's explicit `restoreTarget` is never overridden.
+ */
+export type LayerRegistrationOptions = Partial<LayerParticipation> & {
+  autoCloseOnHigherLayer?: () => void;
+  restoreTarget?: HTMLElement | null;
+};
+
 type LayerEntry = {
   id: string;
   layer: ZIndexLayer;
   zIndex: number;
   timestamp: number;
   participation: LayerParticipation;
+  /** iter-47b2 — auto-close callback invoked when modal/spotlight stacks above. */
+  autoCloseOnHigherLayer?: () => void;
+  /** iter-47b2 — focus restore target (transferred up the modal-over-X chain). */
+  restoreTarget: HTMLElement | null;
 };
 
 let stack: LayerEntry[] = [];
@@ -93,18 +117,36 @@ let counter = 0;
  * registerLayer("my-popover", "popover", {
  *   participatesInFocusTrap: true,                           // modal-style
  * });
+ * registerLayer("my-drawer", "modal", {
+ *   autoCloseOnHigherLayer: () => setOpen(false),
+ *   restoreTarget: triggerRef.current,
+ * });
  * ```
  *
  * Codex 019dde60 iter-47b1 — third `options` parameter overrides the
  * default participation flags for the chosen `layer` type. Backward-
  * compatible: existing two-arg calls keep their default participation.
+ *
+ * Codex 019ddf17 iter-47b2 — `options` widened to
+ * {@link LayerRegistrationOptions}, accepting `autoCloseOnHigherLayer`
+ * (modal-over-X registry callback) and `restoreTarget` (focus restore
+ * chain). When `layer` is `modal` or `spotlight`, a snapshot of all
+ * underlying dismissable dropdown/popover entries is taken first; the
+ * new entry inherits the oldest underlying `restoreTarget` (idempotent:
+ * never overrides an explicit modal-side target); then the snapshot's
+ * `autoCloseOnHigherLayer` callbacks are invoked with try/catch
+ * resilience. Snapshot semantics keep the behavior deterministic even
+ * if a callback synchronously calls {@link unregisterLayer}.
  */
 export function registerLayer(
   id: string,
   layer: ZIndexLayer = 'dropdown',
-  options?: Partial<LayerParticipation>,
+  options?: LayerRegistrationOptions,
 ): number {
-  // Remove existing entry with same id (re-registration)
+  // Remove existing entry with same id (re-registration). Codex 019ddf17
+  // iter-47b2 — re-register MUST NOT trigger the previous entry's
+  // autoCloseOnHigherLayer (that was the entry's responsibility, now
+  // gone). Just drop it.
   stack = stack.filter((entry) => entry.id !== id);
 
   counter += 1;
@@ -113,10 +155,68 @@ export function registerLayer(
 
   const participation: LayerParticipation = {
     ...DEFAULT_PARTICIPATION[layer],
-    ...options,
+    participatesInFocusTrap:
+      options?.participatesInFocusTrap ?? DEFAULT_PARTICIPATION[layer].participatesInFocusTrap,
+    participatesInDismissal:
+      options?.participatesInDismissal ?? DEFAULT_PARTICIPATION[layer].participatesInDismissal,
   };
 
-  stack.push({ id, layer, zIndex, timestamp: Date.now(), participation });
+  const newEntry: LayerEntry = {
+    id,
+    layer,
+    zIndex,
+    timestamp: Date.now(),
+    participation,
+    autoCloseOnHigherLayer: options?.autoCloseOnHigherLayer,
+    restoreTarget: options?.restoreTarget ?? null,
+  };
+
+  // Codex 019ddf17 iter-47b2 — modal-over-X auto-close registry.
+  // Only `modal` and `spotlight` registrations trigger this; dropdown/
+  // popover stacking among themselves does NOT cascade-close.
+  if (layer === 'modal' || layer === 'spotlight') {
+    // Snapshot first — callback may synchronously unregisterLayer; live
+    // stack iteration would skip entries or visit stale state.
+    const dismissibleLowers = stack
+      .filter(
+        (e) =>
+          (e.layer === 'dropdown' || e.layer === 'popover') &&
+          e.participation.participatesInDismissal &&
+          e.zIndex < zIndex,
+      )
+      .slice();
+
+    // Restore-target transfer chain (idempotent):
+    //   - explicit modal restoreTarget → never overridden
+    //   - otherwise inherit OLDEST underlying entry's restoreTarget
+    //     (stack push order = registration order = oldest first), so
+    //     the modal closes back to the original opener (not the
+    //     intermediate dropdown's now-invisible menu item).
+    if (newEntry.restoreTarget == null) {
+      const firstWithRestore = dismissibleLowers.find((e) => e.restoreTarget != null);
+      if (firstWithRestore) {
+        newEntry.restoreTarget = firstWithRestore.restoreTarget;
+      }
+    }
+
+    // Push the new entry BEFORE invoking callbacks so any nested
+    // registerLayer calls inside a callback see the modal already in
+    // place (correct z-index resolution).
+    stack.push(newEntry);
+
+    for (const entry of dismissibleLowers) {
+      try {
+        entry.autoCloseOnHigherLayer?.();
+      } catch (err) {
+        // Resilience — one buggy consumer must not block the rest.
+        // Use console.error so test environments + production parity.
+        console.error(`[layer-stack] auto-close callback failed for ${entry.id}:`, err);
+      }
+    }
+  } else {
+    stack.push(newEntry);
+  }
+
   return zIndex;
 }
 
@@ -183,6 +283,35 @@ export function isTopDismissableLayer(id: string): boolean {
   if (eligible.length === 0) return false;
   const top = eligible.reduce((best, entry) => (entry.zIndex > best.zIndex ? entry : best));
   return top.id === id;
+}
+
+/**
+ * Returns the registered restore target for a layer, if any. Codex
+ * 019ddf17 iter-47b2 — used by `useFocusTrap` to honor the
+ * modal-over-X chain: a modal that inherited an underlying dropdown's
+ * restore target will close back to the dropdown's original opener
+ * (not the intermediate dropdown menu item, now invisible after
+ * auto-close). Returns `null` when the layer is unknown OR has no
+ * restore target.
+ */
+export function getRestoreTarget(id: string): HTMLElement | null {
+  const entry = stack.find((e) => e.id === id);
+  return entry?.restoreTarget ?? null;
+}
+
+/**
+ * Sets/updates the restore target for an already-registered layer.
+ * Codex 019ddf17 iter-47b2 — `useFocusTrap` calls this when its trap
+ * activates so the layer-stack knows where to send focus after close;
+ * a higher modal that registers later can then inherit this target via
+ * the transfer chain. No-op if the layer id is unknown (registration
+ * order: registerLayer first, then setLayerRestoreTarget).
+ */
+export function setLayerRestoreTarget(id: string, target: HTMLElement | null): void {
+  const entry = stack.find((e) => e.id === id);
+  if (entry) {
+    entry.restoreTarget = target;
+  }
 }
 
 /**
