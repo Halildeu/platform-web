@@ -25,58 +25,178 @@
 
 ### Components
 
+> **v2.1 prop-signature realignment (Codex review):** v2 listed an
+> idealised `data: ChartData[]` + xKey/yKey/angleKey/etc. shape that
+> was never how the wrappers actually shipped. v2.1 below mirrors the
+> real exported `*Props` interfaces — see `packages/x-charts/src/<Chart>.tsx`
+> for the canonical source.
+
 ```tsx
 BarChart
-  props: { data: ChartData[]; xKey: string; yKey: string | string[]; stacked?: boolean; horizontal?: boolean }
+  props: {
+    data: ChartDataPoint[];                        // { label, value, color? }
+    orientation?: 'vertical' | 'horizontal';
+    size?: 'sm' | 'md' | 'lg';
+    showValues?: boolean;                          // default false
+    showGrid?: boolean;                            // default true
+    showLegend?: boolean;                          // default false
+    valueFormatter?: (v: number) => string;
+    animate?: boolean;                             // default true
+    colors?: string[];
+    title?: string;
+    series?: ChartSeries[];                        // multi-series grouping
+    onDataPointClick?: (e: ChartClickEvent) => void;
+  }
 
 LineChart
-  props: { data: ChartData[]; xKey: string; yKey: string | string[]; smooth?: boolean; area?: boolean }
+  props: {
+    series: ChartSeries[];                         // required
+    labels: string[];                              // required, x-axis
+    size?: 'sm' | 'md' | 'lg';
+    showDots?: boolean;                            // default true
+    showGrid?: boolean;                            // default true
+    showLegend?: boolean;                          // default false
+    showArea?: boolean;                            // fill area under lines
+    curved?: boolean;                              // bezier interpolation
+    valueFormatter?: (v: number) => string;
+    animate?: boolean;
+    title?: string;
+    onDataPointClick?: (e: ChartClickEvent) => void;
+  }
 
 AreaChart
-  props: { data: ChartData[]; xKey: string; yKey: string | string[]; stacked?: boolean; gradient?: boolean }
+  props: {
+    series: ChartSeries[];                         // required
+    labels: string[];                              // required
+    size?: 'sm' | 'md' | 'lg';
+    stacked?: boolean;                             // default false
+    showDots?: boolean;
+    showGrid?: boolean;
+    showLegend?: boolean;
+    gradient?: boolean;                            // default true
+    curved?: boolean;
+    animate?: boolean;
+    title?: string;
+  }
 
 PieChart
-  props: { data: ChartData[]; angleKey: string; labelKey: string; donut?: boolean; innerRadius?: number }
+  props: {
+    data: ChartDataPoint[];                        // { label, value, color? }
+    size?: 'sm' | 'md' | 'lg';
+    donut?: boolean;
+    showLabels?: boolean;
+    showLegend?: boolean;
+    showPercentage?: boolean;
+    animate?: boolean;
+    title?: string;
+    onDataPointClick?: (e: ChartClickEvent) => void;
+  }
 
 ScatterChart
-  props: { data: ChartData[]; xKey: string; yKey: string; sizeKey?: string; colorKey?: string }
+  props: {
+    data: ScatterDataPoint[];                      // { x, y, size?, label?, color? }
+    size?: 'sm' | 'md' | 'lg';
+    showGrid?: boolean;
+    showLegend?: boolean;
+    title?: string;
+    description?: string;
+    xLabel?: string;
+    yLabel?: string;
+  }
 
 RadarChart
-  props: { data: ChartData[]; angleKey: string; radiusKey: string | string[] }
+  props: {
+    indicators: { name: string; max: number }[];   // required, axes
+    series: { name: string; values: number[] }[];  // required
+    size?: 'sm' | 'md' | 'lg';
+    showLegend?: boolean;
+    title?: string;
+  }
 
 TreemapChart
-  props: { data: TreemapNode[]; valueKey: string; labelKey: string; colorKey?: string }
+  props: {
+    data: TreemapNode[];                           // hierarchical { name, value?, children? }
+    size?: 'sm' | 'md' | 'lg';
+    title?: string;
+  }
 
 SunburstChart
-  props: { data: TreemapNode[]; valueKey: string; labelKey: string }
+  props: {
+    data: SunburstNode[];                          // hierarchical
+    size?: 'sm' | 'md' | 'lg';
+    title?: string;
+  }
 
 HeatmapChart
-  props: { data: ChartData[]; xKey: string; yKey: string; valueKey: string; colorScale?: ColorScale }
+  props: {
+    data: [number, number, number][];              // [row, col, value] tuples
+    xLabels: string[];
+    yLabels: string[];
+    size?: 'sm' | 'md' | 'lg';
+    showValues?: boolean;
+    title?: string;
+  }
 
 FunnelChart
-  props: { data: ChartData[]; categoryKey: string; valueKey: string; orientation?: 'vertical' | 'horizontal' }
+  props: {
+    data: { label: string; value: number }[];
+    size?: 'sm' | 'md' | 'lg';
+    showConversion?: boolean;
+    title?: string;
+  }
 
 SankeyChart
-  props: { data: SankeyData; nodeKey: string; linkKey: string }
+  props: {
+    nodes: { name: string }[];
+    links: { source: string; target: string; value: number }[];
+    size?: 'sm' | 'md' | 'lg';
+    title?: string;
+  }
 
 GaugeChart
-  props: { value: number; min?: number; max?: number; segments?: GaugeSegment[] }
+  props: {
+    value: number;
+    min?: number;                                  // default 0
+    max?: number;                                  // default 100
+    size?: 'sm' | 'md' | 'lg';
+    thresholds?: { value: number; color: string }[];
+    title?: string;
+  }
 
 WaterfallChart
-  props: { data: ChartData[]; categoryKey: string; valueKey: string }
+  props: {
+    data: { label: string; value: number }[];      // negative values flow down
+    size?: 'sm' | 'md' | 'lg';
+    showValues?: boolean;
+    title?: string;
+  }
 
 ChartContainer
-  props: { width?: number | string; height?: number | string; responsive?: boolean; children: ReactNode }
+  props: {
+    children: ReactNode;
+    title?: string;
+    description?: string;
+    loading?: boolean;
+    error?: string;
+    empty?: boolean;
+    emptyLabel?: string;
+    height?: number | string;                      // default 300
+    actions?: ReactNode;
+  }
 
 ChartLegend
-  props: { position?: 'top' | 'bottom' | 'left' | 'right'; interactive?: boolean }
+  props: {
+    items: { label: string; color: string; value?: string }[];
+    direction?: 'horizontal' | 'vertical';
+    maxItems?: number;
+  }
 ```
 
 > **Note (v2.1):** Tooltip behaviour is configured through the per-chart
-> theme (see `src/theme/buildDesignLabEChartsTheme`) and per-chart
-> `formatter` props rather than a standalone `<ChartTooltip>` component.
-> The v2 standalone component declaration was an aspiration that never
-> shipped; v2.1 removes it from the public surface.
+> theme (see `src/theme/buildDesignLabEChartsTheme`) and the
+> `valueFormatter` prop on each chart wrapper, not a standalone
+> `<ChartTooltip>` component. The v2 standalone declaration was an
+> aspiration that never shipped; v2.1 removes it from the public surface.
 
 ### Hooks
 
