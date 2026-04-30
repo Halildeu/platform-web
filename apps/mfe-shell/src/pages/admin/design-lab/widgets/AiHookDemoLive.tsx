@@ -245,16 +245,29 @@ const ChartDescriptionDemo: React.FC = () => {
 /*  nl-to-chart  (mocked LLM via deterministic fetchFn)                */
 /* ------------------------------------------------------------------ */
 
+// Real ChartSpec v1 (matches packages/x-charts/src/spec/ChartSpec.ts).
+// Codex (PR-FIX-1) caught the previous mock returning an LLM-only shape
+// `{ type, data: [...], encoding: { x: 'label', y: 'value' } }`. That
+// shape fails ChartSpec validation (chart_type missing, data must be
+// ChartDataSpec, encoding channels must be ChartChannel objects). The
+// updated mock conforms so nlToChartSpec.isValid === true.
 const MOCK_LLM_RESPONSE = JSON.stringify({
-  type: 'bar',
-  data: [
-    { label: 'Q1', value: 1200 },
-    { label: 'Q2', value: 1500 },
-    { label: 'Q3', value: 1800 },
-    { label: 'Q4', value: 2100 },
-  ],
-  encoding: { x: 'label', y: 'value' },
+  version: 'v1',
+  chart_type: 'bar',
   title: 'Çeyreklik Satış',
+  data: {
+    source: 'inline',
+    values: [
+      { label: 'Q1', value: 1200 },
+      { label: 'Q2', value: 1500 },
+      { label: 'Q3', value: 1800 },
+      { label: 'Q4', value: 2100 },
+    ],
+  },
+  encoding: {
+    x: { field: 'label', type: 'nominal' },
+    y: { field: 'value', type: 'quantitative' },
+  },
 });
 
 const NlToChartDemo: React.FC = () => {

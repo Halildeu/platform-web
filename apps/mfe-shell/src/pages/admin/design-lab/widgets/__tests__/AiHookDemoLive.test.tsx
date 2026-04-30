@@ -64,7 +64,14 @@ describe('AiHookDemoLive — identify-trends', () => {
 });
 
 describe('AiHookDemoLive — suggest-chart', () => {
-  it('clicking Çalıştır produces at least one ranked suggestion with a confidence', () => {
+  it('ranks bar (or line) first for a categorical-vs-numeric tabular sample', () => {
+    // Codex (PR-FIX-1): the previous "length > 10 + confidence \d+%"
+    // assertions would still pass against a no-op stub returning
+    // { type: 'pie', confidence: 0.01, reason: 'placeholder' }. The
+    // sample data is { month: nominal × 6, revenue: quantitative × 6,
+    // channel: nominal × 2 } — a textbook bar/line shape — so we now
+    // pin the top recommendation onto a sensible chart type AND a
+    // non-trivial confidence.
     render(<AiHookDemoLive hookId="suggest-chart" />);
     fireEvent.click(screen.getByTestId('ai-suggest-chart-run'));
 
@@ -72,10 +79,16 @@ describe('AiHookDemoLive — suggest-chart', () => {
     const items = within(list).getAllByTestId(/^ai-suggest-chart-item-/);
     expect(items.length).toBeGreaterThanOrEqual(1);
 
-    // First item must mention a chart type and a confidence percentage.
-    const firstText = items[0].textContent ?? '';
-    expect(firstText).toMatch(/confidence \d+%/);
-    expect(firstText.length).toBeGreaterThan(10);
+    const topText = items[0].textContent ?? '';
+    expect(topText).toMatch(/^\s*(bar|line)\b/);
+
+    const confidenceMatch = topText.match(/confidence (\d+)%/);
+    expect(confidenceMatch).not.toBeNull();
+    expect(Number(confidenceMatch![1])).toBeGreaterThanOrEqual(50);
+
+    // Reason must be a real explanation — empty/whitespace would slip
+    // past the previous length-based check.
+    expect(topText).toMatch(/·\s+\S{4,}/);
   });
 });
 
@@ -98,18 +111,34 @@ describe('AiHookDemoLive — chart-description', () => {
 });
 
 describe('AiHookDemoLive — nl-to-chart', () => {
-  it('clicking Spec üret runs nlToChartSpec with the mock fetchFn and shows a bar spec', async () => {
+  it('parses the mock LLM JSON into a valid ChartSpec v1 (chart_type=bar, inline data, x/y channels)', async () => {
+    // Codex (PR-FIX-1): the previous mock returned an LLM-only shape
+    // `{ type, data: [...], encoding: { x: 'label', y: 'value' } }`
+    // which fails ChartSpec v1 validation. The previous test asserted
+    // only "type: bar" on the raw JSON, which would still pass with
+    // isValid=false. The mock now conforms to ChartSpec v1 and the
+    // assertions here pin the spec contract instead of the mock JSON.
     render(<AiHookDemoLive hookId="nl-to-chart" />);
     fireEvent.click(screen.getByTestId('ai-nl-to-chart-run'));
 
-    // The widget awaits the mock fetchFn before rendering the spec.
     const spec = await screen.findByTestId('ai-nl-to-chart-spec');
     const text = spec.textContent ?? '';
-    expect(text).toMatch(/"type":\s*"bar"/);
-    // The mocked LLM response carries four quarterly points; the parsed
-    // spec must therefore carry them through.
+
+    // ChartSpec v1 contract — every field below would be missing or
+    // wrong if validation drops, the mock regresses, or nlToChartSpec's
+    // JSON extraction stops working.
+    expect(text).toMatch(/"version":\s*"v1"/);
+    expect(text).toMatch(/"chart_type":\s*"bar"/);
+    expect(text).toMatch(/"source":\s*"inline"/);
+    expect(text).toMatch(/"field":\s*"label"/);
+    expect(text).toMatch(/"field":\s*"value"/);
     expect(text).toMatch(/"label":\s*"Q1"/);
     expect(text).toMatch(/"label":\s*"Q4"/);
+
+    // The result panel header flips to "ChartSpec (valid)" only when
+    // validateChartSpec returns isValid: true — exposing the validation
+    // outcome to the test.
+    expect(screen.getByTestId('ai-nl-to-chart-result')).toHaveTextContent(/ChartSpec \(valid\)/);
   });
 
   it('the input field is editable and reflects user edits', () => {
