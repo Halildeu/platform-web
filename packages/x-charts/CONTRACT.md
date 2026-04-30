@@ -1,9 +1,27 @@
-# @mfe/x-charts — API Contract v2.1
+# @mfe/x-charts — API Contract v2.2
 
 ## Status: ACTIVE | Date: 2026-04-30
 
 > **Engine:** Apache ECharts 5.x (primary). AG Charts Community used only for grid-linked
 > embedded charts via `@mfe/x-data-grid`. Decision: `decisions/topics/chart-viz-engine-selection.v1.json`
+>
+> **v2.1 → v2.2 changes (Faz 21.5 + Faz 21.6 cycle, 2026-04-30+):**
+>
+> - **§1.1 "Common chart wrapper props" added.** All 13 canonical chart
+>   wrappers now share opt-in `theme | decal | density | accent` props
+>   (default `'auto'`) backed by `useChartTheme()` and a singleton
+>   reactive store (Faz 21.5-A2/A3 + B3b). Backward compat: defaults are
+>   identity → existing consumers see pixel-perfect identical output.
+> - **§2 Density Support erratum.** v2.1 listed `spacious` as a third
+>   density value, but the actual implementation in `theme/density-helpers.ts`
+>   only accepts `comfortable | compact` (Faz 21.5-A3 + Codex iter-7..10
+>   AGREE). v2.2 corrects the documented values to match shipped code.
+> - **§N "Taxonomy & Boundaries" added (Faz 21.6 PR-D).** Canonical chart
+>   catalogue, legacy duplicates (DS shim layer scope), composite/utility
+>   wrappers (excluded from scorecard audit), and DS-only enterprise chart
+>   migration roadmap (Faz 21.7+).
+> - **Default-on a11y formalised.** ChartA11yShell + useChartA11y composer
+>   (Faz 21.5-B1/B2) now part of the public chart wrapper invariant.
 >
 > **v2 → v2.1 changes (Faz 21.4-E, audit-driven 2026-04-30):**
 >
@@ -23,6 +41,67 @@
 
 ## 1. Public API Surface
 
+### 1.1 Common chart wrapper props (v2.2, Faz 21.5 + 21.6 cycle)
+
+All 13 canonical chart wrappers in `@mfe/x-charts` share four opt-in
+theme/visual props (default `'auto'`):
+
+| Prop      | Values                                                                                      | Default  |
+| --------- | ------------------------------------------------------------------------------------------- | -------- |
+| `theme`   | `'auto' \| 'light' \| 'default' \| 'dark' \| 'high-contrast' \| 'print'`                    | `'auto'` |
+| `decal`   | `boolean \| 'auto'`                                                                         | `'auto'` |
+| `density` | `'auto' \| 'comfortable' \| 'compact'`                                                      | `'auto'` |
+| `accent`  | `'auto' \| 'light' \| 'dark' \| 'emerald' \| 'graphite' \| 'ocean' \| 'sunset' \| 'violet'` | `'auto'` |
+
+**Resolution chain (Codex iter-1..14 AGREE):**
+
+- `theme='auto'` → DOM signal priority: `data-appearance` > `data-theme`
+  (normalize: `serban-*`, `*-hc`, `*-dark` suffixes) > `data-mode`
+  (`light\|dark` only) > `prefers-contrast: more` > `prefers-color-scheme: dark` > `light` default.
+  `'print'` is never auto-detected — explicit-only.
+- `decal='auto'` → enabled iff resolved theme is `high-contrast` or `print`.
+- `density='auto'` → `data-density` attribute (`compact` | `comfortable` default).
+- `accent='auto'` → `data-accent` attribute (`'neutral'` alias maps to `'light'`).
+
+**Backward compat invariant:** all defaults are `'auto'` and resolve to
+identity transforms when no DOM signals are set → existing consumers see
+**pixel-perfect identical output** vs pre-v2.2.
+
+**Implementation:**
+
+- `useChartTheme()` hook in `@mfe/x-charts/theme/useChartTheme`.
+- Singleton `MutationObserver` + `matchMedia` listener pair on
+  `documentElement` (per-chart observer is forbidden — one shared
+  store via `theme/themeReactiveStore`).
+- `useSyncExternalStore`-compatible API: `subscribeThemeStore` /
+  `getThemeSnapshot` / `getServerThemeSnapshot` (SSR-safe).
+- 7-color accent palette dict in `theme/accent-palettes.ts` (Faz 21.5-A2).
+- Density multipliers in `theme/density-helpers.ts` with **a11y clamp at 10px**
+  (`scaleFontSize(base, mul) = Math.max(10, Math.round(base*mul))`).
+
+**Semantic preservation (Codex iter-13):** Chart-level semantic colors
+are accent-IMMUNE:
+
+- `GaugeChart` thresholds (success/warning/danger)
+- `HeatmapChart` gradient colors (low/high)
+- `WaterfallChart` `increase` (success) and `decrease` (danger) — only
+  the `total` color binds to accent primary
+
+The other 10 chart wrappers use `effectivePalette` (from the resolved
+accent or the HC/Print theme builder) as the series color fallback.
+
+**Default-on a11y (Faz 21.5-B1/B2):** All chart wrappers compose with
+`useChartA11y` + `<ChartA11yShell>` providing:
+
+- `role="region"`, `tabIndex=0`, `aria-describedby` linkage to the hidden data table
+- Visually-hidden `<table>` with `<caption>` + `scope="col"` headers (data fallback for screen readers)
+- `aria-live="polite"` `role="status"` announcement region
+- Keyboard navigation: ArrowLeft/Right/Up/Down + Home/End + Enter/Space + Escape
+- ECharts `dispatchAction` sync (highlight/downplay/showTip)
+
+axe-core severity gate (Faz 21.5-B3a): every wrapper passes with **zero
+serious/critical violations**.
+
 ### Components
 
 > **v2.1 prop-signature realignment (Codex review):** v2 listed an
@@ -30,6 +109,10 @@
 > was never how the wrappers actually shipped. v2.1 below mirrors the
 > real exported `*Props` interfaces — see `packages/x-charts/src/<Chart>.tsx`
 > for the canonical source.
+>
+> **v2.2 note:** every wrapper below also accepts the four common props
+> from §1.1 (`theme | decal | density | accent`). They are omitted from
+> per-chart prop blocks to avoid duplication.
 
 ```tsx
 BarChart
@@ -277,9 +360,16 @@ ChartLegend
 
 ### Density Support
 
-- `compact` — reduced padding, smaller legend items, thinner axis lines
-- `comfortable` — default spacing
-- `spacious` — larger labels, wider legend spacing, thicker lines
+> **v2.2 erratum:** v2.1 listed three density values; the shipped
+> implementation in `theme/density-helpers.ts` only accepts two. The
+> third value (`spacious`) is removed in v2.2.
+
+- `compact` — fontSize ×0.875, spacing ×0.75, padding ×0.75 (a11y clamp at 10px floor)
+- `comfortable` — default (fontSize ×1.0, spacing ×1.0, padding ×1.0)
+
+Resolution chain: explicit `density` prop > `data-density` attribute on
+documentElement > `'comfortable'` default. See §1.1 for the full opt-in
+prop surface.
 
 ## 3. Access Control — Phase 2 (pending integration)
 
@@ -364,10 +454,62 @@ ChartLegend
 ### CI Gates
 
 - bundle-size-check (< 350KB gzip)
-- a11y-axe-audit
+- a11y-axe-audit (Faz 21.5-B3a: zero serious/critical violations)
 - contrast-ratio-check (4.5:1)
 - xss-sanitization-check
 - memory-leak-test (100-cycle mount/unmount)
 - chart-spec-validation
 - visual-regression
 - tree-shaking-verify
+- component-scorecard (Faz 21.6 PR-A: multi-package scan, x-charts 13 chart audit)
+
+## 9. Taxonomy & Boundaries (v2.2, Faz 21.6 PR-D)
+
+### Canonical chart catalogue (13 wrappers)
+
+`Bar`, `Line`, `Area`, `Pie`, `Scatter`, `Gauge`, `Radar`, `Treemap`,
+`Heatmap`, `Waterfall`, `Funnel`, `Sankey`, `Sunburst` — all in
+`packages/x-charts/src/<Name>Chart.tsx`. These are the canonical chart
+types audited in `scorecard.json` (component-scorecard.mjs SCAN_PACKAGES
+allowlist deterministic 13).
+
+### Legacy duplicates (DS shim layer in PR-C)
+
+9 chart names live in `@mfe/design-system` but `@mfe/x-charts` is the
+canonical source of truth (Codex iter-19 absorb):
+
+| Chart          | DS path                           | Status (scorecard.json)                             |
+| -------------- | --------------------------------- | --------------------------------------------------- |
+| BarChart       | `components/charts/BarChart.tsx`  | `legacy`, replacedBy `@mfe/x-charts/BarChart`       |
+| LineChart      | `components/charts/LineChart.tsx` | `legacy`, replacedBy `@mfe/x-charts/LineChart`      |
+| AreaChart      | `components/charts/AreaChart.tsx` | `legacy`, replacedBy `@mfe/x-charts/AreaChart`      |
+| PieChart       | `components/charts/PieChart.tsx`  | `legacy`, replacedBy `@mfe/x-charts/PieChart`       |
+| FunnelChart    | `enterprise/FunnelChart.tsx`      | `legacy`, replacedBy `@mfe/x-charts/FunnelChart`    |
+| GaugeChart     | `enterprise/GaugeChart.tsx`       | `legacy`, replacedBy `@mfe/x-charts/GaugeChart`     |
+| RadarChart     | `enterprise/RadarChart.tsx`       | `legacy`, replacedBy `@mfe/x-charts/RadarChart`     |
+| TreemapChart   | `enterprise/TreemapChart.tsx`     | `legacy`, replacedBy `@mfe/x-charts/TreemapChart`   |
+| WaterfallChart | `enterprise/WaterfallChart.tsx`   | `legacy`, replacedBy `@mfe/x-charts/WaterfallChart` |
+
+PR-C scope (DS shim + codemod): re-export DS chart wrappers from
+`@mfe/x-charts` with deprecation JSDoc + dev-only `console.warn`,
+then jscodeshift codemod to migrate consumers (mfe-shell widgets etc.).
+
+### Composite & utility wrappers (in `@mfe/x-charts`, outside the 13-chart audit)
+
+`MiniChart`, `SparklineChart`, `CrossFilterChart`, `ChartContainer`,
+`ChartDashboard`, `ChartLegend`, `ChartToolbar`, `KPICard`, `StatWidget`
+— scaffolding around the 13 canonicals, not chart types themselves.
+Excluded from `scorecard.json` audit (deterministic 13-chart allowlist).
+May be promoted to canonical status in future minor versions if the
+catalogue grows.
+
+### DS-only enterprise chart candidates (Faz 21.7+ migration scope)
+
+| Chart          | DS path                         | x-charts plan | Decision                                                                                |
+| -------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------- |
+| BulletChart    | `enterprise/BulletChart.tsx`    | candidate     | migrate as `BulletChart` in Faz 21.7                                                    |
+| ControlChart   | `enterprise/ControlChart.tsx`   | candidate     | migrate as `ControlChart` in Faz 21.7                                                   |
+| HistogramChart | `enterprise/HistogramChart.tsx` | candidate     | migrate as `HistogramChart` in Faz 21.7                                                 |
+| ParetoChart    | `enterprise/ParetoChart.tsx`    | candidate     | migrate as `ParetoChart` in Faz 21.7                                                    |
+| MicroChart     | `enterprise/MicroChart.tsx`     | consolidate   | superseded by `MiniChart` + `SparklineChart` in `@mfe/x-charts`; deprecate in PR-C      |
+| OrgChart       | `enterprise/OrgChart.tsx`       | OUT-OF-SCOPE  | hierarchy visualization, not a chart type. Future `@mfe/hierarchy-viz` package proposal |
