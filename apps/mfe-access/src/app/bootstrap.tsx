@@ -4,9 +4,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { I18nProvider, I18nManager } from 'mfe_shell/i18n';
 import { getDictionary } from '@mfe/i18n-dicts';
+import { setupAgGridLicense } from '@mfe/design-system';
 import AccessApp from './AccessApp.ui';
 import { configureShellServices } from './services/shell-services';
 import { isRuntimeDev } from './runtime/env';
+
+// AG Grid Enterprise license — see mfe-reporting bootstrap comment.
+setupAgGridLicense();
 
 const queryClient = new QueryClient({
   defaultOptions: {
