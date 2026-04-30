@@ -7,19 +7,20 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from "react";
-import { cn } from "@mfe/design-system";
-import { useEChartsRenderer } from "./renderers";
-import { buildDesignLabEChartsTheme } from "./theme/DesignLabEChartsTheme";
-import { formatCompact } from "./utils/formatters";
-import { sanitizeNumber } from "./utils/data-validation";
-import type { EChartsOption } from "./renderers/echarts-imports";
+import React, { useMemo, useCallback } from 'react';
+import { cn } from '@mfe/design-system';
+import { useEChartsRenderer } from './renderers';
+import { ChartA11yShell, useChartA11y } from './a11y';
+import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { formatCompact } from './utils/formatters';
+import { sanitizeNumber } from './utils/data-validation';
+import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type ChartSize = "sm" | "md" | "lg";
+export type ChartSize = 'sm' | 'md' | 'lg';
 
 export type HeatmapTupleData = [number, number, number];
 
@@ -51,7 +52,7 @@ export interface HeatmapChartProps {
   /** Custom formatter for cell value display. */
   valueFormatter?: (v: number) => string;
   /** Cell size override; "auto" fits to container. @default "auto" */
-  cellSize?: number | "auto";
+  cellSize?: number | 'auto';
   /** Show visual map legend. @default true */
   showLegend?: boolean;
   /** Animate on mount. @default true */
@@ -68,9 +69,17 @@ export interface HeatmapChartProps {
 
 const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
 
-const DEFAULT_PALETTE = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+const _DEFAULT_PALETTE = [
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -78,15 +87,15 @@ const DEFAULT_PALETTE = [
 /* ------------------------------------------------------------------ */
 
 const escapeHtml = (t: string): string =>
-  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
  * Type guard: check if data items are object format (have 'x' key).
  */
-function isObjectData(
-  data: HeatmapTupleData[] | HeatmapObjectData[],
-): data is HeatmapObjectData[] {
-  return data.length > 0 && typeof data[0] === "object" && !Array.isArray(data[0]) && "x" in data[0];
+function isObjectData(data: HeatmapTupleData[] | HeatmapObjectData[]): data is HeatmapObjectData[] {
+  return (
+    data.length > 0 && typeof data[0] === 'object' && !Array.isArray(data[0]) && 'x' in data[0]
+  );
 }
 
 /**
@@ -155,14 +164,14 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       data,
       xLabels,
       yLabels,
-      size = "md",
+      size = 'md',
       title,
       min: minProp,
       max: maxProp,
-      colors = ["#f5f5f5", "#3b82f6"],
+      colors = ['#f5f5f5', '#3b82f6'],
       showValues = false,
       valueFormatter,
-      cellSize = "auto",
+      cellSize = 'auto',
       showLegend = true,
       animate = true,
       onCellClick,
@@ -180,8 +189,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
     const option = useMemo((): EChartsOption | null => {
       if (isEmpty) return null;
 
-      const { normalized, xCats, yCats, dataMin, dataMax } =
-        normalizeData(data, xLabels, yLabels);
+      const { normalized, xCats, yCats, dataMin, dataMax } = normalizeData(data, xLabels, yLabels);
 
       const effectiveMin = minProp ?? dataMin;
       const effectiveMax = maxProp ?? dataMax;
@@ -189,16 +197,16 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       return {
         animation: animate,
         animationDuration: animate ? 500 : 0,
-        animationEasing: "cubicOut",
+        animationEasing: 'cubicOut',
         title: title
           ? {
               text: escapeHtml(title),
-              left: "center",
+              left: 'center',
               textStyle: { fontSize: 16, fontWeight: 600 },
             }
           : undefined,
         tooltip: {
-          trigger: "item",
+          trigger: 'item',
           confine: true,
           formatter: (params: { data: [number, number, number] }) => {
             const [xi, yi, val] = params.data;
@@ -216,14 +224,14 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           containLabel: true,
         },
         xAxis: {
-          type: "category" as const,
+          type: 'category' as const,
           data: xCats,
           splitArea: { show: true },
           axisLabel: { fontSize: 11 },
           axisTick: { alignWithLabel: true },
         },
         yAxis: {
-          type: "category" as const,
+          type: 'category' as const,
           data: yCats,
           splitArea: { show: true },
           axisLabel: { fontSize: 11 },
@@ -233,9 +241,9 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           max: effectiveMax,
           calculable: true,
           show: showLegend,
-          orient: "vertical" as const,
+          orient: 'vertical' as const,
           right: 0,
-          top: "center",
+          top: 'center',
           inRange: {
             color: colors,
           },
@@ -243,7 +251,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
         },
         series: [
           {
-            type: "heatmap" as const,
+            type: 'heatmap' as const,
             data: normalized,
             label: {
               show: showValues,
@@ -253,28 +261,36 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
             },
             emphasis: {
               itemStyle: {
-                borderColor: "#333",
+                borderColor: '#333',
                 borderWidth: 2,
                 shadowBlur: 8,
-                shadowColor: "rgba(0,0,0,0.25)",
+                shadowColor: 'rgba(0,0,0,0.25)',
               },
             },
-            ...(cellSize !== "auto" ? { itemStyle: { width: cellSize, height: cellSize } } : {}),
+            ...(cellSize !== 'auto' ? { itemStyle: { width: cellSize, height: cellSize } } : {}),
           },
         ],
         aria: {
           enabled: true,
           label: {
-            description: title
-              ? `Heatmap chart: ${escapeHtml(title)}`
-              : "Heatmap chart",
+            description: title ? `Heatmap chart: ${escapeHtml(title)}` : 'Heatmap chart',
           },
         },
       } as EChartsOption;
     }, [
-      data, xLabels, yLabels, title, minProp, maxProp,
-      colors, showValues, fmt, cellSize,
-      showLegend, animate, isEmpty,
+      data,
+      xLabels,
+      yLabels,
+      title,
+      minProp,
+      maxProp,
+      colors,
+      showValues,
+      fmt,
+      cellSize,
+      showLegend,
+      animate,
+      isEmpty,
     ]);
 
     const handleClick = useCallback(
@@ -292,17 +308,41 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       [onCellClick],
     );
 
-    const { containerRef } = useEChartsRenderer({
+    const { containerRef, instance } = useEChartsRenderer({
       option: option ?? ({} as EChartsOption),
       theme,
       respectReducedMotion: true,
       onClick: onCellClick ? handleClick : undefined,
     });
 
+    // Faz 21.5-B PR-B2: default-on a11y. Heatmap is a 2D matrix —
+    // flatten each cell to "(xCat, yCat) → value". Order preserves
+    // ECharts' visualization order (left-to-right, top-to-bottom).
+    const a11yData = useMemo(() => {
+      if (isEmpty) return [];
+      try {
+        const norm = normalizeData(data, xLabels, yLabels);
+        const { normalized, xCats, yCats } = norm;
+        return normalized.map(([xi, yi, v]) => ({
+          label: `(${xCats[xi] ?? xi}, ${yCats[yi] ?? yi})`,
+          value: v,
+        }));
+      } catch {
+        return [];
+      }
+    }, [data, xLabels, yLabels, isEmpty]);
+    const a11y = useChartA11y({
+      chartType: 'heatmap',
+      data: a11yData,
+      title,
+      valueFormatter: fmt,
+      echartsInstance: instance,
+    });
+
     const setRefs = useCallback(
       (node: HTMLDivElement | null) => {
         (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
+        if (typeof forwardedRef === 'function') forwardedRef(node);
         else if (forwardedRef)
           (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       },
@@ -315,12 +355,12 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
         <div
           ref={forwardedRef}
           className={cn(
-            "inline-flex items-center justify-center text-sm text-[var(--text-secondary)]",
+            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
             className,
           )}
           style={{ height }}
           role="img"
-          aria-label={title ?? "Heatmap chart -- no data"}
+          aria-label={a11y.ariaLabel}
           data-testid="heatmap-chart-empty"
           {...rest}
         >
@@ -330,23 +370,18 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
     }
 
     return (
-      <div
-        ref={setRefs}
-        className={cn("w-full", className)}
-        style={{ height, width: "100%" }}
-        role="img"
-        aria-label={
-          title
-            ? `Heatmap chart: ${escapeHtml(title)}`
-            : "Heatmap chart"
-        }
-        data-testid="heatmap-chart"
+      <ChartA11yShell
+        a11y={a11y}
+        className={className}
+        height={height}
+        testId="heatmap-chart"
+        setRefs={setRefs}
         {...rest}
       />
     );
   },
 );
 
-HeatmapChart.displayName = "HeatmapChart";
+HeatmapChart.displayName = 'HeatmapChart';
 
 export default HeatmapChart;

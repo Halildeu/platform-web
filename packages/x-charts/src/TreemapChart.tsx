@@ -7,18 +7,19 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from "react";
-import { cn } from "@mfe/design-system";
-import { useEChartsRenderer } from "./renderers";
-import { buildDesignLabEChartsTheme } from "./theme/DesignLabEChartsTheme";
-import { formatCompact } from "./utils/formatters";
-import type { EChartsOption } from "./renderers/echarts-imports";
+import React, { useMemo, useCallback } from 'react';
+import { cn } from '@mfe/design-system';
+import { useEChartsRenderer } from './renderers';
+import { ChartA11yShell, useChartA11y } from './a11y';
+import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { formatCompact } from './utils/formatters';
+import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type ChartSize = "sm" | "md" | "lg";
+export type ChartSize = 'sm' | 'md' | 'lg';
 
 export type TreemapNode = {
   /** Display name for the node. */
@@ -45,7 +46,7 @@ export interface TreemapChartProps {
   /** Maximum visible depth (1 = only root children). @default 1 */
   leafDepth?: number;
   /** Pan/zoom mode. @default false */
-  roam?: boolean | "move" | "scale";
+  roam?: boolean | 'move' | 'scale';
   /** Saturation range for color mapping. @default [0.35, 0.5] */
   colorSaturation?: [number, number];
   /** Minimum area (px^2) to render a label. @default 300 */
@@ -67,8 +68,16 @@ export interface TreemapChartProps {
 const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
 
 const DEFAULT_PALETTE = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -76,7 +85,7 @@ const DEFAULT_PALETTE = [
 /* ------------------------------------------------------------------ */
 
 const escapeHtml = (t: string): string =>
-  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
  * Compute the maximum depth of the tree to generate the right number
@@ -96,16 +105,13 @@ function getMaxDepth(nodes: TreemapNode[], current = 1): number {
  * Build ECharts levels array dynamically based on tree depth.
  * Level 0 = invisible root, levels 1..N = visible depth layers.
  */
-function buildLevels(
-  depth: number,
-  colorSaturation: [number, number],
-): Record<string, unknown>[] {
+function buildLevels(depth: number, colorSaturation: [number, number]): Record<string, unknown>[] {
   const levels: Record<string, unknown>[] = [];
 
   // Level 0 — invisible root
   levels.push({
     itemStyle: {
-      borderColor: "#fff",
+      borderColor: '#fff',
       borderWidth: 2,
       gapWidth: 2,
     },
@@ -116,7 +122,7 @@ function buildLevels(
     levels.push({
       colorSaturation,
       itemStyle: {
-        borderColor: "#fff",
+        borderColor: '#fff',
         borderWidth: isLeaf ? 1 : 2,
         gapWidth: isLeaf ? 1 : 2,
         borderColorSaturation: 0.6,
@@ -125,7 +131,7 @@ function buildLevels(
         show: !isLeaf,
         height: 14,
         fontSize: 10,
-        color: "#333",
+        color: '#333',
         padding: [2, 4, 0, 4],
       },
     });
@@ -142,7 +148,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
   function TreemapChart(
     {
       data,
-      size = "md",
+      size = 'md',
       title,
       showLegend = false,
       showBreadcrumb = true,
@@ -178,16 +184,16 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
       return {
         animation: animate,
         animationDuration: animate ? 500 : 0,
-        animationEasing: "cubicOut",
+        animationEasing: 'cubicOut',
         title: title
           ? {
               text: escapeHtml(title),
-              left: "center",
+              left: 'center',
               textStyle: { fontSize: 16, fontWeight: 600 },
             }
           : undefined,
         tooltip: {
-          trigger: "item",
+          trigger: 'item',
           confine: true,
           formatter: (params: { name: string; value: number }) => {
             const val = escapeHtml(fmt(params.value));
@@ -197,14 +203,14 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
         legend: {
           show: showLegend,
           bottom: 0,
-          icon: "roundRect",
+          icon: 'roundRect',
           itemWidth: 12,
           itemHeight: 8,
           textStyle: { fontSize: 12 },
         },
         series: [
           {
-            type: "treemap" as const,
+            type: 'treemap' as const,
             data,
             leafDepth,
             roam,
@@ -219,12 +225,12 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
               show: true,
               height: 16,
               fontSize: 11,
-              color: "#333",
+              color: '#333',
               padding: [2, 4, 0, 4],
             },
             breadcrumb: {
               show: showBreadcrumb,
-              left: "center",
+              left: 'center',
               bottom: showLegend ? 28 : 4,
               itemStyle: {
                 textStyle: { fontSize: 11 },
@@ -232,14 +238,14 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
             },
             levels,
             itemStyle: {
-              borderColor: "#fff",
+              borderColor: '#fff',
               borderWidth: 1,
               gapWidth: 1,
             },
-            colorMappingBy: "id",
+            colorMappingBy: 'id',
             emphasis: {
               itemStyle: {
-                borderColor: "#333",
+                borderColor: '#333',
                 borderWidth: 1,
               },
             },
@@ -249,16 +255,22 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
         aria: {
           enabled: true,
           label: {
-            description: title
-              ? `Treemap chart: ${escapeHtml(title)}`
-              : "Treemap chart",
+            description: title ? `Treemap chart: ${escapeHtml(title)}` : 'Treemap chart',
           },
         },
       } as EChartsOption;
     }, [
-      data, title, showLegend, showBreadcrumb, leafDepth,
-      roam, colorSaturation, visibleMin, fmt,
-      animate, isEmpty,
+      data,
+      title,
+      showLegend,
+      showBreadcrumb,
+      leafDepth,
+      roam,
+      colorSaturation,
+      visibleMin,
+      fmt,
+      animate,
+      isEmpty,
     ]);
 
     const handleClick = useCallback(
@@ -267,24 +279,43 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
         const p = params as { name: string; value: number; data: unknown };
         onNodeClick({
           name: p.name,
-          value: typeof p.value === "number" ? p.value : 0,
+          value: typeof p.value === 'number' ? p.value : 0,
           data: p.data,
         });
       },
       [onNodeClick],
     );
 
-    const { containerRef } = useEChartsRenderer({
+    const { containerRef, instance } = useEChartsRenderer({
       option: option ?? ({} as EChartsOption),
       theme,
       respectReducedMotion: true,
       onClick: onNodeClick ? handleClick : undefined,
     });
 
+    // Faz 21.5-B PR-B2: default-on a11y. Treemap is hierarchical —
+    // flatten top-level nodes (recursive descent skipped to keep the
+    // SR table digestible). Each node's name + value surfaces.
+    const a11yData = useMemo(
+      () =>
+        (data ?? []).map((node) => ({
+          label: node.name,
+          value: node.value ?? 0,
+        })),
+      [data],
+    );
+    const a11y = useChartA11y({
+      chartType: 'treemap',
+      data: a11yData,
+      title,
+      valueFormatter: fmt,
+      echartsInstance: instance,
+    });
+
     const setRefs = useCallback(
       (node: HTMLDivElement | null) => {
         (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
+        if (typeof forwardedRef === 'function') forwardedRef(node);
         else if (forwardedRef)
           (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       },
@@ -297,12 +328,12 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
         <div
           ref={forwardedRef}
           className={cn(
-            "inline-flex items-center justify-center text-sm text-[var(--text-secondary)]",
+            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
             className,
           )}
           style={{ height }}
           role="img"
-          aria-label={title ?? "Treemap chart -- no data"}
+          aria-label={a11y.ariaLabel}
           data-testid="treemap-chart-empty"
           {...rest}
         >
@@ -312,23 +343,18 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
     }
 
     return (
-      <div
-        ref={setRefs}
-        className={cn("w-full", className)}
-        style={{ height, width: "100%" }}
-        role="img"
-        aria-label={
-          title
-            ? `Treemap chart: ${escapeHtml(title)}`
-            : "Treemap chart"
-        }
-        data-testid="treemap-chart"
+      <ChartA11yShell
+        a11y={a11y}
+        className={className}
+        height={height}
+        testId="treemap-chart"
+        setRefs={setRefs}
         {...rest}
       />
     );
   },
 );
 
-TreemapChart.displayName = "TreemapChart";
+TreemapChart.displayName = 'TreemapChart';
 
 export default TreemapChart;

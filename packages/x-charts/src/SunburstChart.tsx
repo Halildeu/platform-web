@@ -9,12 +9,13 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from "react";
-import { cn } from "@mfe/design-system";
-import { useEChartsRenderer } from "./renderers";
-import { buildDesignLabEChartsTheme } from "./theme/DesignLabEChartsTheme";
-import { formatCompact } from "./utils/formatters";
-import type { EChartsOption } from "./renderers/echarts-imports";
+import React, { useMemo, useCallback } from 'react';
+import { cn } from '@mfe/design-system';
+import { useEChartsRenderer } from './renderers';
+import { ChartA11yShell, useChartA11y } from './a11y';
+import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { formatCompact } from './utils/formatters';
+import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -42,19 +43,19 @@ export interface SunburstLevelConfig {
   label?: Record<string, unknown>;
 }
 
-export type SunburstHighlightPolicy = "descendant" | "ancestor" | "self" | "none";
+export type SunburstHighlightPolicy = 'descendant' | 'ancestor' | 'self' | 'none';
 
 export interface SunburstChartProps {
   /** Hierarchical data tree (top-level children form the inner ring). */
   data: SunburstNode[];
   /** Visual size variant. @default "md" */
-  size?: "sm" | "md" | "lg";
+  size?: 'sm' | 'md' | 'lg';
   /** Chart title. */
   title?: string;
   /** Per-level ring configuration. Auto-generated from data depth when omitted. */
   levels?: SunburstLevelConfig[];
   /** Sort order for sibling nodes. @default "desc" */
-  sort?: "desc" | "asc" | null;
+  sort?: 'desc' | 'asc' | null;
   /** Sunburst inner/outer radius range. @default ["0%", "90%"] */
   radius?: [string, string];
   /** Which nodes to highlight on hover. @default "descendant" */
@@ -75,11 +76,19 @@ export interface SunburstChartProps {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const SIZE_HEIGHT: Record<"sm" | "md" | "lg", number> = { sm: 200, md: 300, lg: 400 };
+const SIZE_HEIGHT: Record<'sm' | 'md' | 'lg', number> = { sm: 200, md: 300, lg: 400 };
 
 const DEFAULT_PALETTE = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+  '#3b82f6',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#6366f1',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -87,7 +96,7 @@ const DEFAULT_PALETTE = [
 /* ------------------------------------------------------------------ */
 
 const escapeHtml = (t: string): string =>
-  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /**
  * Compute the maximum depth of a sunburst tree by DFS traversal.
@@ -125,12 +134,12 @@ function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelCo
       r1: `${r1.toFixed(1)}%`,
       itemStyle: {
         borderWidth: 2,
-        borderColor: "var(--bg-surface, #ffffff)",
+        borderColor: 'var(--bg-surface, #ffffff)',
       },
       label: {
         show: i < 3,
         fontSize: Math.max(9, 12 - i),
-        rotate: i === 0 ? 0 : "tangential",
+        rotate: i === 0 ? 0 : 'tangential',
       },
     });
   }
@@ -142,11 +151,16 @@ function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelCo
  */
 function resolveHighlightFocus(policy: SunburstHighlightPolicy): string | undefined {
   switch (policy) {
-    case "descendant": return "descendant";
-    case "ancestor": return "ancestor";
-    case "self": return "self";
-    case "none": return undefined;
-    default: return "descendant";
+    case 'descendant':
+      return 'descendant';
+    case 'ancestor':
+      return 'ancestor';
+    case 'self':
+      return 'self';
+    case 'none':
+      return undefined;
+    default:
+      return 'descendant';
   }
 }
 
@@ -175,12 +189,12 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
   function SunburstChart(
     {
       data,
-      size = "md",
+      size = 'md',
       title,
       levels: levelsProp,
-      sort = "desc",
-      radius = ["0%", "90%"],
-      highlightPolicy = "descendant",
+      sort = 'desc',
+      radius = ['0%', '90%'],
+      highlightPolicy = 'descendant',
       showLegend = false,
       valueFormatter,
       animate = true,
@@ -207,16 +221,16 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       return {
         animation: animate,
         animationDuration: animate ? 500 : 0,
-        animationEasing: "cubicOut",
+        animationEasing: 'cubicOut',
         title: title
           ? {
               text: escapeHtml(title),
-              left: "center",
+              left: 'center',
               textStyle: { fontSize: 16, fontWeight: 600 },
             }
           : undefined,
         tooltip: {
-          trigger: "item",
+          trigger: 'item',
           confine: true,
           formatter: (params: unknown) => {
             const p = params as {
@@ -228,7 +242,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
               ? p.treePathInfo
                   .map((n) => n.name)
                   .filter(Boolean)
-                  .join(" > ")
+                  .join(' > ')
               : p.name;
             return `<b>${escapeHtml(path)}</b><br/>${fmt(p.value)}`;
           },
@@ -236,7 +250,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
         legend: {
           show: showLegend,
           bottom: 0,
-          icon: "roundRect",
+          icon: 'roundRect',
           itemWidth: 12,
           itemHeight: 8,
           textStyle: { fontSize: 12 },
@@ -244,7 +258,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
         },
         series: [
           {
-            type: "sunburst" as const,
+            type: 'sunburst' as const,
             data: coloredData,
             radius,
             sort: sort === null ? undefined : sort,
@@ -253,14 +267,14 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
               r1: lvl.r1,
               itemStyle: lvl.itemStyle ?? {
                 borderWidth: 2,
-                borderColor: "var(--bg-surface, #ffffff)",
+                borderColor: 'var(--bg-surface, #ffffff)',
               },
               label: lvl.label ?? { show: true, fontSize: 11 },
             })),
             label: {
               show: true,
               formatter: (params: { name: string; value: number }) => {
-                if (!params.name) return "";
+                if (!params.name) return '';
                 return `${params.name}\n${fmt(params.value)}`;
               },
               fontSize: 11,
@@ -269,29 +283,36 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
               focus: focusValue,
               itemStyle: {
                 shadowBlur: 10,
-                shadowColor: "rgba(0, 0, 0, 0.2)",
+                shadowColor: 'rgba(0, 0, 0, 0.2)',
               },
             },
             itemStyle: {
               borderWidth: 2,
-              borderColor: "var(--bg-surface, #ffffff)",
+              borderColor: 'var(--bg-surface, #ffffff)',
             },
-            cursor: onNodeClick ? "pointer" : "default",
+            cursor: onNodeClick ? 'pointer' : 'default',
           },
         ],
         aria: {
           enabled: true,
           label: {
-            description: title
-              ? `Sunburst chart: ${escapeHtml(title)}`
-              : "Sunburst chart",
+            description: title ? `Sunburst chart: ${escapeHtml(title)}` : 'Sunburst chart',
           },
         },
       } as EChartsOption;
     }, [
-      data, size, title, levelsProp, sort, radius,
-      highlightPolicy, showLegend, fmt,
-      animate, onNodeClick, isEmpty,
+      data,
+      size,
+      title,
+      levelsProp,
+      sort,
+      radius,
+      highlightPolicy,
+      showLegend,
+      fmt,
+      animate,
+      onNodeClick,
+      isEmpty,
     ]);
 
     const handleClick = useCallback(
@@ -303,17 +324,35 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       [onNodeClick],
     );
 
-    const { containerRef } = useEChartsRenderer({
+    const { containerRef, instance } = useEChartsRenderer({
       option: option ?? ({} as EChartsOption),
       theme,
       respectReducedMotion: true,
       onClick: onNodeClick ? handleClick : undefined,
     });
 
+    // Faz 21.5-B PR-B2: default-on a11y. Sunburst is hierarchical;
+    // surface top-level segments only (Treemap-pattern).
+    const a11yData = useMemo(
+      () =>
+        (data ?? []).map((node) => ({
+          label: node.name,
+          value: node.value ?? 0,
+        })),
+      [data],
+    );
+    const a11y = useChartA11y({
+      chartType: 'sunburst',
+      data: a11yData,
+      title,
+      valueFormatter: fmt,
+      echartsInstance: instance,
+    });
+
     const setRefs = useCallback(
       (node: HTMLDivElement | null) => {
         (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === "function") forwardedRef(node);
+        if (typeof forwardedRef === 'function') forwardedRef(node);
         else if (forwardedRef)
           (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       },
@@ -326,12 +365,12 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
         <div
           ref={forwardedRef}
           className={cn(
-            "inline-flex items-center justify-center text-sm text-[var(--text-secondary)]",
+            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
             className,
           )}
           style={{ height }}
           role="img"
-          aria-label={title ?? "Sunburst chart -- no data"}
+          aria-label={a11y.ariaLabel}
           data-testid="sunburst-chart-empty"
           {...rest}
         >
@@ -341,23 +380,18 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
     }
 
     return (
-      <div
-        ref={setRefs}
-        className={cn("w-full", className)}
-        style={{ height, width: "100%" }}
-        role="img"
-        aria-label={
-          title
-            ? `Sunburst chart: ${escapeHtml(title)}`
-            : "Sunburst chart"
-        }
-        data-testid="sunburst-chart"
+      <ChartA11yShell
+        a11y={a11y}
+        className={className}
+        height={height}
+        testId="sunburst-chart"
+        setRefs={setRefs}
         {...rest}
       />
     );
   },
 );
 
-SunburstChart.displayName = "SunburstChart";
+SunburstChart.displayName = 'SunburstChart';
 
 export default SunburstChart;
