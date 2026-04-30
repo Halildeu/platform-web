@@ -46,9 +46,12 @@ export {
   isTopDismissableLayer,
   getLayerStack,
   resetLayerStack,
+  getRestoreTarget,
+  setLayerRestoreTarget,
   Z_INDEX_BASE,
   type ZIndexLayer,
   type LayerParticipation,
+  type LayerRegistrationOptions,
 } from './layer-stack';
 
 // Focus Trap — keyboard focus containment

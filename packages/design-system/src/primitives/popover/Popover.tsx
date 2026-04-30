@@ -301,20 +301,29 @@ export const Popover = React.forwardRef<HTMLDivElement, PopoverProps>(
       [],
     );
 
-    /* ---- overlay-engine: layer-stack registration (iter-47b1) ---- */
+    /* ---- overlay-engine: layer-stack registration (iter-47b1 + iter-47b2) ---- */
     // Codex 019dde60 iter-47b1 — Popover joins the layer stack so the
     // dismissal LIFO works for modal-over-popover scenarios. Layer
     // type 'popover' (semantic split from 'dropdown'; same z-index
     // band so visual stacking is unchanged). When enableFocusTrap is
     // true the layer overrides participatesInFocusTrap to true so
     // it's eligible for the focus-trap gate as well.
+    //
+    // Codex 019ddf17 iter-47b2 — `autoCloseOnHigherLayer` ensures the
+    // popover state stays consistent when a modal opens above it.
+    // Without this, the popover would remain `open=true` while
+    // sibling-isolation `inert` hides it; closing the modal would then
+    // reveal a stale half-open popover. The callback delegates to
+    // `closePopover` so the controlled `onOpenChange` consumer sees
+    // the state transition normally.
     useEffect(() => {
       if (!resolvedOpen) return;
       registerLayer(popoverId, 'popover', {
         participatesInFocusTrap: enableFocusTrap,
+        autoCloseOnHigherLayer: () => closePopover(false),
       });
       return () => unregisterLayer(popoverId);
-    }, [resolvedOpen, popoverId, enableFocusTrap]);
+    }, [resolvedOpen, popoverId, enableFocusTrap, closePopover]);
 
     /* ---- overlay-engine: outside click ---- */
     // Codex 019dde60 iter-47b1 — pass popoverId so a stacked modal
