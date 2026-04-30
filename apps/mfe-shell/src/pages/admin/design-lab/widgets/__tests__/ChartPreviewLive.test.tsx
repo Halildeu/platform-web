@@ -144,6 +144,18 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     expect(screen.getByTestId('design-lab-chart-preview-cross-filter')).toBeInTheDocument();
   });
 
+  it.each([
+    { hookId: 'detect-anomalies', demoTestId: 'ai-detect-anomalies-demo' },
+    { hookId: 'identify-trends', demoTestId: 'ai-identify-trends-demo' },
+    { hookId: 'suggest-chart', demoTestId: 'ai-suggest-chart-demo' },
+    { hookId: 'chart-description', demoTestId: 'ai-chart-description-demo' },
+    { hookId: 'nl-to-chart', demoTestId: 'ai-nl-to-chart-demo' },
+  ])('AI hook "$hookId" mounts AiHookDemoLive ($demoTestId)', ({ hookId, demoTestId }) => {
+    render(<ChartPreviewLive chartId={hookId} chartName={`${hookId} preview`} />);
+    expect(screen.getByTestId(demoTestId)).toBeInTheDocument();
+    expect(screen.getByTestId(`design-lab-chart-preview-${hookId}`)).toBeInTheDocument();
+  });
+
   it('unknown chart-id falls through to the friendly empty state', () => {
     render(<ChartPreviewLive chartId="not-a-real-chart" chartName="Future chart" />);
     expect(screen.getByText(/Future chart: live preview yakında/)).toBeInTheDocument();
