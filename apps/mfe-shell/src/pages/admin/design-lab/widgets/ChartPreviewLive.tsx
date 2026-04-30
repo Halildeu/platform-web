@@ -34,6 +34,7 @@ import {
 } from '@mfe/x-charts';
 import CrossFilterDemoLive from './CrossFilterDemoLive';
 import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
+import PerfUtilityDemoLive, { type PerfUtilityId } from './PerfUtilityDemoLive';
 
 const categories = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'];
 const values1 = [320, 332, 301, 334, 390, 330];
@@ -477,6 +478,20 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
         >
           <AiHookDemoLive hookId={chartId as AiHookId} />
+        </div>
+      );
+
+    case 'lttb':
+    case 'progressive-render':
+    case 'lazy-chart':
+    case 'lru-cache':
+    case 'code-split':
+      return (
+        <div
+          data-testid={testId}
+          style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
+        >
+          <PerfUtilityDemoLive utilityId={chartId as PerfUtilityId} />
         </div>
       );
 

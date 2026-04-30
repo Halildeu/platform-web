@@ -90,6 +90,27 @@ vi.mock('@mfe/x-charts', () => {
     useCrossFilterStoreApi: () => ({
       getState: () => ({ clearAllFilters: vi.fn() }),
     }),
+    // Performance helpers — minimal stubs so PerfUtilityDemoLive can mount
+    // inside the routing smoke tests. The real semantics are exercised in
+    // PerfUtilityDemoLive.test.tsx with no mock.
+    downsampleLTTB: (data: unknown[]) => data,
+    useProgressiveRender: ({ data }: { data: unknown[] }) => ({
+      visibleData: data ?? [],
+      isComplete: true,
+      progress: 1,
+      forceComplete: vi.fn(),
+    }),
+    useLazyChart: () => ({ containerRef: { current: null }, shouldRender: true }),
+    LRUCache: class {
+      private map = new Map<unknown, unknown>();
+      set(k: unknown, v: unknown) {
+        this.map.set(k, v);
+      }
+      get(k: unknown) {
+        return this.map.get(k);
+      }
+    },
+    lazyChartImport: () => () => null,
   };
 });
 
@@ -155,6 +176,21 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     expect(screen.getByTestId(demoTestId)).toBeInTheDocument();
     expect(screen.getByTestId(`design-lab-chart-preview-${hookId}`)).toBeInTheDocument();
   });
+
+  it.each([
+    { utilityId: 'lttb', demoTestId: 'perf-lttb-demo' },
+    { utilityId: 'progressive-render', demoTestId: 'perf-progressive-render-demo' },
+    { utilityId: 'lazy-chart', demoTestId: 'perf-lazy-chart-demo' },
+    { utilityId: 'lru-cache', demoTestId: 'perf-lru-cache-demo' },
+    { utilityId: 'code-split', demoTestId: 'perf-code-split-demo' },
+  ])(
+    'Perf utility "$utilityId" mounts PerfUtilityDemoLive ($demoTestId)',
+    ({ utilityId, demoTestId }) => {
+      render(<ChartPreviewLive chartId={utilityId} chartName={`${utilityId} preview`} />);
+      expect(screen.getByTestId(demoTestId)).toBeInTheDocument();
+      expect(screen.getByTestId(`design-lab-chart-preview-${utilityId}`)).toBeInTheDocument();
+    },
+  );
 
   it('unknown chart-id falls through to the friendly empty state', () => {
     render(<ChartPreviewLive chartId="not-a-real-chart" chartName="Future chart" />);
