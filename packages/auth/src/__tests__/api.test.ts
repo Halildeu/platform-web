@@ -176,3 +176,52 @@ describe('fetchAuthzMe — 401 propagation (no retry)', () => {
     expect(httpGet).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('fetchAuthzMe — empty/incomplete body transient guard (iter-34)', () => {
+  // Live capture (Playwright on testai.acik.com 2026-04-30): the first
+  // /authz/me hop returned HTTP 200 with content-length: 0 — the second
+  // hop returned the full payload. PermissionProvider used to cache the
+  // empty body silently and report superAdmin: undefined → drawer
+  // canEdit collapsed to false.
+  it('retries when first response body is empty (data === null)', async () => {
+    const httpGet = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null })
+      .mockResolvedValueOnce({
+        data: { userId: '1204', superAdmin: true, authzVersion: 47 },
+      });
+    const result = await fetchAuthzMe(httpGet);
+    expect(result).toMatchObject({ userId: '1204', superAdmin: true });
+    expect(httpGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries when response body is "" coerced to empty object', async () => {
+    const httpGet = vi
+      .fn()
+      .mockResolvedValueOnce({ data: '' as unknown as never })
+      .mockResolvedValueOnce({
+        data: { userId: '1204', superAdmin: true },
+      });
+    const result = await fetchAuthzMe(httpGet);
+    expect(result).toMatchObject({ userId: '1204', superAdmin: true });
+    expect(httpGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries when response body has no userId (incomplete payload)', async () => {
+    const httpGet = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { superAdmin: false } as never })
+      .mockResolvedValueOnce({
+        data: { userId: '1204', superAdmin: true },
+      });
+    const result = await fetchAuthzMe(httpGet);
+    expect(result.userId).toBe('1204');
+    expect(httpGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws after MAX_RETRIES exhaustion when body keeps coming back empty', async () => {
+    const httpGet = vi.fn().mockResolvedValue({ data: null });
+    await expect(fetchAuthzMe(httpGet)).rejects.toThrow(/empty body/i);
+    expect(httpGet).toHaveBeenCalledTimes(3);
+  });
+});
