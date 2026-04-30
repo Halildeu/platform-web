@@ -66,7 +66,7 @@ describe('Drawer — basic render', () => {
   });
 
   it('does not render footer section when footer is not provided', () => {
-    const { container } = render(
+    const { container: _container } = render(
       <Drawer open onClose={vi.fn()}>
         <p>Body</p>
       </Drawer>,
@@ -156,30 +156,36 @@ describe('Drawer — size variants', () => {
     ['md', 'max-w-md'],
     ['lg', 'max-w-2xl'],
     ['full', 'max-w-full'],
-  ] as const)('size="%s" applies correct width class for horizontal placement', (size, expectedClass) => {
-    render(
-      <Drawer open onClose={vi.fn()} placement="right" size={size}>
-        <p>Content</p>
-      </Drawer>,
-    );
-    const panel = screen.getByRole('dialog');
-    expect(panel.className).toContain(expectedClass);
-  });
+  ] as const)(
+    'size="%s" applies correct width class for horizontal placement',
+    (size, expectedClass) => {
+      render(
+        <Drawer open onClose={vi.fn()} placement="right" size={size}>
+          <p>Content</p>
+        </Drawer>,
+      );
+      const panel = screen.getByRole('dialog');
+      expect(panel.className).toContain(expectedClass);
+    },
+  );
 
   it.each([
     ['sm', 'max-h-[25vh]'],
     ['md', 'max-h-[50vh]'],
     ['lg', 'max-h-[75vh]'],
     ['full', 'max-h-full'],
-  ] as const)('size="%s" applies correct height class for vertical placement', (size, expectedClass) => {
-    render(
-      <Drawer open onClose={vi.fn()} placement="bottom" size={size}>
-        <p>Content</p>
-      </Drawer>,
-    );
-    const panel = screen.getByRole('dialog');
-    expect(panel.className).toContain(expectedClass);
-  });
+  ] as const)(
+    'size="%s" applies correct height class for vertical placement',
+    (size, expectedClass) => {
+      render(
+        <Drawer open onClose={vi.fn()} placement="bottom" size={size}>
+          <p>Content</p>
+        </Drawer>,
+      );
+      const panel = screen.getByRole('dialog');
+      expect(panel.className).toContain(expectedClass);
+    },
+  );
 
   it('defaults to size "md"', () => {
     render(
@@ -477,7 +483,7 @@ describe('Drawer — edge cases', () => {
 
 describe('Drawer — a11y', () => {
   it('has no axe violations', async () => {
-    const { container } = render(
+    const { container: _container } = render(
       <Drawer open onClose={vi.fn()} title="Test Drawer">
         <p>Drawer content</p>
       </Drawer>,
@@ -492,7 +498,11 @@ describe('Drawer — a11y', () => {
 
 describe('Drawer — quality signals', () => {
   it('handles disabled state correctly', () => {
-    const { container } = render(<button disabled data-testid="disabled-el">Disabled</button>);
+    const { container: _container } = render(
+      <button disabled data-testid="disabled-el">
+        Disabled
+      </button>,
+    );
     const el = screen.getByTestId('disabled-el');
     expect(el).toBeDisabled();
     expect(el).toHaveTextContent('Disabled');
@@ -500,7 +510,11 @@ describe('Drawer — quality signals', () => {
   });
 
   it('handles error and invalid states', () => {
-    const { container } = render(<div role="alert" aria-invalid="true" data-testid="error-el">Error message</div>);
+    const { container: _container } = render(
+      <div role="alert" aria-invalid="true" data-testid="error-el">
+        Error message
+      </div>,
+    );
     const el = screen.getByTestId('error-el');
     expect(el).toBeInTheDocument();
     expect(el).toHaveAttribute('aria-invalid', 'true');
@@ -509,7 +523,11 @@ describe('Drawer — quality signals', () => {
   });
 
   it('renders empty state when no data is provided', () => {
-    const { container } = render(<div data-testid="empty-state" data-empty="true">No data available</div>);
+    const { container: _container } = render(
+      <div data-testid="empty-state" data-empty="true">
+        No data available
+      </div>,
+    );
     const el = screen.getByTestId('empty-state');
     expect(el).toBeInTheDocument();
     expect(el).toHaveTextContent('No data available');
@@ -517,11 +535,68 @@ describe('Drawer — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { container: _container, rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');
     });
     expect(screen.getByTestId('async-el')).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Codex 019dde3d iter-46 — real focus trap (symmetric with iter-45) */
+/* ------------------------------------------------------------------ */
+
+describe('Drawer — real focus trap (iter-46)', () => {
+  it('Tab/Shift+Tab boundary wrap-around: close button is first focusable in DOM order', async () => {
+    render(
+      <Drawer open onClose={vi.fn()} title="Trap Test">
+        <button data-testid="b1">First inner</button>
+        <button data-testid="b2">Last inner</button>
+      </Drawer>,
+    );
+    await new Promise((r) => setTimeout(r, 80));
+
+    const closeBtn = screen.getByLabelText('Close');
+    const lastInner = screen.getByTestId('b2');
+
+    // Tab from last inner → wraps to FIRST focusable (close button)
+    lastInner.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeBtn);
+
+    // Shift+Tab from close (first) → wraps to last inner
+    closeBtn.focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(lastInner);
+  });
+
+  it('autoFocus moves focus to the close button on open', async () => {
+    render(
+      <Drawer open onClose={vi.fn()} title="AutoFocus">
+        <button data-testid="inside">Inside</button>
+      </Drawer>,
+    );
+    await new Promise((r) => setTimeout(r, 80));
+    const closeBtn = screen.getByLabelText('Close');
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it('disableFocusTrap=true skips wrap and autoFocus (escape hatch)', async () => {
+    const before = document.createElement('button');
+    before.textContent = 'Outside';
+    document.body.appendChild(before);
+    before.focus();
+
+    render(
+      <Drawer open onClose={vi.fn()} title="No Trap" disableFocusTrap>
+        <button data-testid="inside">Inside</button>
+      </Drawer>,
+    );
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(document.activeElement).toBe(before);
+    document.body.removeChild(before);
   });
 });
