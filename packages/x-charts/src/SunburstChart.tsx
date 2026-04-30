@@ -14,7 +14,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -81,6 +86,8 @@ export interface SunburstChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -128,8 +135,17 @@ function computeMaxDepth(nodes: SunburstNode[], current = 0): number {
  * Auto-generate level configs based on the data tree depth.
  * Distributes the available radius range evenly across levels.
  * Deeper levels get smaller labels to reduce visual clutter.
+ *
+ * Codex iter-9 fix: deep-level fontSize must respect MIN_FONT_SIZE_PX (10).
+ * Old `Math.max(9, 12 - i)` violated a11y minimum at i=3+. We now clamp via
+ * scaleFontSize which guarantees >=10, and apply density multiplier so
+ * compact mode shrinks the base proportionally.
  */
-function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelConfig[] {
+function autoLevels(
+  maxDepth: number,
+  radius: [string, string],
+  densityFontMultiplier: number,
+): SunburstLevelConfig[] {
   const totalLevels = maxDepth + 1;
   const innerPct = parseFloat(radius[0]) || 0;
   const outerPct = parseFloat(radius[1]) || 90;
@@ -140,6 +156,9 @@ function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelCo
   for (let i = 0; i < totalLevels; i++) {
     const r0 = innerPct + step * i;
     const r1 = innerPct + step * (i + 1);
+    // Base font size 12 at root, gradually shrink for deeper levels (12, 11, 10, 10, ...)
+    // scaleFontSize automatically clamps below MIN_FONT_SIZE_PX (10).
+    const baseFontSize = Math.max(10, 12 - i);
     levels.push({
       r0: `${r0.toFixed(1)}%`,
       r1: `${r1.toFixed(1)}%`,
@@ -149,7 +168,7 @@ function autoLevels(maxDepth: number, radius: [string, string]): SunburstLevelCo
       },
       label: {
         show: i < 3,
-        fontSize: Math.max(9, 12 - i),
+        fontSize: scaleFontSize(baseFontSize, densityFontMultiplier),
         rotate: i === 0 ? 0 : 'tangential',
       },
     });
@@ -213,6 +232,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       className,
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
+      density: densityPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -221,9 +241,16 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
     const isEmpty = !data || data.length === 0;
     const fmt = valueFormatter ?? formatCompact;
 
-    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    const {
+      themeObject,
+      decalEnabled,
+      decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
+    } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
+      density: densityPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
@@ -231,7 +258,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
 
       const coloredData = colorizeTopLevel(data);
       const maxDepth = computeMaxDepth(coloredData);
-      const levels = levelsProp ?? autoLevels(maxDepth, radius);
+      const levels = levelsProp ?? autoLevels(maxDepth, radius, densityFontMultiplier);
       const focusValue = resolveHighlightFocus(highlightPolicy);
 
       return {
@@ -242,7 +269,10 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
           ? {
               text: escapeHtml(title),
               left: 'center',
-              textStyle: { fontSize: 16, fontWeight: 600 },
+              textStyle: {
+                fontSize: scaleFontSize(16, densityFontMultiplier),
+                fontWeight: 600,
+              },
             }
           : undefined,
         tooltip: {
@@ -267,9 +297,9 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
           show: showLegend,
           bottom: 0,
           icon: 'roundRect',
-          itemWidth: 12,
-          itemHeight: 8,
-          textStyle: { fontSize: 12 },
+          itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+          itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+          textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
           data: coloredData.map((n) => n.name),
         },
         series: [
@@ -293,7 +323,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
                 if (!params.name) return '';
                 return `${params.name}\n${fmt(params.value)}`;
               },
-              fontSize: 11,
+              fontSize: scaleFontSize(11, densityFontMultiplier),
             },
             emphasis: {
               focus: focusValue,
@@ -332,6 +362,8 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       isEmpty,
       decalEnabled,
       decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
     ]);
 
     const handleClick = useCallback(

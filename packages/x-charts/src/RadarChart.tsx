@@ -12,7 +12,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -77,6 +82,8 @@ export interface RadarChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,6 +133,7 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -134,9 +142,16 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
   const isEmpty = !indicators || indicators.length === 0 || !series || series.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
-  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+  const {
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+  } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
+    density: densityPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
@@ -176,7 +191,10 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
         ? {
             text: escapeHtml(title),
             left: 'center',
-            textStyle: { fontSize: 16, fontWeight: 600 },
+            textStyle: {
+              fontSize: scaleFontSize(16, densityFontMultiplier),
+              fontWeight: 600,
+            },
           }
         : undefined,
       tooltip: {
@@ -196,9 +214,9 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
         show: showLegend || series.length > 1,
         bottom: 0,
         icon: 'roundRect',
-        itemWidth: 12,
-        itemHeight: 8,
-        textStyle: { fontSize: 12 },
+        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
       },
       radar: {
         indicator: indicators.map((ind) => ({
@@ -209,7 +227,7 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
         splitNumber,
         axisName: {
           show: showLabels,
-          fontSize: 11,
+          fontSize: scaleFontSize(11, densityFontMultiplier),
           color: 'var(--text-secondary, #666)',
         },
         splitArea: {
@@ -256,6 +274,8 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
     fmt,
     decalEnabled,
     decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
   ]);
 
   const handleClick = useCallback(

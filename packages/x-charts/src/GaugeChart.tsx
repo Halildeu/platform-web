@@ -12,7 +12,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -77,6 +82,8 @@ export interface GaugeChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -144,6 +151,7 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -153,9 +161,10 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
   const safeValue = sanitizeNumber(value);
   const fmt = valueFormatter ?? formatCompact;
 
-  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+  const { themeObject, decalEnabled, decalPatterns, densityFontMultiplier } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
+    density: densityPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
@@ -212,13 +221,14 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
           axisLabel: {
             show: showAxisLabel,
             distance: 30,
-            fontSize: 11,
+            fontSize: scaleFontSize(11, densityFontMultiplier),
             formatter: (v: number) => escapeHtml(fmt(v)),
           },
           detail: {
             valueAnimation: animate,
             formatter: (v: number) => escapeHtml(fmt(v)),
-            fontSize: Math.round(height * 0.08),
+            // height-relative fontSize already adapts; multiply by density factor
+            fontSize: scaleFontSize(Math.round(height * 0.08), densityFontMultiplier),
             fontWeight: 600,
             offsetCenter: [0, '40%'],
             color: 'inherit',
@@ -227,7 +237,7 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
             ? {
                 show: true,
                 offsetCenter: [0, '60%'],
-                fontSize: 13,
+                fontSize: scaleFontSize(13, densityFontMultiplier),
                 color: 'var(--text-secondary, #666)',
               }
             : { show: false },
@@ -259,6 +269,7 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
     isEmpty,
     decalEnabled,
     decalPatterns,
+    densityFontMultiplier,
   ]);
 
   const { containerRef, instance } = useEChartsRenderer({

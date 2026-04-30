@@ -46,6 +46,14 @@ export interface ThemeSnapshot {
    *   4. default false
    */
   isDarkSurface: boolean;
+  /**
+   * Density signal read from `data-density` attribute on documentElement.
+   * Faz 21.5-A3 (Codex iter-8): comfortable (default) | compact.
+   *
+   * Default 'comfortable' guarantees backward compatibility for consumers
+   * that haven't set the attribute.
+   */
+  density: 'comfortable' | 'compact';
 }
 
 const ATTRIBUTE_FILTER = [
@@ -62,6 +70,7 @@ const SERVER_SNAPSHOT: ThemeSnapshot = {
   resolvedTheme: 'light',
   source: 'server',
   isDarkSurface: false,
+  density: 'comfortable',
 };
 
 const SUBSCRIBERS = new Set<() => void>();
@@ -124,6 +133,19 @@ const normalizeDataMode = (raw: string | null): Exclude<ChartResolvedTheme, 'pri
 };
 
 /**
+ * Read `data-density` attribute → ChartDensity. Default 'comfortable'.
+ *
+ * Faz 21.5-A3: density signal yalnız `data-density` attribute'tan okunur
+ * (theme-controller.ts:172 zaten bu attribute'ı set ediyor — design-system
+ * `ThemeAxes.density` semantik token).
+ */
+const computeDensity = (root: Element): 'comfortable' | 'compact' => {
+  const value = (root.getAttribute('data-density') || '').trim().toLowerCase();
+  if (value === 'compact') return 'compact';
+  return 'comfortable'; // 'comfortable' explicit + tüm diğer değerler default
+};
+
+/**
  * Compute dark surface indicator independently of resolvedTheme.
  * Used by HighContrast theme builder to differentiate light HC vs dark HC.
  *
@@ -161,33 +183,41 @@ const computeSnapshot = (): ThemeSnapshot => {
   const root = document.documentElement;
 
   const isDarkSurface = computeIsDarkSurface(root);
+  const density = computeDensity(root);
 
   const appearance = normalizeDataAppearance(root.getAttribute('data-appearance'));
-  if (appearance) return { resolvedTheme: appearance, source: 'data-appearance', isDarkSurface };
+  if (appearance)
+    return { resolvedTheme: appearance, source: 'data-appearance', isDarkSurface, density };
 
   const theme = normalizeDataTheme(root.getAttribute('data-theme'));
-  if (theme) return { resolvedTheme: theme, source: 'data-theme', isDarkSurface };
+  if (theme) return { resolvedTheme: theme, source: 'data-theme', isDarkSurface, density };
 
   const mode = normalizeDataMode(root.getAttribute('data-mode'));
-  if (mode) return { resolvedTheme: mode, source: 'data-mode', isDarkSurface };
+  if (mode) return { resolvedTheme: mode, source: 'data-mode', isDarkSurface, density };
 
   const contrast = matchMediaSafe('(prefers-contrast: more)');
   if (contrast?.matches) {
-    return { resolvedTheme: 'high-contrast', source: 'prefers-contrast', isDarkSurface };
+    return {
+      resolvedTheme: 'high-contrast',
+      source: 'prefers-contrast',
+      isDarkSurface,
+      density,
+    };
   }
 
   const dark = matchMediaSafe('(prefers-color-scheme: dark)');
   if (dark?.matches) {
-    return { resolvedTheme: 'dark', source: 'prefers-color-scheme', isDarkSurface };
+    return { resolvedTheme: 'dark', source: 'prefers-color-scheme', isDarkSurface, density };
   }
 
-  return { resolvedTheme: 'light', source: 'default', isDarkSurface };
+  return { resolvedTheme: 'light', source: 'default', isDarkSurface, density };
 };
 
 const snapshotsEqual = (a: ThemeSnapshot, b: ThemeSnapshot): boolean =>
   a.resolvedTheme === b.resolvedTheme &&
   a.source === b.source &&
-  a.isDarkSurface === b.isDarkSurface;
+  a.isDarkSurface === b.isDarkSurface &&
+  a.density === b.density;
 
 const broadcast = () => {
   const next = computeSnapshot();
