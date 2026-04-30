@@ -1,5 +1,7 @@
-import React from "react";
-import { cn, Spinner, Text } from "@mfe/design-system";
+import React from 'react';
+import { cn } from './utils/cn';
+import { Spinner } from './components/spinner/Spinner';
+import { Text } from './components/text/Text';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -38,7 +40,7 @@ export function ChartContainer({
   loading = false,
   error,
   empty = false,
-  emptyLabel = "No data available",
+  emptyLabel = 'No data available',
   height = 300,
   className,
   actions,
@@ -47,7 +49,7 @@ export function ChartContainer({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-default)]",
+        'overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-default)]',
         className,
       )}
     >
@@ -61,9 +63,7 @@ export function ChartContainer({
               </Text>
             )}
             {description && (
-              <Text className="text-[11px] text-[var(--text-secondary)]">
-                {description}
-              </Text>
+              <Text className="text-[11px] text-[var(--text-secondary)]">{description}</Text>
             )}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -113,6 +113,6 @@ export function ChartContainer({
   );
 }
 
-ChartContainer.displayName = "ChartContainer";
+ChartContainer.displayName = 'ChartContainer';
 
 export default ChartContainer;

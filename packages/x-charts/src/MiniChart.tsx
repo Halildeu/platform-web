@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { cn } from "@mfe/design-system";
+import React, { useMemo } from 'react';
+import { cn } from './utils/cn';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -14,13 +14,13 @@ export interface MiniChartProps {
   /** Data points to visualise. */
   data: Array<MiniChartDataPoint>;
   /** Chart type. @default "line" */
-  type?: "line" | "bar" | "area" | "donut";
+  type?: 'line' | 'bar' | 'area' | 'donut';
   /** Chart height in pixels. @default 120 */
   height?: number;
   /** Primary colour (CSS value or custom property). @default "var(--action-primary)" */
   color?: string;
   /** Trend direction indicator. */
-  trend?: "up" | "down" | "flat";
+  trend?: 'up' | 'down' | 'flat';
   /** Trend label (e.g. "+12%"). */
   trendValue?: string;
   /** Additional class name. */
@@ -35,23 +35,20 @@ function TrendIndicator({
   trend,
   trendValue,
 }: {
-  trend: "up" | "down" | "flat";
+  trend: 'up' | 'down' | 'flat';
   trendValue?: string;
 }) {
-  const isUp = trend === "up";
-  const isDown = trend === "down";
+  const isUp = trend === 'up';
+  const isDown = trend === 'down';
 
   const color = isUp
-    ? "var(--state-success-text))"
+    ? 'var(--state-success-text))'
     : isDown
-      ? "var(--state-error-text))"
-      : "var(--text-secondary))";
+      ? 'var(--state-error-text))'
+      : 'var(--text-secondary))';
 
   return (
-    <span
-      className="inline-flex items-center gap-0.5 text-xs font-medium"
-      style={{ color }}
-    >
+    <span className="inline-flex items-center gap-0.5 text-xs font-medium" style={{ color }}>
       {isUp && (
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
           <path d="M6 2.5L10 7H2L6 2.5Z" fill="currentColor" />
@@ -62,7 +59,7 @@ function TrendIndicator({
           <path d="M6 9.5L2 5H10L6 9.5Z" fill="currentColor" />
         </svg>
       )}
-      {trend === "flat" && (
+      {trend === 'flat' && (
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
           <path d="M2 6H10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
@@ -95,12 +92,10 @@ function renderLineSVG(
     y: PADDING + innerH - ((d.value - min) / range) * innerH,
   }));
 
-  const polyPoints = coords.map((c) => `${c.x},${c.y}`).join(" ");
+  const polyPoints = coords.map((c) => `${c.x},${c.y}`).join(' ');
 
   const areaPath = filled
-    ? coords
-        .map((c, i) => (i === 0 ? `M ${c.x},${c.y}` : `L ${c.x},${c.y}`))
-        .join(" ") +
+    ? coords.map((c, i) => (i === 0 ? `M ${c.x},${c.y}` : `L ${c.x},${c.y}`)).join(' ') +
       ` L ${coords[coords.length - 1].x},${PADDING + innerH} L ${coords[0].x},${PADDING + innerH} Z`
     : undefined;
 
@@ -130,12 +125,7 @@ function renderLineSVG(
   );
 }
 
-function renderBarSVG(
-  data: MiniChartDataPoint[],
-  width: number,
-  height: number,
-  color: string,
-) {
+function renderBarSVG(data: MiniChartDataPoint[], width: number, height: number, color: string) {
   const PADDING = 8;
   const min = Math.min(0, ...data.map((d) => d.value));
   const max = Math.max(...data.map((d) => d.value));
@@ -184,10 +174,10 @@ function DonutChart({
 
   const COLORS = [
     color,
-    "var(--state-success-text))",
-    "var(--state-warning-text))",
-    "var(--state-error-text))",
-    "var(--text-tertiary))",
+    'var(--state-success-text))',
+    'var(--state-warning-text))',
+    'var(--state-error-text))',
+    'var(--text-tertiary))',
   ];
 
   let cumulativeAngle = -90; // start from top
@@ -226,7 +216,7 @@ function DonutChart({
       height={size}
       role="img"
       aria-label={`Donut chart with ${data.length} segments`}
-      style={{ display: "block", margin: "0 auto" }}
+      style={{ display: 'block', margin: '0 auto' }}
     >
       {/* background track */}
       <circle
@@ -246,96 +236,89 @@ function DonutChart({
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const MiniChart = React.forwardRef<HTMLDivElement, MiniChartProps>(
-  function MiniChart(
-    {
-      data,
-      type = "line",
-      height = 120,
-      color = "var(--action-primary))",
-      trend,
-      trendValue,
-      className,
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const isEmpty = !data || data.length === 0;
+export const MiniChart = React.forwardRef<HTMLDivElement, MiniChartProps>(function MiniChart(
+  {
+    data,
+    type = 'line',
+    height = 120,
+    color = 'var(--action-primary))',
+    trend,
+    trendValue,
+    className,
+    ...rest
+  },
+  forwardedRef,
+) {
+  const isEmpty = !data || data.length === 0;
 
-    const chartContent = useMemo(() => {
-      if (isEmpty) return null;
+  const chartContent = useMemo(() => {
+    if (isEmpty) return null;
 
-      if (type === "donut") {
-        return <DonutChart data={data} height={height} color={color} />;
-      }
+    if (type === 'donut') {
+      return <DonutChart data={data} height={height} color={color} />;
+    }
 
-      // For SVG-based types we use a responsive viewBox
-      const svgWidth = 200;
-      const svgHeight = height;
+    // For SVG-based types we use a responsive viewBox
+    const svgWidth = 200;
+    const svgHeight = height;
 
-      let content: React.ReactNode;
-      switch (type) {
-        case "bar":
-          content = renderBarSVG(data, svgWidth, svgHeight, color);
-          break;
-        case "area":
-          content = renderLineSVG(data, svgWidth, svgHeight, color, true);
-          break;
-        default:
-          content = renderLineSVG(data, svgWidth, svgHeight, color, false);
-      }
-
-      return (
-        <svg
-          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          width="100%"
-          height={svgHeight}
-          preserveAspectRatio="none"
-          role="img"
-          aria-label={`Mini ${type} chart with ${data.length} data points`}
-        >
-          {content}
-        </svg>
-      );
-    }, [data, type, height, color, isEmpty]);
-
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            "flex items-center justify-center text-xs text-[var(--text-secondary)]",
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label="Mini chart — no data"
-          data-testid="mini-chart-empty"
-          {...rest}
-        >
-          No data
-        </div>
-      );
+    let content: React.ReactNode;
+    switch (type) {
+      case 'bar':
+        content = renderBarSVG(data, svgWidth, svgHeight, color);
+        break;
+      case 'area':
+        content = renderLineSVG(data, svgWidth, svgHeight, color, true);
+        break;
+      default:
+        content = renderLineSVG(data, svgWidth, svgHeight, color, false);
     }
 
     return (
+      <svg
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        width="100%"
+        height={svgHeight}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Mini ${type} chart with ${data.length} data points`}
+      >
+        {content}
+      </svg>
+    );
+  }, [data, type, height, color, isEmpty]);
+
+  if (isEmpty) {
+    return (
       <div
         ref={forwardedRef}
-        className={cn("w-full", className)}
-        data-testid="mini-chart"
+        className={cn(
+          'flex items-center justify-center text-xs text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
+        role="img"
+        aria-label="Mini chart — no data"
+        data-testid="mini-chart-empty"
         {...rest}
       >
-        {chartContent}
-        {trend && (
-          <div className="mt-1 flex justify-end">
-            <TrendIndicator trend={trend} trendValue={trendValue} />
-          </div>
-        )}
+        No data
       </div>
     );
-  },
-);
+  }
 
-MiniChart.displayName = "MiniChart";
+  return (
+    <div ref={forwardedRef} className={cn('w-full', className)} data-testid="mini-chart" {...rest}>
+      {chartContent}
+      {trend && (
+        <div className="mt-1 flex justify-end">
+          <TrendIndicator trend={trend} trendValue={trendValue} />
+        </div>
+      )}
+    </div>
+  );
+});
+
+MiniChart.displayName = 'MiniChart';
 
 export default MiniChart;

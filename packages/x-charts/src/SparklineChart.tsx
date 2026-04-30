@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { cn } from "@mfe/design-system";
+import React, { useMemo } from 'react';
+import { cn } from './utils/cn';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -9,7 +9,7 @@ export interface SparklineChartProps {
   /** Numeric data points to render. */
   data: number[];
   /** Visual style of the sparkline. @default "line" */
-  type?: "line" | "bar" | "area";
+  type?: 'line' | 'bar' | 'area';
   /** Width in pixels. @default 120 */
   width?: number;
   /** Height in pixels. @default 32 */
@@ -36,7 +36,7 @@ function buildPolylinePoints(
   height: number,
   padding: number,
 ): string {
-  if (data.length === 0) return "";
+  if (data.length === 0) return '';
 
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -50,16 +50,11 @@ function buildPolylinePoints(
       const y = padding + innerH - ((v - min) / range) * innerH;
       return `${x},${y}`;
     })
-    .join(" ");
+    .join(' ');
 }
 
-function buildAreaPath(
-  data: number[],
-  width: number,
-  height: number,
-  padding: number,
-): string {
-  if (data.length === 0) return "";
+function buildAreaPath(data: number[], width: number, height: number, padding: number): string {
+  if (data.length === 0) return '';
 
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -73,7 +68,9 @@ function buildAreaPath(
     return { x, y };
   });
 
-  const linePart = coords.map((c, i) => (i === 0 ? `M ${c.x},${c.y}` : `L ${c.x},${c.y}`)).join(" ");
+  const linePart = coords
+    .map((c, i) => (i === 0 ? `M ${c.x},${c.y}` : `L ${c.x},${c.y}`))
+    .join(' ');
   const baseline = padding + innerH;
   return `${linePart} L ${coords[coords.length - 1].x},${baseline} L ${coords[0].x},${baseline} Z`;
 }
@@ -86,10 +83,10 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
   function SparklineChart(
     {
       data,
-      type = "line",
+      type = 'line',
       width = 120,
       height = 32,
-      color = "var(--action-primary))",
+      color = 'var(--action-primary))',
       showLastPoint = false,
       showMinMax = false,
       animate = true,
@@ -102,7 +99,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
 
     const { points, areaPath, bars, lastPt, minPt, maxPt } = useMemo(() => {
       if (!data || data.length === 0) {
-        return { points: "", areaPath: "", bars: [], lastPt: null, minPt: null, maxPt: null };
+        return { points: '', areaPath: '', bars: [], lastPt: null, minPt: null, maxPt: null };
       }
 
       const min = Math.min(...data);
@@ -145,14 +142,21 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
         maxCoord = coords[maxIdx];
       }
 
-      return { points: pts, areaPath: area, bars: barRects, lastPt: last, minPt: minCoord, maxPt: maxCoord };
+      return {
+        points: pts,
+        areaPath: area,
+        bars: barRects,
+        lastPt: last,
+        minPt: minCoord,
+        maxPt: maxCoord,
+      };
     }, [data, width, height, showMinMax]);
 
     if (!data || data.length === 0) {
       return (
         <div
           ref={forwardedRef}
-          className={cn("inline-block text-text-primary", className)}
+          className={cn('inline-block text-text-primary', className)}
           style={{ width, height }}
           role="img"
           aria-label="Sparkline chart — no data"
@@ -165,7 +169,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
     return (
       <div
         ref={forwardedRef}
-        className={cn("inline-block text-text-primary", className)}
+        className={cn('inline-block text-text-primary', className)}
         style={{ width, height }}
         data-testid="sparkline-chart"
         {...rest}
@@ -177,7 +181,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
           role="img"
           aria-label={`Sparkline chart: ${data.length} data points, last value ${data[data.length - 1]}`}
         >
-          {type === "bar" ? (
+          {type === 'bar' ? (
             /* ---- bar sparkline ---- */
             bars.map((b, i) => (
               <rect
@@ -201,22 +205,12 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
                 )}
               </rect>
             ))
-          ) : type === "area" ? (
+          ) : type === 'area' ? (
             /* ---- area sparkline ---- */
             <>
-              <path
-                d={areaPath}
-                fill={color}
-                opacity="0.15"
-              >
+              <path d={areaPath} fill={color} opacity="0.15">
                 {animate && (
-                  <animate
-                    attributeName="opacity"
-                    from="0"
-                    to="0.15"
-                    dur="0.4s"
-                    fill="freeze"
-                  />
+                  <animate attributeName="opacity" from="0" to="0.15" dur="0.4s" fill="freeze" />
                 )}
               </path>
               <polyline
@@ -228,13 +222,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
                 strokeLinecap="round"
               >
                 {animate && (
-                  <animate
-                    attributeName="opacity"
-                    from="0"
-                    to="1"
-                    dur="0.4s"
-                    fill="freeze"
-                  />
+                  <animate attributeName="opacity" from="0" to="1" dur="0.4s" fill="freeze" />
                 )}
               </polyline>
             </>
@@ -249,13 +237,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
               strokeLinecap="round"
             >
               {animate && (
-                <animate
-                  attributeName="opacity"
-                  from="0"
-                  to="1"
-                  dur="0.4s"
-                  fill="freeze"
-                />
+                <animate attributeName="opacity" from="0" to="1" dur="0.4s" fill="freeze" />
               )}
             </polyline>
           )}
@@ -299,6 +281,6 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
   },
 );
 
-SparklineChart.displayName = "SparklineChart";
+SparklineChart.displayName = 'SparklineChart';
 
 export default SparklineChart;

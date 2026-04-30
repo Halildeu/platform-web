@@ -7,7 +7,7 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
-import { cn } from '@mfe/design-system';
+import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { useChartTheme } from './theme/useChartTheme';
 import type {

@@ -513,3 +513,23 @@ catalogue grows.
 | ParetoChart    | `enterprise/ParetoChart.tsx`    | candidate     | migrate as `ParetoChart` in Faz 21.7                                                    |
 | MicroChart     | `enterprise/MicroChart.tsx`     | consolidate   | superseded by `MiniChart` + `SparklineChart` in `@mfe/x-charts`; deprecate in PR-C      |
 | OrgChart       | `enterprise/OrgChart.tsx`       | OUT-OF-SCOPE  | hierarchy visualization, not a chart type. Future `@mfe/hierarchy-viz` package proposal |
+
+### Runtime Dependency Boundary (Faz 21.6 PR-C0)
+
+`@mfe/x-charts` MUST NOT import `@mfe/design-system` at runtime. Chart
+wrappers are the canonical implementation layer; design-system chart
+entries may depend on `@mfe/x-charts` as legacy shims (PR-C1/PR-C2),
+but the dependency direction must not be reversed.
+
+Small visual helpers consumed by x-charts (`cn`, internal `Text`,
+internal `Spinner`) live locally in `packages/x-charts/src/utils` and
+`packages/x-charts/src/components` so the package graph stays acyclic.
+These are intentionally NOT exported from the public root barrel
+(`src/index.ts`) — they are implementation details of x-charts.
+
+Verification (CI gate suggestion):
+
+```bash
+rg "@mfe/design-system" packages/x-charts/src   # must be 0 hits
+npx madge --circular packages/x-charts/src      # must be 0 cycles
+```
