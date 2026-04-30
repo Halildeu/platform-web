@@ -1,0 +1,369 @@
+/**
+ * ChartPreviewLive — renders a real @mfe/x-charts component with mock data
+ * inside Design Lab pages, replacing the previous SVG ChartPreviewPlaceholder.
+ *
+ * Mock data and prop shapes are taken verbatim from the Storybook reference
+ * stories (`packages/x-charts/src/__stories__/AllChartTypes.stories.tsx`)
+ * so the visual matches what visual-regression already covers.
+ *
+ * Boolean toggles flowing in from the PlaygroundTab `pgState` are forwarded
+ * as raw props on the underlying chart component when applicable. Unknown
+ * chart ids fall back to a friendly empty state instead of throwing.
+ */
+import React from 'react';
+import {
+  BarChart,
+  LineChart,
+  AreaChart,
+  PieChart,
+  ScatterChart,
+  GaugeChart,
+  RadarChart,
+  TreemapChart,
+  HeatmapChart,
+  WaterfallChart,
+  FunnelChart,
+  SankeyChart,
+  SunburstChart,
+} from '@mfe/x-charts';
+
+const categories = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'];
+const values1 = [320, 332, 301, 334, 390, 330];
+const values2 = [220, 182, 191, 234, 290, 330];
+
+export interface ChartPreviewLiveProps {
+  chartId: string;
+  chartName: string;
+  /**
+   * Boolean / string toggles forwarded from the PlaygroundTab props editor.
+   * Keys correspond to declared chart prop names (e.g. showValues, donut).
+   */
+  toggles?: Record<string, boolean | string>;
+  /**
+   * Visual height (px). Default 360 matches the Storybook visual snapshot box.
+   */
+  height?: number;
+}
+
+const isOn = (
+  toggles: Record<string, boolean | string> | undefined,
+  key: string,
+  fallback: boolean,
+): boolean => {
+  if (!toggles || !(key in toggles)) return fallback;
+  const value = toggles[key];
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value === 'true';
+  return fallback;
+};
+
+interface PreviewBoxProps {
+  testId: string;
+  height: number;
+  children: React.ReactNode;
+}
+
+const PreviewBox: React.FC<PreviewBoxProps> = ({ testId, height, children }) => (
+  <div
+    data-testid={testId}
+    style={{ width: '100%', maxWidth: 720, height, background: 'var(--surface-canvas, #ffffff)' }}
+  >
+    {children}
+  </div>
+);
+
+const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
+  chartId,
+  chartName,
+  toggles,
+  height = 360,
+}) => {
+  const testId = `design-lab-chart-preview-${chartId}`;
+
+  switch (chartId) {
+    case 'bar-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <BarChart
+            data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
+            title={chartName}
+            showValues={isOn(toggles, 'showValues', true)}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            animate={isOn(toggles, 'animate', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'line-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <LineChart
+            series={[
+              { name: 'Seri A', data: values1 },
+              { name: 'Seri B', data: values2 },
+            ]}
+            labels={categories}
+            title={chartName}
+            showDots={isOn(toggles, 'showDots', true)}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            smooth={isOn(toggles, 'curved', false)}
+            area={isOn(toggles, 'showArea', false)}
+            animate={isOn(toggles, 'animate', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'area-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <AreaChart
+            series={[
+              { name: 'Gelir', data: values1 },
+              { name: 'Gider', data: values2 },
+            ]}
+            labels={categories}
+            title={chartName}
+            stacked={isOn(toggles, 'stacked', true)}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showDots={isOn(toggles, 'showDots', false)}
+            gradient={isOn(toggles, 'gradient', true)}
+            curved={isOn(toggles, 'curved', true)}
+            animate={isOn(toggles, 'animate', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'pie-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <PieChart
+            data={categories.slice(0, 5).map((c, i) => ({ label: c, value: values1[i] }))}
+            title={chartName}
+            donut={isOn(toggles, 'donut', true)}
+            showLabels={isOn(toggles, 'showLabels', true)}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            showPercentage={isOn(toggles, 'showPercentage', true)}
+            animate={isOn(toggles, 'animate', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'scatter-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <ScatterChart
+            data={values1.map((v, i) => ({ x: v, y: values2[i], label: categories[i] }))}
+            title={chartName}
+            xLabel="Seri A"
+            yLabel="Seri B"
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'gauge-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <GaugeChart
+            value={72}
+            min={0}
+            max={100}
+            title={chartName}
+            thresholds={[
+              { value: 30, color: '#ef4444' },
+              { value: 70, color: '#f59e0b' },
+              { value: 100, color: '#22c55e' },
+            ]}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'radar-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <RadarChart
+            indicators={[
+              { name: 'Satış', max: 100 },
+              { name: 'Pazarlama', max: 100 },
+              { name: 'Teknoloji', max: 100 },
+              { name: 'Destek', max: 100 },
+              { name: 'Geliştirme', max: 100 },
+            ]}
+            series={[
+              { name: 'Ekip A', values: [85, 70, 95, 60, 80] },
+              { name: 'Ekip B', values: [65, 90, 70, 85, 55] },
+            ]}
+            title={chartName}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'treemap-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <TreemapChart
+            data={[
+              {
+                name: 'Satış',
+                value: 100,
+                children: [
+                  { name: 'Online', value: 60 },
+                  { name: 'Mağaza', value: 40 },
+                ],
+              },
+              {
+                name: 'Pazarlama',
+                value: 80,
+                children: [
+                  { name: 'Dijital', value: 50 },
+                  { name: 'Basılı', value: 30 },
+                ],
+              },
+            ]}
+            title={chartName}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'heatmap-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <HeatmapChart
+            data={[
+              [0, 0, 10],
+              [0, 1, 22],
+              [0, 2, 28],
+              [1, 0, 35],
+              [1, 1, 42],
+              [1, 2, 18],
+              [2, 0, 15],
+              [2, 1, 30],
+              [2, 2, 45],
+              [3, 0, 50],
+              [3, 1, 12],
+              [3, 2, 33],
+              [4, 0, 25],
+              [4, 1, 38],
+              [4, 2, 20],
+            ]}
+            xLabels={['Pzt', 'Sal', 'Çar', 'Per', 'Cum']}
+            yLabels={['Sabah', 'Öğle', 'Akşam']}
+            title={chartName}
+            showValues={isOn(toggles, 'showValues', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'waterfall-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <WaterfallChart
+            data={[
+              { label: 'Başlangıç', value: 1000 },
+              { label: 'Gelir', value: 300 },
+              { label: 'Hizmet', value: 200 },
+              { label: 'Gider', value: -150 },
+              { label: 'Vergi', value: -100 },
+              { label: 'Sonuç', value: 1250 },
+            ]}
+            title={chartName}
+            showValues={isOn(toggles, 'showValues', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'funnel-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <FunnelChart
+            data={[
+              { label: 'Ziyaret', value: 5000 },
+              { label: 'Kayıt', value: 3000 },
+              { label: 'Deneme', value: 1500 },
+              { label: 'Satın Alma', value: 500 },
+            ]}
+            title={chartName}
+            showConversion={isOn(toggles, 'showConversion', true)}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'sankey-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <SankeyChart
+            nodes={[
+              { name: 'Kaynak A' },
+              { name: 'Kaynak B' },
+              { name: 'Hedef X' },
+              { name: 'Hedef Y' },
+            ]}
+            links={[
+              { source: 'Kaynak A', target: 'Hedef X', value: 30 },
+              { source: 'Kaynak A', target: 'Hedef Y', value: 20 },
+              { source: 'Kaynak B', target: 'Hedef X', value: 10 },
+              { source: 'Kaynak B', target: 'Hedef Y', value: 40 },
+            ]}
+            title={chartName}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    case 'sunburst-chart':
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <SunburstChart
+            data={[
+              {
+                name: 'Türkiye',
+                children: [
+                  {
+                    name: 'İstanbul',
+                    children: [
+                      { name: 'Kadıköy', value: 50 },
+                      { name: 'Beşiktaş', value: 30 },
+                    ],
+                  },
+                  {
+                    name: 'Ankara',
+                    children: [
+                      { name: 'Çankaya', value: 40 },
+                      { name: 'Keçiören', value: 20 },
+                    ],
+                  },
+                ],
+              },
+            ]}
+            title={chartName}
+            size="lg"
+          />
+        </PreviewBox>
+      );
+
+    default:
+      return (
+        <PreviewBox testId={testId} height={height}>
+          <div className="flex h-full w-full items-center justify-center text-sm text-text-tertiary">
+            {chartName}: live preview yakında
+          </div>
+        </PreviewBox>
+      );
+  }
+};
+
+export default ChartPreviewLive;
