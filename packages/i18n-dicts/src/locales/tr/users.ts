@@ -160,8 +160,17 @@ const users = {
   'users.detail.scopes.searchPlaceholder': 'İsim veya kod ile ara...',
   'users.detail.scopes.searchEmpty': '"{query}" ile eşleşen sonuç bulunamadı.',
   'users.detail.save': 'Kaydet',
+  'users.detail.save.scope': 'Rol ve veri erişimini kaydet',
   'users.detail.saving': 'Kaydediliyor...',
   'users.detail.cancel': 'Vazgeç',
+  // iter-36 P0 Save Safety
+  'users.detail.dirtyHint': 'Kaydedilmemiş değişiklikler var.',
+  'users.detail.dirtyCloseConfirm':
+    'Kaydedilmemiş değişiklikleriniz var. Yine de kapatmak istiyor musunuz?',
+  'users.detail.loadError.title': 'Mevcut atamalar yüklenemedi',
+  'users.detail.loadError.body':
+    'Bu kullanıcının rol ve veri erişimi sunucudan alınamadı. Kaydetmeden önce yeniden deneyin — aksi halde mevcut yetkiler kaybolabilir.',
+  'users.detail.loadError.retry': 'Yeniden Dene',
   'users.detail.noRolesDefined': 'Henüz rol tanımlanmamış.',
   'users.detail.noRolesWarning': 'En az bir rol seçilmelidir.',
   'users.detail.loadingRoles': 'Yükleniyor...',

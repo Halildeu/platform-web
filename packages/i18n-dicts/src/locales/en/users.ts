@@ -162,8 +162,16 @@ const users = {
   'users.detail.scopes.searchPlaceholder': 'Search by name or code...',
   'users.detail.scopes.searchEmpty': 'No results matching "{query}".',
   'users.detail.save': 'Save',
+  'users.detail.save.scope': 'Save roles and data access',
   'users.detail.saving': 'Saving...',
   'users.detail.cancel': 'Cancel',
+  // iter-36 P0 Save Safety
+  'users.detail.dirtyHint': 'Unsaved changes.',
+  'users.detail.dirtyCloseConfirm': 'You have unsaved changes. Close anyway?',
+  'users.detail.loadError.title': "Couldn't load current assignments",
+  'users.detail.loadError.body':
+    "This user's roles and data access could not be fetched. Retry before saving — otherwise existing access may be wiped.",
+  'users.detail.loadError.retry': 'Retry',
   'users.detail.noRolesDefined': 'No roles defined yet.',
   'users.detail.noRolesWarning': 'At least one role must be selected.',
   'users.detail.loadingRoles': 'Loading...',
