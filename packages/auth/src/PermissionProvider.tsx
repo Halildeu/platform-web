@@ -214,10 +214,34 @@ export function PermissionProvider({
   // window.dispatchEvent('app:auth:unauthorized') yapar; provider de bu
   // event'i dinleyerek cache'i 60s poll'a kadar beklemeden invalidate eder.
   // Guard: permitAll/enabled=false → bootstrap noise'unu ignore et.
+  //
+  // iter-34: only AUTH-CRITICAL path 401s should collapse the global
+  // session. Live capture against testai.acik.com showed variant-service
+  // returning HTTP 401 for /api/v1/variants?gridId=... while the JWT was
+  // valid (Spring's BearerTokenAuthenticationFilter logged
+  // "Authenticated=true" — the 401 came from a downstream authorization
+  // check that should have been a 403). The agressive listener mistook
+  // that for a session-level expiry, set sessionExpired=true, and the
+  // user-detail drawer's canEdit flag flipped to false → every role
+  // checkbox rendered as cursor:not-allowed (the screenshot bug). Filter
+  // by URL: only /authz/me and /authz/version actually mean "the auth
+  // identity itself is gone."
   useEffect(() => {
     if (permitAll || !enabled || typeof window === 'undefined') return undefined;
 
-    const handler = () => {
+    const isAuthCriticalUrl = (url: unknown): boolean => {
+      if (typeof url !== 'string') return true; // unknown path → preserve old behavior
+      return url.includes('/v1/authz/me') || url.includes('/v1/authz/version');
+    };
+
+    const handler = (evt: Event) => {
+      const detail = (evt as CustomEvent<{ url?: unknown }>).detail;
+      if (!isAuthCriticalUrl(detail?.url)) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[PermissionProvider] non-auth-critical 401 ignored:', detail?.url);
+        }
+        return;
+      }
       console.warn('[PermissionProvider] app:auth:unauthorized event — invalidating cache');
       setAuthz(null);
       setSessionExpired(true);
