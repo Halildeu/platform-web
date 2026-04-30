@@ -60,6 +60,22 @@ interface ScorecardEntry {
   name: string;
   path: string;
   dir: string;
+  /** Faz 21.6 PR-A: source package identifier ('design-system' | 'x-charts'). */
+  packageId?: string;
+  /** Faz 21.6 PR-A: full package name (e.g. '@mfe/x-charts'). */
+  packageName?: string;
+  /**
+   * Faz 21.6 PR-B: canonical chart ID. For legacy entries this points to the
+   * canonical x-charts target; for canonical entries it is the entry's own id.
+   */
+  canonicalId?: string;
+  /**
+   * Faz 21.6 PR-B: 'canonical' | 'legacy'. Legacy entries are DS chart wrappers
+   * superseded by an x-charts canonical wrapper.
+   */
+  status?: 'canonical' | 'legacy';
+  /** Faz 21.6 PR-B: x-charts canonical id for legacy entries; null for canonical. */
+  replacedBy?: string | null;
   lineCount: number;
   scores: {
     testDepth: number;
@@ -311,6 +327,20 @@ export default function QualityDashboardPage() {
   const evidenceAvailable = evidenceState.status === 'loaded';
   const scorecardData = useScorecardData();
 
+  // Faz 21.6 PR-B2: legacy entries (DS chart wrappers superseded by x-charts) are
+  // hidden by default. Toggle reveals them and shifts CI Scorecard aggregates +
+  // shallow/a11y-zero lists to include them. Catalog-driven Bottom 20 + Footer
+  // remain unchanged (Codex iter-25 scope).
+  const [showLegacy, setShowLegacy] = useState(false);
+  const legacyCount = useMemo(
+    () => scorecardData.filter((c) => c.status === 'legacy').length,
+    [scorecardData],
+  );
+  const visibleScorecardData = useMemo(
+    () => (showLegacy ? scorecardData : scorecardData.filter((c) => c.status !== 'legacy')),
+    [scorecardData, showLegacy],
+  );
+
   /* ---- Compute all scores ---- */
   const scoredComponents = useMemo(() => {
     return index.items
@@ -358,9 +388,9 @@ export default function QualityDashboardPage() {
       .sort((a, b) => b.avgScore - a.avgScore);
   }, [scoredComponents]);
 
-  /* ---- Scorecard aggregates ---- */
+  /* ---- Scorecard aggregates (Faz 21.6 PR-B2: visibleScorecardData) ---- */
   const scorecardAgg = useMemo(() => {
-    if (scorecardData.length === 0) return null;
+    if (visibleScorecardData.length === 0) return null;
     const metricKeys = [
       'testDepth',
       'api',
@@ -373,17 +403,17 @@ export default function QualityDashboardPage() {
     ] as const;
     const avgs: Record<string, number> = {};
     for (const key of metricKeys) {
-      const sum = scorecardData.reduce((s, c) => s + (c.scores[key] ?? 0), 0);
-      avgs[key] = Math.round(sum / scorecardData.length);
+      const sum = visibleScorecardData.reduce((s, c) => s + (c.scores[key] ?? 0), 0);
+      avgs[key] = Math.round(sum / visibleScorecardData.length);
     }
     const grades: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, F: 0 };
-    for (const c of scorecardData) grades[c.grade] = (grades[c.grade] ?? 0) + 1;
-    const shallowTests = scorecardData.filter((c) => c.scores.testDepth < 30).length;
-    const noStory = scorecardData.filter((c) => c.scores.storyCompleteness === 0).length;
-    const noA11y = scorecardData.filter((c) => c.scores.a11y === 0).length;
-    const noAccessControl = scorecardData.filter((c) => c.scores.accessControl === 0).length;
+    for (const c of visibleScorecardData) grades[c.grade] = (grades[c.grade] ?? 0) + 1;
+    const shallowTests = visibleScorecardData.filter((c) => c.scores.testDepth < 30).length;
+    const noStory = visibleScorecardData.filter((c) => c.scores.storyCompleteness === 0).length;
+    const noA11y = visibleScorecardData.filter((c) => c.scores.a11y === 0).length;
+    const noAccessControl = visibleScorecardData.filter((c) => c.scores.accessControl === 0).length;
     const avgTotal = Math.round(
-      scorecardData.reduce((s, c) => s + c.totalScore, 0) / scorecardData.length,
+      visibleScorecardData.reduce((s, c) => s + c.totalScore, 0) / visibleScorecardData.length,
     );
     return {
       avgs,
@@ -393,9 +423,9 @@ export default function QualityDashboardPage() {
       noA11y,
       noAccessControl,
       avgTotal,
-      total: scorecardData.length,
+      total: visibleScorecardData.length,
     };
-  }, [scorecardData]);
+  }, [visibleScorecardData]);
 
   /* ---- Bottom 20 ---- */
   const bottom20 = useMemo(() => {
@@ -661,19 +691,38 @@ export default function QualityDashboardPage() {
 
       {/* ─── CI Scorecard Metrics (8 boyut) ─── */}
       {scorecardAgg && (
-        <div className="rounded-2xl border border-border-subtle bg-surface-default p-5">
+        <div
+          className="rounded-2xl border border-border-subtle bg-surface-default p-5"
+          data-testid="ci-scorecard-section"
+        >
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Microscope className="h-4 w-4 text-text-secondary" />
               <Text as="div" className="text-sm font-semibold text-text-primary">
                 CI Scorecard — {scorecardAgg.total} Bilesen
+                {legacyCount > 0 && !showLegacy && (
+                  <span className="ml-1 text-text-secondary">({legacyCount} legacy gizli)</span>
+                )}
               </Text>
               {/* K2-3: scorecard fetch loaded ise 'ci'; aksi halde 'no_data'. Kor 'ci' iddiasi yok. */}
               <DataProvenanceBadge level={scorecardAgg ? 'ci' : 'no_data'} />
             </div>
-            <Text as="div" className="text-2xl font-bold tabular-nums text-text-primary">
-              {scorecardAgg.avgTotal}/100
-            </Text>
+            <div className="flex items-center gap-3">
+              {/* Faz 21.6 PR-B2: legacy filter toggle */}
+              {legacyCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowLegacy((v) => !v)}
+                  className="rounded-md border border-border-subtle bg-surface-canvas/50 px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-surface-canvas hover:text-text-primary"
+                  data-testid="toggle-legacy"
+                >
+                  {showLegacy ? `Hide legacy (${legacyCount})` : `Show legacy (${legacyCount})`}
+                </button>
+              )}
+              <Text as="div" className="text-2xl font-bold tabular-nums text-text-primary">
+                {scorecardAgg.avgTotal}/100
+              </Text>
+            </div>
           </div>
 
           {/* Grade Distribution */}
@@ -754,10 +803,60 @@ export default function QualityDashboardPage() {
             </div>
           </div>
 
+          {/* Faz 21.6 PR-B2: Bottom 10 lowest scorecard entries (scorecard-driven, legacy badge) */}
+          {(() => {
+            const bottom10Scorecard = [...visibleScorecardData]
+              .sort((a, b) => a.totalScore - b.totalScore)
+              .slice(0, 10);
+            return (
+              <div
+                className="mt-4 rounded-lg border border-border-subtle bg-surface-canvas/30 p-3"
+                data-testid="bottom-10-scorecard"
+              >
+                <Text variant="secondary" className="mb-2 text-[10px] font-semibold uppercase">
+                  Bottom 10 — Lowest Scorecard Entries
+                </Text>
+                <div className="space-y-1">
+                  {bottom10Scorecard.map((sc) => (
+                    <div
+                      key={`${sc.packageId ?? '?'}/${sc.path}`}
+                      className="flex items-center justify-between rounded-md bg-surface-default/60 px-2 py-1 text-[10px]"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="truncate font-medium text-text-primary">{sc.name}</span>
+                        {sc.packageId && (
+                          <span className="rounded-sm bg-surface-muted px-1 py-0.5 text-[9px] text-text-secondary">
+                            {sc.packageId}
+                          </span>
+                        )}
+                        {sc.status === 'legacy' && (
+                          <span
+                            className="rounded-full bg-state-danger-bg px-1.5 py-0.5 text-[9px] font-bold text-state-danger-text"
+                            data-testid="legacy-badge"
+                          >
+                            LEGACY → {sc.replacedBy?.replace('@mfe/', '') ?? 'x-charts'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-text-secondary">{sc.dir}</span>
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 font-bold ${GRADE_COLORS[sc.grade]}`}
+                        >
+                          {sc.grade} ({sc.totalScore})
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Expandable: Shallow Tests + A11y Zero Lists */}
           {(() => {
-            const shallowList = scorecardData.filter((c) => c.scores.testDepth < 30);
-            const a11yZeroList = scorecardData.filter((c) => c.scores.a11y === 0);
+            const shallowList = visibleScorecardData.filter((c) => c.scores.testDepth < 30);
+            const a11yZeroList = visibleScorecardData.filter((c) => c.scores.a11y === 0);
             return (
               <div className="mt-4 space-y-2">
                 {shallowList.length > 0 && (

@@ -213,3 +213,259 @@ describe('QualityDashboardPage', () => {
     expect(screen.getByText(/Bottom 20/)).toBeInTheDocument();
   });
 });
+
+/* ---------------------------------------------------------------- */
+/*  Faz 21.6 PR-B2 — CI Scorecard canonical filter + legacy badge    */
+/* ---------------------------------------------------------------- */
+
+import { fireEvent } from '@testing-library/react';
+import { waitFor } from '@testing-library/react';
+
+const SCORECARD_FIXTURE = [
+  // 5 canonical entries
+  {
+    name: 'Button',
+    path: 'components/Button.tsx',
+    dir: 'components',
+    packageId: 'design-system',
+    packageName: '@mfe/design-system',
+    canonicalId: '@mfe/design-system/Button',
+    status: 'canonical',
+    replacedBy: null,
+    lineCount: 200,
+    scores: {
+      testDepth: 80,
+      api: 90,
+      a11y: 80,
+      testCoverage: 90,
+      accessControl: 100,
+      storyCompleteness: 90,
+      i18n: 100,
+      documentation: 90,
+    },
+    totalScore: 88,
+    grade: 'A',
+    improvements: [],
+  },
+  {
+    name: 'BarChart',
+    path: 'BarChart.tsx',
+    dir: '.',
+    packageId: 'x-charts',
+    packageName: '@mfe/x-charts',
+    canonicalId: '@mfe/x-charts/BarChart',
+    status: 'canonical',
+    replacedBy: null,
+    lineCount: 300,
+    scores: {
+      testDepth: 60,
+      api: 80,
+      a11y: 60,
+      testCoverage: 80,
+      accessControl: 100,
+      storyCompleteness: 70,
+      i18n: 100,
+      documentation: 80,
+    },
+    totalScore: 75,
+    grade: 'A',
+    improvements: [],
+  },
+  {
+    name: 'OrgChart',
+    path: 'enterprise/OrgChart.tsx',
+    dir: 'enterprise',
+    packageId: 'design-system',
+    packageName: '@mfe/design-system',
+    canonicalId: '@mfe/design-system/OrgChart',
+    status: 'canonical',
+    replacedBy: null,
+    lineCount: 400,
+    scores: {
+      testDepth: 50,
+      api: 70,
+      a11y: 0,
+      testCoverage: 60,
+      accessControl: 80,
+      storyCompleteness: 70,
+      i18n: 100,
+      documentation: 70,
+    },
+    totalScore: 55,
+    grade: 'B',
+    improvements: [],
+  },
+  {
+    name: 'Modal',
+    path: 'components/Modal.tsx',
+    dir: 'components',
+    packageId: 'design-system',
+    packageName: '@mfe/design-system',
+    canonicalId: '@mfe/design-system/Modal',
+    status: 'canonical',
+    replacedBy: null,
+    lineCount: 250,
+    scores: {
+      testDepth: 70,
+      api: 80,
+      a11y: 80,
+      testCoverage: 80,
+      accessControl: 100,
+      storyCompleteness: 80,
+      i18n: 100,
+      documentation: 80,
+    },
+    totalScore: 80,
+    grade: 'A',
+    improvements: [],
+  },
+  {
+    name: 'Tooltip',
+    path: 'components/Tooltip.tsx',
+    dir: 'components',
+    packageId: 'design-system',
+    packageName: '@mfe/design-system',
+    canonicalId: '@mfe/design-system/Tooltip',
+    status: 'canonical',
+    replacedBy: null,
+    lineCount: 150,
+    scores: {
+      testDepth: 50,
+      api: 70,
+      a11y: 50,
+      testCoverage: 70,
+      accessControl: 100,
+      storyCompleteness: 60,
+      i18n: 100,
+      documentation: 60,
+    },
+    totalScore: 65,
+    grade: 'B',
+    improvements: [],
+  },
+  // 2 legacy entries (DS BarChart + DS GaugeChart, both replaced by x-charts)
+  {
+    name: 'BarChart',
+    path: 'components/charts/BarChart.tsx',
+    dir: 'components',
+    packageId: 'design-system',
+    packageName: '@mfe/design-system',
+    canonicalId: '@mfe/x-charts/BarChart',
+    status: 'legacy',
+    replacedBy: '@mfe/x-charts/BarChart',
+    lineCount: 200,
+    scores: {
+      testDepth: 20,
+      api: 60,
+      a11y: 0,
+      testCoverage: 40,
+      accessControl: 80,
+      storyCompleteness: 50,
+      i18n: 100,
+      documentation: 50,
+    },
+    totalScore: 40,
+    grade: 'C',
+    improvements: [],
+  },
+  {
+    name: 'GaugeChart',
+    path: 'enterprise/GaugeChart.tsx',
+    dir: 'enterprise',
+    packageId: 'design-system',
+    packageName: '@mfe/design-system',
+    canonicalId: '@mfe/x-charts/GaugeChart',
+    status: 'legacy',
+    replacedBy: '@mfe/x-charts/GaugeChart',
+    lineCount: 350,
+    scores: {
+      testDepth: 30,
+      api: 70,
+      a11y: 0,
+      testCoverage: 60,
+      accessControl: 80,
+      storyCompleteness: 70,
+      i18n: 100,
+      documentation: 70,
+    },
+    totalScore: 50,
+    grade: 'B',
+    improvements: [],
+  },
+];
+
+describe('QualityDashboardPage — CI Scorecard legacy filter (Faz 21.6 PR-B2)', () => {
+  beforeEach(() => {
+    // Mock fetch /scorecard.json with 5 canonical + 2 legacy
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => SCORECARD_FIXTURE,
+    }) as unknown as typeof fetch;
+  });
+
+  it('default render: legacy entries hidden, total === 5 canonical', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('ci-scorecard-section')).toBeInTheDocument();
+    });
+    // Heading shows "CI Scorecard — 5 Bilesen"
+    await waitFor(() => {
+      expect(screen.getByText(/CI Scorecard — 5 Bilesen/)).toBeInTheDocument();
+    });
+    // "(2 legacy gizli)" hint
+    expect(screen.getByText(/2 legacy gizli/)).toBeInTheDocument();
+  });
+
+  it('toggle button shows count of legacy entries', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('toggle-legacy')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Show legacy \(2\)/)).toBeInTheDocument();
+  });
+
+  it('clicking toggle shows legacy entries (total goes from 5 to 7)', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('toggle-legacy')).toBeInTheDocument();
+    });
+    const toggle = screen.getByTestId('toggle-legacy');
+    fireEvent.click(toggle);
+    // After click: total === 7
+    await waitFor(() => {
+      expect(screen.getByText(/CI Scorecard — 7 Bilesen/)).toBeInTheDocument();
+    });
+    // Hide button text now
+    expect(screen.getByText(/Hide legacy \(2\)/)).toBeInTheDocument();
+  });
+
+  it('Bottom 10 scorecard list renders with legacy badge when toggled on', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('bottom-10-scorecard')).toBeInTheDocument();
+    });
+    // Default: legacy badges hidden (legacy entries filtered out)
+    expect(screen.queryAllByTestId('legacy-badge')).toHaveLength(0);
+    // Toggle on
+    fireEvent.click(screen.getByTestId('toggle-legacy'));
+    // Now legacy badges visible (2 legacy entries)
+    await waitFor(() => {
+      expect(screen.queryAllByTestId('legacy-badge').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('legacy badge shows replacedBy target (x-charts/BarChart)', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('toggle-legacy')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('toggle-legacy'));
+    await waitFor(() => {
+      const badges = screen.queryAllByTestId('legacy-badge');
+      expect(badges.length).toBe(2);
+      const text = badges.map((b) => b.textContent).join(' ');
+      expect(text).toContain('x-charts/BarChart');
+      expect(text).toContain('x-charts/GaugeChart');
+    });
+  });
+});
