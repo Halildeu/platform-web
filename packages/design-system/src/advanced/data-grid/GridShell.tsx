@@ -8,7 +8,14 @@
  * - License guard via setup.ts side-effect import
  * - onGridReady event forwarding
  */
-import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+} from 'react';
 // Codex 019dde93 iter-48 — pure helper for entity-row drawer-open
 // guard (action columns, group/footer rows, interactive DOM
 // targets). Tested independently in
@@ -275,8 +282,79 @@ function GridShellInner<RowData = unknown>(
     [onFilterChanged, rowModelType],
   );
 
+  /* ------------------------------------------------------------------ */
+  /*  Codex 019dde93 iter-48c — DS native `dblclick` fallback           */
+  /*                                                                     */
+  /*  iter-48 + iter-48b proved at runtime that ag-grid v34 does NOT    */
+  /*  fire `onRowDoubleClicked` / `onCellDoubleClicked` for genuine     */
+  /*  user double-clicks even with `cellSelection` removed (root cause */
+  /*  unknown — possibly AgGridReact event-binding regression on this  */
+  /*  version, or a third-party overlay capturing dblclick before ag-  */
+  /*  grid's eventService sees it). Live verify on testai.acik.com:    */
+  /*    - DOM `dblclick` reaches `.ag-cell` (capture phase observed)   */
+  /*    - DS handlers (composeHandlers + fireOpenEntity) never invoked */
+  /*                                                                     */
+  /*  This DS fallback bypasses ag-grid's event translation entirely:  */
+  /*    1. Capture native `dblclick` on the grid root                  */
+  /*    2. Walk up to `.ag-row` / `.ag-cell` to identify the entity    */
+  /*    3. Apply the same `isDrawerOpenSafeTarget` guard               */
+  /*    4. Resolve row data via `gridApi.getDisplayedRowAtIndex()`     */
+  /*    5. Funnel through the same `fireOpenEntity` dedupe path        */
+  /*                                                                     */
+  /*  Sits ALONGSIDE the iter-48 ag-grid handler bindings — if those   */
+  /*  ever start firing again (ag-grid bug fix upstream), the dedupe   */
+  /*  swallows the redundant call.                                     */
+  /* ------------------------------------------------------------------ */
+  const rootContainerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const container = rootContainerRef.current;
+    if (!container || !onRowDoubleClick) return;
+
+    const handler = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      const rowEl = target.closest('.ag-row') as HTMLElement | null;
+      if (!rowEl) return;
+      if (rowEl.classList.contains('ag-header-row')) return;
+      if (rowEl.classList.contains('ag-row-group')) return;
+      if (rowEl.classList.contains('ag-row-pinned')) return;
+
+      const cellEl = target.closest('.ag-cell') as HTMLElement | null;
+      const colId = cellEl?.getAttribute('col-id') ?? null;
+
+      // Reuse the iter-48 guard at DOM level — same allow-list of
+      // canonical action colIds, plus the interactive-target closest
+      // walk via the helper's DOM target check. We coerce a minimal
+      // event shape that satisfies `isDrawerOpenSafeTarget`.
+      const guardEvent = {
+        event: { target },
+        column: colId ? { getColId: () => colId } : null,
+        // `colDef` not available at DOM level; the helper falls back
+        // to colId set + interactive-target walk, which covers the
+        // common cases (action columns + interactive elements).
+        colDef: null,
+        node: null,
+      };
+      if (!isDrawerOpenSafeTarget(guardEvent)) return;
+
+      const rowIndex = Number(rowEl.getAttribute('row-index'));
+      const api = gridApiRef.current;
+      if (!api || Number.isNaN(rowIndex)) return;
+
+      const rowNode = api.getDisplayedRowAtIndex(rowIndex);
+      const data = rowNode?.data;
+      const key = rowNode?.id ?? data;
+      fireOpenEntity(data as RowData | undefined, key);
+    };
+
+    container.addEventListener('dblclick', handler, true);
+    return () => container.removeEventListener('dblclick', handler, true);
+  }, [onRowDoubleClick, fireOpenEntity]);
+
   return (
     <div
+      ref={rootContainerRef}
       data-access-state={accessState.state}
       className={[className ?? '', accessStyles(accessState.state)].join(' ').trim() || undefined}
       data-component="grid-shell"
