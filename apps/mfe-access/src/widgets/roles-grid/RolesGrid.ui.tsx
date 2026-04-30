@@ -2,7 +2,10 @@ import React from 'react';
 import type { ColDef, GridReadyEvent, GridApi } from 'ag-grid-community';
 import { buildColDefs, type ColumnMeta } from '@mfe/design-system/advanced/data-grid';
 import { Badge, Button } from '@mfe/design-system';
-import type { AccessRole, AccessLevel } from '../../features/access-management/model/access.types';
+import type {
+  AccessRole,
+  AccessLevel as _AccessLevel,
+} from '../../features/access-management/model/access.types';
 
 const EntityGridTemplate = React.lazy(() =>
   import('@mfe/design-system').then((m) => ({ default: m.EntityGridTemplate })),
@@ -39,71 +42,97 @@ const showToast = (type: 'success' | 'error', text: string) => {
 
 const RolesGrid: React.FC<RolesGridProps> = ({
   roles,
-  modules,
+  modules: _modules,
   onSelectRole,
   onCreateRole,
   onDeleteRole,
   onCloneRole,
   t,
-  formatNumber,
+  formatNumber: _formatNumber,
   formatDate,
 }) => {
   const gridApiRef = React.useRef<GridApi<AccessRole> | null>(null);
 
-  const columnMeta = React.useMemo<ColumnMeta[]>(() => [
-    { field: 'name', headerNameKey: 'access.grid.columns.name', columnType: 'bold-text', minWidth: 200 },
-    { field: 'memberCount', headerNameKey: 'access.grid.columns.memberCount', columnType: 'number', width: 130 },
-  ], []);
+  const columnMeta = React.useMemo<ColumnMeta[]>(
+    () => [
+      {
+        field: 'name',
+        headerNameKey: 'access.grid.columns.name',
+        columnType: 'bold-text',
+        minWidth: 200,
+      },
+      {
+        field: 'memberCount',
+        headerNameKey: 'access.grid.columns.memberCount',
+        columnType: 'number',
+        width: 130,
+      },
+    ],
+    [],
+  );
 
-  const customColumnDefs = React.useMemo<ColDef<AccessRole>[]>(() => [
-    {
-      headerName: t('access.grid.columns.moduleSummary'),
-      field: 'policies',
-      minWidth: 280,
-      filter: false,
-      sortable: false,
-      cellRenderer: ({ data }: { data: AccessRole }) => {
-        if (!data?.policies?.length) {
-          return <span className="text-sm text-text-subtle">{t('access.filter.level.none')}</span>;
-        }
-        return (
-          <div className="flex flex-wrap gap-1.5 py-1">
-            {data.policies.map((policy) => (
-              <Badge
-                key={policy.moduleKey}
-                variant={LEVEL_BADGE_VARIANT[policy.level] ?? 'muted'}
-                size="sm"
-              >
-                {policy.moduleLabel ?? policy.moduleKey}: {t(`access.filter.level.${policy.level.toLowerCase()}`)}
-              </Badge>
-            ))}
-          </div>
-        );
+  const customColumnDefs = React.useMemo<ColDef<AccessRole>[]>(
+    () => [
+      {
+        headerName: t('access.grid.columns.moduleSummary'),
+        field: 'policies',
+        minWidth: 280,
+        filter: false,
+        sortable: false,
+        cellRenderer: ({ data }: { data: AccessRole }) => {
+          if (!data?.policies?.length) {
+            return (
+              <span className="text-sm text-text-subtle">{t('access.filter.level.none')}</span>
+            );
+          }
+          return (
+            <div className="flex flex-wrap gap-1.5 py-1">
+              {data.policies.map((policy) => (
+                <Badge
+                  key={policy.moduleKey}
+                  variant={LEVEL_BADGE_VARIANT[policy.level] ?? 'muted'}
+                  size="sm"
+                >
+                  {policy.moduleLabel ?? policy.moduleKey}:{' '}
+                  {t(`access.filter.level.${policy.level.toLowerCase()}`)}
+                </Badge>
+              ))}
+            </div>
+          );
+        },
       },
-    },
-    {
-      headerName: t('access.grid.columns.lastModified'),
-      field: 'lastModifiedAt',
-      width: 200,
-      valueGetter: ({ data }) => {
-        if (!data) return '';
-        const ts = formatDate(new Date(data.lastModifiedAt), { dateStyle: 'medium', timeStyle: 'short' });
-        return `${data.lastModifiedBy} · ${ts}`;
+      {
+        headerName: t('access.grid.columns.lastModified'),
+        field: 'lastModifiedAt',
+        width: 200,
+        valueGetter: ({ data }) => {
+          if (!data) return '';
+          const ts = formatDate(new Date(data.lastModifiedAt), {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          });
+          return `${data.lastModifiedBy} · ${ts}`;
+        },
       },
-    },
-    {
-      headerName: '',
-      field: 'id',
-      width: 100,
-      sortable: false,
-      filter: false,
-      pinned: 'right',
-      cellRenderer: ({ data }: { data: AccessRole }) => {
-        if (!data) return null;
-        return <RowActions role={data} onClone={onCloneRole} onDelete={onDeleteRole} t={t} />;
+      {
+        // Codex 019dde93 iter-48 — action column opt-out from
+        // drawer-open dblclick (DS guard recognizes this colId).
+        colId: 'roleActions',
+        headerName: '',
+        field: 'id',
+        width: 100,
+        sortable: false,
+        filter: false,
+        pinned: 'right',
+        suppressDrawerOpenOnDoubleClick: true,
+        cellRenderer: ({ data }: { data: AccessRole }) => {
+          if (!data) return null;
+          return <RowActions role={data} onClone={onCloneRole} onDelete={onDeleteRole} t={t} />;
+        },
       },
-    },
-  ], [formatDate, onCloneRole, onDeleteRole, t]);
+    ],
+    [formatDate, onCloneRole, onDeleteRole, t],
+  );
 
   const localeCode = 'tr-TR';
   const columnDefs = React.useMemo<ColDef<AccessRole>[]>(() => {
@@ -111,16 +140,22 @@ const RolesGrid: React.FC<RolesGridProps> = ({
     return [...metaDefs, ...customColumnDefs];
   }, [columnMeta, customColumnDefs, t]);
 
-  const gridOptions = React.useMemo(() => ({
-    cellSelection: true,
-    multiSortKey: 'ctrl' as const,
-  }), []);
+  const gridOptions = React.useMemo(
+    () => ({
+      cellSelection: true,
+      multiSortKey: 'ctrl' as const,
+    }),
+    [],
+  );
 
-  const toolbarExtra = React.useMemo(() => (
-    <Button onClick={onCreateRole} size="sm">
-      {t('access.actions.create')}
-    </Button>
-  ), [onCreateRole, t]);
+  const toolbarExtra = React.useMemo(
+    () => (
+      <Button onClick={onCreateRole} size="sm">
+        {t('access.actions.create')}
+      </Button>
+    ),
+    [onCreateRole, t],
+  );
 
   return (
     <React.Suspense fallback={<div style={{ height: 400 }} />}>
@@ -169,7 +204,10 @@ const RowActions: React.FC<{
       <button
         type="button"
         className="rounded-md px-2 py-1 text-text-subtle hover:bg-surface-muted hover:text-text-primary"
-        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }}
       >
         ···
       </button>
