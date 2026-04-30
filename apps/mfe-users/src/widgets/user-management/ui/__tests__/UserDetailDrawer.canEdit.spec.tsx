@@ -28,6 +28,7 @@ const mockPermissions = vi.hoisted(() => ({
   hasModule: vi.fn(() => false),
   sessionExpired: false,
   initialized: true,
+  authz: { userId: '1', superAdmin: false } as Record<string, unknown> | null,
 }));
 
 vi.mock('@mfe/auth', () => ({
@@ -130,6 +131,8 @@ beforeEach(() => {
   mockPermissions.isSuperAdmin.mockReset().mockReturnValue(false);
   mockPermissions.hasModule.mockReset().mockReturnValue(false);
   mockPermissions.sessionExpired = false;
+  mockPermissions.initialized = true;
+  mockPermissions.authz = { userId: '1', superAdmin: false };
 });
 
 describe('UserDetailDrawer.canEdit — role checkbox disabled matrix', () => {
@@ -165,5 +168,33 @@ describe('UserDetailDrawer.canEdit — role checkbox disabled matrix', () => {
     renderDrawer();
     const cb = await findFirstRoleCheckbox();
     expect(cb.disabled).toBe(true);
+  });
+
+  // iter-35c — loading-state fallback. Live capture (Playwright on
+  // testai.acik.com) showed the drawer mounting before authz settled.
+  // Pre-fix the gate flipped to disabled and the user was stuck at
+  // cursor:not-allowed even though /authz/me was about to return
+  // superAdmin:true. While authz is still loading the safer default is
+  // "interactive" — the backend is the final authority.
+  it('initialized=false (authz loading) → role checkbox NOT disabled (iter-35c)', async () => {
+    mockPermissions.isSuperAdmin.mockReturnValue(false);
+    mockPermissions.hasModule.mockReturnValue(false);
+    mockPermissions.sessionExpired = false;
+    mockPermissions.initialized = false;
+    mockPermissions.authz = null;
+    renderDrawer();
+    const cb = await findFirstRoleCheckbox();
+    expect(cb.disabled).toBe(false);
+  });
+
+  it('initialized=true + authz=null (transient null) → role checkbox NOT disabled (iter-35c)', async () => {
+    mockPermissions.isSuperAdmin.mockReturnValue(false);
+    mockPermissions.hasModule.mockReturnValue(false);
+    mockPermissions.sessionExpired = false;
+    mockPermissions.initialized = true;
+    mockPermissions.authz = null;
+    renderDrawer();
+    const cb = await findFirstRoleCheckbox();
+    expect(cb.disabled).toBe(false);
   });
 });

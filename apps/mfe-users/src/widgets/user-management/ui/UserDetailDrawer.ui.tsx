@@ -71,12 +71,23 @@ const resolveFallbackRoleOptions = (currentRole: string | undefined): RoleOption
 const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user }) => {
   const { t, locale } = useUsersI18n();
   const queryClient = useQueryClient();
-  const { hasModule, isSuperAdmin, sessionExpired } = usePermissions();
+  const { hasModule, isSuperAdmin, sessionExpired, initialized, authz } = usePermissions();
   const isAdmin = isSuperAdmin();
   // Codex 019dd818 iter-7 (B-prime PR-2b): sessionExpired durumunda canEdit
   // false olur — kullanıcı authn unknown'ı authz deny gibi görmesin. Shell
   // toast 'Oturum yenile' CTA gösterir; burada kontrolleri disabled tutmak yeterli.
-  const canEdit = !sessionExpired && (isAdmin || hasModule('USER_MANAGEMENT'));
+  //
+  // iter-35c — loading-state fallback. Live capture (Playwright on
+  // testai.acik.com) showed the drawer mounting before the
+  // PermissionProvider authz fetch settled. Pre-fix the gate flipped to
+  // disabled (authz=null → isSuperAdmin=false → canEdit=false) and the
+  // user was stuck staring at cursor:not-allowed checkboxes even though
+  // /authz/me was about to return superAdmin:true. Backend is always the
+  // final authority on the assignment write, so the safer default while
+  // authz is still loading is "interactive" — once authz lands, the
+  // existing gate kicks in.
+  const authzReady = initialized && authz != null;
+  const canEdit = !sessionExpired && (!authzReady || isAdmin || hasModule('USER_MANAGEMENT'));
 
   const storedScope = useMemo(() => {
     try {
