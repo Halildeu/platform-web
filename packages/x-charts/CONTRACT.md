@@ -106,11 +106,18 @@ ScatterChart
 
 RadarChart
   props: {
-    indicators: { name: string; max: number }[];   // required, axes
-    series: { name: string; values: number[] }[];  // required
+    indicators: RadarIndicator[];                  // required, [{ name, max }]
+    series: RadarSeriesItem[];                     // required, [{ name, values }]
     size?: 'sm' | 'md' | 'lg';
-    showLegend?: boolean;
+    shape?: 'polygon' | 'circle';                  // default 'polygon'
+    showArea?: boolean;                            // fill area under series
+    showLabels?: boolean;                          // axis name labels, default true
+    showLegend?: boolean;                          // default false
+    splitNumber?: number;                          // concentric rings, default 5
     title?: string;
+    animate?: boolean;
+    valueFormatter?: (v: number) => string;
+    onDataPointClick?: (e: unknown) => void;
   }
 
 TreemapChart
@@ -129,20 +136,38 @@ SunburstChart
 
 HeatmapChart
   props: {
-    data: [number, number, number][];              // [row, col, value] tuples
-    xLabels: string[];
-    yLabels: string[];
+    data: HeatmapTupleData[] | HeatmapObjectData[]; // [x, y, value] or { x, y, value }
+    xLabels?: string[];                              // optional category labels
+    yLabels?: string[];                              // optional category labels
     size?: 'sm' | 'md' | 'lg';
-    showValues?: boolean;
     title?: string;
+    min?: number;                                    // color scale min (auto-detected)
+    max?: number;                                    // color scale max (auto-detected)
+    colors?: [string, string];                       // gradient endpoints, default ['#f5f5f5', '#3b82f6']
+    showValues?: boolean;                            // value text per cell
+    valueFormatter?: (v: number) => string;
+    cellSize?: number | 'auto';                      // default 'auto'
+    showLegend?: boolean;                            // visualMap legend, default true
+    animate?: boolean;
+    onCellClick?: (params: { x: number; y: number; value: number }) => void;
   }
 
 FunnelChart
   props: {
-    data: { label: string; value: number }[];
+    data: FunnelDataPoint[];                       // [{ label, value }]
     size?: 'sm' | 'md' | 'lg';
-    showConversion?: boolean;
     title?: string;
+    sort?: 'descending' | 'ascending' | 'none';    // default 'descending'
+    gap?: number;                                  // pixel gap, default 2
+    showLabels?: boolean;                          // default true
+    labelPosition?: 'inside' | 'outside' | 'left' | 'right'; // default 'inside'
+    showConversion?: boolean;                      // %-between-stages, default false
+    orientation?: 'vertical' | 'horizontal';
+    funnelAlign?: 'left' | 'center' | 'right';     // default 'center'
+    showLegend?: boolean;
+    valueFormatter?: (v: number) => string;
+    animate?: boolean;
+    onDataPointClick?: (params: unknown) => void;
   }
 
 SankeyChart
@@ -165,10 +190,17 @@ GaugeChart
 
 WaterfallChart
   props: {
-    data: { label: string; value: number }[];      // negative values flow down
+    data: WaterfallDataPoint[];                    // [{ label, value }] negative flows down
     size?: 'sm' | 'md' | 'lg';
-    showValues?: boolean;
     title?: string;
+    colors?: { increase?: string; decrease?: string; total?: string };
+    showConnector?: boolean;                       // dashed connector lines, default true
+    showValues?: boolean;                          // value labels on bars, default true
+    valueFormatter?: (v: number) => string;
+    orientation?: 'vertical' | 'horizontal';
+    showLegend?: boolean;
+    animate?: boolean;
+    onDataPointClick?: (params: unknown) => void;
   }
 
 ChartContainer
