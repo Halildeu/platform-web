@@ -237,23 +237,6 @@ export function getTopZIndex(): number {
 }
 
 /**
- * Returns whether the given layer id is the top-most in the stack.
- * Useful for determining which overlay should handle ESC key.
- *
- * @deprecated Codex 019dde60 iter-47b1 — prefer `isTopFocusTrapLayer`
- * (for keyboard focus trap gating) or `isTopDismissableLayer` (for
- * Escape / outside-click gating). The legacy `isTopLayer` ignores
- * participation flags and would let a `toast` (non-interactive,
- * z-index above modal) capture Escape, which is wrong UX. Kept as a
- * compatibility shim until iter-47c.
- */
-export function isTopLayer(id: string): boolean {
-  if (stack.length === 0) return false;
-  const topEntry = stack.reduce((top, entry) => (entry.zIndex > top.zIndex ? entry : top));
-  return topEntry.id === id;
-}
-
-/**
  * Returns whether the given layer id is the top-most layer that
  * participates in the keyboard focus trap. Codex 019dde60 iter-47b1.
  *

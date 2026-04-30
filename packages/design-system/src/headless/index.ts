@@ -11,10 +11,7 @@
 // ---------------------------------------------------------------------------
 
 // State Attributes
-export {
-  stateAttrs,
-  stateSelector,
-} from '../internal/interaction-core';
+export { stateAttrs, stateSelector } from '../internal/interaction-core';
 export type {
   StateAttributeOptions,
   StateAttributes,
@@ -47,22 +44,11 @@ export type {
 } from '../internal/interaction-core';
 
 // Event Guard
-export {
-  evaluateGuard,
-  guardEvent,
-  guardStyles,
-  guardAria,
-} from '../internal/interaction-core';
-export type {
-  EventGuardOptions,
-  EventGuardResult,
-} from '../internal/interaction-core';
+export { evaluateGuard, guardEvent, guardStyles, guardAria } from '../internal/interaction-core';
+export type { EventGuardOptions, EventGuardResult } from '../internal/interaction-core';
 
 // Semantic Intent
-export {
-  resolveKeyboardIntent,
-  resolveClickIntent,
-} from '../internal/interaction-core';
+export { resolveKeyboardIntent, resolveClickIntent } from '../internal/interaction-core';
 export type {
   SemanticIntent,
   NavigationDirection,
@@ -91,11 +77,7 @@ export {
   resolveOverlayPosition,
   resolveOverlayArrowPositionClassName,
 } from '../internal/overlay-engine';
-export type {
-  OverlaySide,
-  OverlayAlign,
-  OverlayPosition,
-} from '../internal/overlay-engine';
+export type { OverlaySide, OverlayAlign, OverlayPosition } from '../internal/overlay-engine';
 
 // Overlay Surface
 export {
@@ -106,26 +88,26 @@ export {
 export type { OverlayCloseReason } from '../internal/overlay-engine';
 
 // Layer Stack
+// Codex 019ddf17 iter-47c — `isTopLayer` removed. Use
+// `isTopFocusTrapLayer` (focus-trap gating) or
+// `isTopDismissableLayer` (Escape / outside-click LIFO).
 export {
   registerLayer,
   unregisterLayer,
   getTopZIndex,
-  isTopLayer,
+  isTopFocusTrapLayer,
+  isTopDismissableLayer,
   getLayerStack,
   resetLayerStack,
+  getRestoreTarget,
+  setLayerRestoreTarget,
   Z_INDEX_BASE,
 } from '../internal/overlay-engine';
 export type { ZIndexLayer } from '../internal/overlay-engine';
 
 // Focus Trap
-export {
-  useFocusTrap,
-  FocusTrap,
-} from '../internal/overlay-engine';
-export type {
-  UseFocusTrapOptions,
-  FocusTrapProps,
-} from '../internal/overlay-engine';
+export { useFocusTrap, FocusTrap } from '../internal/overlay-engine';
+export type { UseFocusTrapOptions, FocusTrapProps } from '../internal/overlay-engine';
 
 // Scroll Lock
 export {
@@ -137,24 +119,15 @@ export {
 } from '../internal/overlay-engine';
 
 // Outside Click
-export {
-  useOutsideClick,
-  useEscapeKey,
-} from '../internal/overlay-engine';
+export { useOutsideClick, useEscapeKey } from '../internal/overlay-engine';
 export type { UseOutsideClickOptions } from '../internal/overlay-engine';
 
 // ARIA Live
-export {
-  announce,
-  useAnnounce,
-  AriaLiveRegion,
-} from '../internal/overlay-engine';
+export { announce, useAnnounce, AriaLiveRegion } from '../internal/overlay-engine';
 export type { AriaLivePoliteness } from '../internal/overlay-engine';
 
 // Roving Tabindex
-export {
-  useRovingTabindex,
-} from '../internal/overlay-engine';
+export { useRovingTabindex } from '../internal/overlay-engine';
 export type {
   UseRovingTabindexOptions,
   RovingTabindexReturn,
@@ -162,21 +135,11 @@ export type {
 } from '../internal/overlay-engine';
 
 // Portal (legacy + new)
-export {
-  Portal,
-  useLegacyPortal,
-  usePortal,
-} from '../internal/overlay-engine';
-export type {
-  PortalProps,
-  UsePortalOptions,
-} from '../internal/overlay-engine';
+export { Portal, useLegacyPortal, usePortal } from '../internal/overlay-engine';
+export type { PortalProps, UsePortalOptions } from '../internal/overlay-engine';
 
 // Portal Provider
-export {
-  PortalProvider,
-  usePortalConfig,
-} from '../internal/overlay-engine';
+export { PortalProvider, usePortalConfig } from '../internal/overlay-engine';
 
 // Focus Restore
 export { useFocusRestore } from '../internal/overlay-engine';
@@ -194,11 +157,7 @@ export {
 // ---------------------------------------------------------------------------
 
 // Audit
-export {
-  auditElement,
-  auditComponent,
-  getAuditRules,
-} from '../a11y';
+export { auditElement, auditComponent, getAuditRules } from '../a11y';
 
 // Keyboard Testing
 export {
@@ -209,11 +168,7 @@ export {
 } from '../a11y';
 
 // Recommendations
-export {
-  getRecommendations,
-  getComponentA11yChecklist,
-  getSupportedChecklistTypes,
-} from '../a11y';
+export { getRecommendations, getComponentA11yChecklist, getSupportedChecklistTypes } from '../a11y';
 
 // A11y Types
 export type {

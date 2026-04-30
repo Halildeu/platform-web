@@ -80,14 +80,14 @@ Use this order:
 
 ## 3. Profile Matrix
 
-| Profile | Use for | Access control | Field shell | Overlay engine | `forwardRef` |
-|---|---|---:|---:|---:|---|
-| `display` | Badge, Text, Divider, Spinner, Skeleton style surfaces | No | No | No | Optional |
-| `interactive-access` | Button-like or clickable access-aware surfaces | Yes | No | No | Required |
-| `field-shell` | Input-like controls with label/hint/error framing | Yes | Yes | No | Required |
-| `composed` | Higher-level components built from primitives | Usually | No | No | Recommended |
-| `overlay-modal` | Dialog/Modal-like overlays | No by default | No | Yes | Optional |
-| `overlay-nonmodal` | Popover/Dropdown/Tooltip-like overlays | No by default | No | Yes | Optional |
+| Profile              | Use for                                                | Access control | Field shell | Overlay engine | `forwardRef` |
+| -------------------- | ------------------------------------------------------ | -------------: | ----------: | -------------: | ------------ |
+| `display`            | Badge, Text, Divider, Spinner, Skeleton style surfaces |             No |          No |             No | Optional     |
+| `interactive-access` | Button-like or clickable access-aware surfaces         |            Yes |          No |             No | Required     |
+| `field-shell`        | Input-like controls with label/hint/error framing      |            Yes |         Yes |             No | Required     |
+| `composed`           | Higher-level components built from primitives          |        Usually |          No |             No | Recommended  |
+| `overlay-modal`      | Dialog/Modal-like overlays                             |  No by default |          No |            Yes | Optional     |
+| `overlay-nonmodal`   | Popover/Dropdown/Tooltip-like overlays                 |  No by default |          No |            Yes | Optional     |
 
 Notes:
 
@@ -137,7 +137,7 @@ import {
   stateAttrs,
   guardAria,
   type AccessControlledProps,
-} from "../../internal/interaction-core";
+} from '../../internal/interaction-core';
 ```
 
 Rules:
@@ -193,7 +193,7 @@ import {
   FieldControlShell,
   getFieldFrameClass,
   getFieldTone,
-} from "../_shared/FieldControlPrimitives";
+} from '../_shared/FieldControlPrimitives';
 ```
 
 or from components:
@@ -203,7 +203,7 @@ import {
   FieldControlShell,
   getFieldFrameClass,
   getFieldTone,
-} from "../../primitives/_shared/FieldControlPrimitives";
+} from '../../primitives/_shared/FieldControlPrimitives';
 ```
 
 Do not force this pattern onto every form control.
@@ -223,8 +223,12 @@ High-level defaults:
 
 - `overlay-modal`
   - prefer native dialog semantics when appropriate
-  - do not automatically add `useFocusTrap`
-  - consider `useScrollLock`, `useEscapeKey`, `registerLayer`, `useFocusRestore`
+  - use `useFocusTrap({ active: open, restoreFocus: true, layerId })` for
+    Tab containment + initial focus + restore in one hook
+  - consider `useScrollLock`, `useEscapeKey`, `registerLayer`
+  - **note**: `useFocusRestore` is deprecated (iter-47c). Migrate to
+    `useFocusTrap({ ..., restoreFocus: true })`. The legacy hook still
+    works but emits a one-time `console.warn` in development builds.
 
 - `overlay-nonmodal`
   - adopt only the hooks the interaction model actually needs
