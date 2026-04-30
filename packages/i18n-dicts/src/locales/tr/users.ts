@@ -159,6 +159,8 @@ const users = {
   // iter-37 — role list search
   'users.detail.roles.searchPlaceholder': 'Rol adı veya açıklamada ara...',
   'users.detail.roles.searchEmpty': '"{query}" ile eşleşen rol bulunamadı.',
+  // iter-39 — section count badge
+  'users.detail.roles.count': '{selected} atanmış / {total} toplam',
   'users.detail.scopes.companies': 'Şirketler',
   'users.detail.scopes.projects': 'Projeler',
   'users.detail.scopes.warehouses': 'Depolar',

@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
-import { DetailDrawer, Tabs, Checkbox } from '@mfe/design-system';
+// Codex 019ddd78 iter-38 P1 — primitive switch from DetailDrawer (read-only
+// detail) to FormDrawer (edit/create). Same slot signature (title/subtitle/
+// footer/size) so the migration is a one-line semantic rename — but it
+// brings the drawer in line with the design-system contract: this drawer
+// persists role + scope writes, so it belongs on the form primitive. Real
+// focus-trap uplift stays a separate DS epic per Codex review.
+import { FormDrawer, Tabs, Checkbox, Skeleton } from '@mfe/design-system';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
 import { pushToast } from '../../../shared/notifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -657,25 +663,32 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     setter: React.Dispatch<React.SetStateAction<number[]>>,
   ) => <ScopePickerSection items={items} selected={selected} setter={setter} />;
 
+  // iter-39 — tab labels carry "(N seçili)" badges so the admin sees scope
+  // selection state without opening every tab. Reads from the controlled
+  // selection state (not the master-data list) since that's the user's
+  // actual access surface.
+  const tabLabel = (baseKey: string, selectedCount: number) =>
+    selectedCount > 0 ? `${t(baseKey)} (${selectedCount})` : t(baseKey);
+
   const scopeTabs = [
     {
       key: 'companies',
-      label: t('users.detail.scopes.companies'),
+      label: tabLabel('users.detail.scopes.companies', selectedCompanyIds.length),
       content: scopeCheckboxList(companies, selectedCompanyIds, setSelectedCompanyIds),
     },
     {
       key: 'projects',
-      label: t('users.detail.scopes.projects'),
+      label: tabLabel('users.detail.scopes.projects', selectedProjectIds.length),
       content: scopeCheckboxList(projects, selectedProjectIds, setSelectedProjectIds),
     },
     {
       key: 'warehouses',
-      label: t('users.detail.scopes.warehouses'),
+      label: tabLabel('users.detail.scopes.warehouses', selectedWarehouseIds.length),
       content: scopeCheckboxList(warehouses, selectedWarehouseIds, setSelectedWarehouseIds),
     },
     {
       key: 'branches',
-      label: t('users.detail.scopes.branches'),
+      label: tabLabel('users.detail.scopes.branches', selectedBranchIds.length),
       content: scopeCheckboxList(branches, selectedBranchIds, setSelectedBranchIds),
     },
   ];
@@ -735,7 +748,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   void dirtyCount;
 
   return (
-    <DetailDrawer
+    <FormDrawer
       open={open}
       onClose={handleClose}
       title={user.fullName}
@@ -864,15 +877,29 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
 
         <hr className="border-border-subtle" />
 
-        {/* iter-37 Roles section — search + human-readable labels.
-            Pre-iter-37 we rendered raw UPPER_SNAKE_CASE for 16 roles with
-            no search and no description. Codex 019ddd5b note: subtitle
-            avoids overpromising "Roller ve İzinler" since the user atanır
-            rol, izinler türetilir. */}
+        {/* iter-37/iter-39 Roles section — search + human-readable labels +
+            count badge + skeleton. Pre-iter-37 we rendered raw
+            UPPER_SNAKE_CASE for 16 roles. Codex 019ddd5b: subtitle avoids
+            overpromising. iter-39: header carries a "N atanmış / M toplam"
+            badge so admins see selection state at a glance, and skeleton
+            placeholders appear while rolesQuery is in flight. */}
         <section>
-          <h3 className="text-base font-semibold text-text-primary">
-            {t('users.detail.section.roles')}
-          </h3>
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="text-base font-semibold text-text-primary">
+              {t('users.detail.section.roles')}
+            </h3>
+            {!rolesQuery.isLoading && roles.length > 0 && (
+              <span
+                className="text-xs font-medium text-text-subtle"
+                data-testid="roles-count-badge"
+              >
+                {t('users.detail.roles.count', {
+                  selected: selectedRoleIds.length,
+                  total: roles.length,
+                })}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-text-subtle mt-1">
             {t('users.detail.section.roles.subtitle')}
           </p>
@@ -888,7 +915,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           )}
           <div className="mt-3 flex flex-col gap-2">
             {rolesQuery.isLoading && (
-              <span className="text-xs text-text-subtle">{t('users.detail.loadingRoles')}</span>
+              <div data-testid="roles-skeleton" className="flex flex-col gap-2">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
             )}
             {filteredRoles.map((role) => {
               const meta = resolveRoleMeta(role.name, locale);
@@ -947,9 +978,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           </div>
         </section>
 
-        {/* iter-36 — footer moved to DetailDrawer.footer slot above (sticky). */}
+        {/* iter-36 — footer moved to FormDrawer.footer slot above (sticky). */}
       </div>
-    </DetailDrawer>
+    </FormDrawer>
   );
 };
 
