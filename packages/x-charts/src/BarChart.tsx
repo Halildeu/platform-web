@@ -14,6 +14,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -83,6 +84,11 @@ export interface BarChartProps {
    * @default "auto" — follows documentElement `data-density` (mfe-shell theme axis)
    */
   density?: ChartDensityPreference;
+  /**
+   * Accent palette override (light/emerald/ocean/violet/sunset/graphite/dark).
+   * @default "auto" — follows documentElement `data-accent` (mfe-shell theme axis)
+   */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -134,6 +140,7 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -152,16 +159,20 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
+    effectivePalette,
   } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
 
-    const palette = colors ?? DEFAULT_PALETTE;
+    // Codex iter-13 fallback chain: explicit `colors` prop > effectivePalette
+    // (accent or HC/Print theme builder) > inline DEFAULT_PALETTE.
+    const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
 
     const axisLabelFontSize = scaleFontSize(11, densityFontMultiplier);
     const labelFontSize = scaleFontSize(11, densityFontMultiplier);
@@ -299,6 +310,7 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
+    effectivePalette,
   ]);
 
   const handleClick = useCallback(

@@ -16,6 +16,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -79,6 +80,14 @@ export interface HeatmapChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /**
+   * Accent palette override.
+   * @default "auto"
+   * @remarks HeatmapChart's `colors` (low/high gradient) is SEMANTIC and NOT
+   *   changed by accent. The accent prop is accepted for API consistency.
+   *   To change gradient endpoints, use the `colors` prop directly.
+   */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -197,6 +206,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
       density: densityPreference = 'auto',
+      accent: accentPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -205,6 +215,8 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
     const isEmpty = !data || data.length === 0;
     const fmt = valueFormatter ?? formatCompact;
 
+    // HeatmapChart accent-IMMUNE — gradient `colors` are semantic; accent
+    // prop accepted for API consistency. effectivePalette ignored.
     const {
       themeObject,
       decalEnabled,
@@ -215,6 +227,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       theme: themePreference,
       decal: decalPreference,
       density: densityPreference,
+      accent: accentPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {

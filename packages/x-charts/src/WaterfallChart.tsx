@@ -18,6 +18,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -78,8 +79,19 @@ export interface WaterfallChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
-  /** Density override. @default "auto" */
+  /**
+   * Density override.
+   * @default "auto"
+   */
   density?: ChartDensityPreference;
+  /**
+   * Accent palette override.
+   * @default "auto"
+   * @remarks Codex iter-13: WaterfallChart `increase` (success) and `decrease`
+   *   (danger) colors are SEMANTIC and NOT changed by accent. Only the `total`
+   *   color binds to accent[0] (primary tint) when not overridden via `colors.total`.
+   */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -134,6 +146,7 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
       density: densityPreference = 'auto',
+      accent: accentPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -147,15 +160,6 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
     );
     const fmt = valueFormatter ?? formatCompact;
 
-    const palette = useMemo(
-      () => ({
-        increase: colorsProp?.increase ?? DEFAULT_COLORS.increase,
-        decrease: colorsProp?.decrease ?? DEFAULT_COLORS.decrease,
-        total: colorsProp?.total ?? DEFAULT_COLORS.total,
-      }),
-      [colorsProp],
-    );
-
     const {
       themeObject,
       decalEnabled,
@@ -163,11 +167,26 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
       densityFontMultiplier,
       densitySpacingMultiplier,
       densityPaddingMultiplier,
+      effectivePalette,
     } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
       density: densityPreference,
+      accent: accentPreference,
     });
+
+    // Codex iter-13 semantic preservation: increase/decrease are SEMANTIC
+    // (success/danger) — never replaced by accent. Only `total` binds to
+    // accent primary (effectivePalette[0]) when no explicit override.
+    const accentPrimary = effectivePalette?.[0] ?? DEFAULT_COLORS.total;
+    const palette = useMemo(
+      () => ({
+        increase: colorsProp?.increase ?? DEFAULT_COLORS.increase,
+        decrease: colorsProp?.decrease ?? DEFAULT_COLORS.decrease,
+        total: colorsProp?.total ?? accentPrimary,
+      }),
+      [colorsProp, accentPrimary],
+    );
 
     const option = useMemo((): EChartsOption | null => {
       if (isEmpty) return null;

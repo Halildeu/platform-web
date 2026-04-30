@@ -18,6 +18,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -88,6 +89,8 @@ export interface SankeyChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -150,6 +153,7 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -164,20 +168,23 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
 
     /* -- Assign default colors to nodes without explicit color -- */
+    const palette = effectivePalette ?? DEFAULT_PALETTE;
     const coloredNodes = nodes.map((n, i) => ({
       ...n,
       itemStyle: {
-        color: n.itemStyle?.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length],
+        color: n.itemStyle?.color ?? palette[i % palette.length],
         ...n.itemStyle,
       },
     }));
@@ -293,6 +300,7 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   ]);
 
   const handleClick = useCallback(

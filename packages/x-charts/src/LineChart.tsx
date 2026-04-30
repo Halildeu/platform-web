@@ -14,6 +14,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -83,6 +84,8 @@ export interface LineChartProps {
    * @default "auto" — follows documentElement `data-density`
    */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -134,6 +137,7 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -150,16 +154,18 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
+    effectivePalette,
   } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
 
-    const palette = DEFAULT_PALETTE;
+    const palette = effectivePalette ?? DEFAULT_PALETTE;
 
     const echartsSeriesList = safeSeries.map((s, i) => ({
       type: 'line' as const,
@@ -270,6 +276,7 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
+    effectivePalette,
   ]);
 
   const handleClick = useCallback(

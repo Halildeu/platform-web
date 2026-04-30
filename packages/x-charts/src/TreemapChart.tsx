@@ -16,6 +16,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -77,6 +78,8 @@ export interface TreemapChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -181,6 +184,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
       density: densityPreference = 'auto',
+      accent: accentPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -195,10 +199,12 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
       decalPatterns,
       densityFontMultiplier,
       densitySpacingMultiplier,
+      effectivePalette,
     } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
       density: densityPreference,
+      accent: accentPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
@@ -285,7 +291,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
             },
           },
         ],
-        color: DEFAULT_PALETTE,
+        color: effectivePalette ?? DEFAULT_PALETTE,
         aria: {
           enabled: true,
           label: {
@@ -310,6 +316,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
       decalPatterns,
       densityFontMultiplier,
       densitySpacingMultiplier,
+      effectivePalette,
     ]);
 
     const handleClick = useCallback(

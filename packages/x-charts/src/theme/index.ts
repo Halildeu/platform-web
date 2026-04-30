@@ -12,11 +12,13 @@ export type { DecalPattern } from './decal-patterns';
 
 // Faz 21.5-B PR-B3b — central theme/decal resolver
 // Faz 21.5-A3 — density preference + scaling helpers
+// Faz 21.5-A2 — accent palette + token-aware theme
 export { useChartTheme } from './useChartTheme';
 export type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
   UseChartThemeOptions,
   UseChartThemeResult,
 } from './useChartTheme';
@@ -29,6 +31,8 @@ export {
   resolveDensity,
 } from './density-helpers';
 export type { ChartDensity, DensityMultiplier } from './density-helpers';
+export { ACCENT_PALETTES, isValidAccent, normalizeAccent } from './accent-palettes';
+export type { ChartAccentName } from './accent-palettes';
 export {
   subscribeThemeStore,
   getThemeSnapshot,

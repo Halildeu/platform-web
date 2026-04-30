@@ -15,6 +15,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -77,6 +78,8 @@ export interface AreaChartProps {
    * @default "auto"
    */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -149,6 +152,7 @@ export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(functi
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -165,16 +169,18 @@ export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(functi
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
+    effectivePalette,
   } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
 
-    const palette = DEFAULT_PALETTE;
+    const palette = effectivePalette ?? DEFAULT_PALETTE;
 
     const echartsSeriesList = safeSeries.map((s, i) => {
       const color = s.color ?? palette[i % palette.length];
@@ -286,6 +292,7 @@ export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(functi
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
+    effectivePalette,
   ]);
 
   const { containerRef, instance } = useEChartsRenderer({

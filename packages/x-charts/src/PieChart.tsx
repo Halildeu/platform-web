@@ -15,6 +15,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -78,6 +79,8 @@ export interface PieChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -128,6 +131,7 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -146,16 +150,18 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
 
-    const palette = DEFAULT_PALETTE;
+    const palette = effectivePalette ?? DEFAULT_PALETTE;
 
     const pieData = validData.map((d, i) => ({
       name: d.label,
@@ -253,6 +259,7 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   ]);
 
   const handleClick = useCallback(
