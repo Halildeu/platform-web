@@ -5,12 +5,17 @@
  * Her bileşen için 8 metrikli kalite puanı üretir.
  * Mevcut araçları (component-audit, test-quality-analyzer) birleştirir.
  *
+ * Faz 21.6 PR-A (Codex iter-17 AGREE):
+ * Multi-package scan support — design-system + x-charts. Eski tek-paket
+ * (SRC hardcoded) yapısı SCAN_PACKAGES config'e dönüştürüldü.
+ *
  * Usage:
- *   node scripts/ci/component-scorecard.mjs              # Full report
+ *   node scripts/ci/component-scorecard.mjs              # Full report (all packages)
  *   node scripts/ci/component-scorecard.mjs --ci          # CI gate (new component <40 fail)
  *   node scripts/ci/component-scorecard.mjs --json        # JSON to reports/scorecard.json
- *   node scripts/ci/component-scorecard.mjs --dir enterprise  # Specific directory
+ *   node scripts/ci/component-scorecard.mjs --dir enterprise  # Specific directory (DS only)
  *   node scripts/ci/component-scorecard.mjs --component Button  # Single component
+ *   node scripts/ci/component-scorecard.mjs --package x-charts  # Single package scan
  */
 
 import fs from 'fs';
@@ -18,7 +23,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SRC = path.resolve(__dirname, '../../src');
 const REPORTS = path.resolve(__dirname, '../../reports');
 
 // ── Weights ──
@@ -46,6 +50,65 @@ const ACCESS_REQUIRED = ['enterprise', 'components', 'patterns', 'advanced'];
 const DISPLAY_NAME_REQUIRED = ['primitives', 'components', 'patterns'];
 
 /**
+ * Faz 21.6 PR-A — Multi-package scan config.
+ *
+ * Each entry describes how to discover + score components in one package.
+ *
+ * `recursive`: walkDir descends into subdirectories (DS pattern). Set false
+ * for flat-structure packages where utility subdirs (a11y/, theme/, etc.)
+ * must NOT be audited.
+ *
+ * `includeFiles`: explicit allowlist of TSX filenames to audit (Codex iter-17
+ * absorb). null = include all *.tsx not skipped by SKIP_FILES/SKIP_PATTERNS.
+ * Allowlist guarantees deterministic scope (e.g. x-charts pinned to 13 charts).
+ *
+ * `hasCatalog/hasVisualDir/hasAuthoring`: scoring features specific to DS.
+ * X-charts and other packages skip these checks.
+ */
+const SCAN_PACKAGES = [
+  {
+    id: 'design-system',
+    packageName: '@mfe/design-system',
+    srcRoot: path.resolve(__dirname, '../../src'),
+    componentDirs: COMPONENT_DIRS,
+    recursive: true,
+    includeFiles: null, // walkDir scans all *.tsx (with SKIP_FILES/SKIP_PATTERNS)
+    hasCatalog: true,
+    hasVisualDir: true,
+    hasAuthoring: true,
+  },
+  {
+    id: 'x-charts',
+    packageName: '@mfe/x-charts',
+    srcRoot: path.resolve(__dirname, '../../../x-charts/src'),
+    componentDirs: ['.'], // top-level only
+    recursive: false, // skip a11y/, theme/, spec/, advanced/, cross-filter/, etc.
+    includeFiles: [
+      // Codex iter-17: deterministic 13-chart audit scope.
+      // Composite/utility wrappers (Mini/Sparkline/CrossFilter, ChartContainer,
+      // ChartDashboard, ChartLegend, ChartToolbar, KPICard, StatWidget) audited
+      // in subsequent PRs as scope expands.
+      'BarChart.tsx',
+      'LineChart.tsx',
+      'AreaChart.tsx',
+      'PieChart.tsx',
+      'ScatterChart.tsx',
+      'GaugeChart.tsx',
+      'RadarChart.tsx',
+      'TreemapChart.tsx',
+      'HeatmapChart.tsx',
+      'WaterfallChart.tsx',
+      'FunnelChart.tsx',
+      'SankeyChart.tsx',
+      'SunburstChart.tsx',
+    ],
+    hasCatalog: false,
+    hasVisualDir: false,
+    hasAuthoring: false,
+  },
+];
+
+/**
  * Detect if a file is a utility/factory module rather than a React component.
  * Utility modules export factory functions (create*, build*, with*, find*) that
  * return render functions or data — they are not standalone user-facing components.
@@ -67,29 +130,72 @@ function isUtilityModule(content) {
   return factoryExports >= 1 && !isReactComponent;
 }
 
-// ── Component Discovery ──
-function findComponents(targetDir) {
+// ── Component Discovery (paket-aware) ──
+/**
+ * Walk a single package's component directories, returning an array of
+ * `{ fullPath, relPath, dir, name, srcRoot, packageId, packageName, packageConfig }`.
+ *
+ * Faz 21.6 PR-A: targetDir filter only applies to DS package (componentDirs
+ * subset); x-charts componentDirs always [.] which is the package root.
+ */
+function findComponentsInPackage(pkg, targetDir) {
   const results = [];
-  const dirs = targetDir ? [targetDir] : COMPONENT_DIRS;
+  const dirs = targetDir
+    ? pkg.componentDirs.includes(targetDir)
+      ? [targetDir]
+      : []
+    : pkg.componentDirs;
+
   for (const dir of dirs) {
-    const fullDir = path.join(SRC, dir);
+    const fullDir = path.join(pkg.srcRoot, dir);
     if (!fs.existsSync(fullDir)) continue;
-    walkDir(fullDir, dir, results);
+    walkDir(fullDir, dir, results, pkg);
   }
   return results;
 }
 
-function walkDir(d, topDir, results) {
+function walkDir(d, topDir, results, pkg) {
   for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
-    if (entry.isDirectory() && entry.name !== '__tests__' && entry.name !== 'node_modules') {
-      walkDir(path.join(d, entry.name), topDir, results);
-    } else if (entry.name.endsWith('.tsx') && !SKIP_FILES.includes(entry.name)) {
-      const fullPath = path.join(d, entry.name);
-      const relPath = path.relative(SRC, fullPath);
-      if (SKIP_PATTERNS.some(p => p.test(relPath))) continue;
-      results.push({ fullPath, relPath, dir: topDir, name: entry.name.replace('.tsx', '') });
+    if (entry.isDirectory()) {
+      // Codex iter-17: respect recursive:false to keep flat packages flat
+      if (!pkg.recursive) continue;
+      if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+      walkDir(path.join(d, entry.name), topDir, results, pkg);
+      continue;
     }
+    if (!entry.name.endsWith('.tsx') || SKIP_FILES.includes(entry.name)) continue;
+    // Codex iter-17: includeFiles allowlist for deterministic scope
+    if (pkg.includeFiles && !pkg.includeFiles.includes(entry.name)) continue;
+
+    const fullPath = path.join(d, entry.name);
+    const relPath = path.relative(pkg.srcRoot, fullPath);
+    if (SKIP_PATTERNS.some((p) => p.test(relPath))) continue;
+
+    results.push({
+      fullPath,
+      relPath,
+      dir: topDir,
+      name: entry.name.replace('.tsx', ''),
+      srcRoot: pkg.srcRoot,
+      packageId: pkg.id,
+      packageName: pkg.packageName,
+      packageConfig: pkg,
+    });
   }
+}
+
+/**
+ * Aggregate component discovery across all configured packages, optionally
+ * filtered by targetDir (DS subdir filter — x-charts does not honor it
+ * because its componentDir is just '.').
+ */
+function findAllComponents(targetDir, packageFilter) {
+  const all = [];
+  for (const pkg of SCAN_PACKAGES) {
+    if (packageFilter && pkg.id !== packageFilter) continue;
+    all.push(...findComponentsInPackage(pkg, targetDir));
+  }
+  return all;
 }
 
 // ── Score: API Quality (0-100) ──
@@ -126,14 +232,14 @@ function scoreAPI(content, dir, _name) {
 }
 
 // ── Score: Test Depth (0-100) ── (mirrors test-quality-analyzer logic)
-function scoreTestDepth(componentName, componentDir) {
+function scoreTestDepth(componentName, componentDir, srcRoot) {
   // Find all test files for this component
   const testFiles = [];
   const searchDirs = [
-    path.join(SRC, componentDir, '__tests__'),
-    path.join(SRC, componentDir, componentName.toLowerCase(), '__tests__'),
+    path.join(srcRoot, componentDir, '__tests__'),
+    path.join(srcRoot, componentDir, componentName.toLowerCase(), '__tests__'),
     // kebab-case directory
-    path.join(SRC, componentDir, componentName.replace(/([A-Z])/g, (_, c, i) => i ? `-${c.toLowerCase()}` : c.toLowerCase()), '__tests__'),
+    path.join(srcRoot, componentDir, componentName.replace(/([A-Z])/g, (_, c, i) => i ? `-${c.toLowerCase()}` : c.toLowerCase()), '__tests__'),
   ];
 
   for (const dir of searchDirs) {
@@ -197,10 +303,10 @@ function scoreTestDepth(componentName, componentDir) {
 }
 
 // ── Score: A11y (0-100) ──
-function scoreA11y(componentName, componentDir) {
+function scoreA11y(componentName, componentDir, srcRoot) {
   const testFiles = [
-    ...findTestFilesFor(componentName, componentDir),
-    ...findContractTestsFor(componentName, componentDir),
+    ...findTestFilesFor(componentName, componentDir, srcRoot),
+    ...findContractTestsFor(componentName, componentDir, srcRoot),
   ];
   if (testFiles.length === 0) return 0;
 
@@ -217,22 +323,27 @@ function scoreA11y(componentName, componentDir) {
 }
 
 // ── Score: Test Coverage (0-100) ──
-function scoreTestCoverage(componentName, componentDir) {
+function scoreTestCoverage(componentName, componentDir, srcRoot, hasVisualDir) {
   // Check if test files exist
-  const testFiles = findTestFilesFor(componentName, componentDir);
-  const contractTests = findContractTestsFor(componentName, componentDir);
+  const testFiles = findTestFilesFor(componentName, componentDir, srcRoot);
+  const contractTests = findContractTestsFor(componentName, componentDir, srcRoot);
 
   let score = 0;
   if (testFiles.length > 0) score += 40; // Has unit test
   if (contractTests.length > 0) score += 20; // Has contract test
   if (testFiles.length > 1) score += 20; // Multiple test files
 
-  // Check visual test
-  const visualDir = path.join(SRC, '__visual__');
-  if (fs.existsSync(visualDir)) {
-    const hasVisual = fs.readdirSync(visualDir, { recursive: true })
-      .some(f => typeof f === 'string' && f.includes(componentName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')));
-    if (hasVisual) score += 20;
+  // Visual test (DS-only feature)
+  if (hasVisualDir) {
+    const visualDir = path.join(srcRoot, '__visual__');
+    if (fs.existsSync(visualDir)) {
+      const hasVisual = fs.readdirSync(visualDir, { recursive: true })
+        .some(f => typeof f === 'string' && f.includes(componentName.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')));
+      if (hasVisual) score += 20;
+    }
+  } else {
+    // Packages without __visual__ dir get the visual test slot waived
+    score += 20;
   }
 
   return Math.min(100, score);
@@ -274,10 +385,10 @@ function findStoryFileRecursive(rootDir, componentName, maxDepth = 4) {
   return null;
 }
 
-function scoreStory(componentName, componentDir) {
+function scoreStory(componentName, componentDir, srcRoot) {
   // Recursive search across all subdirectories (handles deep paths like
   // advanced/data-grid/filter-builder/FilterBuilderPanel.stories.tsx).
-  const topDir = path.join(SRC, componentDir);
+  const topDir = path.join(srcRoot, componentDir);
   const storyFile = findStoryFileRecursive(topDir, componentName);
   if (!storyFile) return 0;
 
@@ -317,7 +428,7 @@ function scoreI18n(content) {
 }
 
 // ── Score: Documentation (0-100) ──
-function scoreDocumentation(content, componentName, componentDir) {
+function scoreDocumentation(content, componentName, componentDir, srcRoot, hasCatalog, hasAuthoring) {
   let score = 0;
 
   // JSDoc on component
@@ -336,31 +447,41 @@ function scoreDocumentation(content, componentName, componentDir) {
   // @see tag in JSDoc (+5)
   if (/@see/.test(content)) score += 5;
 
-  // API reference exists (check main + all part files)
-  const catalogDir = path.join(SRC, 'catalog');
-  if (fs.existsSync(catalogDir)) {
-    const catalogFiles = fs.readdirSync(catalogDir).filter(f => f.startsWith('component-api-catalog') && f.endsWith('.json'));
-    for (const cf of catalogFiles) {
-      const apiContent = fs.readFileSync(path.join(catalogDir, cf), 'utf-8');
-      if (apiContent.includes(`"${componentName}"`)) { score += 20; break; }
+  // API reference (DS catalog)
+  if (hasCatalog) {
+    const catalogDir = path.join(srcRoot, 'catalog');
+    if (fs.existsSync(catalogDir)) {
+      const catalogFiles = fs.readdirSync(catalogDir).filter(f => f.startsWith('component-api-catalog') && f.endsWith('.json'));
+      for (const cf of catalogFiles) {
+        const apiContent = fs.readFileSync(path.join(catalogDir, cf), 'utf-8');
+        if (apiContent.includes(`"${componentName}"`)) { score += 20; break; }
+      }
     }
+  } else {
+    // Packages without DS catalog get the slot waived
+    score += 20;
   }
 
-  // Authoring metadata exists
-  const authoringPath = path.join(SRC, componentDir, componentName.replace(/([A-Z])/g, (_, c, i) => i ? `-${c.toLowerCase()}` : c.toLowerCase()), 'component.authoring.v1.json');
-  if (fs.existsSync(authoringPath)) score += 20;
+  // Authoring metadata (DS-specific component.authoring.v1.json)
+  if (hasAuthoring) {
+    const authoringPath = path.join(srcRoot, componentDir, componentName.replace(/([A-Z])/g, (_, c, i) => i ? `-${c.toLowerCase()}` : c.toLowerCase()), 'component.authoring.v1.json');
+    if (fs.existsSync(authoringPath)) score += 20;
+  } else {
+    // Packages without authoring metadata get the slot waived
+    score += 20;
+  }
 
   return Math.min(100, score);
 }
 
 // ── Helpers ──
-function findTestFilesFor(componentName, componentDir) {
+function findTestFilesFor(componentName, componentDir, srcRoot) {
   const results = [];
   const kebab = componentName.replace(/([A-Z])/g, (_, c, i) => i ? `-${c.toLowerCase()}` : c.toLowerCase());
 
   // Collect all __tests__ dirs (including nested subdirs)
   const searchDirs = new Set();
-  const topDir = path.join(SRC, componentDir);
+  const topDir = path.join(srcRoot, componentDir);
   searchDirs.add(path.join(topDir, '__tests__'));
   searchDirs.add(path.join(topDir, kebab, '__tests__'));
   // Scan one level of subdirs for __tests__
@@ -398,10 +519,10 @@ function findTestFilesFor(componentName, componentDir) {
   return results;
 }
 
-function findContractTestsFor(componentName, componentDir) {
+function findContractTestsFor(componentName, componentDir, srcRoot) {
   const results = [];
   const kebab = componentName.replace(/([A-Z])/g, (_, c, i) => i ? `-${c.toLowerCase()}` : c.toLowerCase());
-  const topDir = path.join(SRC, componentDir);
+  const topDir = path.join(srcRoot, componentDir);
 
   const searchDirs = new Set([
     path.join(topDir, '__tests__'),
@@ -449,174 +570,236 @@ function getImprovements(scores) {
   return improvements;
 }
 
-// ── Main ──
-const args = process.argv.slice(2);
-const isCI = args.includes('--ci');
-const isJSON = args.includes('--json');
-const dirIdx = args.indexOf('--dir');
-const compIdx = args.indexOf('--component');
-const targetDir = dirIdx >= 0 ? args[dirIdx + 1] : null;
-const targetComponent = compIdx >= 0 ? args[compIdx + 1] : null;
-
-console.log('📊 Component Scorecard System\n');
-
-const allComponents = findComponents(targetDir);
-const scorecards = [];
-
-for (const { fullPath, relPath, dir, name } of allComponents) {
-  if (targetComponent && name !== targetComponent) continue;
-
-  const content = fs.readFileSync(fullPath, 'utf-8');
-  const lineCount = content.split('\n').length;
-  if (lineCount < 15) continue; // Skip tiny files
-
-  const isUtility = isUtilityModule(content);
-
-  const scores = {
-    api: scoreAPI(content, dir, name),
-    testDepth: scoreTestDepth(name, dir),
-    a11y: isUtility ? 100 : scoreA11y(name, dir), // Utilities: a11y N/A → full score
-    testCoverage: scoreTestCoverage(name, dir),
-    accessControl: isUtility ? 100 : scoreAccessControl(content, dir), // Utilities: access N/A → full score
-    storyCompleteness: isUtility ? 100 : scoreStory(name, dir), // Utilities: stories N/A → full score
-    i18n: scoreI18n(content),
-    documentation: scoreDocumentation(content, name, dir),
-  };
-
-  let totalScore = 0;
-  for (const [key, weight] of Object.entries(WEIGHTS)) {
-    totalScore += (scores[key] / 100) * weight;
-  }
-  totalScore = Math.round(totalScore);
-
-  const grade = getGrade(totalScore);
-  const improvements = getImprovements(scores);
-
-  scorecards.push({
-    name, path: relPath, dir, lineCount,
-    scores, totalScore, grade, improvements,
-  });
-}
-
-// Sort by score ascending (worst first for attention)
-scorecards.sort((a, b) => a.totalScore - b.totalScore);
-
-// ── Output ──
-if (isJSON) {
-  if (!fs.existsSync(REPORTS)) fs.mkdirSync(REPORTS, { recursive: true });
-  const outPath = path.join(REPORTS, 'scorecard.json');
-  fs.writeFileSync(outPath, JSON.stringify(scorecards, null, 2));
-  console.log(`Written to ${outPath}`);
-  process.exit(0);
-}
-
-// Single component detail
-if (targetComponent && scorecards.length === 1) {
-  const sc = scorecards[0];
-  const bar = (v) => '█'.repeat(Math.round(v / 5)) + '░'.repeat(20 - Math.round(v / 5));
-  console.log(`┌${'─'.repeat(57)}┐`);
-  console.log(`│ ${sc.name.padEnd(40)} Grade: ${sc.grade} (${sc.totalScore}) │`);
-  console.log(`├${'─'.repeat(18)}┬${'─'.repeat(6)}┬${'─'.repeat(30)}┤`);
-  for (const [key, val] of Object.entries(sc.scores)) {
-    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).padEnd(18);
-    const color = val >= 60 ? '\x1b[32m' : val >= 30 ? '\x1b[33m' : '\x1b[31m';
-    console.log(`│ ${label}│ ${color}${String(val).padStart(4)}\x1b[0m │ ${bar(val)} │`);
-  }
-  console.log(`├${'─'.repeat(18)}┴${'─'.repeat(6)}┴${'─'.repeat(30)}┤`);
-  if (sc.improvements.length > 0) {
-    console.log(`│ Improvements:${' '.repeat(42)} │`);
-    for (const imp of sc.improvements) {
-      console.log(`│ → ${imp.padEnd(53)} │`);
-    }
-  }
-  console.log(`└${'─'.repeat(57)}┘`);
-  process.exit(0);
-}
-
-// Grade distribution
-const grades = { A: 0, B: 0, C: 0, D: 0, F: 0 };
-for (const sc of scorecards) grades[sc.grade]++;
-const avgScore = Math.round(scorecards.reduce((s, sc) => s + sc.totalScore, 0) / scorecards.length);
-
-console.log(`Total: ${scorecards.length} components | Avg: ${avgScore}/100\n`);
-
-const gradeColors = { A: '\x1b[32m', B: '\x1b[36m', C: '\x1b[33m', D: '\x1b[31m', F: '\x1b[35m' };
-const gradeLabels = { A: 'Excellent', B: 'Good', C: 'Fair', D: 'Poor', F: 'Critical' };
-console.log('Grade Distribution:');
-for (const [g, count] of Object.entries(grades)) {
-  const bar = '█'.repeat(Math.round((count / scorecards.length) * 40));
-  const pct = Math.round((count / scorecards.length) * 100);
-  console.log(`  ${gradeColors[g]}${g} (${gradeLabels[g]})\x1b[0m ${bar} ${count} (${pct}%)`);
-}
-
-// Directory breakdown
-const dirStats = {};
-for (const sc of scorecards) {
-  if (!dirStats[sc.dir]) dirStats[sc.dir] = { count: 0, total: 0, grades: { A: 0, B: 0, C: 0, D: 0, F: 0 } };
-  dirStats[sc.dir].count++;
-  dirStats[sc.dir].total += sc.totalScore;
-  dirStats[sc.dir].grades[sc.grade]++;
-}
-
-console.log('\nDirectory Breakdown:');
-console.log('┌──────────────────┬───────┬────────┬────┬────┬────┬────┬────┐');
-console.log('│ Directory        │ Count │  Avg   │  A │  B │  C │  D │  F │');
-console.log('├──────────────────┼───────┼────────┼────┼────┼────┼────┼────┤');
-for (const [dir, s] of Object.entries(dirStats).sort((a, b) => (a[1].total / a[1].count) - (b[1].total / b[1].count))) {
-  const avg = Math.round(s.total / s.count);
-  const color = avg >= 50 ? '\x1b[32m' : avg >= 30 ? '\x1b[33m' : '\x1b[31m';
-  console.log(`│ ${dir.padEnd(16)} │ ${String(s.count).padStart(5)} │ ${color}${String(avg).padStart(5)}\x1b[0m% │ ${String(s.grades.A).padStart(2)} │ ${String(s.grades.B).padStart(2)} │ ${String(s.grades.C).padStart(2)} │ ${String(s.grades.D).padStart(2)} │ ${String(s.grades.F).padStart(2)} │`);
-}
-console.log('└──────────────────┴───────┴────────┴────┴────┴────┴────┴────┘');
-
-// Bottom 15
-const worst = scorecards.slice(0, 15);
-console.log(`\n⚠️  Lowest scored components (showing 15/${scorecards.length}):`);
-for (const sc of worst) {
-  const weakest = Object.entries(sc.scores).sort((a, b) => a[1] - b[1]).slice(0, 2).map(([k, v]) => `${k}:${v}`).join(', ');
-  console.log(`  ${sc.grade} ${String(sc.totalScore).padStart(3)} │ ${sc.path} │ ${weakest}`);
-}
-
-// Top 5
-const best = [...scorecards].sort((a, b) => b.totalScore - a.totalScore).slice(0, 5);
-console.log('\n✅ Highest scored components:');
-for (const sc of best) {
-  console.log(`  ${sc.grade} ${String(sc.totalScore).padStart(3)} │ ${sc.path}`);
-}
-
-// Metric averages
-console.log('\nMetric Averages:');
-const metricLabels = {
-  testDepth: 'Test Depth', api: 'API Quality', a11y: 'Accessibility',
-  testCoverage: 'Test Coverage', accessControl: 'Access Control',
-  storyCompleteness: 'Story Complete', i18n: 'i18n Ready', documentation: 'Documentation',
+// ── Public API for tests ──
+export {
+  SCAN_PACKAGES,
+  findComponentsInPackage,
+  findAllComponents,
+  scoreAPI,
+  scoreTestDepth,
+  scoreA11y,
+  scoreTestCoverage,
+  scoreAccessControl,
+  scoreStory,
+  scoreI18n,
+  scoreDocumentation,
+  isUtilityModule,
+  getGrade,
+  getImprovements,
 };
-for (const [key, label] of Object.entries(metricLabels)) {
-  const avg = Math.round(scorecards.reduce((s, sc) => s + sc.scores[key], 0) / scorecards.length);
-  const bar = '█'.repeat(Math.round(avg / 5));
-  const color = avg >= 60 ? '\x1b[32m' : avg >= 40 ? '\x1b[33m' : '\x1b[31m';
-  console.log(`  ${label.padEnd(18)} ${color}${bar}\x1b[0m ${avg}/100`);
-}
 
-// CI gate
-if (isCI) {
-  const critical = scorecards.filter(sc => sc.grade === 'F');
-  if (critical.length > 0) {
-    console.error(`\n❌ SCORECARD GATE FAILED: ${critical.length} component(s) at F grade`);
-    for (const sc of critical) {
-      console.error(`  ${sc.totalScore} │ ${sc.path}`);
+// ── Main (CLI execution only) ──
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (!isMainModule) {
+  // Imported as a library (test, downstream tool) — skip CLI execution.
+  // Uses ESM equivalent of `if (require.main === module)`.
+} else {
+  const args = process.argv.slice(2);
+  const isCI = args.includes('--ci');
+  const isJSON = args.includes('--json');
+  const dirIdx = args.indexOf('--dir');
+  const compIdx = args.indexOf('--component');
+  const pkgIdx = args.indexOf('--package');
+  const targetDir = dirIdx >= 0 ? args[dirIdx + 1] : null;
+  const targetComponent = compIdx >= 0 ? args[compIdx + 1] : null;
+  const targetPackage = pkgIdx >= 0 ? args[pkgIdx + 1] : null;
+
+  console.log('📊 Component Scorecard System\n');
+
+  const allComponents = findAllComponents(targetDir, targetPackage);
+  const scorecards = [];
+
+  for (const cmp of allComponents) {
+    if (targetComponent && cmp.name !== targetComponent) continue;
+    const { fullPath, relPath, dir, name, srcRoot, packageId, packageName, packageConfig } = cmp;
+
+    const content = fs.readFileSync(fullPath, 'utf-8');
+    const lineCount = content.split('\n').length;
+    if (lineCount < 15) continue; // Skip tiny files
+
+    const isUtility = isUtilityModule(content);
+
+    const scores = {
+      api: scoreAPI(content, dir, name),
+      testDepth: scoreTestDepth(name, dir, srcRoot),
+      a11y: isUtility ? 100 : scoreA11y(name, dir, srcRoot), // Utilities: a11y N/A → full score
+      testCoverage: scoreTestCoverage(name, dir, srcRoot, packageConfig.hasVisualDir),
+      accessControl: isUtility ? 100 : scoreAccessControl(content, dir), // Utilities: access N/A → full score
+      storyCompleteness: isUtility ? 100 : scoreStory(name, dir, srcRoot), // Utilities: stories N/A → full score
+      i18n: scoreI18n(content),
+      documentation: scoreDocumentation(
+        content,
+        name,
+        dir,
+        srcRoot,
+        packageConfig.hasCatalog,
+        packageConfig.hasAuthoring,
+      ),
+    };
+
+    let totalScore = 0;
+    for (const [key, weight] of Object.entries(WEIGHTS)) {
+      totalScore += (scores[key] / 100) * weight;
     }
-    process.exit(1);
+    totalScore = Math.round(totalScore);
+
+    const grade = getGrade(totalScore);
+    const improvements = getImprovements(scores);
+
+    scorecards.push({
+      name,
+      path: relPath,
+      dir,
+      packageId,       // Faz 21.6 PR-A
+      packageName,     // Faz 21.6 PR-A
+      lineCount,
+      scores,
+      totalScore,
+      grade,
+      improvements,
+    });
   }
 
-  // D-grade warning (will become blocking in M5 escalation)
-  const poor = scorecards.filter(sc => sc.grade === 'D');
-  if (poor.length > 0) {
-    console.warn(`\n⚠️  SCORECARD WARNING: ${poor.length} component(s) at D grade`);
-    for (const sc of poor) {
-      console.warn(`  ${sc.totalScore} │ ${sc.path} │ ${sc.improvements[0] || ''}`);
-    }
+  // Sort by score ascending (worst first for attention)
+  scorecards.sort((a, b) => a.totalScore - b.totalScore);
+
+  // ── Output ──
+  if (isJSON) {
+    if (!fs.existsSync(REPORTS)) fs.mkdirSync(REPORTS, { recursive: true });
+    const outPath = path.join(REPORTS, 'scorecard.json');
+    fs.writeFileSync(outPath, JSON.stringify(scorecards, null, 2));
+    console.log(`Written to ${outPath}`);
+    process.exit(0);
   }
 
-  console.log(`\n✅ SCORECARD GATE PASSED: No F-grade components. ${poor.length} D-grade warnings. Avg: ${avgScore}/100`);
+  // Single component detail
+  if (targetComponent && scorecards.length === 1) {
+    const sc = scorecards[0];
+    const bar = (v) => '█'.repeat(Math.round(v / 5)) + '░'.repeat(20 - Math.round(v / 5));
+    console.log(`┌${'─'.repeat(57)}┐`);
+    console.log(`│ ${sc.name.padEnd(40)} Grade: ${sc.grade} (${sc.totalScore}) │`);
+    console.log(`├${'─'.repeat(18)}┬${'─'.repeat(6)}┬${'─'.repeat(30)}┤`);
+    for (const [key, val] of Object.entries(sc.scores)) {
+      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).padEnd(18);
+      const color = val >= 60 ? '\x1b[32m' : val >= 30 ? '\x1b[33m' : '\x1b[31m';
+      console.log(`│ ${label}│ ${color}${String(val).padStart(4)}\x1b[0m │ ${bar(val)} │`);
+    }
+    console.log(`├${'─'.repeat(18)}┴${'─'.repeat(6)}┴${'─'.repeat(30)}┤`);
+    if (sc.improvements.length > 0) {
+      console.log(`│ Improvements:${' '.repeat(42)} │`);
+      for (const imp of sc.improvements) {
+        console.log(`│ → ${imp.padEnd(53)} │`);
+      }
+    }
+    console.log(`└${'─'.repeat(57)}┘`);
+    process.exit(0);
+  }
+
+  // Grade distribution
+  const grades = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+  for (const sc of scorecards) grades[sc.grade]++;
+  const avgScore = Math.round(scorecards.reduce((s, sc) => s + sc.totalScore, 0) / scorecards.length);
+
+  console.log(`Total: ${scorecards.length} components | Avg: ${avgScore}/100\n`);
+
+  const gradeColors = { A: '\x1b[32m', B: '\x1b[36m', C: '\x1b[33m', D: '\x1b[31m', F: '\x1b[35m' };
+  const gradeLabels = { A: 'Excellent', B: 'Good', C: 'Fair', D: 'Poor', F: 'Critical' };
+  console.log('Grade Distribution:');
+  for (const [g, count] of Object.entries(grades)) {
+    const bar = '█'.repeat(Math.round((count / scorecards.length) * 40));
+    const pct = Math.round((count / scorecards.length) * 100);
+    console.log(`  ${gradeColors[g]}${g} (${gradeLabels[g]})\x1b[0m ${bar} ${count} (${pct}%)`);
+  }
+
+  // Package breakdown (Faz 21.6 PR-A)
+  const pkgStats = {};
+  for (const sc of scorecards) {
+    if (!pkgStats[sc.packageId]) pkgStats[sc.packageId] = { count: 0, total: 0, grades: { A: 0, B: 0, C: 0, D: 0, F: 0 } };
+    pkgStats[sc.packageId].count++;
+    pkgStats[sc.packageId].total += sc.totalScore;
+    pkgStats[sc.packageId].grades[sc.grade]++;
+  }
+
+  console.log('\nPackage Breakdown:');
+  console.log('┌──────────────────┬───────┬────────┬────┬────┬────┬────┬────┐');
+  console.log('│ Package          │ Count │  Avg   │  A │  B │  C │  D │  F │');
+  console.log('├──────────────────┼───────┼────────┼────┼────┼────┼────┼────┤');
+  for (const [pkg, s] of Object.entries(pkgStats).sort((a, b) => (a[1].total / a[1].count) - (b[1].total / b[1].count))) {
+    const avg = Math.round(s.total / s.count);
+    const color = avg >= 50 ? '\x1b[32m' : avg >= 30 ? '\x1b[33m' : '\x1b[31m';
+    console.log(`│ ${pkg.padEnd(16)} │ ${String(s.count).padStart(5)} │ ${color}${String(avg).padStart(5)}\x1b[0m% │ ${String(s.grades.A).padStart(2)} │ ${String(s.grades.B).padStart(2)} │ ${String(s.grades.C).padStart(2)} │ ${String(s.grades.D).padStart(2)} │ ${String(s.grades.F).padStart(2)} │`);
+  }
+  console.log('└──────────────────┴───────┴────────┴────┴────┴────┴────┴────┘');
+
+  // Directory breakdown
+  const dirStats = {};
+  for (const sc of scorecards) {
+    if (!dirStats[sc.dir]) dirStats[sc.dir] = { count: 0, total: 0, grades: { A: 0, B: 0, C: 0, D: 0, F: 0 } };
+    dirStats[sc.dir].count++;
+    dirStats[sc.dir].total += sc.totalScore;
+    dirStats[sc.dir].grades[sc.grade]++;
+  }
+
+  console.log('\nDirectory Breakdown:');
+  console.log('┌──────────────────┬───────┬────────┬────┬────┬────┬────┬────┐');
+  console.log('│ Directory        │ Count │  Avg   │  A │  B │  C │  D │  F │');
+  console.log('├──────────────────┼───────┼────────┼────┼────┼────┼────┼────┤');
+  for (const [dir, s] of Object.entries(dirStats).sort((a, b) => (a[1].total / a[1].count) - (b[1].total / b[1].count))) {
+    const avg = Math.round(s.total / s.count);
+    const color = avg >= 50 ? '\x1b[32m' : avg >= 30 ? '\x1b[33m' : '\x1b[31m';
+    console.log(`│ ${dir.padEnd(16)} │ ${String(s.count).padStart(5)} │ ${color}${String(avg).padStart(5)}\x1b[0m% │ ${String(s.grades.A).padStart(2)} │ ${String(s.grades.B).padStart(2)} │ ${String(s.grades.C).padStart(2)} │ ${String(s.grades.D).padStart(2)} │ ${String(s.grades.F).padStart(2)} │`);
+  }
+  console.log('└──────────────────┴───────┴────────┴────┴────┴────┴────┴────┘');
+
+  // Bottom 15
+  const worst = scorecards.slice(0, 15);
+  console.log(`\n⚠️  Lowest scored components (showing 15/${scorecards.length}):`);
+  for (const sc of worst) {
+    const weakest = Object.entries(sc.scores).sort((a, b) => a[1] - b[1]).slice(0, 2).map(([k, v]) => `${k}:${v}`).join(', ');
+    console.log(`  ${sc.grade} ${String(sc.totalScore).padStart(3)} │ [${sc.packageId}] ${sc.path} │ ${weakest}`);
+  }
+
+  // Top 5
+  const best = [...scorecards].sort((a, b) => b.totalScore - a.totalScore).slice(0, 5);
+  console.log('\n✅ Highest scored components:');
+  for (const sc of best) {
+    console.log(`  ${sc.grade} ${String(sc.totalScore).padStart(3)} │ [${sc.packageId}] ${sc.path}`);
+  }
+
+  // Metric averages
+  console.log('\nMetric Averages:');
+  const metricLabels = {
+    testDepth: 'Test Depth', api: 'API Quality', a11y: 'Accessibility',
+    testCoverage: 'Test Coverage', accessControl: 'Access Control',
+    storyCompleteness: 'Story Complete', i18n: 'i18n Ready', documentation: 'Documentation',
+  };
+  for (const [key, label] of Object.entries(metricLabels)) {
+    const avg = Math.round(scorecards.reduce((s, sc) => s + sc.scores[key], 0) / scorecards.length);
+    const bar = '█'.repeat(Math.round(avg / 5));
+    const color = avg >= 60 ? '\x1b[32m' : avg >= 40 ? '\x1b[33m' : '\x1b[31m';
+    console.log(`  ${label.padEnd(18)} ${color}${bar}\x1b[0m ${avg}/100`);
+  }
+
+  // CI gate
+  if (isCI) {
+    const critical = scorecards.filter(sc => sc.grade === 'F');
+    if (critical.length > 0) {
+      console.error(`\n❌ SCORECARD GATE FAILED: ${critical.length} component(s) at F grade`);
+      for (const sc of critical) {
+        console.error(`  ${sc.totalScore} │ [${sc.packageId}] ${sc.path}`);
+      }
+      process.exit(1);
+    }
+
+    // D-grade warning (will become blocking in M5 escalation)
+    const poor = scorecards.filter(sc => sc.grade === 'D');
+    if (poor.length > 0) {
+      console.warn(`\n⚠️  SCORECARD WARNING: ${poor.length} component(s) at D grade`);
+      for (const sc of poor) {
+        console.warn(`  ${sc.totalScore} │ [${sc.packageId}] ${sc.path} │ ${sc.improvements[0] || ''}`);
+      }
+    }
+
+    console.log(`\n✅ SCORECARD GATE PASSED: No F-grade components. ${poor.length} D-grade warnings. Avg: ${avgScore}/100`);
+  }
 }

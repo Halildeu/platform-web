@@ -11,6 +11,9 @@ on:
     paths:
       - 'packages/design-system/src/**'
       - 'packages/design-system/scripts/ci/**'
+      # Faz 21.6 PR-A: scorecard now also audits x-charts (13 chart wrappers).
+      # Trigger on x-charts changes so scorecard regression is caught at PR time.
+      - 'packages/x-charts/src/**'
   workflow_dispatch:
 
 permissions:
