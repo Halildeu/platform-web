@@ -780,4 +780,76 @@ Sonuç: M4 closure artık compile-only değil, **lokal + CI runtime-doğrulanmı
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE; PR #65 + #66 ile fake-test risk runtime-doğrulanmış kapatıldı) closure log eklendi._
+## §19 Faz 21.4 — x-charts CONTRACT v2 enforcement (audit-driven, 2026-04-30)
+
+> Kaynak: Claude session 2026-04-30 audit + paralel Explore agent denetimi.
+> Bağlam: F4 ✅ DONE (2026-03-24) ⊃ x-charts mevcut. **CONTRACT v2** (2026-04-11)
+> F4'ün üstüne "world-class" üst standart koydu (§8 CI gates DoD, §1
+> ChartTooltip, §3 AccessControlledProps). Bu standartlar henüz aktif değil;
+> Faz 21.4 onları kapatıyor. F4 minimum DoD korunur, world-class katman eklenir.
+
+### Audit findings (2026-04-30)
+
+**Implemented (16/20 critical features):** crossfilter (16-file store + 6 test),
+drill-down (state machine + breadcrumb), brush selection, zoom/pan, animation
+(prefers-reduced-motion'a saygılı), 4 tema (light/dark/HC/print), export
+(PNG/SVG/PDF/CSV/XLSX), a11y (keyboard, data-table fallback, aria-live, decals,
+colorblind palettes), real-time stream, responsive resize, sanitization,
+density, AI integration (NL→ChartSpec, anomaly, trend, suggestion, description),
+grid adapter (AGGrid bridge), performance (LTTB downsample, worker bridge,
+progressive/lazy render, LRU cache), i18n (ECharts locale), touch gestures,
+plugin registry, dashboard composition, collaboration (sharing, annotation,
+offline cache).
+
+**Gaps (CONTRACT v2 vs reality, 2026-04-30):**
+
+| Gap                                                   | CONTRACT ref                | Severity |
+| ----------------------------------------------------- | --------------------------- | -------- |
+| `ChartTooltip` standalone component                   | §1 line 57-59               | CRITICAL |
+| `AccessControlledProps` integration                   | §3 line 108-112             | CRITICAL |
+| Interactive legend (click-to-hide series)             | §1 ChartLegend              | HIGH     |
+| 8/8 CI gates not active                               | §8                          | MEDIUM   |
+| 13/13 chart components — zero unit tests              | §8 test exit criteria       | MEDIUM   |
+| Design Lab Playground = SVG `ChartPreviewPlaceholder` | UX (HARD RULE No Fake Work) | CRITICAL |
+
+**Design Lab playground reality:** 29 chart route'u var (`/admin/design-lab/charts/*`),
+ama Playground tab'i SVG mock gösteriyordu — toggle'lar render'a yansımıyordu.
+`ChartPreviewPlaceholder` fonksiyonu chart.id'ye göre 6 farklı SVG variant
+döndürüyor (geri kalan 7 chart "default bar" görselli — yanlış görsel).
+Ayrı feature demo'ları (Brush, Zoom/Pan, Real-time, Theme-switch, Export) yok.
+Storybook tarafında sağlam: `__stories__/AllChartTypes.stories.tsx` 13 chart
+için real render + mock data; `CrossFilterDemo.stories.tsx` + `DrillDownDemo.stories.tsx`
+linked-charts + drill-down demo'su.
+
+### PR plan (6 commits, ~24-30 saat total)
+
+| PR    | Scope                                                                                | Effort | Depends      | Status                                                        |
+| ----- | ------------------------------------------------------------------------------------ | ------ | ------------ | ------------------------------------------------------------- |
+| **A** | Design Lab live render (13 chart, fake SVG → real x-charts, toggle forwarding)       | 2h     | —            | ✅ PR [#91](https://github.com/Halildeu/platform-web/pull/91) |
+| **B** | Design Lab live demo (CrossFilter, DrillDown, AI hooks×5, Perf utility×5 = 11 route) | 3-4h   | A            | pending                                                       |
+| **C** | Feature-demo pages (Brush, Zoom/Pan, Real-time, Theme switch, Export)                | 4-6h   | A            | pending                                                       |
+| **D** | 13 chart × unit test (BarChart/LineChart/...)                                        | 4-6h   | — (parallel) | pending                                                       |
+| **E** | CONTRACT cleanup (`ChartTooltip` + `AccessControlledProps` integration kararı)       | 2-3h   | — (parallel) | pending                                                       |
+| **F** | 8 CI gate aktivasyonu (bundle/axe/contrast/xss/memory/spec/visual/tree-shake)        | 4-8h   | — (parallel) | pending                                                       |
+
+### Linked artifacts
+
+- **PR-A landed**: [#91](https://github.com/Halildeu/platform-web/pull/91) — feat(faz-21-4-a) Design Lab live x-charts (Storybook fixture port; 13 chart.id switch; toggle forwarding; placeholder removed)
+- `packages/x-charts/CONTRACT.md` v2 (2026-04-11) — API kontratı + §8 CI gates DoD
+- `packages/x-charts/src/__stories__/AllChartTypes.stories.tsx` — visual regression + Design Lab fixture source-of-truth
+- `docs/01-architecture/f4-enterprise-x-suite/phase-gate-definitions.md` — F4 DoD
+- `packages/design-system/docs/PLATFORM-ROADMAP.md` — X-Suite mimarisi
+
+### F4 vs CONTRACT v2 ilişki (özet)
+
+F4 ✅ DONE = "10+ chart type, theme-aware" (PLATFORM-ROADMAP §374) tamamlandı
+sayılır ve doğrudur — 13 chart + 4 theme + crossfilter + drill-down mevcut.
+**CONTRACT v2 (2026-04-11) F4 done'undan SONRA çıktı** ve daha yüksek bir
+standart koydu: per-chart unit test exit criteria, 8 CI gate, ChartTooltip
+standalone API, AccessControlledProps integration. Faz 21.4 = bu CONTRACT v2'yi
+enforce + Design Lab playground'un fake-work durumunu çözme. F4 base'inin
+üstüne "world-class" enforcement katmanı.
+
+---
+
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE; PR #65 + #66 ile fake-test risk runtime-doğrulanmış kapatıldı), §19 Faz 21.4 x-charts CONTRACT v2 enforcement (audit-driven 2026-04-30, PR-A landed #91; PR-B/C/D/E/F pending) closure log eklendi._
