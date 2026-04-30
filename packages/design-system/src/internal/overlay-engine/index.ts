@@ -42,10 +42,13 @@ export {
   unregisterLayer,
   getTopZIndex,
   isTopLayer,
+  isTopFocusTrapLayer,
+  isTopDismissableLayer,
   getLayerStack,
   resetLayerStack,
   Z_INDEX_BASE,
   type ZIndexLayer,
+  type LayerParticipation,
 } from './layer-stack';
 
 // Focus Trap — keyboard focus containment

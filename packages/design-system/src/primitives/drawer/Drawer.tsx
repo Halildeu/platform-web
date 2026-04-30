@@ -129,14 +129,14 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
     },
     forwardedRef,
   ) => {
-    // Codex 019dde3d iter-46 — useFocusTrap covers autoFocus +
-    // restoreFocus + Tab/Shift+Tab boundary wrap-around.
+    // Codex 019dde60 iter-47b1 — layerId first for layer-aware gates.
+    const layerId = useId();
     const panelRef = useFocusTrap({
       active: open && !disableFocusTrap,
       autoFocus: !disableFocusTrap,
       restoreFocus: !disableFocusTrap,
+      layerId,
     });
-    const layerId = useId();
     const titleId = useId();
     const descriptionId = useId();
 
@@ -165,7 +165,7 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
     }, [open, layerId]);
 
     /* ---- overlay-engine: escape key ---- */
-    useEscapeKey(open && closeOnEscape, onClose);
+    useEscapeKey(open && closeOnEscape, onClose, { layerId });
 
     // Codex 019dde3d iter-46 — autoFocus + restoreFocus handled by
     // useFocusTrap. Removed legacy useFocusRestore + manual panel.focus().

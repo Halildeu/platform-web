@@ -12,6 +12,12 @@
 /* ------------------------------------------------------------------ */
 
 import React, { useEffect, useRef, useCallback } from 'react';
+// Codex 019dde60 iter-47b1 — layer-aware gating: when the consumer
+// passes `layerId`, the keydown handler checks `isTopFocusTrapLayer`
+// at event time so a nested modal doesn't fight the outer modal's
+// trap. Without `layerId` the hook keeps its iter-45 backwards-
+// compatible behavior.
+import { isTopFocusTrapLayer } from './layer-stack';
 
 /* ---- Focusable element query ---- */
 
@@ -63,6 +69,14 @@ export type UseFocusTrapOptions = {
   restoreFocus?: boolean;
   /** Ref to the element that should receive initial focus */
   initialFocusRef?: React.RefObject<HTMLElement>;
+  /**
+   * Layer id from `registerLayer`. When provided, the Tab keydown
+   * handler only intercepts when this layer is the top focus-trap
+   * participant — nested modals can stack without the outer trap
+   * stealing Tab from the inner one. Codex 019dde60 iter-47b1.
+   * Backward-compatible: omitting layerId disables the gate.
+   */
+  layerId?: string;
 };
 
 /**
@@ -89,9 +103,26 @@ export function useFocusTrap({
   autoFocus = true,
   restoreFocus = true,
   initialFocusRef,
+  layerId,
 }: UseFocusTrapOptions): React.RefObject<HTMLDivElement | null> {
   const containerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const wasActiveRef = useRef<boolean>(false);
+
+  // Codex 019dde60 iter-47b1 — restore-once helper used by both the
+  // active=true→false transition and the unmount cleanup. Sets the
+  // previousFocusRef to null after firing so the same target isn't
+  // focused twice (transition + unmount). Skips the focus call when
+  // the target is no longer in the DOM (e.g. trigger removed by an
+  // auto-close in the underlying layer).
+  const restoreToPreviousFocus = useCallback(() => {
+    const target = previousFocusRef.current;
+    if (!target) return;
+    previousFocusRef.current = null;
+    if (target.isConnected) {
+      target.focus();
+    }
+  }, []);
 
   // Store the previously focused element when trap activates
   useEffect(() => {
@@ -99,6 +130,28 @@ export function useFocusTrap({
       previousFocusRef.current = document.activeElement as HTMLElement;
     }
   }, [active, restoreFocus]);
+
+  // Codex 019dde60 iter-47b1 — restore on active=true→false transition
+  // (component still mounted). Without this, opener restore breaks for
+  // overlays that flip `open` while staying mounted (the unmount
+  // cleanup never fires). Combined with `restoreToPreviousFocus`
+  // nulling the ref, the unmount path stays a no-op when active
+  // already transitioned to false.
+  useEffect(() => {
+    if (active) {
+      wasActiveRef.current = true;
+      return;
+    }
+    if (wasActiveRef.current && restoreFocus) {
+      // Slight delay so any async close-handler-driven DOM updates
+      // settle before we try to focus the previous target.
+      const t = setTimeout(() => {
+        restoreToPreviousFocus();
+      }, 0);
+      wasActiveRef.current = false;
+      return () => clearTimeout(t);
+    }
+  }, [active, restoreFocus, restoreToPreviousFocus]);
 
   // Auto-focus on activation
   useEffect(() => {
@@ -127,23 +180,35 @@ export function useFocusTrap({
     return () => clearTimeout(timeout);
   }, [active, autoFocus, initialFocusRef]);
 
-  // Restore focus on deactivation
+  // Restore focus on UNMOUNT (cleanup). Active-transition restore
+  // above already handles the mounted-but-closed case; this branch
+  // only fires when the consumer unmounts the trap entirely. The
+  // ref-null guard from `restoreToPreviousFocus` prevents double
+  // focus when both transition + unmount fire in quick succession.
   useEffect(() => {
     return () => {
       if (restoreFocus && previousFocusRef.current) {
-        // Delay to ensure DOM is ready after unmount transition
         setTimeout(() => {
-          previousFocusRef.current?.focus();
-          previousFocusRef.current = null;
+          restoreToPreviousFocus();
         }, 0);
       }
     };
-  }, [restoreFocus]);
+  }, [restoreFocus, restoreToPreviousFocus]);
 
   // Tab trap handler
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!active || event.key !== 'Tab') return;
+
+      // Codex 019dde60 iter-47b1 — event-time top-layer gate. When
+      // multiple traps are attached (nested modals, modal-style
+      // popover over modal), only the topmost focus-trap participant
+      // should intercept Tab. Without `layerId` the gate is disabled
+      // for backward compatibility with iter-45 consumers.
+      // Important: when the gate excludes us we MUST NOT call
+      // preventDefault — the underlying topmost layer needs a clean
+      // event to handle.
+      if (layerId && !isTopFocusTrapLayer(layerId)) return;
 
       const container = containerRef.current;
       if (!container) return;
@@ -171,7 +236,7 @@ export function useFocusTrap({
         }
       }
     },
-    [active],
+    [active, layerId],
   );
 
   // Attach/detach keydown listener
