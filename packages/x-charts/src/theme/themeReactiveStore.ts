@@ -35,6 +35,17 @@ export interface ThemeSnapshot {
   resolvedTheme: Exclude<ChartResolvedTheme, 'print'>;
   /** Which signal won the priority chain. */
   source: ThemeSnapshotSource;
+  /**
+   * Whether the current surface is dark (independent of resolvedTheme).
+   * Light HC vs dark HC differentiation; Codex iter-5 fix.
+   *
+   * Derivation chain:
+   *   1. data-mode='dark' / 'light' (highest signal)
+   *   2. data-theme contains 'dark' / 'light' suffix
+   *   3. prefers-color-scheme: dark media query
+   *   4. default false
+   */
+  isDarkSurface: boolean;
 }
 
 const ATTRIBUTE_FILTER = [
@@ -47,7 +58,11 @@ const ATTRIBUTE_FILTER = [
   'style',
 ];
 
-const SERVER_SNAPSHOT: ThemeSnapshot = { resolvedTheme: 'light', source: 'server' };
+const SERVER_SNAPSHOT: ThemeSnapshot = {
+  resolvedTheme: 'light',
+  source: 'server',
+  isDarkSurface: false,
+};
 
 const SUBSCRIBERS = new Set<() => void>();
 let observer: MutationObserver | null = null;
@@ -108,34 +123,71 @@ const normalizeDataMode = (raw: string | null): Exclude<ChartResolvedTheme, 'pri
   return null;
 };
 
+/**
+ * Compute dark surface indicator independently of resolvedTheme.
+ * Used by HighContrast theme builder to differentiate light HC vs dark HC.
+ *
+ * Codex iter-5 fix: HC theme has two variants (light/dark surface) and
+ * the hook must pass `dark: <bool>` to the builder.
+ */
+const computeIsDarkSurface = (root: Element): boolean => {
+  // data-mode is the strongest, most explicit signal.
+  const mode = (root.getAttribute('data-mode') || '').trim().toLowerCase();
+  if (mode === 'dark') return true;
+  if (mode === 'light') return false;
+
+  // data-theme suffix-based inference (Serban tokens, custom tenants).
+  const themeKey = (root.getAttribute('data-theme') || '').trim().toLowerCase();
+  if (themeKey) {
+    if (themeKey === 'dark' || themeKey === 'serban-dark' || themeKey.endsWith('-dark')) {
+      return true;
+    }
+    if (
+      themeKey === 'light' ||
+      themeKey === 'serban-light' ||
+      themeKey === 'serban-compact' ||
+      themeKey.endsWith('-light')
+    ) {
+      return false;
+    }
+  }
+
+  // Final fallback: media query.
+  return matchMediaSafe('(prefers-color-scheme: dark)')?.matches ?? false;
+};
+
 const computeSnapshot = (): ThemeSnapshot => {
   if (isServer()) return SERVER_SNAPSHOT;
   const root = document.documentElement;
 
+  const isDarkSurface = computeIsDarkSurface(root);
+
   const appearance = normalizeDataAppearance(root.getAttribute('data-appearance'));
-  if (appearance) return { resolvedTheme: appearance, source: 'data-appearance' };
+  if (appearance) return { resolvedTheme: appearance, source: 'data-appearance', isDarkSurface };
 
   const theme = normalizeDataTheme(root.getAttribute('data-theme'));
-  if (theme) return { resolvedTheme: theme, source: 'data-theme' };
+  if (theme) return { resolvedTheme: theme, source: 'data-theme', isDarkSurface };
 
   const mode = normalizeDataMode(root.getAttribute('data-mode'));
-  if (mode) return { resolvedTheme: mode, source: 'data-mode' };
+  if (mode) return { resolvedTheme: mode, source: 'data-mode', isDarkSurface };
 
   const contrast = matchMediaSafe('(prefers-contrast: more)');
   if (contrast?.matches) {
-    return { resolvedTheme: 'high-contrast', source: 'prefers-contrast' };
+    return { resolvedTheme: 'high-contrast', source: 'prefers-contrast', isDarkSurface };
   }
 
   const dark = matchMediaSafe('(prefers-color-scheme: dark)');
   if (dark?.matches) {
-    return { resolvedTheme: 'dark', source: 'prefers-color-scheme' };
+    return { resolvedTheme: 'dark', source: 'prefers-color-scheme', isDarkSurface };
   }
 
-  return { resolvedTheme: 'light', source: 'default' };
+  return { resolvedTheme: 'light', source: 'default', isDarkSurface };
 };
 
 const snapshotsEqual = (a: ThemeSnapshot, b: ThemeSnapshot): boolean =>
-  a.resolvedTheme === b.resolvedTheme && a.source === b.source;
+  a.resolvedTheme === b.resolvedTheme &&
+  a.source === b.source &&
+  a.isDarkSurface === b.isDarkSurface;
 
 const broadcast = () => {
   const next = computeSnapshot();

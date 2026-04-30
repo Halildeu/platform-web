@@ -213,10 +213,91 @@ describe('themeReactiveStore — priority chain', () => {
     expect(getThemeSnapshot().resolvedTheme).toBe('light');
   });
 
-  it('SSR snapshot returns light/server', () => {
+  it('SSR snapshot returns light/server with dark surface false', () => {
     const ssr = getServerThemeSnapshot();
     expect(ssr.resolvedTheme).toBe('light');
     expect(ssr.source).toBe('server');
+    expect(ssr.isDarkSurface).toBe(false);
+  });
+});
+
+/* ---------------------------------------------------------------- */
+/*  isDarkSurface — Codex iter-5 fix                                 */
+/* ---------------------------------------------------------------- */
+
+describe('themeReactiveStore — isDarkSurface derivation', () => {
+  it('default state → isDarkSurface=false', () => {
+    expect(getThemeSnapshot().isDarkSurface).toBe(false);
+  });
+
+  it('HC + data-mode="dark" → isDarkSurface=true (HC dark variant)', () => {
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    document.documentElement.setAttribute('data-mode', 'dark');
+    __resetThemeStoreForTests();
+    const snap = getThemeSnapshot();
+    expect(snap.resolvedTheme).toBe('high-contrast');
+    expect(snap.isDarkSurface).toBe(true);
+  });
+
+  it('HC alone → isDarkSurface=false (light HC default)', () => {
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    __resetThemeStoreForTests();
+    const snap = getThemeSnapshot();
+    expect(snap.resolvedTheme).toBe('high-contrast');
+    expect(snap.isDarkSurface).toBe(false);
+  });
+
+  it('HC + data-theme="serban-dark" → isDarkSurface=true (data-theme suffix)', () => {
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    document.documentElement.setAttribute('data-theme', 'serban-dark');
+    __resetThemeStoreForTests();
+    const snap = getThemeSnapshot();
+    expect(snap.resolvedTheme).toBe('high-contrast');
+    expect(snap.isDarkSurface).toBe(true);
+  });
+
+  it('HC + prefers-color-scheme:dark → isDarkSurface=true (media fallback)', () => {
+    setMatchMedia('(prefers-color-scheme: dark)', true);
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    __resetThemeStoreForTests();
+    const snap = getThemeSnapshot();
+    expect(snap.resolvedTheme).toBe('high-contrast');
+    expect(snap.isDarkSurface).toBe(true);
+  });
+
+  it('HC + data-mode="light" → isDarkSurface=false (explicit light wins over media)', () => {
+    setMatchMedia('(prefers-color-scheme: dark)', true);
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    document.documentElement.setAttribute('data-mode', 'light');
+    __resetThemeStoreForTests();
+    const snap = getThemeSnapshot();
+    expect(snap.resolvedTheme).toBe('high-contrast');
+    expect(snap.isDarkSurface).toBe(false);
+  });
+
+  it('HC + data-theme="tenant-x-light" → isDarkSurface=false', () => {
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    document.documentElement.setAttribute('data-theme', 'tenant-x-light');
+    __resetThemeStoreForTests();
+    const snap = getThemeSnapshot();
+    expect(snap.isDarkSurface).toBe(false);
+  });
+
+  it('snapshotsEqual treats isDarkSurface diff as a change (subscriber notified)', async () => {
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    __resetThemeStoreForTests();
+    const notify = vi.fn();
+    const unsub = subscribeThemeStore(notify);
+
+    // Initial snapshot has isDarkSurface=false; flipping data-mode to dark
+    // must broadcast even though resolvedTheme stays 'high-contrast'.
+    document.documentElement.setAttribute('data-mode', 'dark');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(notify).toHaveBeenCalled();
+    expect(getThemeSnapshot().isDarkSurface).toBe(true);
+
+    unsub();
   });
 });
 

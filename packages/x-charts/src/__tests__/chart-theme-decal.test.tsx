@@ -418,6 +418,26 @@ describe('Theme builder distinctness invariant', () => {
     const themeAria = printTheme?.aria as Record<string, unknown> | undefined;
     expect(themeAria?.decal).toBeUndefined();
   });
+
+  it('high-contrast: light HC vs dark HC theme builder yields different textStyle.color', () => {
+    // Light HC default
+    document.documentElement.removeAttribute('data-mode');
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    __resetThemeStoreForTests();
+    render(<BarChart data={SAMPLE_BAR} theme="auto" />);
+    const lightHcTheme = lastTheme() as Record<string, unknown>;
+    const lightHcText = (lightHcTheme?.textStyle as Record<string, unknown>)?.color;
+    expect(lightHcText).toBe('#000000');
+
+    initMock.mockClear();
+    // Dark HC
+    document.documentElement.setAttribute('data-mode', 'dark');
+    __resetThemeStoreForTests();
+    render(<BarChart data={SAMPLE_BAR} theme="auto" />);
+    const darkHcTheme = lastTheme() as Record<string, unknown>;
+    const darkHcText = (darkHcTheme?.textStyle as Record<string, unknown>)?.color;
+    expect(darkHcText).toBe('#ffffff');
+  });
 });
 
 /* ---------------------------------------------------------------- */

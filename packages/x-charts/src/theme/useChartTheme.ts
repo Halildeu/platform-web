@@ -90,12 +90,19 @@ const resolveDecalPreference = (
   return Boolean(preference);
 };
 
-const buildThemeObject = (resolved: ChartResolvedTheme): Record<string, unknown> => {
+const buildThemeObject = (
+  resolved: ChartResolvedTheme,
+  isDarkSurface: boolean,
+): Record<string, unknown> => {
   switch (resolved) {
     case 'dark':
+      // DarkTheme builder kendi isDarkMode() helper'ı ile data-theme/media
+      // query üzerinden çalışır; ekstra flag gerekmez.
       return buildDesignLabEChartsDarkTheme();
     case 'high-contrast':
-      return buildDesignLabEChartsHighContrastTheme();
+      // Codex iter-5 fix: HC builder iki varyant (light HC vs dark HC) destekler.
+      // isDarkSurface DOM/data-mode/data-theme/media-query'den hesaplanır.
+      return buildDesignLabEChartsHighContrastTheme({ dark: isDarkSurface });
     case 'print':
       // Codex iter-2 madde 4: print theme'in built-in aria.decal'ı kapatılır;
       // decal kontrolü sadece option seviyesinde yapılır.
@@ -123,9 +130,13 @@ export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResu
   const { resolved, source } = resolveThemePreference(themePreference, snapshot);
   const decalEnabled = resolveDecalPreference(decalPreference, resolved);
 
-  // Memoize on resolved theme only; rebuilding the theme object on every render
-  // would defeat React.memo / option.useMemo dependency arrays in chart wrappers.
-  const themeObject = useMemo(() => buildThemeObject(resolved), [resolved]);
+  // Codex iter-5: HC builder needs dark surface flag. Other themes ignore it
+  // but the dependency keeps the snapshot reactive — overhead is negligible
+  // since theme builders are tiny pure functions.
+  const themeObject = useMemo(
+    () => buildThemeObject(resolved, snapshot.isDarkSurface),
+    [resolved, snapshot.isDarkSurface],
+  );
 
   return {
     themeObject,
