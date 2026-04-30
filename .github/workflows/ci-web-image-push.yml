@@ -102,12 +102,45 @@ jobs:
             VITE_GATEWAY_URL=${{ matrix.gateway }}
             VITE_AUTH_MODE=keycloak
             AG_GRID_LICENSE_KEY=${{ secrets.AG_GRID_LICENSE_KEY }}
+            BUILD_SHA=${{ github.sha }}
+            BUILD_REF=${{ github.ref_name }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:sha-${{ steps.sha.outputs.short }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}:latest
           cache-from: type=gha,scope=${{ matrix.variant }}
           cache-to: type=gha,scope=${{ matrix.variant }},mode=max
           provenance: false
+
+      # iter-50 Step 3.2 (Codex 019dded6) — testai variant SUCCESS sonra
+      # platform-k8s-gitops repo'suna `repository_dispatch` event'i tetikle.
+      # Sadece testai için; prod için ayrı manuel `workflow_dispatch` workflow
+      # (Faz 21.6 follow-up). Secret `GITOPS_DISPATCH_PAT` fine-grained PAT,
+      # `Halildeu/platform-k8s-gitops` üstünde "Contents: write" yetkisi.
+      - name: Dispatch testai deploy to gitops
+        if: matrix.variant == 'testai'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_DISPATCH_PAT }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::GITOPS_DISPATCH_PAT not set; skipping dispatch"
+            exit 0
+          fi
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image_name }}"
+          DIGEST="${{ steps.build.outputs.digest }}"
+          TAG="sha-${{ steps.sha.outputs.short }}"
+          gh api repos/Halildeu/platform-k8s-gitops/dispatches \
+            -X POST \
+            -f event_type=testai-deploy \
+            -F "client_payload[sha]=${{ github.sha }}" \
+            -F "client_payload[short_sha]=${{ steps.sha.outputs.short }}" \
+            -F "client_payload[ref]=${{ github.ref_name }}" \
+            -F "client_payload[image]=${IMAGE_REF}" \
+            -F "client_payload[image_tag]=${TAG}" \
+            -F "client_payload[image_digest]=${DIGEST}"
+          echo "Dispatched testai-deploy to platform-k8s-gitops"
+          echo "  - sha:      ${{ github.sha }}"
+          echo "  - tag:      ${TAG}"
+          echo "  - digest:   ${DIGEST}"
 
       - name: Summary — digest (19.9 pin için kanıt)
         run: |
