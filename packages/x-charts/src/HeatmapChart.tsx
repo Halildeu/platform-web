@@ -11,7 +11,8 @@ import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
-import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -61,6 +62,16 @@ export interface HeatmapChartProps {
   onCellClick?: (params: { x: number; y: number; value: number }) => void;
   /** Additional class name. */
   className?: string;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override.
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -176,6 +187,8 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       animate = true,
       onCellClick,
       className,
+      theme: themePreference = 'auto',
+      decal: decalPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -184,7 +197,10 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
     const isEmpty = !data || data.length === 0;
     const fmt = valueFormatter ?? formatCompact;
 
-    const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+      theme: themePreference,
+      decal: decalPreference,
+    });
 
     const option = useMemo((): EChartsOption | null => {
       if (isEmpty) return null;
@@ -275,6 +291,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           label: {
             description: title ? `Heatmap chart: ${escapeHtml(title)}` : 'Heatmap chart',
           },
+          ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
         },
       } as EChartsOption;
     }, [
@@ -291,6 +308,8 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       showLegend,
       animate,
       isEmpty,
+      decalEnabled,
+      decalPatterns,
     ]);
 
     const handleClick = useCallback(
@@ -310,7 +329,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
 
     const { containerRef, instance } = useEChartsRenderer({
       option: option ?? ({} as EChartsOption),
-      theme,
+      theme: themeObject,
       respectReducedMotion: true,
       onClick: onCellClick ? handleClick : undefined,
     });

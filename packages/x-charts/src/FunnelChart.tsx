@@ -13,7 +13,8 @@ import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
-import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -62,6 +63,16 @@ export interface FunnelChartProps {
   onDataPointClick?: (params: unknown) => void;
   /** Additional class name. */
   className?: string;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override.
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -135,6 +146,8 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     animate = true,
     onDataPointClick,
     className,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -147,7 +160,10 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
   );
   const fmt = valueFormatter ?? formatCompact;
 
-  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+  });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
@@ -245,6 +261,7 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
         label: {
           description: title ? `Funnel chart: ${escapeHtml(title)}` : 'Funnel chart',
         },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
     } as EChartsOption;
   }, [
@@ -263,6 +280,8 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     animate,
     onDataPointClick,
     isEmpty,
+    decalEnabled,
+    decalPatterns,
   ]);
 
   const handleClick = useCallback(
@@ -275,7 +294,7 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
-    theme,
+    theme: themeObject,
     respectReducedMotion: true,
     onClick: onDataPointClick ? handleClick : undefined,
   });

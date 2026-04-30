@@ -10,7 +10,8 @@ import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
-import { buildDesignLabEChartsTheme } from './theme/DesignLabEChartsTheme';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -60,6 +61,16 @@ export interface PieChartProps {
   className?: string;
   /** Callback fired when a data point (slice) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override.
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -107,6 +118,8 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
     description,
     className,
     onDataPointClick,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -119,7 +132,10 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
   const isEmpty = validData.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
-  const theme = useMemo(() => buildDesignLabEChartsTheme(), []);
+  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+  });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
@@ -200,6 +216,7 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
               ? `Pie chart: ${escapeHtml(title)}`
               : 'Pie chart',
         },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
     } as EChartsOption;
   }, [
@@ -214,6 +231,8 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
     description,
     onDataPointClick,
     isEmpty,
+    decalEnabled,
+    decalPatterns,
   ]);
 
   const handleClick = useCallback(
@@ -231,7 +250,7 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
-    theme,
+    theme: themeObject,
     respectReducedMotion: true,
     onClick: onDataPointClick ? handleClick : undefined,
   });

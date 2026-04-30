@@ -10,6 +10,8 @@ import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import { useChartTheme } from './theme/useChartTheme';
+import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -57,6 +59,16 @@ export interface ScatterChartProps {
   bubble?: boolean;
   /** Text shown when data is empty. @default "Veri yok" */
   noDataText?: string;
+  /**
+   * Theme override.
+   * @default "auto" — follows documentElement signals
+   */
+  theme?: ChartThemePreference;
+  /**
+   * Decal pattern override.
+   * @default "auto" — enabled for high-contrast and print themes
+   */
+  decal?: ChartDecalPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -111,6 +123,8 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       yLabel,
       bubble = false,
       noDataText = 'Veri yok',
+      theme: themePreference = 'auto',
+      decal: decalPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -128,6 +142,14 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
     );
     const isEmpty = safeData.length === 0;
     const fmt = valueFormatter ?? formatCompact;
+
+    // Codex iter-1 madde 6: ScatterChart önceden theme'i renderer'a hiç vermiyordu;
+    // theme switch'te option memo recompute olsun diye themeObject ve decal*'ı
+    // dependency olarak option useMemo'ya iletiyoruz.
+    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+      theme: themePreference,
+      decal: decalPreference,
+    });
 
     const option = useMemo((): EChartsOption | null => {
       if (isEmpty) return null;
@@ -255,6 +277,7 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
                 ? `Scatter chart: ${escapeHtml(title)}`
                 : 'Scatter chart',
           },
+          ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
         },
       } as EChartsOption;
     }, [
@@ -270,11 +293,15 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       yLabel,
       bubble,
       isEmpty,
+      themeObject,
+      decalEnabled,
+      decalPatterns,
     ]);
 
     // Use centralized renderer hook
     const { containerRef, instance } = useEChartsRenderer({
       option: option ?? ({} as EChartsOption),
+      theme: themeObject,
       respectReducedMotion: true,
     });
 
