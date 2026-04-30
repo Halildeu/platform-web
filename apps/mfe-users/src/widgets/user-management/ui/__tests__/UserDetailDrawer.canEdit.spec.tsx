@@ -93,6 +93,14 @@ vi.mock('@mfe/design-system', () => {
   return {
     DetailDrawer: drawerShell,
     FormDrawer: drawerShell,
+    // iter-43 — Avatar primitive used in drawer header leading slot.
+    // Stubbed as a passthrough so canEdit tests don't break, but
+    // initials still surface in the DOM for any future probe.
+    Avatar: ({ initials, alt }: { initials?: string; alt?: string }) => (
+      <span data-testid="avatar" aria-hidden="true" aria-label={alt}>
+        {initials}
+      </span>
+    ),
     Skeleton: ({ className }: { className?: string }) => (
       <div data-testid="skeleton" className={className} />
     ),

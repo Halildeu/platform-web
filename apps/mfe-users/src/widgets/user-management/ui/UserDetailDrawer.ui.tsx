@@ -8,7 +8,12 @@ import { usePermissions } from '@mfe/auth';
 // brings the drawer in line with the design-system contract: this drawer
 // persists role + scope writes, so it belongs on the form primitive. Real
 // focus-trap uplift stays a separate DS epic per Codex review.
-import { FormDrawer, Tabs, Checkbox, Skeleton } from '@mfe/design-system';
+// Codex 019dddf4 iter-43 — leading slot avatar: visual hierarchy uplift in
+// drawer header. DS FormDrawer gained a `leading` slot prop (LTR-neutral)
+// in this iter; UserDetailDrawer becomes the first consumer. Avatar uses
+// the existing DS primitive (initials/photo/icon fallback chain).
+import { FormDrawer, Tabs, Checkbox, Skeleton, Avatar } from '@mfe/design-system';
+import { getInitials } from '../utils/getInitials';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
 import { pushToast } from '../../../shared/notifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -753,6 +758,21 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       onClose={handleClose}
       title={user.fullName}
       subtitle={user.email}
+      leading={
+        <Avatar
+          // Codex 019dddf4 iter-43 — initial-circle avatar in drawer
+          // header. size="lg" (48px) gives strong visual hierarchy
+          // anchor without dominating the title text. Image src can be
+          // wired in a follow-up if/when user profile pictures land.
+          initials={getInitials({
+            fullName: user.fullName,
+            email: user.email,
+          })}
+          size="lg"
+          alt={user.fullName}
+          aria-hidden="true"
+        />
+      }
       footer={drawerFooter}
       size="md"
     >
