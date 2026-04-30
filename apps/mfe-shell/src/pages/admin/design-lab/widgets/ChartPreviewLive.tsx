@@ -33,6 +33,7 @@ import {
   useChartInteractions,
 } from '@mfe/x-charts';
 import CrossFilterDemoLive from './CrossFilterDemoLive';
+import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
 
 const categories = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'];
 const values1 = [320, 332, 301, 334, 390, 330];
@@ -462,6 +463,20 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
         >
           <CrossFilterDemoLive />
+        </div>
+      );
+
+    case 'detect-anomalies':
+    case 'identify-trends':
+    case 'suggest-chart':
+    case 'chart-description':
+    case 'nl-to-chart':
+      return (
+        <div
+          data-testid={testId}
+          style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
+        >
+          <AiHookDemoLive hookId={chartId as AiHookId} />
         </div>
       );
 

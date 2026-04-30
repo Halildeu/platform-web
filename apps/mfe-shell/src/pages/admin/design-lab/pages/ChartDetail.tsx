@@ -1177,6 +1177,177 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['filter-state-announced', 'reset-keyboard-focusable'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
+
+  /* ---- AI helpers (Faz 21.4-B3) ---- */
+
+  'detect-anomalies': {
+    id: 'detect-anomalies',
+    name: 'detectAnomalies',
+    description:
+      'IQR-based outlier detection. Returns indices, values, z-scores, and direction (high/low) for each anomaly in a numeric series.',
+    importPath: "import { detectAnomalies } from '@mfe/x-charts';",
+    tier: 'ai',
+    props: [
+      {
+        name: 'data',
+        type: 'number[]',
+        required: true,
+        default: '—',
+        description: 'Numeric values to scan for outliers',
+      },
+      {
+        name: 'sensitivity',
+        type: 'number',
+        required: false,
+        default: '1.5',
+        description: 'IQR multiplier — lower = more sensitive',
+      },
+    ],
+    sampleCode: `const anomalies = detectAnomalies([10, 12, 8, 95, 13]);
+// → [{ index: 3, value: 95, zScore: 12.5, direction: 'high' }]`,
+    features: ['iqr-method', 'direction-flag', 'pure-function'],
+    a11y: ['no-ui-surface'],
+    themes: ['n/a'],
+  },
+
+  'identify-trends': {
+    id: 'identify-trends',
+    name: 'identifyTrends',
+    description:
+      'Linear-regression trend detection. Returns direction (up/down/flat), slope, R², and a human-readable summary, or null if the series is too short.',
+    importPath: "import { identifyTrends } from '@mfe/x-charts';",
+    tier: 'ai',
+    props: [
+      {
+        name: 'data',
+        type: 'number[]',
+        required: true,
+        default: '—',
+        description: 'Numeric values to analyse for a monotonic trend',
+      },
+      {
+        name: 'flatThreshold',
+        type: 'number',
+        required: false,
+        default: '0.01',
+        description: 'Slope magnitude below which the trend is reported as flat',
+      },
+    ],
+    sampleCode: `const trend = identifyTrends([10, 14, 18, 22, 26]);
+// → { direction: 'up', slope: 4, rSquared: 1, summary: '...' }`,
+    features: ['linear-regression', 'r-squared', 'flat-threshold', 'pure-function'],
+    a11y: ['no-ui-surface'],
+    themes: ['n/a'],
+  },
+
+  'suggest-chart': {
+    id: 'suggest-chart',
+    name: 'suggestChartType',
+    description:
+      'Heuristic chart-type recommender. Analyses tabular data shape (row/column counts, dtypes, cardinality) and returns ranked suggestions with confidence scores and reasoning.',
+    importPath: "import { suggestChartType } from '@mfe/x-charts';",
+    tier: 'ai',
+    props: [
+      {
+        name: 'data',
+        type: 'Record<string, unknown>[]',
+        required: true,
+        default: '—',
+        description: 'Tabular sample to analyse',
+      },
+      {
+        name: 'maxSuggestions',
+        type: 'number',
+        required: false,
+        default: '5',
+        description: 'Cap on returned suggestions',
+      },
+    ],
+    sampleCode: `const suggestions = suggestChartType([
+  { month: 'Jan', revenue: 320 },
+  { month: 'Feb', revenue: 332 },
+]);
+// → [{ type: 'bar', confidence: 0.9, reason: '...' }, ...]`,
+    features: ['shape-analysis', 'confidence-score', 'ranked-output', 'pure-function'],
+    a11y: ['no-ui-surface'],
+    themes: ['n/a'],
+  },
+
+  'chart-description': {
+    id: 'chart-description',
+    name: 'generateChartDescription',
+    description:
+      'Generates a Turkish, screen-reader-friendly description for any chart from its type, data point count, value range, and optional categories. Drop the result into aria-describedby.',
+    importPath: "import { generateChartDescription } from '@mfe/x-charts';",
+    tier: 'ai',
+    props: [
+      {
+        name: 'input',
+        type: 'DescriptionInput',
+        required: true,
+        default: '—',
+        description: 'chartType, title, dataPointCount, seriesCount, min/max, categories',
+      },
+    ],
+    sampleCode: `generateChartDescription({
+  chartType: 'bar',
+  title: 'Aylık Gelir',
+  dataPointCount: 6,
+  minValue: 301,
+  maxValue: 390,
+});
+// → 'Aylık Gelir adlı çubuk grafik. 6 veri noktası, 301 ile 390 arasında.'`,
+    features: ['tr-locale', 'aria-describedby-friendly', 'pure-function'],
+    a11y: ['screen-reader-narration', 'wcag-aa-compliant'],
+    themes: ['n/a'],
+  },
+
+  'nl-to-chart': {
+    id: 'nl-to-chart',
+    name: 'nlToChartSpec',
+    description:
+      'Converts a natural-language query into a validated ChartSpec via a user-supplied LLM fetchFn. Returns spec, isValid, errors, prompt, rawResponse for full traceability.',
+    importPath: "import { nlToChartSpec } from '@mfe/x-charts';",
+    tier: 'ai',
+    props: [
+      {
+        name: 'options.query',
+        type: 'string',
+        required: true,
+        default: '—',
+        description: 'Natural-language instruction',
+      },
+      {
+        name: 'options.fetchFn',
+        type: '(prompt: string) => Promise<string>',
+        required: true,
+        default: '—',
+        description: 'LLM call adapter — caller wires this to OpenAI / Anthropic / etc.',
+      },
+      {
+        name: 'options.columns',
+        type: '{ field, type }[]',
+        required: false,
+        default: 'undefined',
+        description: 'Optional schema hints for grounding',
+      },
+      {
+        name: 'options.preferredType',
+        type: 'ChartType',
+        required: false,
+        default: 'undefined',
+        description: 'Bias the LLM toward a specific chart type',
+      },
+    ],
+    sampleCode: `const result = await nlToChartSpec({
+  query: 'Show quarterly sales as a bar chart',
+  fetchFn: async (prompt) => callOpenAI(prompt),
+});
+// → { spec: { type: 'bar', ... }, isValid: true, errors: [], ... }`,
+    features: ['llm-agnostic', 'validation', 'traceable-prompt', 'async'],
+    a11y: ['no-ui-surface'],
+    themes: ['n/a'],
+  },
 };
 
 /* ------------------------------------------------------------------ */

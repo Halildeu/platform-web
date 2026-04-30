@@ -24,6 +24,11 @@ const CHART_PLAYGROUND_ROUTES: Array<{ slug: string; previewTestId: string }> = 
   { slug: 'chart-dashboard', previewTestId: 'design-lab-chart-preview-chart-dashboard' },
   { slug: 'chart-container', previewTestId: 'design-lab-chart-preview-chart-container' },
   { slug: 'chart-toolbar', previewTestId: 'design-lab-chart-preview-chart-toolbar' },
+  { slug: 'detect-anomalies', previewTestId: 'design-lab-chart-preview-detect-anomalies' },
+  { slug: 'identify-trends', previewTestId: 'design-lab-chart-preview-identify-trends' },
+  { slug: 'suggest-chart', previewTestId: 'design-lab-chart-preview-suggest-chart' },
+  { slug: 'chart-description', previewTestId: 'design-lab-chart-preview-chart-description' },
+  { slug: 'nl-to-chart', previewTestId: 'design-lab-chart-preview-nl-to-chart' },
 ];
 
 test.describe('Design Lab chart playground (QLTY-DL-CHART-PLAYGROUND-01)', () => {
@@ -68,6 +73,22 @@ test.describe('Design Lab chart playground (QLTY-DL-CHART-PLAYGROUND-01)', () =>
 
     // Reset button should be present and enabled.
     await expect(demoRoot.getByTestId('cross-filter-reset')).toBeEnabled();
+  });
+
+  test('detect-anomalies route runs the helper and populates the result on click', async ({
+    page,
+    baseURL,
+  }) => {
+    await authenticateAndNavigate(page, baseURL, `${ROOT}/detect-anomalies`, ['DESIGN_LAB']);
+    await page.waitForLoadState('networkidle');
+
+    const result = page.getByTestId('ai-detect-anomalies-result-content');
+    await expect(result).toBeVisible({ timeout: 15_000 });
+    await expect(result).toHaveAttribute('data-empty', 'true');
+
+    await page.getByTestId('ai-detect-anomalies-run').click();
+    await expect(result).toHaveAttribute('data-empty', 'false', { timeout: 5_000 });
+    await expect(result).toContainText('"value": 95');
   });
 
   test('chart-toolbar route exposes the interactions state panel', async ({ page, baseURL }) => {
