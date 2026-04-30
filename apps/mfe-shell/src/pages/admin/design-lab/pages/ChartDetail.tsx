@@ -1000,6 +1000,183 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['landmark-region', 'logical-order'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
+
+  'chart-container': {
+    id: 'chart-container',
+    name: 'ChartContainer',
+    description:
+      'Standardized wrapper for any x-charts component — title, description, loading/error/empty states, height slot, action buttons.',
+    importPath: "import { ChartContainer } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'children',
+        type: 'ReactNode',
+        required: true,
+        default: '—',
+        description: 'Chart content rendered inside the container',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Card title displayed in the header',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Secondary description below the title',
+      },
+      {
+        name: 'loading',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show a loading spinner instead of children',
+      },
+      {
+        name: 'error',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Error message — replaces children with an error state',
+      },
+      {
+        name: 'empty',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show the empty-data placeholder',
+      },
+      {
+        name: 'height',
+        type: 'number | string',
+        required: false,
+        default: '300',
+        description: 'Chart area height',
+      },
+      {
+        name: 'actions',
+        type: 'ReactNode',
+        required: false,
+        default: 'undefined',
+        description: 'Action buttons rendered in the header row',
+      },
+    ],
+    sampleCode: `<ChartContainer
+  title="Q3 Sales"
+  description="Container ile sarılmış BarChart"
+  height={260}
+>
+  <BarChart data={[{ label: "Jan", value: 320 }]} />
+</ChartContainer>`,
+    features: ['states-layer', 'header-slot', 'actions-slot', 'composition'],
+    a11y: ['landmark-region', 'live-region-error'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'chart-toolbar': {
+    id: 'chart-toolbar',
+    name: 'ChartToolbar',
+    description:
+      'Toolbar surface for chart-level actions: zoom in/out/reset, brush mode, undo/redo from cross-filter store, drill-up, export PNG/SVG. Driven by useChartInteractions state.',
+    importPath: "import { ChartToolbar, useChartInteractions } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'interactions',
+        type: 'ChartInteractionState',
+        required: true,
+        default: '—',
+        description: 'State object returned by useChartInteractions',
+      },
+      {
+        name: 'onExportPNG',
+        type: '() => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback for the export-PNG button',
+      },
+      {
+        name: 'onExportSVG',
+        type: '() => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback for the export-SVG button',
+      },
+      {
+        name: 'onUndo',
+        type: '() => void',
+        required: false,
+        default: 'undefined',
+        description: 'Undo callback (typically from cross-filter store)',
+      },
+      {
+        name: 'onRedo',
+        type: '() => void',
+        required: false,
+        default: 'undefined',
+        description: 'Redo callback (typically from cross-filter store)',
+      },
+      {
+        name: 'onDrillUp',
+        type: '() => void',
+        required: false,
+        default: 'undefined',
+        description: 'Drill-up callback (rendered when drillDepth > 0)',
+      },
+    ],
+    sampleCode: `const [interactions] = useChartInteractions({ enableZoom: true, enableBrush: true });
+
+<ChartToolbar
+  interactions={interactions}
+  onExportPNG={() => exportPNG()}
+/>`,
+    features: ['zoom-controls', 'brush-toggle', 'export-actions', 'undo-redo', 'drill-up'],
+    a11y: ['button-aria-labels', 'keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'cross-filter': {
+    id: 'cross-filter',
+    name: 'CrossFilterProvider',
+    description:
+      'Chart-to-chart and chart-to-grid filter coordination bus. Wrap a tree with the provider; child charts/grids subscribe via useChartCrossFilter / useGridCrossFilter and emit filters on user interaction.',
+    importPath: "import { CrossFilterProvider, useChartCrossFilter } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'children',
+        type: 'ReactNode',
+        required: true,
+        default: '—',
+        description: 'Subtree that will share the cross-filter store',
+      },
+      {
+        name: 'initialFilters',
+        type: 'CrossFilterEntry[]',
+        required: false,
+        default: '[]',
+        description: 'Optional filters seeded into the store on mount',
+      },
+    ],
+    sampleCode: `<CrossFilterProvider>
+  <FilteredBar chartId="region" emitField="region" />
+  <FilteredBar chartId="category" emitField="category" />
+</CrossFilterProvider>`,
+    features: [
+      'linked-charts',
+      'imperative-store-access',
+      'event-bridge',
+      'undo-redo',
+      'bookmarks',
+    ],
+    a11y: ['filter-state-announced', 'reset-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
 };
 
 /* ------------------------------------------------------------------ */
