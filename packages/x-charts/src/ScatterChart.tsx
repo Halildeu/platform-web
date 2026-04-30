@@ -11,7 +11,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -69,6 +74,8 @@ export interface ScatterChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -125,6 +132,7 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       noDataText = 'Veri yok',
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
+      density: densityPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -146,9 +154,17 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
     // Codex iter-1 madde 6: ScatterChart önceden theme'i renderer'a hiç vermiyordu;
     // theme switch'te option memo recompute olsun diye themeObject ve decal*'ı
     // dependency olarak option useMemo'ya iletiyoruz.
-    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    const {
+      themeObject,
+      decalEnabled,
+      decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
+      densityPaddingMultiplier,
+    } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
+      density: densityPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
@@ -185,14 +201,23 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
               text: escapeHtml(title),
               subtext: description ? escapeHtml(description) : undefined,
               left: 'center',
-              textStyle: { fontFamily, color: textPrimary, fontSize: 16, fontWeight: 600 },
-              subtextStyle: { fontFamily, color: textSecondary, fontSize: 13 },
+              textStyle: {
+                fontFamily,
+                color: textPrimary,
+                fontSize: scaleFontSize(16, densityFontMultiplier),
+                fontWeight: 600,
+              },
+              subtextStyle: {
+                fontFamily,
+                color: textSecondary,
+                fontSize: scaleFontSize(13, densityFontMultiplier),
+              },
             }
           : undefined,
         tooltip: {
           trigger: 'item',
           confine: true,
-          textStyle: { fontFamily, fontSize: 13 },
+          textStyle: { fontFamily, fontSize: scaleFontSize(13, densityFontMultiplier) },
           formatter: (params: unknown) => {
             const p = params as { value: number[]; name: string };
             const xVal = fmt(p.value[0]);
@@ -204,16 +229,24 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
         legend: {
           show: showLegend,
           bottom: 0,
-          textStyle: { fontFamily, color: textPrimary, fontSize: 12 },
+          textStyle: {
+            fontFamily,
+            color: textPrimary,
+            fontSize: scaleFontSize(12, densityFontMultiplier),
+          },
           icon: 'circle',
-          itemWidth: 10,
-          itemHeight: 10,
+          itemWidth: scaleSpacing(10, densitySpacingMultiplier),
+          itemHeight: scaleSpacing(10, densitySpacingMultiplier),
         },
         grid: {
-          top: title ? 60 : 24,
-          right: 16,
-          bottom: showLegend ? 48 : 24,
-          left: 16,
+          top: title
+            ? scalePadding(60, densityPaddingMultiplier)
+            : scalePadding(24, densityPaddingMultiplier),
+          right: scalePadding(16, densityPaddingMultiplier),
+          bottom: showLegend
+            ? scalePadding(48, densityPaddingMultiplier)
+            : scalePadding(24, densityPaddingMultiplier),
+          left: scalePadding(16, densityPaddingMultiplier),
           containLabel: true,
         },
         xAxis: {
@@ -296,6 +329,9 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       themeObject,
       decalEnabled,
       decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
+      densityPaddingMultiplier,
     ]);
 
     // Use centralized renderer hook

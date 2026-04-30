@@ -12,7 +12,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -72,6 +77,8 @@ export interface HeatmapChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -189,6 +196,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       className,
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
+      density: densityPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -197,9 +205,16 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
     const isEmpty = !data || data.length === 0;
     const fmt = valueFormatter ?? formatCompact;
 
-    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    const {
+      themeObject,
+      decalEnabled,
+      decalPatterns,
+      densityFontMultiplier,
+      densityPaddingMultiplier,
+    } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
+      density: densityPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
@@ -218,7 +233,10 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           ? {
               text: escapeHtml(title),
               left: 'center',
-              textStyle: { fontSize: 16, fontWeight: 600 },
+              textStyle: {
+                fontSize: scaleFontSize(16, densityFontMultiplier),
+                fontWeight: 600,
+              },
             }
           : undefined,
         tooltip: {
@@ -233,24 +251,28 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           },
         },
         grid: {
-          top: title ? 56 : 20,
-          right: showLegend ? 80 : 16,
-          bottom: 24,
-          left: 16,
+          top: title
+            ? scalePadding(56, densityPaddingMultiplier)
+            : scalePadding(20, densityPaddingMultiplier),
+          right: showLegend
+            ? scalePadding(80, densityPaddingMultiplier)
+            : scalePadding(16, densityPaddingMultiplier),
+          bottom: scalePadding(24, densityPaddingMultiplier),
+          left: scalePadding(16, densityPaddingMultiplier),
           containLabel: true,
         },
         xAxis: {
           type: 'category' as const,
           data: xCats,
           splitArea: { show: true },
-          axisLabel: { fontSize: 11 },
+          axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
           axisTick: { alignWithLabel: true },
         },
         yAxis: {
           type: 'category' as const,
           data: yCats,
           splitArea: { show: true },
-          axisLabel: { fontSize: 11 },
+          axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
         },
         visualMap: {
           min: effectiveMin,
@@ -263,7 +285,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           inRange: {
             color: colors,
           },
-          textStyle: { fontSize: 11 },
+          textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
         },
         series: [
           {
@@ -271,7 +293,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
             data: normalized,
             label: {
               show: showValues,
-              fontSize: 10,
+              fontSize: scaleFontSize(10, densityFontMultiplier),
               formatter: (params: { value: [number, number, number] }) =>
                 escapeHtml(fmt(sanitizeNumber(params.value[2]))),
             },
@@ -310,6 +332,8 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
       isEmpty,
       decalEnabled,
       decalPatterns,
+      densityFontMultiplier,
+      densityPaddingMultiplier,
     ]);
 
     const handleClick = useCallback(

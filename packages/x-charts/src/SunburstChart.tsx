@@ -14,7 +14,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -81,6 +86,8 @@ export interface SunburstChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -213,6 +220,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       className,
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
+      density: densityPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -221,9 +229,16 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
     const isEmpty = !data || data.length === 0;
     const fmt = valueFormatter ?? formatCompact;
 
-    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    const {
+      themeObject,
+      decalEnabled,
+      decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
+    } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
+      density: densityPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
@@ -242,7 +257,10 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
           ? {
               text: escapeHtml(title),
               left: 'center',
-              textStyle: { fontSize: 16, fontWeight: 600 },
+              textStyle: {
+                fontSize: scaleFontSize(16, densityFontMultiplier),
+                fontWeight: 600,
+              },
             }
           : undefined,
         tooltip: {
@@ -267,9 +285,9 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
           show: showLegend,
           bottom: 0,
           icon: 'roundRect',
-          itemWidth: 12,
-          itemHeight: 8,
-          textStyle: { fontSize: 12 },
+          itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+          itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+          textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
           data: coloredData.map((n) => n.name),
         },
         series: [
@@ -293,7 +311,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
                 if (!params.name) return '';
                 return `${params.name}\n${fmt(params.value)}`;
               },
-              fontSize: 11,
+              fontSize: scaleFontSize(11, densityFontMultiplier),
             },
             emphasis: {
               focus: focusValue,
@@ -332,6 +350,8 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       isEmpty,
       decalEnabled,
       decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
     ]);
 
     const handleClick = useCallback(

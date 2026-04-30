@@ -14,7 +14,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -73,6 +78,8 @@ export interface WaterfallChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -126,6 +133,7 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
       className,
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
+      density: densityPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -148,9 +156,17 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
       [colorsProp],
     );
 
-    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    const {
+      themeObject,
+      decalEnabled,
+      decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
+      densityPaddingMultiplier,
+    } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
+      density: densityPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
@@ -207,14 +223,14 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
       const categoryAxis = {
         type: 'category' as const,
         data: labels,
-        axisLabel: { fontSize: 11 },
+        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
         axisTick: { alignWithLabel: true },
       };
 
       const valueAxis = {
         type: 'value' as const,
         axisLabel: {
-          fontSize: 11,
+          fontSize: scaleFontSize(11, densityFontMultiplier),
           formatter: (v: number) => fmt(v),
         },
         splitLine: { show: true, lineStyle: { type: 'dashed' as const } },
@@ -253,7 +269,7 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
                 if (t === 'total') return fmt(finalRunningTotal);
                 return fmt(originalVal);
               },
-              fontSize: 11,
+              fontSize: scaleFontSize(11, densityFontMultiplier),
             }
           : { show: false },
         markLine:
@@ -277,7 +293,10 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
           ? {
               text: escapeHtml(title),
               left: 'center',
-              textStyle: { fontSize: 16, fontWeight: 600 },
+              textStyle: {
+                fontSize: scaleFontSize(16, densityFontMultiplier),
+                fontWeight: 600,
+              },
             }
           : undefined,
         tooltip: {
@@ -303,16 +322,20 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
           show: showLegend,
           bottom: 0,
           icon: 'roundRect',
-          itemWidth: 12,
-          itemHeight: 8,
-          textStyle: { fontSize: 12 },
+          itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+          itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+          textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
           data: [title ?? 'Value'],
         },
         grid: {
-          top: title ? 48 : 24,
-          right: 16,
-          bottom: showLegend ? 48 : 24,
-          left: 16,
+          top: title
+            ? scalePadding(48, densityPaddingMultiplier)
+            : scalePadding(24, densityPaddingMultiplier),
+          right: scalePadding(16, densityPaddingMultiplier),
+          bottom: showLegend
+            ? scalePadding(48, densityPaddingMultiplier)
+            : scalePadding(24, densityPaddingMultiplier),
+          left: scalePadding(16, densityPaddingMultiplier),
           containLabel: true,
         },
         xAxis: isHorizontal ? valueAxis : categoryAxis,
@@ -342,6 +365,9 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
       isHorizontal,
       decalEnabled,
       decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
+      densityPaddingMultiplier,
     ]);
 
     const handleClick = useCallback(

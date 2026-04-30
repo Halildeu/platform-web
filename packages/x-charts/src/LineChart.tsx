@@ -10,7 +10,12 @@ import React, { useMemo, useCallback } from 'react';
 import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeSeries } from './utils/data-validation';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -73,6 +78,11 @@ export interface LineChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /**
+   * Density override (compact vs comfortable).
+   * @default "auto" — follows documentElement `data-density`
+   */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -123,6 +133,7 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
     onDataPointClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -132,9 +143,17 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
-  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+  const {
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    densityPaddingMultiplier,
+  } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
+    density: densityPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
@@ -170,8 +189,11 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
             text: escapeHtml(title),
             subtext: description ? escapeHtml(description) : undefined,
             left: 'center',
-            textStyle: { fontSize: 16, fontWeight: 600 },
-            subtextStyle: { fontSize: 13 },
+            textStyle: {
+              fontSize: scaleFontSize(16, densityFontMultiplier),
+              fontWeight: 600,
+            },
+            subtextStyle: { fontSize: scaleFontSize(13, densityFontMultiplier) },
           }
         : undefined,
       tooltip: {
@@ -183,27 +205,32 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
         show: showLegend || safeSeries.length > 1,
         bottom: 0,
         icon: 'roundRect',
-        itemWidth: 12,
-        itemHeight: 8,
-        textStyle: { fontSize: 12 },
+        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
       },
       grid: {
-        top: title ? 60 : 24,
-        right: 16,
-        bottom: showLegend || safeSeries.length > 1 ? 48 : 24,
-        left: 16,
+        top: title
+          ? scalePadding(60, densityPaddingMultiplier)
+          : scalePadding(24, densityPaddingMultiplier),
+        right: scalePadding(16, densityPaddingMultiplier),
+        bottom:
+          showLegend || safeSeries.length > 1
+            ? scalePadding(48, densityPaddingMultiplier)
+            : scalePadding(24, densityPaddingMultiplier),
+        left: scalePadding(16, densityPaddingMultiplier),
         containLabel: true,
       },
       xAxis: {
         type: 'category',
         data: labels,
         boundaryGap: false,
-        axisLabel: { fontSize: 11 },
+        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
       },
       yAxis: {
         type: 'value',
         axisLabel: {
-          fontSize: 11,
+          fontSize: scaleFontSize(11, densityFontMultiplier),
           formatter: (v: number) => fmt(v),
         },
         splitLine: {
@@ -240,6 +267,9 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
     isEmpty,
     decalEnabled,
     decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    densityPaddingMultiplier,
   ]);
 
   const handleClick = useCallback(

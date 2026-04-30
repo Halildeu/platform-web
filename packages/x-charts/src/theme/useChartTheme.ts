@@ -28,6 +28,7 @@ import { buildDesignLabEChartsDarkTheme } from './DesignLabEChartsDarkTheme';
 import { buildDesignLabEChartsHighContrastTheme } from './DesignLabEChartsHighContrastTheme';
 import { buildDesignLabEChartsPrintTheme } from './DesignLabEChartsPrintTheme';
 import { DECAL_PATTERNS, type DecalPattern } from './decal-patterns';
+import { DENSITY_MULTIPLIERS, resolveDensity, type ChartDensity } from './density-helpers';
 import {
   subscribeThemeStore,
   getThemeSnapshot,
@@ -46,11 +47,19 @@ export type ChartThemePreference =
 
 export type ChartDecalPreference = boolean | 'auto';
 
+export type ChartDensityPreference = 'auto' | ChartDensity;
+
 export interface UseChartThemeOptions {
   /** Theme override. `'auto'` (default) follows the documentElement signals. */
   theme?: ChartThemePreference;
   /** Decal pattern override. `'auto'` (default) enables only for high-contrast / print. */
   decal?: ChartDecalPreference;
+  /**
+   * Density override. `'auto'` (default) follows the documentElement
+   * `data-density` attribute (mfe-shell theme axis).
+   * @default 'auto'
+   */
+  density?: ChartDensityPreference;
 }
 
 export interface UseChartThemeResult {
@@ -64,6 +73,21 @@ export interface UseChartThemeResult {
   decalPatterns: DecalPattern[];
   /** Source of resolved theme (debug + observability). */
   themeSource: ThemeSnapshot['source'] | 'explicit';
+  /**
+   * Resolved density after auto/explicit normalization.
+   * Faz 21.5-A3 (Codex iter-8).
+   */
+  resolvedDensity: ChartDensity;
+  /**
+   * Density font scaling factor — call sites should pass this to
+   * `scaleFontSize(base, fontMultiplier)` from density-helpers.
+   * Codex iter-8 note: scalar dependency yields stable useMemo.
+   */
+  densityFontMultiplier: number;
+  /** Density spacing (gap, itemGap) scaling factor. */
+  densitySpacingMultiplier: number;
+  /** Density padding (tooltip, grid) scaling factor. */
+  densityPaddingMultiplier: number;
 }
 
 const resolveThemePreference = (
@@ -114,12 +138,13 @@ const buildThemeObject = (
 };
 
 /**
- * Resolve theme + decal preferences into ECharts-ready outputs.
+ * Resolve theme + decal + density preferences into ECharts-ready outputs.
  * Reactive: re-renders the calling component when the singleton store snapshots change.
  */
 export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResult {
   const themePreference: ChartThemePreference = options?.theme ?? 'auto';
   const decalPreference: ChartDecalPreference = options?.decal ?? 'auto';
+  const densityPreference: ChartDensityPreference = options?.density ?? 'auto';
 
   const snapshot = useSyncExternalStore(
     subscribeThemeStore,
@@ -129,6 +154,7 @@ export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResu
 
   const { resolved, source } = resolveThemePreference(themePreference, snapshot);
   const decalEnabled = resolveDecalPreference(decalPreference, resolved);
+  const resolvedDensity = resolveDensity(densityPreference, snapshot.density);
 
   // Codex iter-5: HC builder needs dark surface flag. Other themes ignore it
   // but the dependency keeps the snapshot reactive — overhead is negligible
@@ -138,11 +164,20 @@ export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResu
     [resolved, snapshot.isDarkSurface],
   );
 
+  // Codex iter-8 note: scalar multiplier alanlarını hook içinde okuyalım,
+  // chart wrapper'lar option useMemo dependency listesine bu scalar'ları
+  // koyacak (objeye değil).
+  const multipliers = DENSITY_MULTIPLIERS[resolvedDensity];
+
   return {
     themeObject,
     resolvedTheme: resolved,
     decalEnabled,
     decalPatterns: DECAL_PATTERNS,
     themeSource: source,
+    resolvedDensity,
+    densityFontMultiplier: multipliers.fontSize,
+    densitySpacingMultiplier: multipliers.spacing,
+    densityPaddingMultiplier: multipliers.padding,
   };
 }

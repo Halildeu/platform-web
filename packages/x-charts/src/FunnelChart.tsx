@@ -14,7 +14,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -73,6 +78,8 @@ export interface FunnelChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -148,6 +155,7 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -160,9 +168,16 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
   );
   const fmt = valueFormatter ?? formatCompact;
 
-  const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+  const {
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+  } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
+    density: densityPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
@@ -196,7 +211,10 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
         ? {
             text: escapeHtml(title),
             left: 'center',
-            textStyle: { fontSize: 16, fontWeight: 600 },
+            textStyle: {
+              fontSize: scaleFontSize(16, densityFontMultiplier),
+              fontWeight: 600,
+            },
           }
         : undefined,
       tooltip: {
@@ -218,9 +236,9 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
         show: showLegend,
         bottom: 0,
         icon: 'roundRect',
-        itemWidth: 12,
-        itemHeight: 8,
-        textStyle: { fontSize: 12 },
+        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
       },
       series: [
         {
@@ -239,13 +257,13 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
                 show: true,
                 position: labelPosition,
                 formatter: labelFormatter,
-                fontSize: 12,
+                fontSize: scaleFontSize(12, densityFontMultiplier),
               }
             : { show: false },
           emphasis: {
             label: {
               show: true,
-              fontSize: 14,
+              fontSize: scaleFontSize(14, densityFontMultiplier),
               fontWeight: 'bold' as const,
             },
           },
@@ -282,6 +300,8 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     isEmpty,
     decalEnabled,
     decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
   ]);
 
   const handleClick = useCallback(

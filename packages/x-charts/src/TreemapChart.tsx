@@ -12,7 +12,12 @@ import { cn } from '@mfe/design-system';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
-import type { ChartThemePreference, ChartDecalPreference } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+} from './theme/useChartTheme';
+import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -70,6 +75,8 @@ export interface TreemapChartProps {
    * @default "auto" — enabled for high-contrast and print themes
    */
   decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,6 +180,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
       className,
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
+      density: densityPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -181,9 +189,16 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
     const isEmpty = !data || data.length === 0;
     const fmt = valueFormatter ?? formatCompact;
 
-    const { themeObject, decalEnabled, decalPatterns } = useChartTheme({
+    const {
+      themeObject,
+      decalEnabled,
+      decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
+    } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
+      density: densityPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
@@ -205,7 +220,10 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
           ? {
               text: escapeHtml(title),
               left: 'center',
-              textStyle: { fontSize: 16, fontWeight: 600 },
+              textStyle: {
+                fontSize: scaleFontSize(16, densityFontMultiplier),
+                fontWeight: 600,
+              },
             }
           : undefined,
         tooltip: {
@@ -220,9 +238,9 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
           show: showLegend,
           bottom: 0,
           icon: 'roundRect',
-          itemWidth: 12,
-          itemHeight: 8,
-          textStyle: { fontSize: 12 },
+          itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+          itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+          textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
         },
         series: [
           {
@@ -234,13 +252,13 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
             label: {
               show: true,
               formatter: labelFormatter,
-              fontSize: 12,
+              fontSize: scaleFontSize(12, densityFontMultiplier),
               ellipsis: true,
             },
             upperLabel: {
               show: true,
               height: 16,
-              fontSize: 11,
+              fontSize: scaleFontSize(11, densityFontMultiplier),
               color: '#333',
               padding: [2, 4, 0, 4],
             },
@@ -249,7 +267,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
               left: 'center',
               bottom: showLegend ? 28 : 4,
               itemStyle: {
-                textStyle: { fontSize: 11 },
+                textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
               },
             },
             levels,
@@ -290,6 +308,8 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
       isEmpty,
       decalEnabled,
       decalPatterns,
+      densityFontMultiplier,
+      densitySpacingMultiplier,
     ]);
 
     const handleClick = useCallback(

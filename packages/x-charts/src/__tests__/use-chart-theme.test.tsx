@@ -74,6 +74,7 @@ beforeEach(() => {
   document.documentElement.removeAttribute('data-appearance');
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-mode');
+  document.documentElement.removeAttribute('data-density');
   mqRegistry.clear();
   installMatchMediaMock();
   __resetThemeStoreForTests();
@@ -83,6 +84,7 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-appearance');
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-mode');
+  document.documentElement.removeAttribute('data-density');
   mqRegistry.clear();
   __resetThemeStoreForTests();
   window.matchMedia = originalMatchMedia;
@@ -213,11 +215,12 @@ describe('themeReactiveStore — priority chain', () => {
     expect(getThemeSnapshot().resolvedTheme).toBe('light');
   });
 
-  it('SSR snapshot returns light/server with dark surface false', () => {
+  it('SSR snapshot returns light/server with dark surface false + density comfortable', () => {
     const ssr = getServerThemeSnapshot();
     expect(ssr.resolvedTheme).toBe('light');
     expect(ssr.source).toBe('server');
     expect(ssr.isDarkSurface).toBe(false);
+    expect(ssr.density).toBe('comfortable');
   });
 });
 
@@ -298,6 +301,105 @@ describe('themeReactiveStore — isDarkSurface derivation', () => {
     expect(getThemeSnapshot().isDarkSurface).toBe(true);
 
     unsub();
+  });
+});
+
+/* ---------------------------------------------------------------- */
+/*  density (Faz 21.5-A3)                                            */
+/* ---------------------------------------------------------------- */
+
+describe('themeReactiveStore — density derivation', () => {
+  it('default → density=comfortable', () => {
+    expect(getThemeSnapshot().density).toBe('comfortable');
+  });
+
+  it('data-density="compact" → density=\'compact\'', () => {
+    document.documentElement.setAttribute('data-density', 'compact');
+    __resetThemeStoreForTests();
+    expect(getThemeSnapshot().density).toBe('compact');
+  });
+
+  it('data-density="comfortable" → density=\'comfortable\' (explicit)', () => {
+    document.documentElement.setAttribute('data-density', 'comfortable');
+    __resetThemeStoreForTests();
+    expect(getThemeSnapshot().density).toBe('comfortable');
+  });
+
+  it('data-density="invalid-value" → density=\'comfortable\' (default)', () => {
+    document.documentElement.setAttribute('data-density', 'rocketspeed');
+    __resetThemeStoreForTests();
+    expect(getThemeSnapshot().density).toBe('comfortable');
+  });
+
+  it('density is independent of resolvedTheme (HC + compact)', () => {
+    document.documentElement.setAttribute('data-appearance', 'high-contrast');
+    document.documentElement.setAttribute('data-density', 'compact');
+    __resetThemeStoreForTests();
+    const snap = getThemeSnapshot();
+    expect(snap.resolvedTheme).toBe('high-contrast');
+    expect(snap.density).toBe('compact');
+  });
+
+  it('snapshotsEqual treats density diff as a change (subscriber notified)', async () => {
+    __resetThemeStoreForTests();
+    const notify = vi.fn();
+    const unsub = subscribeThemeStore(notify);
+
+    // Initial snapshot has density='comfortable'; flipping data-density to
+    // compact must broadcast even though everything else stays the same.
+    document.documentElement.setAttribute('data-density', 'compact');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(notify).toHaveBeenCalled();
+    expect(getThemeSnapshot().density).toBe('compact');
+
+    unsub();
+  });
+});
+
+describe('useChartTheme — density preference normalization', () => {
+  it('default density=auto + no DOM signal → comfortable, multipliers 1/1/1', () => {
+    const { result } = renderHook(() => useChartTheme());
+    expect(result.current.resolvedDensity).toBe('comfortable');
+    expect(result.current.densityFontMultiplier).toBe(1.0);
+    expect(result.current.densitySpacingMultiplier).toBe(1.0);
+    expect(result.current.densityPaddingMultiplier).toBe(1.0);
+  });
+
+  it("density='compact' explicit → compact + multipliers 0.875/0.75/0.75", () => {
+    const { result } = renderHook(() => useChartTheme({ density: 'compact' }));
+    expect(result.current.resolvedDensity).toBe('compact');
+    expect(result.current.densityFontMultiplier).toBe(0.875);
+    expect(result.current.densitySpacingMultiplier).toBe(0.75);
+    expect(result.current.densityPaddingMultiplier).toBe(0.75);
+  });
+
+  it("density='comfortable' explicit overrides DOM 'compact'", () => {
+    document.documentElement.setAttribute('data-density', 'compact');
+    __resetThemeStoreForTests();
+    const { result } = renderHook(() => useChartTheme({ density: 'comfortable' }));
+    expect(result.current.resolvedDensity).toBe('comfortable');
+    expect(result.current.densityFontMultiplier).toBe(1.0);
+  });
+
+  it("density='auto' follows data-density='compact'", () => {
+    document.documentElement.setAttribute('data-density', 'compact');
+    __resetThemeStoreForTests();
+    const { result } = renderHook(() => useChartTheme({ density: 'auto' }));
+    expect(result.current.resolvedDensity).toBe('compact');
+    expect(result.current.densityFontMultiplier).toBe(0.875);
+  });
+
+  it('density preference does not affect themeObject identity (only theme/dark)', () => {
+    const { result, rerender } = renderHook(
+      ({ d }: { d: 'comfortable' | 'compact' }) => useChartTheme({ theme: 'dark', density: d }),
+      { initialProps: { d: 'comfortable' } },
+    );
+    const t1 = result.current.themeObject;
+    rerender({ d: 'compact' });
+    // density doesn't change the theme object — multipliers are separate
+    // outputs. Theme builder dependency stays on resolved + isDarkSurface.
+    expect(result.current.themeObject).toBe(t1);
   });
 });
 
