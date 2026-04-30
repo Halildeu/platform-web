@@ -1,6 +1,19 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Autocomplete, Badge, Button, DetailDrawer, TextInput } from '@mfe/design-system';
+// Codex 019dde0c iter-44 — IconShield decorative leading icon for role
+// drawer header (DetailDrawer.leading slot symmetric with FormDrawer's
+// leading slot from iter-43). Plain shield, not ShieldCheck — the
+// checkmark variant carries verified/success semantics that conflict
+// with the existing tags badges (system, member-count, unsaved).
+import {
+  Alert,
+  Autocomplete,
+  Badge,
+  Button,
+  DetailDrawer,
+  IconShield,
+  TextInput,
+} from '@mfe/design-system';
 import type { AutocompleteOption } from '@mfe/design-system';
 import { usePermissions, useZanzibarAccess } from '@mfe/auth';
 import type { AccessRole, AccessLevel } from '../../features/access-management/model/access.types';
@@ -656,6 +669,15 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       onClose={onClose}
       title={role.name}
       subtitle={role.description || t('access.drawer.noDescription')}
+      leading={
+        // Codex 019dde0c iter-44 — decorative leading icon. h-8 w-8
+        // (32px) per Codex review: bare SVG at 40px would dominate
+        // the header next to the role name + subtitle + tags row.
+        // text-text-secondary keeps it as a neutral identity anchor;
+        // CTA-like text-action-primary would compete with the badges
+        // already present in `tags` for visual emphasis.
+        <IconShield className="h-8 w-8 text-text-secondary" aria-hidden="true" />
+      }
       tags={
         <div className="flex gap-2">
           {role.isSystemRole && (
