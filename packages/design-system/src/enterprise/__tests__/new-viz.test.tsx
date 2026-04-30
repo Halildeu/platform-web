@@ -104,34 +104,25 @@ describe('FineKinney', () => {
 // ---------------------------------------------------------------------------
 
 describe('WaterfallChart', () => {
-  it('renders SVG', () => {
-    const { container } = render(<WaterfallChart items={waterfallItems} />);
-    expect(container.querySelector('svg')).toBeTruthy();
+  // PR-C2: WaterfallChart now delegates to @mfe/x-charts. The legacy DS
+  // SVG <rect>-based bar rendering, custom empty-state copy, rect click
+  // surface, and aria-label are no longer part of the rendered output.
+  // Canonical shim contract lives in EnterpriseCharts.shim.test.tsx (and
+  // WaterfallChart.contract.test.tsx).
+  it.skip('renders SVG (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 
-  it('renders empty state when no items', () => {
-    const { container } = render(<WaterfallChart items={[]} />);
-    expect(container.textContent).toContain('No data');
+  it.skip('renders empty state when no items (legacy DS copy — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 
-  it('fires onItemClick handler', () => {
-    const onClick = vi.fn();
-    const { container } = render(
-      <WaterfallChart items={waterfallItems} onItemClick={onClick} />,
-    );
-    const rects = container.querySelectorAll('rect');
-    // Click the first bar rect (skip zero-line, find a visible rect)
-    const barRect = Array.from(rects).find(
-      (r) => r.getAttribute('width') === '48',
-    );
-    if (barRect) fireEvent.click(barRect);
-    expect(onClick).toHaveBeenCalledTimes(1);
+  it.skip('fires onItemClick handler (legacy DS rect click — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 
   it('returns null when access is hidden', () => {
-    const { container } = render(
-      <WaterfallChart items={waterfallItems} access="hidden" />,
-    );
+    const { container } = render(<WaterfallChart items={waterfallItems} access="hidden" />);
     expect(container.innerHTML).toBe('');
   });
 
@@ -140,11 +131,8 @@ describe('WaterfallChart', () => {
     await expectNoA11yViolations(container);
   });
 
-  it('has accessible ARIA structure', () => {
-    render(<WaterfallChart items={waterfallItems} />);
-    const img = screen.getByRole('img');
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('aria-label', 'Waterfall chart');
+  it.skip('has accessible ARIA structure (legacy DS aria-label — see EnterpriseCharts.shim.test.tsx)', () => {
+    /* legacy assertion intentionally removed */
   });
 });
 
@@ -165,9 +153,7 @@ describe('ParetoChart', () => {
 
   it('fires onItemClick handler', () => {
     const onClick = vi.fn();
-    const { container } = render(
-      <ParetoChart items={paretoItems} onItemClick={onClick} />,
-    );
+    const { container } = render(<ParetoChart items={paretoItems} onItemClick={onClick} />);
     const rects = container.querySelectorAll('rect');
     // Find a bar rect (has rx=2 attribute)
     const barRect = Array.from(rects).find(
@@ -178,9 +164,7 @@ describe('ParetoChart', () => {
   });
 
   it('returns null when access is hidden', () => {
-    const { container } = render(
-      <ParetoChart items={paretoItems} access="hidden" />,
-    );
+    const { container } = render(<ParetoChart items={paretoItems} access="hidden" />);
     expect(container.innerHTML).toBe('');
   });
 
@@ -204,22 +188,14 @@ describe('ParetoChart', () => {
 describe('HeatmapCalendar', () => {
   it('renders SVG', () => {
     const { container } = render(
-      <HeatmapCalendar
-        data={heatmapData}
-        startDate="2025-01-01"
-        endDate="2025-12-31"
-      />,
+      <HeatmapCalendar data={heatmapData} startDate="2025-01-01" endDate="2025-12-31" />,
     );
     expect(container.querySelector('svg')).toBeTruthy();
   });
 
   it('handles empty data', () => {
     const { container } = render(
-      <HeatmapCalendar
-        data={[]}
-        startDate="2025-01-01"
-        endDate="2025-12-31"
-      />,
+      <HeatmapCalendar data={[]} startDate="2025-01-01" endDate="2025-12-31" />,
     );
     expect(container.querySelector('svg')).toBeTruthy();
   });
@@ -258,23 +234,13 @@ describe('HeatmapCalendar', () => {
 
   it('has no accessibility violations', async () => {
     const { container } = render(
-      <HeatmapCalendar
-        data={heatmapData}
-        startDate="2025-01-01"
-        endDate="2025-12-31"
-      />,
+      <HeatmapCalendar data={heatmapData} startDate="2025-01-01" endDate="2025-12-31" />,
     );
     await expectNoA11yViolations(container);
   }, 15_000);
 
   it('has accessible ARIA structure', () => {
-    render(
-      <HeatmapCalendar
-        data={heatmapData}
-        startDate="2025-01-01"
-        endDate="2025-12-31"
-      />,
-    );
+    render(<HeatmapCalendar data={heatmapData} startDate="2025-01-01" endDate="2025-12-31" />);
     const img = screen.getByRole('img', { name: 'Heatmap calendar' });
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('aria-label', 'Heatmap calendar');
@@ -288,7 +254,11 @@ describe('HeatmapCalendar', () => {
 describe('new-viz — quality signals', () => {
   it('responds to user interaction on interactive elements', async () => {
     const user = userEvent.setup();
-    const { container } = render(<div role="button" tabIndex={0} data-testid="interactive">Click me</div>);
+    const { container } = render(
+      <div role="button" tabIndex={0} data-testid="interactive">
+        Click me
+      </div>,
+    );
     const el = container.querySelector('[data-testid="interactive"]')!;
     await user.click(el);
     await user.tab();
@@ -300,7 +270,11 @@ describe('new-viz — quality signals', () => {
   });
 
   it('handles disabled state correctly', () => {
-    const { container } = render(<button disabled data-testid="disabled-el">Disabled</button>);
+    render(
+      <button disabled data-testid="disabled-el">
+        Disabled
+      </button>,
+    );
     const el = screen.getByTestId('disabled-el');
     expect(el).toBeDisabled();
     expect(el).toHaveTextContent('Disabled');
@@ -308,7 +282,11 @@ describe('new-viz — quality signals', () => {
   });
 
   it('handles error and invalid states', () => {
-    const { container } = render(<div role="alert" aria-invalid="true" data-testid="error-el">Error message</div>);
+    render(
+      <div role="alert" aria-invalid="true" data-testid="error-el">
+        Error message
+      </div>,
+    );
     const el = screen.getByTestId('error-el');
     expect(el).toBeInTheDocument();
     expect(el).toHaveAttribute('aria-invalid', 'true');
@@ -317,7 +295,7 @@ describe('new-viz — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');
@@ -326,7 +304,11 @@ describe('new-viz — quality signals', () => {
   });
 
   it('validates DOM structure and attributes', () => {
-    const { container } = render(<div data-testid="structure" className="test-class" id="test-id" aria-label="test"><span>child</span></div>);
+    const { container } = render(
+      <div data-testid="structure" className="test-class" id="test-id" aria-label="test">
+        <span>child</span>
+      </div>,
+    );
     const el = screen.getByTestId('structure');
     expect(el).toBeInTheDocument();
     expect(el).toHaveClass('test-class');
@@ -343,8 +325,10 @@ describe('new-viz — quality signals', () => {
       <form role="form" aria-label="test form">
         <label htmlFor="input1">Label</label>
         <input id="input1" role="textbox" type="text" defaultValue="test" />
-        <button role="button" type="submit">Submit</button>
-      </form>
+        <button role="button" type="submit">
+          Submit
+        </button>
+      </form>,
     );
     expect(screen.getByRole('form')).toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveValue('test');
