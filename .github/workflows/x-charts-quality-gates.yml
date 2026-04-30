@@ -112,6 +112,13 @@ jobs:
     name: chart-component-baseline (PR-D regression guard)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # The smoke test file ships in PR-D (#103); until that PR merges to
+    # main this job has nothing to run. The guard below skips the job
+    # cleanly (no failure) when the file is absent, so PR-F (#106) can
+    # land before #103 without producing a red status. After #103
+    # merges, the file will be present in subsequent runs and the job
+    # automatically becomes a hard block.
+    if: hashFiles('packages/x-charts/src/__tests__/chart-components-smoke.test.tsx') != ''
     steps:
       - name: Checkout
         uses: actions/checkout@v6
