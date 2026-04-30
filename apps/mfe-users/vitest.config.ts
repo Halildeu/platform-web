@@ -7,10 +7,18 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@mfe/design-system/lib/auth': path.resolve(__dirname, '../../packages/design-system/src/lib/auth'),
+      '@mfe/design-system/lib/auth': path.resolve(
+        __dirname,
+        '../../packages/design-system/src/lib/auth',
+      ),
       '@mfe/design-system': path.resolve(__dirname, '../../packages/design-system/src'),
       '@mfe/shared-http': path.resolve(__dirname, '../../packages/shared-http/src'),
       '@mfe/i18n-dicts': path.resolve(__dirname, '../../packages/i18n-dicts/src'),
+      // iter-34: drawer + UserActions tests import usePermissions from
+      // @mfe/auth via the SUT; vitest's import-analysis runs before vi.mock,
+      // so the alias must resolve to the package source even when the test
+      // fully stubs the symbol.
+      '@mfe/auth': path.resolve(__dirname, '../../packages/auth/src'),
       'mfe_shell/i18n': path.resolve(__dirname, '../mfe-shell/src/app/i18n/index.ts'),
     },
   },
