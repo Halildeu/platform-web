@@ -1,3 +1,6 @@
+// iter-34b cache-bust marker — touch the @mfe/auth package source so the
+// next bundle build cannot serve a cached pre-iter-34b layer (the
+// PermissionProvider URL filter must reach production).
 import type {
   AuthzMeResponse,
   CheckRequest,
