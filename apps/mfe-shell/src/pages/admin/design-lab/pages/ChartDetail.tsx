@@ -1348,6 +1348,161 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['no-ui-surface'],
     themes: ['n/a'],
   },
+
+  /* ---- Performance utilities (Faz 21.4-B4) ---- */
+
+  lttb: {
+    id: 'lttb',
+    name: 'downsampleLTTB',
+    description:
+      'Largest-Triangle-Three-Buckets downsampling. Reduces a numeric (x, y) series to a target threshold while preserving visual shape — ideal for 100k+ point charts.',
+    importPath: "import { downsampleLTTB } from '@mfe/x-charts';",
+    tier: 'perf',
+    props: [
+      {
+        name: 'data',
+        type: 'LTTBPoint[]',
+        required: true,
+        default: '—',
+        description: 'Series of { x, y } points',
+      },
+      {
+        name: 'threshold',
+        type: 'number',
+        required: true,
+        default: '—',
+        description: 'Target output size; <2 or >=data.length returns the input clone',
+      },
+    ],
+    sampleCode: `const reduced = downsampleLTTB(points, 1000);
+// 100,000 → 1,000 points, ~99% bandwidth saved`,
+    features: ['shape-preserving', 'pure-function', 'allocation-bounded'],
+    a11y: ['no-ui-surface'],
+    themes: ['n/a'],
+  },
+
+  'progressive-render': {
+    id: 'progressive-render',
+    name: 'useProgressiveRender',
+    description:
+      'Hook that streams a large dataset to the chart in batches, keeping the main thread responsive. Below an immediateThreshold, returns the data synchronously.',
+    importPath: "import { useProgressiveRender } from '@mfe/x-charts';",
+    tier: 'perf',
+    props: [
+      {
+        name: 'options.data',
+        type: 'T[]',
+        required: true,
+        default: '—',
+        description: 'Source array',
+      },
+      {
+        name: 'options.batchSize',
+        type: 'number',
+        required: false,
+        default: '5000',
+        description: 'Points per RAF tick',
+      },
+      {
+        name: 'options.immediateThreshold',
+        type: 'number',
+        required: false,
+        default: '10000',
+        description: 'Below this size, render synchronously',
+      },
+      {
+        name: 'options.enabled',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Disable to fall back to immediate render',
+      },
+    ],
+    sampleCode: `const { data, isProgressing, progress } = useProgressiveRender({
+  data: bigSeries,
+  batchSize: 5000,
+});`,
+    features: ['raf-scheduled', 'progress-state', 'cancellable', 'pure-hook'],
+    a11y: ['no-ui-surface'],
+    themes: ['n/a'],
+  },
+
+  'lazy-chart': {
+    id: 'lazy-chart',
+    name: 'useLazyChart',
+    description:
+      'IntersectionObserver-based lazy mount. Returns a containerRef and a shouldRender flag that flips to true when the container scrolls into view.',
+    importPath: "import { useLazyChart } from '@mfe/x-charts';",
+    tier: 'perf',
+    props: [
+      {
+        name: 'options.rootMargin',
+        type: 'string',
+        required: false,
+        default: '"200px"',
+        description: 'IntersectionObserver pre-fetch margin',
+      },
+      {
+        name: 'options.enabled',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'When false, shouldRender is true immediately',
+      },
+    ],
+    sampleCode: `const { containerRef, shouldRender } = useLazyChart({ rootMargin: '200px' });
+return <div ref={containerRef}>{shouldRender ? <BarChart ... /> : null}</div>;`,
+    features: ['intersection-observer', 'pre-fetch-margin', 'pure-hook'],
+    a11y: ['inherits-host-aria'],
+    themes: ['n/a'],
+  },
+
+  'lru-cache': {
+    id: 'lru-cache',
+    name: 'LRUCache',
+    description:
+      'Bounded least-recently-used cache. Useful for memoising query results, downsampled series, or compiled ECharts options. Eviction is deterministic (insertion-order).',
+    importPath: "import { LRUCache } from '@mfe/x-charts';",
+    tier: 'perf',
+    props: [
+      {
+        name: 'maxSize',
+        type: 'number',
+        required: false,
+        default: '50',
+        description: 'Maximum entries — must be >= 1',
+      },
+    ],
+    sampleCode: `const cache = new LRUCache<string, ChartSpec>(50);
+cache.set(key, spec);
+const cached = cache.get(key); // promotes to most-recently-used`,
+    features: ['size-bounded', 'eviction-deterministic', 'generic-types'],
+    a11y: ['no-ui-surface'],
+    themes: ['n/a'],
+  },
+
+  'code-split': {
+    id: 'code-split',
+    name: 'lazyChartImport',
+    description:
+      'Returns a React.lazy wrapper for a known chart type. Throws on unknown types so configuration errors surface at registration time, not at render time.',
+    importPath: "import { lazyChartImport } from '@mfe/x-charts';",
+    tier: 'perf',
+    props: [
+      {
+        name: 'chartType',
+        type: 'string',
+        required: true,
+        default: '—',
+        description: 'Registered chart type (bar / line / pie / ...)',
+      },
+    ],
+    sampleCode: `const LazyBar = lazyChartImport('bar');
+return <Suspense fallback={<Skeleton />}><LazyBar data={...} /></Suspense>;`,
+    features: ['react-lazy', 'unknown-type-throws', 'tree-shake-friendly'],
+    a11y: ['inherits-host-aria'],
+    themes: ['n/a'],
+  },
 };
 
 /* ------------------------------------------------------------------ */
