@@ -150,8 +150,15 @@ const users = {
   'users.detail.section.roles': 'Roller',
   'users.detail.section.roles.description':
     'Kullanıcıya birden fazla rol atayabilirsiniz. İzinler rollerin birleşimidir.',
+  // iter-37 — neutral subtitle (Codex 019ddd5b microcopy note)
+  'users.detail.section.roles.subtitle':
+    'Kullanıcıya birden fazla rol atayabilirsiniz. İzinler seçili rollerin birleşiminden gelir.',
   'users.detail.section.scopes': 'Veri Erişimi',
   'users.detail.section.scopes.description': 'Scope atanmadan kullanıcı hiçbir veri göremez.',
+  'users.detail.section.scopes.subtitle': 'Bu kullanıcının görebileceği veri kapsamı.',
+  // iter-37 — role list search
+  'users.detail.roles.searchPlaceholder': 'Rol adı veya açıklamada ara...',
+  'users.detail.roles.searchEmpty': '"{query}" ile eşleşen rol bulunamadı.',
   'users.detail.scopes.companies': 'Şirketler',
   'users.detail.scopes.projects': 'Projeler',
   'users.detail.scopes.warehouses': 'Depolar',

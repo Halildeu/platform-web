@@ -151,9 +151,16 @@ const users = {
   'users.detail.section.roles': 'Roles',
   'users.detail.section.roles.description':
     'Assign multiple roles to the user. Permissions are the union of all assigned roles.',
+  // iter-37 — neutral subtitle
+  'users.detail.section.roles.subtitle':
+    'Assign multiple roles. Permissions are derived from the union of selected roles.',
   'users.detail.section.scopes': 'Data Access',
   'users.detail.section.scopes.description':
     'Without scope assignment, the user cannot see any data.',
+  'users.detail.section.scopes.subtitle': 'The data this user is allowed to see.',
+  // iter-37 — role list search
+  'users.detail.roles.searchPlaceholder': 'Search role name or description...',
+  'users.detail.roles.searchEmpty': 'No role matches "{query}".',
   'users.detail.scopes.companies': 'Companies',
   'users.detail.scopes.projects': 'Projects',
   'users.detail.scopes.warehouses': 'Warehouses',

@@ -97,12 +97,33 @@ vi.mock('@mfe/design-system', () => ({
     checked?: boolean;
     disabled?: boolean;
     onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  }) => (
-    <label data-testid={`role-${typeof label === 'string' ? label : 'unknown'}`}>
-      <input type="checkbox" checked={!!checked} disabled={!!disabled} onChange={onChange} />
-      <span>{label}</span>
-    </label>
-  ),
+  }) => {
+    // iter-37 — labels are React fragments (label + description); probe
+    // the first textual leaf for the role-${name} testid.
+    const probeFirstText = (node: React.ReactNode): string => {
+      if (node == null) return 'unknown';
+      if (typeof node === 'string' || typeof node === 'number') return String(node);
+      if (Array.isArray(node)) {
+        for (const c of node) {
+          const v = probeFirstText(c);
+          if (v && v !== 'unknown') return v;
+        }
+        return 'unknown';
+      }
+      if (React.isValidElement(node)) {
+        const props = node.props as { children?: React.ReactNode };
+        return probeFirstText(props.children);
+      }
+      return 'unknown';
+    };
+    const labelKey = probeFirstText(label).split('(')[0].trim() || 'unknown';
+    return (
+      <label data-testid={`role-${labelKey}`}>
+        <input type="checkbox" checked={!!checked} disabled={!!disabled} onChange={onChange} />
+        <span>{label}</span>
+      </label>
+    );
+  },
 }));
 
 // ---------- SUT ----------
@@ -132,13 +153,14 @@ const renderDrawer = () => {
 };
 
 const findFirstRoleCheckbox = async (): Promise<HTMLInputElement> => {
-  // After the rolesQuery resolves the drawer renders one Checkbox per role.
+  // iter-37 — labels are now resolved through resolveRoleMeta(); ADMIN
+  // shows up as testid="role-Yönetici" (Turkish locale, default in tests).
   await waitFor(() => {
-    const adminLabel = screen.queryByTestId('role-ADMIN');
+    const adminLabel = screen.queryByTestId('role-Yönetici');
     expect(adminLabel).not.toBeNull();
   });
   return screen
-    .getByTestId('role-ADMIN')
+    .getByTestId('role-Yönetici')
     .querySelector<HTMLInputElement>('input[type="checkbox"]')!;
 };
 
