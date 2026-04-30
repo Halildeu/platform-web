@@ -16,6 +16,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -84,6 +85,8 @@ export interface RadarChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -134,6 +137,7 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -148,17 +152,20 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty) return null;
 
+    const palette = effectivePalette ?? DEFAULT_PALETTE;
     const radarData = series.map((s, idx) => {
-      const seriesColor = s.color ?? DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length];
+      const seriesColor = s.color ?? palette[idx % palette.length];
 
       // Determine area style: per-series override > global showArea > none
       let areaConfig: { color: string; opacity: number } | undefined;
@@ -276,6 +283,7 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   ]);
 
   const handleClick = useCallback(

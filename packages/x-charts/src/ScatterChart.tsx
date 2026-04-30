@@ -15,6 +15,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -76,6 +77,8 @@ export interface ScatterChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -133,6 +136,7 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
       density: densityPreference = 'auto',
+      accent: accentPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -161,16 +165,18 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       densityFontMultiplier,
       densitySpacingMultiplier,
       densityPaddingMultiplier,
+      effectivePalette,
     } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
       density: densityPreference,
+      accent: accentPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
       if (isEmpty) return null;
 
-      const palette = colors ?? getDefaultPalette();
+      const palette = colors ?? effectivePalette ?? getDefaultPalette();
       const fontFamily = getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
       const textPrimary = getCSSVar('--text-primary', '#1a1a2e');
       const textSecondary = getCSSVar('--text-secondary', '#6b7280');
@@ -340,6 +346,7 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
       densityFontMultiplier,
       densitySpacingMultiplier,
       densityPaddingMultiplier,
+      effectivePalette,
     ]);
 
     // Use centralized renderer hook

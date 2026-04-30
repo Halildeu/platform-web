@@ -16,6 +16,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -84,6 +85,15 @@ export interface GaugeChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /**
+   * Accent palette override.
+   * @default "auto"
+   * @remarks GaugeChart's `thresholds` defaults are SEMANTIC (success/warning/danger)
+   *   and NOT changed by accent. The accent prop is accepted for API consistency
+   *   across all 13 charts but does not affect gauge color rendering.
+   *   To change threshold colors, override the `thresholds` prop directly.
+   */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -152,6 +162,7 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -161,10 +172,14 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
   const safeValue = sanitizeNumber(value);
   const fmt = valueFormatter ?? formatCompact;
 
+  // GaugeChart accent-IMMUNE — accent prop accepted for API consistency
+  // but theme builder defaults (semantic success/warning/danger thresholds)
+  // are intentionally preserved. effectivePalette ignored.
   const { themeObject, decalEnabled, decalPatterns, densityFontMultiplier } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {

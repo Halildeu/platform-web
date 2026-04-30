@@ -29,6 +29,7 @@ import { buildDesignLabEChartsHighContrastTheme } from './DesignLabEChartsHighCo
 import { buildDesignLabEChartsPrintTheme } from './DesignLabEChartsPrintTheme';
 import { DECAL_PATTERNS, type DecalPattern } from './decal-patterns';
 import { DENSITY_MULTIPLIERS, resolveDensity, type ChartDensity } from './density-helpers';
+import { ACCENT_PALETTES, type ChartAccentName } from './accent-palettes';
 import {
   subscribeThemeStore,
   getThemeSnapshot,
@@ -49,6 +50,8 @@ export type ChartDecalPreference = boolean | 'auto';
 
 export type ChartDensityPreference = 'auto' | ChartDensity;
 
+export type ChartAccentPreference = 'auto' | ChartAccentName;
+
 export interface UseChartThemeOptions {
   /** Theme override. `'auto'` (default) follows the documentElement signals. */
   theme?: ChartThemePreference;
@@ -60,6 +63,12 @@ export interface UseChartThemeOptions {
    * @default 'auto'
    */
   density?: ChartDensityPreference;
+  /**
+   * Accent palette override.
+   * `'auto'` (default) follows the documentElement `data-accent` attribute.
+   * @default 'auto'
+   */
+  accent?: ChartAccentPreference;
 }
 
 export interface UseChartThemeResult {
@@ -88,6 +97,30 @@ export interface UseChartThemeResult {
   densitySpacingMultiplier: number;
   /** Density padding (tooltip, grid) scaling factor. */
   densityPaddingMultiplier: number;
+  /**
+   * Resolved accent name after auto/explicit normalization.
+   * Faz 21.5-A2 (Codex iter-14).
+   */
+  resolvedAccent: ChartAccentName;
+  /**
+   * Pure accent palette from ACCENT_PALETTES[resolvedAccent].
+   * Returned even for HC/Print themes (debug + override scenarios).
+   */
+  accentPalette: string[];
+  /**
+   * Effective palette to use as series-color fallback in chart wrappers.
+   *   - HC/Print themes → themeObject.color (theme-builder defined)
+   *   - Other themes → ACCENT_PALETTES[resolvedAccent]
+   *
+   * Chart wrappers should use this AFTER per-item override (`d.color`/`s.color`)
+   * and `colors?` chart prop, but BEFORE inline DEFAULT_PALETTE last fallback.
+   *
+   * Semantic colors (Gauge thresholds, Heatmap gradient, Waterfall
+   * increase/decrease) are accent-IMMUNE — wrappers must NOT replace these
+   * with effectivePalette. Only Waterfall's `total` may bind to
+   * effectivePalette[0] (accent primary).
+   */
+  effectivePalette: string[];
 }
 
 const resolveThemePreference = (
@@ -137,14 +170,23 @@ const buildThemeObject = (
   }
 };
 
+const resolveAccentPreference = (
+  preference: ChartAccentPreference,
+  snapshotAccent: ChartAccentName,
+): ChartAccentName => {
+  if (preference === 'auto') return snapshotAccent;
+  return preference;
+};
+
 /**
- * Resolve theme + decal + density preferences into ECharts-ready outputs.
+ * Resolve theme + decal + density + accent preferences into ECharts-ready outputs.
  * Reactive: re-renders the calling component when the singleton store snapshots change.
  */
 export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResult {
   const themePreference: ChartThemePreference = options?.theme ?? 'auto';
   const decalPreference: ChartDecalPreference = options?.decal ?? 'auto';
   const densityPreference: ChartDensityPreference = options?.density ?? 'auto';
+  const accentPreference: ChartAccentPreference = options?.accent ?? 'auto';
 
   const snapshot = useSyncExternalStore(
     subscribeThemeStore,
@@ -155,6 +197,7 @@ export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResu
   const { resolved, source } = resolveThemePreference(themePreference, snapshot);
   const decalEnabled = resolveDecalPreference(decalPreference, resolved);
   const resolvedDensity = resolveDensity(densityPreference, snapshot.density);
+  const resolvedAccent = resolveAccentPreference(accentPreference, snapshot.accent);
 
   // Codex iter-5: HC builder needs dark surface flag. Other themes ignore it
   // but the dependency keeps the snapshot reactive — overhead is negligible
@@ -169,6 +212,21 @@ export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResu
   // koyacak (objeye değil).
   const multipliers = DENSITY_MULTIPLIERS[resolvedDensity];
 
+  // Pure accent palette (always returned, even HC/Print).
+  const accentPalette = ACCENT_PALETTES[resolvedAccent] ?? ACCENT_PALETTES.light;
+
+  // Codex iter-12 fix: HC/Print themes IGNORE accent palette — they use the
+  // theme builder's hardcoded color array (HC: max-luminance; Print: monochrome).
+  // Other themes use ACCENT_PALETTES[resolvedAccent].
+  const effectivePalette = useMemo(() => {
+    if (resolved === 'high-contrast' || resolved === 'print') {
+      const themeColor = (themeObject.color as string[] | undefined) ?? null;
+      if (themeColor && themeColor.length > 0) return themeColor;
+      return accentPalette;
+    }
+    return accentPalette;
+  }, [resolved, themeObject, accentPalette]);
+
   return {
     themeObject,
     resolvedTheme: resolved,
@@ -179,5 +237,8 @@ export function useChartTheme(options?: UseChartThemeOptions): UseChartThemeResu
     densityFontMultiplier: multipliers.fontSize,
     densitySpacingMultiplier: multipliers.spacing,
     densityPaddingMultiplier: multipliers.padding,
+    resolvedAccent,
+    accentPalette,
+    effectivePalette,
   };
 }

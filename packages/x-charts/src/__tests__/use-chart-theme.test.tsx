@@ -75,6 +75,7 @@ beforeEach(() => {
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-mode');
   document.documentElement.removeAttribute('data-density');
+  document.documentElement.removeAttribute('data-accent');
   mqRegistry.clear();
   installMatchMediaMock();
   __resetThemeStoreForTests();
@@ -85,6 +86,7 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-mode');
   document.documentElement.removeAttribute('data-density');
+  document.documentElement.removeAttribute('data-accent');
   mqRegistry.clear();
   __resetThemeStoreForTests();
   window.matchMedia = originalMatchMedia;
@@ -215,12 +217,13 @@ describe('themeReactiveStore — priority chain', () => {
     expect(getThemeSnapshot().resolvedTheme).toBe('light');
   });
 
-  it('SSR snapshot returns light/server with dark surface false + density comfortable', () => {
+  it('SSR snapshot returns light/server with dark surface false + density comfortable + accent light', () => {
     const ssr = getServerThemeSnapshot();
     expect(ssr.resolvedTheme).toBe('light');
     expect(ssr.source).toBe('server');
     expect(ssr.isDarkSurface).toBe(false);
     expect(ssr.density).toBe('comfortable');
+    expect(ssr.accent).toBe('light');
   });
 });
 
@@ -400,6 +403,119 @@ describe('useChartTheme — density preference normalization', () => {
     // density doesn't change the theme object — multipliers are separate
     // outputs. Theme builder dependency stays on resolved + isDarkSurface.
     expect(result.current.themeObject).toBe(t1);
+  });
+});
+
+/* ---------------------------------------------------------------- */
+/*  accent (Faz 21.5-A2)                                             */
+/* ---------------------------------------------------------------- */
+
+describe('themeReactiveStore — accent derivation', () => {
+  it('default → accent="light"', () => {
+    expect(getThemeSnapshot().accent).toBe('light');
+  });
+
+  it('data-accent="emerald" → accent="emerald"', () => {
+    document.documentElement.setAttribute('data-accent', 'emerald');
+    __resetThemeStoreForTests();
+    expect(getThemeSnapshot().accent).toBe('emerald');
+  });
+
+  it('data-accent="neutral" alias → accent="light"', () => {
+    document.documentElement.setAttribute('data-accent', 'neutral');
+    __resetThemeStoreForTests();
+    expect(getThemeSnapshot().accent).toBe('light');
+  });
+
+  it('invalid data-accent → accent="light" (default fallback)', () => {
+    document.documentElement.setAttribute('data-accent', 'rocketspeed');
+    __resetThemeStoreForTests();
+    expect(getThemeSnapshot().accent).toBe('light');
+  });
+
+  it('all 7 canonical accents resolved correctly', () => {
+    const accents = ['light', 'dark', 'emerald', 'graphite', 'ocean', 'sunset', 'violet'];
+    for (const a of accents) {
+      document.documentElement.setAttribute('data-accent', a);
+      __resetThemeStoreForTests();
+      expect(getThemeSnapshot().accent).toBe(a);
+    }
+  });
+
+  it('snapshotsEqual treats accent diff as a change (subscriber notified)', async () => {
+    __resetThemeStoreForTests();
+    const notify = vi.fn();
+    const unsub = subscribeThemeStore(notify);
+
+    document.documentElement.setAttribute('data-accent', 'emerald');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(notify).toHaveBeenCalled();
+    expect(getThemeSnapshot().accent).toBe('emerald');
+
+    unsub();
+  });
+});
+
+describe('useChartTheme — accent preference normalization', () => {
+  it('default accent=auto + no DOM signal → light + 10-color palette', () => {
+    const { result } = renderHook(() => useChartTheme());
+    expect(result.current.resolvedAccent).toBe('light');
+    expect(result.current.accentPalette.length).toBe(10);
+    expect(result.current.accentPalette[0]).toBe('#3b82f6'); // legacy primary
+  });
+
+  it("explicit accent='emerald' → emerald palette, primary='#16a34a'", () => {
+    const { result } = renderHook(() => useChartTheme({ accent: 'emerald' }));
+    expect(result.current.resolvedAccent).toBe('emerald');
+    expect(result.current.accentPalette[0]).toBe('#16a34a');
+  });
+
+  it("accent='auto' follows data-accent='ocean'", () => {
+    document.documentElement.setAttribute('data-accent', 'ocean');
+    __resetThemeStoreForTests();
+    const { result } = renderHook(() => useChartTheme({ accent: 'auto' }));
+    expect(result.current.resolvedAccent).toBe('ocean');
+    expect(result.current.accentPalette[0]).toBe('#0ea5e9');
+  });
+
+  it('explicit accent overrides data-accent attribute', () => {
+    document.documentElement.setAttribute('data-accent', 'emerald');
+    __resetThemeStoreForTests();
+    const { result } = renderHook(() => useChartTheme({ accent: 'violet' }));
+    expect(result.current.resolvedAccent).toBe('violet');
+    expect(result.current.accentPalette[0]).toBe('#722ed1');
+  });
+
+  it('effectivePalette === accentPalette for non-HC/non-Print themes', () => {
+    const { result } = renderHook(() => useChartTheme({ theme: 'light', accent: 'emerald' }));
+    expect(result.current.effectivePalette).toEqual(result.current.accentPalette);
+  });
+
+  it('effectivePalette === themeObject.color for HIGH-CONTRAST theme (accent ignored)', () => {
+    const { result } = renderHook(() =>
+      useChartTheme({ theme: 'high-contrast', accent: 'emerald' }),
+    );
+    expect(result.current.resolvedAccent).toBe('emerald'); // resolved name preserved
+    // effectivePalette branches to themeObject.color, NOT emerald
+    expect(result.current.effectivePalette).toBe(result.current.themeObject.color);
+    expect(result.current.effectivePalette[0]).not.toBe('#16a34a');
+  });
+
+  it('effectivePalette === themeObject.color for PRINT theme (accent ignored)', () => {
+    const { result } = renderHook(() => useChartTheme({ theme: 'print', accent: 'emerald' }));
+    expect(result.current.resolvedAccent).toBe('emerald');
+    expect(result.current.effectivePalette).toBe(result.current.themeObject.color);
+    expect(result.current.effectivePalette[0]).not.toBe('#16a34a');
+  });
+
+  it('accentPalette stays as ACCENT_PALETTES[resolved] regardless of theme branch', () => {
+    const { result } = renderHook(() =>
+      useChartTheme({ theme: 'high-contrast', accent: 'emerald' }),
+    );
+    // accentPalette is "pure" — unaffected by HC/Print branching
+    expect(result.current.accentPalette[0]).toBe('#16a34a');
+    expect(result.current.accentPalette.length).toBe(10);
   });
 });
 

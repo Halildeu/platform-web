@@ -18,6 +18,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -88,6 +89,8 @@ export interface SunburstChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -195,17 +198,18 @@ function resolveHighlightFocus(policy: SunburstHighlightPolicy): string | undefi
 }
 
 /**
- * Assign default palette colors to top-level nodes that lack
- * an explicit itemStyle.color.
+ * Assign palette colors to top-level nodes that lack an explicit
+ * itemStyle.color. Codex iter-13: prefer effectivePalette (accent-aware) when
+ * provided, fallback to legacy DEFAULT_PALETTE.
  */
-function colorizeTopLevel(data: SunburstNode[]): SunburstNode[] {
+function colorizeTopLevel(data: SunburstNode[], palette: string[]): SunburstNode[] {
   return data.map((node, i) => {
     if (node.itemStyle?.color) return node;
     return {
       ...node,
       itemStyle: {
         ...node.itemStyle,
-        color: DEFAULT_PALETTE[i % DEFAULT_PALETTE.length],
+        color: palette[i % palette.length],
       },
     };
   });
@@ -233,6 +237,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       theme: themePreference = 'auto',
       decal: decalPreference = 'auto',
       density: densityPreference = 'auto',
+      accent: accentPreference = 'auto',
       ...rest
     },
     forwardedRef,
@@ -247,16 +252,19 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       decalPatterns,
       densityFontMultiplier,
       densitySpacingMultiplier,
+      effectivePalette,
     } = useChartTheme({
       theme: themePreference,
       decal: decalPreference,
       density: densityPreference,
+      accent: accentPreference,
     });
 
     const option = useMemo((): EChartsOption | null => {
       if (isEmpty) return null;
 
-      const coloredData = colorizeTopLevel(data);
+      const palette = effectivePalette ?? DEFAULT_PALETTE;
+      const coloredData = colorizeTopLevel(data, palette);
       const maxDepth = computeMaxDepth(coloredData);
       const levels = levelsProp ?? autoLevels(maxDepth, radius, densityFontMultiplier);
       const focusValue = resolveHighlightFocus(highlightPolicy);
@@ -364,6 +372,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
       decalPatterns,
       densityFontMultiplier,
       densitySpacingMultiplier,
+      effectivePalette,
     ]);
 
     const handleClick = useCallback(

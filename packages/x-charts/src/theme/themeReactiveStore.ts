@@ -19,6 +19,8 @@
  * NOTE: 'print' theme is NEVER auto-detected — only via explicit chart prop.
  */
 
+import { type ChartAccentName, normalizeAccent } from './accent-palettes';
+
 export type ChartResolvedTheme = 'light' | 'dark' | 'high-contrast' | 'print';
 
 export type ThemeSnapshotSource =
@@ -54,6 +56,14 @@ export interface ThemeSnapshot {
    * that haven't set the attribute.
    */
   density: 'comfortable' | 'compact';
+  /**
+   * Accent palette signal read from `data-accent` attribute on documentElement.
+   * Faz 21.5-A2 (Codex iter-14): 7 accent values + 'neutral' alias.
+   *
+   * Default 'light' guarantees backward compatibility (light palette ===
+   * legacy DEFAULT_PALETTE in chart wrappers).
+   */
+  accent: ChartAccentName;
 }
 
 const ATTRIBUTE_FILTER = [
@@ -71,6 +81,7 @@ const SERVER_SNAPSHOT: ThemeSnapshot = {
   source: 'server',
   isDarkSurface: false,
   density: 'comfortable',
+  accent: 'light',
 };
 
 const SUBSCRIBERS = new Set<() => void>();
@@ -146,6 +157,18 @@ const computeDensity = (root: Element): 'comfortable' | 'compact' => {
 };
 
 /**
+ * Read `data-accent` attribute → ChartAccentName. Default 'light'.
+ *
+ * Faz 21.5-A2: accent signal `data-accent` attribute'tan okunur (theme-
+ * controller.ts:179 zaten bu attribute'ı set ediyor — design-system
+ * `ThemeAxes.accent` semantik token).
+ *
+ * 'neutral' alias 'light'a normalize edilir (Codex iter-14 absorb).
+ */
+const computeAccentSignal = (root: Element): ChartAccentName =>
+  normalizeAccent(root.getAttribute('data-accent'));
+
+/**
  * Compute dark surface indicator independently of resolvedTheme.
  * Used by HighContrast theme builder to differentiate light HC vs dark HC.
  *
@@ -184,16 +207,23 @@ const computeSnapshot = (): ThemeSnapshot => {
 
   const isDarkSurface = computeIsDarkSurface(root);
   const density = computeDensity(root);
+  const accent = computeAccentSignal(root);
 
   const appearance = normalizeDataAppearance(root.getAttribute('data-appearance'));
   if (appearance)
-    return { resolvedTheme: appearance, source: 'data-appearance', isDarkSurface, density };
+    return {
+      resolvedTheme: appearance,
+      source: 'data-appearance',
+      isDarkSurface,
+      density,
+      accent,
+    };
 
   const theme = normalizeDataTheme(root.getAttribute('data-theme'));
-  if (theme) return { resolvedTheme: theme, source: 'data-theme', isDarkSurface, density };
+  if (theme) return { resolvedTheme: theme, source: 'data-theme', isDarkSurface, density, accent };
 
   const mode = normalizeDataMode(root.getAttribute('data-mode'));
-  if (mode) return { resolvedTheme: mode, source: 'data-mode', isDarkSurface, density };
+  if (mode) return { resolvedTheme: mode, source: 'data-mode', isDarkSurface, density, accent };
 
   const contrast = matchMediaSafe('(prefers-contrast: more)');
   if (contrast?.matches) {
@@ -202,22 +232,30 @@ const computeSnapshot = (): ThemeSnapshot => {
       source: 'prefers-contrast',
       isDarkSurface,
       density,
+      accent,
     };
   }
 
   const dark = matchMediaSafe('(prefers-color-scheme: dark)');
   if (dark?.matches) {
-    return { resolvedTheme: 'dark', source: 'prefers-color-scheme', isDarkSurface, density };
+    return {
+      resolvedTheme: 'dark',
+      source: 'prefers-color-scheme',
+      isDarkSurface,
+      density,
+      accent,
+    };
   }
 
-  return { resolvedTheme: 'light', source: 'default', isDarkSurface, density };
+  return { resolvedTheme: 'light', source: 'default', isDarkSurface, density, accent };
 };
 
 const snapshotsEqual = (a: ThemeSnapshot, b: ThemeSnapshot): boolean =>
   a.resolvedTheme === b.resolvedTheme &&
   a.source === b.source &&
   a.isDarkSurface === b.isDarkSurface &&
-  a.density === b.density;
+  a.density === b.density &&
+  a.accent === b.accent;
 
 const broadcast = () => {
   const next = computeSnapshot();

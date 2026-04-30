@@ -18,6 +18,7 @@ import type {
   ChartThemePreference,
   ChartDecalPreference,
   ChartDensityPreference,
+  ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
@@ -80,6 +81,8 @@ export interface FunnelChartProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
 }
 
 /* ------------------------------------------------------------------ */
@@ -156,6 +159,7 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
     ...rest
   },
   forwardedRef,
@@ -174,10 +178,12 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   } = useChartTheme({
     theme: themePreference,
     decal: decalPreference,
     density: densityPreference,
+    accent: accentPreference,
   });
 
   const option = useMemo((): EChartsOption | null => {
@@ -186,11 +192,12 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     const conversionMap = showConversion ? buildConversionMap(safeData, sort) : null;
 
     /* -- Prepare series data with per-stage colors -- */
+    const palette = effectivePalette ?? DEFAULT_PALETTE;
     const seriesData = safeData.map((d, i) => ({
       name: d.name,
       value: d.value,
       itemStyle: {
-        color: d.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length],
+        color: d.color ?? palette[i % palette.length],
       },
     }));
 
@@ -302,6 +309,7 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
+    effectivePalette,
   ]);
 
   const handleClick = useCallback(
