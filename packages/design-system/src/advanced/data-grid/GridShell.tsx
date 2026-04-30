@@ -8,9 +8,47 @@
  * - License guard via setup.ts side-effect import
  * - onGridReady event forwarding
  */
-import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from "react";
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../../internal/access-controller';
-import { AgGridReact } from "ag-grid-react";
+import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+// Codex 019dde93 iter-48 — pure helper for entity-row drawer-open
+// guard (action columns, group/footer rows, interactive DOM
+// targets). Tested independently in
+// internal/__tests__/drawer-target.test.ts.
+import { isDrawerOpenSafeTarget } from './internal/drawer-target';
+
+/**
+ * Codex 019dde93 iter-48 — handler composition utility.
+ *
+ * GridShell forwards consumer-supplied event handlers from
+ * `gridOptions` AND adds its own DS handlers (drawer-open, grid
+ * ready, etc.). With a single ag-grid prop slot per event, a naive
+ * `{...gridOptions}` spread WITHOUT explicit handlers below would
+ * let the consumer's handler clobber the DS one (no drawer-open).
+ * With explicit handlers AFTER the spread, the consumer's handler
+ * is dropped (the explicit assignment wins).
+ *
+ * `composeHandlers` runs consumer first, then DS unless the
+ * consumer signaled an opt-out via `event.event?.defaultPrevented`.
+ * Local to GridShell on purpose — generalizing across DS handler
+ * boundaries would expand iter-48's scope per Codex review.
+ */
+function composeHandlers<E extends { event?: { defaultPrevented?: boolean } | null }>(
+  consumer: ((event: E) => void) | undefined,
+  ds: (event: E) => void,
+): (event: E) => void {
+  return (event: E) => {
+    if (typeof consumer === 'function') {
+      consumer(event);
+    }
+    if (event.event?.defaultPrevented) return;
+    ds(event);
+  };
+}
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../../internal/access-controller';
+import { AgGridReact } from 'ag-grid-react';
 import type {
   ColDef,
   FilterChangedEvent,
@@ -19,18 +57,18 @@ import type {
   GridReadyEvent,
   ExcelStyle,
   SideBarDef,
-} from "ag-grid-community";
+} from 'ag-grid-community';
 
 // Side-effect: ensures modules are registered
-import "./setup";
+import './setup';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------
  */
 
-export type GridTheme = "quartz" | "balham" | "alpine" | "material";
-export type GridDensity = "comfortable" | "compact";
+export type GridTheme = 'quartz' | 'balham' | 'alpine' | 'material';
+export type GridDensity = 'comfortable' | 'compact';
 
 export interface GridShellApi<RowData = unknown> {
   getGridApi: () => GridApi<RowData> | null;
@@ -47,7 +85,7 @@ export interface GridShellProps<RowData = unknown> extends AccessControlledProps
   /** Row data for client-side mode (undefined for server-side) */
   rowData?: RowData[];
   /** Row model type */
-  rowModelType?: "clientSide" | "serverSide" | "infinite";
+  rowModelType?: 'clientSide' | 'serverSide' | 'infinite';
   /** AG Grid sidebar definition */
   sideBar?: SideBarDef | string | string[] | boolean;
   /** AG Grid locale text overrides */
@@ -61,7 +99,7 @@ export interface GridShellProps<RowData = unknown> extends AccessControlledProps
   /** Row height (overrides density default) */
   rowHeight?: number;
   /** Row selection config */
-  rowSelection?: GridOptions<RowData>["rowSelection"];
+  rowSelection?: GridOptions<RowData>['rowSelection'];
   /** Theme name */
   theme?: GridTheme;
   /** Density setting */
@@ -101,7 +139,7 @@ const DENSITY_ROW_HEIGHT: Record<GridDensity, number> = {
 
 const DEFAULT_COL_DEF: ColDef = {
   sortable: true,
-  filter: "agMultiColumnFilter",
+  filter: 'agMultiColumnFilter',
   floatingFilter: true,
   resizable: true,
   enableRowGroup: true,
@@ -109,7 +147,7 @@ const DEFAULT_COL_DEF: ColDef = {
   enableValue: true,
   minWidth: 120,
   flex: 1,
-  menuTabs: ["generalMenuTab", "filterMenuTab", "columnsMenuTab"],
+  menuTabs: ['generalMenuTab', 'filterMenuTab', 'columnsMenuTab'],
 };
 
 /* ------------------------------------------------------------------ */
@@ -125,7 +163,7 @@ function GridShellInner<RowData = unknown>(
     defaultColDef,
     gridOptions,
     rowData,
-    rowModelType = "clientSide",
+    rowModelType = 'clientSide',
     sideBar,
     localeText,
     excelStyles,
@@ -133,8 +171,8 @@ function GridShellInner<RowData = unknown>(
     overlayNoRowsTemplate,
     rowHeight,
     rowSelection,
-    theme = "quartz",
-    density = "comfortable",
+    theme = 'quartz',
+    density = 'comfortable',
     animateRows = true,
     onGridReady,
     onRowDoubleClick,
@@ -175,29 +213,62 @@ function GridShellInner<RowData = unknown>(
     [onGridReady],
   );
 
-  const handleRowDoubleClicked = useCallback(
-    (event: { data: RowData | undefined }) => {
-      if (event.data && onRowDoubleClick) {
-        onRowDoubleClick(event.data);
-      }
+  // Codex 019dde93 iter-48 — drawer-open dedupe.
+  // ag-grid normally fires BOTH `rowDoubleClicked` AND
+  // `cellDoubleClicked` for the same physical double-click. If we
+  // route both into `onRowDoubleClick(event.data)` directly, the
+  // consumer drawer opens twice (double fetch, double analytics,
+  // race conditions). The shared `lastEntityClickRef` swallows the
+  // second hit within a 300ms window keyed by the rendered DOM
+  // target so semantically distinct dblclicks (different rows) are
+  // never deduped, but the row+cell pair from the same gesture is.
+  const lastEntityClickRef = useRef<{ key: unknown; ts: number } | null>(null);
+  const fireOpenEntity = useCallback(
+    (data: RowData | undefined, key: unknown) => {
+      if (!data || !onRowDoubleClick) return;
+      const now = Date.now();
+      const last = lastEntityClickRef.current;
+      if (last && last.key === key && now - last.ts < 300) return;
+      lastEntityClickRef.current = { key, ts: now };
+      onRowDoubleClick(data);
     },
     [onRowDoubleClick],
   );
 
-  const handlePaginationChanged = useCallback(
-    () => {
-      if (onPaginationChanged && gridApiRef.current) {
-        onPaginationChanged({ api: gridApiRef.current });
-      }
+  const handleRowDoubleClicked = useCallback(
+    (event: { data: RowData | undefined; node?: { id?: string } | null }) => {
+      // Row event always opens the drawer (the row is the entity).
+      // Use node id as dedupe key when available; fall back to data
+      // ref. Action-column click on the row event is essentially
+      // never a problem because the canonical row event surfaces
+      // even for action cells, but we still rely on the cell
+      // handler to skip those via `isDrawerOpenSafeTarget`.
+      const key = event.node?.id ?? event.data;
+      fireOpenEntity(event.data, key);
     },
-    [onPaginationChanged],
+    [fireOpenEntity],
   );
+
+  const handleCellDoubleClicked = useCallback(
+    (event: import('ag-grid-community').CellDoubleClickedEvent<RowData>) => {
+      if (!isDrawerOpenSafeTarget(event)) return;
+      const key = event.node?.id ?? event.data;
+      fireOpenEntity(event.data, key);
+    },
+    [fireOpenEntity],
+  );
+
+  const handlePaginationChanged = useCallback(() => {
+    if (onPaginationChanged && gridApiRef.current) {
+      onPaginationChanged({ api: gridApiRef.current });
+    }
+  }, [onPaginationChanged]);
 
   const handleFilterChanged = useCallback(
     (event: FilterChangedEvent<RowData>) => {
       onFilterChanged?.(event);
       // For SSRM, trigger server refresh so the datasource re-fetches with updated filterModel
-      if (rowModelType === "serverSide" && gridApiRef.current) {
+      if (rowModelType === 'serverSide' && gridApiRef.current) {
         gridApiRef.current.refreshServerSide?.({ purge: true });
       }
     },
@@ -207,18 +278,18 @@ function GridShellInner<RowData = unknown>(
   return (
     <div
       data-access-state={accessState.state}
-      className={[className ?? "", accessStyles(accessState.state)].join(" ").trim() || undefined}
+      className={[className ?? '', accessStyles(accessState.state)].join(' ').trim() || undefined}
       data-component="grid-shell"
       data-density={density}
       title={accessReason}
     >
       <div
         className={themeClassName}
-        style={{ width: "100%", height: typeof height === "number" ? `${height}px` : height }}
+        style={{ width: '100%', height: typeof height === 'number' ? `${height}px` : height }}
       >
         <AgGridReact<RowData>
           key={gridKey}
-          rowData={rowModelType === "clientSide" ? rowData : undefined}
+          rowData={rowModelType === 'clientSide' ? rowData : undefined}
           columnDefs={columnDefs}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AG Grid ColDef typing gap
           defaultColDef={mergedDefaultColDef as any}
@@ -229,8 +300,10 @@ function GridShellInner<RowData = unknown>(
           overlayLoadingTemplate={overlayLoadingTemplate}
           overlayNoRowsTemplate={overlayNoRowsTemplate}
           rowHeight={resolvedRowHeight}
-          headerHeight={density === "compact" ? 40 : 48}
-          rowSelection={rowSelection ?? { mode: 'multiRow' as const, checkboxes: true, headerCheckbox: true }}
+          headerHeight={density === 'compact' ? 40 : 48}
+          rowSelection={
+            rowSelection ?? { mode: 'multiRow' as const, checkboxes: true, headerCheckbox: true }
+          }
           animateRows={animateRows}
           rowGroupPanelShow="always"
           enableRangeSelection
@@ -276,11 +349,13 @@ function GridShellInner<RowData = unknown>(
                 action: () => {
                   if (params.column && params.api) {
                     const colId = params.column.getColId();
-                    params.api.setColumnFilterModel(colId, {
-                      filterType: 'text',
-                      type: 'equals',
-                      filter: String(params.value),
-                    }).then(() => params.api.onFilterChanged());
+                    params.api
+                      .setColumnFilterModel(colId, {
+                        filterType: 'text',
+                        type: 'equals',
+                        filter: String(params.value),
+                      })
+                      .then(() => params.api.onFilterChanged());
                   }
                 },
               },
@@ -322,12 +397,29 @@ function GridShellInner<RowData = unknown>(
               },
             ];
           }}
-          popupParent={typeof document !== "undefined" ? document.body : undefined}
-          onGridReady={handleGridReady}
-          onRowDoubleClicked={handleRowDoubleClicked}
-          onPaginationChanged={handlePaginationChanged}
-          onFilterChanged={handleFilterChanged}
+          popupParent={typeof document !== 'undefined' ? document.body : undefined}
           {...gridOptions}
+          /* Codex 019dde93 iter-48 — handler composition.
+             gridOptions spread comes BEFORE the explicit handlers so
+             our DS handlers always win the prop assignment, while a
+             consumer can still extend behavior via composeHandlers
+             through gridOptions. The composition runs the consumer
+             callback first; if it sets `event.event.defaultPrevented`,
+             the DS drawer-open path is skipped. */
+          onGridReady={composeHandlers(gridOptions?.onGridReady, handleGridReady)}
+          onRowDoubleClicked={composeHandlers(
+            gridOptions?.onRowDoubleClicked,
+            handleRowDoubleClicked,
+          )}
+          onCellDoubleClicked={composeHandlers(
+            gridOptions?.onCellDoubleClicked,
+            handleCellDoubleClicked,
+          )}
+          onPaginationChanged={composeHandlers(
+            gridOptions?.onPaginationChanged,
+            handlePaginationChanged,
+          )}
+          onFilterChanged={composeHandlers(gridOptions?.onFilterChanged, handleFilterChanged)}
         />
       </div>
       {children}
@@ -335,7 +427,7 @@ function GridShellInner<RowData = unknown>(
   );
 }
 
-/** Core AG Grid shell with theme, density, selection, empty state, and imperative API access. 
+/** Core AG Grid shell with theme, density, selection, empty state, and imperative API access.
  * @example
  * ```tsx
  * <GridShell />
@@ -348,6 +440,6 @@ export const GridShell = forwardRef(GridShellInner) as <RowData = unknown>(
 ) => React.ReactElement;
 
 // @ts-expect-error -- generic forwardRef cast loses static properties
-GridShell.displayName = "GridShell";
+GridShell.displayName = 'GridShell';
 
 export default GridShell;

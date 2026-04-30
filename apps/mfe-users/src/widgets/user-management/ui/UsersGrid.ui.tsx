@@ -12,7 +12,11 @@ import type {
 // so import grid utilities from @mfe/design-system directly.
 import type { GridExportConfig } from 'mfe_reporting/grid';
 import { buildEntityGridQueryParams } from '@mfe/design-system';
-import { buildColDefs, buildProcessCellCallback, type ColumnMeta } from '@mfe/design-system/advanced/data-grid';
+import {
+  buildColDefs,
+  buildProcessCellCallback as _buildProcessCellCallback,
+  type ColumnMeta,
+} from '@mfe/design-system/advanced/data-grid';
 // Ağır AG Grid bağımlılıklarını ilk ekranda yüklememek için lazy-load
 const EntityGridTemplate = React.lazy(() =>
   import('@mfe/design-system').then((m) => ({ default: m.EntityGridTemplate })),
@@ -51,7 +55,7 @@ const MODULE_LEVEL_LABELS: Record<UserModuleAccessLevel, string> = {
   MANAGE: 'users.filters.moduleLevel.manage',
 };
 
-const MODULE_LEVEL_COLORS: Record<UserModuleAccessLevel, BadgeTone> = {
+const _MODULE_LEVEL_COLORS: Record<UserModuleAccessLevel, BadgeTone> = {
   NONE: 'muted',
   VIEW: 'info',
   EDIT: 'warning',
@@ -127,14 +131,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   const [retryKey, setRetryKey] = useState(0);
   const notifiedStatesRef = React.useRef<Set<GridAccessState>>(new Set());
   const gridAccessStateRef = React.useRef<GridAccessState>('idle');
-  const debugLog = useCallback(
-    (...args: unknown[]) => {
-      if (process.env.NODE_ENV !== 'production') {
-        console.debug('[UsersGrid]', ...args);
-      }
-    },
-    [],
-  );
+  const debugLog = useCallback((...args: unknown[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[UsersGrid]', ...args);
+    }
+  }, []);
 
   const notifyOnce = useCallback((state: GridAccessState, type: ToastType, message: string) => {
     if (state === 'idle') {
@@ -177,62 +178,112 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   /*  Column metadata — declarative column definitions via column-system  */
   /* ------------------------------------------------------------------ */
 
-  const localeCode = locale === 'tr' ? 'tr-TR' : locale === 'en' ? 'en-US' : locale === 'de' ? 'de-DE' : locale === 'es' ? 'es-ES' : 'tr-TR';
+  const localeCode =
+    locale === 'tr'
+      ? 'tr-TR'
+      : locale === 'en'
+        ? 'en-US'
+        : locale === 'de'
+          ? 'de-DE'
+          : locale === 'es'
+            ? 'es-ES'
+            : 'tr-TR';
 
-  const columnMeta = useMemo<ColumnMeta[]>(() => [
-    { field: 'fullName', headerNameKey: 'users.grid.columns.fullName', columnType: 'bold-text', minWidth: 180 },
-    { field: 'email', headerNameKey: 'users.grid.columns.email', columnType: 'text', minWidth: 220 },
-    {
-      field: 'role', headerNameKey: 'users.grid.columns.role', columnType: 'badge', width: 140,
-      variantMap: { ADMIN: 'danger', USER: 'info' },
-      defaultVariant: 'info',
-      labelMap: { ADMIN: 'users.filters.role.admin', USER: 'users.filters.role.user' },
-      filterValues: ['ADMIN', 'USER'],
-    },
-    {
-      field: 'status', headerNameKey: 'users.grid.columns.status', columnType: 'status', width: 140,
-      statusMap: {
-        ACTIVE: { variant: 'success', labelKey: 'users.filters.status.active' },
-        INACTIVE: { variant: 'muted', labelKey: 'users.filters.status.inactive' },
-        INVITED: { variant: 'warning', labelKey: 'users.filters.status.invited' },
-        SUSPENDED: { variant: 'danger', labelKey: 'users.filters.status.suspended' },
+  const columnMeta = useMemo<ColumnMeta[]>(
+    () => [
+      {
+        field: 'fullName',
+        headerNameKey: 'users.grid.columns.fullName',
+        columnType: 'bold-text',
+        minWidth: 180,
       },
-    },
-    { field: 'sessionTimeoutMinutes', headerNameKey: 'users.grid.columns.sessionTimeoutMinutes', columnType: 'number', width: 160, suffix: 'dk' },
-    { field: 'lastLoginAt', headerNameKey: 'users.grid.columns.lastLoginAt', columnType: 'date', width: 180, format: 'datetime' },
-  ], []);
+      {
+        field: 'email',
+        headerNameKey: 'users.grid.columns.email',
+        columnType: 'text',
+        minWidth: 220,
+      },
+      {
+        field: 'role',
+        headerNameKey: 'users.grid.columns.role',
+        columnType: 'badge',
+        width: 140,
+        variantMap: { ADMIN: 'danger', USER: 'info' },
+        defaultVariant: 'info',
+        labelMap: { ADMIN: 'users.filters.role.admin', USER: 'users.filters.role.user' },
+        filterValues: ['ADMIN', 'USER'],
+      },
+      {
+        field: 'status',
+        headerNameKey: 'users.grid.columns.status',
+        columnType: 'status',
+        width: 140,
+        statusMap: {
+          ACTIVE: { variant: 'success', labelKey: 'users.filters.status.active' },
+          INACTIVE: { variant: 'muted', labelKey: 'users.filters.status.inactive' },
+          INVITED: { variant: 'warning', labelKey: 'users.filters.status.invited' },
+          SUSPENDED: { variant: 'danger', labelKey: 'users.filters.status.suspended' },
+        },
+      },
+      {
+        field: 'sessionTimeoutMinutes',
+        headerNameKey: 'users.grid.columns.sessionTimeoutMinutes',
+        columnType: 'number',
+        width: 160,
+        suffix: 'dk',
+      },
+      {
+        field: 'lastLoginAt',
+        headerNameKey: 'users.grid.columns.lastLoginAt',
+        columnType: 'date',
+        width: 180,
+        format: 'datetime',
+      },
+    ],
+    [],
+  );
 
   /* Custom columns that column-system can't express */
-  const customColumnDefs = useMemo<ColDef<UserSummary>[]>(() => [
-    {
-      headerName: t('users.grid.columns.roles'),
-      field: 'role',
-      minWidth: 180,
-      filter: 'agTextColumnFilter',
-      cellRenderer: ({ data }) => {
-        const roleName = data?.role;
-        if (!roleName) {
-          return <span className="text-sm text-text-subtle">—</span>;
-        }
-        return (
-          <div className="flex flex-wrap gap-1">
-            <Badge variant="info">{roleName}</Badge>
-          </div>
-        );
+  const customColumnDefs = useMemo<ColDef<UserSummary>[]>(
+    () => [
+      {
+        headerName: t('users.grid.columns.roles'),
+        field: 'role',
+        minWidth: 180,
+        filter: 'agTextColumnFilter',
+        cellRenderer: ({ data }) => {
+          const roleName = data?.role;
+          if (!roleName) {
+            return <span className="text-sm text-text-subtle">—</span>;
+          }
+          return (
+            <div className="flex flex-wrap gap-1">
+              <Badge variant="info">{roleName}</Badge>
+            </div>
+          );
+        },
       },
-    },
-    {
-      headerName: t('users.grid.columns.actions'),
-      field: 'id',
-      width: 120,
-      sortable: false,
-      filter: false,
-      floatingFilter: false,
-      cellRenderer: ({ data }) =>
-        data ? <UserActions user={data} onSelect={() => onSelectUser(data)} /> : null,
-      pinned: 'right',
-    },
-  ], [onSelectUser, t]);
+      {
+        // Codex 019dde93 iter-48 — explicit colId so the DS
+        // drawer-target guard treats this as an action column even if
+        // the col goes through field/headerName resolution.
+        colId: 'userActions',
+        headerName: t('users.grid.columns.actions'),
+        field: 'id',
+        width: 120,
+        sortable: false,
+        filter: false,
+        floatingFilter: false,
+        // Belt-and-suspenders flag: even if a future change renames the
+        // colId, this column is opted out of drawer-open on dblclick.
+        suppressDrawerOpenOnDoubleClick: true,
+        cellRenderer: ({ data }) =>
+          data ? <UserActions user={data} onSelect={() => onSelectUser(data)} /> : null,
+        pinned: 'right',
+      },
+    ],
+    [onSelectUser, t],
+  );
 
   /* Merge column-system output with custom columns */
   const columnDefs = useMemo<ColDef<UserSummary>[]>(() => {
@@ -298,107 +349,119 @@ const UsersGrid: React.FC<UsersGridProps> = ({
       advancedFilterJoinOperator: t('users.grid.locale.advancedFilterJoinOperator'),
       advancedFilterAnd: t('users.grid.locale.advancedFilterAnd'),
       advancedFilterOr: t('users.grid.locale.advancedFilterOr'),
-      advancedFilterValidationMissingColumn: t('users.grid.locale.advancedFilterValidationMissingColumn'),
-      advancedFilterValidationMissingOption: t('users.grid.locale.advancedFilterValidationMissingOption'),
-      advancedFilterValidationMissingValue: t('users.grid.locale.advancedFilterValidationMissingValue'),
+      advancedFilterValidationMissingColumn: t(
+        'users.grid.locale.advancedFilterValidationMissingColumn',
+      ),
+      advancedFilterValidationMissingOption: t(
+        'users.grid.locale.advancedFilterValidationMissingOption',
+      ),
+      advancedFilterValidationMissingValue: t(
+        'users.grid.locale.advancedFilterValidationMissingValue',
+      ),
       advancedFilterApply: t('users.grid.locale.advancedFilterApply'),
     } as Record<string, string>;
   }, [t]);
 
-  const mapAdvancedFilterModel = useCallback(
-    (model: AgAdvancedFilterModel | null | undefined) => {
-      if (!model) return null;
+  const mapAdvancedFilterModel = useCallback((model: AgAdvancedFilterModel | null | undefined) => {
+    if (!model) return null;
 
-      const fieldMap: Record<string, string> = {
-        fullName: 'name',
-        email: 'email',
-        role: 'role',
-        lastLoginAt: 'lastLogin',
-        sessionTimeoutMinutes: 'sessionTimeoutMinutes',
-      };
+    const fieldMap: Record<string, string> = {
+      fullName: 'name',
+      email: 'email',
+      role: 'role',
+      lastLoginAt: 'lastLogin',
+      sessionTimeoutMinutes: 'sessionTimeoutMinutes',
+    };
 
-      type BackendOp =
-        | 'equals'
-        | 'notEqual'
-        | 'contains'
-        | 'notContains'
-        | 'lessThan'
-        | 'greaterThan'
-        | 'inRange';
+    type BackendOp =
+      | 'equals'
+      | 'notEqual'
+      | 'contains'
+      | 'notContains'
+      | 'lessThan'
+      | 'greaterThan'
+      | 'inRange';
 
-      const mapOp = (type: string | undefined): BackendOp | null => {
-        switch (type) {
-          case 'equals':
-          case 'notEqual':
-          case 'contains':
-          case 'notContains':
-          case 'lessThan':
-          case 'greaterThan':
-          case 'inRange':
-            return type;
-          case 'lessThanOrEqual':
-            return 'lessThan';
-          case 'greaterThanOrEqual':
-            return 'greaterThan';
-          default:
-            return null;
-        }
-      };
-
-      const conditions: { field: string; op: BackendOp; value?: unknown; value2?: unknown }[] = [];
-
-      const visit = (node: AgAdvancedFilterModel | null | undefined) => {
-        if (!node) return;
-        if (isJoinNode(node)) {
-          (node.conditions ?? []).forEach((child) => visit(child));
-          return;
-        }
-        const conditionNode = node as AdvancedConditionNode;
-        const colId = conditionNode.colId;
-        if (!colId) return;
-        const backendField = fieldMap[colId];
-        if (!backendField) return;
-        const op = mapOp(conditionNode.type);
-        if (!op) return;
-        const value = conditionNode.filter;
-        const value2 = conditionNode.filterTo;
-        const condition: { field: string; op: BackendOp; value?: unknown; value2?: unknown } = {
-          field: backendField,
-          op,
-        };
-        if (value !== undefined) {
-          condition.value = value;
-        }
-        if (op === 'inRange' && value2 !== undefined) {
-          condition.value2 = value2;
-        }
-        conditions.push(condition);
-      };
-
-      visit(model);
-
-      if (conditions.length === 0) {
-        return null;
+    const mapOp = (type: string | undefined): BackendOp | null => {
+      switch (type) {
+        case 'equals':
+        case 'notEqual':
+        case 'contains':
+        case 'notContains':
+        case 'lessThan':
+        case 'greaterThan':
+        case 'inRange':
+          return type;
+        case 'lessThanOrEqual':
+          return 'lessThan';
+        case 'greaterThanOrEqual':
+          return 'greaterThan';
+        default:
+          return null;
       }
+    };
 
-      const logic = isJoinNode(model) && model.type === 'OR' ? 'or' : 'and';
+    const conditions: { field: string; op: BackendOp; value?: unknown; value2?: unknown }[] = [];
 
-      return {
-        logic,
-        conditions,
+    const visit = (node: AgAdvancedFilterModel | null | undefined) => {
+      if (!node) return;
+      if (isJoinNode(node)) {
+        (node.conditions ?? []).forEach((child) => visit(child));
+        return;
+      }
+      const conditionNode = node as AdvancedConditionNode;
+      const colId = conditionNode.colId;
+      if (!colId) return;
+      const backendField = fieldMap[colId];
+      if (!backendField) return;
+      const op = mapOp(conditionNode.type);
+      if (!op) return;
+      const value = conditionNode.filter;
+      const value2 = conditionNode.filterTo;
+      const condition: { field: string; op: BackendOp; value?: unknown; value2?: unknown } = {
+        field: backendField,
+        op,
       };
-    },
-    [],
-  );
+      if (value !== undefined) {
+        condition.value = value;
+      }
+      if (op === 'inRange' && value2 !== undefined) {
+        condition.value2 = value2;
+      }
+      conditions.push(condition);
+    };
+
+    visit(model);
+
+    if (conditions.length === 0) {
+      return null;
+    }
+
+    const logic = isJoinNode(model) && model.type === 'OR' ? 'or' : 'and';
+
+    return {
+      logic,
+      conditions,
+    };
+  }, []);
 
   const createServerSideDatasource = useCallback(
     ({ gridApi }: { gridApi: GridApi<UserSummary> }) => {
       // Aynı aralık/sort/filter için eşzamanlı çağrıları tek backend isteğine indirger
       const inFlight = new Map<string, IServerSideGetRowsParams<UserSummary>[]>();
       const buildKey = (req: IServerSideGetRowsParams<UserSummary>['request']) =>
-        JSON.stringify({ s: req.startRow, e: req.endRow, f: req.filterModel ?? {}, o: req.sortModel ?? [] });
+        JSON.stringify({
+          s: req.startRow,
+          e: req.endRow,
+          f: req.filterModel ?? {},
+          o: req.sortModel ?? [],
+        });
 
-      const ssrmSuccessFor = (p: IServerSideGetRowsParams<UserSummary>, items: UserSummary[], total: number) => {
+      const ssrmSuccessFor = (
+        p: IServerSideGetRowsParams<UserSummary>,
+        items: UserSummary[],
+        total: number,
+      ) => {
         const paramsWithCallbacks = p as ServerSideParamsWithCallbacks;
         if (typeof paramsWithCallbacks.success === 'function') {
           paramsWithCallbacks.success({ rowData: items, rowCount: total });
@@ -411,7 +474,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         // Expected: SSRM API surface bazı versiyonlarda farklı isimlendirme — handler yoksa noop
         logExpected('UsersGrid.ssrmSuccess', undefined, { reason: 'handler-not-found' });
       };
-      const ssrmFailFor = (p: IServerSideGetRowsParams<UserSummary>) => {
+      const _ssrmFailFor = (p: IServerSideGetRowsParams<UserSummary>) => {
         const paramsWithCallbacks = p as ServerSideParamsWithCallbacks;
         if (typeof paramsWithCallbacks.fail === 'function') {
           paramsWithCallbacks.fail();
@@ -433,9 +496,10 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           }
 
           const requestedBlockSize = params.request.endRow - params.request.startRow;
-          const effectiveBlockSize = Number.isFinite(requestedBlockSize) && requestedBlockSize > 0
-            ? requestedBlockSize
-            : SERVER_CACHE_BLOCK_SIZE;
+          const effectiveBlockSize =
+            Number.isFinite(requestedBlockSize) && requestedBlockSize > 0
+              ? requestedBlockSize
+              : SERVER_CACHE_BLOCK_SIZE;
           const startRow = params.request.startRow ?? 0;
           const pageNumber = Math.floor(startRow / effectiveBlockSize) + 1;
           const requestLabel = `${pageNumber}:${effectiveBlockSize}:${startRow}-${params.request.endRow ?? startRow + effectiveBlockSize}`;
@@ -452,9 +516,10 @@ const UsersGrid: React.FC<UsersGridProps> = ({
 
           // Quick filter metnini grid options'tan çek (SSRM global arama desteği)
           const apiWithOptions = gridApi as GridApiWithOptions;
-          const quickFilterText = typeof apiWithOptions.getGridOption === 'function'
-            ? apiWithOptions.getGridOption('quickFilterText') ?? ''
-            : '';
+          const quickFilterText =
+            typeof apiWithOptions.getGridOption === 'function'
+              ? (apiWithOptions.getGridOption('quickFilterText') ?? '')
+              : '';
 
           debugLog('server:getRows:start', requestLabel, {
             request: params.request,
@@ -468,19 +533,28 @@ const UsersGrid: React.FC<UsersGridProps> = ({
               request: params.request,
               quickFilterText,
               mapAdvancedFilter: mapAdvancedFilterModel,
-              multiSearchParams: (gridApi as unknown as Record<string, unknown>).__multiSearchParams as Record<string, string> | undefined,
+              multiSearchParams: (gridApi as unknown as Record<string, unknown>)
+                .__multiSearchParams as Record<string, string> | undefined,
               mapFilterModel: (model) => {
                 const next: Partial<UsersQueryParams> = {};
-                const statusFilter = (model as typeof params.request.filterModel).status as { values?: unknown[] } | undefined;
+                const statusFilter = (model as typeof params.request.filterModel).status as
+                  | { values?: unknown[] }
+                  | undefined;
                 if (statusFilter?.values && statusFilter.values.length > 0) {
                   next.status = String(statusFilter.values[0]) as UsersQueryParams['status'];
                 }
-                const roleFilter = (model as typeof params.request.filterModel).role as { values?: unknown[] } | undefined;
+                const roleFilter = (model as typeof params.request.filterModel).role as
+                  | { values?: unknown[] }
+                  | undefined;
                 if (roleFilter?.values && roleFilter.values.length > 0) {
                   next.role = String(roleFilter.values[0]) as UsersQueryParams['role'];
                 }
-                const nameFilter = (model as typeof params.request.filterModel).fullName as { filter?: unknown } | undefined;
-                const emailFilter = (model as typeof params.request.filterModel).email as { filter?: unknown } | undefined;
+                const nameFilter = (model as typeof params.request.filterModel).fullName as
+                  | { filter?: unknown }
+                  | undefined;
+                const emailFilter = (model as typeof params.request.filterModel).email as
+                  | { filter?: unknown }
+                  | undefined;
                 const textFilterValue = nameFilter?.filter ?? emailFilter?.filter;
                 if (typeof textFilterValue === 'string' && textFilterValue.trim().length > 0) {
                   next.search = textFilterValue.trim();
@@ -494,7 +568,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             if (reason === 'profile-missing') {
               setGridState('profile-missing');
               debugLog('server:getRows:profile-missing', requestLabel, { queryParams: baseParams });
-              notifyOnce('profile-missing', 'warning', 'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.');
+              notifyOnce(
+                'profile-missing',
+                'warning',
+                'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.',
+              );
               const batch = inFlight.get(key) ?? [];
               batch.forEach((p) => ssrmSuccessFor(p, [], 0));
               return;
@@ -502,7 +580,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             if (reason === 'unauthorized') {
               setGridState('unauthorized');
               debugLog('server:getRows:unauthorized', requestLabel, { queryParams: baseParams });
-              notifyOnce('unauthorized', 'warning', 'Kullanıcı verilerini görmek için yetkiniz bulunmuyor.');
+              notifyOnce(
+                'unauthorized',
+                'warning',
+                'Kullanıcı verilerini görmek için yetkiniz bulunmuyor.',
+              );
               const batch = inFlight.get(key) ?? [];
               batch.forEach((p) => ssrmSuccessFor(p, [], 0));
               return;
@@ -510,7 +592,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             if (reason === 'network-error') {
               setGridState('network-error');
               debugLog('server:getRows:network-error', requestLabel, { queryParams: baseParams });
-              notifyOnce('network-error', 'error', 'Kullanıcı listesi alınamadı. Lütfen bağlantınızı kontrol edin.');
+              notifyOnce(
+                'network-error',
+                'error',
+                'Kullanıcı listesi alınamadı. Lütfen bağlantınızı kontrol edin.',
+              );
               const batch = inFlight.get(key) ?? [];
               batch.forEach((p) => ssrmSuccessFor(p, [], 0));
               return;
@@ -531,7 +617,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             logUnexpected('UsersGrid.serverGetRows', error);
             setGridState('network-error');
             debugLog('server:getRows:error', requestLabel, error);
-            notifyOnce('network-error', 'error', error instanceof Error ? error.message : 'Kullanıcılar yüklenirken hata oluştu.');
+            notifyOnce(
+              'network-error',
+              'error',
+              error instanceof Error ? error.message : 'Kullanıcılar yüklenirken hata oluştu.',
+            );
             const batch = inFlight.get(key) ?? [];
             batch.forEach((p) => ssrmSuccessFor(p, [], 0));
           } finally {
@@ -578,7 +668,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
       }
       if (response.meta?.reason === 'profile-missing') {
         setGridState('profile-missing');
-        notifyOnce('profile-missing', 'warning', 'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.');
+        notifyOnce(
+          'profile-missing',
+          'warning',
+          'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.',
+        );
         setClientRows([]);
         return;
       }
@@ -594,7 +688,11 @@ const UsersGrid: React.FC<UsersGridProps> = ({
       // Unexpected: client mode'da API throw — controlled fallback bypass durumu
       logUnexpected('UsersGrid.loadClientData', error);
       setGridState('network-error');
-      notifyOnce('network-error', 'error', error instanceof Error ? error.message : 'Kullanıcı verileri yüklenemedi.');
+      notifyOnce(
+        'network-error',
+        'error',
+        error instanceof Error ? error.message : 'Kullanıcı verileri yüklenemedi.',
+      );
     } finally {
       onLoadingChange?.(false);
     }
@@ -614,26 +712,44 @@ const UsersGrid: React.FC<UsersGridProps> = ({
 
       if (reason === 'unauthorized') {
         setGridState('unauthorized');
-        notifyOnce('unauthorized', 'warning', 'Kullanıcı verilerini görmek için yetkiniz bulunmuyor.');
+        notifyOnce(
+          'unauthorized',
+          'warning',
+          'Kullanıcı verilerini görmek için yetkiniz bulunmuyor.',
+        );
         return;
       }
 
       if (reason === 'profile-missing') {
         setGridState('profile-missing');
-        notifyOnce('profile-missing', 'warning', 'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.');
+        notifyOnce(
+          'profile-missing',
+          'warning',
+          'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.',
+        );
         return;
       }
 
       if (reason === 'network-error') {
         setGridState('network-error');
-        notifyOnce('network-error', 'error', 'Kullanıcı listesi alınamadı. Lütfen bağlantınızı kontrol edin.');
+        notifyOnce(
+          'network-error',
+          'error',
+          'Kullanıcı listesi alınamadı. Lütfen bağlantınızı kontrol edin.',
+        );
         return;
       }
 
       setGridState('idle');
     } catch (error: unknown) {
       setGridState('network-error');
-      notifyOnce('network-error', 'error', error instanceof Error ? error.message : 'Kullanıcı listesi alınamadı. Lütfen bağlantınızı kontrol edin.');
+      notifyOnce(
+        'network-error',
+        'error',
+        error instanceof Error
+          ? error.message
+          : 'Kullanıcı listesi alınamadı. Lütfen bağlantınızı kontrol edin.',
+      );
     } finally {
       setAccessProbeReady(true);
       onLoadingChange?.(false);
@@ -677,7 +793,14 @@ const UsersGrid: React.FC<UsersGridProps> = ({
   );
 
   const handleServerExport = useCallback(
-    async (format: 'excel' | 'csv', params: { filterModel: Record<string, unknown>; sortModel: unknown[]; quickFilterText: string }) => {
+    async (
+      format: 'excel' | 'csv',
+      params: {
+        filterModel: Record<string, unknown>;
+        sortModel: unknown[];
+        quickFilterText: string;
+      },
+    ) => {
       const qs = new URLSearchParams();
       // Sort
       const sortModel = params.sortModel as Array<{ colId: string; sort: string }>;
@@ -767,7 +890,9 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           dataSourceMode={dataSourceMode}
           rowData={dataSourceMode === 'client' ? clientRows : undefined}
           total={dataSourceMode === 'client' ? clientRows.length : undefined}
-          createServerSideDatasource={dataSourceMode === 'server' ? createServerSideDatasource : undefined}
+          createServerSideDatasource={
+            dataSourceMode === 'server' ? createServerSideDatasource : undefined
+          }
           onGridReady={handleGridReady}
           footerStartSlot={modeSelector}
           onServerExport={dataSourceMode === 'server' ? handleServerExport : undefined}
