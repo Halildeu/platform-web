@@ -17,24 +17,12 @@ afterEach(() => {
 
 describe('Popover — temel render', () => {
   it('trigger elementini render eder', () => {
-    render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Popover content"
-        disablePortal
-      />,
-    );
+    render(<Popover trigger={<button>Open</button>} content="Popover content" disablePortal />);
     expect(screen.getByText('Open')).toBeInTheDocument();
   });
 
   it('baslangicta popover kapali olur', () => {
-    render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Popover content"
-        disablePortal
-      />,
-    );
+    render(<Popover trigger={<button>Open</button>} content="Popover content" disablePortal />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -105,12 +93,7 @@ describe('Popover — controlled', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     rerender(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Popover content"
-        open
-        disablePortal
-      />,
+      <Popover trigger={<button>Open</button>} content="Popover content" open disablePortal />,
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
@@ -170,13 +153,7 @@ describe('Popover — title', () => {
 describe('Popover — arrow', () => {
   it('showArrow=true iken arrow render eder', () => {
     render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Content"
-        showArrow
-        open
-        disablePortal
-      />,
+      <Popover trigger={<button>Open</button>} content="Content" showArrow open disablePortal />,
     );
     expect(screen.getByTestId('popover-arrow')).toBeInTheDocument();
   });
@@ -201,26 +178,14 @@ describe('Popover — arrow', () => {
 
 describe('Popover — access control', () => {
   it('access="hidden" iken render etmez', () => {
-    const { container } = render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Content"
-        access="hidden"
-        disablePortal
-      />,
+    const { container: _container } = render(
+      <Popover trigger={<button>Open</button>} content="Content" access="hidden" disablePortal />,
     );
     expect(container.innerHTML).toBe('');
   });
 
   it('access="disabled" iken trigger disabled olur', () => {
-    render(
-      <Popover
-        trigger="Open"
-        content="Content"
-        access="disabled"
-        disablePortal
-      />,
-    );
+    render(<Popover trigger="Open" content="Content" access="disabled" disablePortal />);
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
   });
@@ -244,17 +209,8 @@ describe('Popover — access control', () => {
 
 describe('Popover — a11y', () => {
   it('trigger aria-haspopup="dialog" icinde ayarlanir', () => {
-    render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Content"
-        disablePortal
-      />,
-    );
-    expect(screen.getByText('Open')).toHaveAttribute(
-      'aria-haspopup',
-      'dialog',
-    );
+    render(<Popover trigger={<button>Open</button>} content="Content" disablePortal />);
+    expect(screen.getByText('Open')).toHaveAttribute('aria-haspopup', 'dialog');
   });
 
   it('trigger aria-expanded dogru guncellenir', async () => {
@@ -280,7 +236,7 @@ describe('Popover — a11y', () => {
 
 describe('Popover — edge cases', () => {
   it('className forwarding calisir', () => {
-    const { container } = render(
+    const { container: _container } = render(
       <Popover
         trigger={<button>Open</button>}
         content="Content"
@@ -292,13 +248,7 @@ describe('Popover — edge cases', () => {
   });
 
   it('string trigger fallback button olusturur', () => {
-    render(
-      <Popover
-        trigger="Click here"
-        content="Content"
-        disablePortal
-      />,
-    );
+    render(<Popover trigger="Click here" content="Content" disablePortal />);
     expect(screen.getByRole('button', { name: 'Click here' })).toBeInTheDocument();
   });
 });
@@ -362,27 +312,14 @@ describe('Popover — Faz 3: keyboard & a11y', () => {
   });
 
   it('varsayilan olarak asagi yonde konumlanir (side="bottom")', () => {
-    render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Content"
-        open
-        disablePortal
-      />,
-    );
+    render(<Popover trigger={<button>Open</button>} content="Content" open disablePortal />);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('data-side', 'bottom');
   });
 
   it('showArrow=true oldugunda arrow render eder', () => {
     render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Content"
-        showArrow
-        open
-        disablePortal
-      />,
+      <Popover trigger={<button>Open</button>} content="Content" showArrow open disablePortal />,
     );
     expect(screen.getByTestId('popover-arrow')).toBeInTheDocument();
     expect(screen.getByTestId('popover-arrow')).toHaveAttribute('aria-hidden', 'true');
@@ -402,14 +339,7 @@ describe('Popover — Faz 3: keyboard & a11y', () => {
   });
 
   it('role="dialog" ve aria-modal="false" atanir (non-modal)', () => {
-    render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Content"
-        open
-        disablePortal
-      />,
-    );
+    render(<Popover trigger={<button>Open</button>} content="Content" open disablePortal />);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('role', 'dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'false');
@@ -465,13 +395,8 @@ describe('Popover — overlay-engine integration', () => {
 
 describe('Popover — a11y', () => {
   it('has no axe violations', async () => {
-    const { container } = render(
-      <Popover
-        trigger={<button>Open</button>}
-        content="Popover content"
-        open
-        disablePortal
-      />,
+    const { container: _container } = render(
+      <Popover trigger={<button>Open</button>} content="Popover content" open disablePortal />,
     );
     await expectNoA11yViolations(container);
   });
@@ -483,7 +408,11 @@ describe('Popover — a11y', () => {
 
 describe('Popover — quality signals', () => {
   it('handles keyboard and focus events via fireEvent', () => {
-    const { container } = render(<div role="textbox" tabIndex={0} data-testid="focusable">Content</div>);
+    const { container: _container } = render(
+      <div role="textbox" tabIndex={0} data-testid="focusable">
+        Content
+      </div>,
+    );
     const el = container.querySelector('[data-testid="focusable"]')!;
     fireEvent.focus(el);
     fireEvent.keyDown(el, { key: 'Escape' });
@@ -493,7 +422,11 @@ describe('Popover — quality signals', () => {
   });
 
   it('handles error and invalid states', () => {
-    const { container } = render(<div role="alert" aria-invalid="true" data-testid="error-el">Error message</div>);
+    const { container: _container } = render(
+      <div role="alert" aria-invalid="true" data-testid="error-el">
+        Error message
+      </div>,
+    );
     const el = screen.getByTestId('error-el');
     expect(el).toBeInTheDocument();
     expect(el).toHaveAttribute('aria-invalid', 'true');
@@ -502,7 +435,11 @@ describe('Popover — quality signals', () => {
   });
 
   it('renders empty state when no data is provided', () => {
-    const { container } = render(<div data-testid="empty-state" data-empty="true">No data available</div>);
+    const { container: _container } = render(
+      <div data-testid="empty-state" data-empty="true">
+        No data available
+      </div>,
+    );
     const el = screen.getByTestId('empty-state');
     expect(el).toBeInTheDocument();
     expect(el).toHaveTextContent('No data available');
@@ -510,11 +447,99 @@ describe('Popover — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { container: _container, rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');
     });
     expect(screen.getByTestId('async-el')).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Codex 019dde3d iter-46 — opt-in focus trap (modal-style popover)  */
+/*                                                                     */
+/*  Default popover is NON-MODAL: Tab can leave the popover, click-    */
+/*  outside closes it. The 4 behavior contracts below lock the         */
+/*  semantic split between the default and opt-in modes.               */
+/* ------------------------------------------------------------------ */
+
+describe('Popover — opt-in focus trap (iter-46)', () => {
+  it('enableFocusTrap=false (default): popover is non-modal (aria-modal="false")', async () => {
+    render(
+      <Popover
+        trigger={<button>Open</button>}
+        content={<div data-testid="content">Body</div>}
+        defaultOpen
+      />,
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'false');
+  });
+
+  it('enableFocusTrap=false (default): outside-click still closes the popover', async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <div>
+        <Popover
+          trigger={<button>Open</button>}
+          content={<div>Body</div>}
+          defaultOpen
+          onOpenChange={onOpenChange}
+        />
+        <div data-testid="outside">outside</div>
+      </div>,
+    );
+    await screen.findByRole('dialog');
+    fireEvent.mouseDown(screen.getByTestId('outside'));
+    fireEvent.click(screen.getByTestId('outside'));
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it('enableFocusTrap=true: announces aria-modal="true" (modal-style)', async () => {
+    render(
+      <Popover
+        trigger={<button>Open</button>}
+        content={
+          <div>
+            <button data-testid="b1">First</button>
+            <button data-testid="b2">Last</button>
+          </div>
+        }
+        defaultOpen
+        enableFocusTrap
+      />,
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('enableFocusTrap=true: Tab on last focusable wraps to first inside the panel', async () => {
+    render(
+      <Popover
+        trigger={<button>Open</button>}
+        content={
+          <div>
+            <button data-testid="b1">First</button>
+            <button data-testid="b2">Last</button>
+          </div>
+        }
+        defaultOpen
+        enableFocusTrap
+      />,
+    );
+    await screen.findByRole('dialog');
+    // Wait for hook autoFocus settle
+    await new Promise((r) => setTimeout(r, 80));
+
+    const last = screen.getByTestId('b2');
+    last.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    // Hook wraps to first focusable in DOM order — popover panel does
+    // NOT include a close button, so first focusable is `b1`.
+    expect(document.activeElement).toBe(screen.getByTestId('b1'));
   });
 });
