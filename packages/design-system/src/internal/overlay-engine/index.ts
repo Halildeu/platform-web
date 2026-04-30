@@ -37,11 +37,17 @@ export {
 } from '../OverlaySurface';
 
 // Layer Stack — z-index management
+//
+// Codex 019ddf17 iter-47c — `isTopLayer` deprecated shim removed
+// (was kept since iter-47b1 for compatibility). All consumers should
+// use `isTopFocusTrapLayer` (focus-trap gating) or
+// `isTopDismissableLayer` (Escape / outside-click LIFO) — these honor
+// participation flags so a `toast` doesn't accidentally swallow
+// Escape just because it has the highest z-index band.
 export {
   registerLayer,
   unregisterLayer,
   getTopZIndex,
-  isTopLayer,
   isTopFocusTrapLayer,
   isTopDismissableLayer,
   getLayerStack,

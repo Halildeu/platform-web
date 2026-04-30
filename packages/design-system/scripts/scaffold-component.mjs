@@ -437,8 +437,8 @@ import {
   registerLayer,
   unregisterLayer,
   useEscapeKey,
+  useFocusTrap,
   useScrollLock,
-  useFocusRestore,
 } from "${relToSrc}/internal/overlay-engine";
 
 /* ------------------------------------------------------------------ */
@@ -465,11 +465,15 @@ export function ${pascal}({
   className,
 }: ${pascal}Props) {
   const layerId = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useFocusTrap({
+    active: open,
+    autoFocus: true,
+    restoreFocus: true,
+    layerId,
+  });
 
   useScrollLock(open);
-  useFocusRestore(open);
-  useEscapeKey(open && closeOnEscape, onClose);
+  useEscapeKey(open && closeOnEscape, onClose, { layerId });
 
   useEffect(() => {
     if (!open) return;
