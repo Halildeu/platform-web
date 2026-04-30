@@ -1,9 +1,23 @@
 # Faz 21.5-B — x-charts A11y Baseline Audit & Plan
 
-**Status:** PLANNING (Codex iter-6 sıra: B → A3 → A2)
+**Status:** PLAN-AGREED (Codex iter-7 REVISE → kararlar absorb edildi)
 **Effort estimate:** 12-18 hours
-**Pre-impl review:** Codex iter-7 zorunlu (hook vs wrapper karar)
+**Pre-impl review:** Codex iter-7 ✅ tamamlandı (`pattern_decision: hybrid`, `recommended_pr_granularity: bulk`)
 **Date:** 2026-04-30
+
+## Codex iter-7 Karar Tablosu (REVISE absorb)
+
+| Soru                  | Codex Cevabı                                                                                                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Hook vs Wrapper    | **C Hibrit** — `useChartA11y` core default-on + wrapper sayfa-level opsiyonel                                                                                                    |
+| 2. ChartKeyboardNav   | **Rewrite** — `dispatchAction({ type: 'highlight' })` + Home/End/Arrow + escape clear + visible focus state. `role="application"` kaldır, `role="region"` veya focusable surface |
+| 3. Decal patterns     | **Theme-bound auto + chart-level override** (`decal?: boolean \| 'auto'`); high-contrast + print default on                                                                      |
+| 4. axe-core threshold | **serious+critical zero** hard gate; moderate/minor summary artifact (jsdom layout/CSS var false-positive azaltma)                                                               |
+| 5. PR granularity     | **Bulk + referans-first** (3 PR: B1 BarChart referans, B2 12 chart, B3 decal+CI)                                                                                                 |
+| 6. A2 paralel         | **B-Sütun-4 sonra** — theme API freeze öncesi A2 merge etme                                                                                                                      |
+| 7. Decal token roster | **v2.2** (Faz 21.6 taxonomy ile beraber); v2.1'e patch ekleme                                                                                                                    |
+
+`next_action: PR-B1 aç: useChartA11y API tasarımı + BarChart referans + serious/critical axe test + keyboard dispatchAction testleri`
 
 ## Mevcut Durum (Audit)
 
