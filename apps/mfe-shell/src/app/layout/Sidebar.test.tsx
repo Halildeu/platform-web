@@ -7,7 +7,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 
 const dispatchMock = vi.fn();
-const pushNotificationMock = vi.fn((payload: Record<string, unknown>) => ({ type: 'notifications/push', payload }));
+const pushNotificationMock = vi.fn((payload: Record<string, unknown>) => ({
+  type: 'notifications/push',
+  payload,
+}));
 const toggleOpenMock = vi.fn((payload: boolean) => ({ type: 'notifications/toggle', payload }));
 
 const permissionsMock = {
@@ -25,11 +28,6 @@ const permissionsMock = {
   loading: false,
   refresh: vi.fn(),
 };
-
-const routerFuture = {
-  v7_startTransition: true,
-  v7_relativeSplatPath: true,
-} as const;
 
 vi.mock('../store/store.hooks', () => ({
   useAppDispatch: () => dispatchMock,
@@ -60,16 +58,16 @@ const LocationViewer = () => {
 
 const renderSidebar = (initialPath = '/audit/events') =>
   render(
-    <MemoryRouter initialEntries={[initialPath]} future={routerFuture}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route
           path="*"
-          element={(
+          element={
             <>
               <Sidebar />
               <LocationViewer />
             </>
-          )}
+          }
         />
       </Routes>
     </MemoryRouter>,

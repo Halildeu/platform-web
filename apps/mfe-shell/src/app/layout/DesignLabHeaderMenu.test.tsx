@@ -11,7 +11,7 @@ vi.mock('../i18n', () => ({
     t: (key: string) =>
       ({
         'shell.nav.designLab': 'Design Lab',
-      }[key] ?? key),
+      })[key] ?? key,
   }),
 }));
 
@@ -25,11 +25,6 @@ vi.mock('../../pages/admin/design-lab/useDesignLabI18n', async () => {
   };
 });
 
-const routerFuture = {
-  v7_startTransition: true,
-  v7_relativeSplatPath: true,
-} as const;
-
 const LocationViewer = () => {
   const location = useLocation();
   return <span data-testid="location-display">{`${location.pathname}${location.search}`}</span>;
@@ -37,16 +32,16 @@ const LocationViewer = () => {
 
 const renderMenu = (initialEntry: string) =>
   render(
-    <MemoryRouter initialEntries={[initialEntry]} future={routerFuture}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route
           path="*"
-          element={(
+          element={
             <>
               <DesignLabHeaderMenu />
               <LocationViewer />
             </>
-          )}
+          }
         />
       </Routes>
     </MemoryRouter>,
@@ -93,7 +88,9 @@ describe('DesignLabHeaderMenu', () => {
 
     fireEvent.click(screen.getByTestId('design-lab-header-section-components'));
 
-    expect(screen.getByTestId('location-display')).toHaveTextContent('/admin/design-lab?dl_mode=components&dl_section=components');
+    expect(screen.getByTestId('location-display')).toHaveTextContent(
+      '/admin/design-lab?dl_mode=components&dl_section=components',
+    );
   });
 
   it('click ile acilan taxonomy panelinden secili sectiona gider', () => {
@@ -103,18 +100,24 @@ describe('DesignLabHeaderMenu', () => {
     expectNoRawDesignLabKeys(container.textContent ?? '');
     fireEvent.click(screen.getByTestId('design-lab-header-section-components'));
 
-    expect(screen.getByTestId('location-display')).toHaveTextContent('/admin/design-lab?dl_mode=components&dl_section=components');
+    expect(screen.getByTestId('location-display')).toHaveTextContent(
+      '/admin/design-lab?dl_mode=components&dl_section=components',
+    );
   });
 
   it('design lab icindeyken mode ve tab bilgisini korur, item parametrelerini temizler', () => {
-    renderMenu('/admin/design-lab?dl_mode=recipes&dl_section=patterns&dl_tab=demo&dl_item=input&dl_recipe=search_filter_listing');
+    renderMenu(
+      '/admin/design-lab?dl_mode=recipes&dl_section=patterns&dl_tab=demo&dl_item=input&dl_recipe=search_filter_listing',
+    );
 
     fireEvent.mouseEnter(screen.getByTestId('nav-design-lab'));
 
     fireEvent.click(screen.getByTestId('design-lab-header-section-pages'));
 
     const locationText = screen.getByTestId('location-display');
-    expect(locationText).toHaveTextContent('/admin/design-lab?dl_mode=pages&dl_section=pages&dl_tab=demo');
+    expect(locationText).toHaveTextContent(
+      '/admin/design-lab?dl_mode=pages&dl_section=pages&dl_tab=demo',
+    );
     expect(locationText).not.toHaveTextContent('dl_item=');
     expect(locationText).not.toHaveTextContent('dl_recipe=');
   });
@@ -125,7 +128,9 @@ describe('DesignLabHeaderMenu', () => {
     fireEvent.mouseEnter(screen.getByTestId('nav-design-lab'));
     fireEvent.click(screen.getByTestId('design-lab-header-section-recipes'));
 
-    expect(screen.getByTestId('location-display')).toHaveTextContent('/admin/design-lab?dl_mode=recipes&dl_section=recipes&dl_tab=demo');
+    expect(screen.getByTestId('location-display')).toHaveTextContent(
+      '/admin/design-lab?dl_mode=recipes&dl_section=recipes&dl_tab=demo',
+    );
     expect(screen.getByTestId('location-display')).not.toHaveTextContent('dl_section=ai_ux');
   });
 });

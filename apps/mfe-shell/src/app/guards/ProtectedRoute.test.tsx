@@ -6,11 +6,6 @@ import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { cleanup, render, screen } from '@testing-library/react';
 import { ProtectedRoute } from './ProtectedRoute';
 
-const routerFuture = {
-  v7_startTransition: true,
-  v7_relativeSplatPath: true,
-} as const;
-
 const authState = {
   auth: {
     token: null as string | null,
@@ -54,15 +49,15 @@ const LocationViewer = ({ label }: { label: string }) => {
 
 const renderWithRouter = () =>
   render(
-    <MemoryRouter initialEntries={['/admin/users']} future={routerFuture}>
+    <MemoryRouter initialEntries={['/admin/users']}>
       <Routes>
         <Route
           path="/admin/users"
-          element={(
+          element={
             <ProtectedRoute requiredPermissions={['VIEW_USERS']}>
               <div>Protected Content</div>
             </ProtectedRoute>
-          )}
+          }
         />
         <Route path="/login" element={<LocationViewer label="Login Page" />} />
         <Route path="/unauthorized" element={<LocationViewer label="Unauthorized Page" />} />
@@ -86,7 +81,9 @@ describe('ProtectedRoute', () => {
   it('redirects anonymous user to login with redirect param', () => {
     renderWithRouter();
     expect(screen.getByText('Login Page')).toBeInTheDocument();
-    expect(screen.getByTestId('location-display')).toHaveTextContent('/login?redirect=%2Fadmin%2Fusers');
+    expect(screen.getByTestId('location-display')).toHaveTextContent(
+      '/login?redirect=%2Fadmin%2Fusers',
+    );
   });
 
   it('permitAll bootstrap tamamlanmadan içerik render etmez', () => {
