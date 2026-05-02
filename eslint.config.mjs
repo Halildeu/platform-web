@@ -130,6 +130,12 @@ export default tseslint.config(
       }],
       'no-undef': 'off', // Too many false positives with TS global types
       'no-unused-private-class-members': 'warn',
+      // ESLint 10 added `no-useless-assignment` to recommended; in our codebase
+      // it produces false positives on object-literal fields inside return
+      // statements and on early-return guard initializers (TS narrows the type
+      // but ESLint flow analysis does not see the narrowing). Disabled until
+      // the rule's flow analysis matures.
+      'no-useless-assignment': 'off',
     },
   },
   /* ---- @eslint/css — native CSS linting (ESLint 9+) ---- */
