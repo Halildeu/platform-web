@@ -29,7 +29,11 @@ export interface SchemaValidator {
   /** Validate all fields. Returns map of field name -> error message. Empty = valid. */
   validate: (values: Record<string, unknown>) => Record<string, string>;
   /** Validate a single field. Returns error message or null. */
-  validateField: (field: string, value: unknown, allValues?: Record<string, unknown>) => string | null;
+  validateField: (
+    field: string,
+    value: unknown,
+    allValues?: Record<string, unknown>,
+  ) => string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -191,11 +195,14 @@ export function toZodSchema(formSchema: FormSchema): any | null {
     switch (field.type) {
       case 'number':
         fieldSchema = z.number();
-        if (field.validation?.min !== undefined) fieldSchema = fieldSchema.min(field.validation.min);
-        if (field.validation?.max !== undefined) fieldSchema = fieldSchema.max(field.validation.max);
+        if (field.validation?.min !== undefined)
+          fieldSchema = fieldSchema.min(field.validation.min);
+        if (field.validation?.max !== undefined)
+          fieldSchema = fieldSchema.max(field.validation.max);
         break;
       case 'email':
-        fieldSchema = z.string().email(field.validation?.patternMessage || 'Invalid email');
+        // Zod 4: top-level z.email() replaces the deprecated z.string().email() chain.
+        fieldSchema = z.email(field.validation?.patternMessage || 'Invalid email');
         break;
       case 'checkbox':
         fieldSchema = z.boolean();
@@ -243,20 +250,26 @@ export function fromZodSchema(zodSchema: any, meta?: Partial<FormSchema>): FormS
       required: !fs.isOptional?.(),
     };
 
-    // Detect type from Zod schema _def.typeName
-    // Unwrap optional/nullable wrappers to find the inner type
+    // Detect type from Zod schema _def.type (Zod 4 lowercase tags;
+    // Zod 3 used `_def.typeName === 'ZodXxx'`, see migration note below).
+    // Unwrap optional/nullable wrappers to reach the inner type.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let innerDef: any = fs._def;
-    if (innerDef?.typeName === 'ZodOptional' || innerDef?.typeName === 'ZodNullable') {
+    if (innerDef?.type === 'optional' || innerDef?.type === 'nullable') {
       innerDef = innerDef.innerType?._def;
     }
-    const typeName = innerDef?.typeName;
+    const type = innerDef?.type;
 
-    if (typeName === 'ZodNumber') field.type = 'number';
-    if (typeName === 'ZodBoolean') field.type = 'checkbox';
-    if (typeName === 'ZodEnum') {
+    if (type === 'number') field.type = 'number';
+    if (type === 'boolean') field.type = 'checkbox';
+    if (type === 'enum') {
       field.type = 'select';
-      field.options = innerDef.values.map((v: string) => ({ label: v, value: v }));
+      // Zod 4 enums expose values via `_def.entries` (Record<label,value>);
+      // fall back to `_def.values` for older builds.
+      const entries: string[] = innerDef.entries
+        ? Object.values(innerDef.entries as Record<string, string>)
+        : (innerDef.values ?? []);
+      field.options = entries.map((v: string) => ({ label: v, value: v }));
     }
 
     fields.push(field);

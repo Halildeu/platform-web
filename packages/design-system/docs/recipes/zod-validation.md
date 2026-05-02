@@ -11,12 +11,17 @@ npm install zod
 ```
 
 ```tsx
-import { useForm, ConnectedInput, ConnectedCheckbox, createZodValidator } from '@mfe/design-system/form';
+import {
+  useForm,
+  ConnectedInput,
+  ConnectedCheckbox,
+  createZodValidator,
+} from '@mfe/design-system/form';
 import { Button } from '@mfe/design-system';
 import { z } from 'zod';
 
 const loginSchema = z.object({
-  email: z.string().email('Geçerli e-posta giriniz'),
+  email: z.email('Geçerli e-posta giriniz'),
   password: z.string().min(8, 'En az 8 karakter'),
   rememberMe: z.boolean().optional(),
 });
@@ -33,7 +38,9 @@ export function LoginForm() {
         <ConnectedInput name="email" label="E-posta" type="email" required />
         <ConnectedInput name="password" label="Şifre" type="password" required />
         <ConnectedCheckbox name="rememberMe" label="Beni hatırla" />
-        <Button type="submit" variant="primary">Giriş</Button>
+        <Button type="submit" variant="primary">
+          Giriş
+        </Button>
       </form>
     </form.FormProvider>
   );
@@ -55,11 +62,11 @@ npm install zod @hookform/resolvers react-hook-form
 ## Schema Definition
 
 ```ts
-import { z } from "zod";
+import { z } from 'zod';
 
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  email: z.email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
   rememberMe: z.boolean().optional(),
 });
 
@@ -70,14 +77,14 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 ## Integration with react-hook-form + design-system
 
 ```tsx
-import { useForm, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Input, Checkbox, Button } from "@mfe/design-system";
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Input, Checkbox, Button } from '@mfe/design-system';
 
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  email: z.email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
   rememberMe: z.boolean().optional(),
 });
 
@@ -90,12 +97,12 @@ export function LoginForm() {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", rememberMe: false },
+    defaultValues: { email: '', password: '', rememberMe: false },
   });
 
   const onSubmit = async (data: LoginFormValues) => {
-    await fetch("/api/auth/login", {
-      method: "POST",
+    await fetch('/api/auth/login', {
+      method: 'POST',
       body: JSON.stringify(data),
     });
   };
@@ -107,7 +114,7 @@ export function LoginForm() {
         type="email"
         error={errors.email?.message}
         required
-        {...register("email")}
+        {...register('email')}
       />
 
       <Input
@@ -115,10 +122,10 @@ export function LoginForm() {
         type="password"
         error={errors.password?.message}
         required
-        {...register("password")}
+        {...register('password')}
       />
 
-      <Checkbox label="Remember me" {...register("rememberMe")} />
+      <Checkbox label="Remember me" {...register('rememberMe')} />
 
       <Button type="submit" variant="primary" loading={isSubmitting}>
         Sign in
@@ -133,37 +140,34 @@ export function LoginForm() {
 Zod errors are mapped automatically by `zodResolver`. Each field error becomes
 a `{ message: string; type: string }` object in `formState.errors`.
 
-| Component  | How to pass errors                          |
-|-----------|---------------------------------------------|
-| `Input`   | `error={errors.fieldName?.message}`          |
-| `Select`  | `error={errors.fieldName?.message ?? !!errors.fieldName}` |
-| `Checkbox`| `error={!!errors.fieldName}`                 |
-| `Radio`   | `error={!!errors.fieldName}`                 |
+| Component  | How to pass errors                                        |
+| ---------- | --------------------------------------------------------- |
+| `Input`    | `error={errors.fieldName?.message}`                       |
+| `Select`   | `error={errors.fieldName?.message ?? !!errors.fieldName}` |
+| `Checkbox` | `error={!!errors.fieldName}`                              |
+| `Radio`    | `error={!!errors.fieldName}`                              |
 
 For `FormField`, pass the message to the wrapper:
 
 ```tsx
-import { FormField, Input } from "@mfe/design-system";
+import { FormField, Input } from '@mfe/design-system';
 
 <FormField label="Email" error={errors.email?.message} required>
-  <Input {...register("email")} />
-</FormField>
+  <Input {...register('email')} />
+</FormField>;
 ```
 
 ### Custom error mapping utility
 
 ```ts
-import type { FieldErrors } from "react-hook-form";
+import type { FieldErrors } from 'react-hook-form';
 
 /** Extract first error message from nested RHF errors */
-export function fieldError(
-  errors: FieldErrors,
-  name: string,
-): string | undefined {
-  const parts = name.split(".");
+export function fieldError(errors: FieldErrors, name: string): string | undefined {
+  const parts = name.split('.');
   let current: unknown = errors;
   for (const part of parts) {
-    if (current == null || typeof current !== "object") return undefined;
+    if (current == null || typeof current !== 'object') return undefined;
     current = (current as Record<string, unknown>)[part];
   }
   return (current as { message?: string })?.message;
@@ -179,36 +183,36 @@ export function fieldError(
 
 ```ts
 const loginSchema = z.object({
-  email: z.string().email("Invalid email"),
-  password: z.string().min(8, "At least 8 characters"),
+  email: z.email('Invalid email'),
+  password: z.string().min(8, 'At least 8 characters'),
 });
 ```
 
 ### Registration form
 
 ```tsx
-import { z } from "zod";
+import { z } from 'zod';
 
 const registrationSchema = z
   .object({
-    name: z.string().min(2, "Name must be at least 2 characters"),
-    email: z.string().email("Invalid email address"),
+    name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.email('Invalid email address'),
     password: z
       .string()
-      .min(8, "At least 8 characters")
-      .regex(/[A-Z]/, "Must contain an uppercase letter")
-      .regex(/[0-9]/, "Must contain a number"),
+      .min(8, 'At least 8 characters')
+      .regex(/[A-Z]/, 'Must contain an uppercase letter')
+      .regex(/[0-9]/, 'Must contain a number'),
     confirmPassword: z.string(),
-    role: z.enum(["admin", "editor", "viewer"], {
-      errorMap: () => ({ message: "Select a role" }),
+    role: z.enum(['admin', 'editor', 'viewer'], {
+      errorMap: () => ({ message: 'Select a role' }),
     }),
     terms: z.literal(true, {
-      errorMap: () => ({ message: "You must accept the terms" }),
+      errorMap: () => ({ message: 'You must accept the terms' }),
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
   });
 
 type RegistrationValues = z.infer<typeof registrationSchema>;
@@ -217,9 +221,9 @@ type RegistrationValues = z.infer<typeof registrationSchema>;
 Full form using this schema:
 
 ```tsx
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Input, Select, Checkbox, Button } from "@mfe/design-system";
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Input, Select, Checkbox, Button } from '@mfe/design-system';
 
 export function RegistrationForm() {
   const {
@@ -232,47 +236,42 @@ export function RegistrationForm() {
 
   return (
     <form onSubmit={handleSubmit(console.log)} className="flex flex-col gap-4">
-      <Input
-        label="Full name"
-        error={errors.name?.message}
-        required
-        {...register("name")}
-      />
+      <Input label="Full name" error={errors.name?.message} required {...register('name')} />
       <Input
         label="Email"
         type="email"
         error={errors.email?.message}
         required
-        {...register("email")}
+        {...register('email')}
       />
       <Input
         label="Password"
         type="password"
         error={errors.password?.message}
         required
-        {...register("password")}
+        {...register('password')}
       />
       <Input
         label="Confirm password"
         type="password"
         error={errors.confirmPassword?.message}
         required
-        {...register("confirmPassword")}
+        {...register('confirmPassword')}
       />
       <Select
         options={[
-          { value: "admin", label: "Admin" },
-          { value: "editor", label: "Editor" },
-          { value: "viewer", label: "Viewer" },
+          { value: 'admin', label: 'Admin' },
+          { value: 'editor', label: 'Editor' },
+          { value: 'viewer', label: 'Viewer' },
         ]}
         placeholder="Select a role"
         error={errors.role?.message ?? !!errors.role}
-        {...register("role")}
+        {...register('role')}
       />
       <Checkbox
         label="I accept the terms and conditions"
         error={!!errors.terms}
-        {...register("terms")}
+        {...register('terms')}
       />
       <Button type="submit" variant="primary" loading={isSubmitting}>
         Create account
@@ -286,25 +285,25 @@ export function RegistrationForm() {
 
 ```ts
 const settingsSchema = z.object({
-  displayName: z.string().min(1, "Display name is required").max(50),
-  bio: z.string().max(280, "Bio must be 280 characters or less").optional(),
-  theme: z.enum(["light", "dark", "system"]),
+  displayName: z.string().min(1, 'Display name is required').max(50),
+  bio: z.string().max(280, 'Bio must be 280 characters or less').optional(),
+  theme: z.enum(['light', 'dark', 'system']),
   emailNotifications: z.boolean(),
-  language: z.string().min(1, "Select a language"),
+  language: z.string().min(1, 'Select a language'),
 });
 ```
 
 ### Conditional validation with discriminated unions
 
 ```ts
-const contactSchema = z.discriminatedUnion("contactMethod", [
+const contactSchema = z.discriminatedUnion('contactMethod', [
   z.object({
-    contactMethod: z.literal("email"),
-    email: z.string().email("Invalid email"),
+    contactMethod: z.literal('email'),
+    email: z.email('Invalid email'),
   }),
   z.object({
-    contactMethod: z.literal("phone"),
-    phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number"),
+    contactMethod: z.literal('phone'),
+    phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, 'Invalid phone number'),
   }),
 ]);
 ```
@@ -313,14 +312,14 @@ const contactSchema = z.discriminatedUnion("contactMethod", [
 
 ```ts
 const teamSchema = z.object({
-  teamName: z.string().min(1, "Team name is required"),
+  teamName: z.string().min(1, 'Team name is required'),
   members: z
     .array(
       z.object({
-        name: z.string().min(1, "Member name is required"),
-        role: z.enum(["lead", "member"]),
+        name: z.string().min(1, 'Member name is required'),
+        role: z.enum(['lead', 'member']),
       }),
     )
-    .min(1, "At least one member is required"),
+    .min(1, 'At least one member is required'),
 });
 ```

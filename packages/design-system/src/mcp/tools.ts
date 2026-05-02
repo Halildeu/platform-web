@@ -141,9 +141,7 @@ function buildExamples(entry: DesignLabComponentDocEntry): MCPExampleInfo[] {
 }
 
 function hasChildren(api: NonNullable<DesignLabComponentDocEntry['apiItem']>): boolean {
-  return api.props.some(
-    (p) => p.name === 'children' || p.name.includes('children'),
-  );
+  return api.props.some((p) => p.name === 'children' || p.name.includes('children'));
 }
 
 /** Ayni group'taki iliskili bilesenleri bulur */
@@ -152,9 +150,7 @@ function findRelatedComponents(entry: DesignLabComponentDocEntry): string[] {
   return designLabComponentDocEntries
     .filter(
       (e) =>
-        e.indexItem.group === group &&
-        e.name !== entry.name &&
-        e.indexItem.kind === 'component',
+        e.indexItem.group === group && e.name !== entry.name && e.indexItem.kind === 'component',
     )
     .slice(0, 5)
     .map((e) => e.name);
@@ -211,11 +207,41 @@ function computeRelevance(query: string, text: string): number {
 /* ------------------------------------------------------------------ */
 
 const componentTokenMapping: Record<string, string[]> = {
-  Button: ['action-primary', 'action-primary-hover', 'action-primary-active', 'text-inverse', 'surface-muted', 'border-default'],
-  Alert: ['state-success-bg', 'state-success-text', 'state-warning-bg', 'state-warning-text', 'state-error-bg', 'state-error-text', 'state-info-bg', 'state-info-text'],
-  Badge: ['state-success-bg', 'state-warning-bg', 'state-error-bg', 'state-info-bg', 'surface-muted', 'text-primary'],
+  Button: [
+    'action-primary',
+    'action-primary-hover',
+    'action-primary-active',
+    'text-inverse',
+    'surface-muted',
+    'border-default',
+  ],
+  Alert: [
+    'state-success-bg',
+    'state-success-text',
+    'state-warning-bg',
+    'state-warning-text',
+    'state-error-bg',
+    'state-error-text',
+    'state-info-bg',
+    'state-info-text',
+  ],
+  Badge: [
+    'state-success-bg',
+    'state-warning-bg',
+    'state-error-bg',
+    'state-info-bg',
+    'surface-muted',
+    'text-primary',
+  ],
   Card: ['surface-default', 'surface-raised', 'border-subtle', 'text-primary'],
-  Input: ['surface-default', 'border-default', 'border-strong', 'text-primary', 'text-secondary', 'text-disabled'],
+  Input: [
+    'surface-default',
+    'border-default',
+    'border-strong',
+    'text-primary',
+    'text-secondary',
+    'text-disabled',
+  ],
   Select: ['surface-default', 'border-default', 'text-primary', 'surface-raised'],
   Modal: ['surface-default', 'surface-canvas', 'text-primary', 'border-subtle'],
   Tabs: ['surface-default', 'action-primary', 'text-primary', 'text-secondary', 'border-subtle'],
@@ -230,8 +256,20 @@ const componentTokenMapping: Record<string, string[]> = {
   Breadcrumb: ['text-secondary', 'action-primary', 'text-primary'],
   Steps: ['action-primary', 'text-primary', 'text-secondary', 'surface-muted', 'border-default'],
   DatePicker: ['surface-default', 'action-primary', 'text-primary', 'border-default'],
-  Combobox: ['surface-default', 'surface-raised', 'action-primary', 'text-primary', 'border-default'],
-  Toast: ['state-success-bg', 'state-error-bg', 'state-warning-bg', 'state-info-bg', 'text-primary'],
+  Combobox: [
+    'surface-default',
+    'surface-raised',
+    'action-primary',
+    'text-primary',
+    'border-default',
+  ],
+  Toast: [
+    'state-success-bg',
+    'state-error-bg',
+    'state-warning-bg',
+    'state-info-bg',
+    'text-primary',
+  ],
 };
 
 /* ------------------------------------------------------------------ */
@@ -239,39 +277,182 @@ const componentTokenMapping: Record<string, string[]> = {
 /* ------------------------------------------------------------------ */
 
 const useCaseMap: Array<{ keywords: string[]; component: string; rationale: string }> = [
-  { keywords: ['buton', 'button', 'aksiyon', 'action', 'tikla', 'click', 'kaydet', 'save', 'gonder', 'submit'], component: 'Button', rationale: 'Kullanici aksiyonlari icin temel buton bilesenini kullanin.' },
-  { keywords: ['form', 'giris', 'input', 'metin', 'text', 'yaz'], component: 'TextInput', rationale: 'Metin girisi icin TextInput bilesenini kullanin.' },
-  { keywords: ['secim', 'select', 'dropdown', 'liste', 'sec'], component: 'Select', rationale: 'Sabit seceneklerden secim icin Select bilesenini kullanin.' },
-  { keywords: ['arama', 'search', 'combobox', 'autocomplete', 'otomatik'], component: 'Combobox', rationale: 'Arama ve filtreleme gerektiren secim icin Combobox kullanin.' },
-  { keywords: ['tab', 'sekme', 'navigasyon', 'navigation'], component: 'Tabs', rationale: 'Icerik arasinda sekme tabanli gecis icin Tabs kullanin.' },
-  { keywords: ['modal', 'dialog', 'popup', 'pencere', 'onay', 'confirm'], component: 'Modal', rationale: 'Kullanici onay veya overlay icerik icin Modal kullanin.' },
-  { keywords: ['uyari', 'alert', 'bildirim', 'notification', 'hata', 'error', 'basari', 'success'], component: 'Alert', rationale: 'Durum bildirimi icin Alert bilesenini kullanin.' },
-  { keywords: ['toast', 'snackbar', 'gecici', 'bildirim'], component: 'ToastProvider', rationale: 'Gecici bildirimler icin Toast sistemini kullanin.' },
-  { keywords: ['tablo', 'table', 'veri', 'data', 'grid', 'liste'], component: 'TableSimple', rationale: 'Basit veri tablolari icin TableSimple kullanin.' },
-  { keywords: ['kart', 'card', 'ozet', 'summary'], component: 'Card', rationale: 'Icerik gruplama ve ozet gosterimi icin Card kullanin.' },
-  { keywords: ['breadcrumb', 'yol', 'path', 'izleme'], component: 'Breadcrumb', rationale: 'Sayfa hiyerarsisi navigasyonu icin Breadcrumb kullanin.' },
-  { keywords: ['accordion', 'acilir', 'collapse', 'genisletme'], component: 'Accordion', rationale: 'Icerik gizle/goster icin Accordion kullanin.' },
-  { keywords: ['tarih', 'date', 'takvim', 'calendar'], component: 'DatePicker', rationale: 'Tarih secimi icin DatePicker kullanin.' },
-  { keywords: ['saat', 'time', 'zaman'], component: 'TimePicker', rationale: 'Saat secimi icin TimePicker kullanin.' },
-  { keywords: ['dosya', 'file', 'upload', 'yukle'], component: 'Upload', rationale: 'Dosya yukleme icin Upload bilesenini kullanin.' },
-  { keywords: ['slider', 'kaydirak', 'aralik', 'range'], component: 'Slider', rationale: 'Sayisal aralik secimi icin Slider kullanin.' },
-  { keywords: ['switch', 'toggle', 'acma', 'kapama'], component: 'Switch', rationale: 'Ikili durum degistirme icin Switch kullanin.' },
-  { keywords: ['checkbox', 'isaretleme', 'check', 'onay kutusu'], component: 'Checkbox', rationale: 'Coklu secim icin Checkbox kullanin.' },
-  { keywords: ['radio', 'tek secim', 'secim grubu'], component: 'Radio', rationale: 'Tek secenek secimi icin Radio kullanin.' },
-  { keywords: ['pagination', 'sayfalama', 'sayfa'], component: 'Pagination', rationale: 'Uzun listelerde sayfalama icin Pagination kullanin.' },
-  { keywords: ['tree', 'agac', 'hiyerarsi', 'nested'], component: 'Tree', rationale: 'Hiyerarsik veri gosterimi icin Tree kullanin.' },
-  { keywords: ['tooltip', 'ipucu', 'aciklama', 'hover'], component: 'Tooltip', rationale: 'Ek bilgi gosterimi icin Tooltip kullanin.' },
-  { keywords: ['bos', 'empty', 'sonuc yok', 'no data'], component: 'EmptyState', rationale: 'Icerik yokken kullaniciya yonlendirme icin EmptyState kullanin.' },
-  { keywords: ['adim', 'step', 'wizard', 'sihirbaz'], component: 'Steps', rationale: 'Cok adimli surecler icin Steps kullanin.' },
-  { keywords: ['json', 'viewer', 'goruntuleme', 'veri gosterimi'], component: 'JsonViewer', rationale: 'JSON verisi goruntuleme icin JsonViewer kullanin.' },
-  { keywords: ['menu', 'sag tik', 'context'], component: 'ContextMenu', rationale: 'Sag tik menu icin ContextMenu kullanin.' },
-  { keywords: ['komut', 'command', 'palette', 'arama paleti'], component: 'CommandPalette', rationale: 'Hizli erisim komut paleti icin CommandPalette kullanin.' },
-  { keywords: ['avatar', 'profil', 'kullanici resmi'], component: 'Avatar', rationale: 'Kullanici profil gosterimi icin Avatar kullanin.' },
-  { keywords: ['badge', 'rozet', 'etiket', 'sayi'], component: 'Badge', rationale: 'Durum veya sayi gosterimi icin Badge kullanin.' },
-  { keywords: ['grafik', 'chart', 'cizgi', 'bar', 'pasta', 'pie'], component: 'BarChart', rationale: 'Veri gorsellestime icin Chart bilesenlerini kullanin.' },
-  { keywords: ['ai', 'yapay zeka', 'guven', 'confidence'], component: 'ConfidenceBadge', rationale: 'AI guven skoru gosterimi icin ConfidenceBadge kullanin.' },
-  { keywords: ['prompt', 'ai giris', 'composer'], component: 'PromptComposer', rationale: 'AI prompt girisi icin PromptComposer kullanin.' },
-  { keywords: ['oneri', 'recommendation', 'tavsiye'], component: 'RecommendationCard', rationale: 'Oneri kartlari icin RecommendationCard kullanin.' },
+  {
+    keywords: [
+      'buton',
+      'button',
+      'aksiyon',
+      'action',
+      'tikla',
+      'click',
+      'kaydet',
+      'save',
+      'gonder',
+      'submit',
+    ],
+    component: 'Button',
+    rationale: 'Kullanici aksiyonlari icin temel buton bilesenini kullanin.',
+  },
+  {
+    keywords: ['form', 'giris', 'input', 'metin', 'text', 'yaz'],
+    component: 'TextInput',
+    rationale: 'Metin girisi icin TextInput bilesenini kullanin.',
+  },
+  {
+    keywords: ['secim', 'select', 'dropdown', 'liste', 'sec'],
+    component: 'Select',
+    rationale: 'Sabit seceneklerden secim icin Select bilesenini kullanin.',
+  },
+  {
+    keywords: ['arama', 'search', 'combobox', 'autocomplete', 'otomatik'],
+    component: 'Combobox',
+    rationale: 'Arama ve filtreleme gerektiren secim icin Combobox kullanin.',
+  },
+  {
+    keywords: ['tab', 'sekme', 'navigasyon', 'navigation'],
+    component: 'Tabs',
+    rationale: 'Icerik arasinda sekme tabanli gecis icin Tabs kullanin.',
+  },
+  {
+    keywords: ['modal', 'dialog', 'popup', 'pencere', 'onay', 'confirm'],
+    component: 'Modal',
+    rationale: 'Kullanici onay veya overlay icerik icin Modal kullanin.',
+  },
+  {
+    keywords: ['uyari', 'alert', 'bildirim', 'notification', 'hata', 'error', 'basari', 'success'],
+    component: 'Alert',
+    rationale: 'Durum bildirimi icin Alert bilesenini kullanin.',
+  },
+  {
+    keywords: ['toast', 'snackbar', 'gecici', 'bildirim'],
+    component: 'ToastProvider',
+    rationale: 'Gecici bildirimler icin Toast sistemini kullanin.',
+  },
+  {
+    keywords: ['tablo', 'table', 'veri', 'data', 'grid', 'liste'],
+    component: 'TableSimple',
+    rationale: 'Basit veri tablolari icin TableSimple kullanin.',
+  },
+  {
+    keywords: ['kart', 'card', 'ozet', 'summary'],
+    component: 'Card',
+    rationale: 'Icerik gruplama ve ozet gosterimi icin Card kullanin.',
+  },
+  {
+    keywords: ['breadcrumb', 'yol', 'path', 'izleme'],
+    component: 'Breadcrumb',
+    rationale: 'Sayfa hiyerarsisi navigasyonu icin Breadcrumb kullanin.',
+  },
+  {
+    keywords: ['accordion', 'acilir', 'collapse', 'genisletme'],
+    component: 'Accordion',
+    rationale: 'Icerik gizle/goster icin Accordion kullanin.',
+  },
+  {
+    keywords: ['tarih', 'date', 'takvim', 'calendar'],
+    component: 'DatePicker',
+    rationale: 'Tarih secimi icin DatePicker kullanin.',
+  },
+  {
+    keywords: ['saat', 'time', 'zaman'],
+    component: 'TimePicker',
+    rationale: 'Saat secimi icin TimePicker kullanin.',
+  },
+  {
+    keywords: ['dosya', 'file', 'upload', 'yukle'],
+    component: 'Upload',
+    rationale: 'Dosya yukleme icin Upload bilesenini kullanin.',
+  },
+  {
+    keywords: ['slider', 'kaydirak', 'aralik', 'range'],
+    component: 'Slider',
+    rationale: 'Sayisal aralik secimi icin Slider kullanin.',
+  },
+  {
+    keywords: ['switch', 'toggle', 'acma', 'kapama'],
+    component: 'Switch',
+    rationale: 'Ikili durum degistirme icin Switch kullanin.',
+  },
+  {
+    keywords: ['checkbox', 'isaretleme', 'check', 'onay kutusu'],
+    component: 'Checkbox',
+    rationale: 'Coklu secim icin Checkbox kullanin.',
+  },
+  {
+    keywords: ['radio', 'tek secim', 'secim grubu'],
+    component: 'Radio',
+    rationale: 'Tek secenek secimi icin Radio kullanin.',
+  },
+  {
+    keywords: ['pagination', 'sayfalama', 'sayfa'],
+    component: 'Pagination',
+    rationale: 'Uzun listelerde sayfalama icin Pagination kullanin.',
+  },
+  {
+    keywords: ['tree', 'agac', 'hiyerarsi', 'nested'],
+    component: 'Tree',
+    rationale: 'Hiyerarsik veri gosterimi icin Tree kullanin.',
+  },
+  {
+    keywords: ['tooltip', 'ipucu', 'aciklama', 'hover'],
+    component: 'Tooltip',
+    rationale: 'Ek bilgi gosterimi icin Tooltip kullanin.',
+  },
+  {
+    keywords: ['bos', 'empty', 'sonuc yok', 'no data'],
+    component: 'EmptyState',
+    rationale: 'Icerik yokken kullaniciya yonlendirme icin EmptyState kullanin.',
+  },
+  {
+    keywords: ['adim', 'step', 'wizard', 'sihirbaz'],
+    component: 'Steps',
+    rationale: 'Cok adimli surecler icin Steps kullanin.',
+  },
+  {
+    keywords: ['json', 'viewer', 'goruntuleme', 'veri gosterimi'],
+    component: 'JsonViewer',
+    rationale: 'JSON verisi goruntuleme icin JsonViewer kullanin.',
+  },
+  {
+    keywords: ['menu', 'sag tik', 'context'],
+    component: 'ContextMenu',
+    rationale: 'Sag tik menu icin ContextMenu kullanin.',
+  },
+  {
+    keywords: ['komut', 'command', 'palette', 'arama paleti'],
+    component: 'CommandPalette',
+    rationale: 'Hizli erisim komut paleti icin CommandPalette kullanin.',
+  },
+  {
+    keywords: ['avatar', 'profil', 'kullanici resmi'],
+    component: 'Avatar',
+    rationale: 'Kullanici profil gosterimi icin Avatar kullanin.',
+  },
+  {
+    keywords: ['badge', 'rozet', 'etiket', 'sayi'],
+    component: 'Badge',
+    rationale: 'Durum veya sayi gosterimi icin Badge kullanin.',
+  },
+  {
+    keywords: ['grafik', 'chart', 'cizgi', 'bar', 'pasta', 'pie'],
+    component: 'BarChart',
+    rationale: 'Veri gorsellestime icin Chart bilesenlerini kullanin.',
+  },
+  {
+    keywords: ['ai', 'yapay zeka', 'guven', 'confidence'],
+    component: 'ConfidenceBadge',
+    rationale: 'AI guven skoru gosterimi icin ConfidenceBadge kullanin.',
+  },
+  {
+    keywords: ['prompt', 'ai giris', 'composer'],
+    component: 'PromptComposer',
+    rationale: 'AI prompt girisi icin PromptComposer kullanin.',
+  },
+  {
+    keywords: ['oneri', 'recommendation', 'tavsiye'],
+    component: 'RecommendationCard',
+    rationale: 'Oneri kartlari icin RecommendationCard kullanin.',
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -309,7 +490,8 @@ export function getComponentTokens(componentName: string): MCPTokenInfo[] {
   if (!tokenNames) return [];
 
   return tokenNames.map((tokenName) => {
-    const cssVar = semanticColorTokens[tokenName as keyof typeof semanticColorTokens] ?? `--${tokenName}`;
+    const cssVar =
+      semanticColorTokens[tokenName as keyof typeof semanticColorTokens] ?? `--${tokenName}`;
     return {
       name: tokenName,
       cssVariable: `var(${cssVar})`,
@@ -356,8 +538,11 @@ export function searchComponents(query: string): MCPSearchResult[] {
 
     const relevance = computeRelevance(query, searchText);
     if (relevance > 0) {
-      let matchReason = '';
       const q = query.toLowerCase();
+      // Every branch below assigns matchReason exactly once, so the
+      // declaration intentionally has no initializer (avoids the dead
+      // initial value flagged by ESLint 10's `no-useless-assignment`).
+      let matchReason: string;
       if (idx.name.toLowerCase().includes(q)) matchReason = 'Bilesen ismi eslesti';
       else if (idx.description.toLowerCase().includes(q)) matchReason = 'Aciklama eslesti';
       else if (idx.tags?.some((t) => t.toLowerCase().includes(q))) matchReason = 'Etiket eslesti';
@@ -481,11 +666,11 @@ export function suggestComponent(useCase: string): MCPSuggestion[] {
     if (matched.length === 0) continue;
 
     const confidence = Math.min(matched.length / 2, 1.0);
-    const entry = designLabComponentDocEntries.find(
-      (e) => e.name === mapping.component,
-    );
+    const entry = designLabComponentDocEntries.find((e) => e.name === mapping.component);
 
-    const importStatement = entry?.indexItem.importStatement ?? `import { ${mapping.component} } from '@mfe/design-system';`;
+    const importStatement =
+      entry?.indexItem.importStatement ??
+      `import { ${mapping.component} } from '@mfe/design-system';`;
 
     suggestions.push({
       component: mapping.component,
@@ -499,9 +684,7 @@ export function suggestComponent(useCase: string): MCPSuggestion[] {
   if (suggestions.length === 0) {
     const searchResults = searchComponents(useCase);
     for (const result of searchResults.slice(0, 3)) {
-      const entry = designLabComponentDocEntries.find(
-        (e) => e.name === result.component,
-      );
+      const entry = designLabComponentDocEntries.find((e) => e.name === result.component);
       if (entry) {
         suggestions.push({
           component: result.component,
@@ -530,7 +713,13 @@ export function validateUsage(
   if (!entry) {
     return {
       valid: false,
-      errors: [{ prop: '_component', message: `"${componentName}" bileseni bulunamadi.`, severity: 'error' }],
+      errors: [
+        {
+          prop: '_component',
+          message: `"${componentName}" bileseni bulunamadi.`,
+          severity: 'error',
+        },
+      ],
       suggestions: [`Mevcut bilesenleri goruntulemek icin getComponentCatalog() kullanin.`],
     };
   }
@@ -562,7 +751,12 @@ export function validateUsage(
 
   // Bilinmeyen prop kontrolu
   for (const propName of Object.keys(props)) {
-    if (!propNames.has(propName) && propName !== 'children' && propName !== 'className' && propName !== 'style') {
+    if (
+      !propNames.has(propName) &&
+      propName !== 'children' &&
+      propName !== 'className' &&
+      propName !== 'style'
+    ) {
       errors.push({
         prop: propName,
         message: `"${propName}" tanimlanmamis bir prop. ${componentName} bu prop'u desteklemiyor olabilir.`,
@@ -580,9 +774,7 @@ export function validateUsage(
 
       // Union type kontrolu
       if (typeStr.includes("'") && !typeStr.includes('|') === false) {
-        const allowedValues = typeStr
-          .split('|')
-          .map((v) => v.trim().replace(/'/g, ''));
+        const allowedValues = typeStr.split('|').map((v) => v.trim().replace(/'/g, ''));
         if (typeof value === 'string' && !allowedValues.includes(value)) {
           errors.push({
             prop: mainName,
@@ -614,10 +806,7 @@ export function validateUsage(
 /**
  * Dogal dil gereksinimlerinden bilesen kullanim kodu uretir.
  */
-export function generateCode(
-  componentName: string,
-  requirements: string,
-): MCPGeneratedCode | null {
+export function generateCode(componentName: string, requirements: string): MCPGeneratedCode | null {
   const entry = designLabComponentDocEntries.find(
     (e) => e.name.toLowerCase() === componentName.toLowerCase(),
   );
@@ -759,16 +948,42 @@ function resolveDarkValue(tokenName: string): string {
 /* ================================================================== */
 
 const INTENT_KEYWORDS: Record<string, MCPLayoutProposal['intent']> = {
-  dashboard: 'overview', overview: 'overview', summary: 'overview', kpi: 'overview',
-  report: 'overview', analytics: 'overview', home: 'overview', cockpit: 'overview',
-  detail: 'detail', edit: 'detail', form: 'detail', profile: 'detail',
-  settings: 'detail', config: 'detail', create: 'detail', update: 'detail',
-  compare: 'comparison', diff: 'comparison', versus: 'comparison',
-  benchmark: 'comparison', sidebyside: 'comparison',
-  workflow: 'workflow', process: 'workflow', step: 'workflow', kanban: 'workflow',
-  pipeline: 'workflow', approval: 'workflow', queue: 'workflow',
-  monitor: 'monitoring', alert: 'monitoring', health: 'monitoring', log: 'monitoring',
-  status: 'monitoring', incident: 'monitoring', uptime: 'monitoring', trace: 'monitoring',
+  dashboard: 'overview',
+  overview: 'overview',
+  summary: 'overview',
+  kpi: 'overview',
+  report: 'overview',
+  analytics: 'overview',
+  home: 'overview',
+  cockpit: 'overview',
+  detail: 'detail',
+  edit: 'detail',
+  form: 'detail',
+  profile: 'detail',
+  settings: 'detail',
+  config: 'detail',
+  create: 'detail',
+  update: 'detail',
+  compare: 'comparison',
+  diff: 'comparison',
+  versus: 'comparison',
+  benchmark: 'comparison',
+  sidebyside: 'comparison',
+  workflow: 'workflow',
+  process: 'workflow',
+  step: 'workflow',
+  kanban: 'workflow',
+  pipeline: 'workflow',
+  approval: 'workflow',
+  queue: 'workflow',
+  monitor: 'monitoring',
+  alert: 'monitoring',
+  health: 'monitoring',
+  log: 'monitoring',
+  status: 'monitoring',
+  incident: 'monitoring',
+  uptime: 'monitoring',
+  trace: 'monitoring',
 };
 
 /** 10. proposeLayout — Natural language → layout config */
@@ -779,38 +994,85 @@ export function proposeLayout(
   const lower = description.toLowerCase();
   let intent: MCPLayoutProposal['intent'] = 'overview';
   for (const [kw, i] of Object.entries(INTENT_KEYWORDS)) {
-    if (lower.includes(kw)) { intent = i; break; }
+    if (lower.includes(kw)) {
+      intent = i;
+      break;
+    }
   }
 
   const blocks: MCPLayoutBlock[] = [];
   const reasons: string[] = [];
 
   // Keyword → block type mappings
-  if (lower.includes('metric') || lower.includes('kpi') || lower.includes('stat') || lower.includes('number')) {
-    blocks.push({ key: 'metrics', type: 'metric', priority: 'high', span: 4, title: 'Key Metrics' });
+  if (
+    lower.includes('metric') ||
+    lower.includes('kpi') ||
+    lower.includes('stat') ||
+    lower.includes('number')
+  ) {
+    blocks.push({
+      key: 'metrics',
+      type: 'metric',
+      priority: 'high',
+      span: 4,
+      title: 'Key Metrics',
+    });
     reasons.push('Metrics block added because the description references quantitative indicators');
   }
-  if (lower.includes('chart') || lower.includes('graph') || lower.includes('trend') || lower.includes('visual') || lower.includes('plot')) {
+  if (
+    lower.includes('chart') ||
+    lower.includes('graph') ||
+    lower.includes('trend') ||
+    lower.includes('visual') ||
+    lower.includes('plot')
+  ) {
     blocks.push({ key: 'chart', type: 'chart', priority: 'medium', span: 2, title: 'Chart' });
     reasons.push('Chart block added for visual data representation');
   }
-  if (lower.includes('table') || lower.includes('grid') || lower.includes('list') || lower.includes('data') || lower.includes('record')) {
+  if (
+    lower.includes('table') ||
+    lower.includes('grid') ||
+    lower.includes('list') ||
+    lower.includes('data') ||
+    lower.includes('record')
+  ) {
     blocks.push({ key: 'data', type: 'table', priority: 'medium', span: 2, title: 'Data Table' });
     reasons.push('Table block added for structured data display');
   }
-  if (lower.includes('form') || lower.includes('input') || lower.includes('edit') || lower.includes('create') || lower.includes('field')) {
+  if (
+    lower.includes('form') ||
+    lower.includes('input') ||
+    lower.includes('edit') ||
+    lower.includes('create') ||
+    lower.includes('field')
+  ) {
     blocks.push({ key: 'form', type: 'form', priority: 'high', span: 2, title: 'Form' });
     reasons.push('Form block added for user data entry');
   }
-  if (lower.includes('action') || lower.includes('button') || lower.includes('toolbar') || lower.includes('command')) {
+  if (
+    lower.includes('action') ||
+    lower.includes('button') ||
+    lower.includes('toolbar') ||
+    lower.includes('command')
+  ) {
     blocks.push({ key: 'actions', type: 'action', priority: 'low', span: 1, title: 'Actions' });
     reasons.push('Actions block added for primary user operations');
   }
-  if (lower.includes('timeline') || lower.includes('history') || lower.includes('activity') || lower.includes('event')) {
+  if (
+    lower.includes('timeline') ||
+    lower.includes('history') ||
+    lower.includes('activity') ||
+    lower.includes('event')
+  ) {
     blocks.push({ key: 'timeline', type: 'table', priority: 'medium', span: 2, title: 'Timeline' });
     reasons.push('Timeline block added to display chronological activity');
   }
-  if (lower.includes('alert') || lower.includes('notification') || lower.includes('warning') || lower.includes('error')) {
+  if (
+    lower.includes('alert') ||
+    lower.includes('notification') ||
+    lower.includes('warning') ||
+    lower.includes('error')
+  ) {
     blocks.push({ key: 'alerts', type: 'metric', priority: 'high', span: 4, title: 'Alerts' });
     reasons.push('Alerts block added for critical notifications that need immediate visibility');
   }
@@ -832,7 +1094,9 @@ export function proposeLayout(
           { key: 'timeline', type: 'table', priority: 'medium', span: 2, title: 'Event Timeline' },
           { key: 'metrics', type: 'metric', priority: 'high', span: 2, title: 'Health Metrics' },
         );
-        reasons.push('Monitoring layout: alerts for immediate attention, timeline for recent events, metrics for system health');
+        reasons.push(
+          'Monitoring layout: alerts for immediate attention, timeline for recent events, metrics for system health',
+        );
         break;
       case 'detail':
         blocks.push(
@@ -840,15 +1104,25 @@ export function proposeLayout(
           { key: 'form', type: 'form', priority: 'high', span: 2, title: 'Edit Form' },
           { key: 'related', type: 'table', priority: 'medium', span: 2, title: 'Related Items' },
         );
-        reasons.push('Detail layout: header for entity identity, form for editing, related items for context');
+        reasons.push(
+          'Detail layout: header for entity identity, form for editing, related items for context',
+        );
         break;
       case 'comparison':
         blocks.push(
-          { key: 'metrics', type: 'metric', priority: 'high', span: 4, title: 'Comparison Summary' },
+          {
+            key: 'metrics',
+            type: 'metric',
+            priority: 'high',
+            span: 4,
+            title: 'Comparison Summary',
+          },
           { key: 'chart', type: 'chart', priority: 'medium', span: 2, title: 'Side-by-Side Chart' },
           { key: 'data', type: 'table', priority: 'medium', span: 2, title: 'Differences' },
         );
-        reasons.push('Comparison layout: summary metrics for quick delta, chart for visual contrast, table for detailed differences');
+        reasons.push(
+          'Comparison layout: summary metrics for quick delta, chart for visual contrast, table for detailed differences',
+        );
         break;
       case 'workflow':
         blocks.push(
@@ -856,20 +1130,25 @@ export function proposeLayout(
           { key: 'current', type: 'form', priority: 'high', span: 2, title: 'Current Step' },
           { key: 'history', type: 'table', priority: 'medium', span: 2, title: 'Step History' },
         );
-        reasons.push('Workflow layout: step overview for progress tracking, current step for active input, history for audit trail');
+        reasons.push(
+          'Workflow layout: step overview for progress tracking, current step for active input, history for audit trail',
+        );
         break;
       default: // overview
         blocks.push(
           { key: 'metrics', type: 'metric', priority: 'high', span: 4, title: 'Overview' },
           { key: 'content', type: 'table', priority: 'medium', span: 4, title: 'Content' },
         );
-        reasons.push('Default overview layout: top-level metrics with a content table for drill-down');
+        reasons.push(
+          'Default overview layout: top-level metrics with a content table for drill-down',
+        );
     }
   }
 
-  const rationale = reasons.length > 0
-    ? reasons.join('. ') + '.'
-    : `Default ${intent} layout applied with ${blocks.length} blocks.`;
+  const rationale =
+    reasons.length > 0
+      ? reasons.join('. ') + '.'
+      : `Default ${intent} layout applied with ${blocks.length} blocks.`;
 
   return { blocks, intent, rationale };
 }
@@ -884,15 +1163,39 @@ export function reviewAccessibility(
   const issues: MCPA11yIssue[] = [];
   const suggestions: string[] = [];
 
-  if (!comp) return { issues: [{ rule: 'component-exists', severity: 'critical', message: `Component "${componentName}" not found`, fix: 'Check component name' }], score: 0, suggestions: [] };
+  if (!comp)
+    return {
+      issues: [
+        {
+          rule: 'component-exists',
+          severity: 'critical',
+          message: `Component "${componentName}" not found`,
+          fix: 'Check component name',
+        },
+      ],
+      score: 0,
+      suggestions: [],
+    };
 
-  const isInteractive = comp.category === 'form' || comp.props.some(p => p.name === 'onClick' || p.name === 'onChange');
+  const isInteractive =
+    comp.category === 'form' ||
+    comp.props.some((p) => p.name === 'onClick' || p.name === 'onChange');
   if (isInteractive && !props['aria-label'] && !props['aria-labelledby'] && !props['label']) {
-    issues.push({ rule: 'label-required', severity: 'serious', message: 'Interactive component missing accessible label', fix: 'Add aria-label, aria-labelledby, or label prop' });
+    issues.push({
+      rule: 'label-required',
+      severity: 'serious',
+      message: 'Interactive component missing accessible label',
+      fix: 'Add aria-label, aria-labelledby, or label prop',
+    });
   }
 
   if (props.disabled && !props.accessReason) {
-    issues.push({ rule: 'disabled-reason', severity: 'moderate', message: 'Disabled component lacks accessReason', fix: 'Add accessReason prop to explain why the control is disabled' });
+    issues.push({
+      rule: 'disabled-reason',
+      severity: 'moderate',
+      message: 'Disabled component lacks accessReason',
+      fix: 'Add accessReason prop to explain why the control is disabled',
+    });
   }
 
   if (props.access === 'hidden' && !props['aria-hidden']) {
@@ -914,18 +1217,42 @@ export function suggestTestCases(
   if (!comp) return [];
 
   const tests: MCPTestSuggestion[] = [];
-  tests.push({ category: 'render', description: `renders ${comp.name} without crashing`, code: `render(<${comp.name} />);\nexpect(screen.getByRole('...')).toBeTruthy();` });
+  tests.push({
+    category: 'render',
+    description: `renders ${comp.name} without crashing`,
+    code: `render(<${comp.name} />);\nexpect(screen.getByRole('...')).toBeTruthy();`,
+  });
 
-  for (const prop of comp.props.filter(p => p.required)) {
-    tests.push({ category: 'props', description: `accepts ${prop.name} prop`, code: `render(<${comp.name} ${prop.name}={...} />);\nexpect(...).toBeDefined();` });
+  for (const prop of comp.props.filter((p) => p.required)) {
+    tests.push({
+      category: 'props',
+      description: `accepts ${prop.name} prop`,
+      code: `render(<${comp.name} ${prop.name}={...} />);\nexpect(...).toBeDefined();`,
+    });
   }
 
-  tests.push({ category: 'a11y', description: `has no axe-core violations`, code: `const { container } = render(<${comp.name} />);\nawait expectNoA11yViolations(container);` });
-  tests.push({ category: 'access-control', description: `access="hidden" renders nothing`, code: `const { container } = render(<${comp.name} access="hidden" />);\nexpect(container.innerHTML).toBe('');` });
-  tests.push({ category: 'access-control', description: `access="disabled" disables interaction`, code: `render(<${comp.name} access="disabled" />);\n// Verify disabled state` });
+  tests.push({
+    category: 'a11y',
+    description: `has no axe-core violations`,
+    code: `const { container } = render(<${comp.name} />);\nawait expectNoA11yViolations(container);`,
+  });
+  tests.push({
+    category: 'access-control',
+    description: `access="hidden" renders nothing`,
+    code: `const { container } = render(<${comp.name} access="hidden" />);\nexpect(container.innerHTML).toBe('');`,
+  });
+  tests.push({
+    category: 'access-control',
+    description: `access="disabled" disables interaction`,
+    code: `render(<${comp.name} access="disabled" />);\n// Verify disabled state`,
+  });
 
-  if (comp.props.some(p => p.name === 'onClick')) {
-    tests.push({ category: 'keyboard', description: `supports Enter/Space activation`, code: `const el = screen.getByRole('...');\nawait userEvent.keyboard('{Enter}');` });
+  if (comp.props.some((p) => p.name === 'onClick')) {
+    tests.push({
+      category: 'keyboard',
+      description: `supports Enter/Space activation`,
+      code: `const el = screen.getByRole('...');\nawait userEvent.keyboard('{Enter}');`,
+    });
   }
 
   return tests;
@@ -943,9 +1270,12 @@ export function explainComponent(
   const whenNotToUse: string[] = [];
   const alternatives = comp.relatedComponents.slice(0, 3);
 
-  if (comp.category === 'form') whenNotToUse.push('For display-only data, use Text or Badge instead');
-  if (comp.name.includes('Grid') || comp.name.includes('Table')) whenNotToUse.push('For small datasets (<20 rows), use TableSimple instead');
-  if (comp.name.includes('Modal') || comp.name.includes('Dialog')) whenNotToUse.push('For non-blocking info, use Toast or Tooltip instead');
+  if (comp.category === 'form')
+    whenNotToUse.push('For display-only data, use Text or Badge instead');
+  if (comp.name.includes('Grid') || comp.name.includes('Table'))
+    whenNotToUse.push('For small datasets (<20 rows), use TableSimple instead');
+  if (comp.name.includes('Modal') || comp.name.includes('Dialog'))
+    whenNotToUse.push('For non-blocking info, use Toast or Tooltip instead');
 
   return { component: comp.name, summary: comp.description, whenToUse, whenNotToUse, alternatives };
 }
@@ -960,30 +1290,46 @@ export function compareComponents(
   const compB = catalog.get(b.toLowerCase());
   if (!compA || !compB) return null;
 
-  const propsA = new Set(compA.props.map(p => p.name));
-  const propsB = new Set(compB.props.map(p => p.name));
-  const shared = [...propsA].filter(p => propsB.has(p));
-  const onlyA = [...propsA].filter(p => !propsB.has(p));
-  const onlyB = [...propsB].filter(p => !propsA.has(p));
+  const propsA = new Set(compA.props.map((p) => p.name));
+  const propsB = new Set(compB.props.map((p) => p.name));
+  const shared = [...propsA].filter((p) => propsB.has(p));
+  const onlyA = [...propsA].filter((p) => !propsB.has(p));
+  const onlyB = [...propsB].filter((p) => !propsA.has(p));
 
   return {
-    a: compA.name, b: compB.name,
+    a: compA.name,
+    b: compB.name,
     similarities: shared.length > 0 ? [`Shared props: ${shared.join(', ')}`] : ['No shared props'],
     differences: [
       `${compA.name} unique: ${onlyA.slice(0, 5).join(', ') || 'none'}`,
       `${compB.name} unique: ${onlyB.slice(0, 5).join(', ') || 'none'}`,
     ],
-    recommendation: compA.props.length >= compB.props.length
-      ? `${compA.name} is more feature-rich (${compA.props.length} props)`
-      : `${compB.name} is more feature-rich (${compB.props.length} props)`,
+    recommendation:
+      compA.props.length >= compB.props.length
+        ? `${compA.name} is more feature-rich (${compA.props.length} props)`
+        : `${compB.name} is more feature-rich (${compB.props.length} props)`,
   };
 }
 
 const COMPONENT_SIZES: Record<string, number> = {
-  Button: 2, Input: 3, Select: 4, Checkbox: 1.5, Badge: 0.8, Text: 0.5,
-  Tabs: 5, Accordion: 4, DatePicker: 12, Combobox: 10, Calendar: 15,
-  EntityGridTemplate: 180, SmartDashboard: 28, AILayoutBuilder: 25,
-  AdaptiveForm: 18, Tree: 8, TreeTable: 12, Transfer: 10,
+  Button: 2,
+  Input: 3,
+  Select: 4,
+  Checkbox: 1.5,
+  Badge: 0.8,
+  Text: 0.5,
+  Tabs: 5,
+  Accordion: 4,
+  DatePicker: 12,
+  Combobox: 10,
+  Calendar: 15,
+  EntityGridTemplate: 180,
+  SmartDashboard: 28,
+  AILayoutBuilder: 25,
+  AdaptiveForm: 18,
+  Tree: 8,
+  TreeTable: 12,
+  Transfer: 10,
 };
 
 /** 15. optimizeBundle — bundle impact analysis */
@@ -993,8 +1339,20 @@ export function optimizeBundle(components: string[]): MCPBundleOptimization {
   for (const name of components) {
     const sizeKB = COMPONENT_SIZES[name] ?? 3;
     totalKB += sizeKB;
-    if (sizeKB > 20) suggestions.push({ component: name, sizeKB, action: 'lazy-load', reason: `${name} is ${sizeKB}KB — use createLazyComponent()` });
-    else if (sizeKB > 10) suggestions.push({ component: name, sizeKB, action: 'tree-shake', reason: `${name} is ${sizeKB}KB — ensure only used exports are imported` });
+    if (sizeKB > 20)
+      suggestions.push({
+        component: name,
+        sizeKB,
+        action: 'lazy-load',
+        reason: `${name} is ${sizeKB}KB — use createLazyComponent()`,
+      });
+    else if (sizeKB > 10)
+      suggestions.push({
+        component: name,
+        sizeKB,
+        action: 'tree-shake',
+        reason: `${name} is ${sizeKB}KB — ensure only used exports are imported`,
+      });
   }
   return { totalKB, suggestions };
 }
@@ -1007,14 +1365,24 @@ export function auditTokenUsage(code: string): MCPTokenAuditResult {
   let match: RegExpExecArray | null;
   HARDCODED_COLOR_RE.lastIndex = 0;
   while ((match = HARDCODED_COLOR_RE.exec(code)) !== null) {
-    violations.push({ value: match[0], suggestedToken: 'Use var(--surface-*) or var(--text-*)', cssVariable: '--surface-default' });
+    violations.push({
+      value: match[0],
+      suggestedToken: 'Use var(--surface-*) or var(--text-*)',
+      cssVariable: '--surface-default',
+    });
   }
   return { violations, clean: violations.length === 0 };
 }
 
 const PATTERN_MAP: Record<string, { pattern: string; description: string }> = {
-  'EntityGridTemplate+FilterBar': { pattern: 'MasterDetail', description: 'Filter panel with data grid' },
-  'DetailDrawer+EntityGridTemplate+FilterBar': { pattern: 'MasterDetail+Detail', description: 'Full CRUD: filter, grid, detail' },
+  'EntityGridTemplate+FilterBar': {
+    pattern: 'MasterDetail',
+    description: 'Filter panel with data grid',
+  },
+  'DetailDrawer+EntityGridTemplate+FilterBar': {
+    pattern: 'MasterDetail+Detail',
+    description: 'Full CRUD: filter, grid, detail',
+  },
   'PageHeader+PageLayout': { pattern: 'StandardPage', description: 'Standard page with header' },
   'FormDrawer+Input+Select': { pattern: 'FormPanel', description: 'Slide-in form for create/edit' },
 };
@@ -1027,12 +1395,22 @@ export function suggestPattern(
   const suggestions: MCPPatternSuggestion[] = [];
   for (const [key, val] of Object.entries(PATTERN_MAP)) {
     const keyParts = key.split('+');
-    if (keyParts.every(k => components.some(c => c.toLowerCase() === k.toLowerCase()))) {
-      suggestions.push({ pattern: val.pattern, components: keyParts, description: val.description, exampleCode: `<${val.pattern} />` });
+    if (keyParts.every((k) => components.some((c) => c.toLowerCase() === k.toLowerCase()))) {
+      suggestions.push({
+        pattern: val.pattern,
+        components: keyParts,
+        description: val.description,
+        exampleCode: `<${val.pattern} />`,
+      });
     }
   }
   if (suggestions.length === 0) {
-    suggestions.push({ pattern: 'Custom', components, description: `Custom composition of ${components.join(', ')}`, exampleCode: components.map(c => `<${c} />`).join('\n') });
+    suggestions.push({
+      pattern: 'Custom',
+      components,
+      description: `Custom composition of ${components.join(', ')}`,
+      exampleCode: components.map((c) => `<${c} />`).join('\n'),
+    });
   }
   return suggestions;
 }
@@ -1044,10 +1422,17 @@ export function getComponentDependencies(
 ): MCPDependencyTree | null {
   const comp = catalog.get(componentName.toLowerCase());
   if (!comp) return null;
-  const nodes: MCPDependencyNode[] = [{ name: comp.name, children: comp.relatedComponents, depth: 0 }];
+  const nodes: MCPDependencyNode[] = [
+    { name: comp.name, children: comp.relatedComponents, depth: 0 },
+  ];
   for (const child of comp.relatedComponents) {
     const childComp = catalog.get(child.toLowerCase());
-    if (childComp) nodes.push({ name: childComp.name, children: childComp.relatedComponents.slice(0, 3), depth: 1 });
+    if (childComp)
+      nodes.push({
+        name: childComp.name,
+        children: childComp.relatedComponents.slice(0, 3),
+        depth: 1,
+      });
   }
   return { root: comp.name, nodes, totalDependencies: nodes.length - 1 };
 }
@@ -1057,12 +1442,35 @@ export function getQualityReport(
   componentName: string | undefined,
   catalog: Map<string, MCPComponentInfo>,
 ): MCPQualityReport {
-  if (!componentName) return { component: null, lifecycle: 'stable', testCount: catalog.size, hasContract: true, hasDocs: true, hasStory: true, a11yCompliant: true };
+  if (!componentName)
+    return {
+      component: null,
+      lifecycle: 'stable',
+      testCount: catalog.size,
+      hasContract: true,
+      hasDocs: true,
+      hasStory: true,
+      a11yCompliant: true,
+    };
   const comp = catalog.get(componentName.toLowerCase());
-  if (!comp) return { component: componentName, lifecycle: 'unknown', testCount: 0, hasContract: false, hasDocs: false, hasStory: false, a11yCompliant: false };
+  if (!comp)
+    return {
+      component: componentName,
+      lifecycle: 'unknown',
+      testCount: 0,
+      hasContract: false,
+      hasDocs: false,
+      hasStory: false,
+      a11yCompliant: false,
+    };
   return {
-    component: comp.name, lifecycle: comp.lifecycle, testCount: comp.props.length * 2,
-    hasContract: true, hasDocs: comp.examples.length > 0, hasStory: comp.examples.length > 0, a11yCompliant: comp.accessibilityNotes.length > 0,
+    component: comp.name,
+    lifecycle: comp.lifecycle,
+    testCount: comp.props.length * 2,
+    hasContract: true,
+    hasDocs: comp.examples.length > 0,
+    hasStory: comp.examples.length > 0,
+    a11yCompliant: comp.accessibilityNotes.length > 0,
   };
 }
 
@@ -1075,10 +1483,23 @@ export function migrateComponent(
   const comp = catalog.get(componentName.toLowerCase());
   if (!comp) return null;
   return {
-    component: comp.name, fromVersion, toVersion: 'latest',
+    component: comp.name,
+    fromVersion,
+    toVersion: 'latest',
     steps: [
-      { description: 'Update import path', before: `import { ${comp.name} } from 'old-package'`, after: comp.importStatement },
-      { description: 'Check required props', before: '// Review props', after: `// Required: ${comp.props.filter(p => p.required).map(p => p.name).join(', ')}` },
+      {
+        description: 'Update import path',
+        before: `import { ${comp.name} } from 'old-package'`,
+        after: comp.importStatement,
+      },
+      {
+        description: 'Check required props',
+        before: '// Review props',
+        after: `// Required: ${comp.props
+          .filter((p) => p.required)
+          .map((p) => p.name)
+          .join(', ')}`,
+      },
     ],
     breakingChanges: [],
   };
@@ -1088,19 +1509,32 @@ export function migrateComponent(
 export function generateFormSchema(description: string): MCPFormSchemaResult {
   const lower = description.toLowerCase();
   const fields: string[] = [];
-  if (lower.includes('name') || lower.includes('ad')) fields.push("  name: z.string().min(1, 'Required')");
-  if (lower.includes('email') || lower.includes('e-posta')) fields.push("  email: z.string().email('Invalid email')");
-  if (lower.includes('password') || lower.includes('şifre')) fields.push("  password: z.string().min(8, 'Min 8 chars')");
-  if (lower.includes('phone') || lower.includes('telefon')) fields.push("  phone: z.string().optional()");
-  if (lower.includes('age') || lower.includes('yaş')) fields.push("  age: z.number().min(0).max(150)");
-  if (lower.includes('date') || lower.includes('tarih')) fields.push("  date: z.string()");
-  if (lower.includes('department') || lower.includes('departman')) fields.push("  department: z.string()");
-  if (lower.includes('note') || lower.includes('description')) fields.push("  notes: z.string().optional()");
-  if (lower.includes('agree') || lower.includes('terms')) fields.push("  agreed: z.boolean().refine(v => v, 'Must agree')");
-  if (fields.length === 0) { fields.push("  field1: z.string().min(1)"); fields.push("  field2: z.string().optional()"); }
+  if (lower.includes('name') || lower.includes('ad'))
+    fields.push("  name: z.string().min(1, 'Required')");
+  if (lower.includes('email') || lower.includes('e-posta'))
+    fields.push("  email: z.email('Invalid email')");
+  if (lower.includes('password') || lower.includes('şifre'))
+    fields.push("  password: z.string().min(8, 'Min 8 chars')");
+  if (lower.includes('phone') || lower.includes('telefon'))
+    fields.push('  phone: z.string().optional()');
+  if (lower.includes('age') || lower.includes('yaş'))
+    fields.push('  age: z.number().min(0).max(150)');
+  if (lower.includes('date') || lower.includes('tarih')) fields.push('  date: z.string()');
+  if (lower.includes('department') || lower.includes('departman'))
+    fields.push('  department: z.string()');
+  if (lower.includes('note') || lower.includes('description'))
+    fields.push('  notes: z.string().optional()');
+  if (lower.includes('agree') || lower.includes('terms'))
+    fields.push("  agreed: z.boolean().refine(v => v, 'Must agree')");
+  if (fields.length === 0) {
+    fields.push('  field1: z.string().min(1)');
+    fields.push('  field2: z.string().optional()');
+  }
   const zodSchema = `const schema = z.object({\n${fields.join(',\n')},\n});`;
-  const fieldNames = fields.map(f => f.trim().split(':')[0].trim());
-  const formConfig = fieldNames.map(f => `<ConnectedInput name="${f}" label="${f}" />`).join('\n');
+  const fieldNames = fields.map((f) => f.trim().split(':')[0].trim());
+  const formConfig = fieldNames
+    .map((f) => `<ConnectedInput name="${f}" label="${f}" />`)
+    .join('\n');
   return { zodSchema, formConfig, description: `Form schema for: ${description}` };
 }
 
@@ -1110,9 +1544,6 @@ export function predictComponents(code: string): MCPPredictionReport {
 }
 
 /** 23. detectDesignDrift — detect design system drift in code */
-export function detectDesignDrift(
-  code: string,
-  fileName?: string,
-): DriftReport {
+export function detectDesignDrift(code: string, fileName?: string): DriftReport {
   return detectDrift(code, { fileName });
 }
