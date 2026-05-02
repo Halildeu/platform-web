@@ -224,4 +224,38 @@ describe('generateTemplate', () => {
       expect(files.find((f) => f.path === 'src/index.css')).toBeTruthy();
     }
   });
+
+  /* ---------------------------------------------------------------- */
+  /*  Dependency baseline contract                                    */
+  /*                                                                   */
+  /*  Pins the workspace baseline (Faz 21.7 modernization) so a       */
+  /*  silent dep drift in the template would fail CI rather than      */
+  /*  ship a generated app on stale stack. Update these expectations  */
+  /*  intentionally when bumping the workspace baseline.              */
+  /* ---------------------------------------------------------------- */
+
+  it('package.json pins the workspace dependency baseline', () => {
+    for (const template of ['dashboard', 'crud', 'admin', 'minimal'] as const) {
+      const files = generateTemplate({
+        name: 'baseline-check',
+        template,
+        typescript: true,
+        installDeps: false,
+        git: false,
+      });
+      const pkgFile = files.find((f) => f.path === 'package.json');
+      expect(pkgFile, `${template} template missing package.json`).toBeTruthy();
+      const pkg = JSON.parse(pkgFile!.content);
+
+      // React Router v7: -dom and core both at the same major to keep
+      // Module Federation singleton contracts consistent.
+      expect(pkg.dependencies['react-router']).toBe('^7.14.2');
+      expect(pkg.dependencies['react-router-dom']).toBe('^7.14.2');
+
+      // Build toolchain baseline.
+      expect(pkg.devDependencies['@vitejs/plugin-react']).toBe('^6.0.1');
+      expect(pkg.devDependencies['vite']).toBe('^8.0.10');
+      expect(pkg.devDependencies['typescript']).toBe('^5.9.3');
+    }
+  });
 });

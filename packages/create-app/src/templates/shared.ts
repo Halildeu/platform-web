@@ -24,7 +24,11 @@ export function generatePackageJson(name: string, template: Template): string {
     '@mfe/blocks': '*',
     react: '^18.3.0',
     'react-dom': '^18.3.0',
-    'react-router-dom': '^6.23.0',
+    // React Router v7 ships react-router-dom as a thin re-export of
+    // react-router; both must be pinned to the same major to stay
+    // in sync with the workspace baseline (PR #160).
+    'react-router': '^7.14.2',
+    'react-router-dom': '^7.14.2',
     ...templateDeps[template],
   };
 
@@ -42,9 +46,12 @@ export function generatePackageJson(name: string, template: Template): string {
     devDependencies: {
       '@types/react': '^18.3.0',
       '@types/react-dom': '^18.3.0',
-      '@vitejs/plugin-react': '^4.3.0',
-      typescript: '^5.4.0',
-      vite: '^5.4.0',
+      // Vite 8 + plugin-react 6 baseline matches the workspace
+      // (PR #13 / #161). plugin-react 6 dropped its bundled Babel,
+      // so Vite 8+ is required for the Oxc-driven React Refresh.
+      '@vitejs/plugin-react': '^6.0.1',
+      typescript: '^5.9.3',
+      vite: '^8.0.10',
     },
   };
 
