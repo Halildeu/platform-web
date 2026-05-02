@@ -72,7 +72,11 @@ const AccessApp: React.FC = () => {
         <Routes>
           <Route path="roles" element={<RolesPage />} />
           <Route path="data-access" element={<DataAccessPage />} />
-          <Route path="*" element={<Navigate to="roles" replace />} />
+          {/* React Router v7 made `relativeSplatPath` resolution path-relative
+              (was parent-relative in v6). Use an absolute target so unknown
+              `/access/<garbage>` paths consistently land on `/access/roles`
+              regardless of how deep the splat match was. */}
+          <Route path="*" element={<Navigate to="/access/roles" replace />} />
         </Routes>
       </AccessAppErrorBoundary>
     </QueryClientProvider>
