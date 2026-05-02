@@ -62,8 +62,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       shiki:
         specifier: ^4.0.2
         version: 4.0.2
@@ -261,8 +261,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@mfe/i18n-dicts':
         specifier: '*'
@@ -328,8 +328,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.6.3
@@ -383,8 +383,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.5.0
@@ -465,8 +465,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.4.0
@@ -526,8 +526,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@module-federation/vite':
         specifier: ^1.14.2
@@ -629,8 +629,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.5.0
@@ -690,8 +690,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.5.0
@@ -754,8 +754,8 @@ importers:
         specifier: ^6.27.0
         version: 6.30.3(react@18.2.0)
       react-router-dom:
-        specifier: ^6.27.0
-        version: 6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.6.3
@@ -7521,18 +7521,28 @@ packages:
       redux:
         optional: true
 
-  react-router-dom@6.30.3:
-    resolution: {integrity: sha512-pxPcv1AczD4vso7G4Z3TKcvlxK7g7TNt3/FNGMhfqyntocvYKj+GCatfigGDjbLozC4baguJ0ReCigoDJXb0ag==}
-    engines: {node: '>=14.0.0'}
+  react-router-dom@7.14.2:
+    resolution: {integrity: sha512-YZcM5ES8jJSM+KrJ9BdvHHqlnGTg5tH3sC5ChFRj4inosKctdyzBDhOyyHdGk597q2OT6NTrCA1OvB/YDwfekQ==}
+    engines: {node: '>=20.0.0'}
     peerDependencies:
-      react: '>=16.8'
-      react-dom: '>=16.8'
+      react: '>=18'
+      react-dom: '>=18'
 
   react-router@6.30.3:
     resolution: {integrity: sha512-XRnlbKMTmktBkjCLE8/XcZFlnHvr2Ltdr1eJX4idL55/9BbORzyZEaIkBFDhFGCEWBBItsVrDxwx3gnisMitdw==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       react: '>=16.8'
+
+  react-router@7.14.2:
+    resolution: {integrity: sha512-yCqNne6I8IB6rVCH7XUvlBK7/QKyqypBFGv+8dj4QBFJiiRX+FG7/nkdAvGElyvVZ/HQP5N19wzteuTARXi5Gw==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
+    peerDependenciesMeta:
+      react-dom:
+        optional: true
 
   react@18.2.0:
     resolution: {integrity: sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==}
@@ -7842,6 +7852,9 @@ packages:
 
   set-blocking@2.0.0:
     resolution: {integrity: sha512-KiKBS8AnWGEyLzofFfmvKwpdPzqiy16LvQfK3yv/fVH7Bj13/wl3JSR1J+rfgRE9q7xUJK4qvgS8raSOeLUehw==}
+
+  set-cookie-parser@2.7.2:
+    resolution: {integrity: sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw==}
 
   set-function-length@1.2.2:
     resolution: {integrity: sha512-pgRc4hJ4/sNjWCSS9AmnS40x3bNMDTknHgL5UaMBTMyJnU90EgWh1Rz+MC9eFu4BuN/UwZjKQuY/1v3rM7HMfg==}
@@ -16538,17 +16551,24 @@ snapshots:
       '@types/react': 18.3.28
       redux: 5.0.1
 
-  react-router-dom@6.30.3(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
+  react-router-dom@7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
     dependencies:
-      '@remix-run/router': 1.23.2
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
-      react-router: 6.30.3(react@18.2.0)
+      react-router: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
 
   react-router@6.30.3(react@18.2.0):
     dependencies:
       '@remix-run/router': 1.23.2
       react: 18.2.0
+
+  react-router@7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
+    dependencies:
+      cookie: 1.1.1
+      react: 18.2.0
+      set-cookie-parser: 2.7.2
+    optionalDependencies:
+      react-dom: 18.2.0(react@18.2.0)
 
   react@18.2.0:
     dependencies:
@@ -17028,6 +17048,8 @@ snapshots:
       - supports-color
 
   set-blocking@2.0.0: {}
+
+  set-cookie-parser@2.7.2: {}
 
   set-function-length@1.2.2:
     dependencies:
