@@ -14,7 +14,11 @@ const __dirname = dirname(__filename);
 const outputPath = join(__dirname, '..', 'src', 'app', 'manifest', 'page-manifest.schema.json');
 
 // Zod 4 native JSON Schema export (replaces the third-party
-// `zod-to-json-schema` package — same output, one less dependency).
+// `zod-to-json-schema` package — same semantic schema, different
+// layout: native exporter produces a flat root-object draft-7 schema,
+// where the legacy package wrapped everything inside
+// `{ $ref: '#/definitions/PageManifest', definitions: { … } }`. No
+// repo consumer reads the legacy wrap, so the layout change is safe.
 const jsonSchema = z.toJSONSchema(PageManifestSchema, {
   target: 'draft-7',
 });

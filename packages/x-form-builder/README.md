@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 const schema = z.object({
   name: z.string().min(2, 'Name is required'),
-  email: z.string().email('Invalid email'),
+  email: z.email('Invalid email'),
   role: z.enum(['admin', 'editor', 'viewer']),
 });
 
@@ -85,20 +85,20 @@ export function OnboardingWizard() {
 
 ## Available Components
 
-| Component | Description |
-|-----------|-------------|
-| `FormRenderer` | Renders a form from a field schema array |
+| Component       | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `FormRenderer`  | Renders a form from a field schema array                    |
 | `MultiStepForm` | Multi-step wizard with progress bar and validation per step |
-| `FormDesigner` | Drag-and-drop visual form builder |
-| `FieldArray` | Dynamic add/remove field rows |
+| `FormDesigner`  | Drag-and-drop visual form builder                           |
+| `FieldArray`    | Dynamic add/remove field rows                               |
 
 ## Hooks
 
-| Hook | Description |
-|------|-------------|
-| `useZodForm` | Binds a Zod schema to react-hook-form with type inference |
-| `useConditionalLogic` | Show/hide fields based on other field values |
-| `useFormPersist` | Auto-save form state to localStorage |
+| Hook                  | Description                                               |
+| --------------------- | --------------------------------------------------------- |
+| `useZodForm`          | Binds a Zod schema to react-hook-form with type inference |
+| `useConditionalLogic` | Show/hide fields based on other field values              |
+| `useFormPersist`      | Auto-save form state to localStorage                      |
 
 ## API Reference
 

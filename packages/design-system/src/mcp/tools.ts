@@ -538,8 +538,11 @@ export function searchComponents(query: string): MCPSearchResult[] {
 
     const relevance = computeRelevance(query, searchText);
     if (relevance > 0) {
-      let matchReason = '';
       const q = query.toLowerCase();
+      // Every branch below assigns matchReason exactly once, so the
+      // declaration intentionally has no initializer (avoids the dead
+      // initial value flagged by ESLint 10's `no-useless-assignment`).
+      let matchReason: string;
       if (idx.name.toLowerCase().includes(q)) matchReason = 'Bilesen ismi eslesti';
       else if (idx.description.toLowerCase().includes(q)) matchReason = 'Aciklama eslesti';
       else if (idx.tags?.some((t) => t.toLowerCase().includes(q))) matchReason = 'Etiket eslesti';

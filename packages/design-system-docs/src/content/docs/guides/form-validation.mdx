@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 const schema = z.object({
   name: z.string().min(2, 'Ad en az 2 karakter olmalıdır'),
-  email: z.string().email('Geçerli bir e-posta adresi girin'),
+  email: z.email('Geçerli bir e-posta adresi girin'),
   role: z.enum(['admin', 'editor', 'viewer'], {
     errorMap: () => ({ message: 'Bir rol seçin' }),
   }),
@@ -50,18 +50,18 @@ function UserForm() {
 
 Form bileşenleri `Connected` ön ekiyle form state'ine otomatik bağlanır:
 
-| Bileşen | Açıklama |
-|---------|----------|
-| `ConnectedInput` | Metin, e-posta, şifre, sayı girişi |
-| `ConnectedSelect` | Tekli/çoklu seçim |
-| `ConnectedCheckbox` | Onay kutusu |
-| `ConnectedRadioGroup` | Radyo buton grubu |
-| `ConnectedSwitch` | Açma/kapama |
-| `ConnectedDatePicker` | Tarih seçici |
-| `ConnectedTimePicker` | Saat seçici |
-| `ConnectedFileUpload` | Dosya yükleme |
-| `ConnectedRichText` | Zengin metin editörü |
-| `ConnectedSlider` | Kaydırıcı |
+| Bileşen               | Açıklama                           |
+| --------------------- | ---------------------------------- |
+| `ConnectedInput`      | Metin, e-posta, şifre, sayı girişi |
+| `ConnectedSelect`     | Tekli/çoklu seçim                  |
+| `ConnectedCheckbox`   | Onay kutusu                        |
+| `ConnectedRadioGroup` | Radyo buton grubu                  |
+| `ConnectedSwitch`     | Açma/kapama                        |
+| `ConnectedDatePicker` | Tarih seçici                       |
+| `ConnectedTimePicker` | Saat seçici                        |
+| `ConnectedFileUpload` | Dosya yükleme                      |
+| `ConnectedRichText`   | Zengin metin editörü               |
+| `ConnectedSlider`     | Kaydırıcı                          |
 
 ## Doğrulama Şemaları
 
@@ -73,7 +73,7 @@ import { z } from 'zod';
 const employeeSchema = z.object({
   firstName: z.string().min(1, 'Ad zorunludur'),
   lastName: z.string().min(1, 'Soyad zorunludur'),
-  email: z.string().email('Geçerli e-posta girin'),
+  email: z.email('Geçerli e-posta girin'),
   phone: z.string().regex(/^(\+90|0)?[0-9]{10}$/, 'Geçerli telefon numarası girin'),
   department: z.string().min(1, 'Departman seçin'),
   salary: z.number().min(0, 'Maaş negatif olamaz').max(1000000),
@@ -85,34 +85,36 @@ const employeeSchema = z.object({
 ### Koşullu Doğrulama
 
 ```tsx
-const schema = z.object({
-  employmentType: z.enum(['fulltime', 'contract']),
-  contractEndDate: z.date().optional(),
-}).refine(
-  (data) => {
-    if (data.employmentType === 'contract') {
-      return data.contractEndDate !== undefined;
-    }
-    return true;
-  },
-  {
-    message: 'Sözleşme bitiş tarihi zorunludur',
-    path: ['contractEndDate'],
-  }
-);
+const schema = z
+  .object({
+    employmentType: z.enum(['fulltime', 'contract']),
+    contractEndDate: z.date().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.employmentType === 'contract') {
+        return data.contractEndDate !== undefined;
+      }
+      return true;
+    },
+    {
+      message: 'Sözleşme bitiş tarihi zorunludur',
+      path: ['contractEndDate'],
+    },
+  );
 ```
 
 ### Asenkron Doğrulama
 
 ```tsx
 const schema = z.object({
-  username: z.string().min(3).refine(
-    async (val) => {
+  username: z
+    .string()
+    .min(3)
+    .refine(async (val) => {
       const exists = await checkUsernameExists(val);
       return !exists;
-    },
-    'Bu kullanıcı adı zaten kullanılıyor'
-  ),
+    }, 'Bu kullanıcı adı zaten kullanılıyor'),
 });
 ```
 
