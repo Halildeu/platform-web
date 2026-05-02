@@ -22,7 +22,8 @@ interface TiptapModules {
   Image: typeof import('@tiptap/extension-image').default;
   Underline: typeof import('@tiptap/extension-underline').default;
   Placeholder: typeof import('@tiptap/extension-placeholder').default;
-  Table: typeof import('@tiptap/extension-table').default;
+  // @tiptap/extension-table v3.x ships only named exports (no default).
+  Table: typeof import('@tiptap/extension-table').Table;
   TableRow: typeof import('@tiptap/extension-table-row').default;
   TableCell: typeof import('@tiptap/extension-table-cell').default;
   TableHeader: typeof import('@tiptap/extension-table-header').default;
@@ -68,7 +69,7 @@ export async function loadTiptapModules(): Promise<TiptapModules | null> {
       Image: image.default ?? image,
       Underline: underline.default ?? underline,
       Placeholder: placeholder.default ?? placeholder,
-      Table: table.default ?? table,
+      Table: table.Table,
       TableRow: tableRow.default ?? tableRow,
       TableCell: tableCell.default ?? tableCell,
       TableHeader: tableHeader.default ?? tableHeader,

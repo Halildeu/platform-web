@@ -40,7 +40,10 @@ let _Link: typeof import('@tiptap/extension-link').default | undefined;
 let _Image: typeof import('@tiptap/extension-image').default | undefined;
 let _Underline: typeof import('@tiptap/extension-underline').default | undefined;
 let _Placeholder: typeof import('@tiptap/extension-placeholder').default | undefined;
-let _Table: typeof import('@tiptap/extension-table').default | undefined;
+// `@tiptap/extension-table` ships only named exports in v3.x (no default
+// re-export, unlike the table-row/cell/header satellite packages).
+// Use the named `Table` type rather than `.default`.
+let _Table: typeof import('@tiptap/extension-table').Table | undefined;
 let _TableRow: typeof import('@tiptap/extension-table-row').default | undefined;
 let _TableCell: typeof import('@tiptap/extension-table-cell').default | undefined;
 let _TableHeader: typeof import('@tiptap/extension-table-header').default | undefined;
@@ -88,7 +91,7 @@ export async function ensureTiptapReactModules(): Promise<boolean> {
       _Image = image.default ?? image;
       _Underline = underline.default ?? underline;
       _Placeholder = placeholder.default ?? placeholder;
-      _Table = table.default ?? table;
+      _Table = table.Table;
       _TableRow = tableRow.default ?? tableRow;
       _TableCell = tableCell.default ?? tableCell;
       _TableHeader = tableHeader.default ?? tableHeader;
@@ -158,8 +161,7 @@ function buildEditorCoreFromTiptap(
         .run(),
     setLink: (url: string) => editor.chain().focus().setLink({ href: url }).run(),
     unsetLink: () => editor.chain().focus().unsetLink().run(),
-    insertImage: (src: string, alt?: string) =>
-      editor.chain().focus().setImage({ src, alt }).run(),
+    insertImage: (src: string, alt?: string) => editor.chain().focus().setImage({ src, alt }).run(),
 
     isActive: (name: string, attrs?: Record<string, unknown>) => editor.isActive(name, attrs),
     get isFocused() {
@@ -218,85 +220,89 @@ function buildEditorCoreFromTiptap(
 /*  TiptapEditor component                                             */
 /* ------------------------------------------------------------------ */
 
-export const TiptapEditor = forwardRef<TiptapEditorHandle, TiptapEditorProps>(
-  function TiptapEditor(
-    { value, onChange, placeholder, readOnly = false, autoFocus = false, minHeight = 200, maxHeight, className },
-    ref,
-  ) {
-    if (!_loaded || !_useEditor || !_EditorContent) {
-      throw new Error(
-        'TiptapEditor requires Tiptap modules. Call ensureTiptapReactModules() before rendering.',
-      );
-    }
-
-    const UseEditor = _useEditor;
-    const EditorContentComponent = _EditorContent;
-
-    const extensions = useMemo(
-      () => [
-        _StarterKit!.configure({
-          heading: { levels: [1, 2, 3, 4, 5, 6] },
-          // v3: StarterKit includes link and underline by default —
-          // disable to avoid duplicate extension errors.
-          link: false,
-          underline: false,
-        }),
-        _Link!.configure({ openOnClick: false }),
-        _Image!,
-        _Underline!,
-        _Placeholder!.configure({ placeholder: placeholder ?? '' }),
-        _Table!.configure({ resizable: true }),
-        _TableRow!,
-        _TableCell!,
-        _TableHeader!,
-      ],
-      [placeholder],
-    );
-
-    const editor = UseEditor({
-      extensions,
-      content: value ?? '',
-      editable: !readOnly,
-      immediatelyRender: false,
-      shouldRerenderOnTransaction: true,
-      autofocus: autoFocus ? 'end' : false,
-      onUpdate: ({ editor: e }: { editor: any }) => {
-        onChange?.(e.getHTML());
-      },
-    });
-
-    // Sync external value changes
-    useEffect(() => {
-      if (editor && value !== undefined && editor.getHTML() !== value) {
-        editor.commands.setContent(value, { emitUpdate: false });
-      }
-    }, [editor, value]);
-
-    // Sync readOnly
-    useEffect(() => {
-      if (editor) {
-        editor.setEditable(!readOnly);
-      }
-    }, [editor, readOnly]);
-
-    // Build EditorCore handle
-    const editorCore = useMemo(
-      () => (editor ? buildEditorCoreFromTiptap(editor) : null),
-      [editor],
-    );
-
-    useImperativeHandle(ref, () => ({ editorCore }), [editorCore]);
-
-    const wrapperStyle: React.CSSProperties = {
-      minHeight: `${minHeight}px`,
-      maxHeight: maxHeight ? `${maxHeight}px` : undefined,
-      overflowY: maxHeight ? 'auto' : undefined,
-    };
-
-    return (
-      <div className={className} style={wrapperStyle}>
-        <EditorContentComponent editor={editor} />
-      </div>
-    );
+export const TiptapEditor = forwardRef<TiptapEditorHandle, TiptapEditorProps>(function TiptapEditor(
+  {
+    value,
+    onChange,
+    placeholder,
+    readOnly = false,
+    autoFocus = false,
+    minHeight = 200,
+    maxHeight,
+    className,
   },
-);
+  ref,
+) {
+  if (!_loaded || !_useEditor || !_EditorContent) {
+    throw new Error(
+      'TiptapEditor requires Tiptap modules. Call ensureTiptapReactModules() before rendering.',
+    );
+  }
+
+  const UseEditor = _useEditor;
+  const EditorContentComponent = _EditorContent;
+
+  const extensions = useMemo(
+    () => [
+      _StarterKit!.configure({
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
+        // v3: StarterKit includes link and underline by default —
+        // disable to avoid duplicate extension errors.
+        link: false,
+        underline: false,
+      }),
+      _Link!.configure({ openOnClick: false }),
+      _Image!,
+      _Underline!,
+      _Placeholder!.configure({ placeholder: placeholder ?? '' }),
+      _Table!.configure({ resizable: true }),
+      _TableRow!,
+      _TableCell!,
+      _TableHeader!,
+    ],
+    [placeholder],
+  );
+
+  const editor = UseEditor({
+    extensions,
+    content: value ?? '',
+    editable: !readOnly,
+    immediatelyRender: false,
+    shouldRerenderOnTransaction: true,
+    autofocus: autoFocus ? 'end' : false,
+    onUpdate: ({ editor: e }: { editor: any }) => {
+      onChange?.(e.getHTML());
+    },
+  });
+
+  // Sync external value changes
+  useEffect(() => {
+    if (editor && value !== undefined && editor.getHTML() !== value) {
+      editor.commands.setContent(value, { emitUpdate: false });
+    }
+  }, [editor, value]);
+
+  // Sync readOnly
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(!readOnly);
+    }
+  }, [editor, readOnly]);
+
+  // Build EditorCore handle
+  const editorCore = useMemo(() => (editor ? buildEditorCoreFromTiptap(editor) : null), [editor]);
+
+  useImperativeHandle(ref, () => ({ editorCore }), [editorCore]);
+
+  const wrapperStyle: React.CSSProperties = {
+    minHeight: `${minHeight}px`,
+    maxHeight: maxHeight ? `${maxHeight}px` : undefined,
+    overflowY: maxHeight ? 'auto' : undefined,
+  };
+
+  return (
+    <div className={className} style={wrapperStyle}>
+      <EditorContentComponent editor={editor} />
+    </div>
+  );
+});
