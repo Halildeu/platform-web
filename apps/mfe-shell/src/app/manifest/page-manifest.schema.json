@@ -46,7 +46,9 @@
           "type": "string"
         }
       },
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "additionalProperties": false
     },
     "layout": {
@@ -55,7 +57,11 @@
         "kind": {
           "default": "default",
           "type": "string",
-          "enum": ["default", "settings", "wizard"]
+          "enum": [
+            "default",
+            "settings",
+            "wizard"
+          ]
         }
       },
       "additionalProperties": false
@@ -91,7 +97,10 @@
                 "type": "string"
               }
             },
-            "required": ["key", "type"],
+            "required": [
+              "key",
+              "type"
+            ],
             "additionalProperties": false
           },
           {
@@ -142,7 +151,9 @@
                       "type": "string"
                     }
                   },
-                  "required": ["value"],
+                  "required": [
+                    "value"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -150,7 +161,11 @@
                 "type": "boolean"
               }
             },
-            "required": ["key", "type", "options"],
+            "required": [
+              "key",
+              "type",
+              "options"
+            ],
             "additionalProperties": false
           },
           {
@@ -178,10 +193,17 @@
               },
               "mode": {
                 "type": "string",
-                "enum": ["date", "datetime", "range"]
+                "enum": [
+                  "date",
+                  "datetime",
+                  "range"
+                ]
               }
             },
-            "required": ["key", "type"],
+            "required": [
+              "key",
+              "type"
+            ],
             "additionalProperties": false
           },
           {
@@ -208,7 +230,10 @@
                 "const": "boolean"
               }
             },
-            "required": ["key", "type"],
+            "required": [
+              "key",
+              "type"
+            ],
             "additionalProperties": false
           }
         ]
@@ -229,7 +254,10 @@
             },
             "method": {
               "type": "string",
-              "enum": ["GET", "POST"]
+              "enum": [
+                "GET",
+                "POST"
+              ]
             }
           },
           "additionalProperties": false
@@ -251,7 +279,12 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["text", "number", "date", "status"]
+                "enum": [
+                  "text",
+                  "number",
+                  "date",
+                  "status"
+                ]
               },
               "sortable": {
                 "type": "boolean"
@@ -273,7 +306,9 @@
                 "type": "string"
               }
             },
-            "required": ["key"],
+            "required": [
+              "key"
+            ],
             "additionalProperties": false
           }
         },
@@ -288,15 +323,23 @@
               "direction": {
                 "default": "asc",
                 "type": "string",
-                "enum": ["asc", "desc"]
+                "enum": [
+                  "asc",
+                  "desc"
+                ]
               }
             },
-            "required": ["key", "direction"],
+            "required": [
+              "key",
+              "direction"
+            ],
             "additionalProperties": false
           }
         }
       },
-      "required": ["columns"],
+      "required": [
+        "columns"
+      ],
       "additionalProperties": false
     },
     "detail": {
@@ -326,7 +369,13 @@
                     },
                     "type": {
                       "type": "string",
-                      "enum": ["summary", "related", "audit", "notes", "custom"]
+                      "enum": [
+                        "summary",
+                        "related",
+                        "audit",
+                        "notes",
+                        "custom"
+                      ]
                     },
                     "component": {
                       "type": "string"
@@ -338,12 +387,16 @@
                       "type": "string"
                     }
                   },
-                  "required": ["key"],
+                  "required": [
+                    "key"
+                  ],
                   "additionalProperties": false
                 }
               }
             },
-            "required": ["key"],
+            "required": [
+              "key"
+            ],
             "additionalProperties": false
           }
         }
@@ -369,14 +422,23 @@
           },
           "type": {
             "type": "string",
-            "enum": ["primary", "default", "danger"]
+            "enum": [
+              "primary",
+              "default",
+              "danger"
+            ]
           },
           "target": {
             "type": "string"
           },
           "intent": {
             "type": "string",
-            "enum": ["open-drawer", "open-modal", "mutation", "navigation"]
+            "enum": [
+              "open-drawer",
+              "open-modal",
+              "mutation",
+              "navigation"
+            ]
           },
           "permission": {
             "type": "string"
@@ -397,7 +459,9 @@
             "additionalProperties": false
           }
         },
-        "required": ["key"],
+        "required": [
+          "key"
+        ],
         "additionalProperties": false
       }
     },
@@ -420,6 +484,9 @@
       }
     }
   },
-  "required": ["meta", "grid"],
+  "required": [
+    "meta",
+    "grid"
+  ],
   "additionalProperties": false
 }
