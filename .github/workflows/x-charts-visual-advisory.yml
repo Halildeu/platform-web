@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload diff artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: x-charts-compare-results
           path: |
@@ -127,7 +127,7 @@ jobs:
             --update-snapshots
 
       - name: Upload Linux baseline artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: x-charts-linux-baseline
           path: packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts
