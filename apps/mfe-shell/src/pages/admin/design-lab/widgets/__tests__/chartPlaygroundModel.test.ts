@@ -1,0 +1,276 @@
+/**
+ * Unit tests for `chartPlaygroundModel` helpers (Faz 21.8 follow-up,
+ * Codex thread `019def27`).
+ */
+import { describe, it, expect } from 'vitest';
+import {
+  buildDescriptor,
+  buildDescriptors,
+  deriveDefaults,
+  generatePlaygroundCode,
+  getBool,
+  getCategory,
+  getEditorKind,
+  getEnum,
+  getEnumOptions,
+  getNum,
+  getStr,
+  isLiveEditable,
+  parseDefault,
+  parseStringLiteralUnion,
+  serialisePropToCode,
+  type ChartProp,
+} from '../chartPlaygroundModel';
+
+const mkProp = (over: Partial<ChartProp> = {}): ChartProp => ({
+  name: over.name ?? 'sample',
+  type: over.type ?? 'string',
+  required: over.required ?? false,
+  default: over.default ?? '—',
+  description: over.description ?? '',
+});
+
+describe('chartPlaygroundModel — type detection', () => {
+  it('identifies primitive editor kinds', () => {
+    expect(getEditorKind(mkProp({ type: 'boolean' }))).toBe('boolean');
+    expect(getEditorKind(mkProp({ type: 'string' }))).toBe('string');
+    expect(getEditorKind(mkProp({ type: 'number' }))).toBe('number');
+  });
+
+  it('detects inline string-literal unions as enum', () => {
+    expect(getEditorKind(mkProp({ type: "'vertical' | 'horizontal'" }))).toBe('enum');
+    expect(getEditorKind(mkProp({ type: '"a" | "b" | "c"' }))).toBe('enum');
+  });
+
+  it('detects known type aliases as enum', () => {
+    expect(getEditorKind(mkProp({ type: 'ChartSize' }))).toBe('enum');
+    expect(getEditorKind(mkProp({ type: 'ChartThemePreference' }))).toBe('enum');
+    expect(getEditorKind(mkProp({ type: 'ChartDecalPreference' }))).toBe('enum');
+    expect(getEditorKind(mkProp({ type: 'ChartDensityPreference' }))).toBe('enum');
+    expect(getEditorKind(mkProp({ type: 'ChartAccentPreference' }))).toBe('enum');
+  });
+
+  it('falls back to complex for arrays / functions / unknown structured types', () => {
+    expect(getEditorKind(mkProp({ type: 'ChartDataPoint[]' }))).toBe('complex');
+    expect(getEditorKind(mkProp({ type: '(value: number) => string' }))).toBe('complex');
+    expect(getEditorKind(mkProp({ type: '{ field: string }' }))).toBe('complex');
+    expect(getEditorKind(mkProp({ type: 'string[]' }))).toBe('complex');
+  });
+
+  it('parses string-literal unions and rejects mixed unions', () => {
+    expect(parseStringLiteralUnion("'a' | 'b'")).toEqual(['a', 'b']);
+    expect(parseStringLiteralUnion('"x" | "y" | "z"')).toEqual(['x', 'y', 'z']);
+    expect(parseStringLiteralUnion("'a' | number")).toBeNull();
+    expect(parseStringLiteralUnion('boolean | string')).toBeNull();
+    expect(parseStringLiteralUnion("'only-one'")).toBeNull();
+  });
+
+  it('returns enum options for the access-level inline union', () => {
+    const opts = getEnumOptions('"full" | "readonly" | "disabled" | "hidden"');
+    expect(opts).toBeDefined();
+    expect(opts?.map((o) => o.value)).toEqual(['full', 'readonly', 'disabled', 'hidden']);
+  });
+});
+
+describe('chartPlaygroundModel — default parsing', () => {
+  it('parses boolean defaults', () => {
+    expect(parseDefault(mkProp({ type: 'boolean', default: 'true' }), 'boolean')).toBe(true);
+    expect(parseDefault(mkProp({ type: 'boolean', default: 'false' }), 'boolean')).toBe(false);
+  });
+
+  it('parses number defaults and rejects non-numeric', () => {
+    expect(parseDefault(mkProp({ type: 'number', default: '72' }), 'number')).toBe(72);
+    expect(parseDefault(mkProp({ type: 'number', default: 'foo' }), 'number')).toBeUndefined();
+  });
+
+  it('extracts the first quoted token from string/enum defaults', () => {
+    expect(parseDefault(mkProp({ type: 'string', default: '"vertical"' }), 'enum')).toBe(
+      'vertical',
+    );
+    expect(
+      parseDefault(
+        mkProp({
+          type: 'ChartThemePreference',
+          default:
+            '"auto" — follows documentElement signals (data-appearance / data-theme / media)',
+        }),
+        'enum',
+      ),
+    ).toBe('auto');
+  });
+
+  it('returns undefined for missing / em-dash / undefined sentinels', () => {
+    expect(parseDefault(mkProp({ default: '—' }), 'string')).toBeUndefined();
+    expect(parseDefault(mkProp({ default: 'undefined' }), 'string')).toBeUndefined();
+    expect(parseDefault(mkProp({ default: '' }), 'string')).toBeUndefined();
+  });
+
+  it('returns undefined for complex props regardless of default', () => {
+    expect(parseDefault(mkProp({ default: '{ a: 1 }' }), 'complex')).toBeUndefined();
+  });
+});
+
+describe('chartPlaygroundModel — categorization', () => {
+  it('routes data props to data', () => {
+    expect(getCategory(mkProp({ name: 'data' }))).toBe('data');
+    expect(getCategory(mkProp({ name: 'series' }))).toBe('data');
+    expect(getCategory(mkProp({ name: 'value' }))).toBe('data');
+  });
+
+  it('routes display props to display', () => {
+    expect(getCategory(mkProp({ name: 'showGrid' }))).toBe('display');
+    expect(getCategory(mkProp({ name: 'orientation' }))).toBe('display');
+    expect(getCategory(mkProp({ name: 'animate' }))).toBe('display');
+  });
+
+  it('routes theme props to theme', () => {
+    expect(getCategory(mkProp({ name: 'theme' }))).toBe('theme');
+    expect(getCategory(mkProp({ name: 'accent' }))).toBe('theme');
+    expect(getCategory(mkProp({ name: 'colors' }))).toBe('theme');
+  });
+
+  it('routes access props to access', () => {
+    expect(getCategory(mkProp({ name: 'access' }))).toBe('access');
+    expect(getCategory(mkProp({ name: 'accessReason' }))).toBe('access');
+  });
+
+  it('falls back to advanced', () => {
+    expect(getCategory(mkProp({ name: 'title' }))).toBe('advanced');
+    expect(getCategory(mkProp({ name: 'onDataPointClick' }))).toBe('advanced');
+  });
+});
+
+describe('chartPlaygroundModel — descriptor + defaults', () => {
+  it('marks supported props live and unsupported read-only', () => {
+    const showGrid = mkProp({ name: 'showGrid', type: 'boolean', default: 'true' });
+    const onClick = mkProp({ name: 'onDataPointClick', type: '(e: any) => void' });
+    const dBar = buildDescriptor('bar-chart', showGrid);
+    const dCb = buildDescriptor('bar-chart', onClick);
+    expect(dBar.liveEditable).toBe(true);
+    expect(dBar.readOnlyHint).toBeNull();
+    expect(dCb.liveEditable).toBe(false);
+    expect(dCb.kind).toBe('complex');
+    expect(dCb.readOnlyHint).toMatch(/Code\/API only/);
+  });
+
+  it('respects sidecar default overrides', () => {
+    const value = mkProp({ name: 'value', type: 'number', default: '—' });
+    const d = buildDescriptor('gauge-chart', value);
+    expect(d.defaultValue).toBe(72);
+  });
+
+  it('derives defaults from descriptors and skips empty values', () => {
+    const props: ChartProp[] = [
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+      mkProp({ name: 'title', type: 'string', default: 'undefined' }),
+      mkProp({ name: 'orientation', type: "'vertical' | 'horizontal'", default: '"vertical"' }),
+    ];
+    const descriptors = buildDescriptors('bar-chart', props);
+    const defaults = deriveDefaults(descriptors);
+    expect(defaults).toEqual({ animate: true, orientation: 'vertical' });
+  });
+
+  it('flags chart ids without a live-prop entry as fully read-only', () => {
+    expect(isLiveEditable('bar-chart', 'animate')).toBe(true);
+    expect(isLiveEditable('treemap-chart', 'animate')).toBe(false);
+  });
+});
+
+describe('chartPlaygroundModel — codegen serialisation', () => {
+  it('omits boolean values matching the default', () => {
+    const d = buildDescriptor(
+      'bar-chart',
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+    );
+    expect(serialisePropToCode(d, true)).toBeNull();
+  });
+
+  it('emits bare prop name when boolean differs from default false/undefined', () => {
+    const d = buildDescriptor(
+      'bar-chart',
+      mkProp({ name: 'showValues', type: 'boolean', default: 'false' }),
+    );
+    expect(serialisePropToCode(d, true)).toBe('showValues');
+  });
+
+  it('emits explicit `={false}` when boolean is off and default is true', () => {
+    const d = buildDescriptor(
+      'bar-chart',
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+    );
+    expect(serialisePropToCode(d, false)).toBe('animate={false}');
+  });
+
+  it('emits string/enum values with quotes and escapes embedded quotes', () => {
+    const d = buildDescriptor(
+      'bar-chart',
+      mkProp({ name: 'title', type: 'string', default: 'undefined' }),
+    );
+    expect(serialisePropToCode(d, 'My Chart')).toBe('title="My Chart"');
+    expect(serialisePropToCode(d, 'a "quoted" word')).toBe('title="a \\"quoted\\" word"');
+  });
+
+  it('emits numbers with curly braces', () => {
+    const d = buildDescriptor(
+      'gauge-chart',
+      mkProp({ name: 'value', type: 'number', default: '—' }),
+    );
+    expect(serialisePropToCode(d, 50)).toBe('value={50}');
+    // sidecar default is 72 → 72 should be omitted
+    expect(serialisePropToCode(d, 72)).toBeNull();
+  });
+
+  it('omits complex props entirely', () => {
+    const d = buildDescriptor('bar-chart', mkProp({ name: 'data', type: 'ChartDataPoint[]' }));
+    expect(serialisePropToCode(d, undefined)).toBeNull();
+  });
+
+  it('renders a full prop list using generatePlaygroundCode', () => {
+    const props: ChartProp[] = [
+      mkProp({ name: 'data', type: 'ChartDataPoint[]', required: true }),
+      mkProp({ name: 'showValues', type: 'boolean', default: 'false' }),
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+      mkProp({ name: 'orientation', type: "'vertical' | 'horizontal'", default: '"vertical"' }),
+    ];
+    const descriptors = buildDescriptors('bar-chart', props);
+    const code = generatePlaygroundCode('BarChart', descriptors, {
+      showValues: true,
+      animate: false,
+      orientation: 'horizontal',
+    });
+    expect(code).toBe(
+      [
+        '<BarChart',
+        '  data={sampleData}',
+        '  showValues',
+        '  animate={false}',
+        '  orientation="horizontal"',
+        '/>',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('chartPlaygroundModel — typed accessors', () => {
+  it('reads booleans with backwards-compat for legacy string encoding', () => {
+    expect(getBool({ a: true }, 'a', false)).toBe(true);
+    expect(getBool({ a: 'true' }, 'a', false)).toBe(true);
+    expect(getBool({ a: 'false' }, 'a', true)).toBe(false);
+    expect(getBool({}, 'missing', true)).toBe(true);
+  });
+
+  it('reads enum/string values with fallback', () => {
+    expect(getEnum({ k: 'dark' }, 'k', 'auto' as const)).toBe('dark');
+    expect(getEnum({}, 'k', 'auto' as const)).toBe('auto');
+    expect(getEnum({ k: '' }, 'k', 'auto' as const)).toBe('auto');
+    expect(getStr({ k: 'hello' }, 'k', 'fallback')).toBe('hello');
+    expect(getStr({ k: '' }, 'k', 'fallback')).toBe('fallback');
+  });
+
+  it('reads numbers with fallback for non-numeric / missing', () => {
+    expect(getNum({ a: 42 }, 'a', 0)).toBe(42);
+    expect(getNum({ a: '7' }, 'a', 0)).toBe(7);
+    expect(getNum({ a: 'oops' }, 'a', 99)).toBe(99);
+    expect(getNum(undefined, 'a', 5)).toBe(5);
+  });
+});

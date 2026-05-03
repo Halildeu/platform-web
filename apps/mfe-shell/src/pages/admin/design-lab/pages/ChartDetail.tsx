@@ -5,7 +5,7 @@
  * Self-contained with hardcoded chart catalog (13 charts).
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Layers,
@@ -17,12 +17,26 @@ import {
   Copy,
   Check,
   ChevronRight,
+  ChevronDown,
   BarChart3,
   Cpu,
   Sparkles,
   Eye,
+  Lock,
 } from 'lucide-react';
 import ChartPreviewLive from '../widgets/ChartPreviewLive';
+import {
+  buildDescriptors,
+  deriveDefaults,
+  generatePlaygroundCode,
+  CATEGORY_DEFAULT_OPEN,
+  CATEGORY_LABEL,
+  CATEGORY_ORDER,
+  type EditorCategory,
+  type EditorDescriptor,
+  type PlaygroundState,
+  type PlaygroundValue,
+} from '../widgets/chartPlaygroundModel';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -3348,49 +3362,11 @@ return <Suspense fallback={<Skeleton />}><LazyBar data={...} /></Suspense>;`,
 
 /* ------------------------------------------------------------------ */
 /*  Playground default prop values per chart                           */
+/*                                                                     */
+/*  Faz 21.8 follow-up (Codex thread 019def27): the per-chart switch  */
+/*  was replaced by `chartPlaygroundModel.deriveDefaults`, which      */
+/*  derives typed defaults from the catalog + sidecar overrides.       */
 /* ------------------------------------------------------------------ */
-
-function getPlaygroundDefaults(chartId: string): Record<string, boolean | string> {
-  switch (chartId) {
-    case 'bar-chart':
-      return {
-        showValues: false,
-        showGrid: true,
-        showLegend: false,
-        animate: true,
-        orientation: 'vertical',
-      };
-    case 'line-chart':
-      return {
-        showDots: true,
-        showGrid: true,
-        showLegend: false,
-        showArea: false,
-        curved: false,
-        animate: true,
-      };
-    case 'pie-chart':
-      return {
-        donut: false,
-        showLabels: false,
-        showLegend: false,
-        showPercentage: false,
-        animate: true,
-      };
-    case 'area-chart':
-      return {
-        stacked: false,
-        showDots: false,
-        showGrid: true,
-        showLegend: false,
-        gradient: true,
-        curved: false,
-        animate: true,
-      };
-    default:
-      return {};
-  }
-}
 
 /* ================================================================== */
 /*  Main Component                                                     */
@@ -3641,74 +3617,84 @@ function OverviewTab({ chart }: { chart: ChartMeta }) {
 /* ================================================================== */
 
 function PlaygroundTab({ chart }: { chart: ChartMeta }) {
-  const defaults = useMemo(() => getPlaygroundDefaults(chart.id), [chart.id]);
-  const [pgState, setPgState] = useState<Record<string, boolean | string>>(defaults);
-
-  const booleanProps = useMemo(
-    () => chart.props.filter((p) => p.type === 'boolean'),
-    [chart.props],
+  // Build typed editor descriptors for every prop in the catalog and derive
+  // the initial playground state from their typed defaults. The descriptor
+  // array also drives codegen so the generated snippet stays in sync with
+  // the real API defaults.
+  const descriptors = useMemo<EditorDescriptor[]>(
+    () => buildDescriptors(chart.id, chart.props),
+    [chart.id, chart.props],
   );
+  const defaults = useMemo<PlaygroundState>(() => deriveDefaults(descriptors), [descriptors]);
+  const [pgState, setPgState] = useState<PlaygroundState>(defaults);
+
+  // Reset playground state when the user navigates between charts (otherwise
+  // stale BarChart toggles would leak into LineChart's props editor).
+  useEffect(() => {
+    setPgState(defaults);
+  }, [chart.id, defaults]);
+
+  // Group descriptors by category for the categorised editor layout. We
+  // preserve the catalog order within each category.
+  const grouped = useMemo(() => {
+    const buckets: Record<EditorCategory, EditorDescriptor[]> = {
+      data: [],
+      display: [],
+      theme: [],
+      access: [],
+      advanced: [],
+    };
+    for (const d of descriptors) {
+      buckets[d.category].push(d);
+    }
+    return buckets;
+  }, [descriptors]);
+
+  const setValue = useCallback((propName: string, value: PlaygroundValue) => {
+    setPgState((prev) => ({ ...prev, [propName]: value }));
+  }, []);
 
   const handleToggle = useCallback((propName: string) => {
     setPgState((prev) => ({ ...prev, [propName]: !prev[propName] }));
   }, []);
 
-  const generatedCode = useMemo(() => {
-    const propLines = Object.entries(pgState)
-      .filter(([, v]) => v !== false && v !== undefined)
-      .map(([k, v]) => {
-        if (typeof v === 'boolean' && v) return `  ${k}`;
-        return `  ${k}="${String(v)}"`;
-      })
-      .join('\n');
-
-    return `<${chart.name}\n  data={sampleData}\n${propLines}\n/>`;
-  }, [chart.name, pgState]);
+  const generatedCode = useMemo(
+    () => generatePlaygroundCode(chart.name, descriptors, pgState),
+    [chart.name, descriptors, pgState],
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Controls panel */}
-        <div className="rounded-2xl border border-border-subtle bg-surface-default p-5 lg:col-span-1">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-            Props Editor
-          </span>
-          <div className="mt-4 flex flex-col gap-3">
-            {booleanProps.map((prop) => (
-              <label
-                key={prop.name}
-                className="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-surface-muted"
-              >
-                <div>
-                  <span className="text-sm font-medium text-text-primary">{prop.name}</span>
-                  <p className="text-xs text-text-tertiary">{prop.description}</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={!!pgState[prop.name]}
-                  onClick={() => handleToggle(prop.name)}
-                  className={[
-                    'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
-                    pgState[prop.name]
-                      ? 'bg-action-primary'
-                      : 'bg-surface-muted border border-border-subtle',
-                  ].join(' ')}
-                >
-                  <span
-                    className={[
-                      'inline-block h-3.5 w-3.5 rounded-full bg-white shadow-xs transition-transform',
-                      pgState[prop.name] ? 'translate-x-4' : 'translate-x-0.5',
-                    ].join(' ')}
-                  />
-                </button>
-              </label>
-            ))}
-            {booleanProps.length === 0 && (
-              <p className="text-xs text-text-tertiary">
-                No toggleable boolean props for this chart.
-              </p>
-            )}
+        <div
+          className="rounded-2xl border border-border-subtle bg-surface-default p-5 lg:col-span-1"
+          data-testid="props-editor-panel"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
+              Props Editor
+            </span>
+            <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
+              {descriptors.filter((d) => d.kind !== 'complex').length} / {descriptors.length}
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2">
+            {CATEGORY_ORDER.map((cat) => {
+              const items = grouped[cat];
+              if (items.length === 0) return null;
+              return (
+                <PlaygroundCategoryGroup
+                  key={cat}
+                  category={cat}
+                  items={items}
+                  state={pgState}
+                  onToggle={handleToggle}
+                  onChange={setValue}
+                />
+              );
+            })}
           </div>
         </div>
 
@@ -3739,6 +3725,188 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ================================================================== */
+/*  PlaygroundCategoryGroup                                            */
+/* ================================================================== */
+
+function PlaygroundCategoryGroup({
+  category,
+  items,
+  state,
+  onToggle,
+  onChange,
+}: {
+  category: EditorCategory;
+  items: EditorDescriptor[];
+  state: PlaygroundState;
+  onToggle: (propName: string) => void;
+  onChange: (propName: string, value: PlaygroundValue) => void;
+}) {
+  const [open, setOpen] = useState(CATEGORY_DEFAULT_OPEN[category]);
+  return (
+    <section className="rounded-lg border border-border-subtle">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded-lg px-3 py-2 transition hover:bg-surface-muted"
+        aria-expanded={open}
+        data-testid={`playground-category-${category}`}
+      >
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 text-text-secondary" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-text-secondary" />
+          )}
+          <span className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+            {CATEGORY_LABEL[category]}
+          </span>
+        </div>
+        <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
+          {items.length}
+        </span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1 border-t border-border-subtle px-2 py-2">
+          {items.map((d) => (
+            <PlaygroundPropEditor
+              key={d.prop.name}
+              descriptor={d}
+              value={state[d.prop.name]}
+              onToggle={onToggle}
+              onChange={onChange}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ================================================================== */
+/*  PlaygroundPropEditor                                               */
+/* ================================================================== */
+
+function PlaygroundPropEditor({
+  descriptor,
+  value,
+  onToggle,
+  onChange,
+}: {
+  descriptor: EditorDescriptor;
+  value: PlaygroundValue;
+  onToggle: (propName: string) => void;
+  onChange: (propName: string, value: PlaygroundValue) => void;
+}) {
+  const { prop, kind, liveEditable, options, readOnlyHint } = descriptor;
+  const hint = !liveEditable ? readOnlyHint : null;
+  const disabled = !liveEditable;
+
+  return (
+    <label
+      className={[
+        'flex flex-col gap-1.5 rounded-md px-2 py-2 transition',
+        disabled ? 'opacity-60' : 'hover:bg-surface-muted',
+      ].join(' ')}
+      data-testid={`playground-prop-${prop.name}`}
+      data-prop-kind={kind}
+      data-live-editable={liveEditable ? 'true' : 'false'}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-text-primary">{prop.name}</span>
+            {prop.required && (
+              <span className="rounded-full bg-state-info-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase text-state-info-text">
+                req
+              </span>
+            )}
+            {!liveEditable && (
+              <Lock className="h-3 w-3 shrink-0 text-text-tertiary" aria-hidden="true" />
+            )}
+          </div>
+          <p className="text-xs text-text-tertiary">{prop.description}</p>
+          {hint && <p className="mt-0.5 text-[10px] italic text-text-tertiary">{hint}</p>}
+        </div>
+        {kind === 'boolean' && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!value}
+            disabled={disabled}
+            onClick={() => onToggle(prop.name)}
+            className={[
+              'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+              value ? 'bg-action-primary' : 'bg-surface-muted border border-border-subtle',
+              disabled ? 'cursor-not-allowed' : '',
+            ].join(' ')}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 rounded-full bg-white shadow-xs transition-transform',
+                value ? 'translate-x-4' : 'translate-x-0.5',
+              ].join(' ')}
+            />
+          </button>
+        )}
+      </div>
+
+      {kind === 'enum' && (
+        <select
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => onChange(prop.name, e.target.value)}
+          className="rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-xs text-text-primary disabled:cursor-not-allowed"
+          data-testid={`playground-prop-input-${prop.name}`}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {kind === 'string' && (
+        <input
+          type="text"
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => onChange(prop.name, e.target.value)}
+          placeholder={prop.required ? 'required' : 'optional'}
+          className="rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-xs text-text-primary disabled:cursor-not-allowed"
+          data-testid={`playground-prop-input-${prop.name}`}
+        />
+      )}
+
+      {kind === 'number' && (
+        <input
+          type="number"
+          value={typeof value === 'number' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (next === '') {
+              onChange(prop.name, undefined);
+              return;
+            }
+            const n = Number(next);
+            if (Number.isFinite(n)) onChange(prop.name, n);
+          }}
+          className="w-32 rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-xs text-text-primary disabled:cursor-not-allowed"
+          data-testid={`playground-prop-input-${prop.name}`}
+        />
+      )}
+
+      {kind === 'complex' && (
+        <span className="rounded bg-surface-muted px-2 py-1 font-mono text-[10px] text-text-tertiary">
+          {prop.type}
+        </span>
+      )}
+    </label>
   );
 }
 
