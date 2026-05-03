@@ -404,13 +404,15 @@ Resolution chain: explicit `density` prop > `data-density` attribute on
 documentElement > `'comfortable'` default. See §1.1 for the full opt-in
 prop surface.
 
-## 3. Access Control — Phase 2 (pending integration)
+## 3. Access Control — ACTIVE (v2.3, Faz 21.4 PR-E2)
 
-> **Status (v2.1):** The shape below is the **target** API. No chart
-> wrapper currently accepts `access` / `accessReason` props. Integration
-> is tracked in `docs/x-charts-ui-ux-tracker.md` (Faz 21.5 lift roadmap).
-> Until it ships, callers should gate chart rendering at the page level
-> using the existing Zanzibar guards (e.g. `useZanzibarAccess`).
+> **Status (v2.3, 2026-05-03):** ACTIVE. All 13 chart wrappers now
+> extend `AccessControlledProps` and accept `access` / `accessReason`
+> props at runtime via `<ChartAccessGate>` (PR-E2 #166). The shape
+> below is the canonical surface; default `access === undefined`
+> follows the identity-transform path (zero DOM wrapper). For
+> permission lookups, use `useZanzibarAccessProps` from `@mfe/auth`
+> (PR-E2) which adapts `useZanzibarAccess` results into this shape.
 
 ### Target API: AccessControlledProps Integration
 

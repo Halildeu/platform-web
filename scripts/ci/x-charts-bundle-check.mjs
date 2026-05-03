@@ -127,8 +127,11 @@ async function main() {
     process.exit(2);
   }
 
-  console.log(`\nx-charts bundle check (PR-F2 gate)\n`);
-  console.log(`Entry:      ${ENTRY.replace(ROOT + "/", "")}`);
+  // Human header — emit to stderr so `--json` stdout stays parseable.
+  // (Codex PR #168 must-fix #2: `node ... --json | jq` previously
+  // failed because the human banner sat above the JSON object on stdout.)
+  process.stderr.write(`\nx-charts bundle check (PR-F2 gate)\n`);
+  process.stderr.write(`Entry:      ${ENTRY.replace(ROOT + "/", "")}\n`);
 
   const wrapperOnly = await bundle(WRAPPER_ONLY_EXTERNAL, "wrapperOnly");
   const contractTotal = await bundle(CONTRACT_TOTAL_EXTERNAL, "contractTotal");

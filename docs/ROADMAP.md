@@ -785,8 +785,11 @@ Sonuç: M4 closure artık compile-only değil, **lokal + CI runtime-doğrulanmı
 > Kaynak: Claude session 2026-04-30 audit + paralel Explore agent denetimi.
 > Bağlam: F4 ✅ DONE (2026-03-24) ⊃ x-charts mevcut. **CONTRACT v2** (2026-04-11)
 > F4'ün üstüne "world-class" üst standart koydu (§8 CI gates DoD, §1
-> ChartTooltip, §3 AccessControlledProps). Bu standartlar henüz aktif değil;
-> Faz 21.4 onları kapatıyor. F4 minimum DoD korunur, world-class katman eklenir.
+> ChartTooltip, §3 AccessControlledProps). Faz 21.4 PR-A→PR-F sürecinde
+> bu standartlar **2026-05-03 itibarıyla tamamen aktif**: §8 8/8 CI gate
+> hard-block, §1 ChartTooltip rationale documented (v2.1 removed),
+> §3 AccessControlledProps 13 chart wrapper'a wired (PR-E2 #166).
+> F4 minimum DoD korundu, world-class katman eklendi.
 
 ### Audit findings (2026-04-30)
 
@@ -845,8 +848,8 @@ linked-charts + drill-down demo'su.
 | **E1** | Contract-debt closure (ROADMAP reconcile + ChartTooltip rationale doc + AccessControlledProps relocation to `@mfe/shared-types`)                   | 1-2h   | — (parallel) | ✅ PR [#165](https://github.com/Halildeu/platform-web/pull/165) |
 | **E2** | `AccessControlledProps` integration across 13 chart wrappers + auth `useZanzibarAccessProps` hook + Bar 4-state matrix test                        | 3-4h   | E1           | ✅ PR [#166](https://github.com/Halildeu/platform-web/pull/166) |
 | **F1** | Quality gate wiring — visual rename + axe + contrast + tree-shake (descriptor-driven) + sideEffects allowlist                                      | 3-4h   | — (parallel) | ✅ PR [#167](https://github.com/Halildeu/platform-web/pull/167) |
-| **F2** | Bundle size gate — esbuild source analyze (dual metric: wrapperOnly soft, contractTotal HARD)                                                      | 2-3h   | F1           | in progress (this PR)                                           |
-| **F**  | **8/8 CI gate aktivasyonu COMPLETE** — F1+F2 birlikte 8 gate hard-block (7 in `x-charts-quality-gates.yml` + visual in `x-charts-visual-gate.yml`) | 4-8h   | — (parallel) | F1 ✅, F2 in progress                                           |
+| **F2** | Bundle size gate — esbuild source analyze (dual metric: wrapperOnly soft, contractTotal HARD)                                                      | 2-3h   | F1           | ✅ PR [#168](https://github.com/Halildeu/platform-web/pull/168) |
+| **F**  | **8/8 CI gate aktivasyonu COMPLETE** — F1+F2 birlikte 8 gate hard-block (7 in `x-charts-quality-gates.yml` + visual in `x-charts-visual-gate.yml`) | 4-8h   | — (parallel) | ✅ COMPLETE (Faz 21.4 son PR)                                   |
 
 ### Linked artifacts
 
@@ -873,4 +876,4 @@ enforce + Design Lab playground'un fake-work durumunu çözme. F4 base'inin
 
 ---
 
-_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE; PR #65 + #66 ile fake-test risk runtime-doğrulanmış kapatıldı), §19 Faz 21.4 x-charts CONTRACT v2 enforcement (audit-driven 2026-04-30; PR-A #91, PR-B v1 #95, PR-B2 #99, PR-B3 #100, PR-B4 #101 — **29/29 Design Lab route live**; PR-D/E/F pending; PR-G UI/UX tracker doc landed) closure log eklendi._
+_Bu konsolidasyon dokümanı 2026-04-28'de oluşturuldu, aynı gün Codex denetimi sonrası §1-§8 revize edildi, §11 denetim izi olarak eklendi, §12 K1+K2+K3, §13 K7+K8+GHA, §14 A0+A2+Storybook+K5-attempt, §15 K5-v3+Storybook-scoped-fix, §16 K5-tamamlama (hard gate + browser matrix + composite), §17 Storybook-full-build-green (RCA chain tamamlandı), §18 M4 story coverage %95 (scoring fix + 11 critical component enrichment, Codex 3-iter AGREE; PR #65 + #66 ile fake-test risk runtime-doğrulanmış kapatıldı), §19 Faz 21.4 x-charts CONTRACT v2 enforcement (audit-driven 2026-04-30; PR-A #91, PR-B v1 #95, PR-B2 #99, PR-B3 #100, PR-B4 #101 — **29/29 Design Lab route live**; **PR-D #103 + PR-D2 #164 + PR-E1 #165 + PR-E2 #166 + PR-F1 #167 + PR-F2 #168 — Faz 21.4 COMPLETE 2026-05-03**; PR-G UI/UX tracker doc landed) closure log eklendi._
