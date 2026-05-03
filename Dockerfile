@@ -62,8 +62,13 @@ COPY . .
 RUN pnpm install --frozen-lockfile --prod=false
 
 # Build (scripts/deploy/build-single-domain.mjs → dist/ubuntu-single-domain)
-# Build-time VITE_* env vars webpack DefinePlugin inline eder bundle'a
-RUN pnpm run build:ubuntu:single-domain
+# Build-time VITE_* env vars webpack DefinePlugin inline eder bundle'a.
+# CACHE-BUST: RUN line'ında BUILD_SHA referansı buildx cache key'ine girer.
+# Her commit'te BUILD_SHA değişir → cache invalidate. Bu olmadan ARG/ENV
+# değişimleri RUN cache'i invalidate etmiyordu (Secret update edilse bile
+# eski bundle output cached). License key gibi build-time-injected env
+# değişimleri için bu satır kritik.
+RUN echo "build-rev=${BUILD_SHA}" && pnpm run build:ubuntu:single-domain
 
 # Stage 2: Runtime (nginx serve)
 FROM nginx:1.27-alpine
