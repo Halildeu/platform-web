@@ -30,6 +30,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import prettier from 'prettier';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
@@ -147,7 +148,16 @@ function extractProps(chartName) {
                     : Array.isArray(tag.comment)
                       ? tag.comment.map((c) => c.text || '').join(' ')
                       : '';
-                  defaultValue = tagText.trim().replace(/^[—–-]\s*/, '');
+                  // Codex iter-1 PR-X6 fix: hyphen-minus must NOT be stripped
+                  // (it would mangle negative numbers like `@default -45` for
+                  // GaugeChart.endAngle). Only strip em-dash / en-dash bullet
+                  // markers, and a leading hyphen-minus only when followed by
+                  // whitespace (i.e. used as a "—"-style separator, never as
+                  // part of a numeric literal).
+                  defaultValue = tagText
+                    .trim()
+                    .replace(/^[—–]\s*/, '')
+                    .replace(/^-\s+/, '');
                 }
               }
             }
@@ -307,43 +317,60 @@ function mergeFeaturesBlock(content, chartId) {
 /*  Driver                                                             */
 /* ------------------------------------------------------------------ */
 
-let detail = readFileSync(DETAIL_PATH, 'utf8');
-const original = detail;
+async function main() {
+  let detail = readFileSync(DETAIL_PATH, 'utf8');
+  const original = detail;
 
-const summary = [];
-for (const [chartId, chartName] of CHARTS) {
-  const { props, extendsAccess } = extractProps(chartName);
-  const finalProps = extendsAccess ? [...props, ...ACCESS_PROPS] : props;
-  const block = renderPropsArray(finalProps);
-  detail = replacePropsBlock(detail, chartId, block);
-  detail = replaceThemesBlock(detail, chartId);
-  detail = mergeFeaturesBlock(detail, chartId);
-  summary.push({
-    chart: chartName,
-    propsCount: finalProps.length,
-    accessExtended: extendsAccess,
+  const summary = [];
+  for (const [chartId, chartName] of CHARTS) {
+    const { props, extendsAccess } = extractProps(chartName);
+    const finalProps = extendsAccess ? [...props, ...ACCESS_PROPS] : props;
+    const block = renderPropsArray(finalProps);
+    detail = replacePropsBlock(detail, chartId, block);
+    detail = replaceThemesBlock(detail, chartId);
+    detail = mergeFeaturesBlock(detail, chartId);
+    summary.push({
+      chart: chartName,
+      propsCount: finalProps.length,
+      accessExtended: extendsAccess,
+    });
+  }
+
+  // Codex iter-1 PR-X6 fix: run the generator output through Prettier with
+  // the project's resolved config so the result is byte-identical to what
+  // lint-staged + the `--check` gate produce. Without this, raw multi-line
+  // strings, single-quoted descriptions and array layouts drift from the
+  // canonical formatting and the gate fails on every clean checkout.
+  const prettierConfig = await prettier.resolveConfig(DETAIL_PATH);
+  detail = await prettier.format(detail, {
+    ...(prettierConfig ?? {}),
+    filepath: DETAIL_PATH,
   });
+
+  if (flagCheck) {
+    if (detail !== original) {
+      console.error('✗ ChartDetail.tsx is out of sync with chart wrapper interfaces.');
+      console.error('  Run `node scripts/ci/sync-chart-detail-props.mjs` and commit.');
+      for (const s of summary) {
+        console.error(`  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`);
+      }
+      process.exit(1);
+    }
+    console.log('✓ ChartDetail.tsx props arrays in sync with interfaces.');
+  } else {
+    if (detail === original) {
+      console.log('✓ No drift — ChartDetail.tsx already in sync.');
+    } else {
+      writeFileSync(DETAIL_PATH, detail);
+      console.log(`✓ Synced ${summary.length} chart entries:`);
+      for (const s of summary) {
+        console.log(`  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`);
+      }
+    }
+  }
 }
 
-if (flagCheck) {
-  if (detail !== original) {
-    console.error('✗ ChartDetail.tsx is out of sync with chart wrapper interfaces.');
-    console.error('  Run `node scripts/ci/sync-chart-detail-props.mjs` and commit.');
-    // Show summary
-    for (const s of summary) {
-      console.error(`  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`);
-    }
-    process.exit(1);
-  }
-  console.log('✓ ChartDetail.tsx props arrays in sync with interfaces.');
-} else {
-  if (detail === original) {
-    console.log('✓ No drift — ChartDetail.tsx already in sync.');
-  } else {
-    writeFileSync(DETAIL_PATH, detail);
-    console.log(`✓ Synced ${summary.length} chart entries:`);
-    for (const s of summary) {
-      console.log(`  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`);
-    }
-  }
-}
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

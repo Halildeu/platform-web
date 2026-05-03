@@ -1028,7 +1028,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'endAngle',
         type: 'number',
         required: false,
-        default: '45',
+        default: '-45',
         description: 'End angle in degrees.',
       },
       {
