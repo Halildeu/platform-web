@@ -56,12 +56,28 @@ const UsersPageInner: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
     return gridApi as unknown as XChartsGridApi;
   }, [gridApi]);
 
+  // syncGridToStore is set to false: useGridCrossFilter does NOT subscribe
+  // to AG Grid's `onFilterChanged` event (only an imperative `pushGridFilters`
+  // is exposed and we are not wiring it). Codex iter-1 PR-X4c review note:
+  // declaring `syncGridToStore: true` was misleading — fixed.
   useGridCrossFilter({
     gridId: 'users-grid',
     gridApi: xChartsGridApi,
-    syncGridToStore: true,
+    syncGridToStore: false,
     syncStoreToGrid: true,
   });
+
+  // Shared onGridReady handler — both render paths (PageLayout + isFullscreen)
+  // call this so the bridge is wired in either branch. Without the shared
+  // handler the default `/admin/users` route never set `gridApi` state and
+  // useGridCrossFilter stayed inactive (Codex iter-1 PR-X4c blocker).
+  const handleGridReady = React.useCallback(
+    (event: import('ag-grid-community').GridReadyEvent<UserSummary>) => {
+      gridApiRef.current = event.api;
+      setGridApi(event.api);
+    },
+    [],
+  );
   React.useEffect(() => {
     // Manifest runtime entegrasyonu: gateway'den PageLayout çek.
     fetchPageLayout('users')
@@ -208,12 +224,7 @@ const UsersPageInner: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
           <UsersGrid
             onSelectUser={setSelectedUserSummary}
             isFullscreen
-            onGridReady={(event) => {
-              // İlk bağlamada AG Grid zaten SSRM yüklemeyi tetikler; ekstra refresh gereksiz.
-              gridApiRef.current = event.api;
-              // Faz 21.8 PR-X4c: also expose to useGridCrossFilter via state.
-              setGridApi(event.api);
-            }}
+            onGridReady={handleGridReady}
             onLoadingChange={setIsLoading}
           />
         </div>
@@ -234,10 +245,7 @@ const UsersPageInner: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
           >
             <UsersGrid
               onSelectUser={setSelectedUserSummary}
-              onGridReady={(event) => {
-                // İlk bağlamada AG Grid zaten SSRM yüklemeyi tetikler; ekstra refresh gereksiz.
-                gridApiRef.current = event.api;
-              }}
+              onGridReady={handleGridReady}
               onLoadingChange={setIsLoading}
             />
           </div>

@@ -725,6 +725,9 @@ importers:
       '@mfe/shared-types':
         specifier: '*'
         version: link:../../packages/shared-types
+      '@mfe/x-charts':
+        specifier: '*'
+        version: link:../../packages/x-charts
       '@reduxjs/toolkit':
         specifier: ^2.8.2
         version: 2.11.2(react-redux@9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1))(react@18.2.0)
