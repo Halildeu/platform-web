@@ -32,6 +32,9 @@ import {
   ChartToolbar,
   useChartInteractions,
   useResponsiveBreakpoint,
+  // Faz 21.9 PR3a: shared chart-size contract — replaces the local
+  // CHART_CANVAS_HEIGHT mirror that used to live in this file.
+  CHART_CANVAS_HEIGHT as SHARED_CHART_CANVAS_HEIGHT,
 } from '@mfe/x-charts';
 import CrossFilterDemoLive from './CrossFilterDemoLive';
 import CrossFilterGridDemoLive from './CrossFilterGridDemoLive';
@@ -164,16 +167,14 @@ export const clampChartSize = (
 };
 
 /**
- * Mirror of the wrapper-level `SIZE_HEIGHT` map (BarChart.tsx etc.).
- * Keeping a local copy avoids importing the wrapper module just for the
- * constant — these three numbers are the public contract of the
- * `'sm' | 'md' | 'lg'` ChartSize axis.
+ * Re-export of the shared chart-size contract from `@mfe/x-charts/chartSize`.
+ * Faz 21.9 PR3a (Codex thread `019defa5`): the local mirror that used to
+ * live here is gone — there's now exactly one runtime source of truth for
+ * chart canvas heights, imported above as `SHARED_CHART_CANVAS_HEIGHT` and
+ * re-exported under the legacy name for backwards compatibility with
+ * existing test imports (`chartPreviewResponsive.test.ts`).
  */
-export const CHART_CANVAS_HEIGHT: Record<ChartSize, number> = {
-  sm: 200,
-  md: 300,
-  lg: 400,
-};
+export const CHART_CANVAS_HEIGHT = SHARED_CHART_CANVAS_HEIGHT;
 
 /**
  * PreviewBox height envelope: derived from the *clamped* chart size, not

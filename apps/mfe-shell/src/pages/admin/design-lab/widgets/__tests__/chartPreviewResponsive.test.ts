@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { clampChartSize, responsiveHeight } from '../ChartPreviewLive';
+import { clampChartSize, responsiveHeight, CHART_CANVAS_HEIGHT } from '../ChartPreviewLive';
 
 describe('clampChartSize', () => {
   it('caps at "sm" on mobile regardless of user choice', () => {
@@ -76,13 +76,18 @@ describe('responsiveHeight', () => {
 
 describe('clampChartSize + responsiveHeight invariant', () => {
   /**
-   * The chart wrapper's SIZE_HEIGHT mapping is { sm: 200, md: 300, lg: 400 }.
-   * After clampChartSize + responsiveHeight, the chart canvas must always
-   * fit inside the PreviewBox with at least 20px of breathing room —
-   * otherwise we reproduce the original screenshot bug (chart body
-   * bleeding into the Generated Code section underneath).
+   * The chart wrapper's canvas-height contract is `CHART_CANVAS_HEIGHT`
+   * (re-exported from `@mfe/x-charts` via `../ChartPreviewLive`). After
+   * clampChartSize + responsiveHeight, the chart canvas must always fit
+   * inside the PreviewBox with at least 20px of breathing room — otherwise
+   * we reproduce the original screenshot bug (chart body bleeding into the
+   * Generated Code section underneath).
+   *
+   * Codex 019defa5 PR3a PARTIAL absorb: this test used to declare its own
+   * `const SIZE_HEIGHT = { sm: 200, md: 300, lg: 400 }` — same drift smell
+   * the production code had. We now read from the shared contract so a
+   * future tweak to the canonical heights propagates here automatically.
    */
-  const SIZE_HEIGHT = { sm: 200, md: 300, lg: 400 } as const;
   const MIN_BREATHING_ROOM = 20;
 
   for (const userSize of ['sm', 'md', 'lg'] as const) {
@@ -90,7 +95,9 @@ describe('clampChartSize + responsiveHeight invariant', () => {
       it(`${userSize} on ${bp}: chart canvas fits inside PreviewBox`, () => {
         const clampedSize = clampChartSize(userSize, bp);
         const previewHeight = responsiveHeight(clampedSize);
-        expect(previewHeight).toBeGreaterThanOrEqual(SIZE_HEIGHT[clampedSize] + MIN_BREATHING_ROOM);
+        expect(previewHeight).toBeGreaterThanOrEqual(
+          CHART_CANVAS_HEIGHT[clampedSize] + MIN_BREATHING_ROOM,
+        );
       });
     }
   }

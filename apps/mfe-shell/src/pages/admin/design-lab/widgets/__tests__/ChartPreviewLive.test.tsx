@@ -83,6 +83,12 @@ vi.mock('@mfe/x-charts', () => {
     // so existing chart-routing tests keep matching their previous
     // baseline (no clamp, no height shrink).
     useResponsiveBreakpoint: () => 'desktop',
+    // Faz 21.9 PR3a: shared chart-size contract — ChartPreviewLive now
+    // imports CHART_CANVAS_HEIGHT from @mfe/x-charts instead of
+    // mirroring it inline. The mock has to expose the same constant or
+    // the module re-export crashes.
+    CHART_CANVAS_HEIGHT: { sm: 200, md: 300, lg: 400 },
+    CHART_SIZE_ORDER: ['sm', 'md', 'lg'],
     CrossFilterProvider: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
     useChartCrossFilter: () => ({

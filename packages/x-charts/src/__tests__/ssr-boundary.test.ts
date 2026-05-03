@@ -71,17 +71,37 @@ describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
   });
 
   it("ssrImport: '@mfe/x-charts/ssr' resolves without DOM access", async () => {
-    // Importing this should NOT throw — type-only re-exports + no runtime
-    // side effects. If this test ever fails due to a "window is not defined"
-    // style error, someone has accidentally dragged echarts/DOM into the
-    // SSR barrel and the boundary is broken.
+    // Importing this should NOT throw — type-only re-exports + a tiny set of
+    // pure runtime constants (PR3a: chart-size contract). If this test ever
+    // fails due to a "window is not defined" style error, someone has
+    // accidentally dragged echarts/DOM into the SSR barrel and the boundary
+    // is broken.
     const ssrMod = await import('@mfe/x-charts/ssr');
     expect(ssrMod).toBeDefined();
     // The SSR barrel must not export runtime React components — only types
-    // (which are erased at runtime). So `BarChart` (a forwardRef object)
-    // should NOT be on it.
+    // (erased at runtime) and pure constants. Wrapper components and the
+    // ChartContainer card should NOT be reachable here.
     expect((ssrMod as Record<string, unknown>).BarChart).toBeUndefined();
     expect((ssrMod as Record<string, unknown>).ChartContainer).toBeUndefined();
+  });
+
+  it("ssrChartCanvasHeight: '@mfe/x-charts/ssr' exposes the chart-size contract", async () => {
+    // Faz 21.9 PR3a (Codex thread `019defa5`): RSC consumers that pre-compute
+    // layout space need the canvas-height map without dragging the runtime
+    // wrappers. The constant must be reachable through the SSR barrel and
+    // hold its canonical values.
+    const ssrMod = await import('@mfe/x-charts/ssr');
+    const map = (ssrMod as Record<string, unknown>).CHART_CANVAS_HEIGHT as
+      | Record<string, number>
+      | undefined;
+    expect(map).toBeDefined();
+    expect(map!.sm).toBe(200);
+    expect(map!.md).toBe(300);
+    expect(map!.lg).toBe(400);
+    const order = (ssrMod as Record<string, unknown>).CHART_SIZE_ORDER as
+      | readonly string[]
+      | undefined;
+    expect(order).toEqual(['sm', 'md', 'lg']);
   });
 
   it("useClientPresentInClient: every chart wrapper has 'use client' as its first directive", () => {

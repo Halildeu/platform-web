@@ -27,6 +27,7 @@ import type {
   ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -94,8 +95,6 @@ export interface FunnelChartProps extends AccessControlledProps {
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
-
-const SIZE_HEIGHT: Record<'sm' | 'md' | 'lg', number> = { sm: 200, md: 300, lg: 400 };
 
 const DEFAULT_PALETTE = [
   '#3b82f6',
@@ -180,7 +179,7 @@ const FunnelChartInner = React.forwardRef<
   },
   forwardedRef,
 ) {
-  const height = SIZE_HEIGHT[size];
+  const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
   const safeData = useMemo(
     () => sanitizeDataPoints(data as never) as unknown as FunnelDataPoint[],

@@ -23,6 +23,7 @@ import type {
   ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scalePadding } from './theme/density-helpers';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import {
   buildResponsiveAxisLabel,
@@ -108,8 +109,6 @@ export interface BarChartProps extends AccessControlledProps {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
-
 const DEFAULT_PALETTE = [
   '#3b82f6',
   '#22c55e',
@@ -168,7 +167,7 @@ const BarChartInner = React.forwardRef<
   },
   forwardedRef,
 ) {
-  const height = SIZE_HEIGHT[size];
+  const height = CHART_CANVAS_HEIGHT[size];
   const safeData = useMemo(() => sanitizeDataPoints(data), [data]);
   const isEmpty = safeData.length === 0;
   const isHorizontal = orientation === 'horizontal';
