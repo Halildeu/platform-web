@@ -55,13 +55,13 @@
 
 > Kaynak: [docs/quality-sprint/project.manifest.v1.json](quality-sprint/project.manifest.v1.json). Success metrics: scorecard 87→92+, a11y:0 14→0, story 85→%95, gate warn→block.
 
-| ID     | Hedef                               | Tarih      | Status | Sapma + repo gerçeği                                                                                                                                  |
-| ------ | ----------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M1** | 16 D/F bileşen → C+ notu            | 2026-04-19 | open   | 🔴 **9 gün gecikti.** `apps/mfe-shell/public/scorecard.json` → 218 component, **F=1**, **D=15**, toplam 16 D/F (DoD ile birebir örtüşüyor)            |
-| **M2** | A11y compliance gate (CI block ≥40) | 2026-04-26 | open   | 🔴 **2 gün gecikti.** ⚠️ **Spec uyumsuzluğu**: manifest "≥40" (yüz/100) der; `a11y-gate.mjs:16` threshold **0.7** (oran). Plus aktif CI'da koşulmuyor |
-| **M3** | Scorecard CI auto (PR comment)      | 2026-04-26 | open   | 🔴 **2 gün gecikti.** ⚠️ Workflow var ama `.github/workflows-legacy/scorecard-gate.yml` altında — **disabled**. Aktif CI'da değil                     |
-| M4     | Story coverage %95                  | 2026-05-03 | open   | 🟡 5 gün kaldı                                                                                                                                        |
-| M5     | Quality gate block mode             | 2026-06-30 | open   | 🟢 9 hafta kaldı (M1+M2 önkoşul); şu an `component-scorecard.mjs:595-601` sadece F grade'i blokluyor, D'leri değil                                    |
+| ID     | Hedef                               | Tarih      | Status | Sapma + repo gerçeği                                                                                                                                                                                |
+| ------ | ----------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M1** | 16 D/F bileşen → C+ notu            | 2026-04-19 | open   | 🔴 **9 gün gecikti.** `apps/mfe-shell/public/scorecard.json` → 218 component, **F=1**, **D=15**, toplam 16 D/F (DoD ile birebir örtüşüyor)                                                          |
+| **M2** | A11y compliance gate (CI block ≥40) | 2026-04-26 | open   | 🔴 **2 gün gecikti.** ⚠️ **Spec uyumsuzluğu**: manifest "≥40" (yüz/100) der; `a11y-gate.mjs:16` threshold **0.7** (oran). Plus aktif CI'da koşulmuyor                                               |
+| **M3** | Scorecard CI auto (PR comment)      | 2026-04-26 | open   | 🔴 **2 gün gecikti.** ⚠️ Workflow var ama `.github/workflows-legacy/scorecard-gate.yml` altında — **disabled**. Aktif CI'da değil                                                                   |
+| M4     | Story coverage %95                  | 2026-05-03 | done   | ✅ Avg 95.53 (target ≥95). 13 x-charts stories landed 2026-05-03 (regression fix after PR-D2 enrichment). Manifest "completed" since 2026-04-28; this entry now reflects current scorecard reality. |
+| M5     | Quality gate block mode             | 2026-06-30 | open   | 🟢 9 hafta kaldı (M1+M2 önkoşul); şu an `component-scorecard.mjs:595-601` sadece F grade'i blokluyor, D'leri değil                                                                                  |
 
 **Risk:** M1-M3 gecikmesinin nedeni + yeni hedef tarih dokümante değil. Manifest `status`/`target_date` alanları manuel güncellenmiyor.
 
