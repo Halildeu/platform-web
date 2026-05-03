@@ -9,13 +9,15 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -24,7 +26,7 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -205,6 +207,10 @@ const TreemapChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
+
+  // Faz 21.9 PR3d: container ref + breakpoint for responsive treemap.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
   const fmt = valueFormatter ?? formatCompact;
 
   const {
@@ -254,14 +260,16 @@ const TreemapChartInner = React.forwardRef<
           return `<strong>${escapeHtml(params.name)}</strong><br/>${val}`;
         },
       },
-      legend: {
-        show: showLegend,
-        bottom: 0,
+      legend: buildResponsiveLegend({
+        breakpoint,
+        showLegend,
+        hasMultiSeries: false,
+        seriesCount: 1,
+        densitySpacingMultiplier,
+        densityFontMultiplier,
         icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
+        truncateAt: breakpoint === 'mobile' ? 12 : 18,
+      }),
       series: [
         {
           type: 'treemap' as const,
@@ -331,6 +339,7 @@ const TreemapChartInner = React.forwardRef<
     densityFontMultiplier,
     densitySpacingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -374,6 +383,7 @@ const TreemapChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)
