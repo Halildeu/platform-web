@@ -25,7 +25,12 @@
  *   - DS shim invariant               → packages/design-system/src/components/charts/__tests__/Charts.test.tsx
  *   - Visual regression               → x-charts.visual.ts (advisory)
  */
-import { lastDispatchedOption, resetEChartsMock } from './fixtures/echarts-mock'; // hoists vi.mock('../../renderers/echarts-imports', ...)
+import {
+  lastDispatchedOption,
+  resetEChartsMock,
+  clickListenerRegistrations,
+  clickListenerUnregistrations,
+} from './fixtures/echarts-mock'; // hoists vi.mock('../../renderers/echarts-imports', ...)
 import { installJsdomPolyfills, restoreJsdomPolyfills } from './fixtures/jsdom-polyfills';
 
 import React from 'react';
@@ -284,12 +289,128 @@ describe('access="readonly" — handler-bearing charts suppress listener install
     },
   );
 
-  it.each(handlerBearing)('$name with onClick + access="full" preserves the handler', () => {
-    // No DOM-level assertion possible without exercising ECharts
-    // event dispatch (which the mock skips). The behavioural promise
-    // is encoded in `guardChartCallback`'s unit tests below; this
-    // entry exists to keep the table-driven coverage explicit.
-    expect(true).toBe(true);
+  // Each chart wraps the user-supplied handler in a translator function
+  // (e.g. BarChart's `handleClick` adapts ECharts params into a
+  // ChartClickEvent). So the listener registered on the ECharts instance
+  // is NOT the same reference as the user's `onClick`. We assert
+  // registration COUNT thresholds instead — full mounts attach >=1 click
+  // listener (theme reactive store may re-init the instance once,
+  // producing multiple register cycles paired with unregisters);
+  // readonly/disabled mounts attach 0.
+
+  it.each(handlerBearing)(
+    '$name with onClick + access="full" registers at least one click listener',
+    ({ render: factory }) => {
+      const handler = () => {};
+      render(factory({ access: 'full', onClick: handler }));
+      expect(clickListenerRegistrations().length).toBeGreaterThanOrEqual(1);
+    },
+  );
+
+  it.each(handlerBearing)(
+    '$name with onClick + access="readonly" registers ZERO click listeners',
+    ({ render: factory }) => {
+      const handler = () => {};
+      render(factory({ access: 'readonly', onClick: handler }));
+      expect(clickListenerRegistrations()).toHaveLength(0);
+    },
+  );
+
+  it.each(handlerBearing)(
+    '$name with onClick + access="disabled" registers ZERO click listeners',
+    ({ render: factory }) => {
+      const handler = () => {};
+      render(factory({ access: 'disabled', onClick: handler }));
+      expect(clickListenerRegistrations()).toHaveLength(0);
+    },
+  );
+});
+
+/* ================================================================== */
+/*  Runtime access transitions — listener register/unregister cycle   */
+/*  (PR-E2 must-fix #1 — addresses stale listener bug)                */
+/* ================================================================== */
+
+describe('Runtime access transitions detach stale click listeners', () => {
+  // Same caveat as the listener-install tests above: each chart wraps
+  // the user handler in a translator. So we assert listener COUNT
+  // deltas across rerenders instead of reference equality. The PR-E2
+  // must-fix #1 contract is "stale listener does NOT linger" — that
+  // collapses cleanly to: a transition out of `full` MUST produce a
+  // matching unregister; a transition into `full` MUST produce a new
+  // register.
+
+  it('full → readonly detaches the click listener (matching unregister fires)', () => {
+    const handler = () => {};
+    const { rerender } = render(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="full"
+        onDataPointClick={handler}
+      />,
+    );
+    const initialRegs = clickListenerRegistrations().length;
+    const initialUnregs = clickListenerUnregistrations().length;
+    expect(initialRegs).toBeGreaterThan(0);
+
+    rerender(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="readonly"
+        onDataPointClick={handler}
+      />,
+    );
+    expect(clickListenerUnregistrations().length).toBeGreaterThan(initialUnregs);
+  });
+
+  it('readonly → full attaches a new click listener', () => {
+    const handler = () => {};
+    const { rerender } = render(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="readonly"
+        onDataPointClick={handler}
+      />,
+    );
+    const initialRegs = clickListenerRegistrations().length;
+    expect(initialRegs).toBe(0);
+
+    rerender(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="full"
+        onDataPointClick={handler}
+      />,
+    );
+    expect(clickListenerRegistrations().length).toBeGreaterThan(initialRegs);
+  });
+
+  it('full → disabled detaches the click listener', () => {
+    const handler = () => {};
+    const { rerender } = render(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="full"
+        onDataPointClick={handler}
+      />,
+    );
+    const initialUnregs = clickListenerUnregistrations().length;
+    expect(clickListenerRegistrations().length).toBeGreaterThan(0);
+
+    rerender(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="disabled"
+        onDataPointClick={handler}
+      />,
+    );
+    expect(clickListenerUnregistrations().length).toBeGreaterThan(initialUnregs);
   });
 });
 
@@ -353,7 +474,7 @@ describe('BarChart 4-state access matrix', () => {
     expect(wrapper?.className).toBe('');
   });
 
-  it('access="disabled" → 2-layer wrapper, aria-disabled, opacity inner', () => {
+  it('access="disabled" → 2-layer wrapper, aria-disabled, opacity inner, inert keyboard', () => {
     const { container } = render(
       <BarChart {...props} access="disabled" accessReason="Insufficient permissions" />,
     );
@@ -362,9 +483,13 @@ describe('BarChart 4-state access matrix', () => {
     expect(outer?.getAttribute('aria-disabled')).toBe('true');
     expect(outer?.getAttribute('title')).toBe('Insufficient permissions');
     // Inner pointer-blocker:
-    const inner = outer?.querySelector('.pointer-events-none');
+    const inner = outer?.querySelector('.pointer-events-none') as HTMLElement | null;
     expect(inner).not.toBeNull();
     expect(inner?.className).toContain('opacity-50');
+    // PR-E2 must-fix #2 — inner has `inert` attr so keyboard/focus
+    // is blocked alongside pointer events. Disabled charts must be
+    // visible-but-fully-non-interactive.
+    expect(inner?.hasAttribute('inert')).toBe(true);
   });
 
   it('access="hidden" → null (no DOM)', () => {

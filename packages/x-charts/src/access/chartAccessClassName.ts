@@ -1,10 +1,11 @@
 /**
  * Local className helper for chart-level access state.
  *
- * Mirror of `@mfe/design-system/internal/access-controller#accessStyles`
- * scoped to chart-specific styling rules. We keep this local instead of
- * importing from DS because CONTRACT v2.2 §9 forbids the runtime
- * dependency edge `@mfe/x-charts → @mfe/design-system`.
+ * Mirror of the design-system `accessStyles` Tailwind helper, scoped to
+ * chart-specific styling rules. We keep this local instead of importing
+ * from the design-system package because CONTRACT v2.2 §9 forbids the
+ * runtime dependency edge from `@mfe/x-charts` into the DS package
+ * (the contract enforces this via a literal repository grep — see §9).
  *
  * Style choices (Codex iter-2 PR-E2 plan AGREE):
  * - `disabled` → `opacity-50 pointer-events-none` (visible-but-faded,

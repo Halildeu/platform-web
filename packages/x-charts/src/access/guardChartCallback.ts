@@ -7,9 +7,9 @@
  * receives `undefined` and never installs the listener at all
  * (no cursor: pointer, no hover ripple, no event allocation).
  *
- * This is intentionally NOT the DOM-coupled `withAccessGuard` from
- * `@mfe/design-system/internal/access-controller` — that helper expects
- * a `React.SyntheticEvent` and calls `preventDefault()` /
+ * This is intentionally NOT the DOM-coupled `withAccessGuard` helper
+ * exported by the design-system package — that helper expects a
+ * `React.SyntheticEvent` and calls `preventDefault()` /
  * `stopPropagation()`. ECharts callbacks receive bare ECharts param
  * objects, not synthetic events; trying to call `preventDefault` on
  * those would crash. The two helpers solve different problems:

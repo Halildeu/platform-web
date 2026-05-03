@@ -110,11 +110,6 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     setIsReady(true);
     onReady?.(instance);
 
-    // Click handler
-    if (onClick) {
-      instance.on('click', onClick);
-    }
-
     // ResizeObserver for responsive
     const observer = new ResizeObserver(() => {
       instance.resize({ animation: { duration: 200 } });
@@ -124,9 +119,6 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     // Cleanup
     return () => {
       observer.disconnect();
-      if (onClick) {
-        instance.off('click', onClick);
-      }
       instance.dispose();
       instanceRef.current = null;
       setIsReady(false);
@@ -134,6 +126,25 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     // Faz 21.5-A1: re-init when the active charts locale flips so
     // ECharts re-resolves toolbox/legend/dataZoom strings.
   }, [renderer, theme, echartsLocaleKey]);
+
+  // Click handler lifecycle (Faz 21.4 PR-E2 must-fix #1).
+  //
+  // Separate effect so runtime `onClick` changes register/unregister
+  // correctly. Important for access-control transitions: when a chart
+  // moves from `access='full'` to `access='readonly'/'disabled'`,
+  // `guardChartCallback` returns `undefined` and we MUST detach the
+  // previous user listener; otherwise stale handlers keep firing on
+  // ECharts events. The dependency array intentionally does NOT include
+  // the init triggers (`renderer`, `theme`, `echartsLocaleKey`) — those
+  // re-create the instance and rebind through their own cleanup path.
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance || !onClick) return;
+    instance.on('click', onClick);
+    return () => {
+      instance.off('click', onClick);
+    };
+  }, [onClick, isReady]);
 
   // Option update
   useEffect(() => {

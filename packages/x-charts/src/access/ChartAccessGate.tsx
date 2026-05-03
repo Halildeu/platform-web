@@ -65,10 +65,21 @@ export function ChartAccessGate({
   }
 
   // disabled → 2-layer wrapper. Outer keeps interaction surface for
-  // `title` hover and a11y; inner blocks pointer-events + fades.
+  // `title` hover and a11y; inner blocks pointer-events, fades, AND
+  // applies the HTML5 `inert` attribute so keyboard/focus interaction
+  // is also blocked (PR-E2 must-fix #2). `inert` is a boolean global
+  // attribute that removes the element + descendants from sequential
+  // focus and from all user interaction (clicks, keyboard, hover).
+  // Browser support: Chrome 102+, Firefox 112+, Safari 15.5+ — all
+  // current platform targets.
+  //
+  // Note: we set `inert` via `inert=""` (empty string is the standard
+  // boolean-attribute form). React's HTMLAttributes type accepts it.
   return (
     <div data-access-state="disabled" aria-disabled="true" title={accessReason}>
-      <div className={chartAccessClassName('disabled')}>{children}</div>
+      <div className={chartAccessClassName('disabled')} inert={'' as never}>
+        {children}
+      </div>
       {accessReason ? <ChartAriaLive message={accessReason} /> : null}
     </div>
   );
