@@ -1,0 +1,3 @@
+# Faz 21.9 PR3f: Stryker mutation testing artifacts.
+.stryker-cache/
+reports/mutation/
