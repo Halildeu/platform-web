@@ -100,8 +100,12 @@ function listCandidateFiles() {
         '--glob',
         '!**/.git/**',
         PACKAGE_NAME,
+        // Explicit search path — without this, rg under Node's
+        // execFileSync (no TTY, stdin piped) treats stdin as the input
+        // and returns 0 matches. Codex iter-3 PR-X5 fix.
+        '.',
       ],
-      { cwd: REPO_ROOT, encoding: 'utf8' },
+      { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
     return output
       .split('\n')
