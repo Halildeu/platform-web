@@ -1,14 +1,18 @@
 import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Alert, Button } from '@mfe/design-system';
-import { usePermissions, ExplainPermissionModal } from '@mfe/auth';
+import { usePermissions } from '@mfe/auth';
+// Faz 21.8 PR-X8 — modal moved to `@mfe/auth/ui` subpath to break the
+// auth ↔ design-system MF circular cycle. See packages/auth/src/index.ts.
+import { ExplainPermissionModal } from '@mfe/auth/ui';
 import { api } from '@mfe/shared-http';
 import { useShellCommonI18n } from '../../app/i18n';
 
 const REASON_MESSAGES: Record<string, { title: string; description: string }> = {
   module_denied: {
     title: 'Modül erişimi yok',
-    description: 'Bu modül rolünüzde tanımlı değil. Yöneticinizden ilgili rolün atanmasını isteyebilirsiniz.',
+    description:
+      'Bu modül rolünüzde tanımlı değil. Yöneticinizden ilgili rolün atanmasını isteyebilirsiniz.',
   },
   scope_denied: {
     title: 'Veri erişimi yok',
@@ -16,7 +20,8 @@ const REASON_MESSAGES: Record<string, { title: string; description: string }> = 
   },
   action_denied: {
     title: 'İşlem engellenmiş',
-    description: 'Bu işlem rolünüzde DENY olarak işaretlenmiş. Engelleme yöneticiniz tarafından kaldırılabilir.',
+    description:
+      'Bu işlem rolünüzde DENY olarak işaretlenmiş. Engelleme yöneticiniz tarafından kaldırılabilir.',
   },
 };
 
@@ -27,10 +32,7 @@ const UnauthorizedPage: React.FC = () => {
   // Stable httpPost reference — ExplainPermissionModal's auto-fetch effect
   // depends on this callback; an inline arrow would re-create the identity
   // every render and re-fire the fetch in a loop (P1.1 root cause).
-  const httpPost = React.useCallback(
-    (url: string, body: unknown) => api.post(url, body),
-    [],
-  );
+  const httpPost = React.useCallback((url: string, body: unknown) => api.post(url, body), []);
 
   // P1.9 / AC-0320 Senaryo 4: "Neden erişemiyorum?" opens the shared
   // ExplainPermissionModal — the modal's own scope picker exposes the
@@ -63,9 +65,7 @@ const UnauthorizedPage: React.FC = () => {
         <h1 className="mb-3 text-xl font-semibold text-text-primary">
           {t('auth.unauthorized.title')}
         </h1>
-        <p className="mb-4 text-sm text-text-secondary">
-          {t('auth.unauthorized.description')}
-        </p>
+        <p className="mb-4 text-sm text-text-secondary">{t('auth.unauthorized.description')}</p>
 
         {/* Detailed explanation */}
         {reasonInfo && (
