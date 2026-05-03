@@ -172,7 +172,15 @@ const users = {
   // primitive replaces the assigned-only-toggle pattern; the prior keys
   // (assignedOnly/assignedEmpty/countBadge/showMore) are removed since the
   // single Combobox handles all of those concerns natively.
+  //
+  // 2026-05-04 Session 37 third pass — large-list lazy options (29k+ projects):
+  // placeholderLarge/largeListHint/minQueryHint guide admins to type instead
+  // of waiting for the dropdown to render thousands of rows. Small lists keep
+  // the original `placeholder` copy.
   'users.detail.scopes.placeholder': 'Yetki eklemek için tıklayın veya arayın...',
+  'users.detail.scopes.placeholderLarge': '{total} öğe — aramak için yazmaya başlayın...',
+  'users.detail.scopes.largeListHint': 'Listede {total} öğe var. Eklemek için yazmaya başlayın.',
+  'users.detail.scopes.minQueryHint': 'En az {min} karakter yazın...',
   'users.detail.scopes.noOptions': 'Sonuç bulunamadı.',
   'users.detail.scopes.tagRemoveLabel': 'Yetkiyi kaldır',
   'users.detail.save': 'Kaydet',

@@ -604,14 +604,34 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // the search input + assigned-only toggle + count badge + select-all
   // button + display-limit show-more button — the Combobox covers the same
   // surface natively.
+  //
+  // 2026-05-04 Session 37 third pass — large-list lazy options (kullanıcı
+  // feedback: "projeler kısmını açınca donuyor"). Projects has 29k+ rows;
+  // dumping that into the Combobox `options` prop causes the popup to
+  // render 29k DOM nodes on open and freeze the tab. Solution is a
+  // hybrid lazy strategy:
+  //   - Small lists (<= LARGE_LIST_THRESHOLD): pass full options through;
+  //     no friction for 5–20 row companies/warehouses/branches.
+  //   - Large lists: render *only* the assigned rows by default (keeps
+  //     chip↔checkmark consistency + lets admins remove via the row).
+  //     Adds a typed search of >= MIN_QUERY chars unlocks the full search:
+  //     selected rows + top MAX_RENDER unselected matches. The cap means
+  //     even single-letter input never spawns 5k DOM nodes.
+  const LARGE_LIST_THRESHOLD = 200;
+  const MIN_QUERY = 2;
+  const MAX_RENDER = 50;
+
   const ScopePickerSection: React.FC<{
     items: ScopeEntity[];
     selected: number[];
     setter: React.Dispatch<React.SetStateAction<number[]>>;
   }> = ({ items, selected, setter }) => {
+    const isLargeList = items.length > LARGE_LIST_THRESHOLD;
+    const [inputValue, setInputValue] = React.useState('');
+
     // ScopeEntity.id is numeric; ComboboxOption.value is string. Map both
     // directions so the Combobox round-trips ids without coercion drift.
-    const options = React.useMemo<ComboboxOption[]>(
+    const allOptions = React.useMemo<ComboboxOption[]>(
       () =>
         items.map((item) => ({
           value: String(item.id),
@@ -624,6 +644,34 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         })),
       [items],
     );
+
+    // Lazy option set — see header comment for the strategy.
+    const visibleOptions = React.useMemo<ComboboxOption[]>(() => {
+      if (!isLargeList) return allOptions;
+
+      const q = inputValue.trim().toLocaleLowerCase('tr-TR');
+      const selectedIds = new Set(selected.map((id) => String(id)));
+      const selectedOpts = allOptions.filter((opt) => selectedIds.has(opt.value));
+
+      if (q.length < MIN_QUERY) {
+        // No query (or too short to be useful) — show only assigned rows.
+        // Admin can still see + remove what they have without scanning 29k.
+        return selectedOpts;
+      }
+
+      // Long-enough query — assigned (always) + top-N unselected matches.
+      const matches = allOptions
+        .filter((opt) => {
+          if (selectedIds.has(opt.value)) return false;
+          if (opt.label.toLocaleLowerCase('tr-TR').includes(q)) return true;
+          if ((opt.description ?? '').toLocaleLowerCase('tr-TR').includes(q)) return true;
+          return false;
+        })
+        .slice(0, MAX_RENDER);
+
+      return [...selectedOpts, ...matches];
+    }, [allOptions, isLargeList, inputValue, selected]);
+
     const values = React.useMemo(() => selected.map(String), [selected]);
 
     const handleValuesChange = React.useCallback(
@@ -637,16 +685,36 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       [setter],
     );
 
+    // Dynamic empty-state copy for large lists — guides the admin towards
+    // typing instead of just saying "no results" when they haven't searched.
+    const noOptionsCopy = (() => {
+      if (!isLargeList) return t('users.detail.scopes.noOptions');
+      const q = inputValue.trim();
+      if (q.length === 0) {
+        return t('users.detail.scopes.largeListHint', { total: items.length });
+      }
+      if (q.length < MIN_QUERY) {
+        return t('users.detail.scopes.minQueryHint', { min: MIN_QUERY });
+      }
+      return t('users.detail.scopes.noOptions');
+    })();
+
+    const placeholderCopy = isLargeList
+      ? t('users.detail.scopes.placeholderLarge', { total: items.length })
+      : t('users.detail.scopes.placeholder');
+
     return (
       <div className="mt-2">
         <Combobox
           selectionMode="multiple"
-          options={options}
+          options={visibleOptions}
           values={values}
           onValuesChange={handleValuesChange}
+          inputValue={inputValue}
+          onInputChange={(value) => setInputValue(value)}
           clearable
-          placeholder={t('users.detail.scopes.placeholder')}
-          noOptionsText={t('users.detail.scopes.noOptions')}
+          placeholder={placeholderCopy}
+          noOptionsText={noOptionsCopy}
           tagRemoveLabel={t('users.detail.scopes.tagRemoveLabel')}
           access={canEdit ? 'full' : 'readonly'}
           disabledItemFocusPolicy="skip"
