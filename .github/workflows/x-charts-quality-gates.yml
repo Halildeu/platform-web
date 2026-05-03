@@ -3,16 +3,15 @@ name: x-charts Quality Gates
 # Faz 21.4 PR-F target: 8 CONTRACT v2.1 §8 CI gates
 #   bundle / axe / contrast / xss / memory / spec / visual / tree-shake
 #
-# This workflow after PR-F1 — 6 PR-F gates active as hard-blocks:
-#   chart-spec, xss, memory, axe (NEW PR-F1), contrast (NEW PR-F1), tree-shake (NEW PR-F1)
+# This workflow after PR-F2 — 7 PR-F gates active as hard-blocks:
+#   chart-spec, xss, memory, axe (NEW PR-F1), contrast (NEW PR-F1),
+#   tree-shake (NEW PR-F1), bundle-size (NEW PR-F2)
 # Plus PR-D regression guard: chart-component-baseline (smoke + options-shape + access-contract)
 #   — NOT one of PR-F's 8 gates; separate D-level regression layer.
 #
 # Other PR-F gates active in separate workflows:
 #   visual-regression: `x-charts-visual-gate.yml` (HARD)
-#   bundle-size-check: PENDING PR-F2 (esbuild source analyze, dual metric)
 #
-# CI overall after PR-F1: 7/8 PR-F gates HARD active, bundle remains for F2.
 # CI overall after PR-F2: 8/8 PR-F gates HARD active.
 #
 # component-scorecard is the 9th item in CONTRACT §8 and runs in
@@ -25,6 +24,7 @@ on:
       - 'packages/x-charts/**'
       - 'packages/shared-types/**'
       - 'scripts/ci/verify-tree-shaking.mjs'
+      - 'scripts/ci/x-charts-bundle-check.mjs'
       - '.github/workflows/x-charts-quality-gates.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -34,6 +34,7 @@ on:
       - 'packages/x-charts/**'
       - 'packages/shared-types/**'
       - 'scripts/ci/verify-tree-shaking.mjs'
+      - 'scripts/ci/x-charts-bundle-check.mjs'
       - '.github/workflows/x-charts-quality-gates.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -249,3 +250,31 @@ jobs:
       # supplies entry path, allowed side-effect files, expected exports.
       - name: Verify x-charts tree-shaking (hard block)
         run: node scripts/ci/verify-tree-shaking.mjs --package x-charts
+
+  bundle-size-check:
+    name: bundle-size-check (CONTRACT §8 bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Esbuild source-analyze (no real `dist/`; x-charts ships source-only).
+      # Two synthesised bundles per CONTRACT §7:
+      #   wrapperOnly   — ECharts external; soft observability
+      #   contractTotal — ECharts included; HARD threshold = min(350KB, baseline×1.2)
+      # Baseline lives at packages/x-charts/.bundle-baseline.json.
+      # Manual rotate via `--update-baseline` + commit (NEVER auto-rotated by CI).
+      - name: Bundle size check (hard block on contractTotal)
+        run: node scripts/ci/x-charts-bundle-check.mjs
