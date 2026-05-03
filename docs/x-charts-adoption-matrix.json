@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-03T14:30:57.930Z",
+  "generatedAt": "2026-05-03T22:06:47.487Z",
   "totalConsumers": 42,
   "byBucket": {
     "production": 17,
@@ -265,7 +265,8 @@
         "SunburstChart",
         "TreemapChart",
         "WaterfallChart",
-        "useChartInteractions"
+        "useChartInteractions",
+        "useResponsiveBreakpoint"
       ],
       "kinds": [
         "ImportDeclaration"
