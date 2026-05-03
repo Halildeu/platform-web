@@ -1,10 +1,17 @@
-name: x-charts Visual Advisory
+name: x-charts Visual Gate
 
+# Faz 21.4 PR-F1: file + workflow renamed from `-visual-advisory` to
+# `-visual-gate` to reflect the actual hard-block behaviour. Visual
+# regression has been merge-blocking since the K5 hard-gate sprint
+# (PR #54) — `continue-on-error` removed at line ~46 of the compare-
+# baseline job. The `-advisory` name was stale.
+#
 # Two distinct job paths:
 #
 #   compare-baseline: runs on pull_request — checks committed Linux
-#                     baselines against fresh snapshots. Advisory until
-#                     the K5 hard-gate sprint.
+#                     baselines against fresh snapshots. HARD GATE —
+#                     `maxDiffPixelRatio: 0.02` enforced; failure
+#                     blocks merge.
 #
 #   generate-baseline: runs on workflow_dispatch — produces fresh Linux
 #                      baselines and uploads them as an artifact.
@@ -24,7 +31,7 @@ on:
       - 'packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts/**'
       - 'packages/design-system/playwright.config.ts'
       - '.storybook-k5/**'
-      - '.github/workflows/x-charts-visual-advisory.yml'
+      - '.github/workflows/x-charts-visual-gate.yml'
   workflow_dispatch:
     inputs:
       mode:
@@ -44,7 +51,7 @@ jobs:
     # Hard gate: K5 v3 PR #54 verified Linux baseline + Linux compare =
     # pixel match. continue-on-error removed so visual regression now
     # blocks merge. If a chart change is intentional, regenerate baseline
-    # via `gh workflow run x-charts-visual-advisory.yml -f mode=baseline`
+    # via `gh workflow run x-charts-visual-gate.yml -f mode=baseline`
     # then download artifact + commit (see PR #54 description).
 
     steps:

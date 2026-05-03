@@ -428,7 +428,7 @@ Full Storybook hang RCA **devam ediyor (ayrı sprint)**; bu seans sadece K5'i un
    - `autodocs: false`, `reactDocgen: false`, `tags: []`
    - `viteFinal` alias: `@mfe/design-system` → `packages/design-system/src/index.ts` (x-charts peerDep çözümü)
 
-2. **`.github/workflows/x-charts-visual-advisory.yml`** (NEW) — 2-job split:
+2. **`.github/workflows/x-charts-visual-gate.yml`** (NEW) — 2-job split:
    - `compare-baseline` (pull_request): scoped Storybook build → Playwright compare against committed Linux baseline. Advisory mode (continue-on-error).
    - `generate-baseline` (workflow_dispatch only): scoped build → `--update-snapshots` → upload `x-charts-linux-baseline` artifact (30d retention). Maintainer downloads and commits.
 
@@ -447,7 +447,7 @@ Full Storybook hang RCA **devam ediyor (ayrı sprint)**; bu seans sadece K5'i un
 
 ### Linux baseline (CI artifact)
 
-- `gh workflow run x-charts-visual-advisory.yml --ref claude/k5-v3-scoped-storybook -f mode=baseline`
+- `gh workflow run x-charts-visual-gate.yml --ref claude/k5-v3-scoped-storybook -f mode=baseline`
 - generate-baseline run `25064334940` ✅ success
 - `gh run download 25064334940 -n x-charts-linux-baseline -D /tmp/k5-linux-baseline`
 - 13 PNG artifact (288 KB) → committed to repo `60bfbc55`
@@ -518,14 +518,14 @@ threadId `019dd3c3-f710-7583-ab3f-549173f3dbd8` — REVISE absorbed:
 
 ### K5 ailesi nihai durumu
 
-| Boyut                  | Detay                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------- |
-| Story coverage         | 18 stories: 13 atomic charts + 5 composite (KPICard 3 + ChartDashboard 2)                    |
-| Browser matrix         | desktop-light (Chrome) + desktop-firefox + desktop-webkit (Safari)                           |
-| Total baseline         | 18 stories × 3 browsers = **54 PNG** (~1 MB)                                                 |
-| Gate mode              | **HARD** — visual regression PR merge'i bloklar                                              |
-| Recovery               | `gh workflow run x-charts-visual-advisory.yml -f mode=baseline` + artifact download + commit |
-| Excluded (intentional) | DrillDownDemo + CrossFilterDemo (interactive state machines, deterministic değil)            |
+| Boyut                  | Detay                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| Story coverage         | 18 stories: 13 atomic charts + 5 composite (KPICard 3 + ChartDashboard 2)                |
+| Browser matrix         | desktop-light (Chrome) + desktop-firefox + desktop-webkit (Safari)                       |
+| Total baseline         | 18 stories × 3 browsers = **54 PNG** (~1 MB)                                             |
+| Gate mode              | **HARD** — visual regression PR merge'i bloklar                                          |
+| Recovery               | `gh workflow run x-charts-visual-gate.yml -f mode=baseline` + artifact download + commit |
+| Excluded (intentional) | DrillDownDemo + CrossFilterDemo (interactive state machines, deterministic değil)        |
 
 ### Determinism stack
 
@@ -835,16 +835,18 @@ linked-charts + drill-down demo'su.
 
 ### PR plan (6 commits, ~24-30 saat total)
 
-| PR     | Scope                                                                                                                            | Effort | Depends      | Status                                                          |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ | --------------------------------------------------------------- |
-| **A**  | Design Lab live render (13 chart, fake SVG → real x-charts, toggle forwarding)                                                   | 2h     | —            | ✅ PR [#91](https://github.com/Halildeu/platform-web/pull/91)   |
-| **B**  | Design Lab live demo (CrossFilter, DrillDown, AI hooks×5, Perf utility×5 = 11 route)                                             | 3-4h   | A            | pending                                                         |
-| **C**  | Feature-demo pages (Brush, Zoom/Pan, Real-time, Theme switch, Export)                                                            | 4-6h   | A            | pending                                                         |
-| **D**  | 13 chart × smoke + series.type contract                                                                                          | 4-6h   | — (parallel) | ✅ PR [#103](https://github.com/Halildeu/platform-web/pull/103) |
-| **D2** | 13 chart × deeper option-shape mutation tests (data fidelity, prop toggles, rerender)                                            | 3-4h   | D            | ✅ PR [#164](https://github.com/Halildeu/platform-web/pull/164) |
-| **E1** | Contract-debt closure (ROADMAP reconcile + ChartTooltip rationale doc + AccessControlledProps relocation to `@mfe/shared-types`) | 1-2h   | — (parallel) | in progress (this PR)                                           |
-| **E2** | `AccessControlledProps` integration across 13 chart wrappers + auth `useZanzibarAccessProps` hook + Bar 4-state matrix test      | 3-4h   | E1           | pending                                                         |
-| **F**  | 8 CI gate aktivasyonu (bundle/axe/contrast/xss/memory/spec/visual/tree-shake)                                                    | 4-8h   | — (parallel) | pending                                                         |
+| PR     | Scope                                                                                                                                                   | Effort | Depends      | Status                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ | --------------------------------------------------------------- |
+| **A**  | Design Lab live render (13 chart, fake SVG → real x-charts, toggle forwarding)                                                                          | 2h     | —            | ✅ PR [#91](https://github.com/Halildeu/platform-web/pull/91)   |
+| **B**  | Design Lab live demo (CrossFilter, DrillDown, AI hooks×5, Perf utility×5 = 11 route)                                                                    | 3-4h   | A            | pending                                                         |
+| **C**  | Feature-demo pages (Brush, Zoom/Pan, Real-time, Theme switch, Export)                                                                                   | 4-6h   | A            | pending                                                         |
+| **D**  | 13 chart × smoke + series.type contract                                                                                                                 | 4-6h   | — (parallel) | ✅ PR [#103](https://github.com/Halildeu/platform-web/pull/103) |
+| **D2** | 13 chart × deeper option-shape mutation tests (data fidelity, prop toggles, rerender)                                                                   | 3-4h   | D            | ✅ PR [#164](https://github.com/Halildeu/platform-web/pull/164) |
+| **E1** | Contract-debt closure (ROADMAP reconcile + ChartTooltip rationale doc + AccessControlledProps relocation to `@mfe/shared-types`)                        | 1-2h   | — (parallel) | ✅ PR [#165](https://github.com/Halildeu/platform-web/pull/165) |
+| **E2** | `AccessControlledProps` integration across 13 chart wrappers + auth `useZanzibarAccessProps` hook + Bar 4-state matrix test                             | 3-4h   | E1           | ✅ PR [#166](https://github.com/Halildeu/platform-web/pull/166) |
+| **F1** | Quality gate wiring — visual rename + axe + contrast + tree-shake (descriptor-driven) + sideEffects allowlist                                           | 3-4h   | — (parallel) | in progress (this PR)                                           |
+| **F2** | Bundle size gate — esbuild source analyze (dual metric: wrapperOnly soft, contractTotal HARD)                                                           | 2-3h   | F1           | pending                                                         |
+| **F**  | 8 CI gate aktivasyonu — F1=7/8 hard gates (6 in `x-charts-quality-gates.yml` + visual in `x-charts-visual-gate.yml`); bundle remains PR-F2 to reach 8/8 | 4-8h   | — (parallel) | F1 in progress, F2 pending                                      |
 
 ### Linked artifacts
 

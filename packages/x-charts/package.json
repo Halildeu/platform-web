@@ -37,6 +37,10 @@
     "typecheck": "echo source-only",
     "bench": "vitest bench"
   },
+  "sideEffects": [
+    "**/*.css",
+    "./src/i18n/locale-store.ts"
+  ],
   "dependencies": {
     "@mfe/shared-types": "*",
     "clsx": "^2.1.1",

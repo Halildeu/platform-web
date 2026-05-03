@@ -1,28 +1,41 @@
 name: x-charts Quality Gates
 
-# Faz 21.4-F — first wave of CONTRACT v2.1 §8 CI gates.
-# 3/8 declared gates activated here (chart-spec-validation, xss-sanitization,
-# memory-leak). Each runs an existing dedicated test file as a hard block.
+# Faz 21.4 PR-F target: 8 CONTRACT v2.1 §8 CI gates
+#   bundle / axe / contrast / xss / memory / spec / visual / tree-shake
 #
-# Out-of-scope for this wave (each will land in a follow-up PR-F2..F4):
-#   - bundle-size-check   (size-limit run; bundle artifact + threshold)
-#   - a11y-axe-audit      (axe-core in Storybook test runner)
-#   - contrast-ratio-check (Storybook addon-a11y or token diff check)
-#   - visual-regression   (Chromatic / Playwright snapshot)
-#   - tree-shaking-verify (rollup analyze + per-export size check)
+# This workflow after PR-F1 — 6 PR-F gates active as hard-blocks:
+#   chart-spec, xss, memory, axe (NEW PR-F1), contrast (NEW PR-F1), tree-shake (NEW PR-F1)
+# Plus PR-D regression guard: chart-component-baseline (smoke + options-shape + access-contract)
+#   — NOT one of PR-F's 8 gates; separate D-level regression layer.
+#
+# Other PR-F gates active in separate workflows:
+#   visual-regression: `x-charts-visual-gate.yml` (HARD)
+#   bundle-size-check: PENDING PR-F2 (esbuild source analyze, dual metric)
+#
+# CI overall after PR-F1: 7/8 PR-F gates HARD active, bundle remains for F2.
+# CI overall after PR-F2: 8/8 PR-F gates HARD active.
+#
+# component-scorecard is the 9th item in CONTRACT §8 and runs in
+# `scorecard-gate.yml` (already active per PR-A); NOT counted in PR-F's 8.
 
 on:
   push:
     branches: [main]
     paths:
       - 'packages/x-charts/**'
+      - 'packages/shared-types/**'
+      - 'scripts/ci/verify-tree-shaking.mjs'
       - '.github/workflows/x-charts-quality-gates.yml'
+      - 'package.json'
       - 'pnpm-lock.yaml'
   pull_request:
     branches: [main]
     paths:
       - 'packages/x-charts/**'
+      - 'packages/shared-types/**'
+      - 'scripts/ci/verify-tree-shaking.mjs'
       - '.github/workflows/x-charts-quality-gates.yml'
+      - 'package.json'
       - 'pnpm-lock.yaml'
   workflow_dispatch:
 
@@ -138,3 +151,101 @@ jobs:
             src/__tests__/chart-options-shape.test.tsx \
             src/__tests__/access.contract.test.tsx \
             --reporter=verbose
+
+  axe-audit:
+    name: a11y-axe-audit (CONTRACT §8 axe)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # `chart-axe.test.tsx` disables `color-contrast` rule under jsdom (CSS
+      # variable resolution doesn't work in jsdom — see file header). The
+      # contrast contract gate below covers that dimension via theme-builder
+      # palette math instead.
+      - name: Run axe-core audits (hard block)
+        run: |
+          pnpm --filter @mfe/x-charts exec vitest run \
+            src/__tests__/chart-axe.test.tsx \
+            --reporter=verbose
+
+  contrast-ratio-check:
+    name: contrast-ratio-check (CONTRACT §8 contrast)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Two-pronged contrast gate (PR-F1):
+      #   (1) chart-contrast.contract — STATIC fallback theme-object
+      #       contrast math for text/control elements (4.5:1 across 5
+      #       themes × 7 surfaces). Theme builders read CSS custom
+      #       properties via getComputedStyle at build time; in jsdom
+      #       the shell theme.css isn't loaded so builders fall back to
+      #       hard-coded hex defaults. This gate locks the FALLBACK
+      #       layer — what consumers see during initial paint flash,
+      #       Storybook standalone, snapshot tools. Runtime browser
+      #       OKLCH/CSS-var token resolution is a separate Playwright
+      #       follow-up, not gated here.
+      #   (2) chart-theme-decal — runtime decal/aria fallback
+      #       structural check for high-contrast and print themes
+      #       (CONTRACT §1.1).
+      # Series palette adjacency contrast is intentionally NOT gated;
+      # series differentiation comes from layout, decal, legend, and
+      # markers, not numerical adjacent-color ratio.
+      - name: Run contrast ratio + decal fallback (hard block)
+        run: |
+          pnpm --filter @mfe/x-charts exec vitest run \
+            src/__tests__/chart-contrast.contract.test.ts \
+            src/__tests__/chart-theme-decal.test.tsx \
+            --reporter=verbose
+
+  tree-shaking-verify:
+    name: tree-shaking-verify (CONTRACT §8 tree-shake)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Descriptor-driven verification — DS uses dist-mode (built artifact),
+      # x-charts uses source-mode (no dist; entry is src/index.ts).
+      # Both share scripts/ci/verify-tree-shaking.mjs; per-package descriptor
+      # supplies entry path, allowed side-effect files, expected exports.
+      - name: Verify x-charts tree-shaking (hard block)
+        run: node scripts/ci/verify-tree-shaking.mjs --package x-charts
