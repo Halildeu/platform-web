@@ -8,11 +8,8 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Layers,
-  Gamepad2,
   FileCode2,
   BookOpen,
-  Palette,
   ShieldCheck,
   Copy,
   Check,
@@ -20,8 +17,6 @@ import {
   ChevronDown,
   BarChart3,
   Cpu,
-  Sparkles,
-  Eye,
   Lock,
   RotateCcw,
   Database,
@@ -68,19 +63,13 @@ interface ChartMeta {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Tab definitions                                                    */
 /* ------------------------------------------------------------------ */
-
-type ChartTab = 'overview' | 'playground' | 'api' | 'examples' | 'themes' | 'quality';
-
-const TABS: Array<{ id: ChartTab; label: string; icon: React.ReactNode }> = [
-  { id: 'overview', label: 'Overview', icon: <Layers className="h-3.5 w-3.5" /> },
-  { id: 'playground', label: 'Playground', icon: <Gamepad2 className="h-3.5 w-3.5" /> },
-  { id: 'api', label: 'API', icon: <FileCode2 className="h-3.5 w-3.5" /> },
-  { id: 'examples', label: 'Examples', icon: <BookOpen className="h-3.5 w-3.5" /> },
-  { id: 'themes', label: 'Themes', icon: <Palette className="h-3.5 w-3.5" /> },
-  { id: 'quality', label: 'Quality', icon: <ShieldCheck className="h-3.5 w-3.5" /> },
-];
+/*  Tab definitions — REMOVED                                          */
+/*                                                                     */
+/*  Single-page layout (Codex thread `019def27` AGREE — Variant       */
+/*  A-lite). The previous 6-tab pill bar is replaced by sequential     */
+/*  anchored sections rendered inline by the `ChartDetail` component.  */
+/* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
 /*  Chart catalog (13 charts)                                          */
@@ -3379,10 +3368,24 @@ return <Suspense fallback={<Skeleton />}><LazyBar data={...} /></Suspense>;`,
 const ChartDetail: React.FC = () => {
   const { chartId } = useParams<{ chartId: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<ChartTab>('overview');
   const [copied, setCopied] = useState(false);
 
   const chart = useMemo(() => (chartId ? CHART_CATALOG[chartId] : undefined), [chartId]);
+
+  // Metric chips for the hero header (Codex thread `019def27` simplification:
+  // overview metric cards collapsed into the title strip).
+  const metricChips = useMemo(() => {
+    if (!chart) return null;
+    const editableCount = buildDescriptors(chart.id, chart.props).filter(
+      (d) => d.kind !== 'complex',
+    ).length;
+    return [
+      { label: `${chart.props.length} props`, tone: 'neutral' as const },
+      { label: `${editableCount} editable`, tone: 'neutral' as const },
+      { label: `${chart.themes.length} themes`, tone: 'neutral' as const },
+      { label: `${chart.features.length} capabilities`, tone: 'neutral' as const },
+    ];
+  }, [chart]);
 
   const handleCopyImport = useCallback(async () => {
     if (!chart?.importPath) return;
@@ -3481,6 +3484,21 @@ const ChartDetail: React.FC = () => {
             <span className="rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
               @mfe/x-charts
             </span>
+            {/*
+              Metric chips (Codex thread `019def27` simplification):
+              the previous Overview tab's 4 "metric cards" (Props / Themes /
+              Engine / Features) collapse into a single chip strip on the
+              hero header so the developer sees component shape at a glance
+              without an extra tab click.
+            */}
+            {metricChips?.map((chip) => (
+              <span
+                key={chip.label}
+                className="rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium tabular-nums text-text-secondary"
+              >
+                {chip.label}
+              </span>
+            ))}
           </div>
         </div>
 
@@ -3507,114 +3525,136 @@ const ChartDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* -- Tab navigation (pill style) -- */}
-      <div className="rounded-xl border border-border-subtle bg-surface-default p-1.5">
-        <div className="flex gap-1">
-          {TABS.map(({ id, label, icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={[
-                'flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                activeTab === id
-                  ? 'bg-action-primary text-text-inverse shadow-xs'
-                  : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
-              ].join(' ')}
-            >
-              {icon}
-              <span className="hidden sm:inline">{label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/*
+        Single-page layout (Codex thread `019def27` AGREE — Variant A-lite):
+        the previous 6-tab system (Overview / Playground / API / Examples /
+        Themes / Quality) is replaced with sequential anchored sections.
+        This matches MUI / MUI X / Ant Design / Mantine component-doc
+        conventions: live demo first, reference second, audit last.
 
-      {/* -- Tab content -- */}
-      <div className="min-h-[400px]">
-        {activeTab === 'overview' && <OverviewTab chart={chart} />}
-        {activeTab === 'playground' && <PlaygroundTab chart={chart} />}
-        {activeTab === 'api' && <ApiTab chart={chart} />}
-        {activeTab === 'examples' && <ExamplesTab chart={chart} />}
-        {activeTab === 'themes' && <ThemesTab chart={chart} />}
-        {activeTab === 'quality' && <QualityTab chart={chart} />}
-      </div>
+          - Overview tab is gone — its preview lives inside Playground via
+            ChartPreviewLive; its metric cards collapsed into the hero
+            chip strip above.
+          - Themes tab is gone — the inline `theme/decal/density/accent`
+            switchers in PlaygroundTab cover the on-demand override case.
+          - Examples + Quality stay as collapsible sections (audit-style)
+            so the page doesn't get noisy by default.
+      */}
+
+      {/* PLAYGROUND — primary developer surface */}
+      <DetailSection id="playground" title="Playground">
+        <PlaygroundTab chart={chart} />
+      </DetailSection>
+
+      {/* EXAMPLES — preset code snippets (PR2 will make these live) */}
+      <CollapsibleDetailSection id="examples" title="Examples" defaultOpen={false}>
+        <ExamplesTab chart={chart} />
+      </CollapsibleDetailSection>
+
+      {/* API — full props reference */}
+      <DetailSection id="api" title="API">
+        <ApiTab chart={chart} />
+      </DetailSection>
+
+      {/* QUALITY — audit gates, collapsed by default */}
+      <CollapsibleDetailSection id="quality" title="Quality" defaultOpen={false}>
+        <QualityTab chart={chart} />
+      </CollapsibleDetailSection>
     </div>
   );
 };
 
+/* ================================================================== */
+/*  DetailSection — uniform anchored section wrapper                   */
+/* ================================================================== */
+
+function DetailSection({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      id={id}
+      className="scroll-mt-20 flex flex-col gap-3"
+      data-testid={`detail-section-${id}`}
+    >
+      <header className="flex items-center gap-3">
+        <h2 className="text-lg font-semibold tracking-tight text-text-primary">{title}</h2>
+        <div className="h-px flex-1 bg-border-subtle" aria-hidden="true" />
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/* ================================================================== */
+/*  CollapsibleDetailSection — Examples / Quality accordion            */
+/* ================================================================== */
+
+function CollapsibleDetailSection({
+  id,
+  title,
+  defaultOpen = false,
+  countBadge,
+  children,
+}: {
+  id: string;
+  title: string;
+  defaultOpen?: boolean;
+  countBadge?: number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section
+      id={id}
+      className="scroll-mt-20 rounded-2xl border border-border-subtle bg-surface-default"
+      data-testid={`detail-section-${id}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-left transition hover:bg-surface-muted"
+      >
+        {open ? (
+          <ChevronDown className="h-4 w-4 text-text-secondary" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-text-secondary" />
+        )}
+        <h2 className="text-lg font-semibold tracking-tight text-text-primary">{title}</h2>
+        {typeof countBadge === 'number' && countBadge > 0 && (
+          <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
+            {countBadge}
+          </span>
+        )}
+        <div className="h-px flex-1 bg-border-subtle" aria-hidden="true" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+          {open ? 'collapse' : 'expand'}
+        </span>
+      </button>
+      {open && <div className="border-t border-border-subtle p-5">{children}</div>}
+    </section>
+  );
+}
+
 export default ChartDetail;
 
 /* ================================================================== */
-/*  OverviewTab                                                        */
+/*  OverviewTab — REMOVED                                              */
+/*                                                                     */
+/*  Codex thread `019def27` AGREE — Variant A-lite simplification:     */
+/*  the Overview tab's preview moved into PlaygroundTab via            */
+/*  ChartPreviewLive; its 4 metric cards (Props / Themes / Engine /    */
+/*  Features) collapsed into the hero header chip strip; its           */
+/*  Capabilities chip list is rendered inline by ChartDetail itself    */
+/*  (header description neighbour). Component removed entirely.        */
 /* ================================================================== */
-
-function OverviewTab({ chart }: { chart: ChartMeta }) {
-  return (
-    <div className="flex flex-col gap-8">
-      {/* Sample data preview */}
-      <div className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-default">
-        <div className="flex items-center gap-3 border-b border-border-subtle bg-linear-to-r from-state-info-bg to-transparent px-5 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-state-info-bg">
-            <Eye className="h-4 w-4 text-state-info-text" />
-          </div>
-          <span className="text-sm font-semibold text-text-primary">Preview</span>
-        </div>
-        <div className="flex items-center justify-center bg-surface-canvas p-8">
-          <ChartPreviewLive chartId={chart.id} chartName={chart.name} height={300} />
-        </div>
-      </div>
-
-      {/* Metadata cards (2-col grid) */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <MetadataCard
-          icon={<FileCode2 className="h-3.5 w-3.5 text-state-info-text" />}
-          iconBg="bg-state-info-bg"
-          label="Props"
-          value={String(chart.props.length)}
-          detail={`${chart.props.filter((p) => p.required).length} required`}
-        />
-        <MetadataCard
-          icon={<Palette className="h-3.5 w-3.5 text-action-primary" />}
-          iconBg="bg-action-primary/10"
-          label="Themes"
-          value={String(chart.themes.length)}
-          detail="light, dark, HC, print"
-        />
-        <MetadataCard
-          icon={<Cpu className="h-3.5 w-3.5 text-state-warning-text" />}
-          iconBg="bg-state-warning-bg"
-          label="Engine"
-          value="ECharts 5.6"
-          detail="Apache ECharts"
-        />
-        <MetadataCard
-          icon={<Sparkles className="h-3.5 w-3.5 text-state-success-text" />}
-          iconBg="bg-state-success-bg"
-          label="Features"
-          value={String(chart.features.length)}
-          detail={chart.features.slice(0, 3).join(', ')}
-        />
-      </div>
-
-      {/* Features list */}
-      <div className="rounded-2xl border border-border-subtle bg-surface-default p-5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-          Capabilities
-        </span>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {chart.features.map((f) => (
-            <span
-              key={f}
-              className="rounded-full border border-border-subtle bg-surface-canvas px-3 py-1 text-xs font-medium text-text-secondary"
-            >
-              {f}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ================================================================== */
 /*  PlaygroundTab                                                      */
@@ -4165,112 +4205,16 @@ function buildExamples(chart: ChartMeta): ExampleItem[] {
 }
 
 /* ================================================================== */
-/*  ThemesTab                                                          */
+/*  ThemesTab — REMOVED                                                */
+/*                                                                     */
+/*  Codex thread `019def27` AGREE: a dedicated themes tab repeated    */
+/*  what the inline `theme/decal/density/accent` switchers in the      */
+/*  Theme category of PlaygroundTab already cover (and uses real      */
+/*  ECharts theme resolution; the static THEME_CONFIG previews were   */
+/*  hand-painted bars). The 4-theme yan-yana comparison is queued for */
+/*  PR3 polish as a collapsed Theme Matrix section if real demand     */
+/*  surfaces.                                                          */
 /* ================================================================== */
-
-const THEME_CONFIG = [
-  {
-    id: 'light',
-    label: 'Light',
-    bg: 'bg-white',
-    text: 'text-gray-900',
-    accent: '#3b82f6',
-    muted: '#e5e7eb',
-  },
-  {
-    id: 'dark',
-    label: 'Dark',
-    bg: 'bg-gray-900',
-    text: 'text-gray-100',
-    accent: '#60a5fa',
-    muted: '#374151',
-  },
-  {
-    id: 'high-contrast',
-    label: 'High Contrast',
-    bg: 'bg-black',
-    text: 'text-white',
-    accent: '#facc15',
-    muted: '#525252',
-  },
-  {
-    id: 'print',
-    label: 'Print',
-    bg: 'bg-white',
-    text: 'text-black',
-    accent: '#1f2937',
-    muted: '#d1d5db',
-  },
-] as const;
-
-function ThemesTab({ chart }: { chart: ChartMeta }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border-subtle bg-surface-default p-5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-          Theme Comparison
-        </span>
-        <p className="mt-1 text-xs text-text-tertiary">
-          {chart.name} adapts to all 4 supported themes via design token resolution.
-        </p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        {THEME_CONFIG.map((theme) => (
-          <div
-            key={theme.id}
-            className="overflow-hidden rounded-2xl border border-border-subtle transition-all duration-300 hover:shadow-sm"
-          >
-            <div className="flex items-center gap-2 border-b border-border-subtle bg-surface-muted px-4 py-2.5">
-              <span
-                className="h-3 w-3 rounded-full border border-border-subtle"
-                style={{ backgroundColor: theme.accent }}
-              />
-              <span className="text-xs font-semibold text-text-primary">{theme.label}</span>
-            </div>
-            {/* Mock chart preview area */}
-            <div className={`flex items-center justify-center p-6 ${theme.bg}`}>
-              <div className="flex h-32 w-full items-end justify-center gap-2 px-4">
-                {[0.4, 0.7, 0.55, 0.85, 0.65].map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-t-md transition-all duration-500"
-                    style={{
-                      height: `${h * 100}%`,
-                      backgroundColor: i % 2 === 0 ? theme.accent : theme.muted,
-                      opacity: 0.9,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            {/* Token swatch row */}
-            <div className="flex items-center gap-3 border-t border-border-subtle bg-surface-default px-4 py-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-text-tertiary">accent</span>
-                <span
-                  className="h-3 w-3 rounded-sm border border-border-subtle"
-                  style={{ backgroundColor: theme.accent }}
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-text-tertiary">muted</span>
-                <span
-                  className="h-3 w-3 rounded-sm border border-border-subtle"
-                  style={{ backgroundColor: theme.muted }}
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-text-tertiary">bg</span>
-                <span className={`h-3 w-3 rounded-sm border border-border-subtle ${theme.bg}`} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ================================================================== */
 /*  QualityTab                                                         */
@@ -4400,39 +4344,10 @@ function QualityTab({ chart }: { chart: ChartMeta }) {
 
 /* ================================================================== */
 /*  Shared helper components                                           */
+/*                                                                     */
+/*  `MetadataCard` was removed in the single-page refactor (Codex     */
+/*  thread `019def27`); the 4 metric cards collapsed into hero chips.  */
 /* ================================================================== */
-
-function MetadataCard({
-  icon,
-  iconBg,
-  label,
-  value,
-  detail,
-}: {
-  icon: React.ReactNode;
-  iconBg: string;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border-subtle bg-surface-default p-5 transition-all duration-300 hover:border-border-default hover:shadow-sm">
-      <div className="flex items-center gap-2">
-        <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconBg}`}>
-          {icon}
-        </div>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-          {label}
-        </span>
-        <span className="ml-auto rounded-full bg-surface-muted px-2 py-0.5 text-xs font-bold tabular-nums text-text-primary">
-          {value}
-        </span>
-      </div>
-      <p className="mt-2 text-xs text-text-tertiary">{detail}</p>
-      <div className="pointer-events-none absolute -bottom-3 -right-3 h-12 w-12 rounded-full bg-linear-to-tl from-action-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-    </div>
-  );
-}
 
 /* Previously: ChartPreviewPlaceholder — SVG mock with chart.id-specific
  * variants. Replaced by ChartPreviewLive (../widgets/ChartPreviewLive) which
