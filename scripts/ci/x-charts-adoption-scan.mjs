@@ -51,10 +51,14 @@ const flagJson = args.includes('--json') || true; // default: emit JSON
 /*  Bucket classification                                              */
 /* ------------------------------------------------------------------ */
 
+// Codex iter-1 PR-X5 fix: test + story take priority over demo so a
+// `__tests__/` folder under `design-lab/widgets/` is bucketed as `test`,
+// not `demo`. Demo regex broadened to the entire design-lab subtree
+// (including runtime preview surfaces).
 const BUCKETS = /** @type {const} */ ([
-  ['demo', /design-lab\/(?:widgets|pages|playground|showcase|stories)\//],
   ['story', /\.stories\.tsx?$/],
-  ['test', /(?:\.test\.tsx?$|\/__tests__\/)/],
+  ['test', /(?:\.test\.[mc]?tsx?$|\/__tests__\/)/],
+  ['demo', /design-lab\//],
   ['production', /^apps\/mfe-[^/]+\/src\//],
   ['package', /^packages\//],
 ]);
@@ -117,7 +121,7 @@ function listCandidateFiles() {
 function listCandidateFilesViaGit() {
   const output = execFileSync(
     'git',
-    ['ls-files', '*.ts', '*.tsx'],
+    ['ls-files', '*.ts', '*.tsx', '*.cts', '*.mts'],
     { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
   );
   const files = output
@@ -328,18 +332,63 @@ const json = JSON.stringify(
   2,
 );
 
+/**
+ * Normalize markdown for stale comparison:
+ *   1. Strip the `Generated at:` line (timestamp drift).
+ *   2. Collapse repeated whitespace inside table cells so prettier's
+ *      column-alignment formatting does not cause spurious diffs.
+ *   3. Trim trailing whitespace per line + final newline.
+ */
+function normalizeMd(s) {
+  return s
+    .replace(/\*\*Generated at:\*\* [^\n]+\n/, '')
+    .split('\n')
+    .map((line) => {
+      // Compress 2+ spaces inside markdown table cells (Prettier aligns
+      // them so the generator's raw output diverges).
+      if (line.startsWith('|')) return line.replace(/\s{2,}/g, ' ');
+      return line.trimEnd();
+    })
+    .join('\n')
+    .replace(/\n+$/, '\n');
+}
+
+/**
+ * Normalize JSON for stale comparison: strip `generatedAt` and re-stringify
+ * so Prettier vs JSON.stringify formatting differences disappear.
+ */
+function normalizeJson(s) {
+  try {
+    const obj = JSON.parse(s);
+    delete obj.generatedAt;
+    return JSON.stringify(obj);
+  } catch {
+    return s;
+  }
+}
+
 if (flagCheck) {
-  // CI mode — fail if the matrix on disk is stale.
   if (!existsSync(OUTPUT_MD)) {
-    console.error(`✗ ${relative(REPO_ROOT, OUTPUT_MD)} missing. Run \`node scripts/ci/x-charts-adoption-scan.mjs\` and commit.`);
+    console.error(
+      `✗ ${relative(REPO_ROOT, OUTPUT_MD)} missing. Run \`node scripts/ci/x-charts-adoption-scan.mjs\` and commit.`,
+    );
     process.exit(1);
   }
-  const onDisk = readFileSync(OUTPUT_MD, 'utf8');
-  // Strip the `Generated at:` line so timestamp does not cause spurious diff.
-  const stripTimestamp = (s) => s.replace(/\*\*Generated at:\*\* [^\n]+\n/, '');
-  if (stripTimestamp(onDisk) !== stripTimestamp(md)) {
-    console.error(`✗ ${relative(REPO_ROOT, OUTPUT_MD)} is stale. Run \`node scripts/ci/x-charts-adoption-scan.mjs\` and commit.`);
+  const onDiskMd = readFileSync(OUTPUT_MD, 'utf8');
+  if (normalizeMd(onDiskMd) !== normalizeMd(md)) {
+    console.error(
+      `✗ ${relative(REPO_ROOT, OUTPUT_MD)} is stale. Run \`node scripts/ci/x-charts-adoption-scan.mjs\` and commit.`,
+    );
     process.exit(1);
+  }
+  if (flagJson && existsSync(OUTPUT_JSON)) {
+    const onDiskJson = readFileSync(OUTPUT_JSON, 'utf8');
+    if (normalizeJson(onDiskJson) !== normalizeJson(json)) {
+      console.error(
+        `✗ ${relative(REPO_ROOT, OUTPUT_JSON)} is stale. Run \`node scripts/ci/x-charts-adoption-scan.mjs\` and commit.`,
+      );
+      process.exit(1);
+    }
   }
   console.log(`✓ ${relative(REPO_ROOT, OUTPUT_MD)} up to date (${entries.length} consumers).`);
 } else {

@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-05-03T14:12:46.518Z",
+  "generatedAt": "2026-05-03T14:22:02.649Z",
   "totalConsumers": 42,
   "byBucket": {
-    "production": 18,
+    "production": 17,
     "test": 3,
-    "demo": 7,
+    "demo": 8,
     "package": 14
   },
   "entries": [
@@ -242,7 +242,7 @@
     {
       "file": "apps/mfe-shell/src/pages/admin/design-lab/XSuiteRuntimePreview.tsx",
       "app": "mfe-shell",
-      "bucket": "production",
+      "bucket": "demo",
       "subpaths": ["@mfe/x-charts"],
       "symbols": [],
       "kinds": ["ImportExpression"]
