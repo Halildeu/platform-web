@@ -327,17 +327,22 @@ describe('Codex 019defa5 PR3c: ext wrapper responsive option shape', () => {
     expect(opt.dataZoom?.[0]?.xAxisIndex).toBe(0);
   });
 
-  it('HeatmapChart mobile + showLegend → grid.right reserved + both axes hideOverlap + yAxis no rotate', async () => {
+  it('HeatmapChart mobile + 5 yLabels + showLegend → grid.right reserved + both axes hideOverlap + yAxis no rotate', async () => {
     setMobileViewport(375);
+    // Codex 019defa5 PR3c PARTIAL: 5 yLabels (>4) so the helper would
+    // try to rotate them on mobile. The yAxis override forces rotate=0;
+    // dropping it would flip this assertion to 30 and the test fails.
     render(
       <HeatmapChart
         data={[
           [0, 0, 1],
-          [1, 0, 2],
-          [0, 1, 3],
+          [0, 1, 2],
+          [0, 2, 3],
+          [0, 3, 4],
+          [0, 4, 5],
         ]}
-        xLabels={['A', 'B']}
-        yLabels={['Y1', 'Y2']}
+        xLabels={['A']}
+        yLabels={['Y1', 'Y2', 'Y3', 'Y4', 'Y5']}
         showLegend
         animate={false}
       />,
