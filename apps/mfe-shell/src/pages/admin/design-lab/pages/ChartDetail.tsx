@@ -1323,6 +1323,152 @@ return (
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
 
+  /* ---- Faz 21.4 PR-C: 5 feature demos ---- */
+
+  'feature-brush': {
+    id: 'feature-brush',
+    name: 'useChartInteractions (brush)',
+    description:
+      'Click + drag on the chart container to capture a brush range. The hook tracks isBrushing, brushRange (data-space indices), and exposes clearBrush. Demo wires the handlers onto a plain div so the brush mechanics are observable without a real chart instance.',
+    importPath: "import { useChartInteractions } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'enableBrush',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Turn brush handlers on',
+      },
+      {
+        name: 'onBrushEnd',
+        type: '(range) => void',
+        required: false,
+        default: '—',
+        description: 'Fired on mouseup with the captured range',
+      },
+    ],
+    sampleCode: `const [state, handlers] = useChartInteractions({ enableBrush: true });
+return (
+  <div {...handlers}>
+    {state.isBrushing && <BrushOverlay range={state.brushRange} />}
+  </div>
+);`,
+    features: ['brush', 'mouse-handlers', 'range-state', 'clear'],
+    a11y: ['range-state-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-zoom-pan': {
+    id: 'feature-zoom-pan',
+    name: 'useChartInteractions (zoom + pan)',
+    description:
+      'Wheel-to-zoom and click-drag-pan handlers from a single hook. zoomLevel + panOffset live in the same state block. Pan is gated behind zoom > 1 so the chart only pans when zoomed in.',
+    importPath: "import { useChartInteractions } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'enableZoom',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Wheel handler updates zoomLevel',
+      },
+      {
+        name: 'enablePan',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Mouse-drag handler updates panOffset (active when zoomLevel > 1)',
+      },
+      {
+        name: 'zoomStep',
+        type: 'number',
+        required: false,
+        default: '0.1',
+        description: 'Multiplier per wheel tick',
+      },
+    ],
+    sampleCode: `const [state, handlers] = useChartInteractions({
+  enableZoom: true,
+  enablePan: true,
+});
+return <div {...handlers}>zoom: {state.zoomLevel}× · pan: ({state.panOffset.x}, {state.panOffset.y})</div>;`,
+    features: ['zoom', 'pan', 'wheel-handler', 'reset'],
+    a11y: ['zoom-state-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-realtime': {
+    id: 'feature-realtime',
+    name: 'useRealTimeData',
+    description:
+      'Buffered streaming hook: callers push points via addPoint; the hook caps at maxPoints (FIFO eviction). Pause/resume gate the buffer without stopping the upstream producer. The demo owns its own setInterval to keep the hook deterministic and testable under fake timers.',
+    importPath: "import { useRealTimeData } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'maxPoints',
+        type: 'number',
+        required: false,
+        default: '500',
+        description: 'Buffer capacity (oldest evicted)',
+      },
+      {
+        name: 'onNewPoint',
+        type: '(point) => void',
+        required: false,
+        default: '—',
+        description: 'Fired for every accepted point',
+      },
+    ],
+    sampleCode: `const stream = useRealTimeData<Tick>({ maxPoints: 50 });
+useEffect(() => {
+  const id = setInterval(() => stream.addPoint({ t: Date.now(), v: Math.random() }), 250);
+  return () => clearInterval(id);
+}, []);`,
+    features: ['stream-buffer', 'pause-resume', 'fifo-eviction'],
+    a11y: ['point-count-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-theme-switch': {
+    id: 'feature-theme-switch',
+    name: 'BarChart theme prop',
+    description:
+      'Every chart wrapper accepts a theme prop ("auto" | "light" | "default" | "dark" | "high-contrast" | "print"). Switching the prop re-resolves the ECharts theme + palette and re-renders without remounting the chart.',
+    importPath: "import { BarChart } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'theme',
+        type: '"auto" | "light" | "default" | "dark" | "high-contrast" | "print"',
+        required: false,
+        default: '"auto"',
+        description: 'Override the resolved chart theme',
+      },
+    ],
+    sampleCode: `<BarChart data={data} theme={theme} animate={false} />`,
+    features: ['theme-prop', 'palette-swap', 'no-remount'],
+    a11y: ['high-contrast', 'print', 'decal-fallback'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-export': {
+    id: 'feature-export',
+    name: 'useChartExport',
+    description:
+      'Imperative export hook: PNG and SVG go through instance.getDataURL; CSV goes through a Blob ➜ URL.createObjectURL anchor download. Demo uses a deterministic mock instance (the public BarChart wrapper does not expose its ECharts ref).',
+    importPath: "import { useChartExport } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [],
+    sampleCode: `const exporter = useChartExport();
+const onExport = () => exporter.exportChart(instance, 'png', { fileName: 'chart' });`,
+    features: ['png', 'svg', 'csv', 'data-url', 'blob'],
+    a11y: ['download-button-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
   /* ---- AI helpers (Faz 21.4-B3) ---- */
 
   'detect-anomalies': {

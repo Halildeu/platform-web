@@ -35,6 +35,7 @@ import {
 import CrossFilterDemoLive from './CrossFilterDemoLive';
 import CrossFilterGridDemoLive from './CrossFilterGridDemoLive';
 import DrillDownDemoLive from './DrillDownDemoLive';
+import FeatureDemoLive, { type FeatureId } from './FeatureDemoLive';
 import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
 import PerfUtilityDemoLive, { type PerfUtilityId } from './PerfUtilityDemoLive';
 
@@ -488,6 +489,25 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
         >
           <DrillDownDemoLive mode="basic" />
+        </div>
+      );
+
+    case 'feature-brush':
+    case 'feature-zoom-pan':
+    case 'feature-realtime':
+    case 'feature-theme-switch':
+    case 'feature-export':
+      // Faz 21.4 PR-C: 5 isolated feature demos (brush, zoom/pan,
+      // realtime stream, theme switch, export). Each demo uses real
+      // x-charts hooks; only the export demo uses a mock ECharts
+      // instance (the public BarChart wrapper does not expose its
+      // instance ref).
+      return (
+        <div
+          data-testid={testId}
+          style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
+        >
+          <FeatureDemoLive featureId={chartId as FeatureId} />
         </div>
       );
 

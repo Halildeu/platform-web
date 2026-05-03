@@ -113,6 +113,19 @@ vi.mock('@mfe/x-charts', () => {
         { 'data-testid': 'mock-drill-down-breadcrumb' },
         items.map((it) => it.label).join(' / '),
       ),
+    // Faz 21.4 PR-C — feature demo mock surface
+    useRealTimeData: () => ({
+      data: [],
+      isPaused: false,
+      addPoint: vi.fn(),
+      addPoints: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      clear: vi.fn(),
+    }),
+    useChartExport: () => ({
+      exportChart: vi.fn(),
+    }),
     // Performance helpers — minimal stubs so PerfUtilityDemoLive can mount
     // inside the routing smoke tests. The real semantics are exercised in
     // PerfUtilityDemoLive.test.tsx with no mock.
@@ -216,6 +229,23 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     expect(screen.getByTestId('drill-down-history-counter')).toBeInTheDocument();
     expect(screen.queryByTestId('drill-down-redo')).toBeNull();
   });
+
+  /* Faz 21.4 PR-C — 5 feature demos */
+
+  it.each([
+    { featureId: 'feature-brush', demoTestId: 'feature-brush-demo' },
+    { featureId: 'feature-zoom-pan', demoTestId: 'feature-zoom-pan-demo' },
+    { featureId: 'feature-realtime', demoTestId: 'feature-realtime-demo' },
+    { featureId: 'feature-theme-switch', demoTestId: 'feature-theme-switch-demo' },
+    { featureId: 'feature-export', demoTestId: 'feature-export-demo' },
+  ])(
+    'feature demo "$featureId" mounts FeatureDemoLive ($demoTestId)',
+    ({ featureId, demoTestId }) => {
+      render(<ChartPreviewLive chartId={featureId} chartName={`${featureId} preview`} />);
+      expect(screen.getByTestId(demoTestId)).toBeInTheDocument();
+      expect(screen.getByTestId(`design-lab-chart-preview-${featureId}`)).toBeInTheDocument();
+    },
+  );
 
   it.each([
     { hookId: 'detect-anomalies', demoTestId: 'ai-detect-anomalies-demo' },
