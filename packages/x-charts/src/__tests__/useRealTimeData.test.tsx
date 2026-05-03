@@ -9,6 +9,8 @@
  *                                          under fake timers between pause/resume)
  *   - "ignore onTick undefined return" → onTickUndefinedSkipsPush (count > 0)
  *   - "drop assertion on negative ms"  → negativeIntervalThrowsInDev (no error)
+ *   - "drop fail-closed in prod"        → noScheduleOnInvalidIntervalProd
+ *                                          (setInterval invoked despite NaN/-1)
  *
  * Notes:
  *   - We use vi.useFakeTimers() everywhere so the interval is deterministic.
@@ -19,11 +21,7 @@ import React from 'react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 
-import {
-  useRealTimeData,
-  type RealTimeDataOptions,
-  type RealTimeDataOptionsAutoTick,
-} from '../useRealTimeData';
+import { useRealTimeData, type RealTimeDataOptions } from '../useRealTimeData';
 
 interface Tick {
   t: number;
@@ -189,15 +187,14 @@ describe('useRealTimeData — dev-mode runtime assertions', () => {
     expect(() =>
       render(
         <Probe
-          options={
-            {
-              maxPoints: 50,
-              // Cast — TypeScript would refuse this normally; we cast to
-              // simulate a misconfigured caller (e.g. `as any` from JS).
-              tickIntervalMs: -1,
-              onTick,
-            } as RealTimeDataOptionsAutoTick<Tick>
-          }
+          options={{
+            maxPoints: 50,
+            // The TS `number` type accepts negative / NaN — this is exactly
+            // the case the runtime guard exists to catch (a misconfigured
+            // caller passing a computed value).
+            tickIntervalMs: -1,
+            onTick,
+          }}
         />,
       ),
     ).toThrow(/positive finite/);
@@ -214,16 +211,41 @@ describe('useRealTimeData — dev-mode runtime assertions', () => {
     expect(() =>
       render(
         <Probe
-          options={
-            {
-              maxPoints: 50,
-              tickIntervalMs: -1,
-              onTick,
-            } as RealTimeDataOptionsAutoTick<Tick>
-          }
+          options={{
+            maxPoints: 50,
+            tickIntervalMs: -1,
+            onTick,
+          }}
         />,
       ),
     ).not.toThrow();
+
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it('noScheduleOnInvalidIntervalProd: invalid interval skips setInterval entirely (fail-closed)', () => {
+    // Codex iter-1 PR-X1: production must NOT schedule setInterval when the
+    // interval is invalid; otherwise the HTML5 4ms minimum clamping creates
+    // a tight loop. Verify the schedule is never attempted.
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+
+    const onTick = vi.fn(() => ({ t: 0, v: 0 }));
+    for (const bad of [-1, 0, NaN, Infinity]) {
+      const { unmount } = render(
+        <Probe
+          options={{
+            maxPoints: 50,
+            tickIntervalMs: bad,
+            onTick,
+          }}
+        />,
+      );
+      unmount();
+    }
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+    expect(onTick).not.toHaveBeenCalled();
 
     process.env.NODE_ENV = originalEnv;
   });

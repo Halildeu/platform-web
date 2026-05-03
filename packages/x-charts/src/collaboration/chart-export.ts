@@ -9,7 +9,7 @@
  * NOTE (Faz 21.8 PR-X1): XLSX export was previously type-declared but never
  * implemented. Removed to keep the public contract honest. Future: optional
  * `@mfe/x-charts/export-xlsx` adapter (out of scope this FAZ).
- * See `docs/faz-21-8-reality-parity-plan.md` for context.
+ * See PR #174 (reality-parity plan) for context.
  */
 
 export type ExportFormat = 'png' | 'svg' | 'pdf' | 'csv';

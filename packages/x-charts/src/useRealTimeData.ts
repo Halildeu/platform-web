@@ -197,6 +197,11 @@ export function useRealTimeData<T>(
   useEffect(() => {
     if (tickIntervalMs === undefined) return;
     if (isPaused) return;
+    // Fail-closed in ALL envs (Codex iter-1 PR-X1 review): invalid intervals
+    // (negative, zero, NaN, Infinity) would otherwise be silently clamped by
+    // setInterval (HTML5 spec: < 4ms → 4ms in nested timers) and produce a
+    // tight loop. Dev mode throws above; production also refuses to schedule.
+    if (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0) return;
 
     const id = setInterval(() => {
       const point = onTickRef.current?.();
