@@ -1,12 +1,39 @@
 /**
- * Faz 21.4 PR-F1 — chart contrast contract gate (CONTRACT §8 contrast).
+ * Faz 21.4 PR-F1 — STATIC fallback theme-object contrast contract gate.
  *
- * Asserts WCAG AA 4.5:1 contrast for TEXT/CONTROL elements emitted by
- * each `buildDesignLab...Theme` builder. Series palette colors are
- * NOT gated here — series differentiation is achieved by spacing,
- * borders, markers, legends, labels and decal patterns; tightening
- * adjacent palette ratios to a numerical threshold is a visual-design
- * change, not a CI wiring change (PR-F1 scope).
+ * IMPORTANT — what this gate actually measures:
+ *
+ * Theme builders (`buildDesignLabEChartsTheme` etc.) emit color values
+ * by reading CSS custom properties via `getComputedStyle(documentElement)`
+ * AT BUILD TIME. In jsdom (where this test runs) the shell `theme.css`
+ * is NOT loaded, so the builders fall back to hard-coded HEX defaults
+ * baked into each builder file. This gate therefore asserts WCAG AA
+ * 4.5:1 on the FALLBACK hex layer — not on the runtime browser/OKLCH
+ * token resolution path.
+ *
+ * Why this is still valuable:
+ *   - The fallback layer is what consumers see when CSS hasn't loaded
+ *     yet (initial paint flash) or when the chart is rendered outside
+ *     mfe-shell (Storybook standalone, snapshot tools, SSR-ish paths).
+ *   - It locks the SHAPE of the contract: each text/control color must
+ *     resolve to a 4.5:1-compliant hex in the absence of CSS.
+ *   - It catches regressions where someone replaces a fallback hex
+ *     with a worse value during refactor.
+ *
+ * What this gate does NOT measure:
+ *   - Runtime CSS variable resolution (e.g. `oklch(...)` in shell
+ *     `theme.css`). That requires a real browser; planned for a
+ *     follow-up Playwright-based contrast smoke job.
+ *   - Series palette adjacent-color ratio (would fail current
+ *     palettes; visual-design PR territory, not CI wiring).
+ *   - `nameTextStyle` (axis name uses `textTertiary` token by design;
+ *     ~2.54:1 in the fallback layer; tightening is a token-level
+ *     redesign).
+ *
+ * IN SCOPE (HARD GATE):
+ *   - 7 text/control color × 5 themes = 35 assertions
+ *   - 2 HC palette differentiation invariants
+ *   - 4 helper sanity checks
  *
  * Out of scope (explicitly):
  * - Series palette adjacent-color ratio (would fail current paletes;

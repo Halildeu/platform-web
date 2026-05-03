@@ -466,7 +466,7 @@ prop surface.
 
 - **< 350 KB** gzipped total (ECharts + x-charts wrapper)
 - Each chart type tree-shakeable independently
-- CI gate enforces bundle limit
+- CI gate will enforce bundle limit (PR-F2; HARD on contractTotal incl. ECharts, observability on wrapperOnly)
 
 ### Render Targets
 
@@ -506,7 +506,7 @@ visual). PR-F2 activates the 8th (bundle).
 - **xss-sanitization-check** (`security.contract.test.tsx` — already active)
 - **memory-leak-test** (100-cycle mount/unmount; `memory-leak.test.tsx`
   — already active)
-- **chart-spec-validation** (`spec-transform.contract.test.ts` — already
+- **chart-spec-validation** (`spec-transform.contract.test.tsx` — already
   active)
 - **visual-regression** (`x-charts-visual-gate.yml` workflow,
   `maxDiffPixelRatio: 0.02` HARD; file renamed from `-visual-advisory`
