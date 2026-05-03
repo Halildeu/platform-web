@@ -23,13 +23,16 @@ import {
 } from 'lucide-react';
 import ChartPreviewLive from '../widgets/ChartPreviewLive';
 import {
+  applyPreset,
   buildDescriptors,
   deriveDefaults,
   generatePlaygroundCode,
+  getChartPresets,
   getSampleData,
   CATEGORY_DEFAULT_OPEN,
   CATEGORY_LABEL,
   CATEGORY_ORDER,
+  type ChartPlaygroundPreset,
   type EditorCategory,
   type EditorDescriptor,
   type PlaygroundState,
@@ -4094,105 +4097,125 @@ function ApiTab({ chart }: { chart: ChartMeta }) {
 }
 
 /* ================================================================== */
-/*  ExamplesTab                                                        */
+/*  ExamplesTab — live preset gallery (PR2 Codex thread `019def27`)    */
+/*                                                                     */
+/*  The previous implementation rendered hand-written code snippets    */
+/*  with no live preview. Two problems:                                */
+/*                                                                     */
+/*    1. The snippets drifted from the wrappers (the old `Dark Theme`  */
+/*       example used a `<ThemeProvider theme=...>` API that does not  */
+/*       exist).                                                       */
+/*    2. Rakipler (MUI X / Recharts / Ant Design) named-scenario       */
+/*       galleries with live preview gösteriyor; bizdeki static-code   */
+/*       only sayfa "bu chart ile neler yapabilirim?" sorusuna hızlı   */
+/*       cevap vermiyor.                                               */
+/*                                                                     */
+/*  New model: every preset is `{ statePatch }` on top of the catalog  */
+/*  defaults. The same `ChartPreviewLive` + `generatePlaygroundCode`   */
+/*  machinery that drives the Playground also drives the gallery, so   */
+/*  presets cannot drift from runtime behaviour.                       */
 /* ================================================================== */
 
 function ExamplesTab({ chart }: { chart: ChartMeta }) {
-  const examples = useMemo(() => buildExamples(chart), [chart]);
+  const presets = useMemo(() => getChartPresets(chart.id), [chart.id]);
+
+  // Pre-compute descriptors + defaults once per chart for codegen reuse.
+  const descriptors = useMemo<EditorDescriptor[]>(
+    () => buildDescriptors(chart.id, chart.props),
+    [chart.id, chart.props],
+  );
+  const defaults = useMemo<PlaygroundState>(() => deriveDefaults(descriptors), [descriptors]);
+
+  if (presets.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border-subtle bg-surface-canvas px-5 py-8 text-center text-xs text-text-tertiary">
+        Live preset gallery is not wired for this chart yet — see Playground for an interactive
+        surface and API for the props reference.
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-6">
-      {examples.map((ex) => (
-        <div
-          key={ex.title}
-          className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-default transition-all duration-300 hover:shadow-sm"
-        >
-          <div className="flex items-center gap-2 border-b border-border-subtle px-5 py-3">
-            <BookOpen className="h-3.5 w-3.5 text-text-secondary" />
-            <span className="text-sm font-semibold text-text-primary">{ex.title}</span>
-            <span className="ml-auto rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-text-tertiary">
-              {ex.tag}
-            </span>
-          </div>
-          <p className="border-b border-border-subtle bg-surface-canvas/50 px-5 py-2.5 text-xs text-text-secondary">
-            {ex.description}
-          </p>
-          <pre className="overflow-x-auto p-5 text-xs leading-relaxed text-text-primary">
-            <code>{ex.code}</code>
-          </pre>
-        </div>
+    <div className="grid gap-4 md:grid-cols-2">
+      {presets.map((preset) => (
+        <PresetCard
+          key={preset.id}
+          chart={chart}
+          preset={preset}
+          descriptors={descriptors}
+          defaults={defaults}
+        />
       ))}
     </div>
   );
 }
 
-type ExampleItem = { title: string; tag: string; description: string; code: string };
+/* ================================================================== */
+/*  PresetCard — one live example tile in the Examples gallery        */
+/* ================================================================== */
 
-function buildExamples(chart: ChartMeta): ExampleItem[] {
-  const items: ExampleItem[] = [
-    {
-      title: 'Basic Usage',
-      tag: 'starter',
-      description: `Minimal ${chart.name} setup with default configuration.`,
-      code: chart.sampleCode,
-    },
-  ];
+function PresetCard({
+  chart,
+  preset,
+  descriptors,
+  defaults,
+}: {
+  chart: ChartMeta;
+  preset: ChartPlaygroundPreset;
+  descriptors: readonly EditorDescriptor[];
+  defaults: PlaygroundState;
+}) {
+  // Final state for THIS preset = catalog defaults + statePatch.
+  const presetState = useMemo<PlaygroundState>(
+    () => applyPreset(defaults, preset),
+    [defaults, preset],
+  );
 
-  if (chart.id === 'bar-chart') {
-    items.push({
-      title: 'Horizontal Bars',
-      tag: 'orientation',
-      description: 'Switch to horizontal layout for long category labels.',
-      code: `<BarChart\n  data={data}\n  orientation="horizontal"\n  showValues\n/>`,
-    });
-    items.push({
-      title: 'Grouped Series',
-      tag: 'multi-series',
-      description: 'Compare multiple series side by side within each category.',
-      code: `<BarChart\n  series={[\n    { name: "2024", data: [120, 200, 150] },\n    { name: "2025", data: [180, 220, 190] },\n  ]}\n  showLegend\n  showGrid\n/>`,
-    });
-  } else if (chart.id === 'line-chart') {
-    items.push({
-      title: 'Area Fill with Curves',
-      tag: 'area',
-      description: 'Smooth bezier curves with gradient area fill.',
-      code: `<LineChart\n  series={[{ name: "Trend", data: [10, 40, 25, 60, 35, 70] }]}\n  labels={["Jan", "Feb", "Mar", "Apr", "May", "Jun"]}\n  showArea\n  curved\n  showDots\n/>`,
-    });
-  } else if (chart.id === 'pie-chart') {
-    items.push({
-      title: 'Donut with Center Label',
-      tag: 'donut',
-      description: 'Ring chart with custom content in the center.',
-      code: `<PieChart\n  data={data}\n  donut\n  innerLabel={<span className="text-xl font-bold">85%</span>}\n  showPercentage\n/>`,
-    });
-  } else if (chart.id === 'area-chart') {
-    items.push({
-      title: 'Stacked Areas',
-      tag: 'stacked',
-      description: 'Stack multiple series to show cumulative totals.',
-      code: `<AreaChart\n  series={[\n    { name: "Organic", data: [40, 50, 45, 70] },\n    { name: "Paid", data: [20, 30, 25, 35] },\n  ]}\n  labels={["Q1", "Q2", "Q3", "Q4"]}\n  stacked\n  gradient\n  showLegend\n/>`,
-    });
-  }
+  // Generated code derives from the patched state via the same
+  // serializer the Playground uses; the snippet stays in lock-step
+  // with the live preview shown alongside.
+  const generatedCode = useMemo(
+    () => generatePlaygroundCode(chart.name, descriptors, presetState, chart.id),
+    [chart.id, chart.name, descriptors, presetState],
+  );
 
-  // Common: theme variant example.
-  //
-  // Two equivalent ways to drive a chart into dark mode — both work
-  // because every wrapper accepts the `theme` prop directly AND honours
-  // the shell-level `data-appearance` attribute set by `ThemeProvider`.
-  //
-  // The earlier example used `<ThemeProvider theme="dark">` which is
-  // NOT the real API: `ThemeProvider` accepts `defaultAxes`, not a
-  // `theme` shorthand. Replaced with the chart's own `theme` prop —
-  // the simplest correct path. ThemeProvider scope is documented as
-  // an alternative beneath.
-  items.push({
-    title: 'Dark Theme',
-    tag: 'theme',
-    description: `${chart.name} rendered with an explicit dark theme override.`,
-    code: `<${chart.name}\n  data={data}\n  theme="dark"\n/>\n\n// Or scope at the provider level:\n// <ThemeProvider defaultAxes={{ appearance: 'dark' }}>\n//   <${chart.name} data={data} />\n// </ThemeProvider>`,
-  });
+  return (
+    <article
+      className="flex flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-default transition-all hover:shadow-sm"
+      data-testid={`preset-card-${preset.id}`}
+    >
+      {/* Title strip */}
+      <header className="flex items-center gap-2 border-b border-border-subtle px-4 py-3">
+        <BookOpen className="h-3.5 w-3.5 text-text-secondary" aria-hidden="true" />
+        <span className="text-sm font-semibold text-text-primary">{preset.label}</span>
+        {preset.tag && (
+          <span className="ml-auto rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-text-tertiary">
+            {preset.tag}
+          </span>
+        )}
+      </header>
 
-  return items;
+      {/* Description */}
+      <p className="border-b border-border-subtle bg-surface-canvas/50 px-4 py-2 text-xs text-text-secondary">
+        {preset.description}
+      </p>
+
+      {/* Live preview — same renderer as Playground */}
+      <div className="flex min-h-[220px] items-center justify-center bg-surface-canvas p-4">
+        <ChartPreviewLive
+          chartId={chart.id}
+          chartName={chart.name}
+          toggles={presetState}
+          height={200}
+        />
+      </div>
+
+      {/* Generated code, compile-ready */}
+      <pre className="overflow-x-auto border-t border-border-subtle p-4 text-[11px] leading-relaxed text-text-primary">
+        <code>{generatedCode}</code>
+      </pre>
+    </article>
+  );
 }
 
 /* ================================================================== */

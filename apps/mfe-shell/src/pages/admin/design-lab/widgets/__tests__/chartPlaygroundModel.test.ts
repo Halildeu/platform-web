@@ -4,12 +4,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  applyPreset,
   buildDescriptor,
   buildDescriptors,
   deriveDefaults,
   generatePlaygroundCode,
   getBool,
   getCategory,
+  getChartPresets,
   getDecal,
   getEditorKind,
   getEnum,
@@ -414,5 +416,89 @@ describe('chartPlaygroundModel — tristate codegen', () => {
     expect(codeOn).toContain('animate={false}');
     expect(codeOn).toContain('decal');
     expect(codeOn).not.toContain('decal=');
+  });
+});
+
+describe('chartPlaygroundModel — preset gallery', () => {
+  it('returns BarChart presets including basic + horizontal + dark + readonly', () => {
+    const presets = getChartPresets('bar-chart');
+    const ids = presets.map((p) => p.id);
+    expect(ids).toContain('basic');
+    expect(ids).toContain('horizontal');
+    expect(ids).toContain('with-values');
+    expect(ids).toContain('with-legend');
+    expect(ids).toContain('dark');
+    expect(ids).toContain('compact');
+    expect(ids).toContain('readonly');
+  });
+
+  it('returns LineChart / AreaChart / PieChart / ScatterChart / GaugeChart presets', () => {
+    expect(getChartPresets('line-chart').length).toBeGreaterThanOrEqual(3);
+    expect(getChartPresets('area-chart').length).toBeGreaterThanOrEqual(3);
+    expect(getChartPresets('pie-chart').length).toBeGreaterThanOrEqual(3);
+    expect(getChartPresets('scatter-chart').length).toBeGreaterThanOrEqual(2);
+    expect(getChartPresets('gauge-chart').length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('returns empty array for charts without presets', () => {
+    expect(getChartPresets('treemap-chart')).toEqual([]);
+    expect(getChartPresets('non-existent-chart')).toEqual([]);
+  });
+
+  it('every BarChart preset declares a label + description (gallery card requirements)', () => {
+    for (const preset of getChartPresets('bar-chart')) {
+      expect(preset.label).toBeTruthy();
+      expect(preset.description).toBeTruthy();
+    }
+  });
+
+  it("BarChart 'basic' preset has empty patch (defaults preserved)", () => {
+    const preset = getChartPresets('bar-chart').find((p) => p.id === 'basic')!;
+    expect(preset.statePatch).toEqual({});
+  });
+
+  it("BarChart 'horizontal' preset only patches orientation", () => {
+    const preset = getChartPresets('bar-chart').find((p) => p.id === 'horizontal')!;
+    expect(preset.statePatch).toEqual({ orientation: 'horizontal' });
+  });
+
+  it("GaugeChart 'low' preset overrides value (number patch)", () => {
+    const preset = getChartPresets('gauge-chart').find((p) => p.id === 'low')!;
+    expect(preset.statePatch.value).toBe(15);
+  });
+
+  it('applyPreset shallow-merges patch over defaults', () => {
+    const defaults: Record<string, unknown> = {
+      showGrid: true,
+      animate: true,
+      orientation: 'vertical',
+    };
+    const result = applyPreset(defaults, {
+      id: 'horiz',
+      label: 'Horizontal',
+      description: 'turn it sideways',
+      statePatch: { orientation: 'horizontal' },
+    });
+    expect(result.orientation).toBe('horizontal');
+    expect(result.showGrid).toBe(true);
+    expect(result.animate).toBe(true);
+    // Returned object is a new reference (caller can mutate freely).
+    expect(result).not.toBe(defaults);
+  });
+
+  it('preset state patch flows through generatePlaygroundCode for compile-ready output', () => {
+    const props: ChartProp[] = [
+      mkProp({ name: 'data', type: 'ChartDataPoint[]', required: true }),
+      mkProp({ name: 'orientation', type: "'vertical' | 'horizontal'", default: '"vertical"' }),
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+    ];
+    const descriptors = buildDescriptors('bar-chart', props);
+    const defaults = deriveDefaults(descriptors);
+    const horizontalPreset = getChartPresets('bar-chart').find((p) => p.id === 'horizontal')!;
+    const presetState = applyPreset(defaults, horizontalPreset);
+    const code = generatePlaygroundCode('BarChart', descriptors, presetState, 'bar-chart');
+    expect(code).toContain('orientation="horizontal"');
+    // Default-matching props (animate=true) are omitted.
+    expect(code).not.toContain('animate');
   });
 });
