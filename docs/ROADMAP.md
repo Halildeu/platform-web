@@ -801,16 +801,28 @@ progressive/lazy render, LRU cache), i18n (ECharts locale), touch gestures,
 plugin registry, dashboard composition, collaboration (sharing, annotation,
 offline cache).
 
-**Gaps (CONTRACT v2 vs reality, 2026-04-30):**
+**Gaps (CONTRACT v2 vs reality, 2026-04-30; reconciled with v2.1 changelog 2026-05-03 PR-E1):**
 
-| Gap                                                   | CONTRACT ref                | Severity |
-| ----------------------------------------------------- | --------------------------- | -------- |
-| `ChartTooltip` standalone component                   | §1 line 57-59               | CRITICAL |
-| `AccessControlledProps` integration                   | §3 line 108-112             | CRITICAL |
-| Interactive legend (click-to-hide series)             | §1 ChartLegend              | HIGH     |
-| 8/8 CI gates not active                               | §8                          | MEDIUM   |
-| 13/13 chart components — zero unit tests              | §8 test exit criteria       | MEDIUM   |
-| Design Lab Playground = SVG `ChartPreviewPlaceholder` | UX (HARD RULE No Fake Work) | CRITICAL |
+| Gap                                                   | CONTRACT ref                               | Severity                              |
+| ----------------------------------------------------- | ------------------------------------------ | ------------------------------------- |
+| `ChartTooltip` standalone component                   | §1 line 57-59 (v2.1 removed)               | RESOLVED                              |
+| `AccessControlledProps` integration                   | §3 line 108-112 (v2.1 deferred to Phase 2) | PHASE 2                               |
+| Interactive legend (click-to-hide series)             | §1 ChartLegend                             | HIGH                                  |
+| 8/8 CI gates not active                               | §8                                         | MEDIUM                                |
+| 13/13 chart components — zero unit tests              | §8 test exit criteria                      | MEDIUM (PR-D #103, PR-D2 #164 closed) |
+| Design Lab Playground = SVG `ChartPreviewPlaceholder` | UX (HARD RULE No Fake Work)                | CRITICAL                              |
+
+**Rows 1-2 reconciled by PR-E1 (Faz 21.4 contract-debt closure, 2026-05-03):**
+The 2026-04-30 audit flagged these as CRITICAL based on the v2 contract.
+CONTRACT v2.1 (also 2026-04-30) had already removed `ChartTooltip` from §1
+("would have duplicated that surface for no gain") and explicitly deferred
+`AccessControlledProps` to "Phase 2 — pending integration", tracked in
+`docs/x-charts-ui-ux-tracker.md`. The audit row above was stale because it
+referenced `§1 line 57-59` and `§3 line 108-112` of the v2 contract. With
+v2.1 these are intentional gaps, not regressions. PR-E1 closes the
+documentation debt: ChartTooltip rationale is recorded in `CONTRACT.md §1.0`
+and the access-control vocabulary is relocated to `@mfe/shared-types`
+(prerequisite for PR-E2 wiring).
 
 **Design Lab playground reality:** 29 chart route'u var (`/admin/design-lab/charts/*`),
 ama Playground tab'i SVG mock gösteriyordu — toggle'lar render'a yansımıyordu.
@@ -823,14 +835,16 @@ linked-charts + drill-down demo'su.
 
 ### PR plan (6 commits, ~24-30 saat total)
 
-| PR    | Scope                                                                                | Effort | Depends      | Status                                                        |
-| ----- | ------------------------------------------------------------------------------------ | ------ | ------------ | ------------------------------------------------------------- |
-| **A** | Design Lab live render (13 chart, fake SVG → real x-charts, toggle forwarding)       | 2h     | —            | ✅ PR [#91](https://github.com/Halildeu/platform-web/pull/91) |
-| **B** | Design Lab live demo (CrossFilter, DrillDown, AI hooks×5, Perf utility×5 = 11 route) | 3-4h   | A            | pending                                                       |
-| **C** | Feature-demo pages (Brush, Zoom/Pan, Real-time, Theme switch, Export)                | 4-6h   | A            | pending                                                       |
-| **D** | 13 chart × unit test (BarChart/LineChart/...)                                        | 4-6h   | — (parallel) | pending                                                       |
-| **E** | CONTRACT cleanup (`ChartTooltip` + `AccessControlledProps` integration kararı)       | 2-3h   | — (parallel) | pending                                                       |
-| **F** | 8 CI gate aktivasyonu (bundle/axe/contrast/xss/memory/spec/visual/tree-shake)        | 4-8h   | — (parallel) | pending                                                       |
+| PR     | Scope                                                                                                                            | Effort | Depends      | Status                                                          |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ | --------------------------------------------------------------- |
+| **A**  | Design Lab live render (13 chart, fake SVG → real x-charts, toggle forwarding)                                                   | 2h     | —            | ✅ PR [#91](https://github.com/Halildeu/platform-web/pull/91)   |
+| **B**  | Design Lab live demo (CrossFilter, DrillDown, AI hooks×5, Perf utility×5 = 11 route)                                             | 3-4h   | A            | pending                                                         |
+| **C**  | Feature-demo pages (Brush, Zoom/Pan, Real-time, Theme switch, Export)                                                            | 4-6h   | A            | pending                                                         |
+| **D**  | 13 chart × smoke + series.type contract                                                                                          | 4-6h   | — (parallel) | ✅ PR [#103](https://github.com/Halildeu/platform-web/pull/103) |
+| **D2** | 13 chart × deeper option-shape mutation tests (data fidelity, prop toggles, rerender)                                            | 3-4h   | D            | ✅ PR [#164](https://github.com/Halildeu/platform-web/pull/164) |
+| **E1** | Contract-debt closure (ROADMAP reconcile + ChartTooltip rationale doc + AccessControlledProps relocation to `@mfe/shared-types`) | 1-2h   | — (parallel) | in progress (this PR)                                           |
+| **E2** | `AccessControlledProps` integration across 13 chart wrappers + auth `useZanzibarAccessProps` hook + Bar 4-state matrix test      | 3-4h   | E1           | pending                                                         |
+| **F**  | 8 CI gate aktivasyonu (bundle/axe/contrast/xss/memory/spec/visual/tree-shake)                                                    | 4-8h   | — (parallel) | pending                                                         |
 
 ### Linked artifacts
 

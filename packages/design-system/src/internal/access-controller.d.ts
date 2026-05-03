@@ -1,17 +1,15 @@
-import type React from "react";
-export type AccessLevel = "full" | "readonly" | "disabled" | "hidden";
-export type AccessControlledProps = {
-    access?: AccessLevel;
-    accessReason?: string;
-};
-export type AccessResolution = {
-    state: AccessLevel;
-    isHidden: boolean;
-    isReadonly: boolean;
-    isDisabled: boolean;
-};
-export declare const resolveAccessState: (access?: AccessLevel) => AccessResolution;
-export declare const shouldBlockInteraction: (state: AccessLevel, externallyDisabled?: boolean) => boolean;
+import type React from 'react';
+// Source-of-truth in @mfe/shared-types/access (Faz 21.4 PR-E1). Kept
+// in sync with access-controller.ts re-exports.
+export {
+  type AccessLevel,
+  type AccessControlledProps,
+  type AccessResolution,
+  resolveAccessState,
+  shouldBlockInteraction,
+} from '@mfe/shared-types';
+
+import type { AccessControlledProps, AccessLevel } from '@mfe/shared-types';
 /**
  * Returns Tailwind utility class strings for a given access level.
  *
@@ -23,4 +21,12 @@ export declare const shouldBlockInteraction: (state: AccessLevel, externallyDisa
  * ```
  */
 export declare function accessStyles(access: AccessLevel): string;
-export declare const withAccessGuard: <E extends React.SyntheticEvent = React.SyntheticEvent>(state: AccessLevel, handler?: ((event: E) => void | Promise<void>) | (() => void | Promise<void>), externallyDisabled?: boolean) => (event: E) => void;
+/** @deprecated Use `accessStyles` instead. */
+export declare const _accessStyles: typeof accessStyles;
+/** @deprecated Use `AccessControlledProps` instead. */
+export type _AccessControlledProps = AccessControlledProps;
+export declare const withAccessGuard: <E extends React.SyntheticEvent = React.SyntheticEvent>(
+  state: AccessLevel,
+  handler?: ((event: E) => void | Promise<void>) | (() => void | Promise<void>),
+  externallyDisabled?: boolean,
+) => (event: E) => void;
