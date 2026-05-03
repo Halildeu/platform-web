@@ -38,6 +38,16 @@ import DrillDownDemoLive from './DrillDownDemoLive';
 import FeatureDemoLive, { type FeatureId } from './FeatureDemoLive';
 import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
 import PerfUtilityDemoLive, { type PerfUtilityId } from './PerfUtilityDemoLive';
+import {
+  getBool,
+  getDecal,
+  getEnum,
+  getNum,
+  getOptStr,
+  getStr,
+  getPreviewSurfaceStyle,
+  type PlaygroundState,
+} from './chartPlaygroundModel';
 
 const categories = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'];
 const values1 = [320, 332, 301, 334, 390, 330];
@@ -47,38 +57,47 @@ export interface ChartPreviewLiveProps {
   chartId: string;
   chartName: string;
   /**
-   * Boolean / string toggles forwarded from the PlaygroundTab props editor.
-   * Keys correspond to declared chart prop names (e.g. showValues, donut).
+   * Typed playground state forwarded from `PlaygroundTab`. Faz 21.8
+   * follow-up (Codex thread `019def27`): widened from `boolean | string`
+   * to `PlaygroundState` (boolean | string | number | undefined) so enum
+   * pickers and number inputs can drive the underlying chart prop. The
+   * accessors `getBool` / `getEnum` / `getNum` / `getStr` from
+   * `chartPlaygroundModel` provide typed reads with safe fallbacks.
    */
-  toggles?: Record<string, boolean | string>;
+  toggles?: PlaygroundState;
   /**
    * Visual height (px). Default 360 matches the Storybook visual snapshot box.
    */
   height?: number;
 }
 
-const isOn = (
-  toggles: Record<string, boolean | string> | undefined,
-  key: string,
-  fallback: boolean,
-): boolean => {
-  if (!toggles || !(key in toggles)) return fallback;
-  const value = toggles[key];
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'string') return value === 'true';
-  return fallback;
-};
+// Backwards-compat shim — kept inline so call sites that still expect a
+// boolean reader keep working. Internally just delegates to `getBool`.
+const isOn = (toggles: PlaygroundState | undefined, key: string, fallback: boolean): boolean =>
+  getBool(toggles, key, fallback);
+
+// Mirror of `packages/x-charts/src/types.ts` `ChartSize`. Keep in sync if
+// the wrapper extends the size axis.
+type ChartSize = 'sm' | 'md' | 'lg';
 
 interface PreviewBoxProps {
   testId: string;
   height: number;
+  surfaceStyle?: React.CSSProperties;
   children: React.ReactNode;
 }
 
-const PreviewBox: React.FC<PreviewBoxProps> = ({ testId, height, children }) => (
+const PreviewBox: React.FC<PreviewBoxProps> = ({ testId, height, surfaceStyle, children }) => (
   <div
     data-testid={testId}
-    style={{ width: '100%', maxWidth: 720, height, background: 'var(--surface-canvas, #ffffff)' }}
+    style={{
+      width: '100%',
+      maxWidth: 720,
+      height,
+      background: surfaceStyle?.background ?? 'var(--surface-canvas, #ffffff)',
+      color: surfaceStyle?.color,
+      transition: 'background-color 200ms ease, color 200ms ease',
+    }}
   >
     {children}
   </div>
@@ -93,52 +112,75 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
   const testId = `design-lab-chart-preview-${chartId}`;
 
   switch (chartId) {
-    case 'bar-chart':
+    case 'bar-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
           <BarChart
             data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
-            title={chartName}
-            showValues={isOn(toggles, 'showValues', true)}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            orientation={getEnum(toggles, 'orientation', 'vertical')}
+            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            showValues={isOn(toggles, 'showValues', false)}
             showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
-            size="lg"
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'line-chart':
+    case 'line-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
           <LineChart
             series={[
               { name: 'Seri A', data: values1 },
               { name: 'Seri B', data: values2 },
             ]}
             labels={categories}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
+            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
             showDots={isOn(toggles, 'showDots', true)}
             showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
             curved={isOn(toggles, 'curved', false)}
             showArea={isOn(toggles, 'showArea', false)}
             animate={isOn(toggles, 'animate', true)}
-            size="lg"
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'area-chart':
+    case 'area-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
           <AreaChart
             series={[
               { name: 'Gelir', data: values1 },
               { name: 'Gider', data: values2 },
             ]}
             labels={categories}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
+            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
             stacked={isOn(toggles, 'stacked', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
             showGrid={isOn(toggles, 'showGrid', true)}
@@ -146,57 +188,86 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             gradient={isOn(toggles, 'gradient', true)}
             curved={isOn(toggles, 'curved', true)}
             animate={isOn(toggles, 'animate', true)}
-            size="lg"
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'pie-chart':
+    case 'pie-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
           <PieChart
             data={categories.slice(0, 5).map((c, i) => ({ label: c, value: values1[i] }))}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
+            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
             donut={isOn(toggles, 'donut', true)}
             showLabels={isOn(toggles, 'showLabels', true)}
             showLegend={isOn(toggles, 'showLegend', false)}
             showPercentage={isOn(toggles, 'showPercentage', true)}
             animate={isOn(toggles, 'animate', true)}
-            size="lg"
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'scatter-chart':
+    case 'scatter-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
           <ScatterChart
             data={values1.map((v, i) => ({ x: v, y: values2[i], label: categories[i] }))}
-            title={chartName}
-            xLabel="Seri A"
-            yLabel="Seri B"
-            size="lg"
+            title={getStr(toggles, 'title', chartName)}
+            xLabel={getStr(toggles, 'xLabel', 'Seri A')}
+            yLabel={getStr(toggles, 'yLabel', 'Seri B')}
+            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'gauge-chart':
+    case 'gauge-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
           <GaugeChart
-            value={72}
-            min={0}
-            max={100}
-            title={chartName}
+            value={getNum(toggles, 'value', 72)}
+            min={getNum(toggles, 'min', 0)}
+            max={getNum(toggles, 'max', 100)}
+            title={getStr(toggles, 'title', chartName)}
             thresholds={[
               { value: 30, color: '#ef4444' },
               { value: 70, color: '#f59e0b' },
               { value: 100, color: '#22c55e' },
             ]}
-            size="lg"
+            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
     case 'radar-chart':
       return (
