@@ -389,6 +389,36 @@ describe('Runtime access transitions detach stale click listeners', () => {
     expect(clickListenerRegistrations().length).toBeGreaterThan(initialRegs);
   });
 
+  it('theme re-init re-registers the click listener on the fresh ECharts instance (PR-E2 must-fix #1 iter-2)', () => {
+    const handler = () => {};
+    const { rerender } = render(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="full"
+        theme="light"
+        onDataPointClick={handler}
+      />,
+    );
+    const initialRegs = clickListenerRegistrations().length;
+    expect(initialRegs).toBeGreaterThan(0);
+
+    // Theme rerender forces useEChartsRenderer's init effect to dispose
+    // the old instance and create a fresh one. The click-handler effect
+    // must re-fire against the new instance, even though `onClick`
+    // identity didn't change. Pre-fix: this regression was silent.
+    rerender(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        animate={false}
+        access="full"
+        theme="dark"
+        onDataPointClick={handler}
+      />,
+    );
+    expect(clickListenerRegistrations().length).toBeGreaterThan(initialRegs);
+  });
+
   it('full → disabled detaches the click listener', () => {
     const handler = () => {};
     const { rerender } = render(

@@ -70,6 +70,12 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
   const containerRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
   const [isReady, setIsReady] = useState(false);
+  // PR-E2 must-fix #1 iter-2 — bumped each time the init effect creates
+  // a NEW instance (theme/renderer/locale change). The click-listener
+  // effect depends on this so that, after instance re-init, the user
+  // handler is re-attached to the fresh instance even when `onClick`
+  // identity stayed stable across the rerender.
+  const [instanceVersion, setInstanceVersion] = useState(0);
 
   const {
     option,
@@ -108,6 +114,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
 
     instanceRef.current = instance;
     setIsReady(true);
+    setInstanceVersion((v) => v + 1);
     onReady?.(instance);
 
     // ResizeObserver for responsive
@@ -127,16 +134,19 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     // ECharts re-resolves toolbox/legend/dataZoom strings.
   }, [renderer, theme, echartsLocaleKey]);
 
-  // Click handler lifecycle (Faz 21.4 PR-E2 must-fix #1).
+  // Click handler lifecycle (Faz 21.4 PR-E2 must-fix #1, iter-2).
   //
   // Separate effect so runtime `onClick` changes register/unregister
-  // correctly. Important for access-control transitions: when a chart
-  // moves from `access='full'` to `access='readonly'/'disabled'`,
-  // `guardChartCallback` returns `undefined` and we MUST detach the
-  // previous user listener; otherwise stale handlers keep firing on
-  // ECharts events. The dependency array intentionally does NOT include
-  // the init triggers (`renderer`, `theme`, `echartsLocaleKey`) — those
-  // re-create the instance and rebind through their own cleanup path.
+  // correctly across BOTH dimensions:
+  //   1. Access transitions (full ↔ readonly/disabled) flip `onClick`
+  //      identity at the wrapper layer (guardChartCallback returns
+  //      undefined when blocked). Cleanup unbinds the previous listener
+  //      before the next mount path attaches.
+  //   2. Theme / renderer / locale changes dispose the old ECharts
+  //      instance and create a fresh one. `instanceVersion` is bumped
+  //      inside the init effect on every successful create, so this
+  //      effect re-runs against the new instance even when `onClick`
+  //      identity is unchanged.
   useEffect(() => {
     const instance = instanceRef.current;
     if (!instance || !onClick) return;
@@ -144,7 +154,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     return () => {
       instance.off('click', onClick);
     };
-  }, [onClick, isReady]);
+  }, [onClick, instanceVersion]);
 
   // Option update
   useEffect(() => {
