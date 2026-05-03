@@ -32,10 +32,15 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
   const dotEnv = loadDotEnvLocal();
   // process.env takes priority over .env.local (same as webpack.common.js)
   const merged = { ...dotEnv, ...process.env };
+  // AG Grid lisansı: VITE_ prefix yeterli (allowlist'a eklemeye gerek yok).
+  // Tek-kaynak (single source of truth): GitHub Secret AG_GRID_LICENSE_KEY →
+  // CI build-arg VITE_AG_GRID_LICENSE_KEY → Vite buildRuntimeEnv → bundle.
   const allowlist = new Set([
-    'NODE_ENV', 'AUTH_MODE', 'AG_GRID_LICENSE_KEY',
+    'NODE_ENV',
+    'AUTH_MODE',
     'SHELL_SKIP_REMOTE_SERVICES',
-    'SHELL_ENABLE_SUGGESTIONS_REMOTE', 'SHELL_ENABLE_ETHIC_REMOTE',
+    'SHELL_ENABLE_SUGGESTIONS_REMOTE',
+    'SHELL_ENABLE_ETHIC_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
@@ -85,13 +90,22 @@ function normalizeBasePath(value: string): string {
 
 function buildRemotes() {
   const enabled = {
-    suggestions: readEnvBoolean(['VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE', 'SHELL_ENABLE_SUGGESTIONS_REMOTE']),
+    suggestions: readEnvBoolean([
+      'VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE',
+      'SHELL_ENABLE_SUGGESTIONS_REMOTE',
+    ]),
     ethic: readEnvBoolean(['VITE_SHELL_ENABLE_ETHIC_REMOTE', 'SHELL_ENABLE_ETHIC_REMOTE']),
     access: readEnvBoolean(['VITE_SHELL_ENABLE_ACCESS_REMOTE', 'SHELL_ENABLE_ACCESS_REMOTE']),
     audit: readEnvBoolean(['VITE_SHELL_ENABLE_AUDIT_REMOTE', 'SHELL_ENABLE_AUDIT_REMOTE']),
     users: readEnvBoolean(['VITE_SHELL_ENABLE_USERS_REMOTE', 'SHELL_ENABLE_USERS_REMOTE']),
-    reporting: readEnvBoolean(['VITE_SHELL_ENABLE_REPORTING_REMOTE', 'SHELL_ENABLE_REPORTING_REMOTE']),
-    schemaExplorer: readEnvBoolean(['VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE', 'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE']),
+    reporting: readEnvBoolean([
+      'VITE_SHELL_ENABLE_REPORTING_REMOTE',
+      'SHELL_ENABLE_REPORTING_REMOTE',
+    ]),
+    schemaExplorer: readEnvBoolean([
+      'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
+      'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
+    ]),
   };
 
   // All remotes must be declared so MF plugin can resolve their imports
@@ -100,12 +114,30 @@ function buildRemotes() {
   // will catch the error and gracefully skip.
   const STUB = 'data:text/javascript,export default {}; export function configureShellServices(){}';
   const remoteEntries = {
-    suggestions: readEnvString(['MFE_SUGGESTIONS_URL', 'VITE_MFE_SUGGESTIONS_URL'], 'http://localhost:3001/remoteEntry.js'),
-    ethic: readEnvString(['MFE_ETHIC_URL', 'VITE_MFE_ETHIC_URL'], 'http://localhost:3002/remoteEntry.js'),
-    users: readEnvString(['MFE_USERS_URL', 'VITE_MFE_USERS_URL'], 'http://localhost:3004/remoteEntry.js'),
-    access: readEnvString(['MFE_ACCESS_URL', 'VITE_MFE_ACCESS_URL'], 'http://localhost:3005/remoteEntry.js'),
-    audit: readEnvString(['MFE_AUDIT_URL', 'VITE_MFE_AUDIT_URL'], 'http://localhost:3006/remoteEntry.js'),
-    reporting: readEnvString(['MFE_REPORTING_URL', 'VITE_MFE_REPORTING_URL'], 'http://localhost:3007/remoteEntry.js'),
+    suggestions: readEnvString(
+      ['MFE_SUGGESTIONS_URL', 'VITE_MFE_SUGGESTIONS_URL'],
+      'http://localhost:3001/remoteEntry.js',
+    ),
+    ethic: readEnvString(
+      ['MFE_ETHIC_URL', 'VITE_MFE_ETHIC_URL'],
+      'http://localhost:3002/remoteEntry.js',
+    ),
+    users: readEnvString(
+      ['MFE_USERS_URL', 'VITE_MFE_USERS_URL'],
+      'http://localhost:3004/remoteEntry.js',
+    ),
+    access: readEnvString(
+      ['MFE_ACCESS_URL', 'VITE_MFE_ACCESS_URL'],
+      'http://localhost:3005/remoteEntry.js',
+    ),
+    audit: readEnvString(
+      ['MFE_AUDIT_URL', 'VITE_MFE_AUDIT_URL'],
+      'http://localhost:3006/remoteEntry.js',
+    ),
+    reporting: readEnvString(
+      ['MFE_REPORTING_URL', 'VITE_MFE_REPORTING_URL'],
+      'http://localhost:3007/remoteEntry.js',
+    ),
     schemaExplorer: readEnvString(
       ['MFE_SCHEMA_EXPLORER_URL', 'VITE_MFE_SCHEMA_EXPLORER_URL'],
       'http://localhost:3008/remoteEntry.js',
@@ -203,7 +235,9 @@ const sharedProdOnly = {
 
 export default defineConfig(({ mode }) => {
   const runtimeEnv = buildRuntimeEnv(mode);
-  const appBasePath = normalizeBasePath(readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'));
+  const appBasePath = normalizeBasePath(
+    readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'),
+  );
 
   return {
     base: appBasePath,
@@ -250,14 +284,32 @@ export default defineConfig(({ mode }) => {
 
     resolve: {
       alias: [
-        { find: '@platform/capabilities', replacement: path.resolve(__dirname, '../../packages/platform-capabilities/src') },
-        { find: '@mfe/design-system', replacement: path.resolve(__dirname, '../../packages/design-system/src') },
-        { find: '@mfe/i18n-dicts', replacement: path.resolve(__dirname, '../../packages/i18n-dicts/src') },
-        { find: '@mfe/shared-http', replacement: path.resolve(__dirname, '../../packages/shared-http/src') },
+        {
+          find: '@platform/capabilities',
+          replacement: path.resolve(__dirname, '../../packages/platform-capabilities/src'),
+        },
+        {
+          find: '@mfe/design-system',
+          replacement: path.resolve(__dirname, '../../packages/design-system/src'),
+        },
+        {
+          find: '@mfe/i18n-dicts',
+          replacement: path.resolve(__dirname, '../../packages/i18n-dicts/src'),
+        },
+        {
+          find: '@mfe/shared-http',
+          replacement: path.resolve(__dirname, '../../packages/shared-http/src'),
+        },
         // Bypass MF loadShare wrapper for @tanstack/react-query — prevents
         // "QueryCache is not a constructor" caused by async TLA in Vite 8.
         // Direct resolve to node_modules ESM entry, skipping MF's virtual module.
-        { find: '@tanstack/react-query', replacement: path.resolve(__dirname, 'node_modules/@tanstack/react-query/build/modern/index.js') },
+        {
+          find: '@tanstack/react-query',
+          replacement: path.resolve(
+            __dirname,
+            'node_modules/@tanstack/react-query/build/modern/index.js',
+          ),
+        },
       ],
     },
 
@@ -279,17 +331,33 @@ export default defineConfig(({ mode }) => {
         },
         // Direct service routes — bypass gateway (avoids Vault/Eureka issues)
         '/api/v1/reports': { target: 'http://localhost:8095', changeOrigin: true, secure: false },
-        '/api/v1/dashboards': { target: 'http://localhost:8095', changeOrigin: true, secure: false },
+        '/api/v1/dashboards': {
+          target: 'http://localhost:8095',
+          changeOrigin: true,
+          secure: false,
+        },
         // Access/authz plane permission-service uzerinde yasiyor; local dev
         // proxy'leri stage gateway sahipligiyle ayni tutulur.
-        '/api/v1/context-health': { target: 'http://localhost:8095', changeOrigin: true, secure: false },
+        '/api/v1/context-health': {
+          target: 'http://localhost:8095',
+          changeOrigin: true,
+          secure: false,
+        },
         '/api/v1/roles': { target: 'http://localhost:8090', changeOrigin: true, secure: false },
-        '/api/v1/permissions': { target: 'http://localhost:8090', changeOrigin: true, secure: false },
+        '/api/v1/permissions': {
+          target: 'http://localhost:8090',
+          changeOrigin: true,
+          secure: false,
+        },
         '/api/v1/authz': { target: 'http://localhost:8090', changeOrigin: true, secure: false },
         '/api/v1/users': { target: 'http://localhost:8089', changeOrigin: true, secure: false },
         '/api/v1/companies': { target: 'http://localhost:8092', changeOrigin: true, secure: false },
         '/api/v1/themes': { target: 'http://localhost:8091', changeOrigin: true, secure: false },
-        '/api/v1/theme-registry': { target: 'http://localhost:8091', changeOrigin: true, secure: false },
+        '/api/v1/theme-registry': {
+          target: 'http://localhost:8091',
+          changeOrigin: true,
+          secure: false,
+        },
         '/api/v1/me/theme': { target: 'http://localhost:8091', changeOrigin: true, secure: false },
         '/api/v1/variants': { target: 'http://localhost:8091', changeOrigin: true, secure: false },
         // /api/audit → gateway (route'lar permission-service DB'sine bağlı, henüz migrate edilmedi)

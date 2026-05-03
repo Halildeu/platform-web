@@ -1,4 +1,3 @@
- 
 import { LicenseManager } from 'ag-grid-enterprise';
 
 type EnvRecord = Record<string, string | undefined>;
@@ -29,7 +28,9 @@ const getEnvValue = (key: string): string | undefined => {
 };
 
 const resolveAgGridLicenseKey = (): string | undefined => {
-  const candidate = getEnvValue('VITE_AG_GRID_LICENSE_KEY') ?? getEnvValue('AG_GRID_LICENSE_KEY');
+  // Tek-kaynak: VITE_AG_GRID_LICENSE_KEY (Vite naming convention).
+  // GitHub Secret AG_GRID_LICENSE_KEY → CI build-arg VITE_AG_GRID_LICENSE_KEY → bundle.
+  const candidate = getEnvValue('VITE_AG_GRID_LICENSE_KEY');
   const normalized = candidate?.trim();
   return normalized ? normalized : undefined;
 };
@@ -124,12 +125,20 @@ export const setupAgGridLicense = (): boolean => {
   const isProd = nodeEnv === 'production';
 
   const nextKey = resolveAgGridLicenseKey();
-  if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).__agLicenseDebugDone) {
+  if (
+    typeof window !== 'undefined' &&
+    !(window as unknown as Record<string, unknown>).__agLicenseDebugDone
+  ) {
     (window as unknown as Record<string, unknown>).__agLicenseDebugDone = true;
-     
-    console.debug('[ag-grid-license] resolved key:', nextKey ? `found (${nextKey.length} chars)` : 'NOT FOUND',
-      '| window.__env__:', typeof (window as unknown as Record<string, unknown>).__env__,
-      '| process.env:', typeof process !== 'undefined' ? 'defined' : 'undefined');
+
+    console.debug(
+      '[ag-grid-license] resolved key:',
+      nextKey ? `found (${nextKey.length} chars)` : 'NOT FOUND',
+      '| window.__env__:',
+      typeof (window as unknown as Record<string, unknown>).__env__,
+      '| process.env:',
+      typeof process !== 'undefined' ? 'defined' : 'undefined',
+    );
   }
   if (!nextKey) {
     if (!isProd) {

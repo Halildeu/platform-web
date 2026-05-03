@@ -101,7 +101,7 @@ jobs:
             VITE_FRONTEND_PUBLIC_ORIGIN=${{ matrix.origin }}
             VITE_GATEWAY_URL=${{ matrix.gateway }}
             VITE_AUTH_MODE=keycloak
-            AG_GRID_LICENSE_KEY=${{ secrets.AG_GRID_LICENSE_KEY }}
+            VITE_AG_GRID_LICENSE_KEY=${{ secrets.AG_GRID_LICENSE_KEY }}
             BUILD_SHA=${{ github.sha }}
             BUILD_REF=${{ github.ref_name }}
           tags: |
