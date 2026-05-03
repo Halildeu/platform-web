@@ -59,6 +59,8 @@
     "ci:detect-breaking": "node scripts/ci/detect-breaking.mjs",
     "x-charts:adoption-scan": "node scripts/ci/x-charts-adoption-scan.mjs",
     "x-charts:adoption-check": "node scripts/ci/x-charts-adoption-scan.mjs --check",
+    "x-charts:detail-sync": "node scripts/ci/sync-chart-detail-props.mjs",
+    "x-charts:detail-check": "node scripts/ci/sync-chart-detail-props.mjs --check",
     "ci:publish-gate": "node ./scripts/ci/publish-gate.mjs",
     "ci:visual-diff": "node ./scripts/ci/visual-diff-check.mjs",
     "designlab:index": "python3 scripts/build_design_lab_index.py",
