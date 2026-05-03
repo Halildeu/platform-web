@@ -21,9 +21,11 @@ import { vi } from 'vitest';
  * variables; consumers go through `lastDispatchedOption()`, `resetEChartsMock()`
  * etc. below.
  */
-const { setOptionMock, dispatchMock } = vi.hoisted(() => ({
+const { setOptionMock, dispatchMock, onMock, offMock } = vi.hoisted(() => ({
   setOptionMock: vi.fn(),
   dispatchMock: vi.fn(),
+  onMock: vi.fn(),
+  offMock: vi.fn(),
 }));
 
 vi.mock('../../renderers/echarts-imports', () => {
@@ -31,8 +33,8 @@ vi.mock('../../renderers/echarts-imports', () => {
     setOption: setOptionMock,
     dispose: vi.fn(),
     resize: vi.fn(),
-    on: vi.fn(),
-    off: vi.fn(),
+    on: onMock,
+    off: offMock,
     getZr: () => ({ on: vi.fn(), off: vi.fn() }),
     dispatchAction: dispatchMock,
     getDataURL: vi.fn(() => 'data:image/png;base64,'),
@@ -79,4 +81,30 @@ export const seriesTypes = (option: DispatchedOption | null): string[] => {
 export const resetEChartsMock = (): void => {
   setOptionMock.mockClear();
   dispatchMock.mockClear();
+  onMock.mockClear();
+  offMock.mockClear();
 };
+
+/* ------------------------------------------------------------------ */
+/*  Click listener register/unregister inspection (PR-E2 must-fix #1) */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Number of times `instance.on('click', handler)` was called since
+ * the last reset. Use to assert listener registration on access state
+ * transitions (e.g. readonly → full should fire one new register).
+ */
+export const clickListenerRegistrations = (): Array<(...args: unknown[]) => void> =>
+  onMock.mock.calls
+    .filter((args) => args[0] === 'click')
+    .map((args) => args[1] as (...args: unknown[]) => void);
+
+/**
+ * Number of times `instance.off('click', handler)` was called since
+ * the last reset. Mirror of `clickListenerRegistrations()` for
+ * teardown assertions.
+ */
+export const clickListenerUnregistrations = (): Array<(...args: unknown[]) => void> =>
+  offMock.mock.calls
+    .filter((args) => args[0] === 'click')
+    .map((args) => args[1] as (...args: unknown[]) => void);

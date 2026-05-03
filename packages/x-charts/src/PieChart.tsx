@@ -7,6 +7,10 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -40,7 +44,7 @@ export type ChartClickEvent = {
   label?: string;
 };
 
-export interface PieChartProps {
+export interface PieChartProps extends AccessControlledProps {
   /** Data points to render as slices. */
   data: ChartDataPoint[];
   /** Visual size variant. @default "md" */
@@ -113,7 +117,17 @@ const escapeHtml = (t: string): string =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function PieChart(
+/**
+ * PieChart inner — original hook-bearing body. The outer `PieChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<PieChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const PieChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<PieChartProps, 'access' | 'accessReason'>
+>(function PieChartInner(
   {
     data,
     size = 'md',
@@ -348,6 +362,29 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
   );
 });
 
+PieChartInner.displayName = 'PieChartInner';
+
+/**
+ * PieChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `PieChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function PieChart(
+  { access, accessReason, onDataPointClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <PieChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
+    </ChartAccessGate>
+  );
+});
 PieChart.displayName = 'PieChart';
 
 export default PieChart;

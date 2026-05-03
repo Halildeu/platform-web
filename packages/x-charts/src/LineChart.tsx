@@ -7,7 +7,11 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -40,7 +44,7 @@ export type ChartClickEvent = {
   label?: string;
 };
 
-export interface LineChartProps {
+export interface LineChartProps extends AccessControlledProps {
   /** Series to render as lines. */
   series: ChartSeries[];
   /** X-axis labels. */
@@ -118,7 +122,17 @@ const escapeHtml = (t: string): string =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(function LineChart(
+/**
+ * LineChart inner — original hook-bearing body. The outer `LineChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<LineChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const LineChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<LineChartProps, 'access' | 'accessReason'>
+>(function LineChartInner(
   {
     series: seriesData,
     labels,
@@ -363,6 +377,29 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
   );
 });
 
+LineChartInner.displayName = 'LineChartInner';
+
+/**
+ * LineChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `LineChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(function LineChart(
+  { access, accessReason, onDataPointClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <LineChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
+    </ChartAccessGate>
+  );
+});
 LineChart.displayName = 'LineChart';
 
 export default LineChart;

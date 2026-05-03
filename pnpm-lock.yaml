@@ -789,6 +789,9 @@ importers:
       '@mfe/shared-http':
         specifier: '*'
         version: link:../shared-http
+      '@mfe/shared-types':
+        specifier: '*'
+        version: link:../shared-types
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 18.2.0
@@ -973,6 +976,9 @@ importers:
 
   packages/x-charts:
     dependencies:
+      '@mfe/shared-types':
+        specifier: '*'
+        version: link:../shared-types
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
