@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react';
 import { federation } from '@module-federation/vite';
 import path from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
+// Faz 21.8 PR-X8: inline modulepreload helper to break the
+// auth ↔ design-system MF loadShare runtime cycle.
+import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
 
 /* ------------------------------------------------------------------ */
 /*  Env helpers — replaces webpack's DefinePlugin                      */
@@ -27,7 +30,12 @@ function loadShellDotEnvLocal(): Record<string, string> {
 function buildRuntimeEnv(mode: string): Record<string, string> {
   const dotEnv = loadShellDotEnvLocal();
   const merged = { ...dotEnv, ...process.env };
-  const allowlist = new Set(['NODE_ENV', 'AUTH_MODE', 'AG_GRID_LICENSE_KEY', 'VITE_AG_GRID_LICENSE_KEY']);
+  const allowlist = new Set([
+    'NODE_ENV',
+    'AUTH_MODE',
+    'AG_GRID_LICENSE_KEY',
+    'VITE_AG_GRID_LICENSE_KEY',
+  ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
     if (!allowlist.has(key) && !key.startsWith('VITE_')) continue;
@@ -77,8 +85,11 @@ const singleton = (
 });
 
 const HOST_ONLY_STUB_VERSION = '0.0.0';
-const hostOnly = (shareKey: string, versionKey: string = shareKey, fallback: string | boolean = false) =>
-  singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
+const hostOnly = (
+  shareKey: string,
+  versionKey: string = shareKey,
+  fallback: string | boolean = false,
+) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
 const sharedCore = {
   react: hostOnly('react'),
@@ -106,8 +117,13 @@ const isTest = !!process.env['VITEST'];
 
 export default defineConfig(({ mode }) => {
   const runtimeEnv = buildRuntimeEnv(mode);
-  const appBasePath = normalizeBasePath(readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'));
-  const shellRemoteEntry = readEnvString(['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'], 'http://localhost:3000/remoteEntry.js');
+  const appBasePath = normalizeBasePath(
+    readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'),
+  );
+  const shellRemoteEntry = readEnvString(
+    ['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'],
+    'http://localhost:3000/remoteEntry.js',
+  );
   const reportingRemoteEntry = readEnvString(
     ['MFE_REPORTING_URL', 'VITE_MFE_REPORTING_URL'],
     'http://localhost:3007/remoteEntry.js',
@@ -120,36 +136,67 @@ export default defineConfig(({ mode }) => {
 
     plugins: [
       react(),
-      ...(isTest ? [] : [federation({
-        name: 'mfe_users',
-        filename: 'remoteEntry.js',
-        dts: false,
-        remotes: {
-          mfe_shell: { type: 'module', name: 'mfe_shell', entry: shellRemoteEntry },
-          mfe_reporting: { type: 'module', name: 'mfe_reporting', entry: reportingRemoteEntry },
-        },
-        exposes: {
-          './UsersApp': './src/app/UsersApp.ui.tsx',
-          './shell-services': './src/app/services/shell-services.ts',
-        },
-        shared: {
-          /* Always share the full set — remove isSingleDomainBuild conditional
-           * to prevent duplicate React instances in single-domain builds. */
-          ...sharedCore,
-          ...(mode === 'production' ? sharedProdOnly : {}),
-        },
-      })]),
+      ...(isTest
+        ? []
+        : [
+            federation({
+              name: 'mfe_users',
+              filename: 'remoteEntry.js',
+              dts: false,
+              remotes: {
+                mfe_shell: { type: 'module', name: 'mfe_shell', entry: shellRemoteEntry },
+                mfe_reporting: {
+                  type: 'module',
+                  name: 'mfe_reporting',
+                  entry: reportingRemoteEntry,
+                },
+              },
+              exposes: {
+                './UsersApp': './src/app/UsersApp.ui.tsx',
+                './shell-services': './src/app/services/shell-services.ts',
+              },
+              shared: {
+                /* Always share the full set — remove isSingleDomainBuild conditional
+                 * to prevent duplicate React instances in single-domain builds. */
+                ...sharedCore,
+                ...(mode === 'production' ? sharedProdOnly : {}),
+              },
+            }),
+            mfPreloadHelperIsolation(),
+          ]),
     ],
 
     resolve: {
       alias: [
-        { find: '@mfe/design-system', replacement: path.resolve(__dirname, '../../packages/design-system/src') },
+        {
+          find: '@mfe/design-system',
+          replacement: path.resolve(__dirname, '../../packages/design-system/src'),
+        },
         { find: '@mfe/auth', replacement: path.resolve(__dirname, '../../packages/auth/src') },
-        { find: '@mfe/shared-http', replacement: path.resolve(__dirname, '../../packages/shared-http/src') },
+        {
+          find: '@mfe/shared-http',
+          replacement: path.resolve(__dirname, '../../packages/shared-http/src'),
+        },
         // mfe_shell/i18n: only alias in test mode — in dev/prod, MF remote handles it
-        ...(isTest ? [{ find: 'mfe_shell/i18n', replacement: path.resolve(__dirname, '__mocks__/mfe-shell-i18n.ts') }] : []),
-        { find: /^mfe_reporting\/(.*)$/, replacement: path.resolve(__dirname, '__mocks__/mfe-reporting-$1.ts') },
-        { find: '@tanstack/react-query', replacement: path.resolve(__dirname, 'node_modules/@tanstack/react-query/build/modern/index.js') },
+        ...(isTest
+          ? [
+              {
+                find: 'mfe_shell/i18n',
+                replacement: path.resolve(__dirname, '__mocks__/mfe-shell-i18n.ts'),
+              },
+            ]
+          : []),
+        {
+          find: /^mfe_reporting\/(.*)$/,
+          replacement: path.resolve(__dirname, '__mocks__/mfe-reporting-$1.ts'),
+        },
+        {
+          find: '@tanstack/react-query',
+          replacement: path.resolve(
+            __dirname,
+            'node_modules/@tanstack/react-query/build/modern/index.js',
+          ),
+        },
       ],
     },
 

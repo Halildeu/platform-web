@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 import { federation } from '@module-federation/vite';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+// Faz 21.8 PR-X8: inline modulepreload helper to break the
+// auth ↔ design-system MF loadShare runtime cycle introduced by
+// @module-federation/vite 1.15.1.
+import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
 
 function readEnvString(keys: string[], fallback: string): string {
   for (const key of keys) {
@@ -41,8 +45,11 @@ const singleton = (
 });
 
 const HOST_ONLY_STUB_VERSION = '0.0.0';
-const hostOnly = (shareKey: string, versionKey: string = shareKey, fallback: string | boolean = false) =>
-  singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
+const hostOnly = (
+  shareKey: string,
+  versionKey: string = shareKey,
+  fallback: string | boolean = false,
+) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
 const sharedCore = {
   react: hostOnly('react'),
@@ -70,96 +77,125 @@ const sharedProdOnly = {
 const isTest = !!process.env['VITEST'];
 
 export default defineConfig(({ mode }) => {
-  const appBasePath = normalizeBasePath(readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'));
-  const shellRemoteEntry = readEnvString(['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'], 'http://localhost:3000/remoteEntry.js');
+  const appBasePath = normalizeBasePath(
+    readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'),
+  );
+  const shellRemoteEntry = readEnvString(
+    ['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'],
+    'http://localhost:3000/remoteEntry.js',
+  );
 
-  return ({
+  return {
     base: appBasePath,
     plugins: [
       react(),
       tailwindcss(),
-      ...(isTest ? [] : [federation({
-        name: 'mfe_access',
-        filename: 'remoteEntry.js',
-        dts: false,
-        remotes: {
-          mfe_shell: {
-            type: 'module',
-            name: 'mfe_shell',
-            entry: shellRemoteEntry,
-          },
-        },
-        exposes: {
-          './AccessApp': './src/app/AccessApp.ui.tsx',
-          './shell-services': './src/app/services/shell-services.ts',
-        },
-        shared: {
-          /* Always share the full set — remove isSingleDomainBuild conditional
-           * to prevent duplicate React instances in single-domain builds. */
-          ...sharedCore,
-          ...(mode === 'production' ? sharedProdOnly : {}),
-        },
-      })]),
+      ...(isTest
+        ? []
+        : [
+            federation({
+              name: 'mfe_access',
+              filename: 'remoteEntry.js',
+              dts: false,
+              remotes: {
+                mfe_shell: {
+                  type: 'module',
+                  name: 'mfe_shell',
+                  entry: shellRemoteEntry,
+                },
+              },
+              exposes: {
+                './AccessApp': './src/app/AccessApp.ui.tsx',
+                './shell-services': './src/app/services/shell-services.ts',
+              },
+              shared: {
+                /* Always share the full set — remove isSingleDomainBuild conditional
+                 * to prevent duplicate React instances in single-domain builds. */
+                ...sharedCore,
+                ...(mode === 'production' ? sharedProdOnly : {}),
+              },
+            }),
+            mfPreloadHelperIsolation(),
+          ]),
     ],
 
-  resolve: {
-    alias: [
-      { find: '@mfe/design-system', replacement: path.resolve(__dirname, '../../packages/design-system/src') },
-      { find: '@mfe/shared-http', replacement: path.resolve(__dirname, '../../packages/shared-http/src') },
-      // mfe_shell/i18n: only alias in test mode — in dev/prod, MF remote handles it.
-      // Alias + MF plugin conflict: plugin rewrites to __moduleExports (enforce: pre)
-      // then alias resolves to raw TS file that doesn't have __moduleExports → crash.
-      ...(isTest ? [{ find: 'mfe_shell/i18n', replacement: path.resolve(__dirname, '../mfe-shell/src/app/i18n/index.ts') }] : []),
-      { find: '@tanstack/react-query', replacement: path.resolve(__dirname, 'node_modules/@tanstack/react-query/build/modern/index.js') },
-    ],
-  },
-
-  optimizeDeps: {
-    include: [
-      'react',
-      'react-dom',
-      'react-dom/client',
-      'react/jsx-runtime',
-      'react/jsx-dev-runtime',
-      'react-router',
-      'react-router-dom',
-      'axios',
-      'ag-grid-community',
-      'ag-grid-enterprise',
-      'ag-grid-react',
-    ],
-    exclude: ['mfe_shell', '@tanstack/react-query'],
-  },
-
-  server: {
-    host: '127.0.0.1',
-    port: 3005,
-    strictPort: true,
-    cors: true,
-    headers: { 'Access-Control-Allow-Origin': '*' },
-    proxy: {
-      '/api/v1/users': { target: 'http://localhost:8089', changeOrigin: true, secure: false },
-      '/api/v1/roles': { target: 'http://localhost:8090', changeOrigin: true, secure: false },
-      '/api/v1/authz': { target: 'http://localhost:8090', changeOrigin: true, secure: false },
+    resolve: {
+      alias: [
+        {
+          find: '@mfe/design-system',
+          replacement: path.resolve(__dirname, '../../packages/design-system/src'),
+        },
+        {
+          find: '@mfe/shared-http',
+          replacement: path.resolve(__dirname, '../../packages/shared-http/src'),
+        },
+        // mfe_shell/i18n: only alias in test mode — in dev/prod, MF remote handles it.
+        // Alias + MF plugin conflict: plugin rewrites to __moduleExports (enforce: pre)
+        // then alias resolves to raw TS file that doesn't have __moduleExports → crash.
+        ...(isTest
+          ? [
+              {
+                find: 'mfe_shell/i18n',
+                replacement: path.resolve(__dirname, '../mfe-shell/src/app/i18n/index.ts'),
+              },
+            ]
+          : []),
+        {
+          find: '@tanstack/react-query',
+          replacement: path.resolve(
+            __dirname,
+            'node_modules/@tanstack/react-query/build/modern/index.js',
+          ),
+        },
+      ],
     },
-  },
 
-  build: {
-    target: 'esnext',
-    outDir: 'dist',
-    // NOTE: `rolldownOptions.external: [/^mfe_shell\//]` intentionally removed.
-    // @module-federation/vite zaten shell expose'larını ("mfe_shell/*") federation
-    // rewrite üzerinden handle ediyor. External regex browser'a çıplak
-    // `mfe_shell/i18n` specifier'ı sızdırıp runtime'da
-    // "Failed to resolve module specifier" hatası üretiyordu (Codex CNS thread
-    // 019d97c7 Tur 7 kök neden). Release gate Playwright E2E staging'de bu bug'ı
-    // yakaladı (mfe-access boot fail).
-  },
-
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./src/test-setup.ts'],
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-router',
+        'react-router-dom',
+        'axios',
+        'ag-grid-community',
+        'ag-grid-enterprise',
+        'ag-grid-react',
+      ],
+      exclude: ['mfe_shell', '@tanstack/react-query'],
     },
-  });
+
+    server: {
+      host: '127.0.0.1',
+      port: 3005,
+      strictPort: true,
+      cors: true,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      proxy: {
+        '/api/v1/users': { target: 'http://localhost:8089', changeOrigin: true, secure: false },
+        '/api/v1/roles': { target: 'http://localhost:8090', changeOrigin: true, secure: false },
+        '/api/v1/authz': { target: 'http://localhost:8090', changeOrigin: true, secure: false },
+      },
+    },
+
+    build: {
+      target: 'esnext',
+      outDir: 'dist',
+      // NOTE: `rolldownOptions.external: [/^mfe_shell\//]` intentionally removed.
+      // @module-federation/vite zaten shell expose'larını ("mfe_shell/*") federation
+      // rewrite üzerinden handle ediyor. External regex browser'a çıplak
+      // `mfe_shell/i18n` specifier'ı sızdırıp runtime'da
+      // "Failed to resolve module specifier" hatası üretiyordu (Codex CNS thread
+      // 019d97c7 Tur 7 kök neden). Release gate Playwright E2E staging'de bu bug'ı
+      // yakaladı (mfe-access boot fail).
+    },
+
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./src/test-setup.ts'],
+    },
+  };
 });

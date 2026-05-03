@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react';
 import { federation } from '@module-federation/vite';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+// Faz 21.8 PR-X8: inline modulepreload helper to break the
+// auth ↔ design-system MF loadShare runtime cycle.
+import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
 const deps = pkg.dependencies as Record<string, string>;
@@ -20,8 +23,11 @@ const singleton = (
 });
 
 const HOST_ONLY_STUB_VERSION = '0.0.0';
-const hostOnly = (shareKey: string, versionKey: string = shareKey, fallback: string | boolean = false) =>
-  singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
+const hostOnly = (
+  shareKey: string,
+  versionKey: string = shareKey,
+  fallback: string | boolean = false,
+) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
 const sharedCore = {
   react: hostOnly('react'),
@@ -72,11 +78,18 @@ export default defineConfig(({ mode }) => {
           ...(mode === 'production' ? sharedProdOnly : {}),
         },
       }),
+      mfPreloadHelperIsolation(),
     ],
 
     resolve: {
       alias: [
-        { find: '@tanstack/react-query', replacement: path.resolve(__dirname, 'node_modules/@tanstack/react-query/build/modern/index.js') },
+        {
+          find: '@tanstack/react-query',
+          replacement: path.resolve(
+            __dirname,
+            'node_modules/@tanstack/react-query/build/modern/index.js',
+          ),
+        },
       ],
     },
 
@@ -95,11 +108,17 @@ export default defineConfig(({ mode }) => {
 
     optimizeDeps: {
       include: [
-        'react', 'react-dom', 'react-dom/client',
-        'react/jsx-runtime', 'react/jsx-dev-runtime',
-        'react-router', 'react-router-dom',
-        'axios', 'clsx',
-        'cytoscape', 'cytoscape-fcose',
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-router',
+        'react-router-dom',
+        'axios',
+        'clsx',
+        'cytoscape',
+        'cytoscape-fcose',
       ],
       exclude: ['mfe_shell', '@tanstack/react-query'],
     },
