@@ -4,7 +4,7 @@
  * Five feature demos dispatched by `featureId`:
  *   feature-brush         — useChartInteractions enableBrush, brushRange display
  *   feature-zoom-pan      — useChartInteractions enableZoom + enablePan
- *   feature-realtime      — local setInterval + useRealTimeData stream buffer
+ *   feature-realtime      — useRealTimeData auto-tick mode (Faz 21.8 PR-X1)
  *   feature-theme-switch  — BarChart theme prop radio toggle (light/dark/HC/print)
  *   feature-export        — useChartExport with mock instance (PNG/SVG/CSV)
  *
@@ -12,7 +12,7 @@
  * counter / preview panel) so Vitest can assert per-feature behaviour
  * without exercising real canvas rendering.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BarChart, useChartExport, useChartInteractions, useRealTimeData } from '@mfe/x-charts';
 
 // `ChartThemePreference` is exported from `@mfe/x-charts/theme` but not
@@ -167,43 +167,38 @@ interface Tick {
 }
 
 const RealtimeDemo: React.FC = () => {
-  // Demo owns the timer; useRealTimeData buffers incoming points (no
-  // setInterval inside the hook). This keeps deterministic testing
-  // possible via vi.useFakeTimers().
-  const stream = useRealTimeData<Tick>({ maxPoints: 50 });
+  // Faz 21.8 PR-X1: switched from local setInterval to useRealTimeData
+  // auto-tick mode. The hook owns the timer; this component only owns the
+  // running flag (passing tickIntervalMs/onTick conditionally).
+  //
+  // Discriminated union narrowing means we either pass {} (manual) or
+  // { tickIntervalMs, onTick } (auto-tick) — never half-set. Test still
+  // works deterministically with vi.useFakeTimers() because the interval
+  // lives in a useEffect.
   const [running, setRunning] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stream = useRealTimeData<Tick>(
+    running
+      ? {
+          maxPoints: 50,
+          tickIntervalMs: 250,
+          onTick: () => ({ t: Date.now(), v: Math.round(Math.random() * 100) }),
+        }
+      : { maxPoints: 50 },
+  );
 
-  const start = () => {
-    if (intervalRef.current) return;
-    intervalRef.current = setInterval(() => {
-      stream.addPoint({ t: Date.now(), v: Math.round(Math.random() * 100) });
-    }, 250);
-    setRunning(true);
-  };
-
-  const stop = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setRunning(false);
-  };
-
-  // Cleanup on unmount.
-  useEffect(() => () => stop(), []);
+  const toggle = () => setRunning((r) => !r);
 
   return (
     <div className="space-y-3" data-testid="feature-realtime-demo">
       <p className="text-xs text-text-secondary">
-        Local <code>setInterval</code> emits ticks every 250ms;
-        <code> useRealTimeData</code> buffers them with a circular max-points cap. Pause via the
-        hook to freeze the buffer.
+        <code>useRealTimeData</code> auto-tick mode: pass <code>tickIntervalMs</code> +
+        <code> onTick</code> and the hook owns the <code>setInterval</code>. Buffer is a circular
+        cap (<code>maxPoints</code>) so memory stays bounded.
       </p>
       <div className="flex items-center gap-2 text-xs">
         <button
           type="button"
-          onClick={running ? stop : start}
+          onClick={toggle}
           className="rounded border border-border-subtle bg-surface-default px-3 py-1"
           data-testid="feature-realtime-toggle"
         >

@@ -1403,7 +1403,7 @@ return <div {...handlers}>zoom: {state.zoomLevel}× · pan: ({state.panOffset.x}
     id: 'feature-realtime',
     name: 'useRealTimeData',
     description:
-      'Buffered streaming hook: callers push points via addPoint; the hook caps at maxPoints (FIFO eviction). Pause/resume gate the buffer without stopping the upstream producer. The demo owns its own setInterval to keep the hook deterministic and testable under fake timers.',
+      'Buffered streaming hook with two modes (discriminated union, Faz 21.8 PR-X1): manual (callers push points via addPoint) and auto-tick (caller passes tickIntervalMs + onTick, the hook owns the setInterval). Buffer caps at maxPoints (FIFO eviction). Pause/resume gate the buffer and suspend the auto-tick interval.',
     importPath: "import { useRealTimeData } from '@mfe/x-charts';",
     tier: 'interaction',
     props: [
@@ -1421,23 +1421,36 @@ return <div {...handlers}>zoom: {state.zoomLevel}× · pan: ({state.panOffset.x}
         default: '—',
         description: 'Fired for every accepted point',
       },
+      {
+        name: 'tickIntervalMs',
+        type: 'number',
+        required: false,
+        default: '—',
+        description:
+          'Auto-tick mode: positive finite ms. Required together with onTick (discriminated union).',
+      },
+      {
+        name: 'onTick',
+        type: '() => T | undefined',
+        required: false,
+        default: '—',
+        description:
+          'Auto-tick producer. Hook calls this every tickIntervalMs ms and pushes the returned point (or skips if undefined).',
+      },
     ],
     sampleCode: `type Tick = { t: number; v: number };
 
 function MyStreamingChart() {
-  const stream = useRealTimeData<Tick>({ maxPoints: 50 });
-
-  useEffect(() => {
-    const id = setInterval(
-      () => stream.addPoint({ t: Date.now(), v: Math.random() }),
-      250,
-    );
-    return () => clearInterval(id);
-  }, [stream.addPoint]);
+  // Auto-tick: hook owns the setInterval, no useEffect needed.
+  const stream = useRealTimeData<Tick>({
+    maxPoints: 50,
+    tickIntervalMs: 250,
+    onTick: () => ({ t: Date.now(), v: Math.random() }),
+  });
 
   return <span>points: {stream.data.length}</span>;
 }`,
-    features: ['stream-buffer', 'pause-resume', 'fifo-eviction'],
+    features: ['stream-buffer', 'auto-tick', 'pause-resume', 'fifo-eviction'],
     a11y: ['point-count-announced'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },

@@ -796,7 +796,7 @@ Sonuç: M4 closure artık compile-only değil, **lokal + CI runtime-doğrulanmı
 **Implemented (16/20 critical features):** crossfilter (16-file store + 6 test),
 drill-down (state machine + breadcrumb), brush selection, zoom/pan, animation
 (prefers-reduced-motion'a saygılı), 4 tema (light/dark/HC/print), export
-(PNG/SVG/PDF/CSV/XLSX), a11y (keyboard, data-table fallback, aria-live, decals,
+(PNG/SVG/PDF/CSV — XLSX removed in Faz 21.8 PR-X1, see plan), a11y (keyboard, data-table fallback, aria-live, decals,
 colorblind palettes), real-time stream, responsive resize, sanitization,
 density, AI integration (NL→ChartSpec, anomaly, trend, suggestion, description),
 grid adapter (AGGrid bridge), performance (LTTB downsample, worker bridge,

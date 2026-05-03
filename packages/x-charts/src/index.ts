@@ -61,7 +61,12 @@ export type { ChartToolbarProps } from './ChartToolbar';
 export { useChartResize } from './useChartResize';
 export type { ChartResizeState, UseChartResizeOptions } from './useChartResize';
 export { useRealTimeData } from './useRealTimeData';
-export type { RealTimeDataOptions, RealTimeDataState } from './useRealTimeData';
+export type {
+  RealTimeDataOptions,
+  RealTimeDataOptionsBase,
+  RealTimeDataOptionsAutoTick,
+  RealTimeDataState,
+} from './useRealTimeData';
 export { useDashboardComposition } from './composition/useDashboardComposition';
 export type {
   DateRange,

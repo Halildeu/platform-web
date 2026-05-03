@@ -245,7 +245,7 @@ const CHART_ITEMS: ChartItem[] = [
   {
     id: 'feature-realtime',
     name: 'Feature: Real-time stream',
-    description: 'Local setInterval + useRealTimeData buffer + pause/resume.',
+    description: 'useRealTimeData auto-tick (tickIntervalMs + onTick) + pause/resume buffer.',
     group: 'charts_interaction',
     tier: 'interaction',
     icon: 'realtime',
