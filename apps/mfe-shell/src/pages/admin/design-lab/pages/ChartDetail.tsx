@@ -1210,10 +1210,16 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Push store filter changes to the grid via setFilterModel',
       },
     ],
-    sampleCode: `const { activeFilters, bridge } = useGridCrossFilter({
-  gridId: 'orders-grid',
-  gridApi,
-});`,
+    sampleCode: `<CrossFilterProvider>
+  <ChartSide />   {/* uses useChartCrossFilter to emit filters */}
+  <GridSide />    {/* uses useGridCrossFilter to consume them */}
+</CrossFilterProvider>
+
+function GridSide() {
+  // gridApi is the AG Grid instance ref; mock or real.
+  useGridCrossFilter({ gridId: 'orders-grid', gridApi });
+  return <AgGridReact /* … */ />;
+}`,
     features: ['chart-to-grid', 'event-bridge', 'set-filter-model', 'reset'],
     a11y: ['filter-state-announced', 'reset-keyboard-focusable'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
@@ -1223,7 +1229,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     id: 'drill-down',
     name: 'useDrillDown',
     description:
-      'Hierarchical drill state machine. Define N levels; clicking a chart bar drills into the next level, breadcrumb navigates back. Drill state lives in the cross-filter store, so undo/redo and bookmarks come for free.',
+      'Hierarchical drill state machine. Define N levels; clicking a chart bar drills into the next level, breadcrumb navigates back. Drill state lives in the cross-filter store; useDrillDown must be called inside a CrossFilterProvider tree.',
     importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
     tier: 'interaction',
     props: [
@@ -1242,32 +1248,44 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Display label for the root breadcrumb item',
       },
     ],
-    sampleCode: `const drill = useDrillDown({
-  levels: [
-    { field: 'region', label: 'Region' },
-    { field: 'city', label: 'City' },
-    { field: 'store', label: 'Store' },
-  ],
-});
+    sampleCode: `<CrossFilterProvider>
+  {/* useDrillDown reads/writes the drill state through the
+      cross-filter store, so a CrossFilterProvider ancestor is required. */}
+  <MyDrillChart />
+</CrossFilterProvider>
 
-<DrillDownBreadcrumb
-  breadcrumbs={drill.breadcrumbs}
-  onNavigate={drill.drillTo}
-/>
-<BarChart
-  data={chartData}
-  onDataPointClick={(e) => drill.drillDown(e.label, e.label)}
-/>`,
-    features: ['hierarchical-drill', 'breadcrumb', 'drillToRoot', 'drillTo'],
+function MyDrillChart() {
+  const drill = useDrillDown({
+    levels: [
+      { field: 'region', label: 'Region' },
+      { field: 'city', label: 'City' },
+      { field: 'store', label: 'Store' },
+    ],
+  });
+
+  return (
+    <>
+      <DrillDownBreadcrumb
+        items={drill.breadcrumbs}
+        onNavigate={drill.drillTo}
+      />
+      <BarChart
+        data={chartData}
+        onDataPointClick={(e) => drill.drillDown(e.label, e.label)}
+      />
+    </>
+  );
+}`,
+    features: ['drill-down', 'breadcrumb', 'reset'],
     a11y: ['breadcrumb-aria-current', 'level-state-announced'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
 
   'drill-down-history': {
     id: 'drill-down-history',
-    name: 'useDrillDown (history mode)',
+    name: 'useDrillDown (with undo)',
     description:
-      'Same hook as drill-down but extended with a snapshot stack so the user can undo/redo across drill steps. The cross-filter store retains drillPath history; the demo composes that with a local future-stack to expose redo.',
+      'Same hook as drill-down with an explicit Undo button (drillUp wiring), a Reset action, and a depth + drill-count indicator. A real redo would require persisting the full {field,value,label} trail; that is intentionally out of scope here so the UI does not promise behaviour it cannot deliver.',
     importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
     tier: 'interaction',
     props: [
@@ -1280,21 +1298,27 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       },
     ],
     sampleCode: `const drill = useDrillDown({ levels });
-const [history, setHistory] = useState({ past: 0, future: [] });
+const [drillCount, setDrillCount] = useState(0);
 
 const onClick = (label) => {
   drill.drillDown(label, label);
-  setHistory((h) => ({ past: h.past + 1, future: [] }));
+  setDrillCount((c) => c + 1);
 };
 
 const undo = () => {
   drill.drillUp();
-  setHistory((h) => ({
-    past: Math.max(0, h.past - 1),
-    future: [drill.currentDepth, ...h.future],
-  }));
-};`,
-    features: ['drill-down', 'undo-redo', 'breadcrumb', 'snapshot-stack'],
+  // drillCount is monotonic — counts drills fired, not depth.
+};
+
+return (
+  <>
+    <DrillDownBreadcrumb items={drill.breadcrumbs} onNavigate={drill.drillTo} />
+    <button onClick={undo} disabled={drill.currentDepth === 0}>Undo</button>
+    <button onClick={drill.drillToRoot}>Reset</button>
+    <span>depth {drill.currentDepth} · drills fired {drillCount}</span>
+  </>
+);`,
+    features: ['drill-down', 'undo', 'breadcrumb', 'reset'],
     a11y: ['breadcrumb-aria-current', 'undo-redo-keyboard-focusable'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },

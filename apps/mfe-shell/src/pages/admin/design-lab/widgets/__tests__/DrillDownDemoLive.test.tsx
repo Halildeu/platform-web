@@ -85,19 +85,39 @@ describe('DrillDownDemoLive — drill state mutation observability', () => {
     expect(screen.getByTestId('drill-down-total')).toHaveTextContent('20900');
   });
 
-  it('Test 4: history mode — drilling fills past, undo restores level', () => {
+  it('Test 4: history mode — drillCount monotonic, undo decreases depth not count', () => {
     render(<DrillDownDemoLive mode="history" />);
-    expect(screen.getByTestId('drill-down-history-counter')).toHaveTextContent('past 0 · future 0');
+    expect(screen.getByTestId('drill-down-history-counter')).toHaveTextContent(
+      'depth 0 · drills fired 0',
+    );
 
     fireEvent.click(screen.getByTestId('mock-bar-Americas'));
-    expect(screen.getByTestId('drill-down-history-counter')).toHaveTextContent('past 1 · future 0');
+    expect(screen.getByTestId('drill-down-history-counter')).toHaveTextContent(
+      'depth 1 · drills fired 1',
+    );
 
-    // Undo button now enabled
     const undoBtn = screen.getByTestId('drill-down-undo');
     expect(undoBtn).not.toBeDisabled();
     fireEvent.click(undoBtn);
     expect(screen.getByTestId('drill-down-level')).toHaveTextContent('level 0 / 3');
-    // Future stack now has 1 entry
-    expect(screen.getByTestId('drill-down-history-counter')).toHaveTextContent('past 0 · future 1');
+    // drillCount stays 1 — it counts drills fired, not depth.
+    expect(screen.getByTestId('drill-down-history-counter')).toHaveTextContent(
+      'depth 0 · drills fired 1',
+    );
+  });
+
+  it('Test 5: breadcrumb item click navigates back via drillTo wiring', () => {
+    render(<DrillDownDemoLive mode="basic" />);
+    fireEvent.click(screen.getByTestId('mock-bar-Europe'));
+    fireEvent.click(screen.getByTestId('mock-bar-London'));
+    expect(screen.getByTestId('drill-down-level')).toHaveTextContent('level 2 / 3');
+
+    // DrillDownBreadcrumb renders one <button> per breadcrumb item; the
+    // first one is the root and corresponds to drillTo(-1).
+    const breadcrumb = screen.getByTestId('drill-down-breadcrumb');
+    const rootBtn = breadcrumb.querySelector('button');
+    expect(rootBtn).not.toBeNull();
+    fireEvent.click(rootBtn!);
+    expect(screen.getByTestId('drill-down-level')).toHaveTextContent('level 0 / 3');
   });
 });

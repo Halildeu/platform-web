@@ -208,10 +208,13 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     );
     expect(screen.getByTestId('drill-down-demo-history')).toBeInTheDocument();
     expect(screen.getByTestId('design-lab-chart-preview-drill-down-history')).toBeInTheDocument();
-    // History mode exposes undo/redo controls + history counter.
+    // History mode exposes undo + reset + depth/drill-count counter.
+    // Redo is NOT shown — would require persisting the full
+    // {field,value,label} trail (deliberate scope cut, Codex must-fix).
     expect(screen.getByTestId('drill-down-undo')).toBeInTheDocument();
-    expect(screen.getByTestId('drill-down-redo')).toBeInTheDocument();
+    expect(screen.getByTestId('drill-down-history-reset')).toBeInTheDocument();
     expect(screen.getByTestId('drill-down-history-counter')).toBeInTheDocument();
+    expect(screen.queryByTestId('drill-down-redo')).toBeNull();
   });
 
   it.each([

@@ -75,14 +75,14 @@ interface DrillDownInnerProps {
 const DrillDownInner: React.FC<DrillDownInnerProps> = ({ mode }) => {
   const drill = useDrillDown({ levels: LEVELS, rootLabel: 'All Sales' });
 
-  // History mode — snapshot drillPath into a local stack so we can
-  // undo/redo across rerenders. The store itself does not retain
-  // forward history once a new drillDown is fired, so we keep the
-  // future stack in component state.
-  const [history, setHistory] = useState<{ past: number; future: number[] }>({
-    past: 0,
-    future: [],
-  });
+  // History mode tracks how many drill operations the user has fired
+  // since mount. The `useDrillDown` store retains the drill path and
+  // supports undo via `drillUp`. A real redo would need to persist
+  // the full {field,value,label} trail; that is a deliberate scope
+  // cut for this PR (Codex iter-1 must-fix #1: don't promise a feature
+  // we can't deliver, so we expose only Undo + Reset + a depth/drill
+  // counter, NOT a redo button).
+  const [drillCount, setDrillCount] = useState(0);
 
   const filteredRows = useMemo(() => {
     let rows: readonly SaleRow[] = SALES_DATA;
@@ -102,40 +102,27 @@ const DrillDownInner: React.FC<DrillDownInnerProps> = ({ mode }) => {
   const handleClick = (label: string) => {
     if (!drill.canDrillDeeper) return;
     drill.drillDown(label, label);
-    if (mode === 'history') {
-      setHistory((prev) => ({ past: prev.past + 1, future: [] }));
-    }
+    if (mode === 'history') setDrillCount((c) => c + 1);
   };
 
   const handleUndo = () => {
     if (drill.currentDepth === 0) return;
     drill.drillUp();
-    setHistory((prev) => ({
-      past: Math.max(0, prev.past - 1),
-      future: [drill.currentDepth, ...prev.future],
-    }));
   };
 
-  const handleRedo = () => {
-    if (history.future.length === 0) return;
-    // We only know the next *depth*, not the value. The simplest valid
-    // redo path is "drill back to the level we were at" by revisiting
-    // the last visible chart label. This is intentionally a sketch —
-    // a production-grade history would persist the full breadcrumb
-    // trail; the demo's value is showing where redo wires in.
-    const [, ...rest] = history.future;
-    setHistory((prev) => ({ past: prev.past + 1, future: rest }));
-  };
-
-  const levelLabel =
-    drill.currentLevel?.label ?? LEVELS[drill.currentDepth]?.label ?? 'Sales total';
+  // Label the level the user IS LOOKING AT — i.e. the field the chart
+  // bars are aggregated by next, which equals LEVELS[currentDepth].
+  // The previous code used drill.currentLevel which is always one step
+  // behind (Codex iter-1 must-fix #4).
+  const visibleLevelSpec = LEVELS[drill.currentDepth];
+  const levelLabel = visibleLevelSpec?.label ?? 'Sales total';
 
   return (
     <div className="space-y-3 p-3" data-testid={`drill-down-demo-${mode}`}>
       <p className="text-xs text-text-secondary">
         {mode === 'basic'
           ? 'Bir bara tıklayın → bir alt seviyeye iner. Breadcrumb ile yukarı çıkın.'
-          : "Bir bara tıklayın → drill state'in geçmişi gezinilebilir. Undo/Redo ile snapshot stack üzerinde dolaşın."}
+          : 'Bir bara tıklayın → bir alt seviyeye iner. Undo geri alır, Reset köke döner, depth + drill counter aktiviteyi gösterir.'}
       </p>
 
       <DrillDownBreadcrumb items={drill.breadcrumbs} onNavigate={drill.drillTo} />
@@ -153,15 +140,15 @@ const DrillDownInner: React.FC<DrillDownInnerProps> = ({ mode }) => {
           </button>
           <button
             type="button"
-            onClick={handleRedo}
-            disabled={history.future.length === 0}
+            onClick={drill.drillToRoot}
+            disabled={drill.currentDepth === 0}
             className="rounded border border-border-subtle bg-surface-default px-3 py-1 font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
-            data-testid="drill-down-redo"
+            data-testid="drill-down-history-reset"
           >
-            ↷ Redo
+            ↺ Reset
           </button>
           <span className="text-text-secondary" data-testid="drill-down-history-counter">
-            past {drill.currentDepth} · future {history.future.length}
+            depth {drill.currentDepth} · drills fired {drillCount}
           </span>
         </div>
       ) : (
