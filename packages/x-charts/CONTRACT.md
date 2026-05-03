@@ -190,7 +190,7 @@ ScatterChart
 RadarChart
   props: {
     indicators: RadarIndicator[];                  // required, [{ name, max }]
-    series: RadarSeriesItem[];                     // required, [{ name, values }]
+    series: RadarSeriesItem[];                     // required, [{ name, data }] — data: number[] aligned with indicator order
     size?: 'sm' | 'md' | 'lg';
     shape?: 'polygon' | 'circle';                  // default 'polygon'
     showArea?: boolean;                            // fill area under series
@@ -237,7 +237,7 @@ HeatmapChart
 
 FunnelChart
   props: {
-    data: FunnelDataPoint[];                       // [{ label, value }]
+    data: FunnelDataPoint[];                       // [{ name, value }] — name flows through to label/tooltip via formatter
     size?: 'sm' | 'md' | 'lg';
     title?: string;
     sort?: 'descending' | 'ascending' | 'none';    // default 'descending'

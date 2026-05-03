@@ -180,7 +180,7 @@ const CASES: ChartCase[] = [
           { name: 'B', max: 10 },
           { name: 'C', max: 10 },
         ]}
-        series={[{ name: 's1', values: [5, 6, 7] }]}
+        series={[{ name: 's1', data: [5, 6, 7] }]}
       />
     ),
     expectedSeriesTypes: ['radar'],
@@ -232,9 +232,9 @@ const CASES: ChartCase[] = [
     element: (
       <FunnelChart
         data={[
-          { label: 'Top', value: 100 },
-          { label: 'Mid', value: 60 },
-          { label: 'Bot', value: 30 },
+          { name: 'Top', value: 100 },
+          { name: 'Mid', value: 60 },
+          { name: 'Bot', value: 30 },
         ]}
       />
     ),
