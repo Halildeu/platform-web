@@ -602,6 +602,12 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     features: [
       'donut-mode',
       'inner-label',
+      // Faz 21.9 PR3e (Codex thread `019defa5`): PieChart joins the
+      // cross-filter feature surface. Slice clicks emit a filter event
+      // keyed by `label` — the natural categorical axis for a pie. Other
+      // shape semantics (donut/inner-label) stay independent. Consumers
+      // wrap the chart in <CrossFilterProvider> as usual.
+      'cross-filter',
       'tooltip',
       'responsive',
       'animation',
