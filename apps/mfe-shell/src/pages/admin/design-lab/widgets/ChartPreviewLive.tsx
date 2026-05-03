@@ -207,8 +207,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { name: 'Geliştirme', max: 100 },
             ]}
             series={[
-              { name: 'Ekip A', values: [85, 70, 95, 60, 80] },
-              { name: 'Ekip B', values: [65, 90, 70, 85, 55] },
+              { name: 'Ekip A', data: [85, 70, 95, 60, 80] },
+              { name: 'Ekip B', data: [65, 90, 70, 85, 55] },
             ]}
             title={chartName}
             showLegend={isOn(toggles, 'showLegend', true)}
@@ -299,10 +299,10 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
         <PreviewBox testId={testId} height={height}>
           <FunnelChart
             data={[
-              { label: 'Ziyaret', value: 5000 },
-              { label: 'Kayıt', value: 3000 },
-              { label: 'Deneme', value: 1500 },
-              { label: 'Satın Alma', value: 500 },
+              { name: 'Ziyaret', value: 5000 },
+              { name: 'Kayıt', value: 3000 },
+              { name: 'Deneme', value: 1500 },
+              { name: 'Satın Alma', value: 500 },
             ]}
             title={chartName}
             showConversion={isOn(toggles, 'showConversion', true)}

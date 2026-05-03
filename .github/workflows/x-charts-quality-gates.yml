@@ -135,4 +135,5 @@ jobs:
         run: |
           pnpm --filter @mfe/x-charts exec vitest run \
             src/__tests__/chart-components-smoke.test.tsx \
+            src/__tests__/chart-options-shape.test.tsx \
             --reporter=verbose
