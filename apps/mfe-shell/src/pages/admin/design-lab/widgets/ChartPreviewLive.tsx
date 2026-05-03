@@ -33,6 +33,8 @@ import {
   useChartInteractions,
 } from '@mfe/x-charts';
 import CrossFilterDemoLive from './CrossFilterDemoLive';
+import CrossFilterGridDemoLive from './CrossFilterGridDemoLive';
+import DrillDownDemoLive from './DrillDownDemoLive';
 import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
 import PerfUtilityDemoLive, { type PerfUtilityId } from './PerfUtilityDemoLive';
 
@@ -464,6 +466,39 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
         >
           <CrossFilterDemoLive />
+        </div>
+      );
+
+    case 'cross-filter-grid':
+      // Faz 21.4 PR-B: chart → grid cross-filter bridge demo.
+      return (
+        <div
+          data-testid={testId}
+          style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
+        >
+          <CrossFilterGridDemoLive />
+        </div>
+      );
+
+    case 'drill-down':
+      // Faz 21.4 PR-B: 3-level hierarchical drill (region → city → store).
+      return (
+        <div
+          data-testid={testId}
+          style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
+        >
+          <DrillDownDemoLive mode="basic" />
+        </div>
+      );
+
+    case 'drill-down-history':
+      // Faz 21.4 PR-B: drill-down + explicit Undo (drillUp) + Reset (drillToRoot) + depth/drill counter.
+      return (
+        <div
+          data-testid={testId}
+          style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
+        >
+          <DrillDownDemoLive mode="history" />
         </div>
       );
 

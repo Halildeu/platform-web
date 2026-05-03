@@ -4,8 +4,8 @@
  * Displays all chart components from @mfe/x-charts organized by group.
  */
 
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 /* ------------------------------------------------------------------ */
 /*  Chart Items Data                                                   */
@@ -16,53 +16,297 @@ interface ChartItem {
   name: string;
   description: string;
   group: string;
-  tier: "core" | "enterprise" | "interaction" | "ai" | "perf";
+  tier: 'core' | 'enterprise' | 'interaction' | 'ai' | 'perf';
   icon: string;
 }
 
 const CHART_GROUPS = [
-  { id: "charts_core", title: "Core Charts", description: "Temel grafik tipleri" },
-  { id: "charts_enterprise", title: "Enterprise Charts", description: "Gelismis analitik grafik tipleri" },
-  { id: "charts_interaction", title: "Interaction & Composition", description: "Chart container, dashboard, cross-filter" },
-  { id: "charts_ai", title: "AI & Transforms", description: "Otomatik chart onerisi, anomali, trend, NL->Chart" },
-  { id: "charts_perf", title: "Performance & Infra", description: "Downsampling, lazy loading, cache, code-split" },
+  { id: 'charts_core', title: 'Core Charts', description: 'Temel grafik tipleri' },
+  {
+    id: 'charts_enterprise',
+    title: 'Enterprise Charts',
+    description: 'Gelismis analitik grafik tipleri',
+  },
+  {
+    id: 'charts_interaction',
+    title: 'Interaction & Composition',
+    description: 'Chart container, dashboard, cross-filter',
+  },
+  {
+    id: 'charts_ai',
+    title: 'AI & Transforms',
+    description: 'Otomatik chart onerisi, anomali, trend, NL->Chart',
+  },
+  {
+    id: 'charts_perf',
+    title: 'Performance & Infra',
+    description: 'Downsampling, lazy loading, cache, code-split',
+  },
 ] as const;
 
 const CHART_ITEMS: ChartItem[] = [
   // Core
-  { id: "bar-chart", name: "BarChart", description: "Kategorik karsilastirma. Dikey/yatay, multi-series.", group: "charts_core", tier: "core", icon: "bar" },
-  { id: "line-chart", name: "LineChart", description: "Trend analizi. Zaman serisi veya sirali veri.", group: "charts_core", tier: "core", icon: "line" },
-  { id: "area-chart", name: "AreaChart", description: "Stacked area, gradient fill, kumulatif gosterim.", group: "charts_core", tier: "core", icon: "area" },
-  { id: "pie-chart", name: "PieChart", description: "Oran dagilimi. Donut modu, innerLabel.", group: "charts_core", tier: "core", icon: "pie" },
-  { id: "scatter-chart", name: "ScatterChart", description: "Iki degisken arasi korelasyon.", group: "charts_core", tier: "core", icon: "scatter" },
+  {
+    id: 'bar-chart',
+    name: 'BarChart',
+    description: 'Kategorik karsilastirma. Dikey/yatay, multi-series.',
+    group: 'charts_core',
+    tier: 'core',
+    icon: 'bar',
+  },
+  {
+    id: 'line-chart',
+    name: 'LineChart',
+    description: 'Trend analizi. Zaman serisi veya sirali veri.',
+    group: 'charts_core',
+    tier: 'core',
+    icon: 'line',
+  },
+  {
+    id: 'area-chart',
+    name: 'AreaChart',
+    description: 'Stacked area, gradient fill, kumulatif gosterim.',
+    group: 'charts_core',
+    tier: 'core',
+    icon: 'area',
+  },
+  {
+    id: 'pie-chart',
+    name: 'PieChart',
+    description: 'Oran dagilimi. Donut modu, innerLabel.',
+    group: 'charts_core',
+    tier: 'core',
+    icon: 'pie',
+  },
+  {
+    id: 'scatter-chart',
+    name: 'ScatterChart',
+    description: 'Iki degisken arasi korelasyon.',
+    group: 'charts_core',
+    tier: 'core',
+    icon: 'scatter',
+  },
   // Enterprise
-  { id: "gauge-chart", name: "GaugeChart", description: "KPI gostergesi, tek deger, hedef araligi.", group: "charts_enterprise", tier: "enterprise", icon: "gauge" },
-  { id: "radar-chart", name: "RadarChart", description: "Cok boyutlu karsilastirma (performans profili).", group: "charts_enterprise", tier: "enterprise", icon: "radar" },
-  { id: "treemap-chart", name: "TreemapChart", description: "Hiyerarsik orantili alan gosterimi.", group: "charts_enterprise", tier: "enterprise", icon: "treemap" },
-  { id: "heatmap-chart", name: "HeatmapChart", description: "Iki boyutlu yogunluk matrisi.", group: "charts_enterprise", tier: "enterprise", icon: "heatmap" },
-  { id: "waterfall-chart", name: "WaterfallChart", description: "Artis/azalis kumulatif analiz.", group: "charts_enterprise", tier: "enterprise", icon: "waterfall" },
-  { id: "funnel-chart", name: "FunnelChart", description: "Donusum hunisi, asama bazli dusus.", group: "charts_enterprise", tier: "enterprise", icon: "funnel" },
-  { id: "sankey-chart", name: "SankeyChart", description: "Akis diyagrami, kaynak-hedef iliskileri.", group: "charts_enterprise", tier: "enterprise", icon: "sankey" },
-  { id: "sunburst-chart", name: "SunburstChart", description: "Cok katmanli hiyerarsik dagilim.", group: "charts_enterprise", tier: "enterprise", icon: "sunburst" },
+  {
+    id: 'gauge-chart',
+    name: 'GaugeChart',
+    description: 'KPI gostergesi, tek deger, hedef araligi.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'gauge',
+  },
+  {
+    id: 'radar-chart',
+    name: 'RadarChart',
+    description: 'Cok boyutlu karsilastirma (performans profili).',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'radar',
+  },
+  {
+    id: 'treemap-chart',
+    name: 'TreemapChart',
+    description: 'Hiyerarsik orantili alan gosterimi.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'treemap',
+  },
+  {
+    id: 'heatmap-chart',
+    name: 'HeatmapChart',
+    description: 'Iki boyutlu yogunluk matrisi.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'heatmap',
+  },
+  {
+    id: 'waterfall-chart',
+    name: 'WaterfallChart',
+    description: 'Artis/azalis kumulatif analiz.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'waterfall',
+  },
+  {
+    id: 'funnel-chart',
+    name: 'FunnelChart',
+    description: 'Donusum hunisi, asama bazli dusus.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'funnel',
+  },
+  {
+    id: 'sankey-chart',
+    name: 'SankeyChart',
+    description: 'Akis diyagrami, kaynak-hedef iliskileri.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'sankey',
+  },
+  {
+    id: 'sunburst-chart',
+    name: 'SunburstChart',
+    description: 'Cok katmanli hiyerarsik dagilim.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'sunburst',
+  },
   // Interaction
-  { id: "chart-container", name: "ChartContainer", description: "ECharts wrapper, tema, resize, error boundary.", group: "charts_interaction", tier: "interaction", icon: "container" },
-  { id: "chart-dashboard", name: "ChartDashboard", description: "Multi-chart layout, grid composition.", group: "charts_interaction", tier: "interaction", icon: "dashboard" },
-  { id: "chart-toolbar", name: "ChartToolbar", description: "Undo/redo, drill-up, export actions.", group: "charts_interaction", tier: "interaction", icon: "toolbar" },
-  { id: "kpi-card", name: "KPICard", description: "Tek deger + trend gostergesi.", group: "charts_interaction", tier: "interaction", icon: "kpi" },
-  { id: "sparkline-chart", name: "SparklineChart", description: "Inline mini grafik.", group: "charts_interaction", tier: "interaction", icon: "sparkline" },
-  { id: "cross-filter", name: "CrossFilterProvider", description: "Chart-to-chart, chart-to-grid cross-filter bus.", group: "charts_interaction", tier: "interaction", icon: "filter" },
+  {
+    id: 'chart-container',
+    name: 'ChartContainer',
+    description: 'ECharts wrapper, tema, resize, error boundary.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'container',
+  },
+  {
+    id: 'chart-dashboard',
+    name: 'ChartDashboard',
+    description: 'Multi-chart layout, grid composition.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'dashboard',
+  },
+  {
+    id: 'chart-toolbar',
+    name: 'ChartToolbar',
+    description: 'Undo/redo, drill-up, export actions.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'toolbar',
+  },
+  {
+    id: 'kpi-card',
+    name: 'KPICard',
+    description: 'Tek deger + trend gostergesi.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'kpi',
+  },
+  {
+    id: 'sparkline-chart',
+    name: 'SparklineChart',
+    description: 'Inline mini grafik.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'sparkline',
+  },
+  {
+    id: 'cross-filter',
+    name: 'CrossFilterProvider',
+    description: 'Chart-to-chart, chart-to-grid cross-filter bus.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'filter',
+  },
+  // Faz 21.4 PR-B
+  {
+    id: 'cross-filter-grid',
+    name: 'useGridCrossFilter',
+    description: 'Chart -> mock grid filter model bridge demo.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'filter',
+  },
+  {
+    id: 'drill-down',
+    name: 'useDrillDown',
+    description: '3-seviye hierarchical drill (region -> city -> store) + breadcrumb.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'drill',
+  },
+  {
+    id: 'drill-down-history',
+    name: 'useDrillDown (with undo)',
+    description: 'Drill state + Undo (drillUp) + Reset + depth/drill counter.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'history',
+  },
   // AI
-  { id: "nl-to-chart", name: "nlToChartSpec", description: "Dogal dil -> ChartSpec donusturucusu.", group: "charts_ai", tier: "ai", icon: "ai" },
-  { id: "suggest-chart", name: "suggestChartType", description: "Veri seklinden otomatik chart tipi onerisi.", group: "charts_ai", tier: "ai", icon: "suggest" },
-  { id: "detect-anomalies", name: "detectAnomalies", description: "IQR-based outlier detection.", group: "charts_ai", tier: "ai", icon: "anomaly" },
-  { id: "identify-trends", name: "identifyTrends", description: "OLS regression trend identification.", group: "charts_ai", tier: "ai", icon: "trend" },
-  { id: "chart-description", name: "generateChartDescription", description: "A11y alt text uretici.", group: "charts_ai", tier: "ai", icon: "a11y" },
+  {
+    id: 'nl-to-chart',
+    name: 'nlToChartSpec',
+    description: 'Dogal dil -> ChartSpec donusturucusu.',
+    group: 'charts_ai',
+    tier: 'ai',
+    icon: 'ai',
+  },
+  {
+    id: 'suggest-chart',
+    name: 'suggestChartType',
+    description: 'Veri seklinden otomatik chart tipi onerisi.',
+    group: 'charts_ai',
+    tier: 'ai',
+    icon: 'suggest',
+  },
+  {
+    id: 'detect-anomalies',
+    name: 'detectAnomalies',
+    description: 'IQR-based outlier detection.',
+    group: 'charts_ai',
+    tier: 'ai',
+    icon: 'anomaly',
+  },
+  {
+    id: 'identify-trends',
+    name: 'identifyTrends',
+    description: 'OLS regression trend identification.',
+    group: 'charts_ai',
+    tier: 'ai',
+    icon: 'trend',
+  },
+  {
+    id: 'chart-description',
+    name: 'generateChartDescription',
+    description: 'A11y alt text uretici.',
+    group: 'charts_ai',
+    tier: 'ai',
+    icon: 'a11y',
+  },
   // Performance
-  { id: "lttb", name: "downsampleLTTB", description: "100K+ nokta icin LTTB downsampling.", group: "charts_perf", tier: "perf", icon: "perf" },
-  { id: "progressive-render", name: "useProgressiveRender", description: "Batch rendering, requestIdleCallback.", group: "charts_perf", tier: "perf", icon: "progressive" },
-  { id: "lazy-chart", name: "useLazyChart", description: "Viewport-aware lazy initialization.", group: "charts_perf", tier: "perf", icon: "lazy" },
-  { id: "lru-cache", name: "LRUCache", description: "Bounded cache for query results.", group: "charts_perf", tier: "perf", icon: "cache" },
-  { id: "code-split", name: "lazyChartImport", description: "React.lazy chart type code splitting.", group: "charts_perf", tier: "perf", icon: "split" },
+  {
+    id: 'lttb',
+    name: 'downsampleLTTB',
+    description: '100K+ nokta icin LTTB downsampling.',
+    group: 'charts_perf',
+    tier: 'perf',
+    icon: 'perf',
+  },
+  {
+    id: 'progressive-render',
+    name: 'useProgressiveRender',
+    description: 'Batch rendering, requestIdleCallback.',
+    group: 'charts_perf',
+    tier: 'perf',
+    icon: 'progressive',
+  },
+  {
+    id: 'lazy-chart',
+    name: 'useLazyChart',
+    description: 'Viewport-aware lazy initialization.',
+    group: 'charts_perf',
+    tier: 'perf',
+    icon: 'lazy',
+  },
+  {
+    id: 'lru-cache',
+    name: 'LRUCache',
+    description: 'Bounded cache for query results.',
+    group: 'charts_perf',
+    tier: 'perf',
+    icon: 'cache',
+  },
+  {
+    id: 'code-split',
+    name: 'lazyChartImport',
+    description: 'React.lazy chart type code splitting.',
+    group: 'charts_perf',
+    tier: 'perf',
+    icon: 'split',
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -70,15 +314,17 @@ const CHART_ITEMS: ChartItem[] = [
 /* ------------------------------------------------------------------ */
 
 const TIER_COLORS: Record<string, string> = {
-  core: "bg-blue-100 text-blue-700",
-  enterprise: "bg-purple-100 text-purple-700",
-  interaction: "bg-green-100 text-green-700",
-  ai: "bg-amber-100 text-amber-700",
-  perf: "bg-rose-100 text-rose-700",
+  core: 'bg-blue-100 text-blue-700',
+  enterprise: 'bg-purple-100 text-purple-700',
+  interaction: 'bg-green-100 text-green-700',
+  ai: 'bg-amber-100 text-amber-700',
+  perf: 'bg-rose-100 text-rose-700',
 };
 
 const TierBadge: React.FC<{ tier: string }> = ({ tier }) => (
-  <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${TIER_COLORS[tier] ?? "bg-gray-100 text-gray-600"}`}>
+  <span
+    className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${TIER_COLORS[tier] ?? 'bg-gray-100 text-gray-600'}`}
+  >
     {tier}
   </span>
 );

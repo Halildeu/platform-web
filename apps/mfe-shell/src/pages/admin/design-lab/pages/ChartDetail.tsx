@@ -1178,6 +1178,151 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
 
+  /* ---- Faz 21.4 PR-B: drill-down + chart-to-grid cross-filter ---- */
+
+  'cross-filter-grid': {
+    id: 'cross-filter-grid',
+    name: 'useGridCrossFilter',
+    description:
+      'Bridge a chart wrapper to a grid filter model. Chart click -> store -> grid.setFilterModel via the cross-filter event bridge. The mock grid panel renders the filter model so the bridge effect is observable.',
+    importPath: "import { useGridCrossFilter } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'gridId',
+        type: 'string',
+        required: true,
+        default: '—',
+        description: 'Unique grid identifier in the cross-filter store',
+      },
+      {
+        name: 'gridApi',
+        type: 'GridApi | null',
+        required: true,
+        default: '—',
+        description: 'AG Grid (or mock) API ref; null until the grid is ready',
+      },
+      {
+        name: 'syncStoreToGrid',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Push store filter changes to the grid via setFilterModel',
+      },
+    ],
+    sampleCode: `<CrossFilterProvider>
+  <ChartSide />   {/* uses useChartCrossFilter to emit filters */}
+  <GridSide />    {/* uses useGridCrossFilter to consume them */}
+</CrossFilterProvider>
+
+function GridSide() {
+  // gridApi is the AG Grid instance ref; mock or real.
+  useGridCrossFilter({ gridId: 'orders-grid', gridApi });
+  return <AgGridReact /* … */ />;
+}`,
+    features: ['chart-to-grid', 'event-bridge', 'set-filter-model', 'reset'],
+    a11y: ['filter-state-announced', 'reset-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'drill-down': {
+    id: 'drill-down',
+    name: 'useDrillDown',
+    description:
+      'Hierarchical drill state machine. Define N levels; clicking a chart bar drills into the next level, breadcrumb navigates back. Drill state lives in the cross-filter store; useDrillDown must be called inside a CrossFilterProvider tree.',
+    importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'levels',
+        type: 'DrillDownLevelSpec[]',
+        required: true,
+        default: '—',
+        description: 'Array of { field, label?, chartType? } level descriptors',
+      },
+      {
+        name: 'rootLabel',
+        type: 'string',
+        required: false,
+        default: '"All"',
+        description: 'Display label for the root breadcrumb item',
+      },
+    ],
+    sampleCode: `<CrossFilterProvider>
+  {/* useDrillDown reads/writes the drill state through the
+      cross-filter store, so a CrossFilterProvider ancestor is required. */}
+  <MyDrillChart />
+</CrossFilterProvider>
+
+function MyDrillChart() {
+  const drill = useDrillDown({
+    levels: [
+      { field: 'region', label: 'Region' },
+      { field: 'city', label: 'City' },
+      { field: 'store', label: 'Store' },
+    ],
+  });
+
+  return (
+    <>
+      <DrillDownBreadcrumb
+        items={drill.breadcrumbs}
+        onNavigate={drill.drillTo}
+      />
+      <BarChart
+        data={chartData}
+        onDataPointClick={(e) => drill.drillDown(e.label, e.label)}
+      />
+    </>
+  );
+}`,
+    features: ['drill-down', 'breadcrumb', 'reset'],
+    a11y: ['breadcrumb-aria-current', 'level-state-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'drill-down-history': {
+    id: 'drill-down-history',
+    name: 'useDrillDown (with undo)',
+    description:
+      'Same hook as drill-down with an explicit Undo button (drillUp wiring), a Reset action, and a depth + drill-count indicator. A real redo would require persisting the full {field,value,label} trail; that is intentionally out of scope here so the UI does not promise behaviour it cannot deliver.',
+    importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'levels',
+        type: 'DrillDownLevelSpec[]',
+        required: true,
+        default: '—',
+        description: 'Array of { field, label?, chartType? } level descriptors',
+      },
+    ],
+    sampleCode: `const drill = useDrillDown({ levels });
+const [drillCount, setDrillCount] = useState(0);
+
+const onClick = (label) => {
+  drill.drillDown(label, label);
+  setDrillCount((c) => c + 1);
+};
+
+const undo = () => {
+  drill.drillUp();
+  // drillCount is monotonic — counts drills fired, not depth.
+};
+
+return (
+  <>
+    <DrillDownBreadcrumb items={drill.breadcrumbs} onNavigate={drill.drillTo} />
+    <button onClick={undo} disabled={drill.currentDepth === 0}>Undo</button>
+    <button onClick={drill.drillToRoot}>Reset</button>
+    <span>depth {drill.currentDepth} · drills fired {drillCount}</span>
+  </>
+);`,
+    features: ['drill-down', 'undo', 'breadcrumb', 'reset'],
+    a11y: ['breadcrumb-aria-current', 'undo-redo-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
   /* ---- AI helpers (Faz 21.4-B3) ---- */
 
   'detect-anomalies': {

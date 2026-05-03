@@ -90,6 +90,29 @@ vi.mock('@mfe/x-charts', () => {
     useCrossFilterStoreApi: () => ({
       getState: () => ({ clearAllFilters: vi.fn() }),
     }),
+    useGridCrossFilter: () => ({
+      activeFilters: [],
+      pushGridFilters: vi.fn(),
+      bridge: null,
+    }),
+    useDrillDown: () => ({
+      currentDepth: 0,
+      currentLevel: undefined,
+      chartTypeOverride: undefined,
+      canDrillDeeper: true,
+      breadcrumbs: [{ label: 'All Sales', index: -1, isCurrent: true }],
+      drillDown: vi.fn(),
+      drillUp: vi.fn(),
+      drillToRoot: vi.fn(),
+      drillTo: vi.fn(),
+      drillPath: [],
+    }),
+    DrillDownBreadcrumb: ({ items }: { items: Array<{ label: string }> }) =>
+      React.createElement(
+        'nav',
+        { 'data-testid': 'mock-drill-down-breadcrumb' },
+        items.map((it) => it.label).join(' / '),
+      ),
     // Performance helpers — minimal stubs so PerfUtilityDemoLive can mount
     // inside the routing smoke tests. The real semantics are exercised in
     // PerfUtilityDemoLive.test.tsx with no mock.
@@ -163,6 +186,35 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     render(<ChartPreviewLive chartId="cross-filter" chartName="cross-filter preview" />);
     expect(screen.getByTestId('cross-filter-demo')).toBeInTheDocument();
     expect(screen.getByTestId('design-lab-chart-preview-cross-filter')).toBeInTheDocument();
+  });
+
+  /* Faz 21.4 PR-B — drill-down + chart-to-grid cross-filter demos */
+
+  it('chart-id "cross-filter-grid" mounts CrossFilterGridDemoLive', () => {
+    render(<ChartPreviewLive chartId="cross-filter-grid" chartName="cross-filter-grid preview" />);
+    expect(screen.getByTestId('cross-filter-grid-demo')).toBeInTheDocument();
+    expect(screen.getByTestId('design-lab-chart-preview-cross-filter-grid')).toBeInTheDocument();
+  });
+
+  it('chart-id "drill-down" mounts DrillDownDemoLive in basic mode', () => {
+    render(<ChartPreviewLive chartId="drill-down" chartName="drill-down preview" />);
+    expect(screen.getByTestId('drill-down-demo-basic')).toBeInTheDocument();
+    expect(screen.getByTestId('design-lab-chart-preview-drill-down')).toBeInTheDocument();
+  });
+
+  it('chart-id "drill-down-history" mounts DrillDownDemoLive in history mode', () => {
+    render(
+      <ChartPreviewLive chartId="drill-down-history" chartName="drill-down-history preview" />,
+    );
+    expect(screen.getByTestId('drill-down-demo-history')).toBeInTheDocument();
+    expect(screen.getByTestId('design-lab-chart-preview-drill-down-history')).toBeInTheDocument();
+    // History mode exposes undo + reset + depth/drill-count counter.
+    // Redo is NOT shown — would require persisting the full
+    // {field,value,label} trail (deliberate scope cut, Codex must-fix).
+    expect(screen.getByTestId('drill-down-undo')).toBeInTheDocument();
+    expect(screen.getByTestId('drill-down-history-reset')).toBeInTheDocument();
+    expect(screen.getByTestId('drill-down-history-counter')).toBeInTheDocument();
+    expect(screen.queryByTestId('drill-down-redo')).toBeNull();
   });
 
   it.each([
