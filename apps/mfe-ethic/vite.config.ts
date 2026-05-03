@@ -4,6 +4,9 @@ import tailwindcss from '@tailwindcss/vite';
 import { federation } from '@module-federation/vite';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+// Faz 21.8 PR-X8: inline modulepreload helper to break the
+// auth ↔ design-system MF loadShare runtime cycle.
+import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
 const deps = pkg.dependencies as Record<string, string>;
@@ -20,8 +23,11 @@ const singleton = (
 });
 
 const HOST_ONLY_STUB_VERSION = '0.0.0';
-const hostOnly = (shareKey: string, versionKey: string = shareKey, fallback: string | boolean = false) =>
-  singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
+const hostOnly = (
+  shareKey: string,
+  versionKey: string = shareKey,
+  fallback: string | boolean = false,
+) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
 const sharedCore = {
   react: hostOnly('react'),
@@ -44,24 +50,32 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
-    ...(isTest ? [] : [federation({
-      name: 'mfe_ethic',
-      filename: 'remoteEntry.js',
-      dts: false,
-      remotes: {},
-      exposes: {
-        './EthicApp': './src/App.tsx',
-      },
-      shared: {
-        ...sharedCore,
-        ...(mode === 'production' ? sharedProdOnly : {}),
-      },
-    })]),
+    ...(isTest
+      ? []
+      : [
+          federation({
+            name: 'mfe_ethic',
+            filename: 'remoteEntry.js',
+            dts: false,
+            remotes: {},
+            exposes: {
+              './EthicApp': './src/App.tsx',
+            },
+            shared: {
+              ...sharedCore,
+              ...(mode === 'production' ? sharedProdOnly : {}),
+            },
+          }),
+          mfPreloadHelperIsolation(),
+        ]),
   ],
 
   resolve: {
     alias: [
-      { find: '@mfe/design-system', replacement: path.resolve(__dirname, '../../packages/design-system/src') },
+      {
+        find: '@mfe/design-system',
+        replacement: path.resolve(__dirname, '../../packages/design-system/src'),
+      },
     ],
   },
 

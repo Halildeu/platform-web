@@ -4,6 +4,9 @@ import tailwindcss from '@tailwindcss/vite';
 import { federation } from '@module-federation/vite';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+// Faz 21.8 PR-X8: inline modulepreload helper to break the
+// auth ↔ design-system MF loadShare runtime cycle.
+import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
 
 function readEnvString(keys: string[], fallback: string): string {
   for (const key of keys) {
@@ -41,8 +44,11 @@ const singleton = (
 });
 
 const HOST_ONLY_STUB_VERSION = '0.0.0';
-const hostOnly = (shareKey: string, versionKey: string = shareKey, fallback: string | boolean = false) =>
-  singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
+const hostOnly = (
+  shareKey: string,
+  versionKey: string = shareKey,
+  fallback: string | boolean = false,
+) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
 const sharedCore = {
   react: hostOnly('react'),
@@ -66,85 +72,98 @@ const isQualityBuild = process.env['QUALITY_AUDIT_BUILD'] === '1';
 const isQualityRemoteBuild = process.env['QUALITY_AUDIT_BUILD_REMOTE'] === '1';
 
 export default defineConfig(({ mode }) => {
-  const appBasePath = normalizeBasePath(readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'));
-  const shellRemoteEntry = readEnvString(['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'], 'http://localhost:3000/remoteEntry.js');
+  const appBasePath = normalizeBasePath(
+    readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'),
+  );
+  const shellRemoteEntry = readEnvString(
+    ['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'],
+    'http://localhost:3000/remoteEntry.js',
+  );
 
-  return ({
+  return {
     base: appBasePath,
     plugins: [
       react(),
       tailwindcss(),
-      ...((isTest || isQualityBuild) ? [] : [federation({
-        name: 'mfe_audit',
-        filename: 'remoteEntry.js',
-        dts: false,
-        remotes: {
-          mfe_shell: {
-            type: 'module',
-            name: 'mfe_shell',
-            entry: shellRemoteEntry,
-          },
-        },
-        exposes: {
-          './AuditApp': './src/app/components/AuditApp.tsx',
-          './shell-services': './src/app/services/shell-services.ts',
-        },
-        shared: {
-          /* Always share the full set — remove isSingleDomainBuild conditional
-           * to prevent duplicate React instances in single-domain builds. */
-          ...sharedCore,
-          ...(mode === 'production' ? sharedProdOnly : {}),
-        },
-      })]),
+      ...(isTest || isQualityBuild
+        ? []
+        : [
+            federation({
+              name: 'mfe_audit',
+              filename: 'remoteEntry.js',
+              dts: false,
+              remotes: {
+                mfe_shell: {
+                  type: 'module',
+                  name: 'mfe_shell',
+                  entry: shellRemoteEntry,
+                },
+              },
+              exposes: {
+                './AuditApp': './src/app/components/AuditApp.tsx',
+                './shell-services': './src/app/services/shell-services.ts',
+              },
+              shared: {
+                /* Always share the full set — remove isSingleDomainBuild conditional
+                 * to prevent duplicate React instances in single-domain builds. */
+                ...sharedCore,
+                ...(mode === 'production' ? sharedProdOnly : {}),
+              },
+            }),
+            mfPreloadHelperIsolation(),
+          ]),
     ],
 
-  resolve: {
-    alias: {
-      '@tanstack/react-query': path.resolve(__dirname, 'node_modules/@tanstack/react-query/build/modern/index.js'),
-      ...(isQualityRemoteBuild
-        ? {}
-        : {
-            '@mfe/design-system': path.resolve(__dirname, '../../packages/design-system/src'),
-            '@mfe/shared-http': path.resolve(__dirname, '../../packages/shared-http/src'),
-          }),
+    resolve: {
+      alias: {
+        '@tanstack/react-query': path.resolve(
+          __dirname,
+          'node_modules/@tanstack/react-query/build/modern/index.js',
+        ),
+        ...(isQualityRemoteBuild
+          ? {}
+          : {
+              '@mfe/design-system': path.resolve(__dirname, '../../packages/design-system/src'),
+              '@mfe/shared-http': path.resolve(__dirname, '../../packages/shared-http/src'),
+            }),
+      },
     },
-  },
 
-  optimizeDeps: {
-    include: [
-      'react',
-      'react-dom',
-      'react-dom/client',
-      'react/jsx-runtime',
-      'react/jsx-dev-runtime',
-      'react-router',
-      'react-router-dom',
-      'clsx',
-      'ag-grid-community',
-      'ag-grid-enterprise',
-      'ag-grid-react',
-    ],
-    exclude: ['mfe_shell', '@tanstack/react-query'],
-  },
-
-  server: {
-    host: '127.0.0.1',
-    port: 3006,
-    strictPort: true,
-    cors: true,
-    headers: { 'Access-Control-Allow-Origin': '*' },
-  },
-
-  build: {
-    target: 'esnext',
-    outDir: isQualityBuild ? 'dist-quality' : 'dist',
-    chunkSizeWarningLimit: 3072,
-  },
-
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./src/test-setup.ts'],
+    optimizeDeps: {
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+        'react-router',
+        'react-router-dom',
+        'clsx',
+        'ag-grid-community',
+        'ag-grid-enterprise',
+        'ag-grid-react',
+      ],
+      exclude: ['mfe_shell', '@tanstack/react-query'],
     },
-  });
+
+    server: {
+      host: '127.0.0.1',
+      port: 3006,
+      strictPort: true,
+      cors: true,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    },
+
+    build: {
+      target: 'esnext',
+      outDir: isQualityBuild ? 'dist-quality' : 'dist',
+      chunkSizeWarningLimit: 3072,
+    },
+
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./src/test-setup.ts'],
+    },
+  };
 });
