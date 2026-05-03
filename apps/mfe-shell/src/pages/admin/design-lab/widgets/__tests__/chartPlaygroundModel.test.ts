@@ -10,10 +10,12 @@ import {
   generatePlaygroundCode,
   getBool,
   getCategory,
+  getDecal,
   getEditorKind,
   getEnum,
   getEnumOptions,
   getNum,
+  getOptStr,
   getStr,
   isLiveEditable,
   parseDefault,
@@ -42,12 +44,24 @@ describe('chartPlaygroundModel — type detection', () => {
     expect(getEditorKind(mkProp({ type: '"a" | "b" | "c"' }))).toBe('enum');
   });
 
-  it('detects known type aliases as enum', () => {
+  it('detects known type aliases as enum or tristate', () => {
     expect(getEditorKind(mkProp({ type: 'ChartSize' }))).toBe('enum');
     expect(getEditorKind(mkProp({ type: 'ChartThemePreference' }))).toBe('enum');
-    expect(getEditorKind(mkProp({ type: 'ChartDecalPreference' }))).toBe('enum');
+    // ChartDecalPreference is `boolean | 'auto'` — must be tristate so the
+    // wrapper resolver receives a real boolean instead of `Boolean('off')`.
+    expect(getEditorKind(mkProp({ type: 'ChartDecalPreference' }))).toBe('tristate');
     expect(getEditorKind(mkProp({ type: 'ChartDensityPreference' }))).toBe('enum');
     expect(getEditorKind(mkProp({ type: 'ChartAccentPreference' }))).toBe('enum');
+  });
+
+  it('exposes ChartSize as exactly sm/md/lg (no xl)', () => {
+    const opts = getEnumOptions('ChartSize');
+    expect(opts?.map((o) => o.value)).toEqual(['sm', 'md', 'lg']);
+  });
+
+  it('exposes ChartDecalPreference as auto/true/false (encoded for select)', () => {
+    const opts = getEnumOptions('ChartDecalPreference');
+    expect(opts?.map((o) => o.value)).toEqual(['auto', 'true', 'false']);
   });
 
   it('falls back to complex for arrays / functions / unknown structured types', () => {
@@ -272,5 +286,79 @@ describe('chartPlaygroundModel — typed accessors', () => {
     expect(getNum({ a: '7' }, 'a', 0)).toBe(7);
     expect(getNum({ a: 'oops' }, 'a', 99)).toBe(99);
     expect(getNum(undefined, 'a', 5)).toBe(5);
+  });
+
+  it('decodes tristate decal back to boolean | "auto"', () => {
+    // The select stores literal strings; getDecal must NOT round-trip them
+    // through `Boolean(...)` (would turn "false" into true and break decal).
+    expect(getDecal({ decal: 'auto' }, 'decal')).toBe('auto');
+    expect(getDecal({ decal: 'true' }, 'decal')).toBe(true);
+    expect(getDecal({ decal: 'false' }, 'decal')).toBe(false);
+    expect(getDecal({ decal: true }, 'decal')).toBe(true);
+    expect(getDecal({ decal: false }, 'decal')).toBe(false);
+    expect(getDecal({}, 'decal')).toBe('auto');
+    expect(getDecal({}, 'decal', true)).toBe(true);
+  });
+
+  it('returns undefined for empty optional strings', () => {
+    expect(getOptStr({ desc: 'hi' }, 'desc')).toBe('hi');
+    expect(getOptStr({ desc: '' }, 'desc')).toBeUndefined();
+    expect(getOptStr({}, 'desc')).toBeUndefined();
+    expect(getOptStr(undefined, 'desc')).toBeUndefined();
+  });
+});
+
+describe('chartPlaygroundModel — tristate codegen', () => {
+  const decalProp = (): ChartProp => ({
+    name: 'decal',
+    type: 'ChartDecalPreference',
+    required: false,
+    default: '"auto"',
+    description: 'Decal pattern override.',
+  });
+
+  it('omits "auto" (matches default)', () => {
+    const d = buildDescriptor('bar-chart', decalProp());
+    expect(d.kind).toBe('tristate');
+    expect(serialisePropToCode(d, 'auto')).toBeNull();
+  });
+
+  it('emits bare prop for "true" (decal on)', () => {
+    const d = buildDescriptor('bar-chart', decalProp());
+    expect(serialisePropToCode(d, 'true')).toBe('decal');
+  });
+
+  it('emits explicit `={false}` for "false" (decal off)', () => {
+    const d = buildDescriptor('bar-chart', decalProp());
+    expect(serialisePropToCode(d, 'false')).toBe('decal={false}');
+  });
+
+  it('drops unexpected tristate values', () => {
+    const d = buildDescriptor('bar-chart', decalProp());
+    expect(serialisePropToCode(d, 'on')).toBeNull();
+    expect(serialisePropToCode(d, 'off')).toBeNull();
+  });
+
+  it('renders a full prop list with decal tri-state in generatePlaygroundCode', () => {
+    const props: ChartProp[] = [
+      mkProp({ name: 'data', type: 'ChartDataPoint[]', required: true }),
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+      decalProp(),
+    ];
+    const descriptors = buildDescriptors('bar-chart', props);
+    const codeOff = generatePlaygroundCode('BarChart', descriptors, {
+      animate: true, // matches default → omitted
+      decal: 'false', // tri-state off → decal={false}
+    });
+    expect(codeOff).toContain('decal={false}');
+    expect(codeOff).not.toContain('animate');
+
+    const codeOn = generatePlaygroundCode('BarChart', descriptors, {
+      animate: false, // off, default true → animate={false}
+      decal: 'true', // tri-state on → bare prop
+    });
+    expect(codeOn).toContain('animate={false}');
+    expect(codeOn).toContain('decal');
+    expect(codeOn).not.toContain('decal=');
   });
 });

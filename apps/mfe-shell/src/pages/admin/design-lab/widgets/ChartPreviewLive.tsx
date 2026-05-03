@@ -40,8 +40,10 @@ import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
 import PerfUtilityDemoLive, { type PerfUtilityId } from './PerfUtilityDemoLive';
 import {
   getBool,
+  getDecal,
   getEnum,
   getNum,
+  getOptStr,
   getStr,
   getPreviewSurfaceStyle,
   type PlaygroundState,
@@ -116,8 +118,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           <BarChart
             data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
             title={getStr(toggles, 'title', chartName)}
-            description={getStr(toggles, 'description', '')}
-            className={getStr(toggles, 'className', '')}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             orientation={getEnum(toggles, 'orientation', 'vertical')}
             size={getEnum<ChartSize>(toggles, 'size', 'lg')}
             showValues={isOn(toggles, 'showValues', false)}
@@ -125,11 +127,11 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
             theme={themeOverride}
-            decal={getEnum(toggles, 'decal', 'auto')}
+            decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
-            accessReason={getStr(toggles, 'accessReason', '')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -155,7 +157,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showArea={isOn(toggles, 'showArea', false)}
             animate={isOn(toggles, 'animate', true)}
             theme={themeOverride}
-            decal={getEnum(toggles, 'decal', 'auto')}
+            decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
@@ -185,7 +187,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             curved={isOn(toggles, 'curved', true)}
             animate={isOn(toggles, 'animate', true)}
             theme={themeOverride}
-            decal={getEnum(toggles, 'decal', 'auto')}
+            decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
@@ -209,7 +211,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showPercentage={isOn(toggles, 'showPercentage', true)}
             animate={isOn(toggles, 'animate', true)}
             theme={themeOverride}
-            decal={getEnum(toggles, 'decal', 'auto')}
+            decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
@@ -230,7 +232,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             yLabel={getStr(toggles, 'yLabel', 'Seri B')}
             size={getEnum<ChartSize>(toggles, 'size', 'lg')}
             theme={themeOverride}
-            decal={getEnum(toggles, 'decal', 'auto')}
+            decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
@@ -256,7 +258,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             size={getEnum<ChartSize>(toggles, 'size', 'lg')}
             theme={themeOverride}
-            decal={getEnum(toggles, 'decal', 'auto')}
+            decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}

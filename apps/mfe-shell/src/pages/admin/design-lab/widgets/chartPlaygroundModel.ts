@@ -38,7 +38,7 @@ export interface ChartProp {
   description: string;
 }
 
-export type EditorKind = 'boolean' | 'enum' | 'string' | 'number' | 'complex';
+export type EditorKind = 'boolean' | 'enum' | 'tristate' | 'string' | 'number' | 'complex';
 
 export type EditorCategory = 'data' | 'display' | 'theme' | 'access' | 'advanced';
 
@@ -86,11 +86,14 @@ export type PlaygroundState = Record<string, PlaygroundValue>;
  * values override the documentElement signals.
  */
 const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
+  // ChartSize is `'sm' | 'md' | 'lg'` in `packages/x-charts/src/types.ts`.
+  // Earlier iter-1 mistakenly added 'xl' (Codex review 019def27 RED) which
+  // would forward an invalid prop and break the height-map lookup in the
+  // chart wrappers — keep this in sync with the x-charts type.
   ChartSize: [
     { value: 'sm', label: 'sm' },
     { value: 'md', label: 'md' },
     { value: 'lg', label: 'lg' },
-    { value: 'xl', label: 'xl' },
   ],
   ChartThemePreference: [
     { value: 'auto', label: 'auto (shell axis)' },
@@ -100,10 +103,17 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'high-contrast', label: 'high-contrast', swatch: '#000000' },
     { value: 'print', label: 'print', swatch: '#ffffff' },
   ],
+  // `ChartDecalPreference` is `boolean | 'auto'` in
+  // `packages/x-charts/src/theme/useChartTheme.ts`. The resolver applies
+  // `Boolean(preference)` so the tristate has to encode boolean intent.
+  // Editor stores the literal value string; `getDecal()` decodes it back to
+  // `boolean | 'auto'` before forwarding to the chart wrapper. Codegen
+  // emits `decal` (bare) for `true`, `decal={false}` for `false`, and
+  // omits the prop entirely for `auto`.
   ChartDecalPreference: [
     { value: 'auto', label: 'auto (a11y aware)' },
-    { value: 'on', label: 'on' },
-    { value: 'off', label: 'off' },
+    { value: 'true', label: 'on' },
+    { value: 'false', label: 'off' },
   ],
   ChartDensityPreference: [
     { value: 'auto', label: 'auto (shell density)' },
@@ -172,15 +182,24 @@ export function getEnumOptions(typeStr: string): EditorEnumOption[] | null {
 }
 
 /**
+ * Tristate kinds (boolean | "auto") need a separate editor / accessor /
+ * codegen path. Currently only `ChartDecalPreference` falls into this
+ * category. Add new tristate types here when wrappers introduce them.
+ */
+const TRISTATE_TYPES = new Set(['ChartDecalPreference']);
+
+/**
  * Categorise a prop type into one of the editor kinds. Functions, arrays of
  * non-primitives, and any unknown structured types are tagged `complex` and
- * shown read-only in the playground.
+ * shown read-only in the playground. `boolean | 'auto'` unions are tagged
+ * `tristate` (Codex review 019def27 finding).
  */
 export function getEditorKind(prop: ChartProp): EditorKind {
   const t = prop.type.trim();
   if (t === 'boolean') return 'boolean';
   if (t === 'string') return 'string';
   if (t === 'number') return 'number';
+  if (TRISTATE_TYPES.has(t)) return 'tristate';
   if (getEnumOptions(t)) return 'enum';
   return 'complex';
 }
@@ -426,7 +445,7 @@ export function buildDescriptor(chartId: string, prop: ChartProp): EditorDescrip
   const overrideKey = `${chartId}.${prop.name}`;
   const overrideDefault = PLAYGROUND_DEFAULT_OVERRIDES[overrideKey];
   const defaultValue = overrideDefault !== undefined ? overrideDefault : parseDefault(prop, kind);
-  const options = kind === 'enum' ? (getEnumOptions(prop.type) ?? []) : [];
+  const options = kind === 'enum' || kind === 'tristate' ? (getEnumOptions(prop.type) ?? []) : [];
 
   let readOnlyHint: string | null = null;
   if (kind === 'complex') {
@@ -495,6 +514,20 @@ export function serialisePropToCode(d: EditorDescriptor, value: PlaygroundValue)
     if (typeof value !== 'number') return null;
     if (value === def) return null;
     return `${d.prop.name}={${value}}`;
+  }
+  if (d.kind === 'tristate') {
+    // State stores the literal value string ('auto' | 'true' | 'false') so
+    // the <select> can round-trip. Codegen emits the API-correct shape for
+    // the underlying `boolean | 'auto'` prop:
+    //   'auto'  → omit (resolves to documentElement signal)
+    //   'true'  → bare prop  (e.g. `decal`)
+    //   'false' → explicit   (e.g. `decal={false}`)
+    if (typeof value !== 'string') return null;
+    if (value === def) return null;
+    if (value === 'auto') return null;
+    if (value === 'true') return d.prop.name;
+    if (value === 'false') return `${d.prop.name}={false}`;
+    return null;
   }
   // string / enum
   if (typeof value !== 'string') return null;
@@ -574,6 +607,40 @@ export function getStr(state: PlaygroundState | undefined, key: string, fallback
   if (!state || !(key in state)) return fallback;
   const v = state[key];
   if (typeof v === 'string' && v.length > 0) return v;
+  return fallback;
+}
+
+/**
+ * Read a string toggle returning `undefined` for empty/missing values.
+ * Useful when the underlying chart prop is optional and prefers absence
+ * over an empty string (e.g. `description`, `className`, `accessReason`).
+ */
+export function getOptStr(state: PlaygroundState | undefined, key: string): string | undefined {
+  if (!state || !(key in state)) return undefined;
+  const v = state[key];
+  if (typeof v === 'string' && v.length > 0) return v;
+  return undefined;
+}
+
+/**
+ * Read a tristate (`boolean | 'auto'`) toggle for `decal` / future
+ * tristate props. The state stores the literal value string emitted by
+ * `<select>` (`'auto' | 'true' | 'false'`); this accessor decodes it back
+ * to the runtime contract `boolean | 'auto'` expected by the chart wrapper.
+ */
+export function getDecal(
+  state: PlaygroundState | undefined,
+  key: string,
+  fallback: boolean | 'auto' = 'auto',
+): boolean | 'auto' {
+  if (!state || !(key in state)) return fallback;
+  const v = state[key];
+  if (v === true || v === false) return v;
+  if (typeof v === 'string') {
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    if (v === 'auto') return 'auto';
+  }
   return fallback;
 }
 
