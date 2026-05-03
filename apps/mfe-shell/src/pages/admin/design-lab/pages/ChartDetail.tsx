@@ -1178,6 +1178,127 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
 
+  /* ---- Faz 21.4 PR-B: drill-down + chart-to-grid cross-filter ---- */
+
+  'cross-filter-grid': {
+    id: 'cross-filter-grid',
+    name: 'useGridCrossFilter',
+    description:
+      'Bridge a chart wrapper to a grid filter model. Chart click -> store -> grid.setFilterModel via the cross-filter event bridge. The mock grid panel renders the filter model so the bridge effect is observable.',
+    importPath: "import { useGridCrossFilter } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'gridId',
+        type: 'string',
+        required: true,
+        default: '—',
+        description: 'Unique grid identifier in the cross-filter store',
+      },
+      {
+        name: 'gridApi',
+        type: 'GridApi | null',
+        required: true,
+        default: '—',
+        description: 'AG Grid (or mock) API ref; null until the grid is ready',
+      },
+      {
+        name: 'syncStoreToGrid',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Push store filter changes to the grid via setFilterModel',
+      },
+    ],
+    sampleCode: `const { activeFilters, bridge } = useGridCrossFilter({
+  gridId: 'orders-grid',
+  gridApi,
+});`,
+    features: ['chart-to-grid', 'event-bridge', 'set-filter-model', 'reset'],
+    a11y: ['filter-state-announced', 'reset-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'drill-down': {
+    id: 'drill-down',
+    name: 'useDrillDown',
+    description:
+      'Hierarchical drill state machine. Define N levels; clicking a chart bar drills into the next level, breadcrumb navigates back. Drill state lives in the cross-filter store, so undo/redo and bookmarks come for free.',
+    importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'levels',
+        type: 'DrillDownLevelSpec[]',
+        required: true,
+        default: '—',
+        description: 'Array of { field, label?, chartType? } level descriptors',
+      },
+      {
+        name: 'rootLabel',
+        type: 'string',
+        required: false,
+        default: '"All"',
+        description: 'Display label for the root breadcrumb item',
+      },
+    ],
+    sampleCode: `const drill = useDrillDown({
+  levels: [
+    { field: 'region', label: 'Region' },
+    { field: 'city', label: 'City' },
+    { field: 'store', label: 'Store' },
+  ],
+});
+
+<DrillDownBreadcrumb
+  breadcrumbs={drill.breadcrumbs}
+  onNavigate={drill.drillTo}
+/>
+<BarChart
+  data={chartData}
+  onDataPointClick={(e) => drill.drillDown(e.label, e.label)}
+/>`,
+    features: ['hierarchical-drill', 'breadcrumb', 'drillToRoot', 'drillTo'],
+    a11y: ['breadcrumb-aria-current', 'level-state-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'drill-down-history': {
+    id: 'drill-down-history',
+    name: 'useDrillDown (history mode)',
+    description:
+      'Same hook as drill-down but extended with a snapshot stack so the user can undo/redo across drill steps. The cross-filter store retains drillPath history; the demo composes that with a local future-stack to expose redo.',
+    importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'levels',
+        type: 'DrillDownLevelSpec[]',
+        required: true,
+        default: '—',
+        description: 'Array of { field, label?, chartType? } level descriptors',
+      },
+    ],
+    sampleCode: `const drill = useDrillDown({ levels });
+const [history, setHistory] = useState({ past: 0, future: [] });
+
+const onClick = (label) => {
+  drill.drillDown(label, label);
+  setHistory((h) => ({ past: h.past + 1, future: [] }));
+};
+
+const undo = () => {
+  drill.drillUp();
+  setHistory((h) => ({
+    past: Math.max(0, h.past - 1),
+    future: [drill.currentDepth, ...h.future],
+  }));
+};`,
+    features: ['drill-down', 'undo-redo', 'breadcrumb', 'snapshot-stack'],
+    a11y: ['breadcrumb-aria-current', 'undo-redo-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
   /* ---- AI helpers (Faz 21.4-B3) ---- */
 
   'detect-anomalies': {
