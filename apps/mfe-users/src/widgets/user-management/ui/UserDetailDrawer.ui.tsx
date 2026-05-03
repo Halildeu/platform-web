@@ -585,20 +585,43 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // ALL items in the dataset, not just the filtered subset, so an admin
   // doesn't accidentally clear unselected rows by typing a search query.
   // Code prefix rendered in monospace before the name when present.
+  //
+  // 2026-05-04 Session 37 UX fix (kullanıcı feedback: "şirket depo proje
+  // gibi eklenen data yetkileri varsayılan listenenler yetki verişlenler
+  // olsun liste çok uzun kilitleniyor multi filter gibi çalışsın"):
+  // - Default mode: SADECE atanmış (selected) items render edilir → büyük
+  //   master-data listelerinde (yüzlerce şirket) drawer açılışı hızlanır.
+  // - Toggle: "Sadece atanmış / Hepsini göster" — admin yetki ekleme
+  //   moduna geçince tümü görünür.
+  // - Search + assigned-only filter combine eder (multi-filter pattern).
+  // - Render limit (DEFAULT_DISPLAY_LIMIT = 100): tümü modda + arama yoksa
+  //   ilk 100 item; "Daha fazla göster" buton ile genişletilir.
+  // - "Tümünü Seç" davranışı korunur (TÜM dataset toggle).
+  const DEFAULT_DISPLAY_LIMIT = 100;
   const ScopePickerSection: React.FC<{
     items: ScopeEntity[];
     selected: number[];
     setter: React.Dispatch<React.SetStateAction<number[]>>;
   }> = ({ items, selected, setter }) => {
     const [search, setSearch] = React.useState('');
+    const [showOnlySelected, setShowOnlySelected] = React.useState(true);
+    const [displayLimit, setDisplayLimit] = React.useState(DEFAULT_DISPLAY_LIMIT);
     const q = search.trim().toLocaleLowerCase('tr-TR');
-    const filtered = q
-      ? items.filter(
-          (i) =>
-            (i.name ?? '').toLocaleLowerCase('tr-TR').includes(q) ||
-            (i.code ?? '').toLocaleLowerCase('tr-TR').includes(q),
-        )
-      : items;
+
+    // Multi-filter: assigned-only + search combine
+    const filtered = React.useMemo(() => {
+      const base = showOnlySelected ? items.filter((i) => selected.includes(i.id)) : items;
+      if (!q) return base;
+      return base.filter(
+        (i) =>
+          (i.name ?? '').toLocaleLowerCase('tr-TR').includes(q) ||
+          (i.code ?? '').toLocaleLowerCase('tr-TR').includes(q),
+      );
+    }, [items, selected, showOnlySelected, q]);
+
+    // Performance: render limit (büyük listeler kilitlenmesin)
+    const displayed = filtered.slice(0, displayLimit);
+    const hasMore = filtered.length > displayLimit;
 
     const allSelected = items.length > 0 && items.every((i) => selected.includes(i.id));
     const noneSelected = items.every((i) => !selected.includes(i.id));
@@ -614,16 +637,38 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     return (
       <div className="flex flex-col gap-2 mt-2">
         {items.length > 0 && (
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('users.detail.scopes.searchPlaceholder')}
-            className="w-full rounded border border-border-subtle bg-surface-default px-3 py-1.5 text-sm placeholder:text-text-subtle focus:border-border-default focus:outline-none"
-            data-testid="scope-search-input"
-          />
+          <div className="flex flex-col gap-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setDisplayLimit(DEFAULT_DISPLAY_LIMIT);
+              }}
+              placeholder={t('users.detail.scopes.searchPlaceholder')}
+              className="w-full rounded border border-border-subtle bg-surface-default px-3 py-1.5 text-sm placeholder:text-text-subtle focus:border-border-default focus:outline-none"
+              data-testid="scope-search-input"
+            />
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <Checkbox
+                label={t('users.detail.scopes.assignedOnly')}
+                checked={showOnlySelected}
+                onChange={(checked) => {
+                  setShowOnlySelected(checked);
+                  setDisplayLimit(DEFAULT_DISPLAY_LIMIT);
+                }}
+              />
+              <span className="text-text-subtle font-mono" data-testid="scope-count-badge">
+                {t('users.detail.scopes.countBadge', {
+                  shown: filtered.length,
+                  total: items.length,
+                  selected: selected.length,
+                })}
+              </span>
+            </div>
+          </div>
         )}
-        {items.length > 1 && (
+        {items.length > 1 && !showOnlySelected && (
           <Checkbox
             label={t('users.detail.scopes.selectAll')}
             checked={allSelected}
@@ -637,7 +682,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             {t('users.detail.scopes.searchEmpty', { query: search })}
           </p>
         )}
-        {filtered.map((item) => (
+        {!q && showOnlySelected && filtered.length === 0 && (
+          <p className="text-xs text-text-subtle italic">
+            {t('users.detail.scopes.assignedEmpty')}
+          </p>
+        )}
+        {displayed.map((item) => (
           <Checkbox
             key={item.id}
             label={
@@ -657,6 +707,18 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             disabled={!canEdit}
           />
         ))}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => setDisplayLimit(displayLimit + DEFAULT_DISPLAY_LIMIT)}
+            className="mt-1 self-start rounded border border-border-subtle bg-surface-muted px-3 py-1 text-xs text-text-subtle hover:bg-surface-default"
+            data-testid="scope-show-more"
+          >
+            {t('users.detail.scopes.showMore', {
+              remaining: filtered.length - displayLimit,
+            })}
+          </button>
+        )}
       </div>
     );
   };

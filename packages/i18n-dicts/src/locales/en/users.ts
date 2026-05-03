@@ -170,6 +170,12 @@ const users = {
   'users.detail.scopes.selectAll': 'Select All',
   'users.detail.scopes.searchPlaceholder': 'Search by name or code...',
   'users.detail.scopes.searchEmpty': 'No results matching "{query}".',
+  // 2026-05-04 Session 37 UX fix — multi-filter pattern (assigned-only default + display limit)
+  'users.detail.scopes.assignedOnly': 'Show assigned only',
+  'users.detail.scopes.assignedEmpty':
+    'No items assigned yet. Toggle the switch above to show all.',
+  'users.detail.scopes.countBadge': 'Shown: {shown} / Total: {total} · Assigned: {selected}',
+  'users.detail.scopes.showMore': 'Show {remaining} more items',
   'users.detail.save': 'Save',
   'users.detail.save.scope': 'Save roles and data access',
   'users.detail.saving': 'Saving...',

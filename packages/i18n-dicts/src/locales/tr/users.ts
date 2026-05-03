@@ -168,6 +168,12 @@ const users = {
   'users.detail.scopes.selectAll': 'Tümünü Seç',
   'users.detail.scopes.searchPlaceholder': 'İsim veya kod ile ara...',
   'users.detail.scopes.searchEmpty': '"{query}" ile eşleşen sonuç bulunamadı.',
+  // 2026-05-04 Session 37 UX fix — multi-filter pattern (assigned-only default + display limit)
+  'users.detail.scopes.assignedOnly': 'Sadece atanmış göster',
+  'users.detail.scopes.assignedEmpty':
+    'Henüz hiçbir öğe atanmamış. Tümünü göstermek için yukarıdaki anahtarı kapatın.',
+  'users.detail.scopes.countBadge': 'Görünen: {shown} / Toplam: {total} · Atanmış: {selected}',
+  'users.detail.scopes.showMore': '+{remaining} öğeyi daha göster',
   'users.detail.save': 'Kaydet',
   'users.detail.save.scope': 'Rol ve veri erişimini kaydet',
   'users.detail.saving': 'Kaydediliyor...',
