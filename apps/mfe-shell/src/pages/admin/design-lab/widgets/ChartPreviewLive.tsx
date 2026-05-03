@@ -492,7 +492,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       );
 
     case 'drill-down-history':
-      // Faz 21.4 PR-B: drill-down + undo/redo via cross-filter store snapshot stack.
+      // Faz 21.4 PR-B: drill-down + explicit Undo (drillUp) + Reset (drillToRoot) + depth/drill counter.
       return (
         <div
           data-testid={testId}

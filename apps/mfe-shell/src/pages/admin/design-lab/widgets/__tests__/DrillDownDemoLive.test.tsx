@@ -3,10 +3,11 @@
  * Deep functional test for DrillDownDemoLive (Faz 21.4 PR-B).
  *
  * Mutation discipline (each assertion would fail under a plausible mutation):
- *   - "kill the click handler"           → Test 1 (click leaves level=0)
- *   - "skip drillPath aggregation"       → Test 2 (data never narrows)
- *   - "break breadcrumb drillTo wiring"  → Test 3 (breadcrumb click no-op)
- *   - "drop history future stack"        → Test 4 (redo button always disabled)
+ *   - "kill the click handler"          → Test 1 (click leaves level=0)
+ *   - "skip drillPath aggregation"      → Test 2 (data never narrows)
+ *   - "drop drillToRoot from reset btn" → Test 3 (reset stays at level 1)
+ *   - "lose drillCount accumulation"    → Test 4 (counter stays at 0)
+ *   - "break breadcrumb drillTo wiring" → Test 5 (root crumb no-op)
  *
  * Only the canvas-based BarChart is mocked; real CrossFilterProvider +
  * useDrillDown + DrillDownBreadcrumb + cross-filter store run unmodified.
