@@ -67,7 +67,13 @@ export interface ChartPreviewLiveProps {
    */
   toggles?: PlaygroundState;
   /**
-   * Visual height (px). Default 360 matches the Storybook visual snapshot box.
+   * Optional minimum-height floor (px). Faz 21.9 PR2 (Codex `019defa5`):
+   * the preview surface height is normally derived from the *clamped*
+   * chart size — `220 / 320 / 420` for `sm / md / lg`. Pass a non-zero
+   * `height` here to insist on a floor when the chart-size envelope
+   * would otherwise be too small (e.g. theme-only previews without a
+   * chart). Defaults to `0` so the responsive shrink wins on mobile /
+   * tablet without callers having to remember to override.
    */
   height?: number;
 }
@@ -198,7 +204,12 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
   chartId,
   chartName,
   toggles,
-  height = 360,
+  // Default `height = 0` — the chart-size-derived envelope wins. Callers
+  // that need a hard floor (theme-only previews) can still pass an
+  // explicit value. (Codex 019defa5 PARTIAL fix: an earlier draft
+  // defaulted to 360, which silently bypassed the responsive shrink the
+  // whole PR was meant to deliver.)
+  height = 0,
 }) => {
   const testId = `design-lab-chart-preview-${chartId}`;
 

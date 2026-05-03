@@ -59,13 +59,14 @@ describe('responsiveHeight', () => {
     expect(responsiveHeight('lg', 360)).toBe(420);
   });
 
-  it('Codex 019defa5 PARTIAL fix: legacy 360 floor would have bypassed mobile shrink', () => {
-    // The original PR2 draft passed `floor=360` from the design-lab
-    // call-site; with that, mobile previews stayed at 360 even after the
-    // chart canvas clamped to 'sm' (220). The fix removes the floor at
-    // the call-site so the chart-size-derived height wins.
-    expect(responsiveHeight('sm')).toBe(220);
-    expect(responsiveHeight('sm', 360)).toBe(360); // documents the bypass that USED to happen
+  it('Codex 019defa5 PARTIAL fix: no implicit floor — mobile shrink wins by default', () => {
+    // Two regressions used to silently re-introduce a 360 floor:
+    //   1. ChartDetail.tsx passing height={360} to <ChartPreviewLive />
+    //   2. ChartPreviewLive defaulting `height = 360`
+    // Both are gone in PR2 iter-3. The helper itself defaults floor=0,
+    // and explicit floors are still honoured for theme-only previews.
+    expect(responsiveHeight('sm')).toBe(220); // no floor → chart envelope wins
+    expect(responsiveHeight('sm', 360)).toBe(360); // explicit floor wins (intentional)
   });
 });
 
