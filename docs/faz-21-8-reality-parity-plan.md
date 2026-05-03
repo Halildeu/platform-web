@@ -1,218 +1,351 @@
-# FAZ 21.8 — Reality Parity & Maturity Plan
+# FAZ 21.8 — Reality Parity & Maturity Plan (v2, Codex iter-1 absorbed)
 
-**Status:** PLAN draft (2026-05-03)
+**Status:** PLAN draft v2 (2026-05-03)
 **Owner:** x-charts maintenance
-**Goal:** `@mfe/x-charts` kütüphanesinin "rakipler arasında açık ara önde" iddiasını gerçek davranışla **birebir** eşitlemek. Hiçbir özellik fake olmasın, partial olanlar mature seviyeye çıksın, demo-only feature'lar production'da gerçek tüketici kazansın.
+**Goal:** `@mfe/x-charts` kütüphanesinin "rakipler arasında açık ara önde" iddiasını gerçek davranışla **birebir** eşitlemek. Hiçbir özellik fake olmasın, partial olanlar mature seviyeye çıksın, demo-only feature'lar production'da gerçek tüketici kazansın, "kanıt doğru şeyi ölçüyor mu?" sorusu pas geçilmesin.
 
-> **Şu an pazarlama vs gerçek**: 13 chart wrapper + AccessControlledProps + 5 AI hook + 8/8 CI gate **gerçek**. Ama: XLSX export `format: 'xlsx'` type'da var, switch'te yok (FAKE). `useRealTimeData interval` option type'da var, hook kullanmıyor (FAKE). DrillDown history "redo" PR-B Codex must-fix sonrası kaldırıldı. SSR sadece 2 component için. Contrast gate STATIC fallback only. Cross-filter/DrillDown/AG-Grid bridge sadece Design Lab demo'da, prod consumer yok.
+> **Şu an pazarlama vs gerçek**:
+>
+> - 13 chart wrapper + AccessControlledProps + 5 AI hook + 8/8 CI gate **gerçek**.
+> - Ama: XLSX export `format: 'xlsx'` type'da var, switch'te yok ([chart-export.ts:10, 173 fail-silent](../packages/x-charts/src/collaboration/chart-export.ts)) — **FAKE**.
+> - `useRealTimeData interval` option type'da var, hook destructure'dan eksik ([useRealTimeData.ts:46](../packages/x-charts/src/useRealTimeData.ts)) — **FAKE**.
+> - DrillDown history "redo" — **store-level zaten var** (`createCrossFilterStore.ts:160`), sadece `useDrillDown` return API'sinde expose edilmemiş + memory cap `redo()` içinde eksik (`createCrossFilterStore.ts:168`) — **PARTIAL surface**, infrastructure mature.
+> - SSR `'use client'` boundary `'use client'` sadece `ChartContainer` + `ChartDashboard` için. 13 chart wrapper RSC'de patlar. Ayrıca `package.json exports` map'te `./ssr` subpath YOK — public consumer `import '@mfe/x-charts/ssr'` çözümsüz.
+> - Contrast gate STATIC fallback only. Runtime browser CSS-var/canvas pixel asla doğrulanmadı.
+> - Cross-filter / DrillDown / AG-Grid bridge sadece Design Lab demo'da. `mfe-reporting/hr-compensation` zaten **bespoke** cross-filter (`CompensationDashboard.tsx:288 useState<CrossFilter[]>`) — migration hedefi olarak en güçlü kanıt.
+> - Doc drift: README "All charts meet WCAG AA" / "4.5:1 minimum" iddiası gate olmadan kanıtsız.
 
-> **Bu plan**: tüm bu drift'leri kapatır. 5 PR, ~32-50h tahmini.
+> **Bu plan v2**: tüm bu drift'leri kapatır + "kanıt doğru şeyi ölçüyor mu?" T4 katmanını ekler. **6 PR (X0=plan + X1..X5)**, ~32-50h tahmini. Per-PR doc inline güncellenir; X5 sadece final sweep.
+
+---
+
+## v1 → v2 Revize Notu (Codex iter-1 PARTIAL/REVISE/RED absorbed)
+
+| #   | Codex itirazı                                                                                 | v2'de değişen                                                                                                                      |
+| --- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | XLSX gerçek implement bundle taşar (343,564/350KB cap, 6.4KB margin), sync→async API kırılımı | **Type'tan kaldır** (deprecate). Future ayrı `@mfe/x-charts/export-xlsx` adapter.                                                  |
+| 2   | `interval+onTick` no-op fake'in yeni formu                                                    | **Discriminated union**: `interval` varsa `onTick` zorunlu. Adı `tickIntervalMs`. callback ref kullan.                             |
+| 3   | Cross-filter store'da zaten `past`/`future`/`redo()` var                                      | Plan değişti: store değişmez, sadece **useDrillDown.redo/canRedo expose** + `redo()` line 168 memory cap fix.                      |
+| 4   | `package.json exports` map'te `./ssr` subpath yok                                             | X2'ye **subpath export ekleme** dahil. Wrapper file-level `'use client'` directive. Composite (KPICard/StatWidget) **dahil etme**. |
+| 5   | axe-core color-contrast canvas içinde çalışmaz — false green riski                            | X3'ü **X3a + X3b'e böl**. Gate `axe yerine browser-resolved CSS-var → WCAG math` + SVG renderer fallback for canvas validation.    |
+| 6   | HC palette 4.5:1 sağlamıyor — gate açılınca fail                                              | **X3a (palette redesign + math) ayrı PR**, X3b sonra gate açar.                                                                    |
+| 7   | hr-demographic değil hr-compensation daha doğru target                                        | X4 birinci hedef **CompensationDashboard bespoke→@mfe/x-charts migration** (gerçek user-facing).                                   |
+| 8   | Doc drift X5'e bırakmak yanlış                                                                | **Her PR kendi iddiasını aynı PR'da düzeltir**. X5 sadece final sweep + cross-link audit.                                          |
+| 9   | Bağımlılık X4→X1 yanlış                                                                       | Düzeltildi: X4 X1'e bağımlı **değil**. X4 DrillDown consumer X2'yi bekler.                                                         |
+| 10  | "Açık ara önde" doğrulaması zayıf                                                             | **T4 eklendi**: package-boundary smoke + bundle chunk budget + perf regression + consumer adoption matrix.                         |
 
 ---
 
 ## Tier Breakdown
 
-### T1 — Fake Removal (2 item, ~3-6h)
+### T1 — Fake Removal (2 item, ~2-4h, küçüldü)
 
-Pazarlama tablosunda yer alan ama implementation'da boş olan iki item. **Reklam ihlali**, en yüksek öncelik.
+Pazarlama tablosunda yer alan ama implementation'da boş olan iki item. **Reklam ihlali**, en yüksek öncelik. Codex feedback'i sonrası gerçek implement yerine **type-level deprecate** yolu tercih edildi (bundle + API kırılım koruması).
 
-| Item                           | Şu an                                                                                                                                                                                                          | Hedef                                                                                                                                                                              | PR  |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| **XLSX export**                | `ExportFormat = '...' \| 'xlsx'` + JSDoc "PNG, SVG, PDF, CSV, XLSX" + dosya başlığı `Chart Export — PNG, SVG, PDF, CSV, XLSX` AMA `chart-export.ts:152-167` switch'te `xlsx` case YOK. Çağrılırsa sessiz fail. | **Real impl** via `exceljs` dep. Workbook → buffer → Blob → download. Dosya başlığı + JSDoc parity.                                                                                | X1  |
-| **`useRealTimeData interval`** | `RealTimeDataOptions.interval?: number` + JSDoc "auto-advance a tick at this interval (ms)" AMA `useRealTimeData.ts` body `interval` field'ını **hiç okumuyor**.                                               | **Real impl** via `useEffect(() => { const id = setInterval(emit, interval); return () => clearInterval(id); }, [interval])` + `pause/resume` ile uyum + `onTick` opt-in callback. | X1  |
+| Item                           | Şu an                                                                                                                                                                                        | Hedef                                                                                                                                                                                                                                                                                                                          | PR  |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --- |
+| **XLSX export**                | `ExportFormat = '...' \| 'xlsx'` (chart-export.ts:10) + JSDoc/dosya başlığı "PNG, SVG, PDF, CSV, XLSX" AMA switch'te (line 161-172) `xlsx` case YOK; çağrılırsa **silent return undefined**. | **Type-level removal**: `ExportFormat = 'png' \| 'svg' \| 'pdf' \| 'csv'`. Dosya başlığı + JSDoc parity ("PNG, SVG, PDF, CSV"). README + CONTRACT.md güncel. ChartDetail sample XLSX butonu kaldır. **Future**: ayrı `@mfe/x-charts/export-xlsx` opt-in adapter (out of scope this FAZ).                                       | X1  |
+| **`useRealTimeData interval`** | `RealTimeDataOptions.interval?: number` + JSDoc "auto-advance a tick at this interval (ms)" AMA `useRealTimeData.ts:46` body `interval` field'ını destructure'da OKUMUYOR.                   | **Discriminated union**: ya `RealTimeDataOptionsBase<T>` (no auto-tick) ya `RealTimeDataOptionsAutoTick<T>` (`tickIntervalMs: number; onTick: () => T \| undefined` zorunlu). Body'ye `useEffect` + setInterval + callback-ref pattern. Pause/resume effect cleanup. Runtime `interval` set ama `onTick` yoksa explicit error. | X1  |
 
-### T2 — Partial → Mature (3 item, ~14-22h)
+### T2 — Partial → Mature (3 item, ~8-14h)
 
 Implementation var ama **bütün** değil. Pazarlama dürüst olmuyor: "olgun" diyemiyoruz.
 
-| Item                            | Şu an                                                                                                                                                     | Hedef                                                                                                                                                                                                                                       | PR  |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| **DrillDown history redo**      | PR-B Codex must-fix #1 sonrası **redo button kaldırıldı**. UI sadece undo + reset + counter. Trail persist yok.                                           | Snapshot stack `Array<{ field, value, label }>` future + past, real `redo()` action — `drillTo` ile aynı koordinatları yeniden uygula. UI redo button restored. CONTRACT.md güncel.                                                         | X2  |
-| **SSR (13 chart wrapper)**      | `ssr/index.ts` 25 satır, sadece `ChartContainer` + `ChartDashboard` `'use client'` re-export. 13 chart wrapper'ı RSC'de direct import patlar.             | 13 chart wrapper'ı `ssr/charts.ts` (`'use client'`) re-export'a ekle + RSC compat test (Next.js fixture veya minimum SSR smoke) + dokümantasyon.                                                                                            | X2  |
-| **Contrast gate runtime layer** | `chart-contrast.contract.test.ts` STATIC fallback hex layer (jsdom; theme.css yüklenmez). 41 assertion. Runtime browser CSS-var/OKLCH **gate edilmiyor**. | Storybook K5 build üzerinden Playwright + `@axe-core/playwright` ile real browser color-contrast smoke. 13 chart × 5 theme × {default, HC} = 130 koşum. Workflow `x-charts-runtime-contrast.yml` ek hard gate. CONTRACT §8 8-gate → 9-gate. | X3  |
+| Item                                 | Şu an                                                                                                                                                                                                                                                                                                                                                         | Hedef                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | PR       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| **DrillDown history redo (surface)** | Store-level `redo()` zaten var (createCrossFilterStore.ts:160-171) + `HistoryEntry.drillPath` snapshot taşıyor (types.ts:48). AMA: (a) `useDrillDown` return API'sinde expose edilmemiş (useDrillDown.ts:38-59 interface eksik), (b) `redo()` action'da memory cap eksik (line 168 raw concat), (c) UI redo button PR-B Codex must-fix sonrası kaldırılmıştı. | (a) `useDrillDown` `redo()` + `canUndo`/`canRedo` boolean expose + `useCrossFilter((s)=>s.future.length>0)` selectors. (b) `redo()` line 168'de `state.past.slice(-(historyCap-1))` cap fix. (c) `DrillDownDemoLive` history mode redo button restored. (d) Test: drill 2 → undo → redo → drillPath length=2 + label match.                                                                                                                                                                                                                                                                                       | X2       |
+| **SSR (13 chart wrapper + subpath)** | `ssr/index.ts` 25 satır; `'use client'` sadece `ChartContainer` + `ChartDashboard` re-export. 13 chart wrapper RSC'de direct import patlar. `package.json exports` map'te `.` var, `./ssr` veya `./client` subpath YOK.                                                                                                                                       | (a) Her chart wrapper file'ına (`BarChart.tsx` vs.) **file-level `'use client'`** directive. (b) `package.json exports` map'e `./client` subpath ekle (`./client/index.ts` re-export'u barrel ediyor). (c) `ssr/index.ts` server-safe pure helper'lar (echarts'a dokunan exports kalmaz). (d) Composite (KPICard, StatWidget, ChartContainer, ChartDashboard) **dahil etmez**, ayrı `./composites` subpath veya hep `./client`. (e) `Sparkline` SVG-only ise server-safe kalabilir, kontrol et. (f) RSC fixture: minimal Next.js app router smoke test (`async page.tsx → import @mfe/x-charts/client → render`). | X2       |
+| **Contrast gate runtime layer**      | `chart-contrast.contract.test.ts` STATIC fallback hex layer (jsdom; theme.css yüklenmez). 41 assertion. Runtime browser CSS-var resolution + canvas pixel **gate edilmiyor**. ECharts default canvas (echarts-renderer.ts:30); axe-core canvas içinde color-contrast okumaz.                                                                                  | **X3a + X3b split**. X3a: HC palette + token redesign + visual baseline + static math (4.5:1 sağlatır). X3b: gate açar — Storybook K5 build üzerinden Playwright + browser-resolved CSS-var → WCAG math (kendi script) **+** SVG renderer fallback variant her chart için (axe canvas yerine SVG'de okur). 13 chart × 5 theme × {default, decal/HC} = 130 koşum. Workflow `x-charts-runtime-contrast.yml` ek hard gate. CONTRACT §8 8 → 9 gate.                                                                                                                                                                   | X3 (a+b) |
 
-### T3 — Production Consumer + Doc Drift (4 item, ~15-22h)
+### T3 — Production Consumer + Doc Drift (4 item, ~12-18h)
 
 Demo'da çalışan feature'ları gerçek production app'lerine entegre et + dokümantasyon parity.
 
-| Item                           | Şu an                                                                                                                                         | Hedef                                                                                                                                                                        | PR  |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| **Cross-filter real consumer** | `CrossFilterProvider` + `useChartCrossFilter` sadece `apps/mfe-shell/src/pages/admin/design-lab/widgets/CrossFilterDemoLive.tsx`              | `apps/mfe-reporting` HR/dashboard sayfasında 2-3 chart linked-charts pair (örn. region × category × time sırasıyla daraltılan dashboard)                                     | X4  |
-| **DrillDown real consumer**    | `useDrillDown` sadece DrillDownDemoLive                                                                                                       | `apps/mfe-reporting/context-health` veya `mfe-shell/admin/audit` sayfasında 2-3 seviyeli hierarchical drill (project → component → file örn.)                                | X4  |
-| **AG Grid bridge real**        | `useGridCrossFilter` sadece mock GridApi demo                                                                                                 | `apps/mfe-users` veya `apps/mfe-access` real AG Grid + chart pair (filter chart → grid daraltılır)                                                                           | X4  |
-| **Doc drift cleanup**          | CONTRACT.md, README, ROADMAP, Design Lab catalog: pazarlama "5 hooks" / "8/8 gate" / "WCAG AA" gibi iddialar kısmen doğru, kısmen overpromise | Reality-aligned doc audit: her iddia için kanıt link (file:line, PR#), partial olanlara "STATIC layer only" / "demo-ready, prod consumer integrated in PR-X" gibi disclaimer | X5  |
+| Item                                                       | Şu an                                                                                                                                                                                        | Hedef                                                                                                                                                                                                                                                                                                                                           | PR  |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| **Cross-filter real consumer (hr-compensation migration)** | `CompensationDashboard.tsx:288` bespoke `useState<CrossFilter[]>` + manual `effectiveFilters` merge. `@mfe/x-charts` CrossFilterProvider/useChartCrossFilter/useGridCrossFilter kullanmıyor. | `CrossFilterProvider` wrap + 4 chart `useChartCrossFilter` (department/gender/collarType/education). Mevcut `effectiveFilters` map'i drop, store-driven. Mevcut `CompensationDashboard.test.tsx` (varsa) cross-filter assertion ile genişlet. **Kanıt: gerçek route + chart click → store filter set → re-fetch params değişir**.               | X4  |
+| **DrillDown real consumer**                                | `useDrillDown` sadece DrillDownDemoLive                                                                                                                                                      | `apps/mfe-reporting/src/modules/context-health/charts/HealthComponentBar.tsx` flat label/value. **Önkoşul**: project→component→file 3-seviyeli data backend'de var mı kontrol et. Varsa drill-down levels uygula. **Yoksa**: bu item'ı X4'ten çıkar, ayrı bir backend story aç (uydurma data ile drill-down "demo değil gerçek" kanıtı vermez). | X4  |
+| **AG Grid bridge real (mfe-users)**                        | `useGridCrossFilter` sadece mock GridApi demo                                                                                                                                                | `apps/mfe-users/src/pages/users/UsersPage.ui.tsx` + `widgets/user-management/ui/UsersGrid.ui.tsx` real `gridApiRef`. Role pie chart click → grid `setFilterModel` çağrısı. **Kanıt: Playwright veya integration test'te chart click → API params değişimi assertion**.                                                                          | X4  |
+| **Doc drift cleanup**                                      | CONTRACT.md, README, ROADMAP, Design Lab catalog: pazarlama "5 hooks" / "8/8 gate" / "WCAG AA" gibi iddialar kısmen doğru, kısmen overpromise.                                               | **Her PR kendi iddiasını aynı PR'da düzeltir** (X1 chart-export başlık, X2 SSR section, X3 contrast gate). X5 sadece **final cross-link audit** (her CONTRACT.md claim için file:line + PR# kanıt-link). README "WCAG AA guaranteed" → "WCAG AA gated by static + runtime contrast tests".                                                      | X5  |
+
+### T4 — NEW: Truth Validation Layer (~5-8h)
+
+Codex iter-1 RED #11: "kanıt doğru şeyi ölçüyor mu?" T4 doğrulama katmanı.
+
+| Item                          | Şu an                           | Hedef                                                                                                                                                                                                                                           | PR                            |
+| ----------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Package boundary smoke**    | yok                             | Test: `import { BarChart } from '@mfe/x-charts'` server context'te patlar mı? `'@mfe/x-charts/client'` subpath çözülüyor mu? Vitest/jest unit + minimal Next.js fixture.                                                                        | X2 (in-line)                  |
+| **Bundle async chunk budget** | wrapperOnly + contractTotal var | Ek metrik: lazy-loaded chunk'lar (XLSX deprecate sonrası kalmazsa skip). Chart-specific tree-shake test'i `verify-tree-shaking.mjs` zaten yapıyor — ek olarak per-feature lazy boundary test.                                                   | X2                            |
+| **Perf regression smoke**     | yok                             | Headless Chromium'da 13 chart × 5 theme initial render < 200ms p95 budget. Vitest browser env veya Playwright.                                                                                                                                  | X3 (next to runtime contrast) |
+| **Consumer adoption matrix**  | yok                             | Markdown matrix `docs/x-charts-adoption-matrix.md`: hangi mfe-app + sayfa + hangi chart wrapper + hangi feature kullanıyor. CI script `scripts/ci/x-charts-adoption-scan.mjs` ile statik tarama (grep `from '@mfe/x-charts'` kullanım yerleri). | X5                            |
 
 ### Total
 
-| PR               | Scope                                                | Effort     | Risk                                                                                  |
-| ---------------- | ---------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------- |
-| **X0 (this PR)** | Plan dosyası + Codex review setup                    | 1h         | yok                                                                                   |
-| **X1**           | T1 fake removal (XLSX impl + realtime interval impl) | 3-6h       | exceljs bundle weight (~200KB +contractTotal); test isolation timer                   |
-| **X2**           | T2 DrillDown redo + SSR 13 chart                     | 6-10h      | history trail persistence semantics; RSC `'use client'` boundary için Next.js fixture |
-| **X3**           | T2 Runtime contrast gate (Playwright + Storybook K5) | 6-10h      | snapshot baseline noise; CI runner GPU farkı                                          |
-| **X4**           | T3 Production consumer integrations (3 app)          | 12-18h     | strategic — hangi sayfa, hangi feature, hangi data                                    |
-| **X5**           | T3 Doc drift cleanup                                 | 1-2h       | yok                                                                                   |
-| **Total**        | 5 PR + plan                                          | **29-47h** | manageable                                                                            |
+| PR               | Scope                                                                                | Effort     | Risk                                                    |
+| ---------------- | ------------------------------------------------------------------------------------ | ---------- | ------------------------------------------------------- |
+| **X0 (this PR)** | Plan v2 dosyası + Codex iter-2 review                                                | 0.5h       | yok                                                     |
+| **X1**           | T1 fake removal (XLSX type-removal + realtime discriminated union)                   | 2-4h       | minimal — type-only + hook refactor                     |
+| **X2**           | T2 DrillDown redo expose + SSR subpath + 13 wrapper 'use client' + T4 boundary smoke | 6-10h      | RSC fixture flaky riski; subpath export breaking change |
+| **X3a**          | T2 HC palette/token redesign + static WCAG math 4.5:1                                | 3-5h       | visual snapshot baseline reset                          |
+| **X3b**          | T2 Runtime contrast gate (Playwright + CSS-var math + SVG fallback) + T4 perf smoke  | 5-8h       | CI runner GPU; SVG variant test infra                   |
+| **X4**           | T3 hr-compensation migration + AG Grid bridge + (context-health drill if data ready) | 8-12h      | strategic — context-health data uncertainty             |
+| **X5**           | T3 doc audit final sweep + T4 consumer adoption matrix                               | 2-3h       | yok                                                     |
+| **Total**        | 7 PR                                                                                 | **27-43h** | manageable                                              |
 
 ---
 
-## Per-PR Detail
+## Per-PR Detail (v2)
 
-### PR-X0 — Plan dosyası (this PR)
+### PR-X0 — Plan dosyası v2 (this PR)
 
 **Files**:
 
-- `docs/faz-21-8-reality-parity-plan.md` (NEW — bu dosya)
+- `docs/faz-21-8-reality-parity-plan.md` (UPDATED — bu dosya, v1 → v2)
 
-**Verification**: PR commit + push + Codex adversarial review (`mcp__codex__codex` in `read-only` mode) + PARTIAL/AGREE iter chain.
+**Verification**: Codex iter-2 (`mcp__codex__codex-reply` with v1 threadId 019dedbe-56fc-7413-a51d-459470c362f4) → AGREE → impl chain başlar.
 
-**Codex review questions**:
-
-1. Bu plan kapsam mantıklı mı? T1+T2+T3 sırası doğru mu?
-2. XLSX gerçek talep mi yoksa type'tan kaldırmak daha doğru mu?
-3. PR-X4 production consumer hangi mfe-app + hangi sayfa için pratik?
-4. Runtime contrast gate Storybook K5 + Playwright tek doğru yol mu?
+**v2 değişiklikleri özeti**: yukarıdaki "v1 → v2 Revize Notu" tablosu.
 
 ---
 
-### PR-X1 — T1 Fake Removal
+### PR-X1 — T1 Fake Removal (revised)
 
 **Branch**: `feat/faz-21-8-x1-fake-removal`
 
-#### Item 1: XLSX export (real impl)
+#### Item 1: XLSX export — **type-level removal** (revised)
 
 **Files**:
 
-- `packages/x-charts/package.json` — `dependencies: { exceljs: '^4.4.0' }`
-- `packages/x-charts/src/collaboration/chart-export.ts` — switch'e `xlsx` case ekle:
-  ```ts
-  if (format === 'xlsx' && data && columns) {
-    const ExcelJS = await import('exceljs');
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet(title ?? 'Sheet1');
-    ws.columns = columns.map((c) => ({ header: c.headerName, key: c.field }));
-    ws.addRows(data);
-    const buffer = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    });
-    triggerDownload(URL.createObjectURL(blob), `${filename}.xlsx`);
-    return;
-  }
-  ```
-- `packages/x-charts/src/collaboration/__tests__/chart-export.xlsx.test.ts` — NEW: spy `URL.createObjectURL` + Blob mime check + ExcelJS sheet read-back assert
-- `packages/x-charts/.bundle-baseline.json` — re-baseline (exceljs ~210KB unminified, ~80KB gzip)
-- `apps/mfe-shell/src/pages/admin/design-lab/widgets/FeatureDemoLive.tsx` `feature-export` case'e XLSX butonu ekle
-- `apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx` `feature-export` sample code'a XLSX örnek
+- `packages/x-charts/src/collaboration/chart-export.ts`
+  - Line 1: dosya başlığı `Chart Export — PNG, SVG, PDF, CSV, XLSX` → `Chart Export — PNG, SVG, PDF, CSV`
+  - Line 7: JSDoc `@see contract P7 DoD: "Export: PNG, SVG, PDF, CSV, XLSX"` → `"Export: PNG, SVG, PDF, CSV"`
+  - Line 10: `ExportFormat = 'png' | 'svg' | 'pdf' | 'csv' | 'xlsx'` → drop `'xlsx'`
+  - Line 19, 21: `/** CSV/XLSX data rows */` → `/** CSV data rows */` (XLSX kelimesini kaldır)
+- `packages/x-charts/CONTRACT.md` P7 DoD section: XLSX iddiasını kaldır
+- `packages/x-charts/README.md` line 94 vicinity (Codex'in işaret ettiği "WCAG AA / export claims"): "PNG, SVG, PDF, CSV" listesi
+- `apps/mfe-shell/src/pages/admin/design-lab/widgets/FeatureDemoLive.tsx` `feature-export` case: XLSX butonu kaldır (varsa)
+- `apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx` `feature-export` sample code: XLSX örnek kaldır
+- (Optional) `packages/x-charts/CHANGELOG.md` veya inline JSDoc deprecate note: "XLSX export was previously type-declared but never implemented. Removed in Faz 21.8 PR-X1. Future: optional `@mfe/x-charts/export-xlsx` adapter."
 
 **Test plan**:
 
-- Vitest unit: `exportChart(null, 'xlsx', { data, columns })` → URL.createObjectURL fired + Blob mime correct
-- Vitest behavioral: ExcelJS read-back of generated buffer → header row + data row count
-- Bundle check: re-baseline gzip size, hard cap 350KB still met (335 → ~415KB? maybe over → consider lazy import)
-- **Lazy import** (`await import('exceljs')`) — exceljs sadece XLSX export çağrılırsa yüklensin
+- TypeScript compile: `format: 'xlsx'` kullanan kullanıcı kodu yoksa kırılmaz (sadece public API daralır)
+- Vitest: mevcut `chart-export` testleri pass kalır
+- Bundle: değişmez (zaten implement yoktu)
 
-**Risk**:
+**Codex review hazırlığı**:
 
-- ExcelJS 210KB raw / ~80KB gzip — wrapperOnly metric'i bozar. Mitigation: `await import()` lazy; wrapperOnly external'a ekle.
+- ExportFormat narrowing breaking change mi (semver impact)? Internal-only paket olduğu için minor sayılabilir; CHANGELOG note yeterli.
 
-#### Item 2: `useRealTimeData interval` (real impl)
+#### Item 2: `useRealTimeData interval` — **discriminated union** (revised)
 
 **Files**:
 
-- `packages/x-charts/src/useRealTimeData.ts` — body'ye:
+- `packages/x-charts/src/useRealTimeData.ts`:
+
   ```ts
+  // Type: discriminated union
+  export type RealTimeDataOptions<T> = RealTimeDataOptionsBase<T> | RealTimeDataOptionsAutoTick<T>;
+
+  interface RealTimeDataOptionsBase<T> {
+    maxPoints?: number;
+    onNewPoint?: (point: T) => void;
+    tickIntervalMs?: undefined;
+    onTick?: undefined;
+  }
+
+  interface RealTimeDataOptionsAutoTick<T> {
+    maxPoints?: number;
+    onNewPoint?: (point: T) => void;
+    tickIntervalMs: number; // required when auto-tick
+    onTick: () => T | undefined; // required producer
+  }
+
+  // Body addition (after existing hook logic):
+  const tickIntervalMs = (options as RealTimeDataOptionsAutoTick<T>).tickIntervalMs;
+  const onTickRef = useRef<RealTimeDataOptionsAutoTick<T>['onTick'] | undefined>(undefined);
+  onTickRef.current = (options as RealTimeDataOptionsAutoTick<T>).onTick;
+
   useEffect(() => {
-    if (!interval || isPaused) return;
-    if (!onTick) return; // explicit opt-in: hook can't auto-emit data without a producer
+    if (!tickIntervalMs || pausedRef.current) return;
     const id = setInterval(() => {
-      const point = onTick();
+      const point = onTickRef.current?.();
       if (point !== undefined) addPoint(point);
-    }, interval);
+    }, tickIntervalMs);
     return () => clearInterval(id);
-  }, [interval, isPaused, onTick, addPoint]);
+  }, [tickIntervalMs, isPaused, addPoint]);
   ```
-- Type'a `onTick?: () => T | undefined` ekle
-- `packages/x-charts/src/__tests__/useRealTimeData.test.ts` — NEW: `vi.useFakeTimers()` ile interval test
-- `apps/mfe-shell/src/pages/admin/design-lab/widgets/FeatureDemoLive.tsx` realtime demo'yu hook-driven impl ile yeniden yaz (kendi setInterval kaldır)
+
+- `packages/x-charts/src/__tests__/useRealTimeData.test.ts` (NEW or extend existing): `vi.useFakeTimers()` + auto-tick assertion (5 ticks → buffer length 5 + onTick called 5x); pause cleanup test; runtime error on `tickIntervalMs` set + `onTick` undefined (TypeScript already blocks; runtime guard yine de check)
+- `apps/mfe-shell/src/pages/admin/design-lab/widgets/FeatureDemoLive.tsx` realtime demo: `tickIntervalMs: 250` + `onTick: () => generateNewPoint()` ile yeniden yaz; mevcut `setInterval` kaldır
 
 **Verification**:
 
 - `pnpm --filter @mfe/x-charts exec vitest run src/__tests__/useRealTimeData.test.ts`
-- Demo deterministic test (FeatureDemoLive realtime fake timer + count assertion)
+- FeatureDemoLive realtime test (existing fake timer + count assertion) pass kalır
 
 **Codex review hazırlığı**:
 
-1. `interval` semantiği "auto-tick" → `onTick` opt-in mi, yoksa `addPoint` doğrudan mı? Caller ne emit eder?
-2. Pause/resume cleanup correct mi (effect re-run paused değişiminde)?
-3. Bundle impact (ExcelJS lazy import doğru mu)?
+1. Discriminated union TypeScript narrowing prod consumer code'unda doğru çalışıyor mu (örn. `if ('tickIntervalMs' in options)`)?
+2. Pause sırasında effect re-run cleanup correct mi (pausedRef vs isPaused state dependency)?
+3. `tickIntervalMs` rename mevcut consumer'ları kırar mı (eski adı `interval` zaten okunmuyordu, yani breaking olmayacak)?
 
 ---
 
-### PR-X2 — T2 Partial → Mature (DrillDown redo + SSR)
+### PR-X2 — T2 Partial → Mature (DrillDown surface + SSR subpath + 'use client') + T4 boundary
 
 **Branch**: `feat/faz-21-8-x2-drilldown-redo-ssr`
 
-#### Item 1: DrillDown history redo (real impl)
+#### Item 1: DrillDown redo surface (revised — store değişmez)
 
 **Files**:
 
-- `packages/x-charts/src/cross-filter/createCrossFilterStore.ts` — store'a `pastDrillTrail` + `futureDrillTrail` ekle (her ikisi `DrillLevel[]` snapshot)
-- `packages/x-charts/src/drill-down/useDrillDown.ts` — `redo()` action expose
-- `apps/mfe-shell/src/pages/admin/design-lab/widgets/DrillDownDemoLive.tsx` — history mode'da redo button restored
-- `apps/mfe-shell/src/pages/admin/design-lab/widgets/__tests__/DrillDownDemoLive.test.tsx` — `Test 5: drill 2 levels → undo → redo → original level + breadcrumb match`
-- `apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx` — drill-down-history catalog: redo restored, sample code update
-- `apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx` — `useDrillDown (with undo)` → `useDrillDown (with undo + redo)`
+- `packages/x-charts/src/drill-down/useDrillDown.ts`:
+  - Interface `UseDrillDownReturn` (line 38-59) ekle:
+    ```ts
+    /** Re-apply most recent undone change. */
+    redo: () => void;
+    /** Whether undo is available (past stack non-empty). */
+    canUndo: boolean;
+    /** Whether redo is available (future stack non-empty). */
+    canRedo: boolean;
+    /** Undo last drill change. */
+    undo: () => void;
+    ```
+  - Hook body: `useCrossFilter((s) => s.redo)`, `useCrossFilter((s) => s.undo)`, `useCrossFilter((s) => s.past.length > 0)`, `useCrossFilter((s) => s.future.length > 0)`
+- `packages/x-charts/src/cross-filter/createCrossFilterStore.ts:168` — memory cap fix:
+  ```ts
+  // BEFORE (line 168):
+  past: [...state.past, currentSnapshot],
+  // AFTER:
+  past: [...state.past.slice(-(historyCap - 1)), currentSnapshot],
+  ```
+- `apps/mfe-shell/src/pages/admin/design-lab/widgets/DrillDownDemoLive.tsx` history mode'da redo button restored (canRedo durumuna göre disable)
+- `apps/mfe-shell/src/pages/admin/design-lab/widgets/__tests__/DrillDownDemoLive.test.tsx` Test 5 ekle: drill 2 → undo → redo → drillPath length=2 + label match
+- `apps/mfe-shell/src/pages/admin/design-lab/pages/ChartsListing.tsx`: "useDrillDown (with undo)" → "useDrillDown (with undo + redo)"
+- `packages/x-charts/CONTRACT.md` DrillDown section güncel
+- `packages/x-charts/src/cross-filter/__tests__/createCrossFilterStore.test.ts` (varsa, yoksa NEW): memory cap test (50 drill + redo → past length ≤ 50)
 
 **Test plan**:
 
-- Drill region → city → undo (back to region) → redo (forward to city) → drillPath length = 1, label = original
+- Drill region → city → undo (back to region) → redo (forward to city) → drillPath length 1, label = original
+- Memory cap test: 60 drill + 60 undo + 60 redo → past + future stack toplamı ≤ 50
 
 **Codex review hazırlığı**:
 
-1. Store-level future-stack mı, hook-level mi (cross-filter store'u büyütmek doğru mu)?
-2. `drillTo(index)` mevcut redo'ya alternatif mi yoksa farklı semantik mi?
-3. Past/future stack cap (max-depth limit)?
+1. `useCrossFilter((s) => s.past.length > 0)` selector re-render trigger doğru mu (Zustand vanilla store + custom hook bridge)?
+2. Memory cap fix mevcut undo/redo testlerini kırar mı?
 
-#### Item 2: SSR boundary (13 chart wrapper)
+#### Item 2: SSR subpath + 'use client' (revised)
 
 **Files**:
 
-- `packages/x-charts/src/ssr/charts.ts` (NEW) — 13 chart wrapper `'use client'` re-export
-- `packages/x-charts/src/ssr/index.ts` — `export * from './charts'` ekle
-- `packages/x-charts/CONTRACT.md` SSR section güncelle
-- (Test) `packages/x-charts/src/ssr/__tests__/ssr-boundary.test.ts` — RSC import simulation (no DOM access in SSR phase)
+- `packages/x-charts/package.json` `exports` map güncelle:
+  ```json
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/client/index.ts",
+      "import": "./src/client/index.ts",
+      "default": "./src/client/index.ts"
+    },
+    "./ssr": {
+      "types": "./src/ssr/index.ts",
+      "import": "./src/ssr/index.ts",
+      "default": "./src/ssr/index.ts"
+    }
+  }
+  ```
+- `packages/x-charts/src/client/index.ts` (NEW) — barrel of 13 chart wrappers
+- 13 chart wrapper file'ı `BarChart.tsx`, `LineChart.tsx` vs.: file başına `'use client';` directive (TSX file-level, top of file)
+- `packages/x-charts/src/ssr/index.ts` (UPDATE): yalnız server-safe pure helper exports (echarts dokunmayan tipler, theme tokens). `ChartContainer`/`ChartDashboard` artık `./client`'dan re-export edilir.
+- `packages/x-charts/src/__tests__/ssr-boundary.test.ts` (NEW):
+  ```ts
+  // T4 boundary smoke
+  it('@mfe/x-charts/ssr can be imported in node without DOM', async () => {
+    // jsdom elimine, plain node env
+    const ssr = await import('@mfe/x-charts/ssr');
+    expect(ssr).toBeDefined();
+    // No echarts side effect
+  });
+  it('@mfe/x-charts/client can be imported in jsdom', async () => {
+    const client = await import('@mfe/x-charts/client');
+    expect(client.BarChart).toBeDefined();
+  });
+  ```
+- `packages/x-charts/CONTRACT.md` SSR section güncel: subpath stratejisi + 'use client' directive politikası açık
+- `packages/design-system/src/advanced/charts-bridge/...` (varsa import path migration)
+- `apps/mfe-*` import path migration check: hiçbir consumer `@mfe/x-charts` direct import edip RSC'de patlamamalı
+
+**Composite/Sparkline**:
+
+- `Sparkline.tsx` SVG-only kontrol (echarts dokunmuyorsa server-safe; dokunuyorsa `./client`)
+- `KPICard.tsx`, `StatWidget.tsx`, `ChartContainer.tsx`, `ChartDashboard.tsx` → `./client` (echarts dokunuyor)
 
 **Test plan**:
 
-- Static SSR test: `import * from '@mfe/x-charts/ssr'` → no runtime DOM error
-- Optional: Next.js minimal fixture (RSC tree → ClientChart hydration smoke)
+- `pnpm --filter @mfe/x-charts exec vitest run src/__tests__/ssr-boundary.test.ts`
+- (Optional) Minimal Next.js 14 RSC fixture: `app/page.tsx` server component imports `@mfe/x-charts/ssr`, `app/client.tsx` `'use client'` + imports `@mfe/x-charts/client`. Build smoke (`next build`).
 
 **Codex review hazırlığı**:
 
-1. `'use client'` directive doğru yerde mi (her chart-specific wrapper file mı, yoksa tek `ssr/charts.ts` re-export yeterli mi)?
-2. KPICard, Sparkline gibi composite chart'lar da SSR re-export'a girmeli mi?
-3. RSC fixture test mi, sadece static import smoke yeterli mi?
+1. `'use client'` directive monorepo TS source-only consume edildiğinde Vite ne yapar (Vite 'use client' string'i drop eder mi import boundary'de)?
+2. Subpath export `internal-platform` paket için consumer'da resolve edilir mi (Vite + tsconfig paths)?
+3. `Sparkline` SVG-only kontrolü kanıtla (grep echarts import).
 
 ---
 
-### PR-X3 — T2 Runtime Contrast Gate
+### PR-X3 — T2 Runtime Contrast Gate (revised — split into X3a + X3b)
 
-**Branch**: `feat/faz-21-8-x3-runtime-contrast-gate`
+#### PR-X3a — HC Palette/Token Redesign (must come first)
+
+**Branch**: `feat/faz-21-8-x3a-hc-palette-redesign`
 
 **Files**:
 
-- `packages/design-system/src/__visual__/x-charts-contrast.visual.ts` (NEW) — Storybook K5 üzerinden Playwright + `@axe-core/playwright` ile contrast smoke
-- `.github/workflows/x-charts-runtime-contrast.yml` (NEW) — separate workflow (visual gate gibi)
-- `packages/x-charts/CONTRACT.md` §8 — `contrast-runtime` 9th gate olarak ekle
+- `packages/design-system/src/themes/highContrastLight.css` (or wherever HC tokens live) — adjust `--color-text`, `--color-axis`, `--color-bg` ratios to >= 4.5:1
+- `packages/design-system/src/themes/highContrastDark.css`
+- `packages/x-charts/src/__tests__/chart-contrast.contract.test.ts` HC assertions update (eğer expected ratio değişiyorsa)
+- `packages/x-charts/src/__tests__/__snapshots__/...` baseline reset (visual)
+- `packages/x-charts/CONTRACT.md` palette section güncel
+
+**Test plan**:
+
+- Static contrast test 4.5:1 + 3:1 PASS for HC themes
+- Visual snapshot baseline reset, `chromatic` review
+
+**Codex review hazırlığı**:
+
+1. Palette değişimi mevcut Storybook K5 visual baseline'larını ne kadar bozar? Approval süreci?
+
+#### PR-X3b — Runtime Contrast Gate
+
+**Branch**: `feat/faz-21-8-x3b-runtime-contrast-gate`
+
+**Depends on**: X3a merged
+
+**Files**:
+
+- `packages/design-system/src/__visual__/x-charts-contrast.visual.ts` (NEW) — Storybook K5 + Playwright. **Stratrejy**:
+  - Her chart'ı SVG renderer mode'da render et (`<BarChart renderer="svg" />` test variant — wrapper'ların `renderer` prop'u expose etmesi gerek; bu ek file edit)
+  - DOM'dan resolved CSS-var değerleri çek (`getComputedStyle(el).color`)
+  - WCAG math `getContrastRatio(fg, bg)` (kendi script `scripts/contrast/wcag.mjs`)
+  - 0 violation assert
+- (Wrapper edit) Tüm 13 chart wrapper'a `renderer?: 'canvas' | 'svg'` prop expose et, default canvas (production), test variant SVG
+- `.github/workflows/x-charts-runtime-contrast.yml` (NEW) — separate workflow
+- `packages/x-charts/CONTRACT.md` §8 — `contrast-runtime` 9th gate
 - `docs/ROADMAP.md` — 8 → 9 gate güncelle
-- (Optional) `packages/design-system/src/__visual__/__snapshots__/x-charts-contrast.visual.ts/` baseline
+- (T4 perf smoke) `packages/x-charts/src/__tests__/render-perf.test.ts` (NEW) — Vitest browser env veya Playwright: 13 chart × 5 theme initial render < 200ms p95
 
 **Coverage**:
 
-- 13 chart × 5 theme (light/dark/HC light/HC dark/print) × {default, decal} = 130 koşum
-- Her koşum: real DOM render → axe-core color-contrast rule → 0 violation assert
-- CSS-var resolution gerçek browser'da olur (jsdom yapamıyor)
+- 13 chart × 5 theme × {default, decal} = 130 koşum
+- Her koşum: SVG renderer + DOM CSS-var resolve + WCAG math
+- Failure mode: any combination violates 4.5:1 → reports → PR blocked
 
 **Workflow**:
 
@@ -221,171 +354,206 @@ name: x-charts Runtime Contrast Gate
 on:
   pull_request:
     paths:
-      ['packages/x-charts/**', 'packages/design-system/src/__visual__/x-charts-contrast.visual.ts']
+      - 'packages/x-charts/**'
+      - 'packages/design-system/src/themes/**'
+      - 'packages/design-system/src/__visual__/x-charts-contrast.visual.ts'
+      - '.github/workflows/x-charts-runtime-contrast.yml'
 jobs:
   contrast-runtime:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - checkout
       - pnpm install
-      - storybook build --config-dir .storybook-k5
-      - playwright install chromium
-      - playwright test --grep "x-charts contrast"
+      - pnpm --filter @mfe/design-system exec storybook build --config-dir .storybook-k5
+      - pnpm exec playwright install chromium
+      - pnpm exec playwright test --grep "x-charts contrast"
 ```
 
 **Test plan**:
 
 - Local: `pnpm exec playwright test --grep "x-charts contrast"` → 130 PASS
 - CI: workflow yeşil
-- Failure mode: any chart × theme combination violates WCAG AA → axe-core reports → PR blocked
+- T4 perf: 200ms p95 budget
 
 **Codex review hazırlığı**:
 
-1. axe-core color-contrast rule shadow DOM / canvas içinde çalışır mı? ECharts canvas render — axe gerçek pixel mi okur, yoksa accessibility tree mi?
-2. 130 koşum CI'da süre ne kadar (Storybook build + Playwright)?
-3. Snapshot baseline gerekli mi, yoksa axe assertion yeterli mi?
-4. HC palette mevcut state'te 4.5:1 sağlamıyor (PR-F1 Codex notu) — runtime gate açılırsa fail edebilir. Palette redesign gerekli mi?
+1. SVG renderer mode chart wrapper API'sine eklenirse production canvas mode'unu etkiler mi?
+2. WCAG math kendi script vs `wcag-contrast` npm dep — internal-only paket için npm dep ekleyemez miyiz?
+3. 130 koşum + 30dk timeout makul mi (visual workflow 15dk benchmark)?
 
 ---
 
-### PR-X4 — T3 Production Consumer Integrations
+### PR-X4 — T3 Production Consumer Integrations (revised — hr-compensation focus)
 
 **Branch**: `feat/faz-21-8-x4-prod-consumer-integrations`
 
-**Stratejik karar gerektirir**: hangi mfe-app + hangi sayfa + hangi feature?
+**Stratejik karar gerektirir**: context-health drill için backend data hazır mı?
 
-**Önerilebilir kombinasyon**:
-
-#### Item 1: Cross-filter real usage in `mfe-reporting`
-
-- `apps/mfe-reporting/src/modules/hr-demographic-report/DemographicDashboard.tsx` — region + department + grade üçlü linked dashboard
-- `CrossFilterProvider` wrap + 3 chart `useChartCrossFilter` ile bağlı
-- Filter zinciri: region click → department + grade panel daraltılır
-- Real consumer test (jest/vitest mevcut DemographicDashboard.test.tsx genişlet)
-
-#### Item 2: DrillDown real usage in `mfe-reporting/context-health`
-
-- `apps/mfe-reporting/src/modules/context-health/charts/HealthComponentBar.tsx` — project → component → file 3-seviyeli drill
-- `useDrillDown` levels: project (root) → component (level 1) → file (level 2)
-- Mevcut test cases'i drill-down assertion ile genişlet
-
-#### Item 3: AG Grid bridge real usage in `mfe-users`
-
-- `apps/mfe-users/src/pages/users/UsersPage.tsx` — chart filter (örn. role pie chart) tıklayınca grid `setFilterModel` çağrılır
-- Real AG Grid API instance ref + `useGridCrossFilter` wired
-- Test fixture: AG Grid mock ya da real headless
-
-**Effort**: ~12-18h, 3 ayrı module integration
-
-**Risk**:
-
-- Strategic — hangi feature gerçekten ürün ihtiyacı?
-- AG Grid integration prod data ile test gerek
-- Performance impact (cross-filter store overhead per page)
-
-**Codex review hazırlığı**:
-
-1. T3 kapsam doğru mu, yoksa T3 atlanıp X4 başka iş için reserved mı?
-2. Feature mapping ürün-anlamlı mı (region drill → department-grade vs.)?
-3. AG Grid real integration testi e2e mi, integration mı?
-
----
-
-### PR-X5 — T3 Doc Drift Cleanup
-
-**Branch**: `chore/faz-21-8-x5-doc-drift-cleanup`
+#### Item 1: hr-compensation bespoke → @mfe/x-charts migration
 
 **Files**:
 
-- `packages/x-charts/CONTRACT.md` — her iddia için kanıt-link audit
-- `packages/x-charts/README.md` (varsa) veya gör `package.json description`
-- `docs/ROADMAP.md` — Faz 21.8 closure note
+- `apps/mfe-reporting/src/modules/hr-compensation-report/CompensationDashboard.tsx`:
+  - Line 288 `useState<CrossFilter[]>` kaldır
+  - Wrap `<CrossFilterProvider>` (her wrapper'a `groupId="hr-compensation"`)
+  - 4 chart `useChartCrossFilter` ile bağla (department/gender/collarType/education)
+  - Line 290-299 `effectiveFilters` map'i drop, store'dan oku (`useCrossFilter((s) => s.filters)`)
+- `apps/mfe-reporting/src/modules/hr-compensation-report/__tests__/CompensationDashboard.test.tsx`:
+  - Cross-filter assertion: chart click → store filter set → re-fetch params değişimi
+- (Doc) `docs/x-charts-adoption-matrix.md` (T4) hr-compensation row
+
+**Test plan**:
+
+- Vitest jsdom: chart click simulation → store filter set assertion
+- Optional: Playwright e2e on `/reporting/hr-compensation` → real API call params değişimi
+
+**Codex review hazırlığı**:
+
+1. CrossFilter type contract migration: bespoke `CrossFilter[]` → `Map<string, CrossFilterEntry>` semantik kayıp var mı?
+2. Re-fetch logic store filter change'ine subscribe edip etmiyor (stale-closure riski)?
+
+#### Item 2: DrillDown — context-health (conditional on data ready)
+
+**Files**:
+
+- `apps/mfe-reporting/src/modules/context-health/charts/HealthComponentBar.tsx`
+- (Backend dependency check first) — proje → component → file 3-seviyeli data backend'de var mı?
+- Varsa: `useDrillDown` levels, drill-down click handler, breadcrumb UI
+- Yoksa: bu item X4'ten çıkar, ayrı story aç
+
+**Codex review hazırlığı**:
+
+1. Backend hazır değilse bu item'ı X4'te tutmak zaman israfı; ayır.
+
+#### Item 3: AG Grid bridge real (mfe-users)
+
+**Files**:
+
+- `apps/mfe-users/src/pages/users/UsersPage.ui.tsx`
+- `apps/mfe-users/src/widgets/user-management/ui/UsersGrid.ui.tsx` line 207 (Codex işaret) `gridApiRef`
+- Role pie chart added to UsersPage with `useGridCrossFilter`
+- Chart click → gridApiRef.current.setFilterModel(...)
+- Test: integration test mock'lı veya real grid render assertion
+
+**Codex review hazırlığı**:
+
+1. mfe-users page real route mı, dev-only sayfa mı?
+2. AG Grid real ApiRef + chart click sequence integration test e2e gerek mi?
+
+---
+
+### PR-X5 — Final Doc Audit + Adoption Matrix (revised)
+
+**Branch**: `chore/faz-21-8-x5-doc-audit-final`
+
+**Files**:
+
+- `packages/x-charts/CONTRACT.md` — her iddia için kanıt-link audit (file:line + PR#)
+- `packages/x-charts/README.md` — overpromise dili düzelt (her iddia kanıt-bağlı)
+- `docs/ROADMAP.md` — Faz 21.8 closure note + 9-gate güncel
 - `docs/x-charts-ui-ux-tracker.md` — feature status sync
+- `docs/x-charts-adoption-matrix.md` (NEW, T4) — markdown matrix:
+  ```md
+  | App           | Page            | Wrapper            | Feature        |
+  | ------------- | --------------- | ------------------ | -------------- |
+  | mfe-reporting | hr-compensation | BarChart, PieChart | CrossFilter    |
+  | mfe-users     | UsersPage       | PieChart           | AG Grid bridge |
+  | ...           | ...             | ...                | ...            |
+  ```
+- `scripts/ci/x-charts-adoption-scan.mjs` (NEW, T4) — scan `from '@mfe/x-charts'` import sites + matrix generate
 
-**Audit sample**:
+**Audit sample (her iddia kanıt-bağlı)**:
 
-| Eski (overpromise)                   | Yeni (kanıt-bağlı)                                                                        |
-| ------------------------------------ | ----------------------------------------------------------------------------------------- |
-| "Real-time streaming with auto-tick" | "Buffered queue + opt-in `interval` auto-tick (caller provides `onTick`)"                 |
-| "WCAG AA contrast guaranteed"        | "WCAG AA static fallback layer (gated) + runtime CSS-var gate (Playwright, Storybook K5)" |
-| "Cross-filter built-in"              | "Cross-filter built-in + production usage in `mfe-reporting/hr-demographic`"              |
-| "PNG/SVG/PDF/CSV/XLSX export"        | "PNG/SVG/PDF/CSV/XLSX export (XLSX via lazy `exceljs` import)"                            |
+| Eski (overpromise)                   | Yeni (kanıt-bağlı)                                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| "Real-time streaming with auto-tick" | "Real-time buffer + opt-in `tickIntervalMs` + `onTick` producer (discriminated union, type-safe)"   |
+| "WCAG AA contrast guaranteed"        | "WCAG AA static fallback (41 assertions) + runtime CSS-var math gate (130 SVG variant runs, X3b)"   |
+| "Cross-filter built-in"              | "Cross-filter built-in + production usage in `mfe-reporting/hr-compensation` (X4)"                  |
+| "PNG/SVG/PDF/CSV/XLSX export"        | "PNG/SVG/PDF/CSV export. XLSX removed Faz 21.8 X1; future via `@mfe/x-charts/export-xlsx` adapter." |
+| "5 AI hooks production-ready"        | "5 AI hooks; useRealTimeData discriminated union (X1), other 4 stable since Faz 21.4"               |
+| "8/8 CI quality gates"               | "9/9 CI gates (Faz 21.8 X3b runtime contrast added)"                                                |
 
-**Effort**: ~1-2h
+**Effort**: ~2-3h
 
 ---
 
-## Sequencing & Dependencies
+## Sequencing & Dependencies (revised)
 
 ```
-PR-X0 (plan)
+PR-X0 (plan v2)
   ↓
-Codex iter 1-3 (plan review)
+Codex iter-2 review
   ↓
-PR-X1 (fakes) — independent
-  ↓
-PR-X2 (drilldown + ssr) — independent
-  ↓
-PR-X3 (runtime contrast) — depends on K5 build path (already exists)
-  ↓
-PR-X4 (prod consumers) — needs X1 (XLSX in real usage)
-  ↓
-PR-X5 (doc cleanup) — last, references all previous PRs
+  ├── PR-X1 (T1 fakes) — independent, fast
+  ├── PR-X2 (T2 drilldown surface + SSR subpath + T4 boundary) — independent
+  ├── PR-X3a (T2 HC palette/token) — independent, must merge before X3b
+  │     ↓
+  │   PR-X3b (T2 runtime contrast gate + T4 perf) — depends X3a
+  ├── PR-X4 (T3 hr-compensation + AG Grid + conditional context-health) — depends X2 (DrillDown surface for context-health item)
+  └── PR-X5 (T3 doc audit + T4 adoption matrix) — last, depends X1..X4 merged
 ```
 
-X1 + X2 + X3 paralel olabilir (farklı dosyalar). X4 X1'i bekler. X5 hepsinden sonra.
+X1 + X2 + X3a paralel olabilir. X3b X3a'yı bekler. X4 X2'nin DrillDown surface'ini bekler (eğer context-health drill X4'te kalacaksa). X5 hepsinden sonra.
 
 ---
 
-## Success Criteria (kanıt-bazlı)
+## Success Criteria (kanıt-bazlı, revised)
 
-| Item                | Kanıt                                                                             |
-| ------------------- | --------------------------------------------------------------------------------- |
-| XLSX export         | `chart-export.ts:format==='xlsx'` switch case + ExcelJS sheet read-back test PASS |
-| Realtime interval   | `useRealTimeData.ts useEffect setInterval` block + fake-timer test PASS           |
-| DrillDown redo      | `useDrillDown.redo()` action + Test 5 in DrillDownDemoLive.test PASS              |
-| SSR 13 chart        | `import * from '@mfe/x-charts/ssr'` no DOM error in static analysis               |
-| Runtime contrast    | 130 Playwright runs PASS + workflow hard-block                                    |
-| Cross-filter prod   | mfe-reporting DemographicDashboard real consumer + integration test               |
-| DrillDown prod      | mfe-reporting/context-health real consumer + drill assertions                     |
-| AG Grid bridge prod | mfe-users real grid + chart filter pair + e2e                                     |
-| Doc drift           | every CONTRACT.md claim has file:line / PR# kanıt-link                            |
-
----
-
-## Risk Matrix
-
-| Risk                                | Likelihood | Impact | Mitigation                                                   |
-| ----------------------------------- | ---------- | ------ | ------------------------------------------------------------ |
-| ExcelJS bundle weight               | M          | M      | lazy `await import()` ✓                                      |
-| HC palette runtime contrast fail    | M          | H      | palette redesign as part of X3 (separate sub-PR)             |
-| RSC SSR Next.js fixture flaky       | L          | M      | static import smoke yeterli, fixture optional                |
-| Cross-filter store overhead in prod | L          | M      | benchmark X4                                                 |
-| AG Grid headless test infra         | M          | M      | real grid in dev mode + screenshot smoke                     |
-| T3 strategic uncertainty            | M          | M      | this plan asks for explicit user direction on which app/page |
+| Item                                | Kanıt                                                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| XLSX type-removal                   | `chart-export.ts:10` ExportFormat union'da `'xlsx'` yok + grep `'xlsx'` kullanan kod (sample, JSDoc, README) 0 hit                        |
+| Realtime discriminated union        | `useRealTimeData.ts:46` body `tickIntervalMs` destructure + setInterval block + fake-timer test PASS + onTick zorunluluğu TS error mesajı |
+| DrillDown redo expose               | `useDrillDown.ts:38-59` interface'de `redo`, `canUndo`, `canRedo` field + Test 5 PASS                                                     |
+| DrillDown memory cap                | `createCrossFilterStore.ts:168` `slice(-(historyCap-1))` + 60-drill cap test PASS                                                         |
+| SSR subpath                         | `package.json` `exports` `./client` + `./ssr` + 13 wrapper'da `'use client'` grep + boundary smoke test PASS                              |
+| HC palette redesign                 | static contrast test HC themes 4.5:1 PASS + visual baseline reset                                                                         |
+| Runtime contrast gate               | 130 SVG variant Playwright runs PASS + workflow hard-block + 9-gate CONTRACT update                                                       |
+| Cross-filter prod (hr-compensation) | `CompensationDashboard.tsx` `<CrossFilterProvider>` wrap + bespoke `useState<CrossFilter[]>` removed + integration test PASS              |
+| AG Grid bridge prod                 | `UsersPage.ui.tsx` real `useGridCrossFilter` + integration test PASS                                                                      |
+| DrillDown prod (conditional)        | context-health backend ready ise impl + test, değilse story spawn-task                                                                    |
+| Doc drift                           | every CONTRACT.md/README claim has file:line / PR# kanıt-link                                                                             |
+| T4 boundary smoke                   | `import @mfe/x-charts/ssr` no DOM error + `import @mfe/x-charts/client` works                                                             |
+| T4 perf                             | 13 chart × 5 theme initial render < 200ms p95                                                                                             |
+| T4 adoption matrix                  | `docs/x-charts-adoption-matrix.md` + scan script CI                                                                                       |
 
 ---
 
-## Tracking Table
+## Risk Matrix (revised)
 
-| PR               | Status      | Codex iter | Branch                              | Merged |
-| ---------------- | ----------- | ---------- | ----------------------------------- | ------ |
-| **X0** (this PR) | in progress | pending    | `docs/faz-21-8-reality-parity-plan` | —      |
-| X1               | pending     | —          | —                                   | —      |
-| X2               | pending     | —          | —                                   | —      |
-| X3               | pending     | —          | —                                   | —      |
-| X4               | pending     | —          | —                                   | —      |
-| X5               | pending     | —          | —                                   | —      |
+| Risk                                                  | Likelihood | Impact | Mitigation                                                                   |
+| ----------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------- |
+| Subpath export breaking change for existing consumers | M          | M      | Inventory current `from '@mfe/x-charts'` hits + migration codemod (X2 in-PR) |
+| RSC `'use client'` Vite/source-only consumption       | L          | M      | Static smoke yeterli; Next fixture optional                                  |
+| HC palette redesign visual baseline noise             | H          | M      | X3a separate PR; chromatic approval flow                                     |
+| Canvas vs SVG renderer parity (visual differences)    | M          | M      | Production canvas, test SVG; baseline ayrı                                   |
+| Context-health drill backend data uncertainty         | M          | M      | Conditional item; spawn-task if not ready                                    |
+| AG Grid headless test infra                           | M          | M      | Mock-first, real route smoke as P2                                           |
+| Bundle async chunk budget overhead                    | L          | L      | mevcut bundle check zaten cap koyuyor                                        |
+
+---
+
+## Tracking Table (revised)
+
+| PR               | Status           | Codex iter                      | Branch                              | Merged |
+| ---------------- | ---------------- | ------------------------------- | ----------------------------------- | ------ |
+| **X0** (this PR) | in progress (v2) | iter-1 absorbed, iter-2 pending | `docs/faz-21-8-reality-parity-plan` | —      |
+| X1               | pending          | —                               | —                                   | —      |
+| X2               | pending          | —                               | —                                   | —      |
+| X3a              | pending          | —                               | —                                   | —      |
+| X3b              | pending          | —                               | —                                   | —      |
+| X4               | pending          | —                               | —                                   | —      |
+| X5               | pending          | —                               | —                                   | —      |
 
 ---
 
 ## Sıradaki Adım
 
-1. PR-X0 (bu plan) commit + push + open
-2. Codex adversarial review — plan iter 1-N (`mcp__codex__codex` in `read-only`)
-3. AGREE alınca PR-X1 başla (XLSX + realtime interval)
-4. Auto-merge zinciri: X1 → X2 → X3 → (X4 strategic) → X5
+1. PR-X0 v2 commit + push (PR #174 update)
+2. Codex iter-2 (`mcp__codex__codex-reply` threadId 019dedbe-56fc-7413-a51d-459470c362f4) — plan v2 review
+3. AGREE alınca PR-X1 başla (XLSX type-removal + realtime discriminated union)
+4. Auto-merge zinciri: X1 → X2 → X3a → X3b → X4 → X5
 
 ---
 
-_Bu plan 2026-05-03'te oluşturuldu. FAZ 21.4 + Quality-Sprint M1-M4 kapanışı sonrasında x-charts feature parity tahkimatı için yazıldı. "Hiç fake yok" kullanıcı kuralı (No Fake Work HARD RULE) bu planın temel çıkış noktasıdır._
+_Bu plan v2 2026-05-03'te oluşturuldu. v1 Codex iter-1 PARTIAL/REVISE/RED feedback'i absorb edildi. FAZ 21.4 + Quality-Sprint M1-M4 kapanışı sonrasında x-charts feature parity tahkimatı için yazıldı. "Hiç fake yok" kullanıcı kuralı (No Fake Work HARD RULE) bu planın temel çıkış noktasıdır._
