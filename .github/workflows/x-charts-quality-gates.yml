@@ -30,6 +30,8 @@ on:
       - 'scripts/ci/x-charts-adoption-scan.mjs'
       - 'docs/x-charts-adoption-matrix.md'
       - 'docs/x-charts-adoption-matrix.json'
+      - 'scripts/ci/sync-chart-detail-props.mjs'
+      - 'apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx'
       - '.github/workflows/x-charts-quality-gates.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -45,6 +47,8 @@ on:
       - 'scripts/ci/x-charts-adoption-scan.mjs'
       - 'docs/x-charts-adoption-matrix.md'
       - 'docs/x-charts-adoption-matrix.json'
+      - 'scripts/ci/sync-chart-detail-props.mjs'
+      - 'apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx'
       - '.github/workflows/x-charts-quality-gates.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -315,3 +319,32 @@ jobs:
       # whenever a new consumer (or migration to subpath) lands.
       - name: Adoption matrix up-to-date (soft gate)
         run: node scripts/ci/x-charts-adoption-scan.mjs --check
+
+  chart-detail-props-sync:
+    name: chart-detail-props-sync (Faz 21.8 PR-X6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # ChartDetail.tsx `props: [...]` arrays are auto-generated from the
+      # 13 chart wrapper interfaces (`packages/x-charts/src/<Chart>.tsx`).
+      # Faz 21.8 PR-X6 fix: previously 170 props were undocumented across
+      # 13 detail pages because the manual arrays drifted as interfaces
+      # evolved. Fails if regenerating produces a diff — contributors
+      # must run the script and commit before merge.
+      - name: ChartDetail props arrays in sync with interfaces
+        run: node scripts/ci/sync-chart-detail-props.mjs --check
