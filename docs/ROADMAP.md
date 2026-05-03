@@ -820,7 +820,7 @@ CONTRACT v2.1 (also 2026-04-30) had already removed `ChartTooltip` from §1
 `docs/x-charts-ui-ux-tracker.md`. The audit row above was stale because it
 referenced `§1 line 57-59` and `§3 line 108-112` of the v2 contract. With
 v2.1 these are intentional gaps, not regressions. PR-E1 closes the
-documentation debt: ChartTooltip rationale is recorded in `CONTRACT.md §1.1`
+documentation debt: ChartTooltip rationale is recorded in `CONTRACT.md §1.0`
 and the access-control vocabulary is relocated to `@mfe/shared-types`
 (prerequisite for PR-E2 wiring).
 

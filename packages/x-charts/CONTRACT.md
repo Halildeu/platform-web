@@ -59,9 +59,10 @@ configuration paths:
 3. **No cross-chart tooltip composition use case.** The standalone wrapper
    would have offered a third API surface for the same job, with no
    improvement on testability, themability, or accessibility — and would
-   have broken the **identity-transform invariant** (line 66-68): adding
-   a wrapper component changes the DOM tree without changing user-visible
-   pixels, which is a regression smell.
+   have broken the **identity-transform invariant** declared in §1.1
+   "Backward compat invariant": adding a wrapper component changes the
+   DOM tree without changing user-visible pixels, which is a regression
+   smell.
 
 **Future direction (out of scope for this contract):** if the platform ever
 needs cross-chart tooltip portal coordination (e.g. shared crosshair across
