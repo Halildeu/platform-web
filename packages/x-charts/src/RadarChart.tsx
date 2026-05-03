@@ -9,13 +9,15 @@
  *
  * @migration SVG -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -24,7 +26,7 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -161,6 +163,12 @@ const RadarChartInner = React.forwardRef<
   const isEmpty = !indicators || indicators.length === 0 || !series || series.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
+  // Faz 21.9 PR3c: container ref + breakpoint for responsive radar.
+  // Radar has no grid/dataZoom; we drive the legend + indicator-axis font
+  // size from breakpoint and shrink the radar radius on mobile.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
+
   const {
     themeObject,
     decalEnabled,
@@ -232,15 +240,19 @@ const RadarChartInner = React.forwardRef<
           return `${header}<br/>${lines.join('<br/>')}`;
         },
       },
-      legend: {
-        show: showLegend || series.length > 1,
-        bottom: 0,
+      legend: buildResponsiveLegend({
+        breakpoint,
+        showLegend,
+        hasMultiSeries: series.length > 1,
+        seriesCount: series.length,
+        densitySpacingMultiplier,
+        densityFontMultiplier,
         icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
+      }),
       radar: {
+        // Mobile shrinks the radar envelope so the indicator labels don't
+        // collide with the chart edges or the legend strip below.
+        radius: breakpoint === 'mobile' ? '60%' : breakpoint === 'tablet' ? '68%' : '75%',
         indicator: indicators.map((ind) => ({
           name: ind.name,
           max: ind.max,
@@ -248,8 +260,16 @@ const RadarChartInner = React.forwardRef<
         shape,
         splitNumber,
         axisName: {
-          show: showLabels,
-          fontSize: scaleFontSize(11, densityFontMultiplier),
+          // Codex 019defa5 PR3c PARTIAL: only suppress indicator names
+          // on mobile when the radar is dense enough for them to collide
+          // (>4 indicators on a 60% radius envelope). With 3-4 indicators
+          // the names still fit and the user benefits from seeing them.
+          // Tooltip formatter + a11y table always preserve the names.
+          show: showLabels && !(breakpoint === 'mobile' && indicators.length > 4),
+          fontSize:
+            breakpoint === 'mobile'
+              ? Math.max(9, Math.round(11 * 0.9))
+              : scaleFontSize(11, densityFontMultiplier),
           color: 'var(--text-secondary, #666)',
         },
         splitArea: {
@@ -299,6 +319,7 @@ const RadarChartInner = React.forwardRef<
     densityFontMultiplier,
     densitySpacingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -337,6 +358,7 @@ const RadarChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

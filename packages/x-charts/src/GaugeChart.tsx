@@ -9,11 +9,12 @@
  *
  * @migration SVG -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -185,6 +186,12 @@ const GaugeChartInner = React.forwardRef<
   const safeValue = sanitizeNumber(value);
   const fmt = valueFormatter ?? formatCompact;
 
+  // Faz 21.9 PR3c: container ref + breakpoint for responsive gauge.
+  // Gauge has no grid/legend/dataZoom; we drive only the axisLabel
+  // visibility/font on mobile so the tick numbers don't crowd the dial.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
+
   // GaugeChart accent-IMMUNE — accent prop accepted for API consistency
   // but theme builder defaults (semantic success/warning/danger thresholds)
   // are intentionally preserved. effectivePalette ignored.
@@ -247,9 +254,15 @@ const GaugeChartInner = React.forwardRef<
             lineStyle: { color: '#999', width: 2 },
           },
           axisLabel: {
-            show: showAxisLabel,
+            // Mobile suppresses gauge axis labels — they collide with the
+            // shrunken dial. Tick marks remain so the scale is still
+            // readable. Tablet/desktop respect the consumer's preference.
+            show: showAxisLabel && breakpoint !== 'mobile',
             distance: 30,
-            fontSize: scaleFontSize(11, densityFontMultiplier),
+            fontSize:
+              breakpoint === 'mobile'
+                ? Math.max(9, Math.round(11 * 0.9))
+                : scaleFontSize(11, densityFontMultiplier),
             formatter: (v: number) => escapeHtml(fmt(v)),
           },
           detail: {
@@ -298,6 +311,7 @@ const GaugeChartInner = React.forwardRef<
     decalEnabled,
     decalPatterns,
     densityFontMultiplier,
+    breakpoint,
   ]);
 
   const { containerRef, instance } = useEChartsRenderer({
@@ -322,6 +336,7 @@ const GaugeChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

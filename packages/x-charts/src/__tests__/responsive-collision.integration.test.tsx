@@ -30,6 +30,10 @@ import { LineChart } from '../LineChart';
 import { AreaChart } from '../AreaChart';
 import { ScatterChart } from '../ScatterChart';
 import { PieChart } from '../PieChart';
+import { WaterfallChart } from '../WaterfallChart';
+import { HeatmapChart } from '../HeatmapChart';
+import { RadarChart } from '../RadarChart';
+import { GaugeChart } from '../GaugeChart';
 
 /* ------------------------------------------------------------------ */
 /*  Mobile-viewport mock                                               */
@@ -279,5 +283,138 @@ describe('Codex 019defa5 PARTIAL bug 2: PieChart mobile label suppression opens 
     await flushBreakpoint();
 
     expect(pieSeries().labelLayout?.hideOverlap).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  PR3c — ext wrapper responsive option-shape regression             */
+/* ------------------------------------------------------------------ */
+
+function xAxis(): Record<string, unknown> | undefined {
+  const opt = lastDispatchedOption();
+  return opt?.xAxis as Record<string, unknown> | undefined;
+}
+
+function yAxis(): Record<string, unknown> | undefined {
+  const opt = lastDispatchedOption();
+  return opt?.yAxis as Record<string, unknown> | undefined;
+}
+
+function radar(): Record<string, unknown> | undefined {
+  const opt = lastDispatchedOption();
+  return opt?.radar as Record<string, unknown> | undefined;
+}
+
+function gaugeSeries(): Record<string, unknown> | undefined {
+  const opt = lastDispatchedOption();
+  const series = opt?.series as Array<Record<string, unknown>> | undefined;
+  return series?.[0];
+}
+
+describe('Codex 019defa5 PR3c: ext wrapper responsive option shape', () => {
+  it('WaterfallChart mobile + 40 labels → axisLabel.hideOverlap + interval=auto + dataZoom on xAxis', async () => {
+    setMobileViewport(375);
+    const labels = Array.from({ length: 40 }, (_, i) => `Q${i}`);
+    const data = labels.map((label, i) => ({ label, value: (i % 3) - 1 }));
+    render(<WaterfallChart data={data} animate={false} />);
+    await flushBreakpoint();
+
+    const xa = xAxis() as { axisLabel?: { hideOverlap?: boolean; interval?: 0 | 'auto' } };
+    expect(xa.axisLabel?.hideOverlap).toBe(true);
+    expect(xa.axisLabel?.interval).toBe('auto');
+
+    const opt = lastDispatchedOption() as { dataZoom?: Array<{ xAxisIndex?: number }> };
+    expect(opt.dataZoom?.[0]?.xAxisIndex).toBe(0);
+  });
+
+  it('HeatmapChart mobile + 5 yLabels + showLegend → grid.right reserved + both axes hideOverlap + yAxis no rotate', async () => {
+    setMobileViewport(375);
+    // Codex 019defa5 PR3c PARTIAL: 5 yLabels (>4) so the helper would
+    // try to rotate them on mobile. The yAxis override forces rotate=0;
+    // dropping it would flip this assertion to 30 and the test fails.
+    render(
+      <HeatmapChart
+        data={[
+          [0, 0, 1],
+          [0, 1, 2],
+          [0, 2, 3],
+          [0, 3, 4],
+          [0, 4, 5],
+        ]}
+        xLabels={['A']}
+        yLabels={['Y1', 'Y2', 'Y3', 'Y4', 'Y5']}
+        showLegend
+        animate={false}
+      />,
+    );
+    await flushBreakpoint();
+
+    const g = lastDispatchedOption()?.grid as { right?: number };
+    expect(g?.right).toBeGreaterThanOrEqual(72);
+
+    const xa = xAxis() as { axisLabel?: { hideOverlap?: boolean } };
+    const ya = yAxis() as { axisLabel?: { hideOverlap?: boolean; rotate?: number } };
+    expect(xa.axisLabel?.hideOverlap).toBe(true);
+    expect(ya.axisLabel?.hideOverlap).toBe(true);
+    // PR3c PARTIAL fix: yAxis must NOT inherit the helper's mobile rotate.
+    expect(ya.axisLabel?.rotate).toBe(0);
+  });
+
+  it('RadarChart mobile + 5 indicators → radius shrunk + axisName suppressed (threshold)', async () => {
+    setMobileViewport(375);
+    render(
+      <RadarChart
+        indicators={[
+          { name: 'Speed', max: 100 },
+          { name: 'Reliability', max: 100 },
+          { name: 'Comfort', max: 100 },
+          { name: 'Safety', max: 100 },
+          { name: 'Efficiency', max: 100 },
+        ]}
+        series={[{ name: 'Model A', data: [80, 90, 60, 70, 85] }]}
+        showLabels
+        animate={false}
+      />,
+    );
+    await flushBreakpoint();
+
+    const r = radar() as { radius?: string; axisName?: { show?: boolean } };
+    expect(r.radius).toBe('60%');
+    expect(r.axisName?.show).toBe(false);
+  });
+
+  it('RadarChart mobile + 3 indicators → axisName stays visible (under threshold)', async () => {
+    // Codex PR3c PARTIAL: under-threshold radars keep their axis names.
+    setMobileViewport(375);
+    render(
+      <RadarChart
+        indicators={[
+          { name: 'Speed', max: 100 },
+          { name: 'Reliability', max: 100 },
+          { name: 'Comfort', max: 100 },
+        ]}
+        series={[{ name: 'Model A', data: [80, 90, 60] }]}
+        showLabels
+        animate={false}
+      />,
+    );
+    await flushBreakpoint();
+
+    const r = radar() as { axisName?: { show?: boolean } };
+    expect(r.axisName?.show).toBe(true);
+  });
+
+  it('GaugeChart mobile → axisLabel suppressed but detail.formatter still emits values', async () => {
+    setMobileViewport(375);
+    render(<GaugeChart value={42} animate={false} />);
+    await flushBreakpoint();
+
+    const s = gaugeSeries() as {
+      axisLabel?: { show?: boolean };
+      detail?: { formatter?: (v: number) => string };
+    };
+    expect(s.axisLabel?.show).toBe(false);
+    expect(typeof s.detail?.formatter).toBe('function');
+    expect(s.detail!.formatter!(42)).toContain('42');
   });
 });
