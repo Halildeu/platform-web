@@ -1095,6 +1095,176 @@ export function applyPreset(
 }
 
 /* ================================================================== */
+/*  Feature badges — competitor "New" / "Beta" parity                  */
+/* ================================================================== */
+
+export type FeatureBadgeTone = 'new' | 'beta' | 'stable';
+
+export interface FeatureBadgeMeta {
+  /** Short label shown in the chip strip. */
+  label: FeatureBadgeTone;
+  /** Optional tooltip / hover description. */
+  tooltip?: string;
+}
+
+/**
+ * Per-feature badge metadata (e.g. `cross-filter` is currently `beta`).
+ * Keeps the catalog `features: string[]` shape unchanged — consumers
+ * lookup the badge separately. MUI X uses a similar "New" badge to
+ * highlight recently-added capabilities (Range bar variant, Data Grid
+ * integration). We use this for the same discovery purpose.
+ */
+const FEATURE_BADGES: Record<string, FeatureBadgeMeta> = {
+  'cross-filter': {
+    label: 'beta',
+    tooltip: 'Cross-filter chart→grid bridge — API may evolve in Faz 22',
+  },
+};
+
+/** Lookup the badge for a feature flag. Returns `null` when no badge applies. */
+export function getFeatureBadge(feature: string): FeatureBadgeMeta | null {
+  return FEATURE_BADGES[feature] ?? null;
+}
+
+/* ================================================================== */
+/*  Performance guidance + FAQ — competitor parity content             */
+/* ================================================================== */
+
+export interface PerformanceGuidanceItem {
+  /** Short scenario label (e.g. "Large series (>2k points)"). */
+  label: string;
+  /** One-paragraph guidance. */
+  body: string;
+  /**
+   * Optional reference link (e.g. to an LTTB / progressive-render util).
+   * Plain string for now; the renderer wraps it in a chip.
+   */
+  reference?: string;
+}
+
+/**
+ * Plain-language performance guidance. MUI X documents recommended data
+ * sizes + reduced-motion + SVG-batch trade-offs; we capture the same
+ * developer-facing playbook here so the page answers "ne zaman sorun
+ * yaşarım?" rather than just listing internal Quality gates.
+ *
+ * Keep entries terse — link to the actual perf utilities for depth.
+ */
+const PERFORMANCE_GUIDANCE: PerformanceGuidanceItem[] = [
+  {
+    label: 'Large series (>2,000 points)',
+    body:
+      'Enable LTTB downsampling for time series; enable progressive render for ' +
+      'point-cloud charts. The default ECharts pipeline is fine up to ~2,000 ' +
+      'points; beyond that the initial paint and pan/zoom interaction visibly ' +
+      'degrade.',
+    reference: 'lttb / progressive-render utilities',
+  },
+  {
+    label: 'Animation cost',
+    body:
+      'On dashboards with many small charts, set `animate={false}` on subsequent ' +
+      'data updates — the user already saw the on-mount animation. The wrapper ' +
+      'also respects `prefers-reduced-motion` automatically; no extra wiring ' +
+      'needed.',
+  },
+  {
+    label: 'Large dashboards',
+    body:
+      'Use the `lazy-chart` HOC to defer mounting off-screen charts until the ' +
+      'IntersectionObserver fires, and the `lru-cache` utility to memoise ' +
+      'chart options when the same series is re-rendered across views.',
+    reference: 'lazy-chart / lru-cache utilities',
+  },
+  {
+    label: 'Bundle weight',
+    body:
+      'The `code-split` utility loads chart wrappers on-demand. Combined with ' +
+      'tree-shake-gated exports (every wrapper passes `tree-shaking-verify` in ' +
+      'CI), only the chart types you actually import end up in the user bundle.',
+  },
+  {
+    label: 'Accessibility / reduced motion',
+    body:
+      'Wrappers honour `prefers-reduced-motion` for animations and emit decal ' +
+      'patterns automatically in high-contrast / print themes (visual ' +
+      'differentiation beyond colour). Set `decal={true}` to force-on for ' +
+      'colour-blind users on the default theme.',
+  },
+];
+
+export function getPerformanceGuidance(): PerformanceGuidanceItem[] {
+  return PERFORMANCE_GUIDANCE;
+}
+
+export interface FaqEntry {
+  question: string;
+  answer: string;
+}
+
+/**
+ * Frequently-asked questions about chart wrappers in general (not chart-
+ * specific). Ant Design's FAQ section is a useful precedent: short, direct
+ * answers to the surface-area questions developers hit when ramping up.
+ */
+const FAQ_GENERAL: FaqEntry[] = [
+  {
+    question: 'What does `theme="auto"` mean?',
+    answer:
+      'The wrapper reads documentElement signals (`data-appearance`, ' +
+      '`data-theme`, plus `prefers-color-scheme`) and resolves to the matching ' +
+      'theme. An explicit `theme="dark" | "light" | "high-contrast" | "print"` ' +
+      'overrides the shell-axis signal for that one chart.',
+  },
+  {
+    question: 'When does `decal` turn on?',
+    answer:
+      '`decal="auto"` (default) enables decal patterns automatically for the ' +
+      '`high-contrast` and `print` themes (visual differentiation beyond ' +
+      'colour). Force-on with `decal={true}` for colour-blind-friendly default ' +
+      'themes; force-off with `decal={false}`.',
+  },
+  {
+    question: 'What’s the difference between `colors` and `accent`?',
+    answer:
+      '`colors={[...]}` is an explicit per-series palette override — the wrapper ' +
+      'uses your array literally, no theme axis. `accent="emerald" | "ocean" | ...` ' +
+      'picks one of the design-system’s accent palettes (light / dark mode ' +
+      'aware). For one-off branded charts use `colors`; for theme-coherent ' +
+      'overrides use `accent`.',
+  },
+  {
+    question: 'What’s the difference between `access="readonly"` and `disabled`?',
+    answer:
+      '`readonly` is visible and rendered identically, but click / brush / zoom ' +
+      'event callbacks no-op (the chart shows data without inviting interaction). ' +
+      '`disabled` adds a dim overlay + `inert` attribute; the chart looks dimmed ' +
+      'and screen readers skip it. Use `hidden` to remove the chart from the ' +
+      'tree entirely.',
+  },
+  {
+    question: 'What should I do for large datasets?',
+    answer:
+      'See the Performance section above. Short answer: LTTB or progressive ' +
+      'render past ~2,000 points; lazy-chart for off-screen dashboards; lru-cache ' +
+      'for repeated renders.',
+  },
+  {
+    question: 'Why is `valueFormatter` not editable in the Playground?',
+    answer:
+      'The playground only edits primitive props (boolean / enum / string / ' +
+      'number). Function props like `valueFormatter`, `onDataPointClick`, and ' +
+      'array props like `series` / `colors` are listed in the API table for ' +
+      'reference but provided by `ChartPreviewLive`’s sample data so the ' +
+      'preview always renders.',
+  },
+];
+
+export function getFaq(): FaqEntry[] {
+  return FAQ_GENERAL;
+}
+
+/* ================================================================== */
 /*  Theme axis surface alignment                                       */
 /* ================================================================== */
 

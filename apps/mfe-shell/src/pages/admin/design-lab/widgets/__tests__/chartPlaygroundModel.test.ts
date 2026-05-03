@@ -16,8 +16,11 @@ import {
   getEditorKind,
   getEnum,
   getEnumOptions,
+  getFaq,
+  getFeatureBadge,
   getNum,
   getOptStr,
+  getPerformanceGuidance,
   getSampleData,
   getStr,
   isLiveEditable,
@@ -500,5 +503,61 @@ describe('chartPlaygroundModel — preset gallery', () => {
     expect(code).toContain('orientation="horizontal"');
     // Default-matching props (animate=true) are omitted.
     expect(code).not.toContain('animate');
+  });
+});
+
+describe('chartPlaygroundModel — feature badges', () => {
+  it('returns beta badge for cross-filter (Faz 22 stabilising)', () => {
+    const badge = getFeatureBadge('cross-filter');
+    expect(badge).not.toBeNull();
+    expect(badge?.label).toBe('beta');
+    expect(badge?.tooltip).toContain('Faz 22');
+  });
+
+  it('returns null for stable features so the chip strip stays clean', () => {
+    expect(getFeatureBadge('animation')).toBeNull();
+    expect(getFeatureBadge('axe-gated')).toBeNull();
+    expect(getFeatureBadge('tree-shake-gated')).toBeNull();
+    expect(getFeatureBadge('non-existent')).toBeNull();
+  });
+});
+
+describe('chartPlaygroundModel — performance guidance + FAQ', () => {
+  it('exposes a non-empty performance playbook with labels + bodies', () => {
+    const guidance = getPerformanceGuidance();
+    expect(guidance.length).toBeGreaterThan(0);
+    for (const item of guidance) {
+      expect(item.label).toBeTruthy();
+      expect(item.body).toBeTruthy();
+    }
+  });
+
+  it('covers the canonical scaling concerns', () => {
+    const guidance = getPerformanceGuidance();
+    const labels = guidance.map((g) => g.label.toLowerCase()).join(' ');
+    expect(labels).toMatch(/large series|2,000|2k/);
+    expect(labels).toMatch(/animation|reduced motion/);
+    expect(labels).toMatch(/dashboard|lazy/);
+    expect(labels).toMatch(/bundle|tree[- ]shake/);
+  });
+
+  it('exposes a non-empty FAQ with question + answer pairs', () => {
+    const faq = getFaq();
+    expect(faq.length).toBeGreaterThan(0);
+    for (const entry of faq) {
+      expect(entry.question.length).toBeGreaterThan(0);
+      expect(entry.answer.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('FAQ covers theme=auto, decal, colors-vs-accent, access ladder, and valueFormatter', () => {
+    const faq = getFaq()
+      .map((e) => e.question.toLowerCase())
+      .join(' ');
+    expect(faq).toContain('auto');
+    expect(faq).toContain('decal');
+    expect(faq).toContain('colors');
+    expect(faq).toContain('access');
+    expect(faq).toContain('valueformatter');
   });
 });
