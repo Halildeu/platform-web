@@ -91,12 +91,13 @@ export function SalesDashboard() {
 
 ## Accessibility
 
-All charts meet WCAG AA:
+All charts target WCAG AA. Compliance is gated by:
 
-- Keyboard navigation (tab, arrow, enter)
-- Data table fallback for screen readers
-- Colorblind-safe palettes (4.5:1 contrast minimum)
+- Keyboard navigation (tab, arrow, enter, escape) — `useChartA11y` + `<ChartA11yShell>` (Faz 21.5-B1/B2)
+- Data table fallback for screen readers — visually-hidden `<table>` with `<caption>`
+- Colorblind-safe palettes — 4.5:1 minimum contrast under the **static fallback hex layer** (41 assertions in `chart-contrast.contract.test.ts`, Faz 21.4 PR-F1). Runtime browser CSS-var resolution under canvas is **not yet gated** — see Faz 21.8 PR-X3b plan (deferred).
 - Decal patterns for non-color differentiation
+- axe-core severity gate — every wrapper passes with zero serious/critical violations (Faz 21.5-B3a)
 
 ## Hooks
 

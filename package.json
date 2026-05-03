@@ -57,6 +57,8 @@
     "migration-guide": "node scripts/ci/generate-migration-guide.mjs",
     "component-diff": "node scripts/ci/component-diff.mjs",
     "ci:detect-breaking": "node scripts/ci/detect-breaking.mjs",
+    "x-charts:adoption-scan": "node scripts/ci/x-charts-adoption-scan.mjs",
+    "x-charts:adoption-check": "node scripts/ci/x-charts-adoption-scan.mjs --check",
     "ci:publish-gate": "node ./scripts/ci/publish-gate.mjs",
     "ci:visual-diff": "node ./scripts/ci/visual-diff-check.mjs",
     "designlab:index": "python3 scripts/build_design_lab_index.py",
