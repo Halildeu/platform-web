@@ -3541,20 +3541,31 @@ const ChartDetail: React.FC = () => {
             so the page doesn't get noisy by default.
       */}
 
-      {/* PLAYGROUND — primary developer surface */}
-      <DetailSection id="playground" title="Playground">
+      {/*
+        User follow-up after PR #186:
+          > "api ve play grounda açılır kapanır olsa iyi olurdu"
+
+        Every section is now a CollapsibleDetailSection. Defaults:
+          - Playground: open  (primary developer surface)
+          - API:        open  (props reference)
+          - Examples:   closed (preset deep-dive)
+          - Quality:    closed (audit gates)
+      */}
+
+      {/* PLAYGROUND — primary developer surface, open by default */}
+      <CollapsibleDetailSection id="playground" title="Playground" defaultOpen>
         <PlaygroundTab chart={chart} />
-      </DetailSection>
+      </CollapsibleDetailSection>
 
       {/* EXAMPLES — preset code snippets (PR2 will make these live) */}
       <CollapsibleDetailSection id="examples" title="Examples" defaultOpen={false}>
         <ExamplesTab chart={chart} />
       </CollapsibleDetailSection>
 
-      {/* API — full props reference */}
-      <DetailSection id="api" title="API">
+      {/* API — full props reference, open by default */}
+      <CollapsibleDetailSection id="api" title="API" defaultOpen>
         <ApiTab chart={chart} />
-      </DetailSection>
+      </CollapsibleDetailSection>
 
       {/* QUALITY — audit gates, collapsed by default */}
       <CollapsibleDetailSection id="quality" title="Quality" defaultOpen={false}>
@@ -3565,32 +3576,15 @@ const ChartDetail: React.FC = () => {
 };
 
 /* ================================================================== */
-/*  DetailSection — uniform anchored section wrapper                   */
+/*  DetailSection — REMOVED                                            */
+/*                                                                     */
+/*  Every chart-detail section is now collapsible (user follow-up      */
+/*  after PR #186 — `api ve playgrounda açılır kapanır olsa iyi        */
+/*  olurdu`). The always-visible variant is no longer used; if a       */
+/*  future section needs an always-open layout, prefer adding a        */
+/*  `collapsible={false}` flag to `CollapsibleDetailSection` rather    */
+/*  than reintroducing two near-identical wrappers.                    */
 /* ================================================================== */
-
-function DetailSection({
-  id,
-  title,
-  children,
-}: {
-  id: string;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      id={id}
-      className="scroll-mt-20 flex flex-col gap-3"
-      data-testid={`detail-section-${id}`}
-    >
-      <header className="flex items-center gap-3">
-        <h2 className="text-lg font-semibold tracking-tight text-text-primary">{title}</h2>
-        <div className="h-px flex-1 bg-border-subtle" aria-hidden="true" />
-      </header>
-      {children}
-    </section>
-  );
-}
 
 /* ================================================================== */
 /*  CollapsibleDetailSection — Examples / Quality accordion            */
