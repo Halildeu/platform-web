@@ -19,6 +19,45 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+// Type-only import smoke (Codex iter-2 PR-X2 fix): if any of these are
+// dropped from the documented `@mfe/x-charts/ssr` surface, the test file
+// itself fails to compile — a far stronger signal than string-matching.
+import type {
+  ChartSpec,
+  ChartType,
+  ChartChannel,
+  ChartEncoding,
+  DrillDownLevel,
+  BarChartProps,
+  LineChartProps,
+  PieChartProps,
+  AreaChartProps,
+  CrossFilterEntry,
+  DrillLevel,
+  HistoryEntry,
+  AccessLevel,
+  AccessControlledProps,
+} from '@mfe/x-charts/ssr';
+
+// Reference each one so the imports are not pruned as unused. The
+// declaration is type-only, so it has zero runtime cost.
+type _SSRTypeSurfaceSmoke = [
+  ChartSpec,
+  ChartType,
+  ChartChannel,
+  ChartEncoding,
+  DrillDownLevel,
+  BarChartProps,
+  LineChartProps,
+  PieChartProps,
+  AreaChartProps,
+  CrossFilterEntry,
+  DrillLevel,
+  HistoryEntry,
+  AccessLevel,
+  AccessControlledProps,
+];
+
 describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
   it("clientImport: '@mfe/x-charts/client' resolves and exposes BarChart", async () => {
     const mod = await import('@mfe/x-charts/client');

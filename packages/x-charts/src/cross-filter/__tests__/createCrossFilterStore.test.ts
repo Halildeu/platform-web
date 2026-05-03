@@ -202,46 +202,36 @@ describe('createCrossFilterStore', () => {
       expect(store.getState().past.length).toBeLessThanOrEqual(5);
     });
 
-    // Faz 21.8 PR-X2 — Codex iter-1 cap fix: redo() previously skipped the
-    // cap. Before the fix `past: [...state.past, currentSnapshot]` would
-    // append unconditionally; with the slice-cap pattern it caps at
-    // historyCap. This test seeds past directly with a length already at
-    // the cap so a single redo, under the buggy behaviour, would push it
-    // past the cap. Under the fix it slices first.
+    // Faz 21.8 PR-X2 — Codex iter-1+2 cap fix mutation discipline:
     //
-    // (Earlier draft used the public API alone; Codex iter-1 PR-X2 review
-    // pointed out that the public-action sequence cannot exceed the cap
-    // even with the bug — undo/redo just shuffle snapshots between past
-    // and future. The fix is still correct as a defence-in-depth invariant
-    // for any future code path that pre-loads `past`, e.g. session restore
-    // or bookmark hydration.)
-    it('redo() respects historyCap even when past is pre-seeded at the cap', () => {
+    // Public-action chains alone cannot exceed the cap with the buggy raw
+    // concat — undo/redo just shuffle snapshots and the slice happens at
+    // every other action. The fix is a defence-in-depth invariant for any
+    // code path that pre-loads `past` (session restore / bookmark hydrate
+    // / external state replay) — exactly what a future feature might do.
+    //
+    // To prove the slice-cap fix kills the raw-concat mutation we seed the
+    // store directly via Zustand's `setState` so `past` already sits at
+    // the cap. Under the buggy behaviour, redo would push currentSnapshot
+    // and overflow to length cap+1; the fix slices first.
+    it('redo() respects historyCap when past is pre-seeded (mutation discipline)', () => {
       const store = createCrossFilterStore({ debounceMs: 0, historyCap: 2 });
 
-      // Drive one filter through the public API so future has a snapshot.
-      store.getState().setFilter(makeFilter('a', 1));
+      // Generate one valid HistoryEntry through the public API.
+      store.getState().setFilter(makeFilter('seed', 1));
       vi.advanceTimersByTime(0);
       store.getState().undo();
-      expect(store.getState().future.length).toBe(1);
+      const seed = store.getState().future[0];
+      expect(seed).toBeDefined();
 
-      // Pre-seed past at the cap by replaying setFilter cap times. Each
-      // setFilter clears future, so we have to re-undo afterwards to
-      // recreate the redo precondition.
-      for (let i = 0; i < 2; i++) {
-        store.getState().setFilter(makeFilter(`pad-${i}`, i));
-        vi.advanceTimersByTime(0);
-      }
-      store.getState().undo();
-      // past now has 2 entries (at the cap), future has 1.
-      const before = store.getState();
-      expect(before.past.length).toBeLessThanOrEqual(2);
-      expect(before.future.length).toBeGreaterThan(0);
+      // Pre-seed past at the cap and keep future non-empty for redo.
+      store.setState({ past: [seed, seed], future: [seed] });
+      expect(store.getState().past).toHaveLength(2);
 
-      // Redo: pre-fix would push currentSnapshot onto past without slicing,
-      // overflowing the cap. Post-fix slices first.
+      // Redo with the buggy raw concat would set past=[seed, seed, currentSnapshot]
+      // (length 3, > cap). The slice fix keeps it ≤ cap.
       store.getState().redo();
-      const after = store.getState();
-      expect(after.past.length).toBeLessThanOrEqual(2);
+      expect(store.getState().past.length).toBeLessThanOrEqual(2);
     });
   });
 
