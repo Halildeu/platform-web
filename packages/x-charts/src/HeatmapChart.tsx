@@ -25,6 +25,7 @@ import type {
   ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scalePadding } from './theme/density-helpers';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -99,8 +100,6 @@ export interface HeatmapChartProps extends AccessControlledProps {
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
-
-const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
 
 const _DEFAULT_PALETTE = [
   '#3b82f6',
@@ -226,7 +225,7 @@ const HeatmapChartInner = React.forwardRef<
   },
   forwardedRef,
 ) {
-  const height = SIZE_HEIGHT[size];
+  const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 

@@ -25,6 +25,7 @@ import type {
   ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -99,8 +100,6 @@ export interface RadarChartProps extends AccessControlledProps {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
-
 const DEFAULT_PALETTE = [
   '#3b82f6',
   '#22c55e',
@@ -158,7 +157,7 @@ const RadarChartInner = React.forwardRef<
   },
   forwardedRef,
 ) {
-  const height = SIZE_HEIGHT[size];
+  const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !indicators || indicators.length === 0 || !series || series.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 

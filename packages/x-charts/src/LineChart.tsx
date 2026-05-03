@@ -23,6 +23,7 @@ import type {
   ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scalePadding } from './theme/density-helpers';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeSeries } from './utils/data-validation';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -105,8 +106,6 @@ export interface LineChartProps extends AccessControlledProps {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
-
 const DEFAULT_PALETTE = [
   '#3b82f6',
   '#22c55e',
@@ -165,7 +164,7 @@ const LineChartInner = React.forwardRef<
   },
   forwardedRef,
 ) {
-  const height = SIZE_HEIGHT[size];
+  const height = CHART_CANVAS_HEIGHT[size];
   const safeSeries = useMemo(() => sanitizeSeries(seriesData), [seriesData]);
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;

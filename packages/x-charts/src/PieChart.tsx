@@ -24,6 +24,7 @@ import type {
   ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize } from './theme/density-helpers';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -95,8 +96,6 @@ export interface PieChartProps extends AccessControlledProps {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const SIZE_HEIGHT: Record<ChartSize, number> = { sm: 200, md: 300, lg: 400 };
-
 const DEFAULT_PALETTE = [
   '#3b82f6',
   '#22c55e',
@@ -154,7 +153,7 @@ const PieChartInner = React.forwardRef<
   },
   forwardedRef,
 ) {
-  const height = SIZE_HEIGHT[size];
+  const height = CHART_CANVAS_HEIGHT[size];
 
   const safeData = useMemo(() => sanitizeDataPoints(data), [data]);
   const validData = useMemo(() => safeData.filter((d) => d.value > 0), [safeData]);

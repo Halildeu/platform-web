@@ -78,6 +78,12 @@ export type { ChartConfig, ChartVariant, UseChartVariantsReturn } from './useCha
 export { useResponsiveBreakpoint, useResponsiveChartConfig } from './useResponsiveChart';
 export type { Breakpoint, ResponsiveChartConfig } from './useResponsiveChart';
 
+// Faz 21.9 PR3a: shared chart-size contract — runtime constant + ordered
+// axis + ChartSize re-export. Replaces the SIZE_HEIGHT mirrors that used
+// to live inside every wrapper.
+export { CHART_CANVAS_HEIGHT, CHART_SIZE_ORDER } from './chartSize';
+export type { ChartSize } from './chartSize';
+
 /* ------------------------------------------------------------------ */
 /*  ECharts Foundation (P1)                                           */
 /* ------------------------------------------------------------------ */

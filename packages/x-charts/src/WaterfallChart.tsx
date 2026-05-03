@@ -27,6 +27,7 @@ import type {
   ChartAccentPreference,
 } from './theme/useChartTheme';
 import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -104,8 +105,6 @@ export interface WaterfallChartProps extends AccessControlledProps {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const SIZE_HEIGHT: Record<'sm' | 'md' | 'lg', number> = { sm: 200, md: 300, lg: 400 };
-
 const DEFAULT_COLORS = {
   increase: '#22c55e',
   decrease: '#ef4444',
@@ -166,7 +165,7 @@ const WaterfallChartInner = React.forwardRef<
   },
   forwardedRef,
 ) {
-  const height = SIZE_HEIGHT[size];
+  const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
   const isHorizontal = orientation === 'horizontal';
   const safeData = useMemo(
