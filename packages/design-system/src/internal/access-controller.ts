@@ -1,38 +1,20 @@
-import type React from "react";
+import type React from 'react';
 
-export type AccessLevel = "full" | "readonly" | "disabled" | "hidden";
+// Source-of-truth for these primitives moved to `@mfe/shared-types/access`
+// in Faz 21.4 PR-E1 so that packages forbidden from importing
+// `@mfe/design-system` at runtime (notably `@mfe/x-charts` per CONTRACT
+// v2.2 §9) can share the same vocabulary. DS continues to re-export
+// the exact same surface — no consumer change required.
+export {
+  type AccessLevel,
+  type AccessControlledProps,
+  type AccessResolution,
+  resolveAccessState,
+  shouldBlockInteraction,
+} from '@mfe/shared-types';
 
-export type AccessControlledProps = {
-  access?: AccessLevel;
-  accessReason?: string;
-};
-
-export type AccessResolution = {
-  state: AccessLevel;
-  isHidden: boolean;
-  isReadonly: boolean;
-  isDisabled: boolean;
-};
-
-export const resolveAccessState = (access?: AccessLevel): AccessResolution => {
-  const state: AccessLevel = access ?? "full";
-  return {
-    state,
-    isHidden: state === "hidden",
-    isReadonly: state === "readonly",
-    isDisabled: state === "disabled",
-  };
-};
-
-export const shouldBlockInteraction = (
-  state: AccessLevel,
-  externallyDisabled?: boolean,
-) => {
-  if (externallyDisabled) {
-    return true;
-  }
-  return state === "readonly" || state === "disabled";
-};
+import type { AccessControlledProps, AccessLevel } from '@mfe/shared-types';
+import { shouldBlockInteraction } from '@mfe/shared-types';
 
 /**
  * Returns Tailwind utility class strings for a given access level.
@@ -46,14 +28,14 @@ export const shouldBlockInteraction = (
  */
 export function accessStyles(access: AccessLevel): string {
   switch (access) {
-    case "disabled":
-      return "cursor-not-allowed opacity-50 pointer-events-none";
-    case "readonly":
-      return "cursor-default opacity-70";
-    case "hidden":
-      return "invisible";
+    case 'disabled':
+      return 'cursor-not-allowed opacity-50 pointer-events-none';
+    case 'readonly':
+      return 'cursor-default opacity-70';
+    case 'hidden':
+      return 'invisible';
     default:
-      return "";
+      return '';
   }
 }
 
@@ -63,9 +45,7 @@ export const _accessStyles = accessStyles;
 /** @deprecated Use `AccessControlledProps` instead. */
 export type _AccessControlledProps = AccessControlledProps;
 
-export const withAccessGuard = <
-  E extends React.SyntheticEvent = React.SyntheticEvent,
->(
+export const withAccessGuard = <E extends React.SyntheticEvent = React.SyntheticEvent>(
   state: AccessLevel,
   handler?: ((event: E) => void | Promise<void>) | (() => void | Promise<void>),
   externallyDisabled?: boolean,

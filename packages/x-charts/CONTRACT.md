@@ -41,6 +41,38 @@
 
 ## 1. Public API Surface
 
+### 1.0 WHY no standalone `ChartTooltip` wrapper (v2.1 decision, restated by PR-E1 2026-05-03)
+
+CONTRACT v2 (Faz 21.4-A) initially declared a public `ChartTooltip` component
+in §1. CONTRACT v2.1 (Faz 21.4-E, 2026-04-30) **removed** that component
+because its surface was completely redundant with the existing tooltip
+configuration paths:
+
+1. **Per-chart tooltip via ECharts `option.tooltip`.** Every chart wrapper
+   already accepts a `valueFormatter` prop and forwards it to the ECharts
+   `tooltip.formatter` callback. Themed presentation (background, border,
+   font, shadow) is centralised in `buildDesignLabEChartsTheme()`
+   (`packages/x-charts/src/theme/DesignLabEChartsTheme.ts`).
+2. **Touch-specific tooltip via `MobileTooltip`.** Long-press touch
+   interaction routes through `packages/x-charts/src/touch/MobileTooltip.tsx`
+   which is already exported from the public barrel.
+3. **No cross-chart tooltip composition use case.** The standalone wrapper
+   would have offered a third API surface for the same job, with no
+   improvement on testability, themability, or accessibility — and would
+   have broken the **identity-transform invariant** (line 66-68): adding
+   a wrapper component changes the DOM tree without changing user-visible
+   pixels, which is a regression smell.
+
+**Future direction (out of scope for this contract):** if the platform ever
+needs cross-chart tooltip portal coordination (e.g. shared crosshair across
+linked charts in a dashboard), the right place is a `ChartContainer`-level
+prop or a portal singleton in `@mfe/x-charts/cross-filter`, NOT a per-chart
+component wrapper.
+
+PR-E1 (Faz 21.4) added this rationale here so future contributors and AI
+agents do not re-introduce the wrapper based on stale roadmap audit rows.
+Tracker entry: `docs/x-charts-ui-ux-tracker.md` (Faz 21.4 cycle).
+
 ### 1.1 Common chart wrapper props (v2.2, Faz 21.5 + 21.6 cycle)
 
 All 13 canonical chart wrappers in `@mfe/x-charts` share four opt-in

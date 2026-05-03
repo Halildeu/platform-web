@@ -1,3 +1,14 @@
+// Re-export cross-package access-control vocabulary (Faz 21.4 PR-E1).
+// Source-of-truth lives in `./access.ts`; this barrel export keeps
+// `@mfe/shared-types` consumers seeing a single import surface.
+export {
+  type AccessLevel,
+  type AccessControlledProps,
+  type AccessResolution,
+  resolveAccessState,
+  shouldBlockInteraction,
+} from './access';
+
 // Redux'taki counter state'inin yapısını tanımlar.
 export interface CounterState {
   value: number;
@@ -31,11 +42,7 @@ export interface ProductsState {
 
 export type UserAccountStatus = 'ACTIVE' | 'INACTIVE' | 'INVITED' | 'SUSPENDED';
 
-export type UserModuleAccessLevel =
-  | 'NONE'
-  | 'VIEW'
-  | 'EDIT'
-  | 'MANAGE';
+export type UserModuleAccessLevel = 'NONE' | 'VIEW' | 'EDIT' | 'MANAGE';
 
 export interface UserModulePermission {
   moduleKey: string;
