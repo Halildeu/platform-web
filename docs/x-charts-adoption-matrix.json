@@ -1,0 +1,434 @@
+{
+  "generatedAt": "2026-05-03T14:12:46.518Z",
+  "totalConsumers": 42,
+  "byBucket": {
+    "production": 18,
+    "test": 3,
+    "demo": 7,
+    "package": 14
+  },
+  "entries": [
+    {
+      "file": "apps/mfe-reporting/src/modules/context-health/charts/BenchmarkGapsBar.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/context-health/charts/DocGraphBar.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/context-health/charts/HealthComponentBar.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/context-health/charts/ProjectDistributionBar.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/context-health/charts/ProviderCapabilitiesBar.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/context-health/charts/SectionStatusPie.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["PieChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/context-health/charts/WorkIntakeBar.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/dashboard/DashboardPage.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["AreaChart", "BarChart", "LineChart", "PieChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/hr-compensation-report/__tests__/CompensationDashboard.crossfilter.test.tsx",
+      "app": "mfe-reporting",
+      "bucket": "test",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["CrossFilterProvider", "useCrossFilter"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/hr-compensation-report/CompensationDashboard.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [
+        "BarChart",
+        "ChartClickEvent",
+        "CrossFilterEntry",
+        "CrossFilterProvider",
+        "PieChart",
+        "buildDesignLabEChartsTheme",
+        "useCrossFilter",
+        "useEChartsRenderer"
+      ],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/hr-demographic-report/DemographicDashboard.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XBarChart", "XPieChart", "XRadarChart", "XTreemapChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-reporting/src/visualization/ChartRenderer.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [
+        "AreaChart",
+        "BarChart",
+        "FunnelChart",
+        "GaugeChart",
+        "HeatmapChart",
+        "KPICard",
+        "LineChart",
+        "PieChart",
+        "RadarChart",
+        "SankeyChart",
+        "ScatterChart",
+        "SunburstChart",
+        "TreemapChart",
+        "WaterfallChart"
+      ],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/app/i18n/I18nProvider.tsx",
+      "app": "mfe-shell",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["setChartsLocale"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/AiHookDemoLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [
+        "Anomaly",
+        "ChartTypeSuggestion",
+        "NLToChartSpecResult",
+        "Trend",
+        "detectAnomalies",
+        "generateChartDescription",
+        "identifyTrends",
+        "nlToChartSpec",
+        "suggestChartType"
+      ],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/ChartPreviewLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [
+        "AreaChart",
+        "BarChart",
+        "ChartContainer",
+        "ChartDashboard",
+        "ChartToolbar",
+        "FunnelChart",
+        "GaugeChart",
+        "HeatmapChart",
+        "KPICard",
+        "LineChart",
+        "PieChart",
+        "RadarChart",
+        "SankeyChart",
+        "ScatterChart",
+        "SparklineChart",
+        "SunburstChart",
+        "TreemapChart",
+        "WaterfallChart",
+        "useChartInteractions"
+      ],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/CrossFilterDemoLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [
+        "BarChart",
+        "CrossFilterProvider",
+        "useChartCrossFilter",
+        "useCrossFilterStoreApi"
+      ],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/CrossFilterGridDemoLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [
+        "BarChart",
+        "CrossFilterProvider",
+        "useChartCrossFilter",
+        "useCrossFilterStoreApi",
+        "useGridCrossFilter"
+      ],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/DrillDownDemoLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart", "CrossFilterProvider", "DrillDownBreadcrumb", "useDrillDown"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/FeatureDemoLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart", "useChartExport", "useChartInteractions", "useRealTimeData"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/PerfUtilityDemoLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [
+        "LRUCache",
+        "downsampleLTTB",
+        "lazyChartImport",
+        "useLazyChart",
+        "useProgressiveRender"
+      ],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/XSuiteRuntimePreview.tsx",
+      "app": "mfe-shell",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [],
+      "kinds": ["ImportExpression"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/XSuiteDashboardPage.tsx",
+      "app": "mfe-shell",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": [],
+      "kinds": ["ImportExpression"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/home/widgets/ContextHealthTrendWidget.tsx",
+      "app": "mfe-shell",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["LineChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/home/widgets/ExtensionHealthWidget.tsx",
+      "app": "mfe-shell",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/home/widgets/WorkIntakeWidget.tsx",
+      "app": "mfe-shell",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["PieChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-users/src/pages/users/__tests__/UsersPage.crossfilter.test.tsx",
+      "app": "mfe-users",
+      "bucket": "test",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["CrossFilterProvider", "XChartsGridApi", "useCrossFilter", "useGridCrossFilter"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "apps/mfe-users/src/pages/users/UsersPage.ui.tsx",
+      "app": "mfe-users",
+      "bucket": "production",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["CrossFilterProvider", "XChartsGridApi", "useGridCrossFilter"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/scripts/codemods/__fixtures__/migrate-ds-charts-to-x-charts/aliased-chart.output.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["DSBarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/scripts/codemods/__fixtures__/migrate-ds-charts-to-x-charts/named-mixed.output.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/scripts/codemods/__fixtures__/migrate-ds-charts-to-x-charts/named-multiple-charts.output.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["LineChart", "PieChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/scripts/codemods/__fixtures__/migrate-ds-charts-to-x-charts/named-single.output.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/scripts/codemods/__fixtures__/migrate-ds-charts-to-x-charts/type-import-preserved.output.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["BarChart"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/components/charts/AreaChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XAreaChart", "XAreaChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/components/charts/BarChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XBarChart", "XBarChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/components/charts/LineChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XLineChart", "XLineChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/components/charts/PieChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XPieChart", "XPieChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/enterprise/FunnelChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XFunnelChart", "XFunnelChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/enterprise/GaugeChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XGaugeChart", "XGaugeChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/enterprise/RadarChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XRadarChart", "XRadarChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/enterprise/TreemapChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XTreemapChart", "XTreemapChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/design-system/src/enterprise/WaterfallChart.tsx",
+      "app": "design-system",
+      "bucket": "package",
+      "subpaths": ["@mfe/x-charts"],
+      "symbols": ["XWaterfallChart", "XWaterfallChartProps"],
+      "kinds": ["ImportDeclaration"]
+    },
+    {
+      "file": "packages/x-charts/src/__tests__/ssr-boundary.test.ts",
+      "app": "x-charts",
+      "bucket": "test",
+      "subpaths": ["@mfe/x-charts/client", "@mfe/x-charts/ssr"],
+      "symbols": [
+        "AccessControlledProps",
+        "AccessLevel",
+        "AreaChartProps",
+        "BarChartProps",
+        "ChartChannel",
+        "ChartEncoding",
+        "ChartSpec",
+        "ChartType",
+        "CrossFilterEntry",
+        "DrillDownLevel",
+        "DrillLevel",
+        "HistoryEntry",
+        "LineChartProps",
+        "PieChartProps"
+      ],
+      "kinds": ["ImportDeclaration", "ImportExpression"]
+    }
+  ]
+}

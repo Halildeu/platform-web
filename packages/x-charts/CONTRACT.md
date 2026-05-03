@@ -389,7 +389,7 @@ ChartLegend
 
 - ECharts theme preset: `DesignLabEChartsHighContrastTheme`
 - Decal patterns for non-color differentiation
-- 4.5:1 minimum contrast ratio enforced
+- 4.5:1 minimum contrast ratio enforced **at the static fallback hex layer** (41 assertions in `chart-contrast.contract.test.ts`, Faz 21.4 PR-F1). Runtime browser CSS-var resolution + canvas pixel ratio gate is **not yet active** — runtime contrast gate is tracked as Faz 21.8 PR-X3b (deferred from this PR cycle; static layer kept the existing assertions intact).
 
 ### Density Support
 
