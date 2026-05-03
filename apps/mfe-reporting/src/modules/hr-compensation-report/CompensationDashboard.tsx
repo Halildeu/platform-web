@@ -421,31 +421,33 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
   /**
    * Replicate the bespoke `toggleCrossFilter` semantics (replace by
    * dimension, toggle off on same dim+value) on top of the store API.
-   * The store keys filters by `sourceId:field`, so to enforce
-   * "one active value per dimension" we look up any existing entry with
-   * the same `field` (regardless of sourceId) and remove it before setting
-   * the new one.
+   *
+   * Codex iter-1 PR-X4a fix: the bespoke helper was source-agnostic — it
+   * removed the existing filter whenever `dimension + value` matched,
+   * regardless of which chart originally emitted it. Multiple charts
+   * (`dept-salary-comparison`, `gender-salary-comparison`,
+   * `dept-percentile-radar`) all emit the `department` dimension, so a
+   * source-sensitive comparison would silently change UX (the second
+   * chart would replace instead of toggling off).
    */
   const toggleStoreFilter = React.useCallback(
     (sourceId: string, dimension: string, value: string) => {
       // Find any existing filter with the same dimension (any sourceId).
       let existingKey: string | null = null;
       let existingValue: unknown = null;
-      let existingSourceId: string | null = null;
       for (const [key, entry] of storeFilters.entries()) {
         if (entry.field === dimension) {
           existingKey = key;
           existingValue = entry.value;
-          existingSourceId = entry.sourceId;
           break;
         }
       }
-      if (existingKey && String(existingValue) === value && existingSourceId === sourceId) {
-        // Same dim + same val + same source → toggle off.
+      if (existingKey && String(existingValue) === value) {
+        // Same dim + same val (any source) → toggle off (parity with bespoke).
         removeStoreFilter(existingKey);
         return;
       }
-      // Different value (or different source) → replace by dimension.
+      // Different value → replace by dimension.
       if (existingKey) removeStoreFilter(existingKey);
       const entry: CrossFilterEntry = {
         sourceId,
@@ -770,9 +772,13 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
  * dashboard. Faz 21.8 PR-X4a: this is the public component; consumers
  * (`HrCompensationReport.tsx`) keep their import path unchanged.
  *
- * `debounceMs: 0` disables setFilter coalescing so chart clicks feel
- * instantaneous (matches the bespoke pre-migration UX). The store still
- * caps history at the default 50 snapshots.
+ * `debounceMs: 0` removes the default 150ms debounce delay so chart
+ * clicks feel near-instantaneous (close to bespoke pre-migration UX).
+ * Note: setFilter still goes through `setTimeout(..., 0)` per the store
+ * implementation, so multiple rapid setFilter calls in the same call
+ * stack may still coalesce; for normal click cadence the final state is
+ * indistinguishable from synchronous mutation. The store still caps
+ * history at the default 50 snapshots.
  */
 export const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters }) => (
   <CrossFilterProvider options={{ groupId: 'hr-compensation', debounceMs: 0 }}>
