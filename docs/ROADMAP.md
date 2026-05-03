@@ -827,7 +827,7 @@ documentation debt: ChartTooltip rationale is recorded in `CONTRACT.md §1.0`
 and the access-control vocabulary is relocated to `@mfe/shared-types`
 (prerequisite for PR-E2 wiring).
 
-**Design Lab playground reality:** 32 chart route'u var (`/admin/design-lab/charts/*`) — PR-A→PR-B4 ile 29 route landed; PR-B (this PR) +3 (drill-down + drill-down-history + cross-filter-grid),
+**Design Lab playground reality:** 37 chart route'u var (`/admin/design-lab/charts/*`) — PR-A→PR-B4 ile 29 route, PR-B (#169) +3 (drill-down + drill-down-history + cross-filter-grid), PR-C (this PR) +5 feature demos (brush + zoom/pan + realtime + theme-switch + export),
 ama Playground tab'i SVG mock gösteriyordu — toggle'lar render'a yansımıyordu.
 `ChartPreviewPlaceholder` fonksiyonu chart.id'ye göre 6 farklı SVG variant
 döndürüyor (geri kalan 7 chart "default bar" görselli — yanlış görsel).
@@ -838,18 +838,18 @@ linked-charts + drill-down demo'su.
 
 ### PR plan (6 commits, ~24-30 saat total)
 
-| PR     | Scope                                                                                                                                                                    | Effort | Depends      | Status                                                          |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | ------------ | --------------------------------------------------------------- |
-| **A**  | Design Lab live render (13 chart, fake SVG → real x-charts, toggle forwarding)                                                                                           | 2h     | —            | ✅ PR [#91](https://github.com/Halildeu/platform-web/pull/91)   |
-| **B**  | Design Lab live demo — PR-A→B4 landed 11 routes (1 cross-filter + 5 AI + 5 perf); PR-B (this PR) adds 3 (drill-down + drill-down-history + cross-filter-grid) → 32 total | 3-4h   | A            | in progress (this PR)                                           |
-| **C**  | Feature-demo pages (Brush, Zoom/Pan, Real-time, Theme switch, Export)                                                                                                    | 4-6h   | A            | pending                                                         |
-| **D**  | 13 chart × smoke + series.type contract                                                                                                                                  | 4-6h   | — (parallel) | ✅ PR [#103](https://github.com/Halildeu/platform-web/pull/103) |
-| **D2** | 13 chart × deeper option-shape mutation tests (data fidelity, prop toggles, rerender)                                                                                    | 3-4h   | D            | ✅ PR [#164](https://github.com/Halildeu/platform-web/pull/164) |
-| **E1** | Contract-debt closure (ROADMAP reconcile + ChartTooltip rationale doc + AccessControlledProps relocation to `@mfe/shared-types`)                                         | 1-2h   | — (parallel) | ✅ PR [#165](https://github.com/Halildeu/platform-web/pull/165) |
-| **E2** | `AccessControlledProps` integration across 13 chart wrappers + auth `useZanzibarAccessProps` hook + Bar 4-state matrix test                                              | 3-4h   | E1           | ✅ PR [#166](https://github.com/Halildeu/platform-web/pull/166) |
-| **F1** | Quality gate wiring — visual rename + axe + contrast + tree-shake (descriptor-driven) + sideEffects allowlist                                                            | 3-4h   | — (parallel) | ✅ PR [#167](https://github.com/Halildeu/platform-web/pull/167) |
-| **F2** | Bundle size gate — esbuild source analyze (dual metric: wrapperOnly soft, contractTotal HARD)                                                                            | 2-3h   | F1           | ✅ PR [#168](https://github.com/Halildeu/platform-web/pull/168) |
-| **F**  | **8/8 CI gate aktivasyonu COMPLETE** — F1+F2 birlikte 8 gate hard-block (7 in `x-charts-quality-gates.yml` + visual in `x-charts-visual-gate.yml`)                       | 4-8h   | — (parallel) | ✅ COMPLETE (Faz 21.4 son PR)                                   |
+| PR     | Scope                                                                                                                                                           | Effort | Depends      | Status                                                          |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------ | --------------------------------------------------------------- |
+| **A**  | Design Lab live render (13 chart, fake SVG → real x-charts, toggle forwarding)                                                                                  | 2h     | —            | ✅ PR [#91](https://github.com/Halildeu/platform-web/pull/91)   |
+| **B**  | Design Lab live demo — PR-A→B4 landed 11 routes (1 cross-filter + 5 AI + 5 perf); PR-B added 3 (drill-down + drill-down-history + cross-filter-grid) → 32 total | 3-4h   | A            | ✅ PR [#169](https://github.com/Halildeu/platform-web/pull/169) |
+| **C**  | Feature-demo pages — 5 isolated feature demos (brush, zoom/pan, realtime, theme-switch, export); 32 → 37 routes — closes Faz 21.4 §19                           | 4-6h   | A            | in progress (this PR)                                           |
+| **D**  | 13 chart × smoke + series.type contract                                                                                                                         | 4-6h   | — (parallel) | ✅ PR [#103](https://github.com/Halildeu/platform-web/pull/103) |
+| **D2** | 13 chart × deeper option-shape mutation tests (data fidelity, prop toggles, rerender)                                                                           | 3-4h   | D            | ✅ PR [#164](https://github.com/Halildeu/platform-web/pull/164) |
+| **E1** | Contract-debt closure (ROADMAP reconcile + ChartTooltip rationale doc + AccessControlledProps relocation to `@mfe/shared-types`)                                | 1-2h   | — (parallel) | ✅ PR [#165](https://github.com/Halildeu/platform-web/pull/165) |
+| **E2** | `AccessControlledProps` integration across 13 chart wrappers + auth `useZanzibarAccessProps` hook + Bar 4-state matrix test                                     | 3-4h   | E1           | ✅ PR [#166](https://github.com/Halildeu/platform-web/pull/166) |
+| **F1** | Quality gate wiring — visual rename + axe + contrast + tree-shake (descriptor-driven) + sideEffects allowlist                                                   | 3-4h   | — (parallel) | ✅ PR [#167](https://github.com/Halildeu/platform-web/pull/167) |
+| **F2** | Bundle size gate — esbuild source analyze (dual metric: wrapperOnly soft, contractTotal HARD)                                                                   | 2-3h   | F1           | ✅ PR [#168](https://github.com/Halildeu/platform-web/pull/168) |
+| **F**  | **8/8 CI gate aktivasyonu COMPLETE** — F1+F2 birlikte 8 gate hard-block (7 in `x-charts-quality-gates.yml` + visual in `x-charts-visual-gate.yml`)              | 4-8h   | — (parallel) | ✅ COMPLETE (Faz 21.4 son PR)                                   |
 
 ### Linked artifacts
 
