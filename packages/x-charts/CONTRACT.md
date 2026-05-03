@@ -486,15 +486,44 @@ prop surface.
 
 ### CI Gates
 
-- bundle-size-check (< 350KB gzip)
-- a11y-axe-audit (Faz 21.5-B3a: zero serious/critical violations)
-- contrast-ratio-check (4.5:1)
-- xss-sanitization-check
-- memory-leak-test (100-cycle mount/unmount)
-- chart-spec-validation
-- visual-regression
-- tree-shaking-verify
-- component-scorecard (Faz 21.6 PR-A: multi-package scan, x-charts 13 chart audit)
+PR-F (Faz 21.4) closes the 8 chart-CI gates listed below. The 9th item
+(`component-scorecard`) is a separate workflow that landed earlier in
+Faz 21.6 PR-A; PR-F's "8/8" target intentionally excludes it.
+
+PR-F1 activates 7/8 (chart-spec, xss, memory, axe, contrast, tree-shake,
+visual). PR-F2 activates the 8th (bundle).
+
+- **bundle-size-check** (< 350KB gzip; HARD on `contractTotal` including
+  ECharts; soft observability on `wrapperOnly` — PR-F2)
+- **a11y-axe-audit** (zero serious/critical violations; `chart-axe.test.tsx`
+  with `color-contrast` rule disabled because jsdom cannot resolve CSS
+  variables — contrast handled by the next gate — PR-F1)
+- **contrast-ratio-check** (text/control 4.5:1 across 5 themes × 7
+  surfaces in `chart-contrast.contract.test.ts`; high-contrast palette
+  differentiation invariant; series-palette adjacency NOT gated by ratio
+  math — see `chart-theme-decal.test.tsx` for runtime decal/aria
+  fallback — PR-F1)
+- **xss-sanitization-check** (`security.contract.test.tsx` — already active)
+- **memory-leak-test** (100-cycle mount/unmount; `memory-leak.test.tsx`
+  — already active)
+- **chart-spec-validation** (`spec-transform.contract.test.ts` — already
+  active)
+- **visual-regression** (`x-charts-visual-gate.yml` workflow,
+  `maxDiffPixelRatio: 0.02` HARD; file renamed from `-visual-advisory`
+  in PR-F1 to reflect actual hard-block behaviour)
+- **tree-shaking-verify** (descriptor-driven `verify-tree-shaking.mjs`;
+  x-charts uses `mode: 'source'` with `sideEffects` allowlist for
+  `./src/i18n/locale-store.ts` and CSS — PR-F1)
+
+Adjacent CI workflow (CONTRACT §8 9th item, separate from PR-F's 8):
+
+- **component-scorecard** (Faz 21.6 PR-A: multi-package scan,
+  x-charts 13 chart audit) — `scorecard-gate.yml`, already active.
+
+`x-charts-quality-gates.yml` also runs a `chart-component-baseline` job
+covering smoke + options-shape + access-contract tests as a PR-D
+regression guard. That job is NOT one of PR-F's 8 gates — it's a
+defensive layer below the contract gates above.
 
 ## 9. Taxonomy & Boundaries (v2.2, Faz 21.6 PR-D)
 
