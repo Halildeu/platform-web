@@ -6,13 +6,15 @@
  * toggle:
  *
  *   `basic`   — drillDown / drillUp / drillToRoot via clicks + breadcrumb.
- *   `history` — adds undo/redo by snapshotting the cross-filter store
- *               drillPath and restoring via `drillTo(index)`.
+ *   `history` — same flow plus an Undo button (drillUp wiring), a Reset
+ *               action, and a "depth N · drills fired M" counter. A real
+ *               redo would need to persist the full {field,value,label}
+ *               trail; that is a deliberate scope cut so the demo does
+ *               not promise behaviour it cannot deliver (PR-B Codex
+ *               iter-1 must-fix: no fake work).
  *
  * The drill state lives in the cross-filter store (per
- * `packages/x-charts/src/drill-down/useDrillDown.ts:64-67`). The history
- * mode reads the same `drillPath` selector and recomputes on each
- * snapshot.
+ * `packages/x-charts/src/drill-down/useDrillDown.ts:64-67`).
  */
 import React, { useMemo, useState } from 'react';
 import { BarChart, CrossFilterProvider, DrillDownBreadcrumb, useDrillDown } from '@mfe/x-charts';
