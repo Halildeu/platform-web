@@ -34,7 +34,10 @@ import prettier from 'prettier';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
-const DETAIL_PATH = resolve(REPO_ROOT, 'apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx');
+const DETAIL_PATH = resolve(
+  REPO_ROOT,
+  'apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx',
+);
 
 const flagCheck = process.argv.includes('--check');
 
@@ -104,15 +107,16 @@ function extractProps(chartName) {
    * @param {ts.Node} node
    */
   function visit(node) {
-    if (
-      ts.isInterfaceDeclaration(node) &&
-      node.name.text === `${chartName}Props`
-    ) {
+    if (ts.isInterfaceDeclaration(node) && node.name.text === `${chartName}Props`) {
       // Detect `extends AccessControlledProps`
       if (node.heritageClauses) {
         for (const clause of node.heritageClauses) {
           for (const t of clause.types) {
-            if (t.expression && ts.isIdentifier(t.expression) && t.expression.text === 'AccessControlledProps') {
+            if (
+              t.expression &&
+              ts.isIdentifier(t.expression) &&
+              t.expression.text === 'AccessControlledProps'
+            ) {
               extendsAccess = true;
             }
           }
@@ -124,7 +128,9 @@ function extractProps(chartName) {
         const name = ts.isIdentifier(member.name) ? member.name.text : member.name.getText(sf);
 
         const required = !member.questionToken;
-        const typeText = member.type ? member.type.getText(sf).replace(/\s+/g, ' ').trim() : 'unknown';
+        const typeText = member.type
+          ? member.type.getText(sf).replace(/\s+/g, ' ').trim()
+          : 'unknown';
 
         // JSDoc: comment lines + @default tag
         const jsdoc = ts.getJSDocCommentsAndTags(member);
@@ -133,21 +139,23 @@ function extractProps(chartName) {
         for (const doc of jsdoc) {
           if (ts.isJSDoc(doc)) {
             // Comment text
-            const commentText = typeof doc.comment === 'string'
-              ? doc.comment
-              : Array.isArray(doc.comment)
-                ? doc.comment.map((c) => c.text || '').join(' ')
-                : '';
+            const commentText =
+              typeof doc.comment === 'string'
+                ? doc.comment
+                : Array.isArray(doc.comment)
+                  ? doc.comment.map((c) => c.text || '').join(' ')
+                  : '';
             if (commentText) description = commentText.trim();
             // Tags
             if (doc.tags) {
               for (const tag of doc.tags) {
                 if (tag.tagName.text === 'default') {
-                  const tagText = typeof tag.comment === 'string'
-                    ? tag.comment
-                    : Array.isArray(tag.comment)
-                      ? tag.comment.map((c) => c.text || '').join(' ')
-                      : '';
+                  const tagText =
+                    typeof tag.comment === 'string'
+                      ? tag.comment
+                      : Array.isArray(tag.comment)
+                        ? tag.comment.map((c) => c.text || '').join(' ')
+                        : '';
                   // Codex iter-1 PR-X6 fix: hyphen-minus must NOT be stripped
                   // (it would mangle negative numbers like `@default -45` for
                   // GaugeChart.endAngle). Only strip em-dash / en-dash bullet
@@ -231,7 +239,10 @@ function renderPropsArray(props) {
  * @returns {string}
  */
 function replacePropsBlock(content, chartId, newPropsBlock) {
-  const entryRe = new RegExp(`('${chartId}':\\s*\\{[\\s\\S]*?)(    props:\\s*\\[[\\s\\S]*?\\n    \\],)`, 'm');
+  const entryRe = new RegExp(
+    `('${chartId}':\\s*\\{[\\s\\S]*?)(    props:\\s*\\[[\\s\\S]*?\\n    \\],)`,
+    'm',
+  );
   const match = content.match(entryRe);
   if (!match) {
     throw new Error(`Could not locate props block for '${chartId}' in ChartDetail.tsx`);
@@ -273,7 +284,10 @@ const COMMON_CAPABILITIES = [
  * @returns {string}
  */
 function replaceThemesBlock(content, chartId) {
-  const entryRe = new RegExp(`('${chartId}':\\s*\\{[\\s\\S]*?)(    themes:\\s*\\[[^\\]]*\\],)`, 'm');
+  const entryRe = new RegExp(
+    `('${chartId}':\\s*\\{[\\s\\S]*?)(    themes:\\s*\\[[^\\]]*\\],)`,
+    'm',
+  );
   const match = content.match(entryRe);
   if (!match) return content; // entry might not have themes (e.g. perf hooks)
   const newThemes = `    themes: [${CANONICAL_THEMES.map(quote).join(', ')}],`;
@@ -289,7 +303,10 @@ function replaceThemesBlock(content, chartId) {
  * @returns {string}
  */
 function mergeFeaturesBlock(content, chartId) {
-  const entryRe = new RegExp(`('${chartId}':\\s*\\{[\\s\\S]*?)(    features:\\s*\\[[\\s\\S]*?\\n?\\s*\\],)`, 'm');
+  const entryRe = new RegExp(
+    `('${chartId}':\\s*\\{[\\s\\S]*?)(    features:\\s*\\[[\\s\\S]*?\\n?\\s*\\],)`,
+    'm',
+  );
   const match = content.match(entryRe);
   if (!match) return content;
   // Extract existing feature strings.
@@ -352,7 +369,9 @@ async function main() {
       console.error('✗ ChartDetail.tsx is out of sync with chart wrapper interfaces.');
       console.error('  Run `node scripts/ci/sync-chart-detail-props.mjs` and commit.');
       for (const s of summary) {
-        console.error(`  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`);
+        console.error(
+          `  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`,
+        );
       }
       process.exit(1);
     }
@@ -364,7 +383,9 @@ async function main() {
       writeFileSync(DETAIL_PATH, detail);
       console.log(`✓ Synced ${summary.length} chart entries:`);
       for (const s of summary) {
-        console.log(`  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`);
+        console.log(
+          `  - ${s.chart}: ${s.propsCount} props${s.accessExtended ? ' (incl. access)' : ''}`,
+        );
       }
     }
   }
