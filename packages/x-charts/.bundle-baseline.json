@@ -1,0 +1,12 @@
+{
+  "wrapperOnly": {
+    "raw": 187453,
+    "gzip": 56632
+  },
+  "contractTotal": {
+    "raw": 1037274,
+    "gzip": 343564
+  },
+  "lastUpdated": "2026-05-03T08:24:27.145Z",
+  "lastCommit": null
+}

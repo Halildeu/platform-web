@@ -466,7 +466,7 @@ prop surface.
 
 - **< 350 KB** gzipped total (ECharts + x-charts wrapper)
 - Each chart type tree-shakeable independently
-- CI gate will enforce bundle limit (PR-F2; HARD on contractTotal incl. ECharts, observability on wrapperOnly)
+- CI gate enforces bundle limit (PR-F2 active; HARD on contractTotal incl. ECharts via esbuild source analyze, observability on wrapperOnly; baseline at `packages/x-charts/.bundle-baseline.json`)
 
 ### Render Targets
 
@@ -490,11 +490,15 @@ PR-F (Faz 21.4) closes the 8 chart-CI gates listed below. The 9th item
 (`component-scorecard`) is a separate workflow that landed earlier in
 Faz 21.6 PR-A; PR-F's "8/8" target intentionally excludes it.
 
-PR-F1 activates 7/8 (chart-spec, xss, memory, axe, contrast, tree-shake,
-visual). PR-F2 activates the 8th (bundle).
+PR-F1 activated 7/8 (chart-spec, xss, memory, axe, contrast, tree-shake,
+visual). PR-F2 activates the 8th (bundle) — **8/8 gates now HARD-block**.
 
-- **bundle-size-check** (< 350KB gzip; HARD on `contractTotal` including
-  ECharts; soft observability on `wrapperOnly` — PR-F2)
+- **bundle-size-check** (< 350KB gzip HARD on `contractTotal` including
+  ECharts; soft observability on `wrapperOnly`. Esbuild source analyze
+  via `scripts/ci/x-charts-bundle-check.mjs`; baseline at
+  `packages/x-charts/.bundle-baseline.json`. Threshold:
+  `min(350KB, baseline × 1.2)`. Manual rotate via `--update-baseline`
+  flag + commit; CI NEVER auto-rotates the baseline. PR-F2 — ACTIVE.)
 - **a11y-axe-audit** (zero serious/critical violations; `chart-axe.test.tsx`
   with `color-contrast` rule disabled because jsdom cannot resolve CSS
   variables. The PR-F1 contrast gate below covers ONLY the CSS-absent
