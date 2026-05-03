@@ -6,9 +6,9 @@
  *
  * @see feature_execution_contract (P2 DoD #5, #6)
  */
-import { useCallback, useMemo } from "react";
-import { useCrossFilter } from "../cross-filter/useCrossFilterStore";
-import type { DrillLevel } from "../cross-filter/types";
+import { useCallback, useMemo } from 'react';
+import { useCrossFilter } from '../cross-filter/useCrossFilterStore';
+import type { DrillLevel } from '../cross-filter/types';
 
 export interface DrillDownLevelSpec {
   /** Data field for this drill level. */
@@ -56,16 +56,39 @@ export interface UseDrillDownReturn {
   drillTo: (index: number) => void;
   /** Current drill path from store. */
   drillPath: DrillLevel[];
+  /**
+   * Undo the most recent change (filter set/remove/clear OR drill action).
+   * Mirrors the cross-filter store's `undo()`. Faz 21.8 PR-X2: previously
+   * present in the store but not exposed here.
+   */
+  undo: () => void;
+  /**
+   * Re-apply the most recently undone change. Restores both filter and
+   * drill state from the history future stack.
+   */
+  redo: () => void;
+  /** Whether `undo()` will have any effect (past stack non-empty). */
+  canUndo: boolean;
+  /** Whether `redo()` will have any effect (future stack non-empty). */
+  canRedo: boolean;
 }
 
 export function useDrillDown(options: UseDrillDownOptions): UseDrillDownReturn {
-  const { levels, rootLabel = "All" } = options;
+  const { levels, rootLabel = 'All' } = options;
 
   const drillPath = useCrossFilter((s) => s.drillPath);
   const storeDrillDown = useCrossFilter((s) => s.drillDown);
   const storeDrillUp = useCrossFilter((s) => s.drillUp);
   const storeDrillToRoot = useCrossFilter((s) => s.drillToRoot);
   const storeDrillTo = useCrossFilter((s) => s.drillTo);
+  // Faz 21.8 PR-X2: surface the existing cross-filter store undo/redo
+  // through the drill-down hook so consumers can implement Back/Forward UX
+  // without subscribing to the whole store. `canUndo`/`canRedo` track the
+  // store's `past`/`future` stack lengths.
+  const storeUndo = useCrossFilter((s) => s.undo);
+  const storeRedo = useCrossFilter((s) => s.redo);
+  const canUndo = useCrossFilter((s) => s.past.length > 0);
+  const canRedo = useCrossFilter((s) => s.future.length > 0);
 
   const currentDepth = drillPath.length;
   const currentLevel = currentDepth > 0 ? levels[currentDepth - 1] : undefined;
@@ -110,6 +133,9 @@ export function useDrillDown(options: UseDrillDownOptions): UseDrillDownReturn {
     [storeDrillTo, storeDrillToRoot],
   );
 
+  const undo = useCallback(() => storeUndo(), [storeUndo]);
+  const redo = useCallback(() => storeRedo(), [storeRedo]);
+
   return {
     currentDepth,
     currentLevel,
@@ -121,5 +147,9 @@ export function useDrillDown(options: UseDrillDownOptions): UseDrillDownReturn {
     drillToRoot,
     drillTo,
     drillPath,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   };
 }

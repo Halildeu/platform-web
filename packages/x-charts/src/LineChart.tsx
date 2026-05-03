@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * LineChart -- ECharts-powered line chart
  *

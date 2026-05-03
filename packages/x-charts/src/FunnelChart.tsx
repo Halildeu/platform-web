@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * FunnelChart -- ECharts-powered funnel chart
  *

@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SankeyChart -- ECharts-powered Sankey flow diagram
  *

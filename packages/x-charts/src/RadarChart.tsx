@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * RadarChart -- ECharts-powered radar / spider chart
  *

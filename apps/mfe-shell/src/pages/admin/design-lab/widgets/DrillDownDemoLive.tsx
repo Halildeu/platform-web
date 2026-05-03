@@ -6,12 +6,13 @@
  * toggle:
  *
  *   `basic`   — drillDown / drillUp / drillToRoot via clicks + breadcrumb.
- *   `history` — same flow plus an Undo button (drillUp wiring), a Reset
- *               action, and a "depth N · drills fired M" counter. A real
- *               redo would need to persist the full {field,value,label}
- *               trail; that is a deliberate scope cut so the demo does
- *               not promise behaviour it cannot deliver (PR-B Codex
- *               iter-1 must-fix: no fake work).
+ *   `history` — full undo/redo + Reset + drillCount counter. The cross-
+ *               filter store retains both `past` and `future` snapshot
+ *               stacks (with `HistoryEntry.drillPath` snapshots), so the
+ *               redo button reapplies the most recent undone drill change.
+ *               Faz 21.8 PR-X2 restored the redo affordance after the
+ *               PR-B scope cut: the surface is wired through
+ *               `useDrillDown`'s new `redo`/`canRedo` properties.
  *
  * The drill state lives in the cross-filter store (per
  * `packages/x-charts/src/drill-down/useDrillDown.ts:64-67`).
@@ -78,12 +79,11 @@ const DrillDownInner: React.FC<DrillDownInnerProps> = ({ mode }) => {
   const drill = useDrillDown({ levels: LEVELS, rootLabel: 'All Sales' });
 
   // History mode tracks how many drill operations the user has fired
-  // since mount. The `useDrillDown` store retains the drill path and
-  // supports undo via `drillUp`. A real redo would need to persist
-  // the full {field,value,label} trail; that is a deliberate scope
-  // cut for this PR (Codex iter-1 must-fix #1: don't promise a feature
-  // we can't deliver, so we expose only Undo + Reset + a depth/drill
-  // counter, NOT a redo button).
+  // since mount. The cross-filter store retains both `past` and
+  // `future` HistoryEntry snapshots (each snapshot includes the full
+  // drill path), so `useDrillDown` can expose `redo()` directly.
+  // Faz 21.8 PR-X2 added redo + canRedo to the hook surface; the demo
+  // now wires the redo button against `drill.redo` / `drill.canRedo`.
   const [drillCount, setDrillCount] = useState(0);
 
   const filteredRows = useMemo(() => {
@@ -108,8 +108,13 @@ const DrillDownInner: React.FC<DrillDownInnerProps> = ({ mode }) => {
   };
 
   const handleUndo = () => {
-    if (drill.currentDepth === 0) return;
-    drill.drillUp();
+    if (!drill.canUndo) return;
+    drill.undo();
+  };
+
+  const handleRedo = () => {
+    if (!drill.canRedo) return;
+    drill.redo();
   };
 
   // Label the level the user IS LOOKING AT — i.e. the field the chart
@@ -134,11 +139,20 @@ const DrillDownInner: React.FC<DrillDownInnerProps> = ({ mode }) => {
           <button
             type="button"
             onClick={handleUndo}
-            disabled={drill.currentDepth === 0}
+            disabled={!drill.canUndo}
             className="rounded border border-border-subtle bg-surface-default px-3 py-1 font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
             data-testid="drill-down-undo"
           >
             ↶ Undo
+          </button>
+          <button
+            type="button"
+            onClick={handleRedo}
+            disabled={!drill.canRedo}
+            className="rounded border border-border-subtle bg-surface-default px-3 py-1 font-medium text-text-secondary transition hover:bg-surface-muted disabled:opacity-50"
+            data-testid="drill-down-redo"
+          >
+            ↷ Redo
           </button>
           <button
             type="button"

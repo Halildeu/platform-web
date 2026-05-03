@@ -8,6 +8,9 @@
  *   - "drop drillToRoot from reset btn" → Test 3 (reset stays at level 1)
  *   - "lose drillCount accumulation"    → Test 4 (counter stays at 0)
  *   - "break breadcrumb drillTo wiring" → Test 5 (root crumb no-op)
+ *   - "skip redo store wiring"          → Test 6 (after undo→redo,
+ *                                          drillPath does NOT restore
+ *                                          and level stays at 0)
  *
  * Only the canvas-based BarChart is mocked; real CrossFilterProvider +
  * useDrillDown + DrillDownBreadcrumb + cross-filter store run unmodified.
@@ -120,5 +123,49 @@ describe('DrillDownDemoLive — drill state mutation observability', () => {
     expect(rootBtn).not.toBeNull();
     fireEvent.click(rootBtn!);
     expect(screen.getByTestId('drill-down-level')).toHaveTextContent('level 0 / 3');
+  });
+
+  it('Test 6: history redo restores undone drill state (Faz 21.8 PR-X2)', () => {
+    render(<DrillDownDemoLive mode="history" />);
+    // Drill region → city: depth becomes 2
+    fireEvent.click(screen.getByTestId('mock-bar-Asia'));
+    fireEvent.click(screen.getByTestId('mock-bar-Tokyo'));
+    expect(screen.getByTestId('drill-down-level')).toHaveTextContent('level 2 / 3');
+
+    // Undo → back to depth 1
+    fireEvent.click(screen.getByTestId('drill-down-undo'));
+    expect(screen.getByTestId('drill-down-level')).toHaveTextContent('level 1 / 3');
+    // Asia rows visible at level 1 (Tokyo + Seoul cities)
+    expect(screen.getByTestId('mock-bar-Tokyo')).toBeTruthy();
+    expect(screen.getByTestId('mock-bar-Seoul')).toBeTruthy();
+
+    const redoBtn = screen.getByTestId('drill-down-redo');
+    expect(redoBtn).not.toBeDisabled();
+
+    // Redo → depth 2 again, Tokyo stores visible (Shibuya + Ginza)
+    fireEvent.click(redoBtn);
+    expect(screen.getByTestId('drill-down-level')).toHaveTextContent('level 2 / 3');
+    expect(screen.getByTestId('mock-bar-Shibuya')).toBeTruthy();
+    expect(screen.getByTestId('mock-bar-Ginza')).toBeTruthy();
+    // Tokyo total = Shibuya 2100 + Ginza 2500 = 4600
+    expect(screen.getByTestId('drill-down-total')).toHaveTextContent('4600');
+  });
+
+  it('Test 7: redo button disabled when future stack is empty', () => {
+    render(<DrillDownDemoLive mode="history" />);
+    // Initial: no past, no future → redo disabled
+    expect(screen.getByTestId('drill-down-redo')).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId('mock-bar-Europe'));
+    // After drill, past has entries but future is still empty → redo disabled
+    expect(screen.getByTestId('drill-down-redo')).toBeDisabled();
+
+    // After undo, future has the snapshot → redo enabled
+    fireEvent.click(screen.getByTestId('drill-down-undo'));
+    expect(screen.getByTestId('drill-down-redo')).not.toBeDisabled();
+
+    // A new drill clears the future stack → redo disabled again
+    fireEvent.click(screen.getByTestId('mock-bar-Asia'));
+    expect(screen.getByTestId('drill-down-redo')).toBeDisabled();
   });
 });

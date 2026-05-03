@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * AreaChart -- ECharts-powered area chart
  *

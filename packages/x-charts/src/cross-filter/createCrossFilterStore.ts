@@ -6,14 +6,14 @@
  *
  * @see decisions/topics/chart-viz-engine-selection.v1.json (D-006)
  */
-import { createStore } from "zustand/vanilla";
+import { createStore } from 'zustand/vanilla';
 import type {
   CrossFilterStore,
   CrossFilterState,
   CrossFilterEntry,
   DrillLevel,
   HistoryEntry,
-} from "./types";
+} from './types';
 
 const HISTORY_CAP = 50;
 const DEFAULT_DEBOUNCE_MS = 150;
@@ -40,14 +40,8 @@ export interface CreateCrossFilterStoreOptions {
   groupId?: string;
 }
 
-export function createCrossFilterStore(
-  options: CreateCrossFilterStoreOptions = {},
-) {
-  const {
-    debounceMs = DEFAULT_DEBOUNCE_MS,
-    historyCap = HISTORY_CAP,
-    groupId = null,
-  } = options;
+export function createCrossFilterStore(options: CreateCrossFilterStoreOptions = {}) {
+  const { debounceMs = DEFAULT_DEBOUNCE_MS, historyCap = HISTORY_CAP, groupId = null } = options;
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -93,7 +87,7 @@ export function createCrossFilterStore(
     clearAllFilters: () => {
       const state = get();
       if (state.filters.size === 0) return;
-      const snapshot = makeSnapshot(state, "Clear all filters");
+      const snapshot = makeSnapshot(state, 'Clear all filters');
       set({
         filters: new Map(),
         past: [...state.past.slice(-(historyCap - 1)), snapshot],
@@ -114,7 +108,7 @@ export function createCrossFilterStore(
     drillUp: () => {
       const state = get();
       if (state.drillPath.length === 0) return;
-      const snapshot = makeSnapshot(state, "Drill up");
+      const snapshot = makeSnapshot(state, 'Drill up');
       set({
         drillPath: state.drillPath.slice(0, -1),
         past: [...state.past.slice(-(historyCap - 1)), snapshot],
@@ -125,7 +119,7 @@ export function createCrossFilterStore(
     drillToRoot: () => {
       const state = get();
       if (state.drillPath.length === 0) return;
-      const snapshot = makeSnapshot(state, "Drill to root");
+      const snapshot = makeSnapshot(state, 'Drill to root');
       set({
         drillPath: [],
         past: [...state.past.slice(-(historyCap - 1)), snapshot],
@@ -148,7 +142,7 @@ export function createCrossFilterStore(
       const state = get();
       if (state.past.length === 0) return;
       const previous = state.past[state.past.length - 1];
-      const currentSnapshot = makeSnapshot(state, "Before undo");
+      const currentSnapshot = makeSnapshot(state, 'Before undo');
       set({
         filters: new Map(previous.filters),
         drillPath: [...previous.drillPath],
@@ -161,11 +155,16 @@ export function createCrossFilterStore(
       const state = get();
       if (state.future.length === 0) return;
       const next = state.future[0];
-      const currentSnapshot = makeSnapshot(state, "Before redo");
+      const currentSnapshot = makeSnapshot(state, 'Before redo');
       set({
         filters: new Map(next.filters),
         drillPath: [...next.drillPath],
-        past: [...state.past, currentSnapshot],
+        // Faz 21.8 PR-X2 — Codex iter-1 cap fix: every action that pushes a
+        // snapshot onto `past` must respect `historyCap`. Previously this
+        // path skipped the slice and allowed unbounded growth across
+        // undo/redo cycles. All other store actions already use the same
+        // `slice(-(historyCap-1))` pattern.
+        past: [...state.past.slice(-(historyCap - 1)), currentSnapshot],
         future: state.future.slice(1),
       });
     },

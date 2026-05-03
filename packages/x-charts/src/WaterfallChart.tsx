@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * WaterfallChart -- ECharts-powered waterfall chart
  *

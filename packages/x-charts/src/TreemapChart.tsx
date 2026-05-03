@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * TreemapChart -- ECharts-powered hierarchical treemap
  *

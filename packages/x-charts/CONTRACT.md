@@ -437,16 +437,32 @@ prop surface.
 
 ## 4. SSR / Client Boundary
 
+### Subpath strategy (Faz 21.8 PR-X2)
+
+Three package entry points:
+
+| Subpath                | Purpose                                                                                                                                                                                                                                         | RSC-safe?                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `@mfe/x-charts`        | Default barrel — back-compat for current Vite consumers, re-exports everything from the workspace root                                                                                                                                          | No (mixed)                                                |
+| `@mfe/x-charts/client` | All 13 chart wrappers + composites (`ChartContainer`, `ChartDashboard`, `KPICard`, `StatWidget`, `ChartLegend`, `ChartToolbar`, `MiniChart`, `SparklineChart`). Every leaf carries `'use client'` at the top of the file plus the barrel itself | **No** — must be imported from a client component         |
+| `@mfe/x-charts/ssr`    | Public types (chart props, cross-filter / drill-down types, AccessControlledProps) + theme tokens. **No runtime React components.**                                                                                                             | **Yes** — safe to import from any RSC / Node-only context |
+
 ### Client-Only (`'use client'`)
 
 - ECharts canvas/SVG rendering engine
 - All interactive features: tooltips, legend toggle, zoom, pan
 - Resize observer and responsive recalculation
+- Every chart wrapper file (`AreaChart.tsx` … `WaterfallChart.tsx`) starts
+  with `'use client';` so individual deep imports stay safe in RSC trees.
 
 ### Hydration Strategy
 
 - SSR renders a sized placeholder `<div>` matching chart dimensions
 - ECharts instance mounts on client, renders into placeholder
+- The boundary is verified by a smoke test
+  (`packages/x-charts/src/__tests__/ssr-boundary.test.ts`) which asserts
+  `@mfe/x-charts/ssr` carries no runtime React components and every chart
+  wrapper has `'use client'` as its first statement.
 
 ## 5. Security
 
