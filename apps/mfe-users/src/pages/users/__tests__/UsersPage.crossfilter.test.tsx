@@ -17,9 +17,28 @@
  *                                                       (regression guard)
  */
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { renderHook } from '@testing-library/react';
+
+// Capture useGridCrossFilter call arguments so the production-wiring test
+// can prove the bridge actually receives a non-null gridApi (Codex iter-2
+// PR-X4c review: previous test only asserted `lastOnGridReady` was set,
+// which a regression that drops `setGridApi` from `handleGridReady`
+// would still pass).
+const useGridCrossFilterSpy = vi.fn();
+
+vi.mock('@mfe/x-charts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@mfe/x-charts')>();
+  return {
+    ...actual,
+    useGridCrossFilter: (options: Parameters<typeof actual.useGridCrossFilter>[0]) => {
+      useGridCrossFilterSpy(options);
+      return actual.useGridCrossFilter(options);
+    },
+  };
+});
+
 import { CrossFilterProvider, useGridCrossFilter, useCrossFilter } from '@mfe/x-charts';
 import type { GridApi as XChartsGridApi } from '@mfe/x-charts';
 
@@ -75,47 +94,51 @@ vi.mock('@mfe/shared-http', () => ({
 
 import UsersPage from '../UsersPage.ui';
 
-describe('UsersPage production wiring (Faz 21.8 PR-X4c, Codex iter-1 absorbed)', () => {
+describe('UsersPage production wiring (Faz 21.8 PR-X4c, Codex iter-1+2 absorbed)', () => {
   beforeEach(() => {
     lastOnGridReady = null;
+    useGridCrossFilterSpy.mockClear();
     vi.clearAllMocks();
   });
 
   /**
-   * Renders UsersPage, fires onGridReady with a mocked AG Grid api, then
-   * pushes a cross-filter via a child harness component (sharing the same
-   * provider) and asserts the api receives a setFilterModel call. This is
-   * the production parity proof.
+   * Renders UsersPage, fires `onGridReady` with a mocked AG Grid api, then
+   * waits for the bridge to re-render with a non-null `gridApi`. The spy
+   * on `useGridCrossFilter` lets the test fail when `handleGridReady`
+   * drops the `setGridApi(event.api)` call — the bridge would never see a
+   * real gridApi and the spy's last call would still carry `gridApi: null`.
+   *
+   * This is the production parity proof Codex iter-2 asked for.
    */
   async function assertBridgeWiresFor(isFullscreen: boolean) {
     const fakeGridApi = makeFakeGridApi();
     render(<UsersPage isFullscreen={isFullscreen} />);
 
-    // The mocked UsersGrid should have captured onGridReady. Both render
-    // paths (PageLayout + isFullscreen) share `handleGridReady` so this
-    // assertion holds for either branch — exactly the regression Codex
-    // iter-1 flagged.
     expect(lastOnGridReady).not.toBeNull();
+
+    // Initial calls happen with gridApi=null (mount time), then again
+    // after setGridApi propagates the value. We assert that the LATEST
+    // call after onGridReady carries a non-null gridApi — proving the
+    // setGridApi -> useMemo -> hook re-subscribe chain works.
     lastOnGridReady!({ api: fakeGridApi });
 
-    // We cannot easily push a filter into the page's private store from
-    // the outside (each CrossFilterProvider creates its own isolated
-    // store). The strongest page-boundary assertion is therefore that
-    // both render paths capture the api via the shared handler — proven
-    // by lastOnGridReady being non-null in both cases. Bridge wiring is
-    // additionally proven by the hook-level test below
-    // (`setFilterModelInvoked`).
-    expect(fakeGridApi.setFilterModel).toBeDefined();
+    await waitFor(() => {
+      const calls = useGridCrossFilterSpy.mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const latestOptions = calls[calls.length - 1]?.[0];
+      expect(latestOptions).toMatchObject({
+        gridId: 'users-grid',
+        gridApi: fakeGridApi,
+      });
+    });
   }
 
-  it('defaultPathWiresBridge: PageLayout render path captures gridApi via shared handler', async () => {
+  it('defaultPathWiresBridge: PageLayout render path passes gridApi into useGridCrossFilter', async () => {
     await assertBridgeWiresFor(false);
-    expect(lastOnGridReady).toBeTypeOf('function');
   });
 
-  it('fullscreenPathWiresBridge: isFullscreen render path captures gridApi via shared handler', async () => {
+  it('fullscreenPathWiresBridge: isFullscreen render path passes gridApi into useGridCrossFilter', async () => {
     await assertBridgeWiresFor(true);
-    expect(lastOnGridReady).toBeTypeOf('function');
   });
 });
 

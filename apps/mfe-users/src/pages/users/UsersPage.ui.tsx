@@ -31,10 +31,15 @@ const GRID_TEST_ID = 'users-grid-root';
 
 /**
  * Inner component — Faz 21.8 PR-X4c: assumes a `<CrossFilterProvider>` is
- * mounted somewhere up the tree. The grid's filter model is bidirectionally
- * synced with the cross-filter store via `useGridCrossFilter`, so any
- * future role/status chart added to this page can drive the grid by
- * pushing filters to the store (and vice versa).
+ * mounted somewhere up the tree. The cross-filter store applies its
+ * filters onto the AG Grid via `useGridCrossFilter` (store → grid one-way;
+ * the reverse direction is not wired in this PR — see the
+ * `syncGridToStore` option below). So any future role/status chart added
+ * to this page can drive the grid by pushing filters to the store.
+ *
+ * Codex iter-2 PR-X4c review: previous comment claimed "bidirectional
+ * sync" which was misleading. Hook does not subscribe to AG Grid's
+ * `filterChanged` event today.
  */
 const UsersPageInner: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
   const [selectedUserSummary, setSelectedUserSummary] = React.useState<UserSummary | null>(null);
@@ -46,11 +51,11 @@ const UsersPageInner: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
   const gridApiRef = React.useRef<GridApi<UserSummary> | null>(null);
   const { t } = useUsersI18n();
 
-  // Bridge — pushes grid filter changes to the store and applies store
-  // filters back onto the grid. The hook is a no-op while gridApi is null.
-  // The `xChartsGridApi` cast adapts AG Grid's full GridApi to the
-  // narrower `@mfe/x-charts` GridApi interface (setFilterModel +
-  // refreshServerSide + getFilterModel — all real on the AG Grid api).
+  // Bridge — applies store filters onto the grid (store → grid one-way).
+  // The hook is a no-op while gridApi is null. The `xChartsGridApi` cast
+  // adapts AG Grid's full GridApi to the narrower `@mfe/x-charts` GridApi
+  // interface (setFilterModel + refreshServerSide + getFilterModel — all
+  // real on the AG Grid api).
   const xChartsGridApi = React.useMemo<XChartsGridApi | null>(() => {
     if (!gridApi) return null;
     return gridApi as unknown as XChartsGridApi;
