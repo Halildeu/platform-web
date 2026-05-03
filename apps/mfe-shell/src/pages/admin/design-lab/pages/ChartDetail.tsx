@@ -602,6 +602,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     features: [
       'donut-mode',
       'inner-label',
+      'cross-filter',
       'tooltip',
       'responsive',
       'animation',
