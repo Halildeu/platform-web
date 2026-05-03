@@ -14,7 +14,7 @@ import { test, expect } from '@playwright/test';
 /*  on the slowest CI runner.                                           */
 /*                                                                     */
 /*  Hard gate (post-PR #56). Recovery: regenerate Linux baseline via    */
-/*    gh workflow run x-charts-visual-advisory.yml -f mode=baseline     */
+/*    gh workflow run x-charts-visual-gate.yml -f mode=baseline     */
 /*    gh run download <run-id> -n x-charts-linux-baseline               */
 /*  then commit the artifact contents.                                  */
 /* ------------------------------------------------------------------ */

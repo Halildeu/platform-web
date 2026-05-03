@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * BarChart -- ECharts-powered bar chart
  *
@@ -6,8 +8,12 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -16,7 +22,14 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
+import { scaleFontSize, scalePadding } from './theme/density-helpers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import {
+  buildResponsiveAxisLabel,
+  buildResponsiveLegend,
+  buildResponsiveGrid,
+  buildResponsiveDataZoom,
+} from './responsive';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -40,7 +53,7 @@ export type ChartClickEvent = {
   label?: string;
 };
 
-export interface BarChartProps {
+export interface BarChartProps extends AccessControlledProps {
   /** Data points to render as bars. */
   data: ChartDataPoint[];
   /** Bar orientation. @default "vertical" */
@@ -121,7 +134,17 @@ const escapeHtml = (t: string): string =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function BarChart(
+/**
+ * BarChart inner — original hook-bearing body. The outer `BarChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<BarChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const BarChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<BarChartProps, 'access' | 'accessReason'>
+>(function BarChartInner(
   {
     data,
     orientation = 'vertical',
@@ -152,6 +175,14 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
   const hasMultiSeries = seriesDef && seriesDef.length > 0;
   const fmt = valueFormatter ?? formatCompact;
 
+  // Own container ref so we can drive useResponsiveBreakpoint BEFORE
+  // useEChartsRenderer (whose containerRef is only available after that
+  // hook runs). The ref is shared with the renderer via `setRefs` below so
+  // both ResizeObservers (chart resize + breakpoint detection) observe the
+  // same DOM node — no extra wrapper element is added.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
+
   const {
     themeObject,
     decalEnabled,
@@ -174,20 +205,33 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
     // (accent or HC/Print theme builder) > inline DEFAULT_PALETTE.
     const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
 
-    const axisLabelFontSize = scaleFontSize(11, densityFontMultiplier);
     const labelFontSize = scaleFontSize(11, densityFontMultiplier);
+
+    // Responsive axis label config — collision-aware (Codex 019defa5):
+    // hideOverlap, interval driven by labelCount, mobile rotation only when
+    // labels are dense enough to overlap.
+    const responsiveAxisLabel = buildResponsiveAxisLabel({
+      breakpoint,
+      labelCount: safeData.length,
+      densityFontMultiplier,
+      baseFontSize: 11,
+    });
 
     const categoryAxis = {
       type: 'category' as const,
       data: safeData.map((d) => d.label),
-      axisLabel: { fontSize: axisLabelFontSize },
+      axisLabel: responsiveAxisLabel,
       axisTick: { alignWithLabel: true },
     };
 
     const valueAxis = {
       type: 'value' as const,
       axisLabel: {
-        fontSize: axisLabelFontSize,
+        // Value axis keeps its formatter; just inherit responsive font size +
+        // hideOverlap from the helper so wide value ranges (like 100k–1M)
+        // don't pile labels on top of each other.
+        fontSize: responsiveAxisLabel.fontSize,
+        hideOverlap: true,
         formatter: (v: number) => fmt(v),
       },
       splitLine: {
@@ -195,6 +239,44 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
         lineStyle: { type: 'dashed' as const },
       },
     };
+
+    // Responsive legend / grid / dataZoom — collision-aware (Codex 019defa5).
+    // The legend stays bottom-horizontal on tablet/desktop but flips to a
+    // vertical right-aligned scroll strip on mobile when many series would
+    // otherwise wrap into 3+ rows; `buildResponsiveGrid` then leaves room on
+    // the right side instead of the bottom.
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
+      showLegend,
+      hasMultiSeries: !!hasMultiSeries,
+      seriesCount: hasMultiSeries ? seriesDef!.length : 1,
+      densitySpacingMultiplier,
+      densityFontMultiplier,
+      icon: 'roundRect',
+    });
+
+    const responsiveGrid = buildResponsiveGrid({
+      breakpoint,
+      hasTitle: !!title,
+      hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+      hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
+      density: {
+        titleTop: scalePadding(60, densityPaddingMultiplier),
+        contentTop: scalePadding(24, densityPaddingMultiplier),
+        sidePadding: scalePadding(16, densityPaddingMultiplier),
+        legendBottom: scalePadding(48, densityPaddingMultiplier),
+        plainBottom: scalePadding(24, densityPaddingMultiplier),
+      },
+    });
+
+    // dataZoom only kicks in for category-axis charts above 30 labels on
+    // tablet/mobile — keeps small charts uncluttered while still giving
+    // power users a way to scrub through long datasets.
+    const responsiveDataZoom = buildResponsiveDataZoom({
+      breakpoint,
+      labelCount: safeData.length,
+      horizontal: isHorizontal,
+    });
 
     const echartsSeriesList = hasMultiSeries
       ? seriesDef!.map((s, i) => ({
@@ -254,26 +336,9 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
         axisPointer: { type: 'shadow' },
         valueFormatter: (v: unknown) => fmt(v as number),
       },
-      legend: {
-        show: showLegend || hasMultiSeries,
-        bottom: 0,
-        icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
-      grid: {
-        top: title
-          ? scalePadding(60, densityPaddingMultiplier)
-          : scalePadding(24, densityPaddingMultiplier),
-        right: scalePadding(16, densityPaddingMultiplier),
-        bottom:
-          showLegend || hasMultiSeries
-            ? scalePadding(48, densityPaddingMultiplier)
-            : scalePadding(24, densityPaddingMultiplier),
-        left: scalePadding(16, densityPaddingMultiplier),
-        containLabel: true,
-      },
+      legend: responsiveLegend,
+      grid: responsiveGrid,
+      ...(responsiveDataZoom ? { dataZoom: responsiveDataZoom } : {}),
       xAxis: isHorizontal ? valueAxis : categoryAxis,
       yAxis: isHorizontal ? categoryAxis : valueAxis,
       series: echartsSeriesList,
@@ -305,12 +370,17 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
     isEmpty,
     isHorizontal,
     hasMultiSeries,
+    safeData,
+    fmt,
     decalEnabled,
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
     effectivePalette,
+    // Breakpoint drives axisLabel rotation/interval, legend orientation,
+    // grid padding, and dataZoom enablement (Codex 019defa5).
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -355,6 +425,10 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      // Bind the same DOM node to: (1) our own ref so useResponsiveBreakpoint
+      // can observe it, (2) the renderer's ref so ECharts knows where to
+      // render, (3) the user-supplied forwardedRef.
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)
@@ -395,6 +469,29 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
   );
 });
 
+BarChartInner.displayName = 'BarChartInner';
+
+/**
+ * BarChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `BarChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function BarChart(
+  { access, accessReason, onDataPointClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <BarChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
+    </ChartAccessGate>
+  );
+});
 BarChart.displayName = 'BarChart';
 
 export default BarChart;

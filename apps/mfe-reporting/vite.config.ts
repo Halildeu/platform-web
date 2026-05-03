@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react';
 import { federation } from '@module-federation/vite';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
+// Faz 21.8 PR-X8: inline modulepreload helper to break the
+// auth ↔ design-system MF loadShare runtime cycle.
+import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
 
 function readEnvString(keys: string[], fallback: string): string {
   for (const key of keys) {
@@ -45,8 +48,11 @@ const singleton = (
 });
 
 const HOST_ONLY_STUB_VERSION = '0.0.0';
-const hostOnly = (shareKey: string, versionKey: string = shareKey, fallback: string | boolean = false) =>
-  singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
+const hostOnly = (
+  shareKey: string,
+  versionKey: string = shareKey,
+  fallback: string | boolean = false,
+) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
 const sharedCore = {
   react: hostOnly('react'),
@@ -72,8 +78,13 @@ const sharedProdOnly = {
 /* ------------------------------------------------------------------ */
 
 export default defineConfig(({ mode }) => {
-  const appBasePath = normalizeBasePath(readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'));
-  const shellRemoteEntry = readEnvString(['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'], 'http://localhost:3000/remoteEntry.js');
+  const appBasePath = normalizeBasePath(
+    readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'),
+  );
+  const shellRemoteEntry = readEnvString(
+    ['MFE_SHELL_URL', 'VITE_MFE_SHELL_URL'],
+    'http://localhost:3000/remoteEntry.js',
+  );
 
   return {
     base: appBasePath,
@@ -101,15 +112,34 @@ export default defineConfig(({ mode }) => {
           ...(mode === 'production' ? sharedProdOnly : {}),
         },
       }),
+      mfPreloadHelperIsolation(),
     ],
 
     resolve: {
       alias: [
-        { find: '@platform/capabilities', replacement: path.resolve(__dirname, '../../packages/platform-capabilities/src') },
-        { find: '@mfe/x-charts', replacement: path.resolve(__dirname, '../../packages/x-charts/src') },
-        { find: '@mfe/design-system', replacement: path.resolve(__dirname, '../../packages/design-system/src') },
-        { find: '@mfe/shared-http', replacement: path.resolve(__dirname, '../../packages/shared-http/src') },
-        { find: '@tanstack/react-query', replacement: path.resolve(__dirname, 'node_modules/@tanstack/react-query/build/modern/index.js') },
+        {
+          find: '@platform/capabilities',
+          replacement: path.resolve(__dirname, '../../packages/platform-capabilities/src'),
+        },
+        {
+          find: '@mfe/x-charts',
+          replacement: path.resolve(__dirname, '../../packages/x-charts/src'),
+        },
+        {
+          find: '@mfe/design-system',
+          replacement: path.resolve(__dirname, '../../packages/design-system/src'),
+        },
+        {
+          find: '@mfe/shared-http',
+          replacement: path.resolve(__dirname, '../../packages/shared-http/src'),
+        },
+        {
+          find: '@tanstack/react-query',
+          replacement: path.resolve(
+            __dirname,
+            'node_modules/@tanstack/react-query/build/modern/index.js',
+          ),
+        },
       ],
     },
 

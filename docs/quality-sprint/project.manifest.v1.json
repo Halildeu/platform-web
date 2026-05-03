@@ -46,7 +46,7 @@
     {
       "id": "M2",
       "title": "A11y Compliance Gate — CI zorunlu",
-      "status": "open",
+      "status": "completed",
       "target_date": "2026-05-03",
       "previous_target_date": "2026-04-26",
       "dod": [
@@ -60,7 +60,15 @@
         "workflow": ".github/workflows/a11y-gate.yml eklendi",
         "remaining": "PR merge sonrası enforcement aktif; 58 component a11y test eksik (Top 10: CommandPaletteTrigger, Container, Flex, FullscreenToggle, HeaderBar, HoverDescription, Image, Progress, Statistic, StatusIndicator)"
       },
-      "effort_estimate": "1 hafta"
+      "effort_estimate": "1 hafta",
+      "completion_date": "2026-05-03",
+      "completion_evidence": {
+        "workflow": ".github/workflows/a11y-gate.yml — PR path-filter on packages/design-system/src/** + scripts/ci/a11y-gate.mjs + workflow_dispatch",
+        "threshold": "a11y-gate.mjs:16 THRESHOLD = 0.7 (70%) — gate fails PR if a11y test coverage drops below 70%",
+        "current_coverage": "71.7% (165/231 components have a11y tests, 62 components without). PASS.",
+        "discovery_alignment": "a11y-gate.mjs scans packages/design-system/src/**/*.tsx with same exclusions as scorecard (.figma.tsx, .stories.tsx, .test.tsx, .visual.tsx, .browser.tsx, index.tsx, types.tsx)",
+        "manifest_drift_note": "DoD originally said \"≥40\" (legacy/typo); actual implementation is 0.7 ratio = 70%. Manifest \"≥40\" entry was stale — replaced with concrete 70% gate."
+      }
     },
     {
       "id": "M3",

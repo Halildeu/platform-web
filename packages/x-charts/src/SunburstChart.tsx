@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SunburstChart -- ECharts-powered hierarchical sunburst chart
  *
@@ -10,6 +12,10 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -52,7 +58,7 @@ export interface SunburstLevelConfig {
 
 export type SunburstHighlightPolicy = 'descendant' | 'ancestor' | 'self' | 'none';
 
-export interface SunburstChartProps {
+export interface SunburstChartProps extends AccessControlledProps {
   /** Hierarchical data tree (top-level children form the inner ring). */
   data: SunburstNode[];
   /** Visual size variant. @default "md" */
@@ -219,239 +225,269 @@ function colorizeTopLevel(data: SunburstNode[], palette: string[]): SunburstNode
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps>(
-  function SunburstChart(
-    {
-      data,
-      size = 'md',
-      title,
-      levels: levelsProp,
-      sort = 'desc',
-      radius = ['0%', '90%'],
-      highlightPolicy = 'descendant',
-      showLegend = false,
-      valueFormatter,
-      animate = true,
-      onNodeClick,
-      className,
-      theme: themePreference = 'auto',
-      decal: decalPreference = 'auto',
-      density: densityPreference = 'auto',
-      accent: accentPreference = 'auto',
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const height = SIZE_HEIGHT[size];
-    const isEmpty = !data || data.length === 0;
-    const fmt = valueFormatter ?? formatCompact;
+/**
+ * SunburstChart inner — original hook-bearing body. The outer `SunburstChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<SunburstChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const SunburstChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<SunburstChartProps, 'access' | 'accessReason'>
+>(function SunburstChartInner(
+  {
+    data,
+    size = 'md',
+    title,
+    levels: levelsProp,
+    sort = 'desc',
+    radius = ['0%', '90%'],
+    highlightPolicy = 'descendant',
+    showLegend = false,
+    valueFormatter,
+    animate = true,
+    onNodeClick,
+    className,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
+    ...rest
+  },
+  forwardedRef,
+) {
+  const height = SIZE_HEIGHT[size];
+  const isEmpty = !data || data.length === 0;
+  const fmt = valueFormatter ?? formatCompact;
 
-    const {
-      themeObject,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
-      densitySpacingMultiplier,
-      effectivePalette,
-    } = useChartTheme({
-      theme: themePreference,
-      decal: decalPreference,
-      density: densityPreference,
-      accent: accentPreference,
-    });
+  const {
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    effectivePalette,
+  } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+    density: densityPreference,
+    accent: accentPreference,
+  });
 
-    const option = useMemo((): EChartsOption | null => {
-      if (isEmpty) return null;
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty) return null;
 
-      const palette = effectivePalette ?? DEFAULT_PALETTE;
-      const coloredData = colorizeTopLevel(data, palette);
-      const maxDepth = computeMaxDepth(coloredData);
-      const levels = levelsProp ?? autoLevels(maxDepth, radius, densityFontMultiplier);
-      const focusValue = resolveHighlightFocus(highlightPolicy);
+    const palette = effectivePalette ?? DEFAULT_PALETTE;
+    const coloredData = colorizeTopLevel(data, palette);
+    const maxDepth = computeMaxDepth(coloredData);
+    const levels = levelsProp ?? autoLevels(maxDepth, radius, densityFontMultiplier);
+    const focusValue = resolveHighlightFocus(highlightPolicy);
 
-      return {
-        animation: animate,
-        animationDuration: animate ? 500 : 0,
-        animationEasing: 'cubicOut',
-        title: title
-          ? {
-              text: escapeHtml(title),
-              left: 'center',
-              textStyle: {
-                fontSize: scaleFontSize(16, densityFontMultiplier),
-                fontWeight: 600,
-              },
-            }
-          : undefined,
-        tooltip: {
-          trigger: 'item',
-          confine: true,
-          formatter: (params: unknown) => {
-            const p = params as {
-              name: string;
-              value: number;
-              treePathInfo: Array<{ name: string }>;
-            };
-            const path = p.treePathInfo
-              ? p.treePathInfo
-                  .map((n) => n.name)
-                  .filter(Boolean)
-                  .join(' > ')
-              : p.name;
-            return `<b>${escapeHtml(path)}</b><br/>${fmt(p.value)}`;
-          },
-        },
-        legend: {
-          show: showLegend,
-          bottom: 0,
-          icon: 'roundRect',
-          itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-          itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-          textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-          data: coloredData.map((n) => n.name),
-        },
-        series: [
-          {
-            type: 'sunburst' as const,
-            data: coloredData,
-            radius,
-            sort: sort === null ? undefined : sort,
-            levels: levels.map((lvl) => ({
-              r0: lvl.r0,
-              r1: lvl.r1,
-              itemStyle: lvl.itemStyle ?? {
-                borderWidth: 2,
-                borderColor: 'var(--bg-surface, #ffffff)',
-              },
-              label: lvl.label ?? { show: true, fontSize: 11 },
-            })),
-            label: {
-              show: true,
-              formatter: (params: { name: string; value: number }) => {
-                if (!params.name) return '';
-                return `${params.name}\n${fmt(params.value)}`;
-              },
-              fontSize: scaleFontSize(11, densityFontMultiplier),
+    return {
+      animation: animate,
+      animationDuration: animate ? 500 : 0,
+      animationEasing: 'cubicOut',
+      title: title
+        ? {
+            text: escapeHtml(title),
+            left: 'center',
+            textStyle: {
+              fontSize: scaleFontSize(16, densityFontMultiplier),
+              fontWeight: 600,
             },
-            emphasis: {
-              focus: focusValue,
-              itemStyle: {
-                shadowBlur: 10,
-                shadowColor: 'rgba(0, 0, 0, 0.2)',
-              },
-            },
-            itemStyle: {
+          }
+        : undefined,
+      tooltip: {
+        trigger: 'item',
+        confine: true,
+        formatter: (params: unknown) => {
+          const p = params as {
+            name: string;
+            value: number;
+            treePathInfo: Array<{ name: string }>;
+          };
+          const path = p.treePathInfo
+            ? p.treePathInfo
+                .map((n) => n.name)
+                .filter(Boolean)
+                .join(' > ')
+            : p.name;
+          return `<b>${escapeHtml(path)}</b><br/>${fmt(p.value)}`;
+        },
+      },
+      legend: {
+        show: showLegend,
+        bottom: 0,
+        icon: 'roundRect',
+        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
+        data: coloredData.map((n) => n.name),
+      },
+      series: [
+        {
+          type: 'sunburst' as const,
+          data: coloredData,
+          radius,
+          sort: sort === null ? undefined : sort,
+          levels: levels.map((lvl) => ({
+            r0: lvl.r0,
+            r1: lvl.r1,
+            itemStyle: lvl.itemStyle ?? {
               borderWidth: 2,
               borderColor: 'var(--bg-surface, #ffffff)',
             },
-            cursor: onNodeClick ? 'pointer' : 'default',
-          },
-        ],
-        aria: {
-          enabled: true,
+            label: lvl.label ?? { show: true, fontSize: 11 },
+          })),
           label: {
-            description: title ? `Sunburst chart: ${escapeHtml(title)}` : 'Sunburst chart',
+            show: true,
+            formatter: (params: { name: string; value: number }) => {
+              if (!params.name) return '';
+              return `${params.name}\n${fmt(params.value)}`;
+            },
+            fontSize: scaleFontSize(11, densityFontMultiplier),
           },
-          ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
+          emphasis: {
+            focus: focusValue,
+            itemStyle: {
+              shadowBlur: 10,
+              shadowColor: 'rgba(0, 0, 0, 0.2)',
+            },
+          },
+          itemStyle: {
+            borderWidth: 2,
+            borderColor: 'var(--bg-surface, #ffffff)',
+          },
+          cursor: onNodeClick ? 'pointer' : 'default',
         },
-      } as EChartsOption;
-    }, [
-      data,
-      size,
-      title,
-      levelsProp,
-      sort,
-      radius,
-      highlightPolicy,
-      showLegend,
-      fmt,
-      animate,
-      onNodeClick,
-      isEmpty,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
-      densitySpacingMultiplier,
-      effectivePalette,
-    ]);
-
-    const handleClick = useCallback(
-      (params: unknown) => {
-        if (!onNodeClick) return;
-        const p = params as { name: string; value: number; data: unknown };
-        onNodeClick({ name: p.name, value: p.value, data: p.data });
+      ],
+      aria: {
+        enabled: true,
+        label: {
+          description: title ? `Sunburst chart: ${escapeHtml(title)}` : 'Sunburst chart',
+        },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
-      [onNodeClick],
-    );
+    } as EChartsOption;
+  }, [
+    data,
+    size,
+    title,
+    levelsProp,
+    sort,
+    radius,
+    highlightPolicy,
+    showLegend,
+    fmt,
+    animate,
+    onNodeClick,
+    isEmpty,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    effectivePalette,
+  ]);
 
-    const { containerRef, instance } = useEChartsRenderer({
-      option: option ?? ({} as EChartsOption),
-      theme: themeObject,
-      respectReducedMotion: true,
-      onClick: onNodeClick ? handleClick : undefined,
-    });
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onNodeClick) return;
+      const p = params as { name: string; value: number; data: unknown };
+      onNodeClick({ name: p.name, value: p.value, data: p.data });
+    },
+    [onNodeClick],
+  );
 
-    // Faz 21.5-B PR-B2: default-on a11y. Sunburst is hierarchical;
-    // surface top-level segments only (Treemap-pattern).
-    const a11yData = useMemo(
-      () =>
-        (data ?? []).map((node) => ({
-          label: node.name,
-          value: node.value ?? 0,
-        })),
-      [data],
-    );
-    const a11y = useChartA11y({
-      chartType: 'sunburst',
-      data: a11yData,
-      title,
-      valueFormatter: fmt,
-      echartsInstance: instance,
-    });
+  const { containerRef, instance } = useEChartsRenderer({
+    option: option ?? ({} as EChartsOption),
+    theme: themeObject,
+    respectReducedMotion: true,
+    onClick: onNodeClick ? handleClick : undefined,
+  });
 
-    const setRefs = useCallback(
-      (node: HTMLDivElement | null) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === 'function') forwardedRef(node);
-        else if (forwardedRef)
-          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      },
-      [forwardedRef, containerRef],
-    );
+  // Faz 21.5-B PR-B2: default-on a11y. Sunburst is hierarchical;
+  // surface top-level segments only (Treemap-pattern).
+  const a11yData = useMemo(
+    () =>
+      (data ?? []).map((node) => ({
+        label: node.name,
+        value: node.value ?? 0,
+      })),
+    [data],
+  );
+  const a11y = useChartA11y({
+    chartType: 'sunburst',
+    data: a11yData,
+    title,
+    valueFormatter: fmt,
+    echartsInstance: instance,
+  });
 
-    /* ---- empty state ---- */
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label={a11y.ariaLabel}
-          data-testid="sunburst-chart-empty"
-          {...rest}
-        >
-          Veri yok
-        </div>
-      );
-    }
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [forwardedRef, containerRef],
+  );
 
+  /* ---- empty state ---- */
+  if (isEmpty) {
     return (
-      <ChartA11yShell
-        a11y={a11y}
-        className={className}
-        height={height}
-        testId="sunburst-chart"
-        setRefs={setRefs}
+      <div
+        ref={forwardedRef}
+        className={cn(
+          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
+        role="img"
+        aria-label={a11y.ariaLabel}
+        data-testid="sunburst-chart-empty"
         {...rest}
-      />
+      >
+        Veri yok
+      </div>
+    );
+  }
+
+  return (
+    <ChartA11yShell
+      a11y={a11y}
+      className={className}
+      height={height}
+      testId="sunburst-chart"
+      setRefs={setRefs}
+      {...rest}
+    />
+  );
+});
+
+SunburstChartInner.displayName = 'SunburstChartInner';
+
+/**
+ * SunburstChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `SunburstChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps>(
+  function SunburstChart({ access, accessReason, onNodeClick, ...rest }, ref) {
+    const { state } = resolveAccessState(access);
+    return (
+      <ChartAccessGate access={access} accessReason={accessReason}>
+        <SunburstChartInner
+          ref={ref}
+          {...rest}
+          onNodeClick={guardChartCallback(state, onNodeClick)}
+        />
+      </ChartAccessGate>
     );
   },
 );
-
 SunburstChart.displayName = 'SunburstChart';
 
 export default SunburstChart;

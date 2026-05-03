@@ -44,34 +44,36 @@ export interface DesignLabThemeOptions {
  * echarts.registerTheme('design-lab', theme);
  * ```
  */
-export function buildDesignLabEChartsTheme(options?: DesignLabThemeOptions): Record<string, unknown> {
-  const {
-    colorblindPalette = 'default',
-    fontFamily: fontFamilyOverride,
-  } = options ?? {};
+export function buildDesignLabEChartsTheme(
+  options?: DesignLabThemeOptions,
+): Record<string, unknown> {
+  const { colorblindPalette = 'default', fontFamily: fontFamilyOverride } = options ?? {};
 
   // Read tokens
-  const fontFamily = fontFamilyOverride ?? getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
+  const fontFamily =
+    fontFamilyOverride ?? getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
   const textPrimary = getCSSVar('--text-primary', '#1a1a2e');
   const textSecondary = getCSSVar('--text-secondary', '#6b7280');
   const textTertiary = getCSSVar('--text-tertiary', '#9ca3af');
   const bgSurface = getCSSVar('--bg-surface', '#ffffff');
-  const bgMuted = getCSSVar('--bg-muted', '#f9fafb');
   const borderDefault = getCSSVar('--border-default', '#e5e7eb');
-  const actionPrimary = getCSSVar('--action-primary', '#3b82f6');
 
   // Color palette
-  const palette = colorblindPalette === 'default'
-    ? [
-        getCSSVar('--action-primary', '#3b82f6'),
-        getCSSVar('--state-success-text', '#22c55e'),
-        getCSSVar('--state-warning-text', '#f59e0b'),
-        getCSSVar('--state-error-text', '#ef4444'),
-        getCSSVar('--state-info-text', '#06b6d4'),
-        getCSSVar('--action-secondary', '#8b5cf6'),
-        '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-      ]
-    : COLORBLIND_PALETTES[colorblindPalette] ?? COLORBLIND_PALETTES.deuteranopia;
+  const palette =
+    colorblindPalette === 'default'
+      ? [
+          getCSSVar('--action-primary', '#3b82f6'),
+          getCSSVar('--state-success-text', '#22c55e'),
+          getCSSVar('--state-warning-text', '#f59e0b'),
+          getCSSVar('--state-error-text', '#ef4444'),
+          getCSSVar('--state-info-text', '#06b6d4'),
+          getCSSVar('--action-secondary', '#8b5cf6'),
+          '#ec4899',
+          '#14b8a6',
+          '#f97316',
+          '#6366f1',
+        ]
+      : (COLORBLIND_PALETTES[colorblindPalette] ?? COLORBLIND_PALETTES.deuteranopia);
 
   return {
     color: palette,
@@ -105,6 +107,11 @@ export function buildDesignLabEChartsTheme(options?: DesignLabThemeOptions): Rec
       itemWidth: 12,
       itemHeight: 12,
       itemGap: 16,
+      // Collision defaults (Codex 019defa5): when a wrapper has many series
+      // or a narrow container, ECharts paginates instead of overflowing.
+      // Wrappers that need vertical-right legend on mobile override via
+      // `buildResponsiveLegend`.
+      type: 'scroll',
     },
     tooltip: {
       backgroundColor: bgSurface,
@@ -115,20 +122,25 @@ export function buildDesignLabEChartsTheme(options?: DesignLabThemeOptions): Rec
         color: textPrimary,
         fontSize: 13,
       },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px; padding: 10px 14px;',
+      extraCssText:
+        'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px; padding: 10px 14px;',
+      // Collision default: keep tooltips inside the chart bounding box so
+      // they don't bleed onto neighbouring layout (the screenshot bug where
+      // pie tooltips landed outside the preview surface).
+      confine: true,
     },
     categoryAxis: {
       axisLine: { lineStyle: { color: borderDefault } },
       axisTick: { lineStyle: { color: borderDefault } },
-      axisLabel: { color: textSecondary, fontFamily, fontSize: 11 },
-      splitLine: { lineStyle: { color: bgMuted, type: 'dashed' } },
+      axisLabel: { color: textSecondary, fontFamily, fontSize: 11, hideOverlap: true },
+      splitLine: { lineStyle: { color: borderDefault, type: 'dashed', opacity: 0.6 } },
       nameTextStyle: { color: textTertiary, fontFamily, fontSize: 11 },
     },
     valueAxis: {
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: textSecondary, fontFamily, fontSize: 11 },
-      splitLine: { lineStyle: { color: bgMuted, type: 'dashed' } },
+      axisLabel: { color: textSecondary, fontFamily, fontSize: 11, hideOverlap: true },
+      splitLine: { lineStyle: { color: borderDefault, type: 'dashed', opacity: 0.6 } },
       nameTextStyle: { color: textTertiary, fontFamily, fontSize: 11 },
     },
     bar: {

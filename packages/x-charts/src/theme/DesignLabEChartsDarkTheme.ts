@@ -29,7 +29,9 @@ export function isDarkMode(): boolean {
   const attr = document.documentElement.getAttribute('data-theme');
   if (attr === 'dark') return true;
   if (attr === 'light') return false;
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  return (
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -62,14 +64,14 @@ export interface DarkThemeOptions {
  * echarts.registerTheme('design-lab-dark', theme);
  * ```
  */
-export function buildDesignLabEChartsDarkTheme(options?: DarkThemeOptions): Record<string, unknown> {
-  const {
-    colorblindPalette = 'default',
-    fontFamily: fontFamilyOverride,
-  } = options ?? {};
+export function buildDesignLabEChartsDarkTheme(
+  options?: DarkThemeOptions,
+): Record<string, unknown> {
+  const { colorblindPalette = 'default', fontFamily: fontFamilyOverride } = options ?? {};
 
   // Dark mode tokens (design-lab dark preset fallbacks)
-  const fontFamily = fontFamilyOverride ?? getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
+  const fontFamily =
+    fontFamilyOverride ?? getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
   const textPrimary = getCSSVar('--text-primary', '#e5e7eb');
   const textSecondary = getCSSVar('--text-secondary', '#9ca3af');
   const textTertiary = getCSSVar('--text-tertiary', '#6b7280');
@@ -79,17 +81,21 @@ export function buildDesignLabEChartsDarkTheme(options?: DarkThemeOptions): Reco
   const _actionPrimary = getCSSVar('--action-primary', '#60a5fa');
 
   // Brighter palette for dark backgrounds
-  const palette = colorblindPalette === 'default'
-    ? [
-        getCSSVar('--action-primary', '#60a5fa'),
-        getCSSVar('--state-success-text', '#4ade80'),
-        getCSSVar('--state-warning-text', '#fbbf24'),
-        getCSSVar('--state-error-text', '#f87171'),
-        getCSSVar('--state-info-text', '#22d3ee'),
-        getCSSVar('--action-secondary', '#a78bfa'),
-        '#f472b6', '#2dd4bf', '#fb923c', '#818cf8',
-      ]
-    : COLORBLIND_PALETTES[colorblindPalette] ?? COLORBLIND_PALETTES.deuteranopia;
+  const palette =
+    colorblindPalette === 'default'
+      ? [
+          getCSSVar('--action-primary', '#60a5fa'),
+          getCSSVar('--state-success-text', '#4ade80'),
+          getCSSVar('--state-warning-text', '#fbbf24'),
+          getCSSVar('--state-error-text', '#f87171'),
+          getCSSVar('--state-info-text', '#22d3ee'),
+          getCSSVar('--action-secondary', '#a78bfa'),
+          '#f472b6',
+          '#2dd4bf',
+          '#fb923c',
+          '#818cf8',
+        ]
+      : (COLORBLIND_PALETTES[colorblindPalette] ?? COLORBLIND_PALETTES.deuteranopia);
 
   return {
     color: palette,
@@ -123,6 +129,9 @@ export function buildDesignLabEChartsDarkTheme(options?: DarkThemeOptions): Reco
       itemWidth: 12,
       itemHeight: 12,
       itemGap: 16,
+      // Collision default mirrors the light theme — ECharts paginates instead
+      // of overflowing when many series share a horizontal legend strip.
+      type: 'scroll',
     },
     tooltip: {
       backgroundColor: bgSurface,
@@ -133,19 +142,23 @@ export function buildDesignLabEChartsDarkTheme(options?: DarkThemeOptions): Reco
         color: textPrimary,
         fontSize: 13,
       },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.32); border-radius: 8px; padding: 10px 14px;',
+      extraCssText:
+        'box-shadow: 0 4px 12px rgba(0,0,0,0.32); border-radius: 8px; padding: 10px 14px;',
+      // Confine tooltip inside chart bounding box (Codex 019defa5 collision
+      // defaults — keeps the dark-mode tooltip out of neighbouring layout).
+      confine: true,
     },
     categoryAxis: {
       axisLine: { lineStyle: { color: borderDefault } },
       axisTick: { lineStyle: { color: borderDefault } },
-      axisLabel: { color: textSecondary, fontFamily, fontSize: 11 },
+      axisLabel: { color: textSecondary, fontFamily, fontSize: 11, hideOverlap: true },
       splitLine: { lineStyle: { color: borderDefault, type: 'dashed', opacity: 0.3 } },
       nameTextStyle: { color: textTertiary, fontFamily, fontSize: 11 },
     },
     valueAxis: {
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: textSecondary, fontFamily, fontSize: 11 },
+      axisLabel: { color: textSecondary, fontFamily, fontSize: 11, hideOverlap: true },
       splitLine: { lineStyle: { color: borderDefault, type: 'dashed', opacity: 0.3 } },
       nameTextStyle: { color: textTertiary, fontFamily, fontSize: 11 },
     },

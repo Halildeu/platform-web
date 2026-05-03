@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SankeyChart -- ECharts-powered Sankey flow diagram
  *
@@ -10,6 +12,10 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -46,7 +52,7 @@ export interface SankeyLink {
 
 export type SankeyFocusMode = boolean | 'allEdges' | 'outEdges' | 'inEdges';
 
-export interface SankeyChartProps {
+export interface SankeyChartProps extends AccessControlledProps {
   /** Node definitions. */
   nodes: SankeyNode[];
   /** Link definitions connecting source to target with a value. */
@@ -133,7 +139,17 @@ function resolveFocusMode(mode: SankeyFocusMode): string | undefined {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(function SankeyChart(
+/**
+ * SankeyChart inner — original hook-bearing body. The outer `SankeyChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<SankeyChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const SankeyChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<SankeyChartProps, 'access' | 'accessReason'>
+>(function SankeyChartInner(
   {
     nodes,
     links,
@@ -391,6 +407,25 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
   );
 });
 
+SankeyChartInner.displayName = 'SankeyChartInner';
+
+/**
+ * SankeyChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `SankeyChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(function SankeyChart(
+  { access, accessReason, onNodeClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <SankeyChartInner ref={ref} {...rest} onNodeClick={guardChartCallback(state, onNodeClick)} />
+    </ChartAccessGate>
+  );
+});
 SankeyChart.displayName = 'SankeyChart';
 
 export default SankeyChart;

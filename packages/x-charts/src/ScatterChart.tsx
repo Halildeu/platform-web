@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * ScatterChart — ECharts-powered scatter/bubble chart with Design Lab integration
  *
@@ -6,7 +8,9 @@
  *
  * @migration AG Charts → ECharts (P1, chart-viz-engine-selection D-001)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -21,6 +25,8 @@ import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpe
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend, buildResponsiveGrid } from './responsive';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -36,7 +42,7 @@ export type ScatterDataPoint = {
 
 export type ChartSize = 'sm' | 'md' | 'lg';
 
-export interface ScatterChartProps {
+export interface ScatterChartProps extends AccessControlledProps {
   /** Data points for the scatter plot. */
   data: ScatterDataPoint[];
   /** Visual size variant. @default "md" */
@@ -116,311 +122,363 @@ const getDefaultPalette = (): string[] => [
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
-  function ScatterChart(
-    {
-      data,
-      size = 'md',
-      showGrid = true,
-      showLegend = false,
-      title,
-      description,
-      colors,
-      valueFormatter,
-      animate = true,
-      className,
-      xLabel,
-      yLabel,
-      bubble = false,
-      noDataText = 'Veri yok',
-      theme: themePreference = 'auto',
-      decal: decalPreference = 'auto',
-      density: densityPreference = 'auto',
-      accent: accentPreference = 'auto',
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const height = SIZE_HEIGHT[size];
-    const safeData = useMemo(
-      () =>
-        (data ?? []).map((d) => ({
-          ...d,
-          x: sanitizeNumber(d.x),
-          y: sanitizeNumber(d.y),
-          size: d.size != null ? sanitizeNumber(d.size) : undefined,
-        })),
-      [data],
-    );
-    const isEmpty = safeData.length === 0;
-    const fmt = valueFormatter ?? formatCompact;
+/**
+ * ScatterChart inner — original hook-bearing body. The outer `ScatterChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<ScatterChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const ScatterChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<ScatterChartProps, 'access' | 'accessReason'>
+>(function ScatterChartInner(
+  {
+    data,
+    size = 'md',
+    showGrid = true,
+    showLegend = false,
+    title,
+    description,
+    colors,
+    valueFormatter,
+    animate = true,
+    className,
+    xLabel,
+    yLabel,
+    bubble = false,
+    noDataText = 'Veri yok',
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
+    ...rest
+  },
+  forwardedRef,
+) {
+  const height = SIZE_HEIGHT[size];
+  const safeData = useMemo(
+    () =>
+      (data ?? []).map((d) => ({
+        ...d,
+        x: sanitizeNumber(d.x),
+        y: sanitizeNumber(d.y),
+        size: d.size != null ? sanitizeNumber(d.size) : undefined,
+      })),
+    [data],
+  );
+  const isEmpty = safeData.length === 0;
+  const fmt = valueFormatter ?? formatCompact;
 
-    // Codex iter-1 madde 6: ScatterChart önceden theme'i renderer'a hiç vermiyordu;
-    // theme switch'te option memo recompute olsun diye themeObject ve decal*'ı
-    // dependency olarak option useMemo'ya iletiyoruz.
-    const {
-      themeObject,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
-      densitySpacingMultiplier,
-      densityPaddingMultiplier,
-      effectivePalette,
-    } = useChartTheme({
-      theme: themePreference,
-      decal: decalPreference,
-      density: densityPreference,
-      accent: accentPreference,
-    });
+  // Same DOM node feeds breakpoint observer and ECharts renderer.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
-    const option = useMemo((): EChartsOption | null => {
-      if (isEmpty) return null;
+  // Codex iter-1 madde 6: ScatterChart önceden theme'i renderer'a hiç vermiyordu;
+  // theme switch'te option memo recompute olsun diye themeObject ve decal*'ı
+  // dependency olarak option useMemo'ya iletiyoruz.
+  const {
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    densityPaddingMultiplier,
+    effectivePalette,
+  } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+    density: densityPreference,
+    accent: accentPreference,
+  });
 
-      const palette = colors ?? effectivePalette ?? getDefaultPalette();
-      const fontFamily = getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
-      const textPrimary = getCSSVar('--text-primary', '#1a1a2e');
-      const textSecondary = getCSSVar('--text-secondary', '#6b7280');
-      const borderDefault = getCSSVar('--border-default', '#e5e7eb');
-      const bgMuted = getCSSVar('--bg-muted', '#f9fafb');
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty) return null;
 
-      // Transform data: [x, y, size?, label?, color?]
-      const scatterData = safeData.map((d, i) => ({
-        value: bubble && d.size != null ? [d.x, d.y, d.size] : [d.x, d.y],
-        name: d.label ?? `Point ${i + 1}`,
-        itemStyle: d.color ? { color: d.color } : undefined,
-      }));
+    const palette = colors ?? effectivePalette ?? getDefaultPalette();
+    const fontFamily = getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
+    const textPrimary = getCSSVar('--text-primary', '#1a1a2e');
+    const textSecondary = getCSSVar('--text-secondary', '#6b7280');
+    const borderDefault = getCSSVar('--border-default', '#e5e7eb');
+    const bgMuted = getCSSVar('--bg-muted', '#f9fafb');
 
-      // Bubble: symbolSize maps size field to visual radius
-      const symbolSizeFn = bubble
-        ? (val: number[]) => {
-            const raw = val[2] ?? 10;
-            return Math.max(6, Math.min(60, Math.sqrt(raw) * 4));
-          }
-        : 8;
+    // Transform data: [x, y, size?, label?, color?]
+    const scatterData = safeData.map((d, i) => ({
+      value: bubble && d.size != null ? [d.x, d.y, d.size] : [d.x, d.y],
+      name: d.label ?? `Point ${i + 1}`,
+      itemStyle: d.color ? { color: d.color } : undefined,
+    }));
 
-      return {
-        animation: animate,
-        animationDuration: animate ? 500 : 0,
-        animationEasing: 'cubicOut',
-        title: title
-          ? {
-              text: escapeHtml(title),
-              subtext: description ? escapeHtml(description) : undefined,
-              left: 'center',
-              textStyle: {
-                fontFamily,
-                color: textPrimary,
-                fontSize: scaleFontSize(16, densityFontMultiplier),
-                fontWeight: 600,
-              },
-              subtextStyle: {
-                fontFamily,
-                color: textSecondary,
-                fontSize: scaleFontSize(13, densityFontMultiplier),
-              },
-            }
-          : undefined,
-        tooltip: {
-          trigger: 'item',
-          confine: true,
-          textStyle: { fontFamily, fontSize: scaleFontSize(13, densityFontMultiplier) },
-          formatter: (params: unknown) => {
-            const p = params as { value: number[]; name: string };
-            const xVal = fmt(p.value[0]);
-            const yVal = fmt(p.value[1]);
-            const label = p.name && !p.name.startsWith('Point ') ? ` — ${escapeHtml(p.name)}` : '';
-            return `(${escapeHtml(xVal)}, ${escapeHtml(yVal)})${label}`;
-          },
-        },
-        legend: {
-          show: showLegend,
-          bottom: 0,
-          textStyle: {
-            fontFamily,
-            color: textPrimary,
-            fontSize: scaleFontSize(12, densityFontMultiplier),
-          },
-          icon: 'circle',
-          itemWidth: scaleSpacing(10, densitySpacingMultiplier),
-          itemHeight: scaleSpacing(10, densitySpacingMultiplier),
-        },
-        grid: {
-          top: title
-            ? scalePadding(60, densityPaddingMultiplier)
-            : scalePadding(24, densityPaddingMultiplier),
-          right: scalePadding(16, densityPaddingMultiplier),
-          bottom: showLegend
-            ? scalePadding(48, densityPaddingMultiplier)
-            : scalePadding(24, densityPaddingMultiplier),
-          left: scalePadding(16, densityPaddingMultiplier),
-          containLabel: true,
-        },
-        xAxis: {
-          type: 'value',
-          name: xLabel,
-          nameLocation: 'center',
-          nameGap: scaleSpacing(28, densitySpacingMultiplier),
-          nameTextStyle: {
-            fontFamily,
-            color: textSecondary,
-            fontSize: scaleFontSize(12, densityFontMultiplier),
-          },
-          axisLine: { lineStyle: { color: borderDefault } },
-          axisTick: { lineStyle: { color: borderDefault } },
-          axisLabel: {
-            color: textSecondary,
-            fontFamily,
-            fontSize: scaleFontSize(11, densityFontMultiplier),
-            formatter: (v: number) => fmt(v),
-          },
-          splitLine: {
-            show: showGrid,
-            lineStyle: { color: bgMuted, type: 'dashed' as const },
-          },
-        },
-        yAxis: {
-          type: 'value',
-          name: yLabel,
-          nameLocation: 'center',
-          nameGap: scaleSpacing(40, densitySpacingMultiplier),
-          nameTextStyle: {
-            fontFamily,
-            color: textSecondary,
-            fontSize: scaleFontSize(12, densityFontMultiplier),
-          },
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: {
-            color: textSecondary,
-            fontFamily,
-            fontSize: scaleFontSize(11, densityFontMultiplier),
-            formatter: (v: number) => fmt(v),
-          },
-          splitLine: {
-            show: showGrid,
-            lineStyle: { color: bgMuted, type: 'dashed' as const },
-          },
-        },
-        series: [
-          {
-            type: 'scatter',
-            data: scatterData,
-            symbolSize: symbolSizeFn,
-            itemStyle: {
-              color: palette[0],
-            },
-            emphasis: {
-              focus: 'self',
-              itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' },
-            },
-          },
-        ],
-        aria: {
-          enabled: true,
-          label: {
-            description: description
-              ? escapeHtml(description)
-              : title
-                ? `Scatter chart: ${escapeHtml(title)}`
-                : 'Scatter chart',
-          },
-          ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
-        },
-      } as EChartsOption;
-    }, [
-      data,
-      showGrid,
+    // Bubble: symbolSize maps size field to visual radius
+    const symbolSizeFn = bubble
+      ? (val: number[]) => {
+          const raw = val[2] ?? 10;
+          return Math.max(6, Math.min(60, Math.sqrt(raw) * 4));
+        }
+      : 8;
+
+    // Resolve legend before returning so the grid helper can read its
+    // `show` / `orient` (Codex 019defa5 PARTIAL).
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
       showLegend,
-      valueFormatter,
-      animate,
-      colors,
-      title,
-      description,
-      xLabel,
-      yLabel,
-      bubble,
-      isEmpty,
-      themeObject,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
+      // Scatter is single-series at the legend level (one symbol type).
+      hasMultiSeries: false,
+      seriesCount: 1,
       densitySpacingMultiplier,
-      densityPaddingMultiplier,
-      effectivePalette,
-    ]);
-
-    // Use centralized renderer hook
-    const { containerRef, instance } = useEChartsRenderer({
-      option: option ?? ({} as EChartsOption),
-      theme: themeObject,
-      respectReducedMotion: true,
+      densityFontMultiplier,
+      icon: 'circle',
     });
 
-    // Faz 21.5-B PR-B2: default-on a11y. ScatterChart is 2D — flatten
-    // each point to {label: explicit-label-or-coordinate, value: y}
-    // for SR consumption. The hidden table shows label + y-value;
-    // x-coordinates surface only via tooltip (ECharts handles them).
-    const a11yData = useMemo(
-      () =>
-        safeData.map((d, i) => ({
-          label: d.label ?? `Point ${i + 1} (${d.x}, ${d.y})`,
-          value: d.y,
-        })),
-      [safeData],
-    );
-    const a11y = useChartA11y({
-      chartType: 'scatter',
-      data: a11yData,
-      title,
-      description,
-      valueFormatter: fmt,
-      echartsInstance: instance,
-    });
-
-    // Merge refs
-    const setRefs = useCallback(
-      (node: HTMLDivElement | null) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === 'function') forwardedRef(node);
-        else if (forwardedRef)
-          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    return {
+      animation: animate,
+      animationDuration: animate ? 500 : 0,
+      animationEasing: 'cubicOut',
+      title: title
+        ? {
+            text: escapeHtml(title),
+            subtext: description ? escapeHtml(description) : undefined,
+            left: 'center',
+            textStyle: {
+              fontFamily,
+              color: textPrimary,
+              fontSize: scaleFontSize(16, densityFontMultiplier),
+              fontWeight: 600,
+            },
+            subtextStyle: {
+              fontFamily,
+              color: textSecondary,
+              fontSize: scaleFontSize(13, densityFontMultiplier),
+            },
+          }
+        : undefined,
+      tooltip: {
+        trigger: 'item',
+        confine: true,
+        textStyle: { fontFamily, fontSize: scaleFontSize(13, densityFontMultiplier) },
+        formatter: (params: unknown) => {
+          const p = params as { value: number[]; name: string };
+          const xVal = fmt(p.value[0]);
+          const yVal = fmt(p.value[1]);
+          const label = p.name && !p.name.startsWith('Point ') ? ` — ${escapeHtml(p.name)}` : '';
+          return `(${escapeHtml(xVal)}, ${escapeHtml(yVal)})${label}`;
+        },
       },
-      [forwardedRef, containerRef],
-    );
+      legend: {
+        ...responsiveLegend,
+        // Preserve the explicit text style so the scatter chart keeps its
+        // CSS-var-driven palette even when the helper's textStyle wins.
+        textStyle: {
+          fontFamily,
+          color: textPrimary,
+          fontSize: scaleFontSize(12, densityFontMultiplier),
+        },
+      },
+      grid: buildResponsiveGrid({
+        breakpoint,
+        hasTitle: !!title,
+        // Codex 019defa5 PARTIAL fix: derive padding from the resolved
+        // legend's orient so mobile bottom legends don't overlap axes.
+        hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+        hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
+        density: {
+          titleTop: scalePadding(60, densityPaddingMultiplier),
+          contentTop: scalePadding(24, densityPaddingMultiplier),
+          sidePadding: scalePadding(16, densityPaddingMultiplier),
+          legendBottom: scalePadding(48, densityPaddingMultiplier),
+          plainBottom: scalePadding(24, densityPaddingMultiplier),
+        },
+      }),
+      xAxis: {
+        type: 'value',
+        name: xLabel,
+        nameLocation: 'center',
+        nameGap: scaleSpacing(28, densitySpacingMultiplier),
+        nameTextStyle: {
+          fontFamily,
+          color: textSecondary,
+          fontSize: scaleFontSize(12, densityFontMultiplier),
+        },
+        axisLine: { lineStyle: { color: borderDefault } },
+        axisTick: { lineStyle: { color: borderDefault } },
+        axisLabel: {
+          color: textSecondary,
+          fontFamily,
+          fontSize: scaleFontSize(11, densityFontMultiplier),
+          // Value axes need hideOverlap too — wide ranges (1k–1M) pile up
+          // tick labels otherwise (Codex 019defa5 collision defaults).
+          hideOverlap: true,
+          formatter: (v: number) => fmt(v),
+        },
+        splitLine: {
+          show: showGrid,
+          lineStyle: { color: bgMuted, type: 'dashed' as const },
+        },
+      },
+      yAxis: {
+        type: 'value',
+        name: yLabel,
+        nameLocation: 'center',
+        nameGap: scaleSpacing(40, densitySpacingMultiplier),
+        nameTextStyle: {
+          fontFamily,
+          color: textSecondary,
+          fontSize: scaleFontSize(12, densityFontMultiplier),
+        },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: {
+          color: textSecondary,
+          fontFamily,
+          fontSize: scaleFontSize(11, densityFontMultiplier),
+          hideOverlap: true,
+          formatter: (v: number) => fmt(v),
+        },
+        splitLine: {
+          show: showGrid,
+          lineStyle: { color: bgMuted, type: 'dashed' as const },
+        },
+      },
+      series: [
+        {
+          type: 'scatter',
+          data: scatterData,
+          symbolSize: symbolSizeFn,
+          itemStyle: {
+            color: palette[0],
+          },
+          emphasis: {
+            focus: 'self',
+            itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' },
+          },
+        },
+      ],
+      aria: {
+        enabled: true,
+        label: {
+          description: description
+            ? escapeHtml(description)
+            : title
+              ? `Scatter chart: ${escapeHtml(title)}`
+              : 'Scatter chart',
+        },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
+      },
+    } as EChartsOption;
+  }, [
+    data,
+    safeData,
+    showGrid,
+    showLegend,
+    valueFormatter,
+    animate,
+    colors,
+    title,
+    description,
+    xLabel,
+    yLabel,
+    bubble,
+    isEmpty,
+    fmt,
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    densityPaddingMultiplier,
+    effectivePalette,
+    breakpoint,
+  ]);
 
-    /* ---- empty state ---- */
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label={a11y.ariaLabel}
-          data-testid="scatter-chart-empty"
-          {...rest}
-        >
-          {noDataText}
-        </div>
-      );
-    }
+  // Use centralized renderer hook
+  const { containerRef, instance } = useEChartsRenderer({
+    option: option ?? ({} as EChartsOption),
+    theme: themeObject,
+    respectReducedMotion: true,
+  });
 
+  // Faz 21.5-B PR-B2: default-on a11y. ScatterChart is 2D — flatten
+  // each point to {label: explicit-label-or-coordinate, value: y}
+  // for SR consumption. The hidden table shows label + y-value;
+  // x-coordinates surface only via tooltip (ECharts handles them).
+  const a11yData = useMemo(
+    () =>
+      safeData.map((d, i) => ({
+        label: d.label ?? `Point ${i + 1} (${d.x}, ${d.y})`,
+        value: d.y,
+      })),
+    [safeData],
+  );
+  const a11y = useChartA11y({
+    chartType: 'scatter',
+    data: a11yData,
+    title,
+    description,
+    valueFormatter: fmt,
+    echartsInstance: instance,
+  });
+
+  // Merge refs
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [forwardedRef, containerRef],
+  );
+
+  /* ---- empty state ---- */
+  if (isEmpty) {
     return (
-      <ChartA11yShell
-        a11y={a11y}
-        className={className}
-        height={height}
-        testId="scatter-chart"
-        setRefs={setRefs}
+      <div
+        ref={forwardedRef}
+        className={cn(
+          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
+        role="img"
+        aria-label={a11y.ariaLabel}
+        data-testid="scatter-chart-empty"
         {...rest}
-      />
+      >
+        {noDataText}
+      </div>
+    );
+  }
+
+  return (
+    <ChartA11yShell
+      a11y={a11y}
+      className={className}
+      height={height}
+      testId="scatter-chart"
+      setRefs={setRefs}
+      {...rest}
+    />
+  );
+});
+
+ScatterChartInner.displayName = 'ScatterChartInner';
+
+/**
+ * ScatterChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `ScatterChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
+  function ScatterChart({ access, accessReason, ...rest }, ref) {
+    return (
+      <ChartAccessGate access={access} accessReason={accessReason}>
+        <ScatterChartInner ref={ref} {...rest} />
+      </ChartAccessGate>
     );
   },
 );
-
 ScatterChart.displayName = 'ScatterChart';
 
 export default ScatterChart;

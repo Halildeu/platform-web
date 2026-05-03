@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * RadarChart -- ECharts-powered radar / spider chart
  *
@@ -8,6 +10,10 @@
  * @migration SVG -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -46,7 +52,7 @@ export type RadarSeriesItem = {
   areaStyle?: { opacity?: number };
 };
 
-export interface RadarChartProps {
+export interface RadarChartProps extends AccessControlledProps {
   /** Axis indicators defining the radar shape. */
   indicators: RadarIndicator[];
   /** Data series to plot on the radar. */
@@ -119,7 +125,17 @@ const escapeHtml = (t: string): string =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(function RadarChart(
+/**
+ * RadarChart inner — original hook-bearing body. The outer `RadarChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<RadarChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const RadarChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<RadarChartProps, 'access' | 'accessReason'>
+>(function RadarChartInner(
   {
     indicators,
     series,
@@ -362,6 +378,29 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
   );
 });
 
+RadarChartInner.displayName = 'RadarChartInner';
+
+/**
+ * RadarChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `RadarChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(function RadarChart(
+  { access, accessReason, onDataPointClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <RadarChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
+    </ChartAccessGate>
+  );
+});
 RadarChart.displayName = 'RadarChart';
 
 export default RadarChart;

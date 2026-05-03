@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * GaugeChart -- ECharts-powered gauge with threshold zones
  *
@@ -8,6 +10,8 @@
  * @migration SVG -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -38,7 +42,7 @@ export type GaugeThreshold = {
   label?: string;
 };
 
-export interface GaugeChartProps {
+export interface GaugeChartProps extends AccessControlledProps {
   /** Current gauge value. */
   value: number;
   /** Minimum scale value. @default 0 */
@@ -142,7 +146,17 @@ function buildAxisLineColors(
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(function GaugeChart(
+/**
+ * GaugeChart inner — original hook-bearing body. The outer `GaugeChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<GaugeChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const GaugeChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<GaugeChartProps, 'access' | 'accessReason'>
+>(function GaugeChartInner(
   {
     value,
     min = 0,
@@ -349,6 +363,24 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
   );
 });
 
+GaugeChartInner.displayName = 'GaugeChartInner';
+
+/**
+ * GaugeChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `GaugeChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(function GaugeChart(
+  { access, accessReason, ...rest },
+  ref,
+) {
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <GaugeChartInner ref={ref} {...rest} />
+    </ChartAccessGate>
+  );
+});
 GaugeChart.displayName = 'GaugeChart';
 
 export default GaugeChart;

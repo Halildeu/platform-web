@@ -5,24 +5,43 @@
  * Self-contained with hardcoded chart catalog (13 charts).
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Layers,
-  Gamepad2,
   FileCode2,
   BookOpen,
-  Palette,
   ShieldCheck,
   Copy,
   Check,
   ChevronRight,
+  ChevronDown,
   BarChart3,
   Cpu,
-  Sparkles,
-  Eye,
+  Lock,
+  RotateCcw,
+  Database,
 } from 'lucide-react';
 import ChartPreviewLive from '../widgets/ChartPreviewLive';
+import {
+  applyPreset,
+  buildDescriptors,
+  deriveDefaults,
+  generatePlaygroundCode,
+  getChartPresets,
+  getFaq,
+  getFeatureBadge,
+  getPerformanceGuidance,
+  getSampleData,
+  CATEGORY_DEFAULT_OPEN,
+  CATEGORY_LABEL,
+  CATEGORY_ORDER,
+  type ChartPlaygroundPreset,
+  type EditorCategory,
+  type EditorDescriptor,
+  type PlaygroundState,
+  type PlaygroundValue,
+  type SampleDataDef,
+} from '../widgets/chartPlaygroundModel';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -50,19 +69,13 @@ interface ChartMeta {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Tab definitions                                                    */
 /* ------------------------------------------------------------------ */
-
-type ChartTab = 'overview' | 'playground' | 'api' | 'examples' | 'themes' | 'quality';
-
-const TABS: Array<{ id: ChartTab; label: string; icon: React.ReactNode }> = [
-  { id: 'overview', label: 'Overview', icon: <Layers className="h-3.5 w-3.5" /> },
-  { id: 'playground', label: 'Playground', icon: <Gamepad2 className="h-3.5 w-3.5" /> },
-  { id: 'api', label: 'API', icon: <FileCode2 className="h-3.5 w-3.5" /> },
-  { id: 'examples', label: 'Examples', icon: <BookOpen className="h-3.5 w-3.5" /> },
-  { id: 'themes', label: 'Themes', icon: <Palette className="h-3.5 w-3.5" /> },
-  { id: 'quality', label: 'Quality', icon: <ShieldCheck className="h-3.5 w-3.5" /> },
-];
+/*  Tab definitions — REMOVED                                          */
+/*                                                                     */
+/*  Single-page layout (Codex thread `019def27` AGREE — Variant       */
+/*  A-lite). The previous 6-tab pill bar is replaced by sequential     */
+/*  anchored sections rendered inline by the `ChartDetail` component.  */
+/* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
 /*  Chart catalog (13 charts)                                          */
@@ -81,85 +94,143 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'data',
         type: 'ChartDataPoint[]',
         required: true,
-        default: '[]',
-        description: 'Array of { label, value, color? } data points',
+        default: '—',
+        description: 'Data points to render as bars.',
       },
       {
         name: 'orientation',
         type: "'vertical' | 'horizontal'",
         required: false,
-        default: "'vertical'",
-        description: 'Bar direction',
+        default: '"vertical"',
+        description: 'Bar orientation.',
       },
       {
         name: 'size',
-        type: "'sm' | 'md' | 'lg'",
+        type: 'ChartSize',
         required: false,
-        default: "'md'",
-        description: 'Chart container size preset',
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'showValues',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Display value labels on each bar',
+        description: 'Show value labels on bars.',
       },
       {
         name: 'showGrid',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Show background grid lines',
+        description: 'Show grid lines.',
       },
       {
         name: 'showLegend',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Show color legend below chart',
+        description: 'Show legend below the chart.',
       },
       {
         name: 'valueFormatter',
-        type: '(v: number) => string',
+        type: '(value: number) => string',
         required: false,
-        default: 'String',
-        description: 'Custom value formatting function',
+        default: 'undefined',
+        description: 'Custom value formatter.',
       },
       {
         name: 'animate',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Enable enter/update animations',
+        description: 'Animate bars on mount.',
       },
       {
         name: 'colors',
         type: 'string[]',
         required: false,
-        default: 'theme',
-        description: 'Custom color palette override',
+        default: 'undefined',
+        description: 'Override default chart colors.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Accessible chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
       },
       {
         name: 'series',
-        type: 'ChartSeries[]',
+        type: '{ field: string; name: string; color?: string }[]',
         required: false,
         default: 'undefined',
-        description: 'Multi-series grouped data',
+        description: 'Multi-series: grouped bars by field.',
       },
       {
         name: 'onDataPointClick',
-        type: '(point: DataPoint) => void',
+        type: '(event: ChartClickEvent) => void',
         required: false,
         default: 'undefined',
-        description: 'Click handler for individual bars',
+        description: 'Callback fired when a data point (bar) is clicked.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals (data-appearance / data-theme / media)',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override (visual differentiation beyond color).',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto" — follows documentElement `data-density` (mfe-shell theme axis)',
+        description: 'Density override (compact vs comfortable).',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto" — follows documentElement `data-accent` (mfe-shell theme axis)',
+        description: 'Accent palette override (light/emerald/ocean/violet/sunset/graphite/dark).',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<BarChart
@@ -180,9 +251,18 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'theme-aware',
       'animation',
       'tooltip',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
     ],
     a11y: ['keyboard-nav', 'data-table-fallback', 'aria-live', 'reduced-motion'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'line-chart': {
     id: 'line-chart',
@@ -196,85 +276,143 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'series',
         type: 'ChartSeries[]',
         required: true,
-        default: '[]',
-        description: 'Array of named data series',
+        default: '—',
+        description: 'Series to render as lines.',
       },
       {
         name: 'labels',
         type: 'string[]',
         required: true,
-        default: '[]',
-        description: 'X-axis category labels',
+        default: '—',
+        description: 'X-axis labels.',
       },
       {
         name: 'size',
-        type: "'sm' | 'md' | 'lg'",
+        type: 'ChartSize',
         required: false,
-        default: "'md'",
-        description: 'Chart container size preset',
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'showDots',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Show data point markers',
+        description: 'Show dot markers at data points.',
       },
       {
         name: 'showGrid',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Show background grid',
+        description: 'Show grid lines.',
       },
       {
         name: 'showLegend',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Show series legend',
+        description: 'Show legend below the chart.',
       },
       {
         name: 'showArea',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Fill area under the line',
+        description: 'Fill area under the lines.',
       },
       {
         name: 'curved',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Use bezier curve interpolation',
+        description: 'Use bezier curves instead of straight lines.',
       },
       {
         name: 'valueFormatter',
-        type: '(v: number) => string',
+        type: '(value: number) => string',
         required: false,
-        default: 'String',
-        description: 'Custom value formatting',
+        default: 'undefined',
+        description: 'Custom value formatter.',
       },
       {
         name: 'animate',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Enable animations',
+        description: 'Animate line drawing on mount.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Accessible chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
       },
       {
         name: 'onDataPointClick',
-        type: '(point: DataPoint) => void',
+        type: '(event: ChartClickEvent) => void',
         required: false,
         default: 'undefined',
-        description: 'Click handler for data points',
+        description: 'Callback fired when a data point (marker) is clicked.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto" — follows documentElement `data-density`',
+        description: 'Density override (compact vs comfortable).',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<LineChart
@@ -287,9 +425,25 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   showArea
   curved
 />`,
-    features: ['multi-series', 'area-fill', 'cross-filter', 'tooltip', 'responsive', 'animation'],
+    features: [
+      'multi-series',
+      'area-fill',
+      'cross-filter',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback', 'aria-live', 'reduced-motion'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'pie-chart': {
     id: 'pie-chart',
@@ -303,78 +457,136 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'data',
         type: 'ChartDataPoint[]',
         required: true,
-        default: '[]',
-        description: 'Array of { label, value, color? } slices',
+        default: '—',
+        description: 'Data points to render as slices.',
       },
       {
         name: 'size',
-        type: "'sm' | 'md' | 'lg'",
+        type: 'ChartSize',
         required: false,
-        default: "'md'",
-        description: 'Chart size preset',
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'donut',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Enable donut (ring) mode',
+        description: 'Donut mode (ring instead of filled).',
       },
       {
         name: 'showLabels',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Show slice labels',
+        description: 'Show labels beside slices.',
       },
       {
         name: 'showLegend',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Show color legend',
+        description: 'Show legend below the chart.',
       },
       {
         name: 'showPercentage',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Display percentage on slices',
+        description: 'Show percentage on slices.',
       },
       {
         name: 'valueFormatter',
-        type: '(v: number) => string',
+        type: '(value: number) => string',
         required: false,
-        default: 'String',
-        description: 'Custom value formatting',
+        default: 'undefined',
+        description: 'Custom value formatter.',
       },
       {
         name: 'innerLabel',
-        type: 'ReactNode',
+        type: 'React.ReactNode',
         required: false,
         default: 'undefined',
-        description: 'Content inside donut center',
+        description: 'Center content for donut mode.',
       },
       {
         name: 'animate',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Enable animations',
+        description: 'Animate slices on mount.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Accessible chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
       },
       {
         name: 'onDataPointClick',
-        type: '(point: DataPoint) => void',
+        type: '(event: ChartClickEvent) => void',
         required: false,
         default: 'undefined',
-        description: 'Click handler for slices',
+        description: 'Callback fired when a data point (slice) is clicked.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<PieChart
@@ -387,9 +599,24 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   showPercentage
   showLegend
 />`,
-    features: ['donut-mode', 'inner-label', 'tooltip', 'responsive', 'animation'],
+    features: [
+      'donut-mode',
+      'inner-label',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback', 'aria-live', 'reduced-motion'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'area-chart': {
     id: 'area-chart',
@@ -403,85 +630,143 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'series',
         type: 'ChartSeries[]',
         required: true,
-        default: '[]',
-        description: 'Array of named data series',
+        default: '—',
+        description: 'Series to render as filled areas.',
       },
       {
         name: 'labels',
         type: 'string[]',
         required: true,
-        default: '[]',
-        description: 'X-axis labels',
+        default: '—',
+        description: 'X-axis labels.',
       },
       {
         name: 'size',
-        type: "'sm' | 'md' | 'lg'",
+        type: 'ChartSize',
         required: false,
-        default: "'md'",
-        description: 'Chart size preset',
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'stacked',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Stack areas on top of each other',
+        description: 'Stack areas on top of each other.',
       },
       {
         name: 'showDots',
         type: 'boolean',
         required: false,
-        default: 'false',
-        description: 'Show data point markers',
+        default: 'true',
+        description: 'Show dot markers at data points.',
       },
       {
         name: 'showGrid',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Show grid lines',
+        description: 'Show grid lines.',
       },
       {
         name: 'showLegend',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Show series legend',
+        description: 'Show legend below the chart.',
       },
       {
         name: 'gradient',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Apply gradient fill to areas',
+        description: 'Use gradient fills instead of flat color.',
       },
       {
         name: 'curved',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Bezier interpolation',
+        description: 'Use bezier curves instead of straight lines.',
       },
       {
         name: 'valueFormatter',
-        type: '(v: number) => string',
+        type: '(value: number) => string',
         required: false,
-        default: 'String',
-        description: 'Value formatting function',
+        default: 'undefined',
+        description: 'Custom value formatter.',
       },
       {
         name: 'animate',
         type: 'boolean',
         required: false,
         default: 'true',
-        description: 'Enable animations',
+        description: 'Animate on mount.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Accessible chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override (compact vs comfortable).',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<AreaChart
@@ -493,9 +778,24 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   stacked
   gradient
 />`,
-    features: ['stacked', 'gradient-fill', 'tooltip', 'responsive', 'animation'],
+    features: [
+      'stacked',
+      'gradient-fill',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback', 'aria-live', 'reduced-motion'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'scatter-chart': {
     id: 'scatter-chart',
@@ -509,29 +809,143 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'data',
         type: 'ScatterDataPoint[]',
         required: true,
-        default: '[]',
-        description: 'Array of { x, y, size?, label? } points',
+        default: '—',
+        description: 'Data points for the scatter plot.',
       },
       {
         name: 'size',
-        type: "'sm' | 'md' | 'lg'",
+        type: 'ChartSize',
         required: false,
-        default: "'md'",
-        description: 'Chart size preset',
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
-        name: 'title',
-        type: 'string',
+        name: 'showGrid',
+        type: 'boolean',
         required: false,
-        default: 'undefined',
-        description: 'Accessible chart title',
+        default: 'true',
+        description: 'Show grid lines.',
       },
       {
         name: 'showLegend',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Show series legend',
+        description: 'Show legend below the chart.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'colors',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description: 'Override default chart colors.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter for axis labels.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'xLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'X-axis label.',
+      },
+      {
+        name: 'yLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Y-axis label.',
+      },
+      {
+        name: 'bubble',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Enable bubble mode — sizes markers by the `size` field.',
+      },
+      {
+        name: 'noDataText',
+        type: 'string',
+        required: false,
+        default: '"Veri yok"',
+        description: 'Text shown when data is empty.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<ScatterChart
@@ -543,9 +957,23 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   ]}
   title="Correlation Plot"
 />`,
-    features: ['bubble-size', 'tooltip', 'responsive', 'zoom'],
+    features: [
+      'bubble-size',
+      'tooltip',
+      'responsive',
+      'zoom',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback', 'aria-live'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'gauge-chart': {
     id: 'gauge-chart',
@@ -559,29 +987,150 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'value',
         type: 'number',
         required: true,
-        default: '0',
-        description: 'Current gauge value',
+        default: '—',
+        description: 'Current gauge value.',
       },
       {
         name: 'min',
         type: 'number',
         required: false,
         default: '0',
-        description: 'Minimum range value',
+        description: 'Minimum scale value.',
       },
       {
         name: 'max',
         type: 'number',
         required: false,
         default: '100',
-        description: 'Maximum range value',
+        description: 'Maximum scale value.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Gauge label',
+        description: 'Title displayed above the gauge.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'thresholds',
+        type: 'GaugeThreshold[]',
+        required: false,
+        default: 'undefined',
+        description: 'Threshold zones for colored arc segments.',
+      },
+      {
+        name: 'startAngle',
+        type: 'number',
+        required: false,
+        default: '225',
+        description: 'Start angle in degrees.',
+      },
+      {
+        name: 'endAngle',
+        type: 'number',
+        required: false,
+        default: '-45',
+        description: 'End angle in degrees.',
+      },
+      {
+        name: 'showProgress',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show a progress arc from min to current value.',
+      },
+      {
+        name: 'pointer',
+        type: '{ length?: string; width?: number; color?: string; }',
+        required: false,
+        default: 'undefined',
+        description: 'Pointer configuration.',
+      },
+      {
+        name: 'splitNumber',
+        type: 'number',
+        required: false,
+        default: '10',
+        description: 'Number of segments on the axis.',
+      },
+      {
+        name: 'showAxisLabel',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show numeric axis labels.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom formatter for the center value display.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount and value changes.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<GaugeChart
@@ -590,9 +1139,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   max={100}
   title="CPU Usage"
 />`,
-    features: ['threshold-colors', 'animation', 'responsive'],
+    features: [
+      'threshold-colors',
+      'animation',
+      'responsive',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['aria-live', 'reduced-motion'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'radar-chart': {
     id: 'radar-chart',
@@ -603,25 +1165,139 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     tier: 'enterprise',
     props: [
       {
-        name: 'data',
-        type: 'RadarDataPoint[]',
+        name: 'indicators',
+        type: 'RadarIndicator[]',
         required: true,
-        default: '[]',
-        description: 'Array of { axis, value } entries',
+        default: '—',
+        description: 'Axis indicators defining the radar shape.',
       },
       {
-        name: 'title',
-        type: 'string',
+        name: 'series',
+        type: 'RadarSeriesItem[]',
+        required: true,
+        default: '—',
+        description: 'Data series to plot on the radar.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
         required: false,
-        default: 'undefined',
-        description: 'Chart title',
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'shape',
+        type: "'polygon' | 'circle'",
+        required: false,
+        default: '"polygon"',
+        description: 'Radar shape.',
+      },
+      {
+        name: 'showArea',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Fill the area under each series line.',
+      },
+      {
+        name: 'showLabels',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show axis name labels.',
       },
       {
         name: 'showLegend',
         type: 'boolean',
         required: false,
         default: 'false',
-        description: 'Show legend',
+        description: 'Show legend below the chart.',
+      },
+      {
+        name: 'splitNumber',
+        type: 'number',
+        required: false,
+        default: '5',
+        description: 'Number of concentric split rings.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter for tooltip.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(params: unknown) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a data point is clicked.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<RadarChart
@@ -634,9 +1310,23 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   ]}
   title="Service Comparison"
 />`,
-    features: ['multi-axis', 'overlay', 'tooltip', 'responsive'],
+    features: [
+      'multi-axis',
+      'overlay',
+      'tooltip',
+      'responsive',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['data-table-fallback', 'aria-live'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'treemap-chart': {
     id: 'treemap-chart',
@@ -650,15 +1340,136 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'data',
         type: 'TreemapNode[]',
         required: true,
-        default: '[]',
-        description: 'Nested tree structure with value',
+        default: '—',
+        description: 'Hierarchical tree data.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show legend below the chart.',
+      },
+      {
+        name: 'showBreadcrumb',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show breadcrumb navigation on drill-down.',
+      },
+      {
+        name: 'leafDepth',
+        type: 'number',
+        required: false,
+        default: '1',
+        description: 'Maximum visible depth (1 = only root children).',
+      },
+      {
+        name: 'roam',
+        type: "boolean | 'move' | 'scale'",
+        required: false,
+        default: 'false',
+        description: 'Pan/zoom mode.',
+      },
+      {
+        name: 'colorSaturation',
+        type: '[number, number]',
+        required: false,
+        default: '[0.35, 0.5]',
+        description: 'Saturation range for color mapping.',
+      },
+      {
+        name: 'visibleMin',
+        type: 'number',
+        required: false,
+        default: '300',
+        description: 'Minimum area (px^2) to render a label.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom formatter for displayed values.',
+      },
+      {
+        name: 'onNodeClick',
+        type: '(params: { name: string; value: number; data: unknown }) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a node is clicked.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<TreemapChart
@@ -673,9 +1484,23 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   ]}
   title="Budget Allocation"
 />`,
-    features: ['drill-down', 'tooltip', 'responsive', 'animation'],
+    features: [
+      'drill-down',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'heatmap-chart': {
     id: 'heatmap-chart',
@@ -687,17 +1512,152 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     props: [
       {
         name: 'data',
-        type: 'HeatmapCell[]',
+        type: 'HeatmapTupleData[] | HeatmapObjectData[]',
         required: true,
-        default: '[]',
-        description: 'Array of { x, y, value } cells',
+        default: '—',
+        description: 'Heatmap data in tuple [x, y, value] or object format.',
+      },
+      {
+        name: 'xLabels',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description: 'X-axis category labels.',
+      },
+      {
+        name: 'yLabels',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description: 'Y-axis category labels.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'min',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description: 'Minimum data value for color scale. Auto-detected if not provided.',
+      },
+      {
+        name: 'max',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description: 'Maximum data value for color scale. Auto-detected if not provided.',
+      },
+      {
+        name: 'colors',
+        type: '[string, string]',
+        required: false,
+        default: "['#f5f5f5', '#3b82f6']",
+        description: 'Color gradient endpoints [low, high].',
+      },
+      {
+        name: 'showValues',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show value text on each cell.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom formatter for cell value display.',
+      },
+      {
+        name: 'cellSize',
+        type: "number | 'auto'",
+        required: false,
+        default: '"auto"',
+        description: 'Cell size override; "auto" fits to container.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show visual map legend.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'onCellClick',
+        type: '(params: { x: number; y: number; value: number }) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a cell is clicked.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<HeatmapChart
@@ -709,9 +1669,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   ]}
   title="Activity Heatmap"
 />`,
-    features: ['color-scale', 'tooltip', 'responsive'],
+    features: [
+      'color-scale',
+      'tooltip',
+      'responsive',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['data-table-fallback', 'aria-live'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'waterfall-chart': {
     id: 'waterfall-chart',
@@ -723,17 +1696,131 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     props: [
       {
         name: 'data',
-        type: 'WaterfallItem[]',
+        type: 'WaterfallDataPoint[]',
         required: true,
-        default: '[]',
-        description: 'Array of { label, value, type? } items',
+        default: '—',
+        description: 'Data points to render as waterfall bars.',
+      },
+      {
+        name: 'size',
+        type: "'sm' | 'md' | 'lg'",
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'colors',
+        type: '{ increase?: string; decrease?: string; total?: string; }',
+        required: false,
+        default: 'undefined',
+        description: 'Colors per waterfall segment type.',
+      },
+      {
+        name: 'showConnector',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Draw dashed connector lines between adjacent bars.',
+      },
+      {
+        name: 'showValues',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show value labels on bars.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter for labels and tooltip.',
+      },
+      {
+        name: 'orientation',
+        type: "'vertical' | 'horizontal'",
+        required: false,
+        default: '"vertical"',
+        description: 'Bar orientation.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show legend below the chart.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate bars on mount.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(params: unknown) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a bar is clicked.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<WaterfallChart
@@ -746,9 +1833,23 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   ]}
   title="Revenue Breakdown"
 />`,
-    features: ['total-markers', 'color-coding', 'tooltip', 'responsive'],
+    features: [
+      'total-markers',
+      'color-coding',
+      'tooltip',
+      'responsive',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['data-table-fallback', 'aria-live'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'funnel-chart': {
     id: 'funnel-chart',
@@ -760,17 +1861,152 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     props: [
       {
         name: 'data',
-        type: 'FunnelStage[]',
+        type: 'FunnelDataPoint[]',
         required: true,
-        default: '[]',
-        description: 'Array of { label, value } stages',
+        default: '—',
+        description: 'Data points to render as funnel stages.',
+      },
+      {
+        name: 'size',
+        type: "'sm' | 'md' | 'lg'",
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'sort',
+        type: "'descending' | 'ascending' | 'none'",
+        required: false,
+        default: '"descending"',
+        description: 'Sort order for funnel stages.',
+      },
+      {
+        name: 'gap',
+        type: 'number',
+        required: false,
+        default: '2',
+        description: 'Pixel gap between funnel stages.',
+      },
+      {
+        name: 'showLabels',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show labels on stages.',
+      },
+      {
+        name: 'labelPosition',
+        type: "'inside' | 'outside' | 'left' | 'right'",
+        required: false,
+        default: '"inside"',
+        description: 'Label placement.',
+      },
+      {
+        name: 'showConversion',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show conversion percentage between consecutive stages.',
+      },
+      {
+        name: 'orientation',
+        type: "'vertical' | 'horizontal'",
+        required: false,
+        default: '"vertical"',
+        description: 'Funnel layout direction.',
+      },
+      {
+        name: 'funnelAlign',
+        type: "'left' | 'center' | 'right'",
+        required: false,
+        default: '"center"',
+        description: 'Horizontal alignment of the funnel shape.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show legend below the chart.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter for labels and tooltip.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(params: unknown) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a stage is clicked.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<FunnelChart
@@ -783,9 +2019,23 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   ]}
   title="Sales Funnel"
 />`,
-    features: ['conversion-rates', 'tooltip', 'responsive', 'animation'],
+    features: [
+      'conversion-rates',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['data-table-fallback', 'aria-live'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'sankey-chart': {
     id: 'sankey-chart',
@@ -796,18 +2046,153 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     tier: 'enterprise',
     props: [
       {
-        name: 'data',
-        type: 'SankeyData',
+        name: 'nodes',
+        type: 'SankeyNode[]',
         required: true,
-        default: '{}',
-        description: 'Object with nodes[] and links[] arrays',
+        default: '—',
+        description: 'Node definitions.',
+      },
+      {
+        name: 'links',
+        type: 'SankeyLink[]',
+        required: true,
+        default: '—',
+        description: 'Link definitions connecting source to target with a value.',
+      },
+      {
+        name: 'size',
+        type: "'sm' | 'md' | 'lg'",
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'orient',
+        type: "'horizontal' | 'vertical'",
+        required: false,
+        default: '"horizontal"',
+        description: 'Layout orientation.',
+      },
+      {
+        name: 'nodeWidth',
+        type: 'number',
+        required: false,
+        default: '20',
+        description: 'Width of each node in pixels.',
+      },
+      {
+        name: 'nodeGap',
+        type: 'number',
+        required: false,
+        default: '8',
+        description: 'Vertical gap between nodes in the same column.',
+      },
+      {
+        name: 'draggable',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Allow interactive node dragging.',
+      },
+      {
+        name: 'focusNodeAdjacency',
+        type: 'SankeyFocusMode',
+        required: false,
+        default: '"allEdges"',
+        description: 'Emphasis focus behaviour on hover.',
+      },
+      {
+        name: 'lineStyle',
+        type: "'gradient' | 'source' | 'target'",
+        required: false,
+        default: '"gradient"',
+        description: 'Link line coloring strategy.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show legend below the chart.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter for tooltip.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'onNodeClick',
+        type: '(params: { name: string; data: unknown }) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a node is clicked.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<SankeyChart
@@ -824,9 +2209,23 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   }}
   title="Budget Flow"
 />`,
-    features: ['node-dragging', 'tooltip', 'responsive', 'animation'],
+    features: [
+      'node-dragging',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['data-table-fallback', 'aria-live'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
   'sunburst-chart': {
     id: 'sunburst-chart',
@@ -840,15 +2239,129 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'data',
         type: 'SunburstNode[]',
         required: true,
-        default: '[]',
-        description: 'Nested hierarchical tree structure',
+        default: '—',
+        description: 'Hierarchical data tree (top-level children form the inner ring).',
+      },
+      {
+        name: 'size',
+        type: "'sm' | 'md' | 'lg'",
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
       },
       {
         name: 'title',
         type: 'string',
         required: false,
         default: 'undefined',
-        description: 'Chart title',
+        description: 'Chart title.',
+      },
+      {
+        name: 'levels',
+        type: 'SunburstLevelConfig[]',
+        required: false,
+        default: 'undefined',
+        description: 'Per-level ring configuration. Auto-generated from data depth when omitted.',
+      },
+      {
+        name: 'sort',
+        type: "'desc' | 'asc' | null",
+        required: false,
+        default: '"desc"',
+        description: 'Sort order for sibling nodes.',
+      },
+      {
+        name: 'radius',
+        type: '[string, string]',
+        required: false,
+        default: '["0%", "90%"]',
+        description: 'Sunburst inner/outer radius range.',
+      },
+      {
+        name: 'highlightPolicy',
+        type: 'SunburstHighlightPolicy',
+        required: false,
+        default: '"descendant"',
+        description: 'Which nodes to highlight on hover.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show legend below the chart.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(v: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter for labels and tooltip.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'onNodeClick',
+        type: '(params: { name: string; value: number; data: unknown }) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a node is clicked.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
     sampleCode: `<SunburstChart
@@ -867,9 +2380,23 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   ]}
   title="Organization"
 />`,
-    features: ['drill-down', 'tooltip', 'responsive', 'animation'],
+    features: [
+      'drill-down',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
-    themes: ['light', 'dark', 'high-contrast', 'print'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
 
   /* ---- Interaction & Composition (Faz 21.4-B) ---- */
@@ -1175,6 +2702,320 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'bookmarks',
     ],
     a11y: ['filter-state-announced', 'reset-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  /* ---- Faz 21.4 PR-B: drill-down + chart-to-grid cross-filter ---- */
+
+  'cross-filter-grid': {
+    id: 'cross-filter-grid',
+    name: 'useGridCrossFilter',
+    description:
+      'Bridge a chart wrapper to a grid filter model. Chart click -> store -> grid.setFilterModel via the cross-filter event bridge. The mock grid panel renders the filter model so the bridge effect is observable.',
+    importPath: "import { useGridCrossFilter } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'gridId',
+        type: 'string',
+        required: true,
+        default: '—',
+        description: 'Unique grid identifier in the cross-filter store',
+      },
+      {
+        name: 'gridApi',
+        type: 'GridApi | null',
+        required: true,
+        default: '—',
+        description: 'AG Grid (or mock) API ref; null until the grid is ready',
+      },
+      {
+        name: 'syncStoreToGrid',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Push store filter changes to the grid via setFilterModel',
+      },
+    ],
+    sampleCode: `<CrossFilterProvider>
+  <ChartSide />   {/* uses useChartCrossFilter to emit filters */}
+  <GridSide />    {/* uses useGridCrossFilter to consume them */}
+</CrossFilterProvider>
+
+function GridSide() {
+  // gridApi is the AG Grid instance ref; mock or real.
+  useGridCrossFilter({ gridId: 'orders-grid', gridApi });
+  return <AgGridReact /* … */ />;
+}`,
+    features: ['chart-to-grid', 'event-bridge', 'set-filter-model', 'reset'],
+    a11y: ['filter-state-announced', 'reset-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'drill-down': {
+    id: 'drill-down',
+    name: 'useDrillDown',
+    description:
+      'Hierarchical drill state machine. Define N levels; clicking a chart bar drills into the next level, breadcrumb navigates back. Drill state lives in the cross-filter store; useDrillDown must be called inside a CrossFilterProvider tree.',
+    importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'levels',
+        type: 'DrillDownLevelSpec[]',
+        required: true,
+        default: '—',
+        description: 'Array of { field, label?, chartType? } level descriptors',
+      },
+      {
+        name: 'rootLabel',
+        type: 'string',
+        required: false,
+        default: '"All"',
+        description: 'Display label for the root breadcrumb item',
+      },
+    ],
+    sampleCode: `<CrossFilterProvider>
+  {/* useDrillDown reads/writes the drill state through the
+      cross-filter store, so a CrossFilterProvider ancestor is required. */}
+  <MyDrillChart />
+</CrossFilterProvider>
+
+function MyDrillChart() {
+  const drill = useDrillDown({
+    levels: [
+      { field: 'region', label: 'Region' },
+      { field: 'city', label: 'City' },
+      { field: 'store', label: 'Store' },
+    ],
+  });
+
+  return (
+    <>
+      <DrillDownBreadcrumb
+        items={drill.breadcrumbs}
+        onNavigate={drill.drillTo}
+      />
+      <BarChart
+        data={chartData}
+        onDataPointClick={(e) => drill.drillDown(e.label, e.label)}
+      />
+    </>
+  );
+}`,
+    features: ['drill-down', 'breadcrumb', 'reset'],
+    a11y: ['breadcrumb-aria-current', 'level-state-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'drill-down-history': {
+    id: 'drill-down-history',
+    name: 'useDrillDown (with undo)',
+    description:
+      'Same hook as drill-down with an explicit Undo button (drillUp wiring), a Reset action, and a depth + drill-count indicator. A real redo would require persisting the full {field,value,label} trail; that is intentionally out of scope here so the UI does not promise behaviour it cannot deliver.',
+    importPath: "import { useDrillDown, DrillDownBreadcrumb } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'levels',
+        type: 'DrillDownLevelSpec[]',
+        required: true,
+        default: '—',
+        description: 'Array of { field, label?, chartType? } level descriptors',
+      },
+    ],
+    sampleCode: `const drill = useDrillDown({ levels });
+const [drillCount, setDrillCount] = useState(0);
+
+const onClick = (label) => {
+  drill.drillDown(label, label);
+  setDrillCount((c) => c + 1);
+};
+
+const undo = () => {
+  drill.drillUp();
+  // drillCount is monotonic — counts drills fired, not depth.
+};
+
+return (
+  <>
+    <DrillDownBreadcrumb items={drill.breadcrumbs} onNavigate={drill.drillTo} />
+    <button onClick={undo} disabled={drill.currentDepth === 0}>Undo</button>
+    <button onClick={drill.drillToRoot}>Reset</button>
+    <span>depth {drill.currentDepth} · drills fired {drillCount}</span>
+  </>
+);`,
+    features: ['drill-down', 'undo', 'breadcrumb', 'reset'],
+    a11y: ['breadcrumb-aria-current', 'undo-redo-keyboard-focusable'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  /* ---- Faz 21.4 PR-C: 5 feature demos ---- */
+
+  'feature-brush': {
+    id: 'feature-brush',
+    name: 'useChartInteractions (brush)',
+    description:
+      'Click + drag on the chart container to capture a brush range. The hook tracks isBrushing, brushRange (data-space indices), and exposes clearBrush. Demo wires the handlers onto a plain div so the brush mechanics are observable without a real chart instance.',
+    importPath: "import { useChartInteractions } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'enableBrush',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Turn brush handlers on',
+      },
+      {
+        name: 'onBrushEnd',
+        type: '(range) => void',
+        required: false,
+        default: '—',
+        description: 'Fired on mouseup with the captured range',
+      },
+    ],
+    sampleCode: `const [state, handlers] = useChartInteractions({ enableBrush: true });
+return (
+  <div {...handlers}>
+    {state.isBrushing && <BrushOverlay range={state.brushRange} />}
+  </div>
+);`,
+    features: ['brush', 'mouse-handlers', 'range-state', 'clear'],
+    a11y: ['range-state-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-zoom-pan': {
+    id: 'feature-zoom-pan',
+    name: 'useChartInteractions (zoom + pan)',
+    description:
+      'Wheel-to-zoom and click-drag-pan handlers from a single hook. zoomLevel + panOffset live in the same state block. Pan is gated behind zoom > 1 so the chart only pans when zoomed in.',
+    importPath: "import { useChartInteractions } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'enableZoom',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Wheel handler updates zoomLevel',
+      },
+      {
+        name: 'enablePan',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Mouse-drag handler updates panOffset (active when zoomLevel > 1)',
+      },
+      {
+        name: 'zoomStep',
+        type: 'number',
+        required: false,
+        default: '0.1',
+        description: 'Multiplier per wheel tick',
+      },
+    ],
+    sampleCode: `const [state, handlers] = useChartInteractions({
+  enableZoom: true,
+  enablePan: true,
+});
+return <div {...handlers}>zoom: {state.zoomLevel}× · pan: ({state.panOffset.x}, {state.panOffset.y})</div>;`,
+    features: ['zoom', 'pan', 'wheel-handler', 'reset'],
+    a11y: ['zoom-state-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-realtime': {
+    id: 'feature-realtime',
+    name: 'useRealTimeData',
+    description:
+      'Buffered streaming hook with two modes (discriminated union, Faz 21.8 PR-X1): manual (callers push points via addPoint) and auto-tick (caller passes tickIntervalMs + onTick, the hook owns the setInterval). Buffer caps at maxPoints (FIFO eviction). Pause/resume gate the buffer and suspend the auto-tick interval.',
+    importPath: "import { useRealTimeData } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'maxPoints',
+        type: 'number',
+        required: false,
+        default: '500',
+        description: 'Buffer capacity (oldest evicted)',
+      },
+      {
+        name: 'onNewPoint',
+        type: '(point) => void',
+        required: false,
+        default: '—',
+        description: 'Fired for every accepted point',
+      },
+      {
+        name: 'tickIntervalMs',
+        type: 'number',
+        required: false,
+        default: '—',
+        description:
+          'Auto-tick mode: positive finite ms. Required together with onTick (discriminated union).',
+      },
+      {
+        name: 'onTick',
+        type: '() => T | undefined',
+        required: false,
+        default: '—',
+        description:
+          'Auto-tick producer. Hook calls this every tickIntervalMs ms and pushes the returned point (or skips if undefined).',
+      },
+    ],
+    sampleCode: `type Tick = { t: number; v: number };
+
+function MyStreamingChart() {
+  // Auto-tick: hook owns the setInterval, no useEffect needed.
+  const stream = useRealTimeData<Tick>({
+    maxPoints: 50,
+    tickIntervalMs: 250,
+    onTick: () => ({ t: Date.now(), v: Math.random() }),
+  });
+
+  return <span>points: {stream.data.length}</span>;
+}`,
+    features: ['stream-buffer', 'auto-tick', 'pause-resume', 'fifo-eviction'],
+    a11y: ['point-count-announced'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-theme-switch': {
+    id: 'feature-theme-switch',
+    name: 'BarChart theme prop',
+    description:
+      'Every chart wrapper accepts a theme prop ("auto" | "light" | "default" | "dark" | "high-contrast" | "print"). Switching the prop re-resolves the ECharts theme + palette and re-renders without remounting the chart.',
+    importPath: "import { BarChart } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [
+      {
+        name: 'theme',
+        type: '"auto" | "light" | "default" | "dark" | "high-contrast" | "print"',
+        required: false,
+        default: '"auto"',
+        description: 'Override the resolved chart theme',
+      },
+    ],
+    sampleCode: `<BarChart data={data} theme={theme} animate={false} />`,
+    features: ['theme-prop', 'palette-swap', 'no-remount'],
+    a11y: ['high-contrast', 'print', 'decal-fallback'],
+    themes: ['light', 'dark', 'high-contrast', 'print'],
+  },
+
+  'feature-export': {
+    id: 'feature-export',
+    name: 'useChartExport',
+    description:
+      'Imperative export hook: PNG and SVG go through instance.getDataURL; CSV goes through a Blob ➜ URL.createObjectURL anchor download. Demo uses a deterministic mock instance (the public BarChart wrapper does not expose its ECharts ref).',
+    importPath: "import { useChartExport } from '@mfe/x-charts';",
+    tier: 'interaction',
+    props: [],
+    sampleCode: `const exporter = useChartExport();
+const onExport = () => exporter.exportChart(instance, 'png', { filename: 'chart' });`,
+    features: ['png', 'svg', 'csv', 'data-url', 'blob'],
+    a11y: ['download-button-focusable'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
   },
 
@@ -1507,49 +3348,11 @@ return <Suspense fallback={<Skeleton />}><LazyBar data={...} /></Suspense>;`,
 
 /* ------------------------------------------------------------------ */
 /*  Playground default prop values per chart                           */
+/*                                                                     */
+/*  Faz 21.8 follow-up (Codex thread 019def27): the per-chart switch  */
+/*  was replaced by `chartPlaygroundModel.deriveDefaults`, which      */
+/*  derives typed defaults from the catalog + sidecar overrides.       */
 /* ------------------------------------------------------------------ */
-
-function getPlaygroundDefaults(chartId: string): Record<string, boolean | string> {
-  switch (chartId) {
-    case 'bar-chart':
-      return {
-        showValues: false,
-        showGrid: true,
-        showLegend: false,
-        animate: true,
-        orientation: 'vertical',
-      };
-    case 'line-chart':
-      return {
-        showDots: true,
-        showGrid: true,
-        showLegend: false,
-        showArea: false,
-        curved: false,
-        animate: true,
-      };
-    case 'pie-chart':
-      return {
-        donut: false,
-        showLabels: false,
-        showLegend: false,
-        showPercentage: false,
-        animate: true,
-      };
-    case 'area-chart':
-      return {
-        stacked: false,
-        showDots: false,
-        showGrid: true,
-        showLegend: false,
-        gradient: true,
-        curved: false,
-        animate: true,
-      };
-    default:
-      return {};
-  }
-}
 
 /* ================================================================== */
 /*  Main Component                                                     */
@@ -1558,10 +3361,24 @@ function getPlaygroundDefaults(chartId: string): Record<string, boolean | string
 const ChartDetail: React.FC = () => {
   const { chartId } = useParams<{ chartId: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<ChartTab>('overview');
   const [copied, setCopied] = useState(false);
 
   const chart = useMemo(() => (chartId ? CHART_CATALOG[chartId] : undefined), [chartId]);
+
+  // Metric chips for the hero header (Codex thread `019def27` simplification:
+  // overview metric cards collapsed into the title strip).
+  const metricChips = useMemo(() => {
+    if (!chart) return null;
+    const editableCount = buildDescriptors(chart.id, chart.props).filter(
+      (d) => d.kind !== 'complex',
+    ).length;
+    return [
+      { label: `${chart.props.length} props`, tone: 'neutral' as const },
+      { label: `${editableCount} editable`, tone: 'neutral' as const },
+      { label: `${chart.themes.length} themes`, tone: 'neutral' as const },
+      { label: `${chart.features.length} capabilities`, tone: 'neutral' as const },
+    ];
+  }, [chart]);
 
   const handleCopyImport = useCallback(async () => {
     if (!chart?.importPath) return;
@@ -1620,7 +3437,7 @@ const ChartDetail: React.FC = () => {
       </nav>
 
       {/* -- Hero header -- */}
-      <div className="relative overflow-hidden rounded-2xl border border-border-subtle bg-linear-to-br from-surface-default via-surface-default to-surface-canvas p-6 sm:p-8">
+      <div className="relative overflow-hidden rounded-2xl border border-border-subtle bg-linear-to-br from-surface-default via-surface-default to-surface-canvas p-4 sm:p-6 lg:p-8">
         {/* Decorative dots */}
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.02]"
@@ -1638,15 +3455,26 @@ const ChartDetail: React.FC = () => {
             {chart.description}
           </p>
 
-          {/* Badges */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-state-success-bg px-3 py-1 text-xs font-semibold text-state-success-text">
+          {/*
+            Badges — Faz 21.9 PR2 (Codex thread `019defa5`):
+            on mobile (< 640px) the strip becomes a horizontal scroll lane
+            so 7-12 chips don't wrap into 4-5 rows that push the rest of
+            the page below the fold. From `sm` upward we restore wrap so
+            tablet/desktop users see every badge at a glance. Each chip
+            adds `shrink-0 whitespace-nowrap` so it never collapses or
+            wraps mid-text inside the scroll lane.
+          */}
+          <div
+            className="mt-4 -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0"
+            data-testid="chart-detail-badges"
+          >
+            <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-state-success-bg px-3 py-1 text-xs font-semibold text-state-success-text">
               <span className="h-1.5 w-1.5 rounded-full bg-state-success-text" />
               stable
             </span>
             <span
               className={[
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
+                'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold',
                 chart.tier === 'enterprise'
                   ? 'bg-action-primary/10 text-action-primary'
                   : 'bg-state-info-bg text-state-info-text',
@@ -1654,12 +3482,60 @@ const ChartDetail: React.FC = () => {
             >
               {chart.tier}
             </span>
-            <span className="rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
+            <span className="shrink-0 whitespace-nowrap rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
               ECharts 5.6
             </span>
-            <span className="rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
+            <span className="shrink-0 whitespace-nowrap rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
               @mfe/x-charts
             </span>
+            {/*
+              Metric chips (Codex thread `019def27` simplification):
+              the previous Overview tab's 4 "metric cards" (Props / Themes /
+              Engine / Features) collapse into a single chip strip on the
+              hero header so the developer sees component shape at a glance
+              without an extra tab click.
+            */}
+            {metricChips?.map((chip) => (
+              <span
+                key={chip.label}
+                className="shrink-0 whitespace-nowrap rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium tabular-nums text-text-secondary"
+              >
+                {chip.label}
+              </span>
+            ))}
+            {/*
+              Beta / new feature badges (Codex thread `019def27` PR3):
+              MUI X uses "New" pills to advertise recently-added capabilities
+              (Range bar variant, Data Grid integration). We surface our own
+              betas directly next to the metric chips so developers see at a
+              glance which features are still stabilising before they wire
+              them into production code.
+            */}
+            {chart.features
+              .map((f) => ({ feature: f, badge: getFeatureBadge(f) }))
+              .filter(
+                (entry): entry is { feature: string; badge: NonNullable<typeof entry.badge> } =>
+                  entry.badge !== null,
+              )
+              .map(({ feature, badge }) => (
+                <span
+                  key={`badge-${feature}`}
+                  className={[
+                    'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                    badge.label === 'beta'
+                      ? 'border-state-warning-text/30 bg-state-warning-bg text-state-warning-text'
+                      : badge.label === 'new'
+                        ? 'border-state-info-text/30 bg-state-info-bg text-state-info-text'
+                        : 'border-border-subtle bg-surface-canvas text-text-secondary',
+                  ].join(' ')}
+                  title={badge.tooltip ?? undefined}
+                >
+                  <span>{feature}</span>
+                  <span className="rounded bg-white/40 px-1 py-0 font-semibold uppercase tracking-wider">
+                    {badge.label}
+                  </span>
+                </span>
+              ))}
           </div>
         </div>
 
@@ -1686,201 +3562,359 @@ const ChartDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* -- Tab navigation (pill style) -- */}
-      <div className="rounded-xl border border-border-subtle bg-surface-default p-1.5">
-        <div className="flex gap-1">
-          {TABS.map(({ id, label, icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={[
-                'flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                activeTab === id
-                  ? 'bg-action-primary text-text-inverse shadow-xs'
-                  : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
-              ].join(' ')}
-            >
-              {icon}
-              <span className="hidden sm:inline">{label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/*
+        Single-page layout (Codex thread `019def27` AGREE — Variant A-lite):
+        the previous 6-tab system (Overview / Playground / API / Examples /
+        Themes / Quality) is replaced with sequential anchored sections.
+        This matches MUI / MUI X / Ant Design / Mantine component-doc
+        conventions: live demo first, reference second, audit last.
 
-      {/* -- Tab content -- */}
-      <div className="min-h-[400px]">
-        {activeTab === 'overview' && <OverviewTab chart={chart} />}
-        {activeTab === 'playground' && <PlaygroundTab chart={chart} />}
-        {activeTab === 'api' && <ApiTab chart={chart} />}
-        {activeTab === 'examples' && <ExamplesTab chart={chart} />}
-        {activeTab === 'themes' && <ThemesTab chart={chart} />}
-        {activeTab === 'quality' && <QualityTab chart={chart} />}
-      </div>
+          - Overview tab is gone — its preview lives inside Playground via
+            ChartPreviewLive; its metric cards collapsed into the hero
+            chip strip above.
+          - Themes tab is gone — the inline `theme/decal/density/accent`
+            switchers in PlaygroundTab cover the on-demand override case.
+          - Examples + Quality stay as collapsible sections (audit-style)
+            so the page doesn't get noisy by default.
+      */}
+
+      {/*
+        User follow-up after PR #186:
+          > "api ve play grounda açılır kapanır olsa iyi olurdu"
+
+        Every section is now a CollapsibleDetailSection. Defaults:
+          - Playground: open  (primary developer surface)
+          - API:        open  (props reference)
+          - Examples:   closed (preset deep-dive)
+          - Quality:    closed (audit gates)
+      */}
+
+      {/* PLAYGROUND — primary developer surface, open by default */}
+      <CollapsibleDetailSection id="playground" title="Playground" defaultOpen>
+        <PlaygroundTab chart={chart} />
+      </CollapsibleDetailSection>
+
+      {/* EXAMPLES — preset code snippets (PR2 will make these live) */}
+      <CollapsibleDetailSection id="examples" title="Examples" defaultOpen={false}>
+        <ExamplesTab chart={chart} />
+      </CollapsibleDetailSection>
+
+      {/* API — full props reference, open by default */}
+      <CollapsibleDetailSection id="api" title="API" defaultOpen>
+        <ApiTab chart={chart} />
+      </CollapsibleDetailSection>
+
+      {/* PERFORMANCE — large-data guidance (Codex thread `019def27` PR3) */}
+      <CollapsibleDetailSection id="performance" title="Performance" defaultOpen={false}>
+        <PerformanceSection />
+      </CollapsibleDetailSection>
+
+      {/* FAQ — competitor-parity Q&A (Ant Design pattern) */}
+      <CollapsibleDetailSection id="faq" title="FAQ" defaultOpen={false}>
+        <FaqSection />
+      </CollapsibleDetailSection>
+
+      {/* QUALITY — audit gates, collapsed by default */}
+      <CollapsibleDetailSection id="quality" title="Quality" defaultOpen={false}>
+        <QualityTab chart={chart} />
+      </CollapsibleDetailSection>
     </div>
   );
 };
 
-export default ChartDetail;
-
 /* ================================================================== */
-/*  OverviewTab                                                        */
+/*  PerformanceSection — large-data guidance                           */
+/*                                                                     */
+/*  Codex thread `019def27` PR3: MUI X documents recommended data      */
+/*  sizes + reduced-motion + SVG-batch trade-offs. Our previous Quality */
+/*  section listed CI gates ("axe-gated", "tree-shake-gated") but      */
+/*  never answered "ne zaman sorun yaşarım?" in user-facing language.   */
+/*  Plain-language playbook lives in `chartPlaygroundModel`             */
+/*  `getPerformanceGuidance()`.                                         */
 /* ================================================================== */
 
-function OverviewTab({ chart }: { chart: ChartMeta }) {
+function PerformanceSection() {
+  const guidance = useMemo(() => getPerformanceGuidance(), []);
   return (
-    <div className="flex flex-col gap-8">
-      {/* Sample data preview */}
-      <div className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-default">
-        <div className="flex items-center gap-3 border-b border-border-subtle bg-linear-to-r from-state-info-bg to-transparent px-5 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-state-info-bg">
-            <Eye className="h-4 w-4 text-state-info-text" />
-          </div>
-          <span className="text-sm font-semibold text-text-primary">Preview</span>
-        </div>
-        <div className="flex items-center justify-center bg-surface-canvas p-8">
-          <ChartPreviewLive chartId={chart.id} chartName={chart.name} height={300} />
-        </div>
-      </div>
-
-      {/* Metadata cards (2-col grid) */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <MetadataCard
-          icon={<FileCode2 className="h-3.5 w-3.5 text-state-info-text" />}
-          iconBg="bg-state-info-bg"
-          label="Props"
-          value={String(chart.props.length)}
-          detail={`${chart.props.filter((p) => p.required).length} required`}
-        />
-        <MetadataCard
-          icon={<Palette className="h-3.5 w-3.5 text-action-primary" />}
-          iconBg="bg-action-primary/10"
-          label="Themes"
-          value={String(chart.themes.length)}
-          detail="light, dark, HC, print"
-        />
-        <MetadataCard
-          icon={<Cpu className="h-3.5 w-3.5 text-state-warning-text" />}
-          iconBg="bg-state-warning-bg"
-          label="Engine"
-          value="ECharts 5.6"
-          detail="Apache ECharts"
-        />
-        <MetadataCard
-          icon={<Sparkles className="h-3.5 w-3.5 text-state-success-text" />}
-          iconBg="bg-state-success-bg"
-          label="Features"
-          value={String(chart.features.length)}
-          detail={chart.features.slice(0, 3).join(', ')}
-        />
-      </div>
-
-      {/* Features list */}
-      <div className="rounded-2xl border border-border-subtle bg-surface-default p-5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-          Capabilities
-        </span>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {chart.features.map((f) => (
-            <span
-              key={f}
-              className="rounded-full border border-border-subtle bg-surface-canvas px-3 py-1 text-xs font-medium text-text-secondary"
-            >
-              {f}
-            </span>
-          ))}
-        </div>
-      </div>
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-text-tertiary">
+        Wrappers are wired to handle the common scale-up paths automatically — the notes below cover
+        the breakpoints where you should reach for the performance utilities (LTTB, progressive
+        render, lazy-chart, lru-cache, code-split).
+      </p>
+      <ul className="flex flex-col gap-2">
+        {guidance.map((item) => (
+          <li
+            key={item.label}
+            className="rounded-xl border border-border-subtle bg-surface-canvas p-4"
+          >
+            <p className="text-sm font-semibold text-text-primary">{item.label}</p>
+            <p className="mt-1 text-xs leading-relaxed text-text-secondary">{item.body}</p>
+            {item.reference && (
+              <span className="mt-2 inline-block rounded-full bg-surface-muted px-2 py-0.5 font-mono text-[10px] text-text-tertiary">
+                {item.reference}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
+
+/* ================================================================== */
+/*  FaqSection — competitor-parity Q&A                                 */
+/*                                                                     */
+/*  Codex thread `019def27` PR3: Ant Design Charts ships a per-component */
+/*  FAQ that disambiguates the most common ramp-up questions. We mirror */
+/*  that pattern globally (the answers cover wrapper conventions, not  */
+/*  chart-specific behaviour) so every chart's detail page benefits     */
+/*  from the same Q&A list. Source: `chartPlaygroundModel.getFaq()`.    */
+/* ================================================================== */
+
+function FaqSection() {
+  const entries = useMemo(() => getFaq(), []);
+  return (
+    <ul className="flex flex-col gap-3">
+      {entries.map((entry) => (
+        <li
+          key={entry.question}
+          className="rounded-xl border border-border-subtle bg-surface-canvas p-4"
+        >
+          <p className="text-sm font-semibold text-text-primary">{entry.question}</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-text-secondary">{entry.answer}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ================================================================== */
+/*  DetailSection — REMOVED                                            */
+/*                                                                     */
+/*  Every chart-detail section is now collapsible (user follow-up      */
+/*  after PR #186 — `api ve playgrounda açılır kapanır olsa iyi        */
+/*  olurdu`). The always-visible variant is no longer used; if a       */
+/*  future section needs an always-open layout, prefer adding a        */
+/*  `collapsible={false}` flag to `CollapsibleDetailSection` rather    */
+/*  than reintroducing two near-identical wrappers.                    */
+/* ================================================================== */
+
+/* ================================================================== */
+/*  CollapsibleDetailSection — Examples / Quality accordion            */
+/* ================================================================== */
+
+function CollapsibleDetailSection({
+  id,
+  title,
+  defaultOpen = false,
+  countBadge,
+  children,
+}: {
+  id: string;
+  title: string;
+  defaultOpen?: boolean;
+  countBadge?: number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section
+      id={id}
+      className="scroll-mt-20 rounded-2xl border border-border-subtle bg-surface-default"
+      data-testid={`detail-section-${id}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 rounded-2xl px-5 py-4 text-left transition hover:bg-surface-muted"
+      >
+        {open ? (
+          <ChevronDown className="h-4 w-4 text-text-secondary" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-text-secondary" />
+        )}
+        <h2 className="text-lg font-semibold tracking-tight text-text-primary">{title}</h2>
+        {typeof countBadge === 'number' && countBadge > 0 && (
+          <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
+            {countBadge}
+          </span>
+        )}
+        <div className="h-px flex-1 bg-border-subtle" aria-hidden="true" />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+          {open ? 'collapse' : 'expand'}
+        </span>
+      </button>
+      {open && <div className="border-t border-border-subtle p-5">{children}</div>}
+    </section>
+  );
+}
+
+export default ChartDetail;
+
+/* ================================================================== */
+/*  OverviewTab — REMOVED                                              */
+/*                                                                     */
+/*  Codex thread `019def27` AGREE — Variant A-lite simplification:     */
+/*  the Overview tab's preview moved into PlaygroundTab via            */
+/*  ChartPreviewLive; its 4 metric cards (Props / Themes / Engine /    */
+/*  Features) collapsed into the hero header chip strip; its           */
+/*  Capabilities chip list is rendered inline by ChartDetail itself    */
+/*  (header description neighbour). Component removed entirely.        */
+/* ================================================================== */
 
 /* ================================================================== */
 /*  PlaygroundTab                                                      */
 /* ================================================================== */
 
 function PlaygroundTab({ chart }: { chart: ChartMeta }) {
-  const defaults = useMemo(() => getPlaygroundDefaults(chart.id), [chart.id]);
-  const [pgState, setPgState] = useState<Record<string, boolean | string>>(defaults);
-
-  const booleanProps = useMemo(
-    () => chart.props.filter((p) => p.type === 'boolean'),
-    [chart.props],
+  // Build typed editor descriptors for every prop in the catalog and derive
+  // the initial playground state from their typed defaults. The descriptor
+  // array also drives codegen so the generated snippet stays in sync with
+  // the real API defaults.
+  const descriptors = useMemo<EditorDescriptor[]>(
+    () => buildDescriptors(chart.id, chart.props),
+    [chart.id, chart.props],
   );
+  const defaults = useMemo<PlaygroundState>(() => deriveDefaults(descriptors), [descriptors]);
+  const [pgState, setPgState] = useState<PlaygroundState>(defaults);
+
+  // Reset playground state when the user navigates between charts (otherwise
+  // stale BarChart toggles would leak into LineChart's props editor).
+  useEffect(() => {
+    setPgState(defaults);
+  }, [chart.id, defaults]);
+
+  // Group descriptors by category for the categorised editor layout. We
+  // preserve the catalog order within each category.
+  const grouped = useMemo(() => {
+    const buckets: Record<EditorCategory, EditorDescriptor[]> = {
+      data: [],
+      display: [],
+      theme: [],
+      access: [],
+      advanced: [],
+    };
+    for (const d of descriptors) {
+      buckets[d.category].push(d);
+    }
+    return buckets;
+  }, [descriptors]);
+
+  const setValue = useCallback((propName: string, value: PlaygroundValue) => {
+    setPgState((prev) => ({ ...prev, [propName]: value }));
+  }, []);
 
   const handleToggle = useCallback((propName: string) => {
     setPgState((prev) => ({ ...prev, [propName]: !prev[propName] }));
   }, []);
 
-  const generatedCode = useMemo(() => {
-    const propLines = Object.entries(pgState)
-      .filter(([, v]) => v !== false && v !== undefined)
-      .map(([k, v]) => {
-        if (typeof v === 'boolean' && v) return `  ${k}`;
-        return `  ${k}="${String(v)}"`;
-      })
-      .join('\n');
+  const generatedCode = useMemo(
+    () => generatePlaygroundCode(chart.name, descriptors, pgState, chart.id),
+    [chart.id, chart.name, descriptors, pgState],
+  );
 
-    return `<${chart.name}\n  data={sampleData}\n${propLines}\n/>`;
-  }, [chart.name, pgState]);
+  const sampleData = useMemo<SampleDataDef | null>(() => getSampleData(chart.id), [chart.id]);
+
+  // Reset returns the editor to the catalog-derived defaults — the same
+  // shape the user landed on. Keyed by reference equality so it doesn't
+  // trigger unnecessary re-renders.
+  const handleReset = useCallback(() => {
+    setPgState(defaults);
+  }, [defaults]);
+
+  // Diff vs. defaults so the Reset button can disable when the editor is
+  // already in the default state. Cheap shallow compare over the small
+  // playground object is fine here.
+  const isDirty = useMemo(() => {
+    const stateKeys = Object.keys(pgState);
+    const defaultKeys = Object.keys(defaults);
+    if (stateKeys.length !== defaultKeys.length) return true;
+    for (const k of stateKeys) {
+      if (pgState[k] !== defaults[k]) return true;
+    }
+    return false;
+  }, [pgState, defaults]);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Controls panel */}
-        <div className="rounded-2xl border border-border-subtle bg-surface-default p-5 lg:col-span-1">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-            Props Editor
-          </span>
-          <div className="mt-4 flex flex-col gap-3">
-            {booleanProps.map((prop) => (
-              <label
-                key={prop.name}
-                className="flex items-center justify-between rounded-lg px-3 py-2 transition hover:bg-surface-muted"
+        <div
+          className="rounded-2xl border border-border-subtle bg-surface-default p-5 lg:col-span-1"
+          data-testid="props-editor-panel"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
+              Props Editor
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
+                {descriptors.filter((d) => d.kind !== 'complex').length} / {descriptors.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={!isDirty}
+                className={[
+                  'inline-flex items-center gap-1 rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition',
+                  isDirty
+                    ? 'text-text-primary hover:bg-surface-muted'
+                    : 'cursor-not-allowed text-text-tertiary opacity-50',
+                ].join(' ')}
+                data-testid="playground-reset"
+                aria-label="Reset playground to defaults"
+                title="Reset to defaults"
               >
-                <div>
-                  <span className="text-sm font-medium text-text-primary">{prop.name}</span>
-                  <p className="text-xs text-text-tertiary">{prop.description}</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={!!pgState[prop.name]}
-                  onClick={() => handleToggle(prop.name)}
-                  className={[
-                    'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
-                    pgState[prop.name]
-                      ? 'bg-action-primary'
-                      : 'bg-surface-muted border border-border-subtle',
-                  ].join(' ')}
-                >
-                  <span
-                    className={[
-                      'inline-block h-3.5 w-3.5 rounded-full bg-white shadow-xs transition-transform',
-                      pgState[prop.name] ? 'translate-x-4' : 'translate-x-0.5',
-                    ].join(' ')}
-                  />
-                </button>
-              </label>
-            ))}
-            {booleanProps.length === 0 && (
-              <p className="text-xs text-text-tertiary">
-                No toggleable boolean props for this chart.
-              </p>
-            )}
+                <RotateCcw className="h-3 w-3" />
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2">
+            {CATEGORY_ORDER.map((cat) => {
+              const items = grouped[cat];
+              if (items.length === 0) return null;
+              return (
+                <PlaygroundCategoryGroup
+                  key={cat}
+                  category={cat}
+                  items={items}
+                  state={pgState}
+                  onToggle={handleToggle}
+                  onChange={setValue}
+                />
+              );
+            })}
           </div>
         </div>
 
         {/* Live preview area */}
-        <div className="flex flex-col gap-4 lg:col-span-2">
-          <div className="flex-1 rounded-2xl border border-border-subtle bg-surface-canvas p-8">
-            <div className="flex min-h-[360px] items-center justify-center">
-              <ChartPreviewLive
-                chartId={chart.id}
-                chartName={chart.name}
-                toggles={pgState}
-                height={360}
-              />
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+          {/*
+            Faz 21.9 PR2 (Codex thread `019defa5`):
+              - mobile p-3 (12px) instead of p-8 (32px) — leaves the chart
+                more horizontal room on small viewports
+              - min-h responsive — 240 mobile / 320 tablet / 360 desktop;
+                ChartPreviewLive itself clamps its render height the same
+                way so the chart canvas + preview surround are in lockstep
+              - `min-w-0` on the container so the chart never forces the
+                outer grid into horizontal overflow at narrow widths
+          */}
+          <div className="flex-1 rounded-2xl border border-border-subtle bg-surface-canvas p-3 sm:p-6 lg:p-8">
+            <div className="flex min-h-[240px] items-center justify-center sm:min-h-[320px] lg:min-h-[360px]">
+              {/*
+                Codex 019defa5 PARTIAL fix: do NOT pass `height={360}`.
+                That value used to be a fixed render height; with PR2 it
+                became a *floor* on top of `responsiveHeight(clampedSize)`
+                — and a 360 floor cancelled the mobile/tablet shrink the
+                whole responsive overhaul was supposed to deliver. Letting
+                the prop default keeps `floor=0` so the chart-size-derived
+                height (220 / 320 / 420) wins on every breakpoint.
+              */}
+              <ChartPreviewLive chartId={chart.id} chartName={chart.name} toggles={pgState} />
             </div>
           </div>
 
@@ -1895,9 +3929,239 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
               <code>{generatedCode}</code>
             </pre>
           </div>
+
+          {/* Sample Data — preview-feeding mock data definitions */}
+          {sampleData && (
+            <div
+              className="overflow-hidden rounded-xl border border-border-subtle bg-surface-default"
+              data-testid="playground-sample-data"
+            >
+              <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2">
+                <Database className="h-3.5 w-3.5 text-text-secondary" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                  Sample Data
+                </span>
+                <span className="text-[10px] text-text-tertiary">
+                  · live preview uses these literals
+                </span>
+              </div>
+              <div className="flex flex-col divide-y divide-border-subtle">
+                {sampleData.scaffold.map((entry) => (
+                  <div key={entry.propName} className="px-4 py-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-text-primary">
+                        {entry.varName}
+                      </span>
+                      <span className="text-[10px] text-text-tertiary">
+                        {entry.caption} → <code className="font-mono">{entry.propName}</code>
+                      </span>
+                    </div>
+                    <pre className="overflow-x-auto whitespace-pre rounded bg-surface-muted p-3 text-[11px] leading-relaxed text-text-primary">
+                      <code>{entry.jsLiteral}</code>
+                    </pre>
+                  </div>
+                ))}
+                {sampleData.auxiliaryProps?.map((aux) => (
+                  <div key={aux.propName} className="px-4 py-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-text-primary">{aux.varName}</span>
+                      <span className="text-[10px] text-text-tertiary">
+                        → <code className="font-mono">{aux.propName}</code>
+                      </span>
+                    </div>
+                    <pre className="overflow-x-auto whitespace-pre rounded bg-surface-muted p-3 text-[11px] leading-relaxed text-text-primary">
+                      <code>{aux.jsLiteral}</code>
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+/* ================================================================== */
+/*  PlaygroundCategoryGroup                                            */
+/* ================================================================== */
+
+function PlaygroundCategoryGroup({
+  category,
+  items,
+  state,
+  onToggle,
+  onChange,
+}: {
+  category: EditorCategory;
+  items: EditorDescriptor[];
+  state: PlaygroundState;
+  onToggle: (propName: string) => void;
+  onChange: (propName: string, value: PlaygroundValue) => void;
+}) {
+  const [open, setOpen] = useState(CATEGORY_DEFAULT_OPEN[category]);
+  return (
+    <section className="rounded-lg border border-border-subtle">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded-lg px-3 py-2 transition hover:bg-surface-muted"
+        aria-expanded={open}
+        data-testid={`playground-category-${category}`}
+      >
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ChevronDown className="h-3.5 w-3.5 text-text-secondary" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-text-secondary" />
+          )}
+          <span className="text-xs font-semibold uppercase tracking-wider text-text-primary">
+            {CATEGORY_LABEL[category]}
+          </span>
+        </div>
+        <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
+          {items.length}
+        </span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1 border-t border-border-subtle px-2 py-2">
+          {items.map((d) => (
+            <PlaygroundPropEditor
+              key={d.prop.name}
+              descriptor={d}
+              value={state[d.prop.name]}
+              onToggle={onToggle}
+              onChange={onChange}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ================================================================== */
+/*  PlaygroundPropEditor                                               */
+/* ================================================================== */
+
+function PlaygroundPropEditor({
+  descriptor,
+  value,
+  onToggle,
+  onChange,
+}: {
+  descriptor: EditorDescriptor;
+  value: PlaygroundValue;
+  onToggle: (propName: string) => void;
+  onChange: (propName: string, value: PlaygroundValue) => void;
+}) {
+  const { prop, kind, liveEditable, options, readOnlyHint } = descriptor;
+  const hint = !liveEditable ? readOnlyHint : null;
+  const disabled = !liveEditable;
+
+  return (
+    <label
+      className={[
+        'flex flex-col gap-1.5 rounded-md px-2 py-2 transition',
+        disabled ? 'opacity-60' : 'hover:bg-surface-muted',
+      ].join(' ')}
+      data-testid={`playground-prop-${prop.name}`}
+      data-prop-kind={kind}
+      data-live-editable={liveEditable ? 'true' : 'false'}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-text-primary">{prop.name}</span>
+            {prop.required && (
+              <span className="rounded-full bg-state-info-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase text-state-info-text">
+                req
+              </span>
+            )}
+            {!liveEditable && (
+              <Lock className="h-3 w-3 shrink-0 text-text-tertiary" aria-hidden="true" />
+            )}
+          </div>
+          <p className="text-xs text-text-tertiary">{prop.description}</p>
+          {hint && <p className="mt-0.5 text-[10px] italic text-text-tertiary">{hint}</p>}
+        </div>
+        {kind === 'boolean' && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!value}
+            disabled={disabled}
+            onClick={() => onToggle(prop.name)}
+            className={[
+              'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+              value ? 'bg-action-primary' : 'bg-surface-muted border border-border-subtle',
+              disabled ? 'cursor-not-allowed' : '',
+            ].join(' ')}
+          >
+            <span
+              className={[
+                'inline-block h-3.5 w-3.5 rounded-full bg-white shadow-xs transition-transform',
+                value ? 'translate-x-4' : 'translate-x-0.5',
+              ].join(' ')}
+            />
+          </button>
+        )}
+      </div>
+
+      {(kind === 'enum' || kind === 'tristate') && (
+        <select
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => onChange(prop.name, e.target.value)}
+          className="rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-xs text-text-primary disabled:cursor-not-allowed"
+          data-testid={`playground-prop-input-${prop.name}`}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {kind === 'string' && (
+        <input
+          type="text"
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => onChange(prop.name, e.target.value)}
+          placeholder={prop.required ? 'required' : 'optional'}
+          className="rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-xs text-text-primary disabled:cursor-not-allowed"
+          data-testid={`playground-prop-input-${prop.name}`}
+        />
+      )}
+
+      {kind === 'number' && (
+        <input
+          type="number"
+          value={typeof value === 'number' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (next === '') {
+              onChange(prop.name, undefined);
+              return;
+            }
+            const n = Number(next);
+            if (Number.isFinite(n)) onChange(prop.name, n);
+          }}
+          className="w-32 rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-xs text-text-primary disabled:cursor-not-allowed"
+          data-testid={`playground-prop-input-${prop.name}`}
+        />
+      )}
+
+      {kind === 'complex' && (
+        <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface-muted px-2 py-1 font-mono text-[10px] leading-relaxed text-text-tertiary">
+          <code>{prop.type}</code>
+        </pre>
+      )}
+    </label>
   );
 }
 
@@ -1971,204 +4235,138 @@ function ApiTab({ chart }: { chart: ChartMeta }) {
 }
 
 /* ================================================================== */
-/*  ExamplesTab                                                        */
+/*  ExamplesTab — live preset gallery (PR2 Codex thread `019def27`)    */
+/*                                                                     */
+/*  The previous implementation rendered hand-written code snippets    */
+/*  with no live preview. Two problems:                                */
+/*                                                                     */
+/*    1. The snippets drifted from the wrappers (the old `Dark Theme`  */
+/*       example used a `<ThemeProvider theme=...>` API that does not  */
+/*       exist).                                                       */
+/*    2. Rakipler (MUI X / Recharts / Ant Design) named-scenario       */
+/*       galleries with live preview gösteriyor; bizdeki static-code   */
+/*       only sayfa "bu chart ile neler yapabilirim?" sorusuna hızlı   */
+/*       cevap vermiyor.                                               */
+/*                                                                     */
+/*  New model: every preset is `{ statePatch }` on top of the catalog  */
+/*  defaults. The same `ChartPreviewLive` + `generatePlaygroundCode`   */
+/*  machinery that drives the Playground also drives the gallery, so   */
+/*  presets cannot drift from runtime behaviour.                       */
 /* ================================================================== */
 
 function ExamplesTab({ chart }: { chart: ChartMeta }) {
-  const examples = useMemo(() => buildExamples(chart), [chart]);
+  const presets = useMemo(() => getChartPresets(chart.id), [chart.id]);
+
+  // Pre-compute descriptors + defaults once per chart for codegen reuse.
+  const descriptors = useMemo<EditorDescriptor[]>(
+    () => buildDescriptors(chart.id, chart.props),
+    [chart.id, chart.props],
+  );
+  const defaults = useMemo<PlaygroundState>(() => deriveDefaults(descriptors), [descriptors]);
+
+  if (presets.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border-subtle bg-surface-canvas px-5 py-8 text-center text-xs text-text-tertiary">
+        Live preset gallery is not wired for this chart yet — see Playground for an interactive
+        surface and API for the props reference.
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-6">
-      {examples.map((ex) => (
-        <div
-          key={ex.title}
-          className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-default transition-all duration-300 hover:shadow-sm"
-        >
-          <div className="flex items-center gap-2 border-b border-border-subtle px-5 py-3">
-            <BookOpen className="h-3.5 w-3.5 text-text-secondary" />
-            <span className="text-sm font-semibold text-text-primary">{ex.title}</span>
-            <span className="ml-auto rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-text-tertiary">
-              {ex.tag}
-            </span>
-          </div>
-          <p className="border-b border-border-subtle bg-surface-canvas/50 px-5 py-2.5 text-xs text-text-secondary">
-            {ex.description}
-          </p>
-          <pre className="overflow-x-auto p-5 text-xs leading-relaxed text-text-primary">
-            <code>{ex.code}</code>
-          </pre>
-        </div>
+    <div className="grid gap-4 md:grid-cols-2">
+      {presets.map((preset) => (
+        <PresetCard
+          key={preset.id}
+          chart={chart}
+          preset={preset}
+          descriptors={descriptors}
+          defaults={defaults}
+        />
       ))}
     </div>
   );
 }
 
-type ExampleItem = { title: string; tag: string; description: string; code: string };
-
-function buildExamples(chart: ChartMeta): ExampleItem[] {
-  const items: ExampleItem[] = [
-    {
-      title: 'Basic Usage',
-      tag: 'starter',
-      description: `Minimal ${chart.name} setup with default configuration.`,
-      code: chart.sampleCode,
-    },
-  ];
-
-  if (chart.id === 'bar-chart') {
-    items.push({
-      title: 'Horizontal Bars',
-      tag: 'orientation',
-      description: 'Switch to horizontal layout for long category labels.',
-      code: `<BarChart\n  data={data}\n  orientation="horizontal"\n  showValues\n/>`,
-    });
-    items.push({
-      title: 'Grouped Series',
-      tag: 'multi-series',
-      description: 'Compare multiple series side by side within each category.',
-      code: `<BarChart\n  series={[\n    { name: "2024", data: [120, 200, 150] },\n    { name: "2025", data: [180, 220, 190] },\n  ]}\n  showLegend\n  showGrid\n/>`,
-    });
-  } else if (chart.id === 'line-chart') {
-    items.push({
-      title: 'Area Fill with Curves',
-      tag: 'area',
-      description: 'Smooth bezier curves with gradient area fill.',
-      code: `<LineChart\n  series={[{ name: "Trend", data: [10, 40, 25, 60, 35, 70] }]}\n  labels={["Jan", "Feb", "Mar", "Apr", "May", "Jun"]}\n  showArea\n  curved\n  showDots\n/>`,
-    });
-  } else if (chart.id === 'pie-chart') {
-    items.push({
-      title: 'Donut with Center Label',
-      tag: 'donut',
-      description: 'Ring chart with custom content in the center.',
-      code: `<PieChart\n  data={data}\n  donut\n  innerLabel={<span className="text-xl font-bold">85%</span>}\n  showPercentage\n/>`,
-    });
-  } else if (chart.id === 'area-chart') {
-    items.push({
-      title: 'Stacked Areas',
-      tag: 'stacked',
-      description: 'Stack multiple series to show cumulative totals.',
-      code: `<AreaChart\n  series={[\n    { name: "Organic", data: [40, 50, 45, 70] },\n    { name: "Paid", data: [20, 30, 25, 35] },\n  ]}\n  labels={["Q1", "Q2", "Q3", "Q4"]}\n  stacked\n  gradient\n  showLegend\n/>`,
-    });
-  }
-
-  // Common: theme variant example
-  items.push({
-    title: 'Dark Theme',
-    tag: 'theme',
-    description: `${chart.name} rendered within a dark theme context.`,
-    code: `<ThemeProvider theme="dark">\n  ${chart.sampleCode.split('\n')[0]}\n    {...props}\n  />\n</ThemeProvider>`,
-  });
-
-  return items;
-}
-
 /* ================================================================== */
-/*  ThemesTab                                                          */
+/*  PresetCard — one live example tile in the Examples gallery        */
 /* ================================================================== */
 
-const THEME_CONFIG = [
-  {
-    id: 'light',
-    label: 'Light',
-    bg: 'bg-white',
-    text: 'text-gray-900',
-    accent: '#3b82f6',
-    muted: '#e5e7eb',
-  },
-  {
-    id: 'dark',
-    label: 'Dark',
-    bg: 'bg-gray-900',
-    text: 'text-gray-100',
-    accent: '#60a5fa',
-    muted: '#374151',
-  },
-  {
-    id: 'high-contrast',
-    label: 'High Contrast',
-    bg: 'bg-black',
-    text: 'text-white',
-    accent: '#facc15',
-    muted: '#525252',
-  },
-  {
-    id: 'print',
-    label: 'Print',
-    bg: 'bg-white',
-    text: 'text-black',
-    accent: '#1f2937',
-    muted: '#d1d5db',
-  },
-] as const;
+function PresetCard({
+  chart,
+  preset,
+  descriptors,
+  defaults,
+}: {
+  chart: ChartMeta;
+  preset: ChartPlaygroundPreset;
+  descriptors: readonly EditorDescriptor[];
+  defaults: PlaygroundState;
+}) {
+  // Final state for THIS preset = catalog defaults + statePatch.
+  const presetState = useMemo<PlaygroundState>(
+    () => applyPreset(defaults, preset),
+    [defaults, preset],
+  );
 
-function ThemesTab({ chart }: { chart: ChartMeta }) {
+  // Generated code derives from the patched state via the same
+  // serializer the Playground uses; the snippet stays in lock-step
+  // with the live preview shown alongside.
+  const generatedCode = useMemo(
+    () => generatePlaygroundCode(chart.name, descriptors, presetState, chart.id),
+    [chart.id, chart.name, descriptors, presetState],
+  );
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-border-subtle bg-surface-default p-5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-          Theme Comparison
-        </span>
-        <p className="mt-1 text-xs text-text-tertiary">
-          {chart.name} adapts to all 4 supported themes via design token resolution.
-        </p>
+    <article
+      className="flex flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-default transition-all hover:shadow-sm"
+      data-testid={`preset-card-${preset.id}`}
+    >
+      {/* Title strip */}
+      <header className="flex items-center gap-2 border-b border-border-subtle px-4 py-3">
+        <BookOpen className="h-3.5 w-3.5 text-text-secondary" aria-hidden="true" />
+        <span className="text-sm font-semibold text-text-primary">{preset.label}</span>
+        {preset.tag && (
+          <span className="ml-auto rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-text-tertiary">
+            {preset.tag}
+          </span>
+        )}
+      </header>
+
+      {/* Description */}
+      <p className="border-b border-border-subtle bg-surface-canvas/50 px-4 py-2 text-xs text-text-secondary">
+        {preset.description}
+      </p>
+
+      {/* Live preview — same renderer as Playground */}
+      <div className="flex min-h-[220px] items-center justify-center bg-surface-canvas p-4">
+        <ChartPreviewLive
+          chartId={chart.id}
+          chartName={chart.name}
+          toggles={presetState}
+          height={200}
+        />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {THEME_CONFIG.map((theme) => (
-          <div
-            key={theme.id}
-            className="overflow-hidden rounded-2xl border border-border-subtle transition-all duration-300 hover:shadow-sm"
-          >
-            <div className="flex items-center gap-2 border-b border-border-subtle bg-surface-muted px-4 py-2.5">
-              <span
-                className="h-3 w-3 rounded-full border border-border-subtle"
-                style={{ backgroundColor: theme.accent }}
-              />
-              <span className="text-xs font-semibold text-text-primary">{theme.label}</span>
-            </div>
-            {/* Mock chart preview area */}
-            <div className={`flex items-center justify-center p-6 ${theme.bg}`}>
-              <div className="flex h-32 w-full items-end justify-center gap-2 px-4">
-                {[0.4, 0.7, 0.55, 0.85, 0.65].map((h, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-t-md transition-all duration-500"
-                    style={{
-                      height: `${h * 100}%`,
-                      backgroundColor: i % 2 === 0 ? theme.accent : theme.muted,
-                      opacity: 0.9,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-            {/* Token swatch row */}
-            <div className="flex items-center gap-3 border-t border-border-subtle bg-surface-default px-4 py-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-text-tertiary">accent</span>
-                <span
-                  className="h-3 w-3 rounded-sm border border-border-subtle"
-                  style={{ backgroundColor: theme.accent }}
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-text-tertiary">muted</span>
-                <span
-                  className="h-3 w-3 rounded-sm border border-border-subtle"
-                  style={{ backgroundColor: theme.muted }}
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-text-tertiary">bg</span>
-                <span className={`h-3 w-3 rounded-sm border border-border-subtle ${theme.bg}`} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      {/* Generated code, compile-ready */}
+      <pre className="overflow-x-auto border-t border-border-subtle p-4 text-[11px] leading-relaxed text-text-primary">
+        <code>{generatedCode}</code>
+      </pre>
+    </article>
   );
 }
+
+/* ================================================================== */
+/*  ThemesTab — REMOVED                                                */
+/*                                                                     */
+/*  Codex thread `019def27` AGREE: a dedicated themes tab repeated    */
+/*  what the inline `theme/decal/density/accent` switchers in the      */
+/*  Theme category of PlaygroundTab already cover (and uses real      */
+/*  ECharts theme resolution; the static THEME_CONFIG previews were   */
+/*  hand-painted bars). The 4-theme yan-yana comparison is queued for */
+/*  PR3 polish as a collapsed Theme Matrix section if real demand     */
+/*  surfaces.                                                          */
+/* ================================================================== */
 
 /* ================================================================== */
 /*  QualityTab                                                         */
@@ -2298,39 +4496,10 @@ function QualityTab({ chart }: { chart: ChartMeta }) {
 
 /* ================================================================== */
 /*  Shared helper components                                           */
+/*                                                                     */
+/*  `MetadataCard` was removed in the single-page refactor (Codex     */
+/*  thread `019def27`); the 4 metric cards collapsed into hero chips.  */
 /* ================================================================== */
-
-function MetadataCard({
-  icon,
-  iconBg,
-  label,
-  value,
-  detail,
-}: {
-  icon: React.ReactNode;
-  iconBg: string;
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-border-subtle bg-surface-default p-5 transition-all duration-300 hover:border-border-default hover:shadow-sm">
-      <div className="flex items-center gap-2">
-        <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconBg}`}>
-          {icon}
-        </div>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-          {label}
-        </span>
-        <span className="ml-auto rounded-full bg-surface-muted px-2 py-0.5 text-xs font-bold tabular-nums text-text-primary">
-          {value}
-        </span>
-      </div>
-      <p className="mt-2 text-xs text-text-tertiary">{detail}</p>
-      <div className="pointer-events-none absolute -bottom-3 -right-3 h-12 w-12 rounded-full bg-linear-to-tl from-action-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-    </div>
-  );
-}
 
 /* Previously: ChartPreviewPlaceholder — SVG mock with chart.id-specific
  * variants. Replaced by ChartPreviewLive (../widgets/ChartPreviewLive) which

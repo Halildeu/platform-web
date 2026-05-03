@@ -243,12 +243,10 @@ export const ShellLayout: React.FC = () => {
   }, [dispatch, expiresAt, token, t]);
 
   return (
-    <BrowserRouter
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
+    // React Router v7 made `v7_startTransition` and `v7_relativeSplatPath`
+    // the default. Removing the explicit `future={...}` prop now that the
+    // workspace baseline is v7 (see PR #160).
+    <BrowserRouter>
       <RouteTracker />
       <ShellChrome />
     </BrowserRouter>

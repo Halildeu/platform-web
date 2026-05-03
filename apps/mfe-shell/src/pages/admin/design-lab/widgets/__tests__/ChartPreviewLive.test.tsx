@@ -78,6 +78,11 @@ vi.mock('@mfe/x-charts', () => {
       },
       {},
     ],
+    // Faz 21.9 PR2: useResponsiveBreakpoint drives PreviewBox height +
+    // chart `size` clamp. The mock returns a stable 'desktop' breakpoint
+    // so existing chart-routing tests keep matching their previous
+    // baseline (no clamp, no height shrink).
+    useResponsiveBreakpoint: () => 'desktop',
     CrossFilterProvider: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
     useChartCrossFilter: () => ({
@@ -89,6 +94,42 @@ vi.mock('@mfe/x-charts', () => {
     }),
     useCrossFilterStoreApi: () => ({
       getState: () => ({ clearAllFilters: vi.fn() }),
+    }),
+    useGridCrossFilter: () => ({
+      activeFilters: [],
+      pushGridFilters: vi.fn(),
+      bridge: null,
+    }),
+    useDrillDown: () => ({
+      currentDepth: 0,
+      currentLevel: undefined,
+      chartTypeOverride: undefined,
+      canDrillDeeper: true,
+      breadcrumbs: [{ label: 'All Sales', index: -1, isCurrent: true }],
+      drillDown: vi.fn(),
+      drillUp: vi.fn(),
+      drillToRoot: vi.fn(),
+      drillTo: vi.fn(),
+      drillPath: [],
+    }),
+    DrillDownBreadcrumb: ({ items }: { items: Array<{ label: string }> }) =>
+      React.createElement(
+        'nav',
+        { 'data-testid': 'mock-drill-down-breadcrumb' },
+        items.map((it) => it.label).join(' / '),
+      ),
+    // Faz 21.4 PR-C — feature demo mock surface
+    useRealTimeData: () => ({
+      data: [],
+      isPaused: false,
+      addPoint: vi.fn(),
+      addPoints: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      clear: vi.fn(),
+    }),
+    useChartExport: () => ({
+      exportChart: vi.fn(),
     }),
     // Performance helpers — minimal stubs so PerfUtilityDemoLive can mount
     // inside the routing smoke tests. The real semantics are exercised in
@@ -164,6 +205,54 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     expect(screen.getByTestId('cross-filter-demo')).toBeInTheDocument();
     expect(screen.getByTestId('design-lab-chart-preview-cross-filter')).toBeInTheDocument();
   });
+
+  /* Faz 21.4 PR-B — drill-down + chart-to-grid cross-filter demos */
+
+  it('chart-id "cross-filter-grid" mounts CrossFilterGridDemoLive', () => {
+    render(<ChartPreviewLive chartId="cross-filter-grid" chartName="cross-filter-grid preview" />);
+    expect(screen.getByTestId('cross-filter-grid-demo')).toBeInTheDocument();
+    expect(screen.getByTestId('design-lab-chart-preview-cross-filter-grid')).toBeInTheDocument();
+  });
+
+  it('chart-id "drill-down" mounts DrillDownDemoLive in basic mode', () => {
+    render(<ChartPreviewLive chartId="drill-down" chartName="drill-down preview" />);
+    expect(screen.getByTestId('drill-down-demo-basic')).toBeInTheDocument();
+    expect(screen.getByTestId('design-lab-chart-preview-drill-down')).toBeInTheDocument();
+  });
+
+  it('chart-id "drill-down-history" mounts DrillDownDemoLive in history mode', () => {
+    render(
+      <ChartPreviewLive chartId="drill-down-history" chartName="drill-down-history preview" />,
+    );
+    expect(screen.getByTestId('drill-down-demo-history')).toBeInTheDocument();
+    expect(screen.getByTestId('design-lab-chart-preview-drill-down-history')).toBeInTheDocument();
+    // History mode exposes undo + redo + reset + depth/drill-count counter.
+    // Faz 21.8 PR-X2: redo button restored — the cross-filter store already
+    // retained `past` and `future` HistoryEntry stacks (each with full
+    // drillPath snapshots), so the surface only needed wiring through
+    // useDrillDown's new `redo`/`canRedo` properties.
+    expect(screen.getByTestId('drill-down-undo')).toBeInTheDocument();
+    expect(screen.getByTestId('drill-down-redo')).toBeInTheDocument();
+    expect(screen.getByTestId('drill-down-history-reset')).toBeInTheDocument();
+    expect(screen.getByTestId('drill-down-history-counter')).toBeInTheDocument();
+  });
+
+  /* Faz 21.4 PR-C — 5 feature demos */
+
+  it.each([
+    { featureId: 'feature-brush', demoTestId: 'feature-brush-demo' },
+    { featureId: 'feature-zoom-pan', demoTestId: 'feature-zoom-pan-demo' },
+    { featureId: 'feature-realtime', demoTestId: 'feature-realtime-demo' },
+    { featureId: 'feature-theme-switch', demoTestId: 'feature-theme-switch-demo' },
+    { featureId: 'feature-export', demoTestId: 'feature-export-demo' },
+  ])(
+    'feature demo "$featureId" mounts FeatureDemoLive ($demoTestId)',
+    ({ featureId, demoTestId }) => {
+      render(<ChartPreviewLive chartId={featureId} chartName={`${featureId} preview`} />);
+      expect(screen.getByTestId(demoTestId)).toBeInTheDocument();
+      expect(screen.getByTestId(`design-lab-chart-preview-${featureId}`)).toBeInTheDocument();
+    },
+  );
 
   it.each([
     { hookId: 'detect-anomalies', demoTestId: 'ai-detect-anomalies-demo' },

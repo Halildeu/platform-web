@@ -5,16 +5,13 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
-const routerFuture = {
-  v7_startTransition: true,
-  v7_relativeSplatPath: true,
-} as const;
-
 const authModeMock = { permitAll: false };
 const authStateMock = { token: null as string | null, initialized: true };
 const { startKeycloakLoginMock, resolveKeycloakLoginUrlMock } = vi.hoisted(() => ({
   startKeycloakLoginMock: vi.fn().mockResolvedValue(undefined),
-  resolveKeycloakLoginUrlMock: vi.fn().mockResolvedValue('https://ai.acik.com/realms/serban/protocol/openid-connect/auth'),
+  resolveKeycloakLoginUrlMock: vi
+    .fn()
+    .mockResolvedValue('https://ai.acik.com/realms/serban/protocol/openid-connect/auth'),
 }));
 
 vi.mock('../../app/auth/keycloakClient', () => ({
@@ -56,7 +53,9 @@ describe('LoginPage', () => {
     authModeMock.permitAll = false;
     authStateMock.token = null;
     authStateMock.initialized = true;
-    resolveKeycloakLoginUrlMock.mockResolvedValue('https://ai.acik.com/realms/serban/protocol/openid-connect/auth');
+    resolveKeycloakLoginUrlMock.mockResolvedValue(
+      'https://ai.acik.com/realms/serban/protocol/openid-connect/auth',
+    );
   });
 
   afterEach(() => {
@@ -65,7 +64,7 @@ describe('LoginPage', () => {
 
   it('renders corporate login button', () => {
     render(
-      <MemoryRouter initialEntries={['/login']} future={routerFuture}>
+      <MemoryRouter initialEntries={['/login']}>
         <LoginPage />
       </MemoryRouter>,
     );
@@ -77,7 +76,7 @@ describe('LoginPage', () => {
 
   it('hazirlanan login href bilgisini butona baglar', async () => {
     render(
-      <MemoryRouter initialEntries={['/login?redirect=/access/roles']} future={routerFuture}>
+      <MemoryRouter initialEntries={['/login?redirect=/access/roles']}>
         <LoginPage />
       </MemoryRouter>,
     );
@@ -94,7 +93,7 @@ describe('LoginPage', () => {
     resolveKeycloakLoginUrlMock.mockResolvedValueOnce(null);
 
     render(
-      <MemoryRouter initialEntries={['/login?redirect=/access/roles']} future={routerFuture}>
+      <MemoryRouter initialEntries={['/login?redirect=/access/roles']}>
         <LoginPage />
       </MemoryRouter>,
     );
@@ -113,7 +112,7 @@ describe('LoginPage', () => {
     authStateMock.initialized = false;
 
     render(
-      <MemoryRouter initialEntries={['/login?redirect=/access/roles']} future={routerFuture}>
+      <MemoryRouter initialEntries={['/login?redirect=/access/roles']}>
         <LoginPage />
       </MemoryRouter>,
     );
@@ -129,7 +128,7 @@ describe('LoginPage', () => {
   it('shows permitAll mode with Devam Et button', () => {
     authModeMock.permitAll = true;
     render(
-      <MemoryRouter initialEntries={['/login']} future={routerFuture}>
+      <MemoryRouter initialEntries={['/login']}>
         <LoginPage />
       </MemoryRouter>,
     );

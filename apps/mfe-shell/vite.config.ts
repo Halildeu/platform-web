@@ -6,6 +6,10 @@ import { federation } from '@module-federation/vite';
 import path from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 import { serviceHealthApi } from './vite-plugins/service-health-api';
+// Faz 21.8 PR-X8: break runtime cycle by inlining the
+// modulepreload helper inside design-system loadShare instead of importing
+// it from auth loadShare.
+import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
 
 /* ------------------------------------------------------------------ */
 /*  Env helpers — replaces webpack's DefinePlugin + InjectRuntimeEnv   */
@@ -38,6 +42,10 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
   const allowlist = new Set([
     'NODE_ENV',
     'AUTH_MODE',
+    // AG_GRID_LICENSE_KEY removed (hotfix single-source refactor): the
+    // VITE_AG_GRID_LICENSE_KEY env is already picked up by the
+    // `key.startsWith('VITE_')` filter below — explicit allowlist entry
+    // is now redundant.
     'SHELL_SKIP_REMOTE_SERVICES',
     'SHELL_ENABLE_SUGGESTIONS_REMOTE',
     'SHELL_ENABLE_ETHIC_REMOTE',
@@ -280,6 +288,7 @@ export default defineConfig(({ mode }) => {
           ...(mode === 'production' ? sharedProdOnly : {}),
         },
       }),
+      mfPreloadHelperIsolation(),
     ],
 
     resolve: {

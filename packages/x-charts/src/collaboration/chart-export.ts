@@ -1,13 +1,18 @@
 /**
- * Chart Export — PNG, SVG, PDF, CSV, XLSX
+ * Chart Export — PNG, SVG, PDF, CSV
  *
  * Extracts chart content from ECharts instance or raw data
  * and triggers browser download.
  *
- * @see contract P7 DoD: "Export: PNG, SVG, PDF, CSV, XLSX"
+ * @see contract P7 DoD: "Export: PNG, SVG, PDF, CSV"
+ *
+ * NOTE (Faz 21.8 PR-X1): XLSX export was previously type-declared but never
+ * implemented. Removed to keep the public contract honest. Future: optional
+ * `@mfe/x-charts/export-xlsx` adapter (out of scope this FAZ).
+ * See PR #174 (reality-parity plan) for context.
  */
 
-export type ExportFormat = 'png' | 'svg' | 'pdf' | 'csv' | 'xlsx';
+export type ExportFormat = 'png' | 'svg' | 'pdf' | 'csv';
 
 export interface ExportOptions {
   /** Export file name (without extension) */
@@ -16,9 +21,9 @@ export interface ExportOptions {
   title?: string;
   /** PNG/SVG pixel ratio. @default 2 */
   pixelRatio?: number;
-  /** CSV/XLSX data rows */
+  /** CSV data rows */
   data?: Record<string, unknown>[];
-  /** CSV/XLSX column headers */
+  /** CSV column headers */
   columns?: Array<{ field: string; headerName: string }>;
 }
 
@@ -36,15 +41,20 @@ function triggerDownload(url: string, filename: string) {
   document.body.removeChild(a);
 }
 
-function dataToCSV(data: Record<string, unknown>[], columns: Array<{ field: string; headerName: string }>): string {
+function dataToCSV(
+  data: Record<string, unknown>[],
+  columns: Array<{ field: string; headerName: string }>,
+): string {
   const header = columns.map((c) => `"${c.headerName}"`).join(',');
   const rows = data.map((row) =>
-    columns.map((c) => {
-      const val = row[c.field];
-      if (val === null || val === undefined) return '';
-      if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
-      return String(val);
-    }).join(','),
+    columns
+      .map((c) => {
+        const val = row[c.field];
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
+        return String(val);
+      })
+      .join(','),
   );
   return [header, ...rows].join('\n');
 }
@@ -81,7 +91,9 @@ function buildPdfFromImage(dataUrl: string, title?: string): Blob {
   // 2: Pages
   objs.push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj');
   // 3: Page
-  objs.push(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /XObject << /Img 5 0 R >> /Font << /F1 6 0 R >> >> >>\nendobj`);
+  objs.push(
+    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /XObject << /Img 5 0 R >> /Font << /F1 6 0 R >> >> >>\nendobj`,
+  );
 
   // 4: Content stream
   let stream = `q\n${w} 0 0 ${h} ${x} ${yImg} cm\n/Img Do\nQ\n`;
@@ -92,7 +104,9 @@ function buildPdfFromImage(dataUrl: string, title?: string): Blob {
   objs.push(`4 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}endstream\nendobj`);
 
   // 5: Image XObject
-  objs.push(`5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${imgW} /Height ${imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageLen} >>\nstream\n`);
+  objs.push(
+    `5 0 obj\n<< /Type /XObject /Subtype /Image /Width ${imgW} /Height ${imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageLen} >>\nstream\n`,
+  );
   // Image stream appended as binary
 
   // 6: Font

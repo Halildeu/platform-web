@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useMemo } from 'react';
 import { cn } from './utils/cn';
 import { Text } from './components/text/Text';

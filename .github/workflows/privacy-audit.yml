@@ -54,7 +54,7 @@ jobs:
 
       - name: Upload privacy-audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: privacy-audit
           path: packages/design-system/reports/privacy-audit.json

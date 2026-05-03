@@ -41,6 +41,39 @@
 
 ## 1. Public API Surface
 
+### 1.0 WHY no standalone `ChartTooltip` wrapper (v2.1 decision, restated by PR-E1 2026-05-03)
+
+CONTRACT v2 (Faz 21.4-A) initially declared a public `ChartTooltip` component
+in §1. CONTRACT v2.1 (Faz 21.4-E, 2026-04-30) **removed** that component
+because its surface was completely redundant with the existing tooltip
+configuration paths:
+
+1. **Per-chart tooltip via ECharts `option.tooltip`.** Every chart wrapper
+   already accepts a `valueFormatter` prop and forwards it to the ECharts
+   `tooltip.formatter` callback. Themed presentation (background, border,
+   font, shadow) is centralised in `buildDesignLabEChartsTheme()`
+   (`packages/x-charts/src/theme/DesignLabEChartsTheme.ts`).
+2. **Touch-specific tooltip via `MobileTooltip`.** Long-press touch
+   interaction routes through `packages/x-charts/src/touch/MobileTooltip.tsx`
+   which is already exported from the public barrel.
+3. **No cross-chart tooltip composition use case.** The standalone wrapper
+   would have offered a third API surface for the same job, with no
+   improvement on testability, themability, or accessibility — and would
+   have broken the **identity-transform invariant** declared in §1.1
+   "Backward compat invariant": adding a wrapper component changes the
+   DOM tree without changing user-visible pixels, which is a regression
+   smell.
+
+**Future direction (out of scope for this contract):** if the platform ever
+needs cross-chart tooltip portal coordination (e.g. shared crosshair across
+linked charts in a dashboard), the right place is a `ChartContainer`-level
+prop or a portal singleton in `@mfe/x-charts/cross-filter`, NOT a per-chart
+component wrapper.
+
+PR-E1 (Faz 21.4) added this rationale here so future contributors and AI
+agents do not re-introduce the wrapper based on stale roadmap audit rows.
+Tracker entry: `docs/x-charts-ui-ux-tracker.md` (Faz 21.4 cycle).
+
 ### 1.1 Common chart wrapper props (v2.2, Faz 21.5 + 21.6 cycle)
 
 All 13 canonical chart wrappers in `@mfe/x-charts` share four opt-in
@@ -190,7 +223,7 @@ ScatterChart
 RadarChart
   props: {
     indicators: RadarIndicator[];                  // required, [{ name, max }]
-    series: RadarSeriesItem[];                     // required, [{ name, values }]
+    series: RadarSeriesItem[];                     // required, [{ name, data }] — data: number[] aligned with indicator order
     size?: 'sm' | 'md' | 'lg';
     shape?: 'polygon' | 'circle';                  // default 'polygon'
     showArea?: boolean;                            // fill area under series
@@ -237,7 +270,7 @@ HeatmapChart
 
 FunnelChart
   props: {
-    data: FunnelDataPoint[];                       // [{ label, value }]
+    data: FunnelDataPoint[];                       // [{ name, value }] — name flows through to label/tooltip via formatter
     size?: 'sm' | 'md' | 'lg';
     title?: string;
     sort?: 'descending' | 'ascending' | 'none';    // default 'descending'
@@ -356,7 +389,7 @@ ChartLegend
 
 - ECharts theme preset: `DesignLabEChartsHighContrastTheme`
 - Decal patterns for non-color differentiation
-- 4.5:1 minimum contrast ratio enforced
+- 4.5:1 minimum contrast ratio enforced **at the static fallback hex layer** (41 assertions in `chart-contrast.contract.test.ts`, Faz 21.4 PR-F1). Runtime browser CSS-var resolution + canvas pixel ratio gate is **not yet active** — runtime contrast gate is tracked as Faz 21.8 PR-X3b (deferred from this PR cycle; static layer kept the existing assertions intact).
 
 ### Density Support
 
@@ -371,13 +404,15 @@ Resolution chain: explicit `density` prop > `data-density` attribute on
 documentElement > `'comfortable'` default. See §1.1 for the full opt-in
 prop surface.
 
-## 3. Access Control — Phase 2 (pending integration)
+## 3. Access Control — ACTIVE (v2.3, Faz 21.4 PR-E2)
 
-> **Status (v2.1):** The shape below is the **target** API. No chart
-> wrapper currently accepts `access` / `accessReason` props. Integration
-> is tracked in `docs/x-charts-ui-ux-tracker.md` (Faz 21.5 lift roadmap).
-> Until it ships, callers should gate chart rendering at the page level
-> using the existing Zanzibar guards (e.g. `useZanzibarAccess`).
+> **Status (v2.3, 2026-05-03):** ACTIVE. All 13 chart wrappers now
+> extend `AccessControlledProps` and accept `access` / `accessReason`
+> props at runtime via `<ChartAccessGate>` (PR-E2 #166). The shape
+> below is the canonical surface; default `access === undefined`
+> follows the identity-transform path (zero DOM wrapper). For
+> permission lookups, use `useZanzibarAccessProps` from `@mfe/auth`
+> (PR-E2) which adapts `useZanzibarAccess` results into this shape.
 
 ### Target API: AccessControlledProps Integration
 
@@ -402,16 +437,32 @@ prop surface.
 
 ## 4. SSR / Client Boundary
 
+### Subpath strategy (Faz 21.8 PR-X2)
+
+Three package entry points:
+
+| Subpath                | Purpose                                                                                                                                                                                                                                         | RSC-safe?                                                 |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `@mfe/x-charts`        | Default barrel — back-compat for current Vite consumers, re-exports everything from the workspace root                                                                                                                                          | No (mixed)                                                |
+| `@mfe/x-charts/client` | All 13 chart wrappers + composites (`ChartContainer`, `ChartDashboard`, `KPICard`, `StatWidget`, `ChartLegend`, `ChartToolbar`, `MiniChart`, `SparklineChart`). Every leaf carries `'use client'` at the top of the file plus the barrel itself | **No** — must be imported from a client component         |
+| `@mfe/x-charts/ssr`    | Public types (chart props, cross-filter / drill-down types, AccessControlledProps) + theme tokens. **No runtime React components.**                                                                                                             | **Yes** — safe to import from any RSC / Node-only context |
+
 ### Client-Only (`'use client'`)
 
 - ECharts canvas/SVG rendering engine
 - All interactive features: tooltips, legend toggle, zoom, pan
 - Resize observer and responsive recalculation
+- Every chart wrapper file (`AreaChart.tsx` … `WaterfallChart.tsx`) starts
+  with `'use client';` so individual deep imports stay safe in RSC trees.
 
 ### Hydration Strategy
 
 - SSR renders a sized placeholder `<div>` matching chart dimensions
 - ECharts instance mounts on client, renders into placeholder
+- The boundary is verified by a smoke test
+  (`packages/x-charts/src/__tests__/ssr-boundary.test.ts`) which asserts
+  `@mfe/x-charts/ssr` carries no runtime React components and every chart
+  wrapper has `'use client'` as its first statement.
 
 ## 5. Security
 
@@ -433,7 +484,7 @@ prop surface.
 
 - **< 350 KB** gzipped total (ECharts + x-charts wrapper)
 - Each chart type tree-shakeable independently
-- CI gate enforces bundle limit
+- CI gate enforces bundle limit (PR-F2 active; HARD on contractTotal incl. ECharts via esbuild source analyze, observability on wrapperOnly; baseline at `packages/x-charts/.bundle-baseline.json`)
 
 ### Render Targets
 
@@ -453,15 +504,53 @@ prop surface.
 
 ### CI Gates
 
-- bundle-size-check (< 350KB gzip)
-- a11y-axe-audit (Faz 21.5-B3a: zero serious/critical violations)
-- contrast-ratio-check (4.5:1)
-- xss-sanitization-check
-- memory-leak-test (100-cycle mount/unmount)
-- chart-spec-validation
-- visual-regression
-- tree-shaking-verify
-- component-scorecard (Faz 21.6 PR-A: multi-package scan, x-charts 13 chart audit)
+PR-F (Faz 21.4) closes the 8 chart-CI gates listed below. The 9th item
+(`component-scorecard`) is a separate workflow that landed earlier in
+Faz 21.6 PR-A; PR-F's "8/8" target intentionally excludes it.
+
+PR-F1 activated 7/8 (chart-spec, xss, memory, axe, contrast, tree-shake,
+visual). PR-F2 activates the 8th (bundle) — **8/8 gates now HARD-block**.
+
+- **bundle-size-check** (< 350KB gzip HARD on `contractTotal` including
+  ECharts; soft observability on `wrapperOnly`. Esbuild source analyze
+  via `scripts/ci/x-charts-bundle-check.mjs`; baseline at
+  `packages/x-charts/.bundle-baseline.json`. Threshold:
+  `min(350KB, baseline × 1.2)`. Manual rotate via `--update-baseline`
+  flag + commit; CI NEVER auto-rotates the baseline. PR-F2 — ACTIVE.)
+- **a11y-axe-audit** (zero serious/critical violations; `chart-axe.test.tsx`
+  with `color-contrast` rule disabled because jsdom cannot resolve CSS
+  variables. The PR-F1 contrast gate below covers ONLY the CSS-absent
+  static fallback theme-object layer. Runtime browser/OKLCH token
+  contrast is a separate Playwright follow-up — PR-F1)
+- **contrast-ratio-check** (STATIC fallback theme-object text/control
+  4.5:1 across 5 themes × 7 surfaces in `chart-contrast.contract.test.ts`.
+  This does NOT measure runtime shell `theme.css` / `oklch(...)` token
+  resolution — that requires a real browser and is a planned Playwright
+  follow-up. The fallback layer is what consumers see during initial
+  paint flash, in Storybook standalone, and in snapshot tools when CSS
+  hasn't loaded. Series-palette adjacency NOT gated by ratio math —
+  see `chart-theme-decal.test.tsx` for HC structural fallback — PR-F1)
+- **xss-sanitization-check** (`security.contract.test.tsx` — already active)
+- **memory-leak-test** (100-cycle mount/unmount; `memory-leak.test.tsx`
+  — already active)
+- **chart-spec-validation** (`spec-transform.contract.test.tsx` — already
+  active)
+- **visual-regression** (`x-charts-visual-gate.yml` workflow,
+  `maxDiffPixelRatio: 0.02` HARD; file renamed from `-visual-advisory`
+  in PR-F1 to reflect actual hard-block behaviour)
+- **tree-shaking-verify** (descriptor-driven `verify-tree-shaking.mjs`;
+  x-charts uses `mode: 'source'` with `sideEffects` allowlist for
+  `./src/i18n/locale-store.ts` and CSS — PR-F1)
+
+Adjacent CI workflow (CONTRACT §8 9th item, separate from PR-F's 8):
+
+- **component-scorecard** (Faz 21.6 PR-A: multi-package scan,
+  x-charts 13 chart audit) — `scorecard-gate.yml`, already active.
+
+`x-charts-quality-gates.yml` also runs a `chart-component-baseline` job
+covering smoke + options-shape + access-contract tests as a PR-D
+regression guard. That job is NOT one of PR-F's 8 gates — it's a
+defensive layer below the contract gates above.
 
 ## 9. Taxonomy & Boundaries (v2.2, Faz 21.6 PR-D)
 

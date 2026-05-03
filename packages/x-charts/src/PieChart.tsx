@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * PieChart -- ECharts-powered pie/donut chart
  *
@@ -6,7 +8,11 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -17,10 +23,12 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { scaleFontSize } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend } from './responsive';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -40,7 +48,7 @@ export type ChartClickEvent = {
   label?: string;
 };
 
-export interface PieChartProps {
+export interface PieChartProps extends AccessControlledProps {
   /** Data points to render as slices. */
   data: ChartDataPoint[];
   /** Visual size variant. @default "md" */
@@ -113,7 +121,17 @@ const escapeHtml = (t: string): string =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function PieChart(
+/**
+ * PieChart inner — original hook-bearing body. The outer `PieChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<PieChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const PieChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<PieChartProps, 'access' | 'accessReason'>
+>(function PieChartInner(
   {
     data,
     size = 'md',
@@ -143,6 +161,10 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
 
   const isEmpty = validData.length === 0;
   const fmt = valueFormatter ?? formatCompact;
+
+  // Same DOM node feeds breakpoint observer and ECharts renderer.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
   const {
     themeObject,
@@ -196,22 +218,45 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
           return `${escapeHtml(p.name)}: ${escapeHtml(formatted)} (${p.percent}%)`;
         },
       },
-      legend: {
-        show: showLegend,
-        bottom: 0,
+      // Codex 019defa5 PARTIAL fix: when mobile suppresses outer slice
+      // labels (collision avoidance), force the legend on so users still
+      // see slice names / percentages — otherwise the chart renders pure
+      // colour swatches with no textual context.
+      legend: buildResponsiveLegend({
+        breakpoint,
+        showLegend: showLegend || (breakpoint === 'mobile' && (showLabels || showPercentage)),
+        // Pie's "series" is one but legend entries = slice count.
+        hasMultiSeries: false,
+        seriesCount: validData.length,
+        densitySpacingMultiplier,
+        densityFontMultiplier,
         icon: 'circle',
-        itemWidth: scaleSpacing(10, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(10, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
+        // Truncate long slice names to 16 chars on tablet, 12 on mobile so
+        // the legend strip doesn't push the pie offscreen. Tooltip + a11y
+        // still receive the original name.
+        truncateAt: breakpoint === 'mobile' ? 12 : 16,
+      }),
       series: [
         {
           type: 'pie',
-          radius: donut ? ['45%', '70%'] : ['0%', '70%'],
+          // Mobile shrinks the radius envelope so the legend strip on the
+          // bottom (or vertical right when slice-count > 5) has room
+          // without forcing the pie body to render outside the canvas.
+          radius:
+            breakpoint === 'mobile'
+              ? donut
+                ? ['38%', '60%']
+                : ['0%', '60%']
+              : donut
+                ? ['45%', '70%']
+                : ['0%', '70%'],
           center: ['50%', title ? '55%' : '50%'],
           data: pieData,
           label: {
-            show: showLabels || showPercentage,
+            // On mobile we hide outer slice labels regardless of prop —
+            // they're the #1 collision source (overlapping text in the
+            // 4-screenshot bug report). Legend covers the same info.
+            show: breakpoint !== 'mobile' && (showLabels || showPercentage),
             formatter: showPercentage
               ? (p: { name: string; value: number }) =>
                   `${escapeHtml(p.name)} ${total > 0 ? Math.round((p.value / total) * 100) : 0}%`
@@ -220,7 +265,16 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
                 : undefined,
             fontSize: scaleFontSize(12, densityFontMultiplier),
           },
-          labelLine: { show: showLabels || showPercentage },
+          // labelLine length shrinks on tablet so leader lines don't stab
+          // through neighbouring slices.
+          labelLine: {
+            show: breakpoint !== 'mobile' && (showLabels || showPercentage),
+            length: breakpoint === 'tablet' ? 8 : 14,
+            length2: breakpoint === 'tablet' ? 8 : 14,
+          },
+          // Codex 019defa5: hide overlapping outer slice labels rather
+          // than letting them stack on top of each other.
+          labelLayout: { hideOverlap: true },
           emphasis: {
             itemStyle: {
               shadowBlur: 10,
@@ -255,11 +309,13 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
     description,
     onDataPointClick,
     isEmpty,
+    fmt,
     decalEnabled,
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -299,6 +355,7 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)
@@ -348,6 +405,29 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
   );
 });
 
+PieChartInner.displayName = 'PieChartInner';
+
+/**
+ * PieChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `PieChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function PieChart(
+  { access, accessReason, onDataPointClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <PieChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
+    </ChartAccessGate>
+  );
+});
 PieChart.displayName = 'PieChart';
 
 export default PieChart;

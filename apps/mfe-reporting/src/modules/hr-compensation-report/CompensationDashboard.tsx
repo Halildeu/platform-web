@@ -1,12 +1,19 @@
 import React from 'react';
 import { getLiveKPIs, getLiveCharts, refreshDashboardData } from './api';
 import type { DashboardKPI, DashboardChart, DashboardChartItem, DashboardFilters } from './api';
-import { BarChart, PieChart, useEChartsRenderer, buildDesignLabEChartsTheme } from '@mfe/x-charts';
-import type { ChartClickEvent } from '@mfe/x-charts';
+import {
+  BarChart,
+  PieChart,
+  useEChartsRenderer,
+  buildDesignLabEChartsTheme,
+  CrossFilterProvider,
+  useCrossFilter,
+} from '@mfe/x-charts';
+import type { ChartClickEvent, CrossFilterEntry } from '@mfe/x-charts';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef } from 'ag-grid-community';
 import type { CrossFilter } from './crossFilterTypes';
-import { CHART_FILTER_MAP, KPI_FILTER_MAP, toggleCrossFilter } from './crossFilterTypes';
+import { CHART_FILTER_MAP, KPI_FILTER_MAP } from './crossFilterTypes';
 import ActiveFilterChips from './ActiveFilterChips';
 import type { HrCompensationFilters } from './types';
 
@@ -16,7 +23,11 @@ import type { HrCompensationFilters } from './types';
 
 const formatCurrency = (v: number | null): string => {
   if (v == null) return '-';
-  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat('tr-TR', {
+    style: 'currency',
+    currency: 'TRY',
+    maximumFractionDigits: 0,
+  }).format(v);
 };
 
 const formatPercent = (v: number | null): string => {
@@ -31,7 +42,10 @@ const formatNumber = (v: number | null): string => {
 
 const formatDecimal = (v: number | null): string => {
   if (v == null) return '-';
-  return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(v);
+  return new Intl.NumberFormat('tr-TR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  }).format(v);
 };
 
 const formatValue = (v: number | null, format?: string): string => {
@@ -69,28 +83,54 @@ const toneColors: Record<string, string> = {
 /*  KPI Card                                                           */
 /* ------------------------------------------------------------------ */
 
-const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: boolean }> = ({ kpi, onClick, active }) => {
+const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: boolean }> = ({
+  kpi,
+  onClick,
+  active,
+}) => {
   const toneClass = toneColors[kpi.tone ?? 'info'] ?? 'text-text-primary';
-  const trendIcon = kpi.trend?.direction === 'up' ? '\u2191' : kpi.trend?.direction === 'down' ? '\u2193' : '';
-  const interactiveClass = onClick ? 'cursor-pointer hover:ring-2 hover:ring-action-primary/40 transition' : '';
+  const trendIcon =
+    kpi.trend?.direction === 'up' ? '\u2191' : kpi.trend?.direction === 'down' ? '\u2193' : '';
+  const interactiveClass = onClick
+    ? 'cursor-pointer hover:ring-2 hover:ring-action-primary/40 transition'
+    : '';
   const activeClass = active ? 'ring-2 ring-action-primary' : '';
   return (
     <div
       className={`${cardClass} flex flex-col gap-1 ${interactiveClass} ${activeClass}`}
       onClick={onClick}
-      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      <span className="text-xs text-text-subtle truncate" title={kpi.title}>{kpi.title}</span>
-      <span className={`text-lg font-semibold ${toneClass}`}>{formatValue(kpi.value, kpi.format)}</span>
+      <span className="text-xs text-text-subtle truncate" title={kpi.title}>
+        {kpi.title}
+      </span>
+      <span className={`text-lg font-semibold ${toneClass}`}>
+        {formatValue(kpi.value, kpi.format)}
+      </span>
       {kpi.trend && (
         <span className="text-xs text-text-subtle">
-          {trendIcon} {kpi.trend.percentage != null ? `${kpi.trend.percentage > 0 ? '+' : ''}${kpi.trend.percentage.toFixed(1)}%` : ''}
+          {trendIcon}{' '}
+          {kpi.trend.percentage != null
+            ? `${kpi.trend.percentage > 0 ? '+' : ''}${kpi.trend.percentage.toFixed(1)}%`
+            : ''}
         </span>
       )}
       {kpi.benchmark?.label && (
-        <span className="text-xs text-text-subtle">{kpi.benchmark.label}: {kpi.benchmark.value != null ? formatValue(kpi.benchmark.value, kpi.format) : 'N/A'}</span>
+        <span className="text-xs text-text-subtle">
+          {kpi.benchmark.label}:{' '}
+          {kpi.benchmark.value != null ? formatValue(kpi.benchmark.value, kpi.format) : 'N/A'}
+        </span>
       )}
     </div>
   );
@@ -113,24 +153,28 @@ const ChartDataGrid: React.FC<{
 }> = ({ data, columns }) => {
   if (!data || data.length === 0) return null;
 
-  const colDefs = React.useMemo<ColDef[]>(() =>
-    columns.map((col, idx) => ({
-      field: col.key,
-      headerName: col.label,
-      flex: idx === 0 ? 1.5 : 1,
-      minWidth: idx === 0 ? 160 : 100,
-      sortable: true,
-      type: idx > 0 ? 'rightAligned' : undefined,
-      valueFormatter: idx > 0 ? (params: { value: unknown }) => {
-        const v = params.value;
-        if (v == null) return '-';
-        const num = typeof v === 'number' ? v : Number(v);
-        if (isNaN(num)) return String(v);
-        if (col.format === 'currency') return formatCurrency(num);
-        if (col.format === 'percent') return formatPercent(num);
-        return formatNumber(num);
-      } : undefined,
-    })),
+  const colDefs = React.useMemo<ColDef[]>(
+    () =>
+      columns.map((col, idx) => ({
+        field: col.key,
+        headerName: col.label,
+        flex: idx === 0 ? 1.5 : 1,
+        minWidth: idx === 0 ? 160 : 100,
+        sortable: true,
+        type: idx > 0 ? 'rightAligned' : undefined,
+        valueFormatter:
+          idx > 0
+            ? (params: { value: unknown }) => {
+                const v = params.value;
+                if (v == null) return '-';
+                const num = typeof v === 'number' ? v : Number(v);
+                if (isNaN(num)) return String(v);
+                if (col.format === 'currency') return formatCurrency(num);
+                if (col.format === 'percent') return formatPercent(num);
+                return formatNumber(num);
+              }
+            : undefined,
+      })),
     [columns],
   );
 
@@ -167,9 +211,7 @@ const ChartBlock: React.FC<{
       <div className={`${height ?? 'h-72'} overflow-hidden`}>
         {chart && data.length > 0 ? children : <EmptyState />}
       </div>
-      {gridColumns && data.length > 0 && (
-        <ChartDataGrid data={data} columns={gridColumns} />
-      )}
+      {gridColumns && data.length > 0 && <ChartDataGrid data={data} columns={gridColumns} />}
     </div>
   );
 };
@@ -185,7 +227,8 @@ const renderBarChart = (
   onDataPointClick?: (event: ChartClickEvent) => void,
 ) => {
   if (!data.length) return <EmptyState />;
-  const orientation = config?.orientation === 'horizontal' ? 'horizontal' as const : 'vertical' as const;
+  const orientation =
+    config?.orientation === 'horizontal' ? ('horizontal' as const) : ('vertical' as const);
   return (
     <BarChart
       data={data}
@@ -241,12 +284,16 @@ const DualAxisLineChart: React.FC<{ data: DashboardChartItem[] }> = ({ data }) =
           axisLabel: { formatter: (v: number) => chartCurrencyFormatter(v) },
           splitLine: { show: true },
         },
-        ...(hasDualSeries ? [{
-          type: 'value' as const,
-          name: 'Çalışan Sayısı',
-          axisLabel: { formatter: (v: number) => formatNumber(v) },
-          splitLine: { show: false },
-        }] : []),
+        ...(hasDualSeries
+          ? [
+              {
+                type: 'value' as const,
+                name: 'Çalışan Sayısı',
+                axisLabel: { formatter: (v: number) => formatNumber(v) },
+                splitLine: { show: false },
+              },
+            ]
+          : []),
       ],
       series,
     };
@@ -254,7 +301,9 @@ const DualAxisLineChart: React.FC<{ data: DashboardChartItem[] }> = ({ data }) =
 
   const { containerRef } = useEChartsRenderer({ option, theme });
 
-  return <div ref={containerRef as React.Ref<HTMLDivElement>} style={{ height: 320, width: '100%' }} />;
+  return (
+    <div ref={containerRef as React.Ref<HTMLDivElement>} style={{ height: 320, width: '100%' }} />
+  );
 };
 
 const renderPieChart = (
@@ -263,7 +312,14 @@ const renderPieChart = (
   onDataPointClick?: (event: ChartClickEvent) => void,
 ) => {
   if (!data.length) return <EmptyState />;
-  return <PieChart data={data} showLegend valueFormatter={valueFormatter} onDataPointClick={onDataPointClick} />;
+  return (
+    <PieChart
+      data={data}
+      showLegend
+      valueFormatter={valueFormatter}
+      onDataPointClick={onDataPointClick}
+    />
+  );
 };
 
 const EmptyState = () => (
@@ -280,12 +336,47 @@ interface CompensationDashboardProps {
   filters?: Partial<HrCompensationFilters>;
 }
 
-const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: sidebarFilters }) => {
+/**
+ * Inner component — assumes a `<CrossFilterProvider>` is mounted somewhere
+ * up the tree. Faz 21.8 PR-X4a migration: cross-filter state lives in the
+ * `@mfe/x-charts` Zustand store now (single source of truth) instead of a
+ * bespoke `useState<CrossFilter[]>`. The toggle "same dimension + same
+ * value -> remove; same dimension + different value -> replace; otherwise
+ * add" semantics are preserved by the click handler logic below; the
+ * removeFilter / clearAllFilters store actions handle the chip UI.
+ */
+const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
+  filters: sidebarFilters,
+}) => {
   const [kpis, setKpis] = React.useState<DashboardKPI[]>([]);
   const [charts, setCharts] = React.useState<DashboardChart[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [retryCount, setRetryCount] = React.useState(0);
-  const [crossFilters, setCrossFilters] = React.useState<CrossFilter[]>([]);
+
+  // Store-backed cross-filter state. The store filters Map is keyed by
+  // `${sourceId}:${field}` (see `createCrossFilterStore.ts:filterKey`).
+  const storeFilters = useCrossFilter((s) => s.filters);
+  const setStoreFilter = useCrossFilter((s) => s.setFilter);
+  const removeStoreFilter = useCrossFilter((s) => s.removeFilter);
+  const clearAllStoreFilters = useCrossFilter((s) => s.clearAllFilters);
+
+  // Adapt the store's `Map<string, CrossFilterEntry>` to the legacy
+  // `CrossFilter[]` shape the chip + KPI UI consumes. This is a derived
+  // view, not a duplicate state.
+  const crossFilters = React.useMemo<CrossFilter[]>(() => {
+    const out: CrossFilter[] = [];
+    for (const entry of storeFilters.values()) {
+      out.push({
+        sourceId: entry.sourceId,
+        dimension: entry.field,
+        value: entry.value as string | number,
+        displayLabel: entry.sourceId.startsWith('kpi:')
+          ? `KPI: ${entry.value}`
+          : `${entry.field}: ${entry.value}`,
+      });
+    }
+    return out;
+  }, [storeFilters]);
 
   const effectiveFilters = React.useMemo<DashboardFilters>(() => {
     const merged: DashboardFilters = { ...sidebarFilters };
@@ -298,23 +389,28 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
     return merged;
   }, [sidebarFilters, crossFilters]);
 
-
   React.useEffect(() => {
     let active = true;
-    const timer = setTimeout(() => {
-      setLoading(true);
-      Promise.all([getLiveKPIs(effectiveFilters), getLiveCharts(effectiveFilters)])
-        .then(([k, c]) => {
-          if (active) {
-            setKpis(k ?? []);
-            setCharts(c ?? []);
-          }
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, crossFilters.length > 0 || sidebarFilters ? 300 : 0);
-    return () => { active = false; clearTimeout(timer); };
+    const timer = setTimeout(
+      () => {
+        setLoading(true);
+        Promise.all([getLiveKPIs(effectiveFilters), getLiveCharts(effectiveFilters)])
+          .then(([k, c]) => {
+            if (active) {
+              setKpis(k ?? []);
+              setCharts(c ?? []);
+            }
+          })
+          .finally(() => {
+            if (active) setLoading(false);
+          });
+      },
+      crossFilters.length > 0 || sidebarFilters ? 300 : 0,
+    );
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [effectiveFilters, retryCount]);
 
   const handleRetry = React.useCallback(() => {
@@ -322,41 +418,86 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
     setRetryCount((c) => c + 1);
   }, []);
 
-  const handleChartClick = React.useCallback((chartId: string, event: ChartClickEvent) => {
-    const mapping = CHART_FILTER_MAP[chartId];
-    if (!mapping) return;
-    const label = event.label ?? event.datum?.[mapping.valueField] ?? '';
-    if (!label) return;
-    setCrossFilters((prev) =>
-      toggleCrossFilter(prev, {
-        sourceId: `chart:${chartId}`,
-        dimension: mapping.dimension,
-        value: String(label),
-        displayLabel: `${mapping.dimension}: ${label}`,
-      }),
-    );
-  }, []);
+  /**
+   * Replicate the bespoke `toggleCrossFilter` semantics (replace by
+   * dimension, toggle off on same dim+value) on top of the store API.
+   *
+   * Codex iter-1 PR-X4a fix: the bespoke helper was source-agnostic — it
+   * removed the existing filter whenever `dimension + value` matched,
+   * regardless of which chart originally emitted it. Multiple charts
+   * (`dept-salary-comparison`, `gender-salary-comparison`,
+   * `dept-percentile-radar`) all emit the `department` dimension, so a
+   * source-sensitive comparison would silently change UX (the second
+   * chart would replace instead of toggling off).
+   */
+  const toggleStoreFilter = React.useCallback(
+    (sourceId: string, dimension: string, value: string) => {
+      // Find any existing filter with the same dimension (any sourceId).
+      let existingKey: string | null = null;
+      let existingValue: unknown = null;
+      for (const [key, entry] of storeFilters.entries()) {
+        if (entry.field === dimension) {
+          existingKey = key;
+          existingValue = entry.value;
+          break;
+        }
+      }
+      if (existingKey && String(existingValue) === value) {
+        // Same dim + same val (any source) → toggle off (parity with bespoke).
+        removeStoreFilter(existingKey);
+        return;
+      }
+      // Different value → replace by dimension.
+      if (existingKey) removeStoreFilter(existingKey);
+      const entry: CrossFilterEntry = {
+        sourceId,
+        field: dimension,
+        value,
+        operator: 'eq',
+        createdAt: Date.now(),
+      };
+      setStoreFilter(entry);
+    },
+    [storeFilters, setStoreFilter, removeStoreFilter],
+  );
 
-  const handleKpiClick = React.useCallback((kpiId: string) => {
-    const dimension = KPI_FILTER_MAP[kpiId];
-    if (!dimension) return;
-    setCrossFilters((prev) =>
-      toggleCrossFilter(prev, {
-        sourceId: `kpi:${kpiId}`,
-        dimension,
-        value: kpiId,
-        displayLabel: `KPI: ${kpiId}`,
-      }),
-    );
-  }, []);
+  const handleChartClick = React.useCallback(
+    (chartId: string, event: ChartClickEvent) => {
+      const mapping = CHART_FILTER_MAP[chartId];
+      if (!mapping) return;
+      const label = event.label ?? event.datum?.[mapping.valueField] ?? '';
+      if (!label) return;
+      toggleStoreFilter(`chart:${chartId}`, mapping.dimension, String(label));
+    },
+    [toggleStoreFilter],
+  );
 
-  const handleRemoveFilter = React.useCallback((filter: CrossFilter) => {
-    setCrossFilters((prev) => prev.filter((f) => !(f.dimension === filter.dimension && f.value === filter.value)));
-  }, []);
+  const handleKpiClick = React.useCallback(
+    (kpiId: string) => {
+      const dimension = KPI_FILTER_MAP[kpiId];
+      if (!dimension) return;
+      toggleStoreFilter(`kpi:${kpiId}`, dimension, kpiId);
+    },
+    [toggleStoreFilter],
+  );
+
+  const handleRemoveFilter = React.useCallback(
+    (filter: CrossFilter) => {
+      // Find the store key that matches this UI-level CrossFilter and remove
+      // it. The chip has no `sourceId:field` so we match by source+dim.
+      for (const [key, entry] of storeFilters.entries()) {
+        if (entry.sourceId === filter.sourceId && entry.field === filter.dimension) {
+          removeStoreFilter(key);
+          return;
+        }
+      }
+    },
+    [storeFilters, removeStoreFilter],
+  );
 
   const handleClearAll = React.useCallback(() => {
-    setCrossFilters([]);
-  }, []);
+    clearAllStoreFilters();
+  }, [clearAllStoreFilters]);
 
   const makeChartClickHandler = React.useCallback(
     (chartId: string) => {
@@ -386,7 +527,10 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
     <div className={sectionClass}>
       {!hasData && (
         <div className="mb-6 rounded-lg border border-state-warning-border bg-state-warning-surface p-4 text-sm text-state-warning-text flex items-center justify-between gap-3">
-          <span>Dashboard verileri yüklenemedi. Backend report-service servisinin çalıştığından emin olun.</span>
+          <span>
+            Dashboard verileri yüklenemedi. Backend report-service servisinin çalıştığından emin
+            olun.
+          </span>
           <button
             type="button"
             onClick={handleRetry}
@@ -398,20 +542,35 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
       )}
 
       {/* Active Cross-Filter Chips */}
-      <ActiveFilterChips filters={crossFilters} onRemove={handleRemoveFilter} onClearAll={handleClearAll} />
+      <ActiveFilterChips
+        filters={crossFilters}
+        onRemove={handleRemoveFilter}
+        onClearAll={handleClearAll}
+      />
 
       {/* KPI Strip */}
       <div className={kpiStripClass}>
-        {kpis.length > 0 ? kpis.map((kpi) => (
-          <KPICard
-            key={kpi.id}
-            kpi={kpi}
-            onClick={KPI_FILTER_MAP[kpi.id] ? () => handleKpiClick(kpi.id) : undefined}
-            active={crossFilters.some((f) => f.sourceId === `kpi:${kpi.id}`)}
-          />
-        )) : (
+        {kpis.length > 0 ? (
+          kpis.map((kpi) => (
+            <KPICard
+              key={kpi.id}
+              kpi={kpi}
+              onClick={KPI_FILTER_MAP[kpi.id] ? () => handleKpiClick(kpi.id) : undefined}
+              active={crossFilters.some((f) => f.sourceId === `kpi:${kpi.id}`)}
+            />
+          ))
+        ) : (
           <>
-            {['Medyan Maaş', 'Compa-Ratio', 'Cinsiyet Farkı', 'İşveren Maliyeti', 'YoY Artış', 'P90/P10', 'Fazla Mesai', 'Gini'].map((label) => (
+            {[
+              'Medyan Maaş',
+              'Compa-Ratio',
+              'Cinsiyet Farkı',
+              'İşveren Maliyeti',
+              'YoY Artış',
+              'P90/P10',
+              'Fazla Mesai',
+              'Gini',
+            ].map((label) => (
               <div key={label} className={`${cardClass} flex flex-col gap-1`}>
                 <span className="text-xs text-text-subtle">{label}</span>
                 <span className="text-lg font-semibold text-text-subtle">—</span>
@@ -432,7 +591,12 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value', label: 'Kişi Sayısı', format: 'number' },
           ]}
         >
-          {renderBarChart(findChart('salary-histogram')?.data ?? [], findChart('salary-histogram')?.chartConfig, undefined, makeChartClickHandler('salary-histogram'))}
+          {renderBarChart(
+            findChart('salary-histogram')?.data ?? [],
+            findChart('salary-histogram')?.chartConfig,
+            undefined,
+            makeChartClickHandler('salary-histogram'),
+          )}
         </ChartBlock>
       </div>
 
@@ -447,7 +611,12 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
           ]}
         >
-          {renderBarChart(findChart('dept-salary-comparison')?.data ?? [], { ...findChart('dept-salary-comparison')?.chartConfig, orientation: 'horizontal' }, chartCurrencyFormatter, makeChartClickHandler('dept-salary-comparison'))}
+          {renderBarChart(
+            findChart('dept-salary-comparison')?.data ?? [],
+            { ...findChart('dept-salary-comparison')?.chartConfig, orientation: 'horizontal' },
+            chartCurrencyFormatter,
+            makeChartClickHandler('dept-salary-comparison'),
+          )}
         </ChartBlock>
       </div>
 
@@ -462,7 +631,12 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value2', label: 'Kadın Ort.', format: 'currency' },
           ]}
         >
-          {renderBarChart(findChart('gender-salary-comparison')?.data ?? [], { ...findChart('gender-salary-comparison')?.chartConfig, orientation: 'horizontal' }, chartCurrencyFormatter, makeChartClickHandler('gender-salary-comparison'))}
+          {renderBarChart(
+            findChart('gender-salary-comparison')?.data ?? [],
+            { ...findChart('gender-salary-comparison')?.chartConfig, orientation: 'horizontal' },
+            chartCurrencyFormatter,
+            makeChartClickHandler('gender-salary-comparison'),
+          )}
         </ChartBlock>
 
         <ChartBlock
@@ -473,7 +647,12 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
           ]}
         >
-          {renderBarChart(findChart('education-salary-premium')?.data ?? [], { ...findChart('education-salary-premium')?.chartConfig, orientation: 'horizontal' }, chartCurrencyFormatter, makeChartClickHandler('education-salary-premium'))}
+          {renderBarChart(
+            findChart('education-salary-premium')?.data ?? [],
+            { ...findChart('education-salary-premium')?.chartConfig, orientation: 'horizontal' },
+            chartCurrencyFormatter,
+            makeChartClickHandler('education-salary-premium'),
+          )}
         </ChartBlock>
       </div>
 
@@ -504,7 +683,12 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value2', label: 'Kişi Sayısı', format: 'number' },
           ]}
         >
-          {renderBarChart(findChart('collar-type-salary')?.data ?? [], findChart('collar-type-salary')?.chartConfig, chartCurrencyFormatter, makeChartClickHandler('collar-type-salary'))}
+          {renderBarChart(
+            findChart('collar-type-salary')?.data ?? [],
+            findChart('collar-type-salary')?.chartConfig,
+            chartCurrencyFormatter,
+            makeChartClickHandler('collar-type-salary'),
+          )}
         </ChartBlock>
 
         <ChartBlock
@@ -515,7 +699,12 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
           ]}
         >
-          {renderBarChart(findChart('tenure-salary-relation')?.data ?? [], findChart('tenure-salary-relation')?.chartConfig, chartCurrencyFormatter, makeChartClickHandler('tenure-salary-relation'))}
+          {renderBarChart(
+            findChart('tenure-salary-relation')?.data ?? [],
+            findChart('tenure-salary-relation')?.chartConfig,
+            chartCurrencyFormatter,
+            makeChartClickHandler('tenure-salary-relation'),
+          )}
         </ChartBlock>
       </div>
 
@@ -530,7 +719,11 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value', label: 'Tutar', format: 'currency' },
           ]}
         >
-          {renderBarChart(findChart('cost-waterfall')?.data ?? [], { orientation: 'horizontal', showValues: true, showGrid: true }, chartCurrencyFormatter)}
+          {renderBarChart(
+            findChart('cost-waterfall')?.data ?? [],
+            { orientation: 'horizontal', showValues: true, showGrid: true },
+            chartCurrencyFormatter,
+          )}
         </ChartBlock>
       </div>
 
@@ -545,7 +738,11 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'value', label: 'Toplam Bordro', format: 'currency' },
           ]}
         >
-          {renderPieChart(findChart('company-payroll-pie')?.data ?? [], chartCurrencyFormatter, makeChartClickHandler('company-payroll-pie'))}
+          {renderPieChart(
+            findChart('company-payroll-pie')?.data ?? [],
+            chartCurrencyFormatter,
+            makeChartClickHandler('company-payroll-pie'),
+          )}
         </ChartBlock>
 
         <ChartBlock
@@ -558,11 +755,35 @@ const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters: 
             { key: 'max_val', label: 'Max', format: 'currency' },
           ]}
         >
-          {renderBarChart(findChart('dept-percentile-radar')?.data ?? [], { ...findChart('dept-percentile-radar')?.chartConfig, orientation: 'horizontal' }, chartCurrencyFormatter, makeChartClickHandler('dept-percentile-radar'))}
+          {renderBarChart(
+            findChart('dept-percentile-radar')?.data ?? [],
+            { ...findChart('dept-percentile-radar')?.chartConfig, orientation: 'horizontal' },
+            chartCurrencyFormatter,
+            makeChartClickHandler('dept-percentile-radar'),
+          )}
         </ChartBlock>
       </div>
     </div>
   );
 };
+
+/**
+ * Outer wrapper — provides an isolated cross-filter store for this
+ * dashboard. Faz 21.8 PR-X4a: this is the public component; consumers
+ * (`HrCompensationReport.tsx`) keep their import path unchanged.
+ *
+ * `debounceMs: 0` removes the default 150ms debounce delay so chart
+ * clicks feel near-instantaneous (close to bespoke pre-migration UX).
+ * Note: setFilter still goes through `setTimeout(..., 0)` per the store
+ * implementation, so multiple rapid setFilter calls in the same call
+ * stack may still coalesce; for normal click cadence the final state is
+ * indistinguishable from synchronous mutation. The store still caps
+ * history at the default 50 snapshots.
+ */
+export const CompensationDashboard: React.FC<CompensationDashboardProps> = ({ filters }) => (
+  <CrossFilterProvider options={{ groupId: 'hr-compensation', debounceMs: 0 }}>
+    <CompensationDashboardInner filters={filters} />
+  </CrossFilterProvider>
+);
 
 export default CompensationDashboard;

@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * FunnelChart -- ECharts-powered funnel chart
  *
@@ -10,6 +12,10 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -38,7 +44,7 @@ export interface FunnelDataPoint {
   color?: string;
 }
 
-export interface FunnelChartProps {
+export interface FunnelChartProps extends AccessControlledProps {
   /** Data points to render as funnel stages. */
   data: FunnelDataPoint[];
   /** Visual size variant. @default "md" */
@@ -139,7 +145,17 @@ function buildConversionMap(data: FunnelDataPoint[], sort: string): Map<string, 
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(function FunnelChart(
+/**
+ * FunnelChart inner — original hook-bearing body. The outer `FunnelChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<FunnelChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const FunnelChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<FunnelChartProps, 'access' | 'accessReason'>
+>(function FunnelChartInner(
   {
     data,
     size = 'md',
@@ -383,6 +399,29 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
   );
 });
 
+FunnelChartInner.displayName = 'FunnelChartInner';
+
+/**
+ * FunnelChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `FunnelChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(function FunnelChart(
+  { access, accessReason, onDataPointClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <FunnelChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
+    </ChartAccessGate>
+  );
+});
 FunnelChart.displayName = 'FunnelChart';
 
 export default FunnelChart;

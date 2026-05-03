@@ -40,15 +40,18 @@ export interface PrintThemeOptions {
  * echarts.registerTheme('design-lab-print', theme);
  * ```
  */
-export function buildDesignLabEChartsPrintTheme(options?: PrintThemeOptions): Record<string, unknown> {
-  const {
-    fontFamily = 'Georgia, "Times New Roman", Times, serif',
-    useDecalPatterns = true,
-  } = options ?? {};
+export function buildDesignLabEChartsPrintTheme(
+  options?: PrintThemeOptions,
+): Record<string, unknown> {
+  const { fontFamily = 'Georgia, "Times New Roman", Times, serif', useDecalPatterns = true } =
+    options ?? {};
 
   const textPrimary = '#000000';
   const textSecondary = '#333333';
-  const textTertiary = '#666666';
+  // textTertiary kept as a comment for parity with other theme builders.
+  // Print preview chart text uses textSecondary directly; restore if a
+  // third tier of text colour is ever needed.
+  // const textTertiary = '#666666';
   const borderDefault = '#000000';
   const borderLight = '#999999';
 
@@ -96,6 +99,9 @@ export function buildDesignLabEChartsPrintTheme(options?: PrintThemeOptions): Re
       itemWidth: 14,
       itemHeight: 14,
       itemGap: 18,
+      // Collision default — print previews on screen still need pagination
+      // to avoid overflow even though the printed sheet ignores it.
+      type: 'scroll',
     },
     tooltip: {
       // Tooltips invisible in print — but keep valid for screen preview
@@ -108,18 +114,20 @@ export function buildDesignLabEChartsPrintTheme(options?: PrintThemeOptions): Re
         fontSize: 12,
       },
       extraCssText: 'border-radius: 4px; padding: 8px 12px;',
+      // Confine tooltip to chart bounding box during screen preview.
+      confine: true,
     },
     categoryAxis: {
       axisLine: { lineStyle: { color: borderDefault, width: 1 } },
       axisTick: { lineStyle: { color: borderDefault, width: 1 } },
-      axisLabel: { color: textPrimary, fontFamily, fontSize: 11 },
+      axisLabel: { color: textPrimary, fontFamily, fontSize: 11, hideOverlap: true },
       splitLine: { lineStyle: { color: borderLight, type: 'dashed', width: 0.5 } },
       nameTextStyle: { color: textSecondary, fontFamily, fontSize: 11, fontWeight: 600 },
     },
     valueAxis: {
       axisLine: { show: true, lineStyle: { color: borderDefault, width: 1 } },
       axisTick: { show: true, lineStyle: { color: borderDefault } },
-      axisLabel: { color: textPrimary, fontFamily, fontSize: 11 },
+      axisLabel: { color: textPrimary, fontFamily, fontSize: 11, hideOverlap: true },
       splitLine: { lineStyle: { color: borderLight, type: 'dashed', width: 0.5 } },
       nameTextStyle: { color: textSecondary, fontFamily, fontSize: 11, fontWeight: 600 },
     },

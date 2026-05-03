@@ -250,9 +250,6 @@
     },
     "zod": {
       "optional": true
-    },
-    "@mfe/shared-types": {
-      "optional": true
     }
   }
 }
