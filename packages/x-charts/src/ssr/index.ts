@@ -97,3 +97,22 @@ export type {
   ChartResponsiveSpec,
   ChartExportSpec,
 } from '../spec/ChartSpec';
+
+/* ------------------------------------------------------------------ */
+/*  Pure runtime constants (no DOM, no React)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Faz 21.9 PR3a (Codex thread `019defa5`): RSC consumers that pre-compute
+ * layout space for a chart card need the canvas-height contract without
+ * pulling the entire root barrel (which drags ECharts in). `chartSize.ts`
+ * is React-free, so it's safe to expose through this SSR boundary.
+ *
+ * Usage in RSC context:
+ * ```tsx
+ * import { CHART_CANVAS_HEIGHT } from '@mfe/x-charts/ssr';
+ * const cardHeight = CHART_CANVAS_HEIGHT.md + 48; // chart + header
+ * ```
+ */
+export { CHART_CANVAS_HEIGHT, CHART_SIZE_ORDER } from '../chartSize';
+export type { ChartSize as ChartSizeAxis } from '../chartSize';

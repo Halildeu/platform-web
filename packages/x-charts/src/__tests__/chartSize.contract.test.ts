@@ -8,6 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CHART_CANVAS_HEIGHT, CHART_SIZE_ORDER } from '../chartSize';
 
 describe('CHART_CANVAS_HEIGHT contract', () => {
@@ -47,4 +49,42 @@ describe('CHART_SIZE_ORDER contract', () => {
       prev = CHART_CANVAS_HEIGHT[size];
     }
   });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Static drift guard                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Codex 019defa5 PR3a PARTIAL absorb: the contract test above pins the
+ * canonical *values*, but if a wrapper re-introduces a local
+ * `const SIZE_HEIGHT = { ... }` mirror with the same values, the
+ * contract is intact yet the single-source guarantee is broken. This
+ * static check reads the wrapper sources and asserts none of them
+ * declare their own SIZE_HEIGHT constant. Future drift gets caught at
+ * unit-test time, not when consumers diverge silently.
+ */
+const WRAPPER_FILES = [
+  'AreaChart.tsx',
+  'BarChart.tsx',
+  'FunnelChart.tsx',
+  'GaugeChart.tsx',
+  'HeatmapChart.tsx',
+  'LineChart.tsx',
+  'PieChart.tsx',
+  'RadarChart.tsx',
+  'SankeyChart.tsx',
+  'ScatterChart.tsx',
+  'SunburstChart.tsx',
+  'TreemapChart.tsx',
+  'WaterfallChart.tsx',
+] as const;
+
+describe('chart-size single-source guard', () => {
+  for (const file of WRAPPER_FILES) {
+    it(`${file} does not reintroduce a local SIZE_HEIGHT mirror`, () => {
+      const source = readFileSync(join(__dirname, '..', file), 'utf8');
+      expect(source, file).not.toMatch(/\bconst\s+SIZE_HEIGHT\b/);
+    });
+  }
 });
