@@ -542,14 +542,50 @@ export function generatePlaygroundCode(
   chartName: string,
   descriptors: readonly EditorDescriptor[],
   state: PlaygroundState,
+  chartId?: string,
 ): string {
+  const sample = chartId ? getSampleData(chartId) : null;
+  // Build a preamble of `const X = ...;` definitions for every required
+  // sample-data piece. The snippet then references those locals from the
+  // chart prop list, so a copy/paste actually compiles.
+  const preambleLines: string[] = [];
+  const dataPropLines: string[] = [];
+  if (sample) {
+    for (const entry of sample.scaffold) {
+      preambleLines.push(`const ${entry.varName} = ${entry.jsLiteral};`);
+      dataPropLines.push(`  ${entry.propName}={${entry.varName}}`);
+    }
+    if (sample.auxiliaryProps) {
+      for (const aux of sample.auxiliaryProps) {
+        preambleLines.push(`const ${aux.varName} = ${aux.jsLiteral};`);
+        dataPropLines.push(`  ${aux.propName}={${aux.varName}}`);
+      }
+    }
+  } else {
+    // Legacy fallback for charts without an explicit scaffold.
+    dataPropLines.push(`  data={sampleData}`);
+  }
+
+  // Skip prop names that the scaffold already provides — otherwise we
+  // would emit a duplicate `data={...} data={...}` line if the user later
+  // makes the data prop editable.
+  const skipNames = new Set<string>();
+  if (sample) {
+    for (const entry of sample.scaffold) skipNames.add(entry.propName);
+    for (const aux of sample.auxiliaryProps ?? []) skipNames.add(aux.propName);
+  }
+
   const propLines: string[] = [];
   for (const d of descriptors) {
+    if (skipNames.has(d.prop.name)) continue;
     const fragment = serialisePropToCode(d, state[d.prop.name]);
     if (fragment) propLines.push(`  ${fragment}`);
   }
-  const body = propLines.length > 0 ? `\n${propLines.join('\n')}` : '';
-  return `<${chartName}\n  data={sampleData}${body}\n/>`;
+
+  const allPropLines = [...dataPropLines, ...propLines];
+  const body = allPropLines.length > 0 ? `\n${allPropLines.join('\n')}` : '';
+  const preamble = preambleLines.length > 0 ? `${preambleLines.join('\n\n')}\n\n` : '';
+  return `${preamble}<${chartName}${body}\n/>`;
 }
 
 /* ================================================================== */
@@ -642,6 +678,157 @@ export function getDecal(
     if (v === 'auto') return 'auto';
   }
   return fallback;
+}
+
+/* ================================================================== */
+/*  Sample data scaffolds                                              */
+/* ================================================================== */
+
+export interface SampleDataScaffoldEntry {
+  /** The chart prop name (e.g. `data`, `series`, `nodes`, `value`). */
+  propName: string;
+  /**
+   * JS literal source for this prop's sample value. Embedded into the
+   * generated snippet's preamble (`const ${varName} = ${jsLiteral};`) and
+   * surfaced read-only in the playground "Sample Data" panel.
+   */
+  jsLiteral: string;
+  /** Local variable name used in the snippet (e.g. `sampleData`). */
+  varName: string;
+  /** Short caption shown above the literal in the panel. */
+  caption: string;
+}
+
+export interface SampleDataDef {
+  scaffold: SampleDataScaffoldEntry[];
+  /** Optional auxiliary props passed alongside the scaffold (e.g. `labels`). */
+  auxiliaryProps?: { propName: string; varName: string; jsLiteral: string }[];
+}
+
+/**
+ * Sample data definitions per chart id. Mirrors the mock data wired into
+ * `ChartPreviewLive` so the user-facing snippet can compile end-to-end.
+ *
+ * Codex thread `019def27` follow-up: the previous snippet always wrote
+ * `data={sampleData}` regardless of the chart's actual required prop
+ * (Gauge takes `value`, Sankey takes `nodes + links`, etc.). Centralising
+ * the scaffold here lets the codegen produce correct "compile-ready"
+ * snippets for each chart.
+ */
+const SAMPLE_DATA: Record<string, SampleDataDef> = {
+  'bar-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'BarChart data',
+        jsLiteral: `[
+  { label: 'Ocak', value: 320 },
+  { label: 'Şubat', value: 332 },
+  { label: 'Mart', value: 301 },
+  { label: 'Nisan', value: 334 },
+  { label: 'Mayıs', value: 390 },
+  { label: 'Haziran', value: 330 },
+]`,
+      },
+    ],
+  },
+  'line-chart': {
+    scaffold: [
+      {
+        propName: 'series',
+        varName: 'series',
+        caption: 'LineChart series',
+        jsLiteral: `[
+  { name: 'Seri A', data: [320, 332, 301, 334, 390, 330] },
+  { name: 'Seri B', data: [220, 182, 191, 234, 290, 330] },
+]`,
+      },
+    ],
+    auxiliaryProps: [
+      {
+        propName: 'labels',
+        varName: 'labels',
+        jsLiteral: `['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran']`,
+      },
+    ],
+  },
+  'area-chart': {
+    scaffold: [
+      {
+        propName: 'series',
+        varName: 'series',
+        caption: 'AreaChart series',
+        jsLiteral: `[
+  { name: 'Gelir', data: [320, 332, 301, 334, 390, 330] },
+  { name: 'Gider', data: [220, 182, 191, 234, 290, 330] },
+]`,
+      },
+    ],
+    auxiliaryProps: [
+      {
+        propName: 'labels',
+        varName: 'labels',
+        jsLiteral: `['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran']`,
+      },
+    ],
+  },
+  'pie-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'PieChart slices',
+        jsLiteral: `[
+  { label: 'Ocak', value: 320 },
+  { label: 'Şubat', value: 332 },
+  { label: 'Mart', value: 301 },
+  { label: 'Nisan', value: 334 },
+  { label: 'Mayıs', value: 390 },
+]`,
+      },
+    ],
+  },
+  'scatter-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'ScatterChart points',
+        jsLiteral: `[
+  { x: 320, y: 220, label: 'Ocak' },
+  { x: 332, y: 182, label: 'Şubat' },
+  { x: 301, y: 191, label: 'Mart' },
+  { x: 334, y: 234, label: 'Nisan' },
+  { x: 390, y: 290, label: 'Mayıs' },
+  { x: 330, y: 330, label: 'Haziran' },
+]`,
+      },
+    ],
+  },
+  'gauge-chart': {
+    scaffold: [
+      {
+        propName: 'thresholds',
+        varName: 'thresholds',
+        caption: 'GaugeChart colour thresholds',
+        jsLiteral: `[
+  { value: 30, color: '#ef4444' },
+  { value: 70, color: '#f59e0b' },
+  { value: 100, color: '#22c55e' },
+]`,
+      },
+    ],
+  },
+};
+
+/**
+ * Returns the sample-data scaffold for a chart id, or `null` when the chart
+ * hasn't been wired with a scaffold yet (the snippet then falls back to the
+ * legacy `data={sampleData}` reference and the panel hides).
+ */
+export function getSampleData(chartId: string): SampleDataDef | null {
+  return SAMPLE_DATA[chartId] ?? null;
 }
 
 /* ================================================================== */

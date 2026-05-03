@@ -23,12 +23,15 @@ import {
   Sparkles,
   Eye,
   Lock,
+  RotateCcw,
+  Database,
 } from 'lucide-react';
 import ChartPreviewLive from '../widgets/ChartPreviewLive';
 import {
   buildDescriptors,
   deriveDefaults,
   generatePlaygroundCode,
+  getSampleData,
   CATEGORY_DEFAULT_OPEN,
   CATEGORY_LABEL,
   CATEGORY_ORDER,
@@ -36,6 +39,7 @@ import {
   type EditorDescriptor,
   type PlaygroundState,
   type PlaygroundValue,
+  type SampleDataDef,
 } from '../widgets/chartPlaygroundModel';
 
 /* ------------------------------------------------------------------ */
@@ -3659,9 +3663,31 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
   }, []);
 
   const generatedCode = useMemo(
-    () => generatePlaygroundCode(chart.name, descriptors, pgState),
-    [chart.name, descriptors, pgState],
+    () => generatePlaygroundCode(chart.name, descriptors, pgState, chart.id),
+    [chart.id, chart.name, descriptors, pgState],
   );
+
+  const sampleData = useMemo<SampleDataDef | null>(() => getSampleData(chart.id), [chart.id]);
+
+  // Reset returns the editor to the catalog-derived defaults — the same
+  // shape the user landed on. Keyed by reference equality so it doesn't
+  // trigger unnecessary re-renders.
+  const handleReset = useCallback(() => {
+    setPgState(defaults);
+  }, [defaults]);
+
+  // Diff vs. defaults so the Reset button can disable when the editor is
+  // already in the default state. Cheap shallow compare over the small
+  // playground object is fine here.
+  const isDirty = useMemo(() => {
+    const stateKeys = Object.keys(pgState);
+    const defaultKeys = Object.keys(defaults);
+    if (stateKeys.length !== defaultKeys.length) return true;
+    for (const k of stateKeys) {
+      if (pgState[k] !== defaults[k]) return true;
+    }
+    return false;
+  }, [pgState, defaults]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -3671,13 +3697,32 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
           className="rounded-2xl border border-border-subtle bg-surface-default p-5 lg:col-span-1"
           data-testid="props-editor-panel"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
               Props Editor
             </span>
-            <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
-              {descriptors.filter((d) => d.kind !== 'complex').length} / {descriptors.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-secondary">
+                {descriptors.filter((d) => d.kind !== 'complex').length} / {descriptors.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={!isDirty}
+                className={[
+                  'inline-flex items-center gap-1 rounded-md border border-border-subtle bg-surface-canvas px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition',
+                  isDirty
+                    ? 'text-text-primary hover:bg-surface-muted'
+                    : 'cursor-not-allowed text-text-tertiary opacity-50',
+                ].join(' ')}
+                data-testid="playground-reset"
+                aria-label="Reset playground to defaults"
+                title="Reset to defaults"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 flex flex-col gap-2">
@@ -3722,6 +3767,54 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
               <code>{generatedCode}</code>
             </pre>
           </div>
+
+          {/* Sample Data — preview-feeding mock data definitions */}
+          {sampleData && (
+            <div
+              className="overflow-hidden rounded-xl border border-border-subtle bg-surface-default"
+              data-testid="playground-sample-data"
+            >
+              <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2">
+                <Database className="h-3.5 w-3.5 text-text-secondary" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                  Sample Data
+                </span>
+                <span className="text-[10px] text-text-tertiary">
+                  · live preview uses these literals
+                </span>
+              </div>
+              <div className="flex flex-col divide-y divide-border-subtle">
+                {sampleData.scaffold.map((entry) => (
+                  <div key={entry.propName} className="px-4 py-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-text-primary">
+                        {entry.varName}
+                      </span>
+                      <span className="text-[10px] text-text-tertiary">
+                        {entry.caption} → <code className="font-mono">{entry.propName}</code>
+                      </span>
+                    </div>
+                    <pre className="overflow-x-auto whitespace-pre rounded bg-surface-muted p-3 text-[11px] leading-relaxed text-text-primary">
+                      <code>{entry.jsLiteral}</code>
+                    </pre>
+                  </div>
+                ))}
+                {sampleData.auxiliaryProps?.map((aux) => (
+                  <div key={aux.propName} className="px-4 py-3">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-text-primary">{aux.varName}</span>
+                      <span className="text-[10px] text-text-tertiary">
+                        → <code className="font-mono">{aux.propName}</code>
+                      </span>
+                    </div>
+                    <pre className="overflow-x-auto whitespace-pre rounded bg-surface-muted p-3 text-[11px] leading-relaxed text-text-primary">
+                      <code>{aux.jsLiteral}</code>
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -3902,9 +3995,9 @@ function PlaygroundPropEditor({
       )}
 
       {kind === 'complex' && (
-        <span className="rounded bg-surface-muted px-2 py-1 font-mono text-[10px] text-text-tertiary">
-          {prop.type}
-        </span>
+        <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-surface-muted px-2 py-1 font-mono text-[10px] leading-relaxed text-text-tertiary">
+          <code>{prop.type}</code>
+        </pre>
       )}
     </label>
   );
