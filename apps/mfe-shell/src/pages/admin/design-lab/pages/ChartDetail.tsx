@@ -3437,7 +3437,7 @@ const ChartDetail: React.FC = () => {
       </nav>
 
       {/* -- Hero header -- */}
-      <div className="relative overflow-hidden rounded-2xl border border-border-subtle bg-linear-to-br from-surface-default via-surface-default to-surface-canvas p-6 sm:p-8">
+      <div className="relative overflow-hidden rounded-2xl border border-border-subtle bg-linear-to-br from-surface-default via-surface-default to-surface-canvas p-4 sm:p-6 lg:p-8">
         {/* Decorative dots */}
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.02]"
@@ -3455,15 +3455,26 @@ const ChartDetail: React.FC = () => {
             {chart.description}
           </p>
 
-          {/* Badges */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-state-success-bg px-3 py-1 text-xs font-semibold text-state-success-text">
+          {/*
+            Badges — Faz 21.9 PR2 (Codex thread `019defa5`):
+            on mobile (< 640px) the strip becomes a horizontal scroll lane
+            so 7-12 chips don't wrap into 4-5 rows that push the rest of
+            the page below the fold. From `sm` upward we restore wrap so
+            tablet/desktop users see every badge at a glance. Each chip
+            adds `shrink-0 whitespace-nowrap` so it never collapses or
+            wraps mid-text inside the scroll lane.
+          */}
+          <div
+            className="mt-4 -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-x-visible sm:px-0 sm:pb-0"
+            data-testid="chart-detail-badges"
+          >
+            <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-state-success-bg px-3 py-1 text-xs font-semibold text-state-success-text">
               <span className="h-1.5 w-1.5 rounded-full bg-state-success-text" />
               stable
             </span>
             <span
               className={[
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold',
+                'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold',
                 chart.tier === 'enterprise'
                   ? 'bg-action-primary/10 text-action-primary'
                   : 'bg-state-info-bg text-state-info-text',
@@ -3471,10 +3482,10 @@ const ChartDetail: React.FC = () => {
             >
               {chart.tier}
             </span>
-            <span className="rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
+            <span className="shrink-0 whitespace-nowrap rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
               ECharts 5.6
             </span>
-            <span className="rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
+            <span className="shrink-0 whitespace-nowrap rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium text-text-secondary">
               @mfe/x-charts
             </span>
             {/*
@@ -3487,7 +3498,7 @@ const ChartDetail: React.FC = () => {
             {metricChips?.map((chip) => (
               <span
                 key={chip.label}
-                className="rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium tabular-nums text-text-secondary"
+                className="shrink-0 whitespace-nowrap rounded-full border border-border-subtle bg-surface-canvas px-2.5 py-0.5 text-xs font-medium tabular-nums text-text-secondary"
               >
                 {chip.label}
               </span>
@@ -3510,7 +3521,7 @@ const ChartDetail: React.FC = () => {
                 <span
                   key={`badge-${feature}`}
                   className={[
-                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                    'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium',
                     badge.label === 'beta'
                       ? 'border-state-warning-text/30 bg-state-warning-bg text-state-warning-text'
                       : badge.label === 'new'
@@ -3881,15 +3892,29 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
         </div>
 
         {/* Live preview area */}
-        <div className="flex flex-col gap-4 lg:col-span-2">
-          <div className="flex-1 rounded-2xl border border-border-subtle bg-surface-canvas p-8">
-            <div className="flex min-h-[360px] items-center justify-center">
-              <ChartPreviewLive
-                chartId={chart.id}
-                chartName={chart.name}
-                toggles={pgState}
-                height={360}
-              />
+        <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+          {/*
+            Faz 21.9 PR2 (Codex thread `019defa5`):
+              - mobile p-3 (12px) instead of p-8 (32px) — leaves the chart
+                more horizontal room on small viewports
+              - min-h responsive — 240 mobile / 320 tablet / 360 desktop;
+                ChartPreviewLive itself clamps its render height the same
+                way so the chart canvas + preview surround are in lockstep
+              - `min-w-0` on the container so the chart never forces the
+                outer grid into horizontal overflow at narrow widths
+          */}
+          <div className="flex-1 rounded-2xl border border-border-subtle bg-surface-canvas p-3 sm:p-6 lg:p-8">
+            <div className="flex min-h-[240px] items-center justify-center sm:min-h-[320px] lg:min-h-[360px]">
+              {/*
+                Codex 019defa5 PARTIAL fix: do NOT pass `height={360}`.
+                That value used to be a fixed render height; with PR2 it
+                became a *floor* on top of `responsiveHeight(clampedSize)`
+                — and a 360 floor cancelled the mobile/tablet shrink the
+                whole responsive overhaul was supposed to deliver. Letting
+                the prop default keeps `floor=0` so the chart-size-derived
+                height (220 / 320 / 420) wins on every breakpoint.
+              */}
+              <ChartPreviewLive chartId={chart.id} chartName={chart.name} toggles={pgState} />
             </div>
           </div>
 

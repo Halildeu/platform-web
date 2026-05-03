@@ -10,7 +10,7 @@
  * as raw props on the underlying chart component when applicable. Unknown
  * chart ids fall back to a friendly empty state instead of throwing.
  */
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   BarChart,
   LineChart,
@@ -31,6 +31,7 @@ import {
   ChartContainer,
   ChartToolbar,
   useChartInteractions,
+  useResponsiveBreakpoint,
 } from '@mfe/x-charts';
 import CrossFilterDemoLive from './CrossFilterDemoLive';
 import CrossFilterGridDemoLive from './CrossFilterGridDemoLive';
@@ -66,7 +67,13 @@ export interface ChartPreviewLiveProps {
    */
   toggles?: PlaygroundState;
   /**
-   * Visual height (px). Default 360 matches the Storybook visual snapshot box.
+   * Optional minimum-height floor (px). Faz 21.9 PR2 (Codex `019defa5`):
+   * the preview surface height is normally derived from the *clamped*
+   * chart size — `220 / 320 / 420` for `sm / md / lg`. Pass a non-zero
+   * `height` here to insist on a floor when the chart-size envelope
+   * would otherwise be too small (e.g. theme-only previews without a
+   * chart). Defaults to `0` so the responsive shrink wins on mobile /
+   * tablet without callers having to remember to override.
    */
   height?: number;
 }
@@ -87,43 +94,169 @@ interface PreviewBoxProps {
   children: React.ReactNode;
 }
 
-const PreviewBox: React.FC<PreviewBoxProps> = ({ testId, height, surfaceStyle, children }) => (
-  <div
-    data-testid={testId}
-    style={{
-      width: '100%',
-      maxWidth: 720,
-      height,
-      background: surfaceStyle?.background ?? 'var(--surface-canvas, #ffffff)',
-      color: surfaceStyle?.color,
-      transition: 'background-color 200ms ease, color 200ms ease',
-    }}
-  >
-    {children}
-  </div>
+/**
+ * PreviewBox — Faz 21.9 PR2 (Codex thread `019defa5`): the Design Lab
+ * chart-detail preview surface that wraps every live chart. Two roles:
+ *
+ *   1. Apply the design-lab theme background so dark/print-mode previews
+ *      blend with the surrounding canvas.
+ *   2. Contain the chart canvas with `overflow: hidden` + `position:
+ *      relative` so the chart body never bleeds onto neighbouring layout
+ *      (the screenshot bug where Generated Code / Sample Data text landed
+ *      on top of the bar chart canvas at 360px container height while the
+ *      `size="lg"` wrapper produced a 400px canvas).
+ *
+ *  The fixed `maxWidth: 720` cap is intentional — it keeps preview width
+ *  in lockstep with the Storybook visual-regression snapshot so design-lab
+ *  and visual review render the same pixels.
+ */
+const PreviewBox = React.forwardRef<HTMLDivElement, PreviewBoxProps>(
+  ({ testId, height, surfaceStyle, children }, ref) => (
+    <div
+      ref={ref}
+      data-testid={testId}
+      style={{
+        width: '100%',
+        maxWidth: 720,
+        height,
+        position: 'relative',
+        overflow: 'hidden',
+        background: surfaceStyle?.background ?? 'var(--surface-canvas, #ffffff)',
+        color: surfaceStyle?.color,
+        transition: 'background-color 200ms ease, color 200ms ease',
+      }}
+    >
+      {children}
+    </div>
+  ),
 );
+PreviewBox.displayName = 'PreviewBox';
+
+/* ------------------------------------------------------------------ */
+/*  Responsive size clamping                                           */
+/* ------------------------------------------------------------------ */
+
+export const SIZE_ORDER: ChartSize[] = ['sm', 'md', 'lg'];
+
+/**
+ * Coerce the user-selected chart `size` (from the playground toggles) to
+ * the largest size that actually fits the live preview container at the
+ * current breakpoint. Without this, mobile users on the design-lab page
+ * who happened to flip `size="lg"` got a 400px-tall ECharts canvas inside
+ * a 240px PreviewBox — the chart body would clip into Generated Code /
+ * Sample Data sections directly underneath.
+ *
+ * Mapping:
+ *   - mobile  (< 480px container width): cap at "sm" (200px ECharts canvas)
+ *   - tablet  (480–1024px): cap at "md" (300px)
+ *   - desktop (> 1024px): no cap, honour the user choice up to "lg" (400px)
+ *
+ * Exported for unit tests; the production path stays inside this file.
+ */
+export const clampChartSize = (
+  userSize: ChartSize,
+  breakpoint: 'mobile' | 'tablet' | 'desktop',
+): ChartSize => {
+  const cap: ChartSize = breakpoint === 'mobile' ? 'sm' : breakpoint === 'tablet' ? 'md' : 'lg';
+  const userIdx = SIZE_ORDER.indexOf(userSize);
+  const capIdx = SIZE_ORDER.indexOf(cap);
+  return SIZE_ORDER[Math.min(userIdx, capIdx)];
+};
+
+/**
+ * Mirror of the wrapper-level `SIZE_HEIGHT` map (BarChart.tsx etc.).
+ * Keeping a local copy avoids importing the wrapper module just for the
+ * constant — these three numbers are the public contract of the
+ * `'sm' | 'md' | 'lg'` ChartSize axis.
+ */
+export const CHART_CANVAS_HEIGHT: Record<ChartSize, number> = {
+  sm: 200,
+  md: 300,
+  lg: 400,
+};
+
+/**
+ * PreviewBox height envelope: derived from the *clamped* chart size, not
+ * the user's requested height. The container is always exactly 20px
+ * taller than the chart canvas it wraps so we never reproduce the
+ * original screenshot bug (chart body bleeding into the Generated Code
+ * section underneath).
+ *
+ *   mobile  + lg → clampedSize 'sm' → 200 + 20 = 220
+ *   tablet  + lg → clampedSize 'md' → 300 + 20 = 320
+ *   desktop + lg → clampedSize 'lg' → 400 + 20 = 420
+ *
+ * The optional `floor` argument lets the caller insist on a minimum
+ * height — but the playground call-site keeps it at 0 so the responsive
+ * shrink actually takes effect. (Codex 019defa5 PARTIAL fix: an earlier
+ * draft passed `floor={360}` which kept mobile previews at 360px even
+ * after the chart canvas clamped down to `sm`.)
+ *
+ * Breakpoint isn't a parameter because `clampedSize` already encodes the
+ * breakpoint cap upstream; passing it twice would invite a re-derive bug.
+ *
+ * Exported for unit tests.
+ */
+export const responsiveHeight = (clampedSize: ChartSize, floor = 0): number =>
+  Math.max(floor, CHART_CANVAS_HEIGHT[clampedSize] + 20);
 
 const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
   chartId,
   chartName,
   toggles,
-  height = 360,
+  // Default `height = 0` — the chart-size-derived envelope wins. Callers
+  // that need a hard floor (theme-only previews) can still pass an
+  // explicit value. (Codex 019defa5 PARTIAL fix: an earlier draft
+  // defaulted to 360, which silently bypassed the responsive shrink the
+  // whole PR was meant to deliver.)
+  height = 0,
 }) => {
   const testId = `design-lab-chart-preview-${chartId}`;
+
+  // Faz 21.9 PR2: track the preview surface size with the same hook the
+  // chart wrappers use, so PreviewBox height + chart `size` clamp stay in
+  // lockstep. The same DOM node feeds the breakpoint observer; chart
+  // wrappers attach their own renderer ref through React's normal flow.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(containerRef);
+  const userSize = getEnum<ChartSize>(toggles, 'size', 'lg');
+  const clampedSize = clampChartSize(userSize, breakpoint);
+  // Height is driven by the clamped chart size, not the user's `height`
+  // prop, so the PreviewBox is always exactly 20px taller than the chart
+  // canvas — preventing the original screenshot bug where a 400px lg
+  // canvas overflowed a 360px container. `height` is treated as a *floor*
+  // (theme-only previews can insist on a minimum), but the design-lab
+  // call-site no longer passes a non-zero floor so the responsive shrink
+  // actually wins on mobile/tablet.
+  const finalHeight = responsiveHeight(clampedSize, height);
+
+  /**
+   * Resolve the chart `size` prop from the playground toggles, then clamp
+   * it against the active breakpoint cap. `defaultSize` is the wrapper's
+   * own default (e.g. BarChart defaults to 'md'); each switch case picks
+   * the size it wants the live preview to honour.
+   */
+  const sizeFor = (defaultSize: ChartSize): ChartSize =>
+    clampChartSize(getEnum<ChartSize>(toggles, 'size', defaultSize), breakpoint);
 
   switch (chartId) {
     case 'bar-chart': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <BarChart
             data={categories.map((c, i) => ({ label: c, value: values1[i] }))}
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
             orientation={getEnum(toggles, 'orientation', 'vertical')}
-            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            size={sizeFor('lg')}
             showValues={isOn(toggles, 'showValues', false)}
             showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', false)}
@@ -143,7 +276,12 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <LineChart
             series={[
               { name: 'Seri A', data: values1 },
@@ -151,7 +289,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             labels={categories}
             title={getStr(toggles, 'title', chartName)}
-            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            size={sizeFor('lg')}
             showDots={isOn(toggles, 'showDots', true)}
             showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
@@ -172,7 +310,12 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <AreaChart
             series={[
               { name: 'Gelir', data: values1 },
@@ -180,7 +323,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             labels={categories}
             title={getStr(toggles, 'title', chartName)}
-            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            size={sizeFor('lg')}
             stacked={isOn(toggles, 'stacked', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
             showGrid={isOn(toggles, 'showGrid', true)}
@@ -202,11 +345,16 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <PieChart
             data={categories.slice(0, 5).map((c, i) => ({ label: c, value: values1[i] }))}
             title={getStr(toggles, 'title', chartName)}
-            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            size={sizeFor('lg')}
             donut={isOn(toggles, 'donut', true)}
             showLabels={isOn(toggles, 'showLabels', true)}
             showLegend={isOn(toggles, 'showLegend', false)}
@@ -226,13 +374,18 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <ScatterChart
             data={values1.map((v, i) => ({ x: v, y: values2[i], label: categories[i] }))}
             title={getStr(toggles, 'title', chartName)}
             xLabel={getStr(toggles, 'xLabel', 'Seri A')}
             yLabel={getStr(toggles, 'yLabel', 'Seri B')}
-            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -247,7 +400,12 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox testId={testId} height={height} surfaceStyle={surfaceStyle}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <GaugeChart
             value={getNum(toggles, 'value', 72)}
             min={getNum(toggles, 'min', 0)}
@@ -258,7 +416,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { value: 70, color: '#f59e0b' },
               { value: 100, color: '#22c55e' },
             ]}
-            size={getEnum<ChartSize>(toggles, 'size', 'lg')}
+            size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -271,7 +429,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
 
     case 'radar-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <RadarChart
             indicators={[
               { name: 'Satış', max: 100 },
@@ -286,14 +444,14 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             title={chartName}
             showLegend={isOn(toggles, 'showLegend', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
 
     case 'treemap-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <TreemapChart
             data={[
               {
@@ -314,14 +472,14 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               },
             ]}
             title={chartName}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
 
     case 'heatmap-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <HeatmapChart
             data={[
               [0, 0, 10],
@@ -344,14 +502,14 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             yLabels={['Sabah', 'Öğle', 'Akşam']}
             title={chartName}
             showValues={isOn(toggles, 'showValues', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
 
     case 'waterfall-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <WaterfallChart
             data={[
               { label: 'Başlangıç', value: 1000 },
@@ -363,14 +521,14 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             title={chartName}
             showValues={isOn(toggles, 'showValues', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
 
     case 'funnel-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <FunnelChart
             data={[
               { name: 'Ziyaret', value: 5000 },
@@ -380,14 +538,14 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             title={chartName}
             showConversion={isOn(toggles, 'showConversion', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
 
     case 'sankey-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <SankeyChart
             nodes={[
               { name: 'Kaynak A' },
@@ -402,14 +560,14 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { source: 'Kaynak B', target: 'Hedef Y', value: 40 },
             ]}
             title={chartName}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
 
     case 'sunburst-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <SunburstChart
             data={[
               {
@@ -433,14 +591,14 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               },
             ]}
             title={chartName}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
 
     case 'kpi-card':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <div className="flex h-full w-full items-center justify-center p-4">
             <KPICard
               title="Revenue"
@@ -454,7 +612,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
 
     case 'sparkline-chart':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-4">
             <div className="flex w-full max-w-md items-center gap-3 text-xs text-text-secondary">
               <span className="w-20 shrink-0">line</span>
@@ -480,7 +638,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
 
     case 'chart-dashboard':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <ChartDashboard columns={{ sm: 1, md: 2, lg: 3 }} gap={12}>
             <KPICard
               title="Revenue"
@@ -506,7 +664,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
 
     case 'chart-container':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <ChartContainer
             title="Q3 Sales"
             description="ChartContainer ile sarılmış BarChart — title + description + height slot"
@@ -525,7 +683,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
 
     case 'chart-toolbar':
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <ChartToolbarShowcase chartName={chartName} />
         </PreviewBox>
       );
@@ -623,7 +781,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
 
     default:
       return (
-        <PreviewBox testId={testId} height={height}>
+        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <div className="flex h-full w-full items-center justify-center text-sm text-text-tertiary">
             {chartName}: live preview yakında
           </div>
