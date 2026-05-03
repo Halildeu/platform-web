@@ -17,6 +17,7 @@
     "@mfe/shared-types": "*",
     "@mfe/i18n-dicts": "*",
     "@mfe/design-system": "*",
+    "@mfe/x-charts": "*",
     "@reduxjs/toolkit": "^2.8.2",
     "@tanstack/react-query": "^5.99.0",
     "ag-grid-community": "34.3.1",

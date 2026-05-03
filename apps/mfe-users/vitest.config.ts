@@ -20,6 +20,15 @@ export default defineConfig({
       // fully stubs the symbol.
       '@mfe/auth': path.resolve(__dirname, '../../packages/auth/src'),
       'mfe_shell/i18n': path.resolve(__dirname, '../mfe-shell/src/app/i18n/index.ts'),
+      // Faz 21.8 PR-X4c: Codex iter-2 PR-X2 compatibility note —
+      // resolve x-charts root + subpath via tsconfig-style alias for
+      // tests under legacy `moduleResolution: 'node'`.
+      '@mfe/x-charts/client': path.resolve(
+        __dirname,
+        '../../packages/x-charts/src/client/index.ts',
+      ),
+      '@mfe/x-charts/ssr': path.resolve(__dirname, '../../packages/x-charts/src/ssr/index.ts'),
+      '@mfe/x-charts': path.resolve(__dirname, '../../packages/x-charts/src/index.ts'),
     },
   },
   test: {
