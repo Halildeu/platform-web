@@ -9,13 +9,15 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveAxisLabel, buildResponsiveGrid } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -229,6 +231,10 @@ const HeatmapChartInner = React.forwardRef<
   const isEmpty = !data || data.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
+  // Faz 21.9 PR3c: container ref + breakpoint for responsive heatmap.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
+
   // HeatmapChart accent-IMMUNE — gradient `colors` are semantic; accent
   // prop accepted for API consistency. effectivePalette ignored.
   const {
@@ -277,29 +283,44 @@ const HeatmapChartInner = React.forwardRef<
           return `${escapeHtml(xLabel)} / ${escapeHtml(yLabel)}<br/><strong>${display}</strong>`;
         },
       },
-      grid: {
-        top: title
-          ? scalePadding(56, densityPaddingMultiplier)
-          : scalePadding(20, densityPaddingMultiplier),
-        right: showLegend
-          ? scalePadding(80, densityPaddingMultiplier)
-          : scalePadding(16, densityPaddingMultiplier),
-        bottom: scalePadding(24, densityPaddingMultiplier),
-        left: scalePadding(16, densityPaddingMultiplier),
-        containLabel: true,
-      },
+      grid: buildResponsiveGrid({
+        breakpoint,
+        hasTitle: !!title,
+        // Heatmap uses a vertical visualMap on the right when showLegend
+        // is on, not a bottom legend strip — route via hasRightLegend so
+        // the grid leaves room on the right side instead of the bottom.
+        hasBottomLegend: false,
+        hasRightLegend: showLegend,
+        density: {
+          titleTop: scalePadding(56, densityPaddingMultiplier),
+          contentTop: scalePadding(20, densityPaddingMultiplier),
+          sidePadding: scalePadding(16, densityPaddingMultiplier),
+          legendBottom: scalePadding(24, densityPaddingMultiplier),
+          plainBottom: scalePadding(24, densityPaddingMultiplier),
+        },
+      }),
       xAxis: {
         type: 'category' as const,
         data: xCats,
         splitArea: { show: true },
-        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+        axisLabel: buildResponsiveAxisLabel({
+          breakpoint,
+          labelCount: xCats.length,
+          densityFontMultiplier,
+          baseFontSize: 11,
+        }),
         axisTick: { alignWithLabel: true },
       },
       yAxis: {
         type: 'category' as const,
         data: yCats,
         splitArea: { show: true },
-        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+        axisLabel: buildResponsiveAxisLabel({
+          breakpoint,
+          labelCount: yCats.length,
+          densityFontMultiplier,
+          baseFontSize: 11,
+        }),
       },
       visualMap: {
         min: effectiveMin,
@@ -361,6 +382,7 @@ const HeatmapChartInner = React.forwardRef<
     decalPatterns,
     densityFontMultiplier,
     densityPaddingMultiplier,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -411,6 +433,7 @@ const HeatmapChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

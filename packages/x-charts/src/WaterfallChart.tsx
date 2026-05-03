@@ -11,13 +11,20 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import {
+  buildResponsiveAxisLabel,
+  buildResponsiveLegend,
+  buildResponsiveGrid,
+  buildResponsiveDataZoom,
+} from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -26,7 +33,7 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
+import { scaleFontSize, scalePadding } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
@@ -174,6 +181,10 @@ const WaterfallChartInner = React.forwardRef<
   );
   const fmt = valueFormatter ?? formatCompact;
 
+  // Faz 21.9 PR3c: same DOM node feeds breakpoint observer + ECharts renderer.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
+
   const {
     themeObject,
     decalEnabled,
@@ -253,21 +264,59 @@ const WaterfallChartInner = React.forwardRef<
       }
     }
 
+    const responsiveAxisLabel = buildResponsiveAxisLabel({
+      breakpoint,
+      labelCount: labels.length,
+      densityFontMultiplier,
+      baseFontSize: 11,
+    });
+
     const categoryAxis = {
       type: 'category' as const,
       data: labels,
-      axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+      axisLabel: responsiveAxisLabel,
       axisTick: { alignWithLabel: true },
     };
 
     const valueAxis = {
       type: 'value' as const,
       axisLabel: {
-        fontSize: scaleFontSize(11, densityFontMultiplier),
+        fontSize: responsiveAxisLabel.fontSize,
+        hideOverlap: true,
         formatter: (v: number) => fmt(v),
       },
       splitLine: { show: true, lineStyle: { type: 'dashed' as const } },
     };
+
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
+      showLegend,
+      hasMultiSeries: false,
+      seriesCount: 1,
+      densitySpacingMultiplier,
+      densityFontMultiplier,
+      icon: 'roundRect',
+    });
+
+    const responsiveGrid = buildResponsiveGrid({
+      breakpoint,
+      hasTitle: !!title,
+      hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+      hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
+      density: {
+        titleTop: scalePadding(48, densityPaddingMultiplier),
+        contentTop: scalePadding(24, densityPaddingMultiplier),
+        sidePadding: scalePadding(16, densityPaddingMultiplier),
+        legendBottom: scalePadding(48, densityPaddingMultiplier),
+        plainBottom: scalePadding(24, densityPaddingMultiplier),
+      },
+    });
+
+    const dataZoom = buildResponsiveDataZoom({
+      breakpoint,
+      labelCount: labels.length,
+      horizontal: isHorizontal,
+    });
 
     /* -- Invisible base series (stacked underneath) -- */
     const baseSeries = {
@@ -351,26 +400,9 @@ const WaterfallChartInner = React.forwardRef<
           return `<b>${escapeHtml(visible.name)}</b><br/>${prefix}${fmt(displayVal)}`;
         },
       },
-      legend: {
-        show: showLegend,
-        bottom: 0,
-        icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-        data: [title ?? 'Value'],
-      },
-      grid: {
-        top: title
-          ? scalePadding(48, densityPaddingMultiplier)
-          : scalePadding(24, densityPaddingMultiplier),
-        right: scalePadding(16, densityPaddingMultiplier),
-        bottom: showLegend
-          ? scalePadding(48, densityPaddingMultiplier)
-          : scalePadding(24, densityPaddingMultiplier),
-        left: scalePadding(16, densityPaddingMultiplier),
-        containLabel: true,
-      },
+      legend: { ...responsiveLegend, data: [title ?? 'Value'] },
+      grid: responsiveGrid,
+      ...(dataZoom ? { dataZoom } : {}),
       xAxis: isHorizontal ? valueAxis : categoryAxis,
       yAxis: isHorizontal ? categoryAxis : valueAxis,
       series: [baseSeries, valueSeries],
@@ -401,6 +433,7 @@ const WaterfallChartInner = React.forwardRef<
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -437,6 +470,7 @@ const WaterfallChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)
