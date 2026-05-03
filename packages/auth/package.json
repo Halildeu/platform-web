@@ -10,6 +10,7 @@
     "@mfe/design-system": "*"
   },
   "dependencies": {
-    "@mfe/shared-http": "*"
+    "@mfe/shared-http": "*",
+    "@mfe/shared-types": "*"
   }
 }

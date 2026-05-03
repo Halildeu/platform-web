@@ -131,9 +131,10 @@ jobs:
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: Run 13-chart smoke + option-shape contract (hard block)
+      - name: Run 13-chart smoke + option-shape + access contract (hard block)
         run: |
           pnpm --filter @mfe/x-charts exec vitest run \
             src/__tests__/chart-components-smoke.test.tsx \
             src/__tests__/chart-options-shape.test.tsx \
+            src/__tests__/access.contract.test.tsx \
             --reporter=verbose

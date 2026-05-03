@@ -81,8 +81,19 @@ export interface BatchCheckResponse {
   results: BatchCheckItem[];
 }
 
-/** Design-system compatible access level for Zanzibar object-level checks. */
-export type ZanzibarAccessLevel = 'full' | 'readonly' | 'disabled' | 'hidden';
+/**
+ * Design-system compatible access level for Zanzibar object-level checks.
+ *
+ * Faz 21.4 PR-E1 relocated the canonical four-state ladder
+ * (`'full' | 'readonly' | 'disabled' | 'hidden'`) to
+ * `@mfe/shared-types/access#AccessLevel`. This file aliases that type so
+ * the existing `ZanzibarAccessLevel` name keeps working across all auth
+ * callers without duplicating the union. The other `AccessLevel` declared
+ * in this file (line 29 — `'NONE' | 'VIEW' | 'MANAGE'`) is module-level
+ * permission tier, not related; the rename below avoids the collision.
+ */
+import type { AccessLevel as SharedAccessLevel } from '@mfe/shared-types';
+export type ZanzibarAccessLevel = SharedAccessLevel;
 
 /** Scope kind accepted by explain + UI pickers. Backend stores canonical upper-case keys. */
 export type ExplainScopeType = 'COMPANY' | 'PROJECT' | 'WAREHOUSE' | 'BRANCH';

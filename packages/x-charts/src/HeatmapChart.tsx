@@ -8,6 +8,10 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -37,7 +41,7 @@ export type HeatmapObjectData = {
   value: number;
 };
 
-export interface HeatmapChartProps {
+export interface HeatmapChartProps extends AccessControlledProps {
   /** Heatmap data in tuple [x, y, value] or object format. */
   data: HeatmapTupleData[] | HeatmapObjectData[];
   /** X-axis category labels. */
@@ -185,259 +189,289 @@ function normalizeData(
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
-  function HeatmapChart(
-    {
-      data,
-      xLabels,
-      yLabels,
-      size = 'md',
-      title,
-      min: minProp,
-      max: maxProp,
-      colors = ['#f5f5f5', '#3b82f6'],
-      showValues = false,
-      valueFormatter,
-      cellSize = 'auto',
-      showLegend = true,
-      animate = true,
-      onCellClick,
-      className,
-      theme: themePreference = 'auto',
-      decal: decalPreference = 'auto',
-      density: densityPreference = 'auto',
-      accent: accentPreference = 'auto',
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const height = SIZE_HEIGHT[size];
-    const isEmpty = !data || data.length === 0;
-    const fmt = valueFormatter ?? formatCompact;
+/**
+ * HeatmapChart inner — original hook-bearing body. The outer `HeatmapChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<HeatmapChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const HeatmapChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<HeatmapChartProps, 'access' | 'accessReason'>
+>(function HeatmapChartInner(
+  {
+    data,
+    xLabels,
+    yLabels,
+    size = 'md',
+    title,
+    min: minProp,
+    max: maxProp,
+    colors = ['#f5f5f5', '#3b82f6'],
+    showValues = false,
+    valueFormatter,
+    cellSize = 'auto',
+    showLegend = true,
+    animate = true,
+    onCellClick,
+    className,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
+    ...rest
+  },
+  forwardedRef,
+) {
+  const height = SIZE_HEIGHT[size];
+  const isEmpty = !data || data.length === 0;
+  const fmt = valueFormatter ?? formatCompact;
 
-    // HeatmapChart accent-IMMUNE — gradient `colors` are semantic; accent
-    // prop accepted for API consistency. effectivePalette ignored.
-    const {
-      themeObject,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
-      densityPaddingMultiplier,
-    } = useChartTheme({
-      theme: themePreference,
-      decal: decalPreference,
-      density: densityPreference,
-      accent: accentPreference,
-    });
+  // HeatmapChart accent-IMMUNE — gradient `colors` are semantic; accent
+  // prop accepted for API consistency. effectivePalette ignored.
+  const {
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densityPaddingMultiplier,
+  } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+    density: densityPreference,
+    accent: accentPreference,
+  });
 
-    const option = useMemo((): EChartsOption | null => {
-      if (isEmpty) return null;
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty) return null;
 
-      const { normalized, xCats, yCats, dataMin, dataMax } = normalizeData(data, xLabels, yLabels);
+    const { normalized, xCats, yCats, dataMin, dataMax } = normalizeData(data, xLabels, yLabels);
 
-      const effectiveMin = minProp ?? dataMin;
-      const effectiveMax = maxProp ?? dataMax;
+    const effectiveMin = minProp ?? dataMin;
+    const effectiveMax = maxProp ?? dataMax;
 
-      return {
-        animation: animate,
-        animationDuration: animate ? 500 : 0,
-        animationEasing: 'cubicOut',
-        title: title
-          ? {
-              text: escapeHtml(title),
-              left: 'center',
-              textStyle: {
-                fontSize: scaleFontSize(16, densityFontMultiplier),
-                fontWeight: 600,
-              },
-            }
-          : undefined,
-        tooltip: {
-          trigger: 'item',
-          confine: true,
-          formatter: (params: { data: [number, number, number] }) => {
-            const [xi, yi, val] = params.data;
-            const xLabel = xCats[xi] ?? String(xi);
-            const yLabel = yCats[yi] ?? String(yi);
-            const display = escapeHtml(fmt(sanitizeNumber(val)));
-            return `${escapeHtml(xLabel)} / ${escapeHtml(yLabel)}<br/><strong>${display}</strong>`;
-          },
-        },
-        grid: {
-          top: title
-            ? scalePadding(56, densityPaddingMultiplier)
-            : scalePadding(20, densityPaddingMultiplier),
-          right: showLegend
-            ? scalePadding(80, densityPaddingMultiplier)
-            : scalePadding(16, densityPaddingMultiplier),
-          bottom: scalePadding(24, densityPaddingMultiplier),
-          left: scalePadding(16, densityPaddingMultiplier),
-          containLabel: true,
-        },
-        xAxis: {
-          type: 'category' as const,
-          data: xCats,
-          splitArea: { show: true },
-          axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
-          axisTick: { alignWithLabel: true },
-        },
-        yAxis: {
-          type: 'category' as const,
-          data: yCats,
-          splitArea: { show: true },
-          axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
-        },
-        visualMap: {
-          min: effectiveMin,
-          max: effectiveMax,
-          calculable: true,
-          show: showLegend,
-          orient: 'vertical' as const,
-          right: 0,
-          top: 'center',
-          inRange: {
-            color: colors,
-          },
-          textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
-        },
-        series: [
-          {
-            type: 'heatmap' as const,
-            data: normalized,
-            label: {
-              show: showValues,
-              fontSize: scaleFontSize(10, densityFontMultiplier),
-              formatter: (params: { value: [number, number, number] }) =>
-                escapeHtml(fmt(sanitizeNumber(params.value[2]))),
+    return {
+      animation: animate,
+      animationDuration: animate ? 500 : 0,
+      animationEasing: 'cubicOut',
+      title: title
+        ? {
+            text: escapeHtml(title),
+            left: 'center',
+            textStyle: {
+              fontSize: scaleFontSize(16, densityFontMultiplier),
+              fontWeight: 600,
             },
-            emphasis: {
-              itemStyle: {
-                borderColor: '#333',
-                borderWidth: 2,
-                shadowBlur: 8,
-                shadowColor: 'rgba(0,0,0,0.25)',
-              },
-            },
-            ...(cellSize !== 'auto' ? { itemStyle: { width: cellSize, height: cellSize } } : {}),
-          },
-        ],
-        aria: {
-          enabled: true,
+          }
+        : undefined,
+      tooltip: {
+        trigger: 'item',
+        confine: true,
+        formatter: (params: { data: [number, number, number] }) => {
+          const [xi, yi, val] = params.data;
+          const xLabel = xCats[xi] ?? String(xi);
+          const yLabel = yCats[yi] ?? String(yi);
+          const display = escapeHtml(fmt(sanitizeNumber(val)));
+          return `${escapeHtml(xLabel)} / ${escapeHtml(yLabel)}<br/><strong>${display}</strong>`;
+        },
+      },
+      grid: {
+        top: title
+          ? scalePadding(56, densityPaddingMultiplier)
+          : scalePadding(20, densityPaddingMultiplier),
+        right: showLegend
+          ? scalePadding(80, densityPaddingMultiplier)
+          : scalePadding(16, densityPaddingMultiplier),
+        bottom: scalePadding(24, densityPaddingMultiplier),
+        left: scalePadding(16, densityPaddingMultiplier),
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category' as const,
+        data: xCats,
+        splitArea: { show: true },
+        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+        axisTick: { alignWithLabel: true },
+      },
+      yAxis: {
+        type: 'category' as const,
+        data: yCats,
+        splitArea: { show: true },
+        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+      },
+      visualMap: {
+        min: effectiveMin,
+        max: effectiveMax,
+        calculable: true,
+        show: showLegend,
+        orient: 'vertical' as const,
+        right: 0,
+        top: 'center',
+        inRange: {
+          color: colors,
+        },
+        textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+      },
+      series: [
+        {
+          type: 'heatmap' as const,
+          data: normalized,
           label: {
-            description: title ? `Heatmap chart: ${escapeHtml(title)}` : 'Heatmap chart',
+            show: showValues,
+            fontSize: scaleFontSize(10, densityFontMultiplier),
+            formatter: (params: { value: [number, number, number] }) =>
+              escapeHtml(fmt(sanitizeNumber(params.value[2]))),
           },
-          ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
+          emphasis: {
+            itemStyle: {
+              borderColor: '#333',
+              borderWidth: 2,
+              shadowBlur: 8,
+              shadowColor: 'rgba(0,0,0,0.25)',
+            },
+          },
+          ...(cellSize !== 'auto' ? { itemStyle: { width: cellSize, height: cellSize } } : {}),
         },
-      } as EChartsOption;
-    }, [
-      data,
-      xLabels,
-      yLabels,
-      title,
-      minProp,
-      maxProp,
-      colors,
-      showValues,
-      fmt,
-      cellSize,
-      showLegend,
-      animate,
-      isEmpty,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
-      densityPaddingMultiplier,
-    ]);
-
-    const handleClick = useCallback(
-      (params: unknown) => {
-        if (!onCellClick) return;
-        const p = params as { data: [number, number, number] };
-        if (Array.isArray(p.data) && p.data.length >= 3) {
-          onCellClick({
-            x: p.data[0],
-            y: p.data[1],
-            value: p.data[2],
-          });
-        }
+      ],
+      aria: {
+        enabled: true,
+        label: {
+          description: title ? `Heatmap chart: ${escapeHtml(title)}` : 'Heatmap chart',
+        },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
-      [onCellClick],
-    );
+    } as EChartsOption;
+  }, [
+    data,
+    xLabels,
+    yLabels,
+    title,
+    minProp,
+    maxProp,
+    colors,
+    showValues,
+    fmt,
+    cellSize,
+    showLegend,
+    animate,
+    isEmpty,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densityPaddingMultiplier,
+  ]);
 
-    const { containerRef, instance } = useEChartsRenderer({
-      option: option ?? ({} as EChartsOption),
-      theme: themeObject,
-      respectReducedMotion: true,
-      onClick: onCellClick ? handleClick : undefined,
-    });
-
-    // Faz 21.5-B PR-B2: default-on a11y. Heatmap is a 2D matrix —
-    // flatten each cell to "(xCat, yCat) → value". Order preserves
-    // ECharts' visualization order (left-to-right, top-to-bottom).
-    const a11yData = useMemo(() => {
-      if (isEmpty) return [];
-      try {
-        const norm = normalizeData(data, xLabels, yLabels);
-        const { normalized, xCats, yCats } = norm;
-        return normalized.map(([xi, yi, v]) => ({
-          label: `(${xCats[xi] ?? xi}, ${yCats[yi] ?? yi})`,
-          value: v,
-        }));
-      } catch {
-        return [];
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onCellClick) return;
+      const p = params as { data: [number, number, number] };
+      if (Array.isArray(p.data) && p.data.length >= 3) {
+        onCellClick({
+          x: p.data[0],
+          y: p.data[1],
+          value: p.data[2],
+        });
       }
-    }, [data, xLabels, yLabels, isEmpty]);
-    const a11y = useChartA11y({
-      chartType: 'heatmap',
-      data: a11yData,
-      title,
-      valueFormatter: fmt,
-      echartsInstance: instance,
-    });
+    },
+    [onCellClick],
+  );
 
-    const setRefs = useCallback(
-      (node: HTMLDivElement | null) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === 'function') forwardedRef(node);
-        else if (forwardedRef)
-          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      },
-      [forwardedRef, containerRef],
-    );
+  const { containerRef, instance } = useEChartsRenderer({
+    option: option ?? ({} as EChartsOption),
+    theme: themeObject,
+    respectReducedMotion: true,
+    onClick: onCellClick ? handleClick : undefined,
+  });
 
-    /* ---- empty state ---- */
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label={a11y.ariaLabel}
-          data-testid="heatmap-chart-empty"
-          {...rest}
-        >
-          Veri yok
-        </div>
-      );
+  // Faz 21.5-B PR-B2: default-on a11y. Heatmap is a 2D matrix —
+  // flatten each cell to "(xCat, yCat) → value". Order preserves
+  // ECharts' visualization order (left-to-right, top-to-bottom).
+  const a11yData = useMemo(() => {
+    if (isEmpty) return [];
+    try {
+      const norm = normalizeData(data, xLabels, yLabels);
+      const { normalized, xCats, yCats } = norm;
+      return normalized.map(([xi, yi, v]) => ({
+        label: `(${xCats[xi] ?? xi}, ${yCats[yi] ?? yi})`,
+        value: v,
+      }));
+    } catch {
+      return [];
     }
+  }, [data, xLabels, yLabels, isEmpty]);
+  const a11y = useChartA11y({
+    chartType: 'heatmap',
+    data: a11yData,
+    title,
+    valueFormatter: fmt,
+    echartsInstance: instance,
+  });
 
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [forwardedRef, containerRef],
+  );
+
+  /* ---- empty state ---- */
+  if (isEmpty) {
     return (
-      <ChartA11yShell
-        a11y={a11y}
-        className={className}
-        height={height}
-        testId="heatmap-chart"
-        setRefs={setRefs}
+      <div
+        ref={forwardedRef}
+        className={cn(
+          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
+        role="img"
+        aria-label={a11y.ariaLabel}
+        data-testid="heatmap-chart-empty"
         {...rest}
-      />
+      >
+        Veri yok
+      </div>
+    );
+  }
+
+  return (
+    <ChartA11yShell
+      a11y={a11y}
+      className={className}
+      height={height}
+      testId="heatmap-chart"
+      setRefs={setRefs}
+      {...rest}
+    />
+  );
+});
+
+HeatmapChartInner.displayName = 'HeatmapChartInner';
+
+/**
+ * HeatmapChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `HeatmapChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
+  function HeatmapChart({ access, accessReason, onCellClick, ...rest }, ref) {
+    const { state } = resolveAccessState(access);
+    return (
+      <ChartAccessGate access={access} accessReason={accessReason}>
+        <HeatmapChartInner
+          ref={ref}
+          {...rest}
+          onCellClick={guardChartCallback(state, onCellClick)}
+        />
+      </ChartAccessGate>
     );
   },
 );
-
 HeatmapChart.displayName = 'HeatmapChart';
 
 export default HeatmapChart;

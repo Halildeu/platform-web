@@ -9,6 +9,7 @@ export { ExplainPermissionModal } from './ExplainPermissionModal';
 export type { ExplainPermissionModalProps } from './ExplainPermissionModal';
 export { ProtectedRoute, ProtectedSection } from './ProtectedRoute';
 export { useZanzibarAccess } from './useZanzibarAccess';
+export { useZanzibarAccessProps } from './useZanzibarAccessProps';
 export { useBatchZanzibarAccess } from './useBatchZanzibarAccess';
 export type { BatchAccessEntry, BatchZanzibarAccessResult } from './useBatchZanzibarAccess';
 export { ZanzibarGate } from './ZanzibarGate';

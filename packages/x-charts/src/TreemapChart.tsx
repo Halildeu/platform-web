@@ -8,6 +8,10 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -39,7 +43,7 @@ export type TreemapNode = {
   itemStyle?: { color?: string };
 };
 
-export interface TreemapChartProps {
+export interface TreemapChartProps extends AccessControlledProps {
   /** Hierarchical tree data. */
   data: TreemapNode[];
   /** Visual size variant. @default "md" */
@@ -165,242 +169,272 @@ function buildLevels(depth: number, colorSaturation: [number, number]): Record<s
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
-  function TreemapChart(
-    {
-      data,
-      size = 'md',
-      title,
-      showLegend = false,
-      showBreadcrumb = true,
-      leafDepth = 1,
-      roam = false,
-      colorSaturation = [0.35, 0.5],
-      visibleMin = 300,
-      valueFormatter,
-      onNodeClick,
-      animate = true,
-      className,
-      theme: themePreference = 'auto',
-      decal: decalPreference = 'auto',
-      density: densityPreference = 'auto',
-      accent: accentPreference = 'auto',
-      ...rest
-    },
-    forwardedRef,
-  ) {
-    const height = SIZE_HEIGHT[size];
-    const isEmpty = !data || data.length === 0;
-    const fmt = valueFormatter ?? formatCompact;
+/**
+ * TreemapChart inner — original hook-bearing body. The outer `TreemapChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<TreemapChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const TreemapChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<TreemapChartProps, 'access' | 'accessReason'>
+>(function TreemapChartInner(
+  {
+    data,
+    size = 'md',
+    title,
+    showLegend = false,
+    showBreadcrumb = true,
+    leafDepth = 1,
+    roam = false,
+    colorSaturation = [0.35, 0.5],
+    visibleMin = 300,
+    valueFormatter,
+    onNodeClick,
+    animate = true,
+    className,
+    theme: themePreference = 'auto',
+    decal: decalPreference = 'auto',
+    density: densityPreference = 'auto',
+    accent: accentPreference = 'auto',
+    ...rest
+  },
+  forwardedRef,
+) {
+  const height = SIZE_HEIGHT[size];
+  const isEmpty = !data || data.length === 0;
+  const fmt = valueFormatter ?? formatCompact;
 
-    const {
-      themeObject,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
-      densitySpacingMultiplier,
-      effectivePalette,
-    } = useChartTheme({
-      theme: themePreference,
-      decal: decalPreference,
-      density: densityPreference,
-      accent: accentPreference,
-    });
+  const {
+    themeObject,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    effectivePalette,
+  } = useChartTheme({
+    theme: themePreference,
+    decal: decalPreference,
+    density: densityPreference,
+    accent: accentPreference,
+  });
 
-    const option = useMemo((): EChartsOption | null => {
-      if (isEmpty) return null;
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty) return null;
 
-      const maxDepth = getMaxDepth(data);
-      const levels = buildLevels(maxDepth, colorSaturation);
+    const maxDepth = getMaxDepth(data);
+    const levels = buildLevels(maxDepth, colorSaturation);
 
-      const labelFormatter = (params: { name: string; value: number }) => {
-        const formatted = fmt(params.value);
-        return `${escapeHtml(params.name)}\n${escapeHtml(formatted)}`;
-      };
+    const labelFormatter = (params: { name: string; value: number }) => {
+      const formatted = fmt(params.value);
+      return `${escapeHtml(params.name)}\n${escapeHtml(formatted)}`;
+    };
 
-      return {
-        animation: animate,
-        animationDuration: animate ? 500 : 0,
-        animationEasing: 'cubicOut',
-        title: title
-          ? {
-              text: escapeHtml(title),
-              left: 'center',
-              textStyle: {
-                fontSize: scaleFontSize(16, densityFontMultiplier),
-                fontWeight: 600,
-              },
-            }
-          : undefined,
-        tooltip: {
-          trigger: 'item',
-          confine: true,
-          formatter: (params: { name: string; value: number }) => {
-            const val = escapeHtml(fmt(params.value));
-            return `<strong>${escapeHtml(params.name)}</strong><br/>${val}`;
-          },
+    return {
+      animation: animate,
+      animationDuration: animate ? 500 : 0,
+      animationEasing: 'cubicOut',
+      title: title
+        ? {
+            text: escapeHtml(title),
+            left: 'center',
+            textStyle: {
+              fontSize: scaleFontSize(16, densityFontMultiplier),
+              fontWeight: 600,
+            },
+          }
+        : undefined,
+      tooltip: {
+        trigger: 'item',
+        confine: true,
+        formatter: (params: { name: string; value: number }) => {
+          const val = escapeHtml(fmt(params.value));
+          return `<strong>${escapeHtml(params.name)}</strong><br/>${val}`;
         },
-        legend: {
-          show: showLegend,
-          bottom: 0,
-          icon: 'roundRect',
-          itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-          itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-          textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-        },
-        series: [
-          {
-            type: 'treemap' as const,
-            data,
-            leafDepth,
-            roam,
-            visibleMin,
-            label: {
-              show: true,
-              formatter: labelFormatter,
-              fontSize: scaleFontSize(12, densityFontMultiplier),
-              ellipsis: true,
-            },
-            upperLabel: {
-              show: true,
-              height: 16,
-              fontSize: scaleFontSize(11, densityFontMultiplier),
-              color: '#333',
-              padding: [2, 4, 0, 4],
-            },
-            breadcrumb: {
-              show: showBreadcrumb,
-              left: 'center',
-              bottom: showLegend ? 28 : 4,
-              itemStyle: {
-                textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
-              },
-            },
-            levels,
-            itemStyle: {
-              borderColor: '#fff',
-              borderWidth: 1,
-              gapWidth: 1,
-            },
-            colorMappingBy: 'id',
-            emphasis: {
-              itemStyle: {
-                borderColor: '#333',
-                borderWidth: 1,
-              },
-            },
-          },
-        ],
-        color: effectivePalette ?? DEFAULT_PALETTE,
-        aria: {
-          enabled: true,
+      },
+      legend: {
+        show: showLegend,
+        bottom: 0,
+        icon: 'roundRect',
+        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
+        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
+        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
+      },
+      series: [
+        {
+          type: 'treemap' as const,
+          data,
+          leafDepth,
+          roam,
+          visibleMin,
           label: {
-            description: title ? `Treemap chart: ${escapeHtml(title)}` : 'Treemap chart',
+            show: true,
+            formatter: labelFormatter,
+            fontSize: scaleFontSize(12, densityFontMultiplier),
+            ellipsis: true,
           },
-          ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
+          upperLabel: {
+            show: true,
+            height: 16,
+            fontSize: scaleFontSize(11, densityFontMultiplier),
+            color: '#333',
+            padding: [2, 4, 0, 4],
+          },
+          breadcrumb: {
+            show: showBreadcrumb,
+            left: 'center',
+            bottom: showLegend ? 28 : 4,
+            itemStyle: {
+              textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+            },
+          },
+          levels,
+          itemStyle: {
+            borderColor: '#fff',
+            borderWidth: 1,
+            gapWidth: 1,
+          },
+          colorMappingBy: 'id',
+          emphasis: {
+            itemStyle: {
+              borderColor: '#333',
+              borderWidth: 1,
+            },
+          },
         },
-      } as EChartsOption;
-    }, [
-      data,
-      title,
-      showLegend,
-      showBreadcrumb,
-      leafDepth,
-      roam,
-      colorSaturation,
-      visibleMin,
-      fmt,
-      animate,
-      isEmpty,
-      decalEnabled,
-      decalPatterns,
-      densityFontMultiplier,
-      densitySpacingMultiplier,
-      effectivePalette,
-    ]);
-
-    const handleClick = useCallback(
-      (params: unknown) => {
-        if (!onNodeClick) return;
-        const p = params as { name: string; value: number; data: unknown };
-        onNodeClick({
-          name: p.name,
-          value: typeof p.value === 'number' ? p.value : 0,
-          data: p.data,
-        });
+      ],
+      color: effectivePalette ?? DEFAULT_PALETTE,
+      aria: {
+        enabled: true,
+        label: {
+          description: title ? `Treemap chart: ${escapeHtml(title)}` : 'Treemap chart',
+        },
+        ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
-      [onNodeClick],
-    );
+    } as EChartsOption;
+  }, [
+    data,
+    title,
+    showLegend,
+    showBreadcrumb,
+    leafDepth,
+    roam,
+    colorSaturation,
+    visibleMin,
+    fmt,
+    animate,
+    isEmpty,
+    decalEnabled,
+    decalPatterns,
+    densityFontMultiplier,
+    densitySpacingMultiplier,
+    effectivePalette,
+  ]);
 
-    const { containerRef, instance } = useEChartsRenderer({
-      option: option ?? ({} as EChartsOption),
-      theme: themeObject,
-      respectReducedMotion: true,
-      onClick: onNodeClick ? handleClick : undefined,
-    });
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onNodeClick) return;
+      const p = params as { name: string; value: number; data: unknown };
+      onNodeClick({
+        name: p.name,
+        value: typeof p.value === 'number' ? p.value : 0,
+        data: p.data,
+      });
+    },
+    [onNodeClick],
+  );
 
-    // Faz 21.5-B PR-B2: default-on a11y. Treemap is hierarchical —
-    // flatten top-level nodes (recursive descent skipped to keep the
-    // SR table digestible). Each node's name + value surfaces.
-    const a11yData = useMemo(
-      () =>
-        (data ?? []).map((node) => ({
-          label: node.name,
-          value: node.value ?? 0,
-        })),
-      [data],
-    );
-    const a11y = useChartA11y({
-      chartType: 'treemap',
-      data: a11yData,
-      title,
-      valueFormatter: fmt,
-      echartsInstance: instance,
-    });
+  const { containerRef, instance } = useEChartsRenderer({
+    option: option ?? ({} as EChartsOption),
+    theme: themeObject,
+    respectReducedMotion: true,
+    onClick: onNodeClick ? handleClick : undefined,
+  });
 
-    const setRefs = useCallback(
-      (node: HTMLDivElement | null) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof forwardedRef === 'function') forwardedRef(node);
-        else if (forwardedRef)
-          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      },
-      [forwardedRef, containerRef],
-    );
+  // Faz 21.5-B PR-B2: default-on a11y. Treemap is hierarchical —
+  // flatten top-level nodes (recursive descent skipped to keep the
+  // SR table digestible). Each node's name + value surfaces.
+  const a11yData = useMemo(
+    () =>
+      (data ?? []).map((node) => ({
+        label: node.name,
+        value: node.value ?? 0,
+      })),
+    [data],
+  );
+  const a11y = useChartA11y({
+    chartType: 'treemap',
+    data: a11yData,
+    title,
+    valueFormatter: fmt,
+    echartsInstance: instance,
+  });
 
-    /* ---- empty state ---- */
-    if (isEmpty) {
-      return (
-        <div
-          ref={forwardedRef}
-          className={cn(
-            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
-            className,
-          )}
-          style={{ height }}
-          role="img"
-          aria-label={a11y.ariaLabel}
-          data-testid="treemap-chart-empty"
-          {...rest}
-        >
-          Veri yok
-        </div>
-      );
-    }
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef)
+        (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [forwardedRef, containerRef],
+  );
 
+  /* ---- empty state ---- */
+  if (isEmpty) {
     return (
-      <ChartA11yShell
-        a11y={a11y}
-        className={className}
-        height={height}
-        testId="treemap-chart"
-        setRefs={setRefs}
+      <div
+        ref={forwardedRef}
+        className={cn(
+          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          className,
+        )}
+        style={{ height }}
+        role="img"
+        aria-label={a11y.ariaLabel}
+        data-testid="treemap-chart-empty"
         {...rest}
-      />
+      >
+        Veri yok
+      </div>
+    );
+  }
+
+  return (
+    <ChartA11yShell
+      a11y={a11y}
+      className={className}
+      height={height}
+      testId="treemap-chart"
+      setRefs={setRefs}
+      {...rest}
+    />
+  );
+});
+
+TreemapChartInner.displayName = 'TreemapChartInner';
+
+/**
+ * TreemapChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `TreemapChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
+  function TreemapChart({ access, accessReason, onNodeClick, ...rest }, ref) {
+    const { state } = resolveAccessState(access);
+    return (
+      <ChartAccessGate access={access} accessReason={accessReason}>
+        <TreemapChartInner
+          ref={ref}
+          {...rest}
+          onNodeClick={guardChartCallback(state, onNodeClick)}
+        />
+      </ChartAccessGate>
     );
   },
 );
-
 TreemapChart.displayName = 'TreemapChart';
 
 export default TreemapChart;

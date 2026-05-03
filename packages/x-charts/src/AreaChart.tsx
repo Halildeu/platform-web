@@ -7,6 +7,8 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -34,7 +36,7 @@ export type ChartSeries = {
   color?: string;
 };
 
-export interface AreaChartProps {
+export interface AreaChartProps extends AccessControlledProps {
   /** Series to render as filled areas. */
   series: ChartSeries[];
   /** X-axis labels. */
@@ -133,7 +135,17 @@ const makeGradient = (color: string, opacity: number) => ({
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(function AreaChart(
+/**
+ * AreaChart inner — original hook-bearing body. The outer `AreaChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<AreaChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const AreaChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<AreaChartProps, 'access' | 'accessReason'>
+>(function AreaChartInner(
   {
     series: seriesData,
     labels,
@@ -362,6 +374,24 @@ export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(functi
   );
 });
 
+AreaChartInner.displayName = 'AreaChartInner';
+
+/**
+ * AreaChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `AreaChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(function AreaChart(
+  { access, accessReason, ...rest },
+  ref,
+) {
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <AreaChartInner ref={ref} {...rest} />
+    </ChartAccessGate>
+  );
+});
 AreaChart.displayName = 'AreaChart';
 
 export default AreaChart;

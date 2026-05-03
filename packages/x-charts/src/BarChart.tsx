@@ -7,7 +7,11 @@
  * @migration AG Charts -> ECharts (P3)
  */
 import React, { useMemo, useCallback } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -40,7 +44,7 @@ export type ChartClickEvent = {
   label?: string;
 };
 
-export interface BarChartProps {
+export interface BarChartProps extends AccessControlledProps {
   /** Data points to render as bars. */
   data: ChartDataPoint[];
   /** Bar orientation. @default "vertical" */
@@ -121,7 +125,17 @@ const escapeHtml = (t: string): string =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function BarChart(
+/**
+ * BarChart inner — original hook-bearing body. The outer `BarChart`
+ * wrapper below adds the `access` / `accessReason` gate without touching
+ * hook order (Faz 21.4 PR-E2). Accepting `Omit<BarChartProps, 'access' |
+ * 'accessReason'>` keeps the inner contract honest: access is resolved
+ * exactly once, in the outer wrapper, never re-read inside the hooks.
+ */
+const BarChartInner = React.forwardRef<
+  HTMLDivElement,
+  Omit<BarChartProps, 'access' | 'accessReason'>
+>(function BarChartInner(
   {
     data,
     orientation = 'vertical',
@@ -395,6 +409,29 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
   );
 });
 
+BarChartInner.displayName = 'BarChartInner';
+
+/**
+ * BarChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `BarChartInner`. Faz 21.4 PR-E2 wiring; default `access === undefined`
+ * follows the identity-transform path through `ChartAccessGate`.
+ */
+export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function BarChart(
+  { access, accessReason, onDataPointClick, ...rest },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <BarChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
+    </ChartAccessGate>
+  );
+});
 BarChart.displayName = 'BarChart';
 
 export default BarChart;
