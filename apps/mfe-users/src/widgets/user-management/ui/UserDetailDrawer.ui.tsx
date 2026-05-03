@@ -12,7 +12,15 @@ import { usePermissions } from '@mfe/auth';
 // drawer header. DS FormDrawer gained a `leading` slot prop (LTR-neutral)
 // in this iter; UserDetailDrawer becomes the first consumer. Avatar uses
 // the existing DS primitive (initials/photo/icon fallback chain).
-import { FormDrawer, Tabs, Checkbox, Skeleton, Avatar } from '@mfe/design-system';
+import {
+  FormDrawer,
+  Tabs,
+  Checkbox,
+  Skeleton,
+  Avatar,
+  Combobox,
+  type ComboboxOption,
+} from '@mfe/design-system';
 import { getInitials } from '../utils/getInitials';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
 import { pushToast } from '../../../shared/notifications';
@@ -509,10 +517,8 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     setDirty(true);
   };
 
-  const toggleScope = (setter: React.Dispatch<React.SetStateAction<number[]>>, id: number) => {
-    setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-    setDirty(true);
-  };
+  // toggleScope removed — ScopePickerSection now drives state via the
+  // Combobox onValuesChange callback (string→number mapping inline).
 
   // --- Session timeout ---
   const handleSessionTimeoutSave = async () => {
@@ -578,147 +584,95 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const warehouses = warehousesQuery.data ?? [];
   const branches = branchesQuery.data ?? [];
 
-  // Codex 019dda1c iter-30: scope picker section refactored into a
-  // dedicated component so each tab can hold its own search state
-  // (helper functions can't useState — Rules of Hooks). Search filters
-  // by both code and name (case-insensitive). "Tümünü Seç" still toggles
-  // ALL items in the dataset, not just the filtered subset, so an admin
-  // doesn't accidentally clear unselected rows by typing a search query.
-  // Code prefix rendered in monospace before the name when present.
+  // Codex 019dda1c iter-30: scope picker started life as a flat checkbox
+  // list with per-tab search.
   //
-  // 2026-05-04 Session 37 UX fix (kullanıcı feedback: "şirket depo proje
-  // gibi eklenen data yetkileri varsayılan listenenler yetki verişlenler
-  // olsun liste çok uzun kilitleniyor multi filter gibi çalışsın"):
-  // - Default mode: SADECE atanmış (selected) items render edilir → büyük
-  //   master-data listelerinde (yüzlerce şirket) drawer açılışı hızlanır.
-  // - Toggle: "Sadece atanmış / Hepsini göster" — admin yetki ekleme
-  //   moduna geçince tümü görünür.
-  // - Search + assigned-only filter combine eder (multi-filter pattern).
-  // - Render limit (DEFAULT_DISPLAY_LIMIT = 100): tümü modda + arama yoksa
-  //   ilk 100 item; "Daha fazla göster" buton ile genişletilir.
-  // - "Tümünü Seç" davranışı korunur (TÜM dataset toggle).
-  const DEFAULT_DISPLAY_LIMIT = 100;
+  // 2026-05-04 Session 37 first UX pass (kullanıcı feedback: "şirket depo
+  // proje gibi eklenen data yetkileri varsayılan listenenler yetki
+  // verilenler olsun liste çok uzun kilitleniyor multi filter gibi
+  // çalışsın") moved to assigned-only-default + display-limit + multi-filter.
+  // That fixed the lockup but broke the add path: with assigned-only on by
+  // default the admin couldn't reach unselected rows without first toggling
+  // the filter off — surfaced as "ama yeni ekleyemiyorum bu şekilde. multi
+  // select gibi birşey lazım" with a chip-dropdown reference image.
+  //
+  // 2026-05-04 Session 37 second pass — adopt the design-system Combobox
+  // (selectionMode="multiple") which already handles: chip view of selected
+  // items with X remove, dropdown with built-in keyword search (name +
+  // code), keyboard nav, ✓ marker on selected rows, large list rendering
+  // (popup virtualises via max-height + overflow). Single primitive replaces
+  // the search input + assigned-only toggle + count badge + select-all
+  // button + display-limit show-more button — the Combobox covers the same
+  // surface natively.
   const ScopePickerSection: React.FC<{
     items: ScopeEntity[];
     selected: number[];
     setter: React.Dispatch<React.SetStateAction<number[]>>;
   }> = ({ items, selected, setter }) => {
-    const [search, setSearch] = React.useState('');
-    const [showOnlySelected, setShowOnlySelected] = React.useState(true);
-    const [displayLimit, setDisplayLimit] = React.useState(DEFAULT_DISPLAY_LIMIT);
-    const q = search.trim().toLocaleLowerCase('tr-TR');
+    // ScopeEntity.id is numeric; ComboboxOption.value is string. Map both
+    // directions so the Combobox round-trips ids without coercion drift.
+    const options = React.useMemo<ComboboxOption[]>(
+      () =>
+        items.map((item) => ({
+          value: String(item.id),
+          label: item.name,
+          description: item.code ?? undefined,
+          // keywords feed the built-in matcher so typing a project number
+          // (PROJECT_NUMBER, COMPANY_SHORT_CODE, …) hits the same row even
+          // when the visible label only shows the code badge.
+          keywords: item.code ? [item.code] : undefined,
+        })),
+      [items],
+    );
+    const values = React.useMemo(() => selected.map(String), [selected]);
 
-    // Multi-filter: assigned-only + search combine
-    const filtered = React.useMemo(() => {
-      const base = showOnlySelected ? items.filter((i) => selected.includes(i.id)) : items;
-      if (!q) return base;
-      return base.filter(
-        (i) =>
-          (i.name ?? '').toLocaleLowerCase('tr-TR').includes(q) ||
-          (i.code ?? '').toLocaleLowerCase('tr-TR').includes(q),
-      );
-    }, [items, selected, showOnlySelected, q]);
-
-    // Performance: render limit (büyük listeler kilitlenmesin)
-    const displayed = filtered.slice(0, displayLimit);
-    const hasMore = filtered.length > displayLimit;
-
-    const allSelected = items.length > 0 && items.every((i) => selected.includes(i.id));
-    const noneSelected = items.every((i) => !selected.includes(i.id));
-    const toggleAll = () => {
-      if (allSelected) {
-        setter([]);
-      } else {
-        setter(items.map((i) => i.id));
-      }
-      setDirty(true);
-    };
+    const handleValuesChange = React.useCallback(
+      (nextValues: string[]) => {
+        const nextIds = nextValues
+          .map((value) => Number(value))
+          .filter((id) => Number.isFinite(id));
+        setter(nextIds);
+        setDirty(true);
+      },
+      [setter],
+    );
 
     return (
-      <div className="flex flex-col gap-2 mt-2">
-        {items.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setDisplayLimit(DEFAULT_DISPLAY_LIMIT);
-              }}
-              placeholder={t('users.detail.scopes.searchPlaceholder')}
-              className="w-full rounded border border-border-subtle bg-surface-default px-3 py-1.5 text-sm placeholder:text-text-subtle focus:border-border-default focus:outline-none"
-              data-testid="scope-search-input"
-            />
-            <div className="flex items-center justify-between gap-2 text-xs">
-              <Checkbox
-                label={t('users.detail.scopes.assignedOnly')}
-                checked={showOnlySelected}
-                onChange={(checked) => {
-                  setShowOnlySelected(checked);
-                  setDisplayLimit(DEFAULT_DISPLAY_LIMIT);
-                }}
-              />
-              <span className="text-text-subtle font-mono" data-testid="scope-count-badge">
-                {t('users.detail.scopes.countBadge', {
-                  shown: filtered.length,
-                  total: items.length,
-                  selected: selected.length,
-                })}
-              </span>
-            </div>
-          </div>
-        )}
-        {items.length > 1 && !showOnlySelected && (
-          <Checkbox
-            label={t('users.detail.scopes.selectAll')}
-            checked={allSelected}
-            indeterminate={!allSelected && !noneSelected}
-            onChange={toggleAll}
-            disabled={!canEdit}
-          />
-        )}
-        {q && filtered.length === 0 && (
-          <p className="text-xs text-text-subtle italic">
-            {t('users.detail.scopes.searchEmpty', { query: search })}
-          </p>
-        )}
-        {!q && showOnlySelected && filtered.length === 0 && (
-          <p className="text-xs text-text-subtle italic">
-            {t('users.detail.scopes.assignedEmpty')}
-          </p>
-        )}
-        {displayed.map((item) => (
-          <Checkbox
-            key={item.id}
-            label={
-              item.code ? (
-                <span>
-                  <span className="mr-2 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-text-subtle">
-                    {item.code}
+      <div className="mt-2">
+        <Combobox
+          selectionMode="multiple"
+          options={options}
+          values={values}
+          onValuesChange={handleValuesChange}
+          clearable
+          placeholder={t('users.detail.scopes.placeholder')}
+          noOptionsText={t('users.detail.scopes.noOptions')}
+          tagRemoveLabel={t('users.detail.scopes.tagRemoveLabel')}
+          access={canEdit ? 'full' : 'readonly'}
+          disabledItemFocusPolicy="skip"
+          renderOption={(option, state) => (
+            <div className="flex w-full items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                {option.description ? (
+                  <span className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-text-subtle">
+                    {option.description}
                   </span>
-                  {item.name}
+                ) : null}
+                <span className="truncate text-sm text-text-primary">{option.label}</span>
+              </div>
+              {state.selected ? (
+                <span
+                  className="shrink-0 text-state-info-text"
+                  aria-hidden="true"
+                  data-testid="scope-option-selected-mark"
+                >
+                  ✓
                 </span>
-              ) : (
-                item.name
-              )
-            }
-            checked={selected.includes(item.id)}
-            onChange={() => toggleScope(setter, item.id)}
-            disabled={!canEdit}
-          />
-        ))}
-        {hasMore && (
-          <button
-            type="button"
-            onClick={() => setDisplayLimit(displayLimit + DEFAULT_DISPLAY_LIMIT)}
-            className="mt-1 self-start rounded border border-border-subtle bg-surface-muted px-3 py-1 text-xs text-text-subtle hover:bg-surface-default"
-            data-testid="scope-show-more"
-          >
-            {t('users.detail.scopes.showMore', {
-              remaining: filtered.length - displayLimit,
-            })}
-          </button>
-        )}
+              ) : null}
+            </div>
+          )}
+          data-testid="scope-multiselect"
+        />
       </div>
     );
   };
