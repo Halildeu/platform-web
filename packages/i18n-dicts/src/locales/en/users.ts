@@ -174,7 +174,15 @@ const users = {
   // primitive replaces the assigned-only-toggle pattern; the prior keys
   // (assignedOnly/assignedEmpty/countBadge/showMore) are removed since the
   // single Combobox handles all of those concerns natively.
+  //
+  // 2026-05-04 Session 37 third pass — large-list lazy options (29k+ projects):
+  // placeholderLarge/largeListHint/minQueryHint guide admins to type instead
+  // of waiting for the dropdown to render thousands of rows. Small lists keep
+  // the original `placeholder` copy.
   'users.detail.scopes.placeholder': 'Click or search to grant access...',
+  'users.detail.scopes.placeholderLarge': '{total} items — start typing to search...',
+  'users.detail.scopes.largeListHint': '{total} items in the list. Start typing to add.',
+  'users.detail.scopes.minQueryHint': 'Type at least {min} characters...',
   'users.detail.scopes.noOptions': 'No results.',
   'users.detail.scopes.tagRemoveLabel': 'Remove access',
   'users.detail.save': 'Save',
