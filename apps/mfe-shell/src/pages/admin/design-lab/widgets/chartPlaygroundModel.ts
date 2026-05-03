@@ -832,6 +832,269 @@ export function getSampleData(chartId: string): SampleDataDef | null {
 }
 
 /* ================================================================== */
+/*  Playground presets — competitor-parity live example gallery        */
+/* ================================================================== */
+
+/**
+ * A named, user-facing playground variation. Codex thread `019def27`
+ * follow-up: replaces the previous static-code-only Examples tab with
+ * live preview cards (MUI X / Recharts parity). Each preset patches the
+ * default playground state — the live preview and generated code derive
+ * from the patched state via the same `ChartPreviewLive` /
+ * `generatePlaygroundCode` machinery the playground itself uses, so
+ * presets cannot drift away from runtime behaviour.
+ */
+export interface ChartPlaygroundPreset {
+  /** Stable id (used as React key + a11y label). */
+  id: string;
+  /** Card title shown in the gallery. */
+  label: string;
+  /** Optional category chip (e.g. `starter`, `theme`, `orientation`). */
+  tag?: string;
+  /** One-line explanation of what the preset demonstrates. */
+  description: string;
+  /**
+   * State patch applied on top of `deriveDefaults(descriptors)`. Empty
+   * patch (`{}`) is the canonical "Basic" preset.
+   */
+  statePatch: PlaygroundState;
+}
+
+/**
+ * Per-chart preset definitions. Only charts wired in `LIVE_PROP_SUPPORT`
+ * appear here — for the remaining 7 canonical charts and the composite
+ * widgets the gallery falls back to a single "Basic" preset.
+ *
+ * Keep entries small and focused — one prop change per preset where
+ * possible — so the user can mentally diff the preset against "Basic".
+ */
+const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
+  'bar-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Default configuration — vertical bars with grid + animation.',
+      statePatch: {},
+    },
+    {
+      id: 'horizontal',
+      label: 'Horizontal',
+      tag: 'orientation',
+      description: 'Switch to horizontal layout for long category labels.',
+      statePatch: { orientation: 'horizontal' },
+    },
+    {
+      id: 'with-values',
+      label: 'With Values',
+      tag: 'labels',
+      description: 'Show numeric value labels above each bar.',
+      statePatch: { showValues: true },
+    },
+    {
+      id: 'with-legend',
+      label: 'With Legend',
+      tag: 'legend',
+      description: 'Display the legend strip below the chart.',
+      statePatch: { showLegend: true },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override (overrides shell axis).',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'compact',
+      label: 'Compact Density',
+      tag: 'density',
+      description: 'Compact density override — smaller fonts and spacing.',
+      statePatch: { density: 'compact' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click / brush / zoom no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  'line-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Multi-series line chart with dots and grid.',
+      statePatch: {},
+    },
+    {
+      id: 'curved',
+      label: 'Curved',
+      tag: 'curve',
+      description: 'Smooth bezier interpolation between points.',
+      statePatch: { curved: true },
+    },
+    {
+      id: 'area',
+      label: 'Area Fill',
+      tag: 'area',
+      description: 'Filled area beneath the line.',
+      statePatch: { showArea: true },
+    },
+    {
+      id: 'no-dots',
+      label: 'Without Dots',
+      tag: 'dots',
+      description: 'Hide point markers — pure line traces.',
+      statePatch: { showDots: false },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+  ],
+  'area-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Stacked areas with gradient fill and curved interpolation.',
+      statePatch: {},
+    },
+    {
+      id: 'unstacked',
+      label: 'Unstacked',
+      tag: 'layout',
+      description: 'Each series on its own baseline (overlapping).',
+      statePatch: { stacked: false },
+    },
+    {
+      id: 'no-gradient',
+      label: 'Solid Fill',
+      tag: 'fill',
+      description: 'Solid colour fill instead of gradient.',
+      statePatch: { gradient: false },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+  ],
+  'pie-chart': [
+    {
+      id: 'basic',
+      label: 'Donut (default)',
+      tag: 'starter',
+      description: 'Donut chart with percentage labels.',
+      statePatch: {},
+    },
+    {
+      id: 'pie',
+      label: 'Solid Pie',
+      tag: 'shape',
+      description: 'Solid disc instead of donut.',
+      statePatch: { donut: false },
+    },
+    {
+      id: 'with-legend',
+      label: 'With Legend',
+      tag: 'legend',
+      description: 'Show legend below the chart.',
+      statePatch: { showLegend: true, donut: false },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+  ],
+  'scatter-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Default scatter plot with 6 sample points.',
+      statePatch: {},
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+  ],
+  'gauge-chart': [
+    {
+      id: 'basic',
+      label: 'Default (72)',
+      tag: 'starter',
+      description: 'Default value sitting in the warning threshold.',
+      statePatch: {},
+    },
+    {
+      id: 'low',
+      label: 'Low (15)',
+      tag: 'state',
+      description: 'Value below the first threshold — red zone.',
+      statePatch: { value: 15 },
+    },
+    {
+      id: 'mid',
+      label: 'Mid (50)',
+      tag: 'state',
+      description: 'Value in the middle threshold — orange zone.',
+      statePatch: { value: 50 },
+    },
+    {
+      id: 'high',
+      label: 'High (95)',
+      tag: 'state',
+      description: 'Value above the last threshold — green zone.',
+      statePatch: { value: 95 },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+  ],
+};
+
+/**
+ * Look up the preset gallery for a chart id. Returns an empty array when
+ * no presets are wired (the consumer should fall back to a single
+ * "Basic" placeholder card or the legacy static examples).
+ */
+export function getChartPresets(chartId: string): ChartPlaygroundPreset[] {
+  return CHART_PRESETS[chartId] ?? [];
+}
+
+/**
+ * Apply a preset's `statePatch` on top of derived defaults. This is the
+ * canonical entry point for "what state would the playground be in if I
+ * picked this preset?". Returned object is a fresh shallow merge so
+ * callers may freely mutate.
+ */
+export function applyPreset(
+  defaults: PlaygroundState,
+  preset: ChartPlaygroundPreset,
+): PlaygroundState {
+  return { ...defaults, ...preset.statePatch };
+}
+
+/* ================================================================== */
 /*  Theme axis surface alignment                                       */
 /* ================================================================== */
 
