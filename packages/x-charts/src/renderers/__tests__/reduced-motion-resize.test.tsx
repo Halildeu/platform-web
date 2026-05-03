@@ -64,11 +64,12 @@ afterEach(() => {
 });
 
 function setReducedMotion(enabled: boolean): void {
-  // jsdom doesn't ship matchMedia by default — define-or-replace.
-  Object.defineProperty(window, 'matchMedia', {
-    configurable: true,
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
+  // Codex 019defa5 PR3b PARTIAL: use stubGlobal so afterEach's
+  // unstubAllGlobals() restores the original matchMedia (or its absence)
+  // cleanly — keeping suite isolation strong.
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
       matches: enabled && query.includes('prefers-reduced-motion'),
       media: query,
       onchange: null,
@@ -78,7 +79,7 @@ function setReducedMotion(enabled: boolean): void {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(() => false),
     })),
-  });
+  );
 }
 
 describe('useEChartsRenderer reduced-motion resize', () => {
@@ -117,5 +118,27 @@ describe('useEChartsRenderer reduced-motion resize', () => {
     });
     const last = resizeCalls.at(-1);
     expect(last?.animation?.duration).toBe(0);
+  });
+
+  it('passes duration 200 when reduced motion is ON but respectReducedMotion is false', () => {
+    // Codex 019defa5 PR3b PARTIAL: lock the escape hatch — consumers can
+    // opt out of reduced-motion respect (`respectReducedMotion: false`)
+    // and keep the 200ms resize animation even when the OS asks for
+    // reduced motion. Validates the second branch of the resize callback.
+    setReducedMotion(true);
+    renderHook(() => {
+      const renderer = useEChartsRenderer({
+        option: { series: [] },
+        respectReducedMotion: false,
+      });
+      const div = document.createElement('div');
+      (renderer.containerRef as React.MutableRefObject<HTMLDivElement | null>).current = div;
+      return renderer;
+    });
+    act(() => {
+      resizeObserverCallbacks.forEach((cb) => cb());
+    });
+    const last = resizeCalls.at(-1);
+    expect(last?.animation?.duration).toBe(200);
   });
 });
