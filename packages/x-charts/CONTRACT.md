@@ -497,12 +497,17 @@ visual). PR-F2 activates the 8th (bundle).
   ECharts; soft observability on `wrapperOnly` — PR-F2)
 - **a11y-axe-audit** (zero serious/critical violations; `chart-axe.test.tsx`
   with `color-contrast` rule disabled because jsdom cannot resolve CSS
-  variables — contrast handled by the next gate — PR-F1)
-- **contrast-ratio-check** (text/control 4.5:1 across 5 themes × 7
-  surfaces in `chart-contrast.contract.test.ts`; high-contrast palette
-  differentiation invariant; series-palette adjacency NOT gated by ratio
-  math — see `chart-theme-decal.test.tsx` for runtime decal/aria
-  fallback — PR-F1)
+  variables. The PR-F1 contrast gate below covers ONLY the CSS-absent
+  static fallback theme-object layer. Runtime browser/OKLCH token
+  contrast is a separate Playwright follow-up — PR-F1)
+- **contrast-ratio-check** (STATIC fallback theme-object text/control
+  4.5:1 across 5 themes × 7 surfaces in `chart-contrast.contract.test.ts`.
+  This does NOT measure runtime shell `theme.css` / `oklch(...)` token
+  resolution — that requires a real browser and is a planned Playwright
+  follow-up. The fallback layer is what consumers see during initial
+  paint flash, in Storybook standalone, and in snapshot tools when CSS
+  hasn't loaded. Series-palette adjacency NOT gated by ratio math —
+  see `chart-theme-decal.test.tsx` for HC structural fallback — PR-F1)
 - **xss-sanitization-check** (`security.contract.test.tsx` — already active)
 - **memory-leak-test** (100-cycle mount/unmount; `memory-leak.test.tsx`
   — already active)

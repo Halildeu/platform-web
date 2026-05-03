@@ -200,11 +200,20 @@ jobs:
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install
         run: pnpm install --frozen-lockfile
-      # Two-pronged contrast gate:
-      #   (1) chart-contrast.contract — theme-builder palette math for
-      #       text/control elements (4.5:1 across 5 themes × 7 surfaces)
-      #   (2) chart-theme-decal — runtime decal/aria fallback structural
-      #       check for high-contrast and print themes (CONTRACT §1.1)
+      # Two-pronged contrast gate (PR-F1):
+      #   (1) chart-contrast.contract — STATIC fallback theme-object
+      #       contrast math for text/control elements (4.5:1 across 5
+      #       themes × 7 surfaces). Theme builders read CSS custom
+      #       properties via getComputedStyle at build time; in jsdom
+      #       the shell theme.css isn't loaded so builders fall back to
+      #       hard-coded hex defaults. This gate locks the FALLBACK
+      #       layer — what consumers see during initial paint flash,
+      #       Storybook standalone, snapshot tools. Runtime browser
+      #       OKLCH/CSS-var token resolution is a separate Playwright
+      #       follow-up, not gated here.
+      #   (2) chart-theme-decal — runtime decal/aria fallback
+      #       structural check for high-contrast and print themes
+      #       (CONTRACT §1.1).
       # Series palette adjacency contrast is intentionally NOT gated;
       # series differentiation comes from layout, decal, legend, and
       # markers, not numerical adjacent-color ratio.

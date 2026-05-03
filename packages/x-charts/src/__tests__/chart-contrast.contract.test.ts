@@ -35,19 +35,8 @@
  *   - 2 HC palette differentiation invariants
  *   - 4 helper sanity checks
  *
- * Out of scope (explicitly):
- * - Series palette adjacent-color ratio (would fail current paletes;
- *   visual-design PR territory).
- * - High-contrast palette numerical 4.5:1 series ratio (current HC
- *   palette doesn't satisfy; visual-design PR territory).
- * - `nameTextStyle` (axis name, uses `textTertiary` token by design;
- *   ~2.54:1 on white. Tightening is a token-level redesign).
- * - Decal pattern + HC structural fallback (covered by
- *   `chart-theme-decal.test.tsx` — runs in same CI job).
- *
- * In scope (HARD GATE):
- * 7 text/control color × 5 themes = 35 assertions plus 2 HC palette
- * differentiation invariants.
+ * Decal pattern + HC structural fallback live in `chart-theme-decal.test.tsx`
+ * which runs in the same CI job as a sibling check.
  */
 import { describe, it, expect } from 'vitest';
 import {
