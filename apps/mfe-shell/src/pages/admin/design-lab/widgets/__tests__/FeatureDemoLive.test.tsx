@@ -48,11 +48,31 @@ describe('FeatureDemoLive — feature-brush', () => {
     expect(screen.getByTestId('feature-brush-range')).toHaveTextContent('null');
   });
 
-  it('mouseDown sets isBrushing true', () => {
+  it('full drag cycle: mouseDown → mouseMove → mouseUp updates range and resets isBrushing', () => {
+    render(<FeatureDemoLive featureId="feature-brush" />);
+    const surface = screen.getByTestId('feature-brush-surface');
+
+    fireEvent.mouseDown(surface, { clientX: 10 });
+    expect(screen.getByTestId('feature-brush-state')).toHaveTextContent('isBrushing: true');
+
+    fireEvent.mouseMove(surface, { clientX: 70 });
+    expect(screen.getByTestId('feature-brush-range').textContent ?? '').toMatch(/\d+\s*→\s*\d+/);
+
+    fireEvent.mouseUp(surface, { clientX: 70 });
+    expect(screen.getByTestId('feature-brush-state')).toHaveTextContent('isBrushing: false');
+    // Range persists after mouseUp until cleared.
+    expect(screen.getByTestId('feature-brush-range').textContent ?? '').toMatch(/\d+\s*→\s*\d+/);
+  });
+
+  it('Clear brush button resets range to null', () => {
     render(<FeatureDemoLive featureId="feature-brush" />);
     const surface = screen.getByTestId('feature-brush-surface');
     fireEvent.mouseDown(surface, { clientX: 10 });
-    expect(screen.getByTestId('feature-brush-state')).toHaveTextContent('isBrushing: true');
+    fireEvent.mouseMove(surface, { clientX: 70 });
+    fireEvent.mouseUp(surface, { clientX: 70 });
+
+    fireEvent.click(screen.getByTestId('feature-brush-clear'));
+    expect(screen.getByTestId('feature-brush-range')).toHaveTextContent('null');
   });
 });
 
@@ -88,17 +108,12 @@ describe('FeatureDemoLive — feature-realtime', () => {
     expect(screen.getByTestId('feature-realtime-count')).toHaveTextContent('points: 0');
 
     fireEvent.click(screen.getByTestId('feature-realtime-toggle'));
-    // 4 ticks at 250ms = 1000ms
+    // 4 ticks at 250ms = 1000ms — fake timer is deterministic here, no
+    // jitter allowance (Codex iter-1 must-fix #3).
     act(() => {
       vi.advanceTimersByTime(1000);
     });
-    const text = screen.getByTestId('feature-realtime-count').textContent ?? '';
-    const m = text.match(/points: (\d+)/);
-    expect(m).not.toBeNull();
-    const count = Number(m![1]);
-    // Allow some jitter — interval call timing varies under fake timers.
-    expect(count).toBeGreaterThanOrEqual(3);
-    expect(count).toBeLessThanOrEqual(5);
+    expect(screen.getByTestId('feature-realtime-count')).toHaveTextContent('points: 4');
   });
 });
 
@@ -134,21 +149,49 @@ describe('FeatureDemoLive — feature-export', () => {
     expect(screen.getByTestId('feature-export-last').textContent ?? '').toContain('png');
   });
 
-  it('CSV button calls URL.createObjectURL', () => {
-    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
-    // jsdom may not implement revokeObjectURL; stub if missing.
+  it('CSV button creates a Blob whose body matches the columns + data', async () => {
+    if (typeof URL.createObjectURL !== 'function') {
+      Object.defineProperty(URL, 'createObjectURL', {
+        configurable: true,
+        writable: true,
+        value: () => 'blob:mock-url',
+      });
+    }
     if (typeof URL.revokeObjectURL !== 'function') {
       Object.defineProperty(URL, 'revokeObjectURL', {
         configurable: true,
-        value: vi.fn(),
+        writable: true,
+        value: () => {},
       });
-    } else {
-      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     }
+
+    // jsdom 26's Blob lacks .text(); polyfill via FileReader (which it has).
+    const blobs: Blob[] = [];
+    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: Blob) => {
+      blobs.push(blob);
+      return 'blob:mock-url';
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
     render(<FeatureDemoLive featureId="feature-export" />);
     fireEvent.click(screen.getByTestId('feature-export-csv'));
-    expect(createObjectURLSpy).toHaveBeenCalled();
+
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+    expect(blobs).toHaveLength(1);
+
+    const csv: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.readAsText(blobs[0]);
+    });
+    // Header row uses headerName; rows use field values from SAMPLE_DATA.
+    // chart-export quotes string fields and headers; numeric values are
+    // emitted bare (verified at the dataToCSV implementation in
+    // packages/x-charts/src/collaboration/chart-export.ts:39-50).
+    expect(csv).toContain('"Quarter","Revenue"');
+    expect(csv).toContain('"Q1",1200');
+    expect(csv).toContain('"Q4",2100');
     expect(screen.getByTestId('feature-export-last').textContent ?? '').toContain('csv');
   });
 });

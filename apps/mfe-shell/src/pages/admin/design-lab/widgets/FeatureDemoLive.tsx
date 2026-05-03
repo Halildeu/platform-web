@@ -278,13 +278,13 @@ const ThemeSwitchDemo: React.FC = () => {
 /*  feature-export                                                     */
 /* ------------------------------------------------------------------ */
 
+// Matches the internal `EChartsLike` shape that `useChartExport` reads
+// (packages/x-charts/src/collaboration/chart-export.ts:25). The opts
+// argument is required (not optional) because the hook always passes
+// at least { type }.
 interface MockEChartsLike {
-  getDataURL: (options?: {
-    type?: 'png' | 'svg' | 'jpeg';
-    pixelRatio?: number;
-    backgroundColor?: string;
-    excludeComponents?: string[];
-  }) => string;
+  getDataURL: (opts: { type: string; pixelRatio?: number; backgroundColor?: string }) => string;
+  getConnectedDataURL?: (opts: { type: string; pixelRatio?: number }) => string;
 }
 
 const ExportDemo: React.FC = () => {
@@ -297,7 +297,7 @@ const ExportDemo: React.FC = () => {
   // human-readable summary in the status line.
   const mockInstance: MockEChartsLike = useMemo(
     () => ({
-      getDataURL: ({ type = 'png' } = {}) =>
+      getDataURL: ({ type }) =>
         type === 'svg'
           ? 'data:image/svg+xml;base64,PHN2Zy8+'
           : 'data:image/png;base64,iVBORw0KGgo=',
@@ -306,22 +306,22 @@ const ExportDemo: React.FC = () => {
   );
 
   const handlePng = () => {
-    exporter.exportChart(mockInstance, 'png', { fileName: 'chart-demo' });
+    exporter.exportChart(mockInstance, 'png', { filename: 'chart-demo' });
     setLastExport('png · data:image/png;base64,…');
   };
 
   const handleSvg = () => {
-    exporter.exportChart(mockInstance, 'svg', { fileName: 'chart-demo' });
+    exporter.exportChart(mockInstance, 'svg', { filename: 'chart-demo' });
     setLastExport('svg · data:image/svg+xml;base64,…');
   };
 
   const handleCsv = () => {
     exporter.exportChart(null, 'csv', {
-      fileName: 'chart-demo',
+      filename: 'chart-demo',
       data: SAMPLE_DATA,
       columns: [
-        { key: 'label', header: 'Quarter' },
-        { key: 'value', header: 'Revenue' },
+        { field: 'label', headerName: 'Quarter' },
+        { field: 'value', headerName: 'Revenue' },
       ],
     });
     setLastExport('csv · 2 columns × 4 rows');

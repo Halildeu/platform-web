@@ -1422,11 +1422,21 @@ return <div {...handlers}>zoom: {state.zoomLevel}× · pan: ({state.panOffset.x}
         description: 'Fired for every accepted point',
       },
     ],
-    sampleCode: `const stream = useRealTimeData<Tick>({ maxPoints: 50 });
-useEffect(() => {
-  const id = setInterval(() => stream.addPoint({ t: Date.now(), v: Math.random() }), 250);
-  return () => clearInterval(id);
-}, []);`,
+    sampleCode: `type Tick = { t: number; v: number };
+
+function MyStreamingChart() {
+  const stream = useRealTimeData<Tick>({ maxPoints: 50 });
+
+  useEffect(() => {
+    const id = setInterval(
+      () => stream.addPoint({ t: Date.now(), v: Math.random() }),
+      250,
+    );
+    return () => clearInterval(id);
+  }, [stream.addPoint]);
+
+  return <span>points: {stream.data.length}</span>;
+}`,
     features: ['stream-buffer', 'pause-resume', 'fifo-eviction'],
     a11y: ['point-count-announced'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
