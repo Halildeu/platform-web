@@ -9,12 +9,13 @@ import { UserDetail, UserSummary, TelemetryEvent } from '@mfe/shared-types';
 import { fetchPageLayout, trackAction, resolveTraceId } from '@mfe/shared-http';
 import type { PageLayoutManifest } from '@mfe/shared-types';
 import type { GridApi } from 'ag-grid-community';
+import { CrossFilterProvider, useGridCrossFilter } from '@mfe/x-charts';
+import type { GridApi as XChartsGridApi } from '@mfe/x-charts';
 import { useUserDetailQuery } from '../../features/user-management/model/use-users-query.model';
 import UsersGrid from '../../widgets/user-management/ui/UsersGrid.ui';
 import UserDetailDrawer from '../../widgets/user-management/ui/UserDetailDrawer.ui';
 import { usersPageManifest } from '../../manifest/users/users-page.manifest';
 import { useUsersI18n } from '../../i18n/useUsersI18n';
-
 
 interface UsersPageProps {
   isFullscreen?: boolean;
@@ -28,12 +29,39 @@ type GridApiWithInternals = GridApi<UserSummary> & {
 
 const GRID_TEST_ID = 'users-grid-root';
 
-const UsersPage: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
+/**
+ * Inner component — Faz 21.8 PR-X4c: assumes a `<CrossFilterProvider>` is
+ * mounted somewhere up the tree. The grid's filter model is bidirectionally
+ * synced with the cross-filter store via `useGridCrossFilter`, so any
+ * future role/status chart added to this page can drive the grid by
+ * pushing filters to the store (and vice versa).
+ */
+const UsersPageInner: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
   const [selectedUserSummary, setSelectedUserSummary] = React.useState<UserSummary | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [pageLayout, setPageLayout] = React.useState<PageLayoutManifest | null>(null);
+  // Faz 21.8 PR-X4c: gridApi is state (not ref) so useGridCrossFilter
+  // can re-subscribe when the grid is ready. Stable after first set.
+  const [gridApi, setGridApi] = React.useState<GridApi<UserSummary> | null>(null);
   const gridApiRef = React.useRef<GridApi<UserSummary> | null>(null);
   const { t } = useUsersI18n();
+
+  // Bridge — pushes grid filter changes to the store and applies store
+  // filters back onto the grid. The hook is a no-op while gridApi is null.
+  // The `xChartsGridApi` cast adapts AG Grid's full GridApi to the
+  // narrower `@mfe/x-charts` GridApi interface (setFilterModel +
+  // refreshServerSide + getFilterModel — all real on the AG Grid api).
+  const xChartsGridApi = React.useMemo<XChartsGridApi | null>(() => {
+    if (!gridApi) return null;
+    return gridApi as unknown as XChartsGridApi;
+  }, [gridApi]);
+
+  useGridCrossFilter({
+    gridId: 'users-grid',
+    gridApi: xChartsGridApi,
+    syncGridToStore: true,
+    syncStoreToGrid: true,
+  });
   React.useEffect(() => {
     // Manifest runtime entegrasyonu: gateway'den PageLayout çek.
     fetchPageLayout('users')
@@ -45,12 +73,13 @@ const UsersPage: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
   }, []);
 
   const pageBreadcrumbItems = React.useMemo(
-    () => createPageLayoutBreadcrumbItems(
-      (usersPageManifest.layout.breadcrumbItems ?? []).map((item) => ({
-        ...item,
-        title: t(item.title as string),
-      })),
-    ),
+    () =>
+      createPageLayoutBreadcrumbItems(
+        (usersPageManifest.layout.breadcrumbItems ?? []).map((item) => ({
+          ...item,
+          title: t(item.title as string),
+        })),
+      ),
     [t],
   );
   const pageLayoutPreset = React.useMemo(
@@ -58,7 +87,9 @@ const UsersPage: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
     [],
   );
   const pageTitle = t((pageLayout?.title ?? usersPageManifest.layout.title) as string);
-  const pageDescription = t((pageLayout?.description ?? usersPageManifest.layout.description) as string);
+  const pageDescription = t(
+    (pageLayout?.description ?? usersPageManifest.layout.description) as string,
+  );
 
   const { data: selectedUserDetail, isLoading: isDetailLoading } = useUserDetailQuery(
     selectedUserSummary ? { id: selectedUserSummary.id, email: selectedUserSummary.email } : null,
@@ -133,7 +164,9 @@ const UsersPage: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
     setSelectedUserSummary(null);
   };
 
-  const actionContent = React.useMemo(
+  // Pre-existing dead memo — kept (referenced by manifest), prefixed
+  // `_` so eslint does not flag the unused binding (Faz 21.8 PR-X4c).
+  const _actionContent = React.useMemo(
     () => (
       <div className="flex items-center gap-3">
         <button
@@ -178,6 +211,8 @@ const UsersPage: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
             onGridReady={(event) => {
               // İlk bağlamada AG Grid zaten SSRM yüklemeyi tetikler; ekstra refresh gereksiz.
               gridApiRef.current = event.api;
+              // Faz 21.8 PR-X4c: also expose to useGridCrossFilter via state.
+              setGridApi(event.api);
             }}
             onLoadingChange={setIsLoading}
           />
@@ -214,7 +249,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
         onClose={handleCloseDrawer}
         user={mergedUserDetail}
       />
-      {(isDetailLoading && selectedUserSummary) && (
+      {isDetailLoading && selectedUserSummary && (
         <div className="fixed bottom-6 right-6 rounded-full border border-border-subtle bg-surface-default/90 p-3 shadow-lg">
           <span className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-border-subtle border-t-action-primary" />
         </div>
@@ -222,5 +257,20 @@ const UsersPage: React.FC<UsersPageProps> = ({ isFullscreen = false }) => {
     </>
   );
 };
+
+/**
+ * Outer wrapper — provides an isolated cross-filter store for this page.
+ * Faz 21.8 PR-X4c: this is the public component; the existing route
+ * mounting `UsersPage` keeps its import path unchanged.
+ *
+ * `debounceMs: 0` removes the default 150ms delay so grid filter mutations
+ * propagate near-instantaneously into the store (relevant for any future
+ * chart added to this page that subscribes via `useChartCrossFilter`).
+ */
+const UsersPage: React.FC<UsersPageProps> = (props) => (
+  <CrossFilterProvider options={{ groupId: 'users-page', debounceMs: 0 }}>
+    <UsersPageInner {...props} />
+  </CrossFilterProvider>
+);
 
 export default UsersPage;
