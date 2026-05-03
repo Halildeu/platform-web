@@ -225,6 +225,47 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'interaction',
     icon: 'history',
   },
+  // Faz 21.4 PR-C — feature demos
+  {
+    id: 'feature-brush',
+    name: 'Feature: Brush',
+    description: 'useChartInteractions enableBrush + brushRange display.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'brush',
+  },
+  {
+    id: 'feature-zoom-pan',
+    name: 'Feature: Zoom + Pan',
+    description: 'useChartInteractions enableZoom + enablePan handlers.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'zoom',
+  },
+  {
+    id: 'feature-realtime',
+    name: 'Feature: Real-time stream',
+    description: 'Local setInterval + useRealTimeData buffer + pause/resume.',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'realtime',
+  },
+  {
+    id: 'feature-theme-switch',
+    name: 'Feature: Theme switch',
+    description: 'BarChart theme prop runtime swap (light/dark/high-contrast/print).',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'theme',
+  },
+  {
+    id: 'feature-export',
+    name: 'Feature: Export',
+    description: 'useChartExport PNG/SVG (getDataURL) + CSV (Blob ➜ URL.createObjectURL).',
+    group: 'charts_interaction',
+    tier: 'interaction',
+    icon: 'download',
+  },
   // AI
   {
     id: 'nl-to-chart',
