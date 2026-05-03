@@ -8,7 +8,7 @@
  *
  * @migration AG Charts → ECharts (P1, chart-viz-engine-selection D-001)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
@@ -25,6 +25,8 @@ import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpe
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend, buildResponsiveGrid } from './responsive';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -168,6 +170,10 @@ const ScatterChartInner = React.forwardRef<
   const isEmpty = safeData.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
+  // Same DOM node feeds breakpoint observer and ECharts renderer.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
+
   // Codex iter-1 madde 6: ScatterChart önceden theme'i renderer'a hiç vermiyordu;
   // theme switch'te option memo recompute olsun diye themeObject ve decal*'ı
   // dependency olarak option useMemo'ya iletiyoruz.
@@ -246,28 +252,37 @@ const ScatterChartInner = React.forwardRef<
         },
       },
       legend: {
-        show: showLegend,
-        bottom: 0,
+        ...buildResponsiveLegend({
+          breakpoint,
+          showLegend,
+          // Scatter is single-series at the legend level (one symbol type).
+          hasMultiSeries: false,
+          seriesCount: 1,
+          densitySpacingMultiplier,
+          densityFontMultiplier,
+          icon: 'circle',
+        }),
+        // Preserve the explicit text style so the scatter chart keeps its
+        // CSS-var-driven palette even when the helper's textStyle wins.
         textStyle: {
           fontFamily,
           color: textPrimary,
           fontSize: scaleFontSize(12, densityFontMultiplier),
         },
-        icon: 'circle',
-        itemWidth: scaleSpacing(10, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(10, densitySpacingMultiplier),
       },
-      grid: {
-        top: title
-          ? scalePadding(60, densityPaddingMultiplier)
-          : scalePadding(24, densityPaddingMultiplier),
-        right: scalePadding(16, densityPaddingMultiplier),
-        bottom: showLegend
-          ? scalePadding(48, densityPaddingMultiplier)
-          : scalePadding(24, densityPaddingMultiplier),
-        left: scalePadding(16, densityPaddingMultiplier),
-        containLabel: true,
-      },
+      grid: buildResponsiveGrid({
+        breakpoint,
+        hasTitle: !!title,
+        hasBottomLegend: showLegend && breakpoint !== 'mobile',
+        hasRightLegend: false,
+        density: {
+          titleTop: scalePadding(60, densityPaddingMultiplier),
+          contentTop: scalePadding(24, densityPaddingMultiplier),
+          sidePadding: scalePadding(16, densityPaddingMultiplier),
+          legendBottom: scalePadding(48, densityPaddingMultiplier),
+          plainBottom: scalePadding(24, densityPaddingMultiplier),
+        },
+      }),
       xAxis: {
         type: 'value',
         name: xLabel,
@@ -284,6 +299,9 @@ const ScatterChartInner = React.forwardRef<
           color: textSecondary,
           fontFamily,
           fontSize: scaleFontSize(11, densityFontMultiplier),
+          // Value axes need hideOverlap too — wide ranges (1k–1M) pile up
+          // tick labels otherwise (Codex 019defa5 collision defaults).
+          hideOverlap: true,
           formatter: (v: number) => fmt(v),
         },
         splitLine: {
@@ -307,6 +325,7 @@ const ScatterChartInner = React.forwardRef<
           color: textSecondary,
           fontFamily,
           fontSize: scaleFontSize(11, densityFontMultiplier),
+          hideOverlap: true,
           formatter: (v: number) => fmt(v),
         },
         splitLine: {
@@ -342,6 +361,7 @@ const ScatterChartInner = React.forwardRef<
     } as EChartsOption;
   }, [
     data,
+    safeData,
     showGrid,
     showLegend,
     valueFormatter,
@@ -353,6 +373,7 @@ const ScatterChartInner = React.forwardRef<
     yLabel,
     bubble,
     isEmpty,
+    fmt,
     themeObject,
     decalEnabled,
     decalPatterns,
@@ -360,6 +381,7 @@ const ScatterChartInner = React.forwardRef<
     densitySpacingMultiplier,
     densityPaddingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   // Use centralized renderer hook
@@ -393,6 +415,7 @@ const ScatterChartInner = React.forwardRef<
   // Merge refs
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

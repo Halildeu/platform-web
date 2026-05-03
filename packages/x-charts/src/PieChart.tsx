@@ -8,7 +8,7 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
@@ -23,10 +23,12 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { scaleFontSize } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend } from './responsive';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -160,6 +162,10 @@ const PieChartInner = React.forwardRef<
   const isEmpty = validData.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
+  // Same DOM node feeds breakpoint observer and ECharts renderer.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
+
   const {
     themeObject,
     decalEnabled,
@@ -212,22 +218,41 @@ const PieChartInner = React.forwardRef<
           return `${escapeHtml(p.name)}: ${escapeHtml(formatted)} (${p.percent}%)`;
         },
       },
-      legend: {
-        show: showLegend,
-        bottom: 0,
+      legend: buildResponsiveLegend({
+        breakpoint,
+        showLegend,
+        // Pie's "series" is one but legend entries = slice count.
+        hasMultiSeries: false,
+        seriesCount: validData.length,
+        densitySpacingMultiplier,
+        densityFontMultiplier,
         icon: 'circle',
-        itemWidth: scaleSpacing(10, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(10, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
+        // Truncate long slice names to 16 chars on tablet, 12 on mobile so
+        // the legend strip doesn't push the pie offscreen. Tooltip + a11y
+        // still receive the original name.
+        truncateAt: breakpoint === 'mobile' ? 12 : 16,
+      }),
       series: [
         {
           type: 'pie',
-          radius: donut ? ['45%', '70%'] : ['0%', '70%'],
+          // Mobile shrinks the radius envelope so the legend strip on the
+          // bottom (or vertical right when slice-count > 5) has room
+          // without forcing the pie body to render outside the canvas.
+          radius:
+            breakpoint === 'mobile'
+              ? donut
+                ? ['38%', '60%']
+                : ['0%', '60%']
+              : donut
+                ? ['45%', '70%']
+                : ['0%', '70%'],
           center: ['50%', title ? '55%' : '50%'],
           data: pieData,
           label: {
-            show: showLabels || showPercentage,
+            // On mobile we hide outer slice labels regardless of prop —
+            // they're the #1 collision source (overlapping text in the
+            // 4-screenshot bug report). Legend covers the same info.
+            show: breakpoint !== 'mobile' && (showLabels || showPercentage),
             formatter: showPercentage
               ? (p: { name: string; value: number }) =>
                   `${escapeHtml(p.name)} ${total > 0 ? Math.round((p.value / total) * 100) : 0}%`
@@ -236,7 +261,16 @@ const PieChartInner = React.forwardRef<
                 : undefined,
             fontSize: scaleFontSize(12, densityFontMultiplier),
           },
-          labelLine: { show: showLabels || showPercentage },
+          // labelLine length shrinks on tablet so leader lines don't stab
+          // through neighbouring slices.
+          labelLine: {
+            show: breakpoint !== 'mobile' && (showLabels || showPercentage),
+            length: breakpoint === 'tablet' ? 8 : 14,
+            length2: breakpoint === 'tablet' ? 8 : 14,
+          },
+          // Codex 019defa5: hide overlapping outer slice labels rather
+          // than letting them stack on top of each other.
+          labelLayout: { hideOverlap: true },
           emphasis: {
             itemStyle: {
               shadowBlur: 10,
@@ -271,11 +305,13 @@ const PieChartInner = React.forwardRef<
     description,
     onDataPointClick,
     isEmpty,
+    fmt,
     decalEnabled,
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -315,6 +351,7 @@ const PieChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

@@ -71,19 +71,19 @@ export interface HighContrastThemeOptions {
 export function buildDesignLabEChartsHighContrastTheme(
   options?: HighContrastThemeOptions,
 ): Record<string, unknown> {
-  const {
-    colorblindPalette,
-    dark = false,
-    fontFamily: fontFamilyOverride,
-  } = options ?? {};
+  const { colorblindPalette, dark = false, fontFamily: fontFamilyOverride } = options ?? {};
 
-  const fontFamily = fontFamilyOverride ?? getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
+  const fontFamily =
+    fontFamilyOverride ?? getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
 
   // High-contrast token pairs
   const textPrimary = dark ? '#ffffff' : '#000000';
   const textSecondary = dark ? '#e0e0e0' : '#1a1a1a';
   const bgSurface = dark ? '#000000' : '#ffffff';
-  const bgMuted = dark ? '#111111' : '#f5f5f5';
+  // bgMuted retained as a comment for parity with other theme builders;
+  // the high-contrast theme uses bgSurface directly so this token is not
+  // currently rendered. Restore if surface variants are ever needed.
+  // const bgMuted = dark ? '#111111' : '#f5f5f5';
   const borderDefault = dark ? '#ffffff' : '#000000';
   const borderSubtle = dark ? '#888888' : '#555555';
 
@@ -126,6 +126,9 @@ export function buildDesignLabEChartsHighContrastTheme(
       itemWidth: 14,
       itemHeight: 14,
       itemGap: 18,
+      // Collision default — mirrors the light/dark themes so the high-contrast
+      // theme paginates the legend instead of overflowing the chart bounds.
+      type: 'scroll',
     },
     tooltip: {
       backgroundColor: bgSurface,
@@ -138,18 +141,32 @@ export function buildDesignLabEChartsHighContrastTheme(
         fontWeight: 500,
       },
       extraCssText: `box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-radius: 6px; padding: 12px 16px;`,
+      // Confine to chart bounding box (Codex 019defa5 collision defaults).
+      confine: true,
     },
     categoryAxis: {
       axisLine: { lineStyle: { color: borderDefault, width: 2 } },
       axisTick: { lineStyle: { color: borderDefault, width: 2 } },
-      axisLabel: { color: textPrimary, fontFamily, fontSize: 12, fontWeight: 500 },
+      axisLabel: {
+        color: textPrimary,
+        fontFamily,
+        fontSize: 12,
+        fontWeight: 500,
+        hideOverlap: true,
+      },
       splitLine: { lineStyle: { color: borderSubtle, type: 'solid', width: 1 } },
       nameTextStyle: { color: textPrimary, fontFamily, fontSize: 12, fontWeight: 600 },
     },
     valueAxis: {
       axisLine: { show: true, lineStyle: { color: borderDefault, width: 2 } },
       axisTick: { show: true, lineStyle: { color: borderDefault, width: 2 } },
-      axisLabel: { color: textPrimary, fontFamily, fontSize: 12, fontWeight: 500 },
+      axisLabel: {
+        color: textPrimary,
+        fontFamily,
+        fontSize: 12,
+        fontWeight: 500,
+        hideOverlap: true,
+      },
       splitLine: { lineStyle: { color: borderSubtle, type: 'solid', width: 1 } },
       nameTextStyle: { color: textPrimary, fontFamily, fontSize: 12, fontWeight: 600 },
     },
