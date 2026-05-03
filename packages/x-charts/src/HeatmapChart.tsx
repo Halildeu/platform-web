@@ -315,12 +315,20 @@ const HeatmapChartInner = React.forwardRef<
         type: 'category' as const,
         data: yCats,
         splitArea: { show: true },
-        axisLabel: buildResponsiveAxisLabel({
-          breakpoint,
-          labelCount: yCats.length,
-          densityFontMultiplier,
-          baseFontSize: 11,
-        }),
+        axisLabel: {
+          ...buildResponsiveAxisLabel({
+            breakpoint,
+            labelCount: yCats.length,
+            densityFontMultiplier,
+            baseFontSize: 11,
+          }),
+          // Codex 019defa5 PR3c PARTIAL: helper rotates labels on mobile
+          // when there are >4 of them — that's the right call for a
+          // *horizontal* axis, but on a vertical axis (heatmap y) it
+          // increases the dead-letter footprint and clips into the left
+          // padding. Force rotate=0 here.
+          rotate: 0,
+        },
       },
       visualMap: {
         min: effectiveMin,

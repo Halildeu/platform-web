@@ -260,9 +260,12 @@ const RadarChartInner = React.forwardRef<
         shape,
         splitNumber,
         axisName: {
-          // Mobile suppresses indicator names entirely (collision with the
-          // shrunken radar) — values stay reachable via tooltip + a11y.
-          show: showLabels && breakpoint !== 'mobile',
+          // Codex 019defa5 PR3c PARTIAL: only suppress indicator names
+          // on mobile when the radar is dense enough for them to collide
+          // (>4 indicators on a 60% radius envelope). With 3-4 indicators
+          // the names still fit and the user benefits from seeing them.
+          // Tooltip formatter + a11y table always preserve the names.
+          show: showLabels && !(breakpoint === 'mobile' && indicators.length > 4),
           fontSize:
             breakpoint === 'mobile'
               ? Math.max(9, Math.round(11 * 0.9))
