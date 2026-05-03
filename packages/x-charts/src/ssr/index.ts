@@ -70,3 +70,30 @@ export type {
 
 // AccessControlledProps + access vocabulary (shared-types)
 export type { AccessLevel, AccessControlledProps } from '@mfe/shared-types';
+
+// ChartSpec types — declared in §1 of CONTRACT.md and referenced by the
+// RSC import example above. Codex iter-1 PR-X2 review: the example
+// promised `ChartSpec` but the barrel only re-exported wrapper props;
+// callers following the documented import would fail to resolve.
+export type {
+  ChartType,
+  ChartSpec,
+  ChartChannel,
+  ChartEncoding,
+  ChartTransform,
+  ChartDataSpec,
+  FieldType,
+  AggregateType,
+  DataSourceType,
+  DrillDownLevel,
+  ContextMenuItem,
+  ChartAccessibilitySpec,
+  ChartStatesSpec,
+  ChartAnimationSpec,
+  ChartLocaleSpec,
+  ChartSecuritySpec,
+  ChartPerformanceSpec,
+  ChartAnnotation,
+  ChartResponsiveSpec,
+  ChartExportSpec,
+} from '../spec/ChartSpec';

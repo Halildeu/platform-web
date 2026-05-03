@@ -80,13 +80,60 @@ describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
     expect(src.split('\n')[0].trim()).toMatch(/['"]use client['"];?/);
   });
 
-  it("ssrBarrelHasNoUseClient: ssr/index.ts is server-safe (no 'use client' directive)", () => {
+  it("ssrBarrelHasNoUseClient: ssr/index.ts is server-safe (no 'use client' directive at any non-comment site)", () => {
+    // Codex iter-1 PR-X2 review: the previous version of this test only
+    // matched the first non-empty-non-`/*` line, which a leading docblock
+    // could mask. Strip block + line comments first, then assert the first
+    // real statement is NOT a use-client directive AND the directive does
+    // not appear anywhere as a top-level statement.
+    const filePath = path.resolve(__dirname, '../ssr/index.ts');
+    const raw = fs.readFileSync(filePath, 'utf8');
+    // Strip /* ... */ block comments
+    const noBlockComments = raw.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Strip // line comments
+    const noComments = noBlockComments.replace(/^\s*\/\/.*$/gm, '');
+    const lines = noComments
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    expect(lines.length).toBeGreaterThan(0);
+    // First real statement must not be the directive
+    expect(lines[0]).not.toMatch(/['"]use client['"];?/);
+    // And the directive must not appear as a standalone top-level statement
+    // anywhere (a string in JSDoc would have been stripped above).
+    const hasDirective = lines.some((l) => /^['"]use client['"];?$/.test(l));
+    expect(hasDirective).toBe(false);
+  });
+
+  it('ssrTypeSurface: ssr/index.ts exports ChartSpec + chart wrapper prop types (Codex iter-1 PR-X2 fix)', () => {
+    // Codex flagged that the documented RSC example imports ChartSpec, but
+    // the barrel did not export it. This test enforces the documented
+    // surface by string-matching the export declarations. A type-level
+    // tsc smoke would be stronger; this is the closest signal we can run
+    // inside vitest without introducing a new build step.
     const filePath = path.resolve(__dirname, '../ssr/index.ts');
     const src = fs.readFileSync(filePath, 'utf8');
-    // First non-empty line should NOT be a use-client directive.
-    const firstNonEmpty = src
-      .split('\n')
-      .find((line) => line.trim().length > 0 && !line.trim().startsWith('/*'));
-    expect(firstNonEmpty?.trim()).not.toMatch(/['"]use client['"];?/);
+    const required = [
+      // From ChartSpec
+      'ChartSpec',
+      'ChartType',
+      'ChartChannel',
+      'ChartEncoding',
+      'DrillDownLevel',
+      // Wrapper prop types
+      'BarChartProps',
+      'LineChartProps',
+      'PieChartProps',
+      'AreaChartProps',
+      // Cross-filter
+      'CrossFilterEntry',
+      'DrillLevel',
+      'HistoryEntry',
+      // Access vocabulary
+      'AccessLevel',
+      'AccessControlledProps',
+    ];
+    const missing = required.filter((name) => !new RegExp(`\\b${name}\\b`).test(src));
+    expect(missing).toEqual([]);
   });
 });
