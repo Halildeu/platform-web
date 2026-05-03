@@ -167,10 +167,14 @@ describe('FeatureDemoLive — feature-export', () => {
 
     // jsdom 26's Blob lacks .text(); polyfill via FileReader (which it has).
     const blobs: Blob[] = [];
-    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob: Blob) => {
-      blobs.push(blob);
-      return 'blob:mock-url';
-    });
+    // URL.createObjectURL accepts `Blob | MediaSource`; assert + narrow.
+    const createObjectURLSpy = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockImplementation((obj: Blob | MediaSource) => {
+        expect(obj).toBeInstanceOf(Blob);
+        blobs.push(obj as Blob);
+        return 'blob:mock-url';
+      });
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
     render(<FeatureDemoLive featureId="feature-export" />);

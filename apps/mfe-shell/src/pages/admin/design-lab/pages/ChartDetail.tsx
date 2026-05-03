@@ -1473,7 +1473,7 @@ function MyStreamingChart() {
     tier: 'interaction',
     props: [],
     sampleCode: `const exporter = useChartExport();
-const onExport = () => exporter.exportChart(instance, 'png', { fileName: 'chart' });`,
+const onExport = () => exporter.exportChart(instance, 'png', { filename: 'chart' });`,
     features: ['png', 'svg', 'csv', 'data-url', 'blob'],
     a11y: ['download-button-focusable'],
     themes: ['light', 'dark', 'high-contrast', 'print'],
