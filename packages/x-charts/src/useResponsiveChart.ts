@@ -47,23 +47,27 @@ function resolveBreakpoint(width: number): Breakpoint {
  * - tablet: 480 – 1024 px
  * - desktop: > 1024 px
  */
-export function useResponsiveBreakpoint(
-  containerRef: RefObject<HTMLElement | null>,
-): Breakpoint {
+export function useResponsiveBreakpoint(containerRef: RefObject<HTMLElement | null>): Breakpoint {
   const [breakpoint, setBreakpoint] = useState<Breakpoint>('desktop');
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    // Measure immediately
+    // Measure immediately. Skip width=0 — that's a jsdom/SSR artefact
+    // (the node hasn't been laid out yet); we keep the safe `desktop`
+    // default rather than misclassifying as `mobile`.
     const rect = el.getBoundingClientRect();
-    setBreakpoint(resolveBreakpoint(rect.width));
+    if (rect.width > 0) {
+      setBreakpoint(resolveBreakpoint(rect.width));
+    }
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width } = entry.contentRect;
-        setBreakpoint(resolveBreakpoint(width));
+        if (width > 0) {
+          setBreakpoint(resolveBreakpoint(width));
+        }
       }
     });
 
@@ -115,8 +119,6 @@ const CONFIG_MAP: Record<Breakpoint, ResponsiveChartConfig> = {
  * - **tablet**: medium fonts, legend below chart
  * - **desktop**: full configuration
  */
-export function useResponsiveChartConfig(
-  breakpoint: Breakpoint,
-): ResponsiveChartConfig {
+export function useResponsiveChartConfig(breakpoint: Breakpoint): ResponsiveChartConfig {
   return CONFIG_MAP[breakpoint];
 }

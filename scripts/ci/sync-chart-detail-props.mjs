@@ -261,13 +261,17 @@ const CANONICAL_THEMES = ['auto', 'light', 'default', 'dark', 'high-contrast', '
  * Capabilities every wrapper inherits from the platform-wide invariant
  * (CONTRACT v2.3 §1.1, PR-D/E/F, PR-X2). Added on top of the chart-
  * specific features that the manual entry already lists.
+ *
+ * NOTE: `mutation-tested` was removed in PR #188 because Stryker config
+ * only ships for @mfe/design-system, not @mfe/x-charts. Re-add it to
+ * this list ONLY when packages/x-charts/stryker.config.* exists and the
+ * mutation suite is wired into CI.
  */
 const COMMON_CAPABILITIES = [
   'access-control',
   'decal',
   'density-aware',
   'accent-aware',
-  'mutation-tested',
   'axe-gated',
   'contrast-gated-static',
   'bundle-gated',

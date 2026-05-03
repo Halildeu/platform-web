@@ -8,7 +8,7 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
@@ -22,11 +22,18 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
+import { scaleFontSize, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeSeries } from './utils/data-validation';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import type { EChartsOption } from './renderers/echarts-imports';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import {
+  buildResponsiveAxisLabel,
+  buildResponsiveLegend,
+  buildResponsiveGrid,
+  buildResponsiveDataZoom,
+} from './responsive';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -162,6 +169,12 @@ const LineChartInner = React.forwardRef<
   const safeSeries = useMemo(() => sanitizeSeries(seriesData), [seriesData]);
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;
+  const hasMultiSeries = safeSeries.length > 1;
+
+  // Container ref shared with the renderer (via setRefs) so the same DOM node
+  // drives both useResponsiveBreakpoint and useEChartsRenderer's resize loop.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
   const {
     themeObject,
@@ -182,6 +195,26 @@ const LineChartInner = React.forwardRef<
     if (isEmpty) return null;
 
     const palette = effectivePalette ?? DEFAULT_PALETTE;
+
+    // Compute the responsive dataZoom once — option object spreads it
+    // conditionally. Re-computing inside the spread would call the helper
+    // twice per render.
+    const dataZoom = buildResponsiveDataZoom({
+      breakpoint,
+      labelCount: labels.length,
+    });
+
+    // Resolve legend before grid so the grid helper can read its `show` /
+    // `orient` to decide which side needs padding (Codex 019defa5 PARTIAL).
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
+      showLegend,
+      hasMultiSeries,
+      seriesCount: safeSeries.length,
+      densitySpacingMultiplier,
+      densityFontMultiplier,
+      icon: 'roundRect',
+    });
 
     const echartsSeriesList = safeSeries.map((s, i) => ({
       type: 'line' as const,
@@ -223,36 +256,41 @@ const LineChartInner = React.forwardRef<
         confine: true,
         valueFormatter: (v: unknown) => fmt(v as number),
       },
-      legend: {
-        show: showLegend || safeSeries.length > 1,
-        bottom: 0,
-        icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
-      grid: {
-        top: title
-          ? scalePadding(60, densityPaddingMultiplier)
-          : scalePadding(24, densityPaddingMultiplier),
-        right: scalePadding(16, densityPaddingMultiplier),
-        bottom:
-          showLegend || safeSeries.length > 1
-            ? scalePadding(48, densityPaddingMultiplier)
-            : scalePadding(24, densityPaddingMultiplier),
-        left: scalePadding(16, densityPaddingMultiplier),
-        containLabel: true,
-      },
+      legend: responsiveLegend,
+      grid: buildResponsiveGrid({
+        breakpoint,
+        hasTitle: !!title,
+        // Codex 019defa5 PARTIAL fix: derive bottom-legend padding from
+        // the resolved legend's orient — earlier draft hardcoded
+        // `breakpoint !== 'mobile'` which left mobile bottom legends
+        // overlapping the x-axis when seriesCount <= 5.
+        hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+        hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
+        density: {
+          titleTop: scalePadding(60, densityPaddingMultiplier),
+          contentTop: scalePadding(24, densityPaddingMultiplier),
+          sidePadding: scalePadding(16, densityPaddingMultiplier),
+          legendBottom: scalePadding(48, densityPaddingMultiplier),
+          plainBottom: scalePadding(24, densityPaddingMultiplier),
+        },
+      }),
+      ...(dataZoom ? { dataZoom } : {}),
       xAxis: {
         type: 'category',
         data: labels,
         boundaryGap: false,
-        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+        axisLabel: buildResponsiveAxisLabel({
+          breakpoint,
+          labelCount: labels.length,
+          densityFontMultiplier,
+          baseFontSize: 11,
+        }),
       },
       yAxis: {
         type: 'value',
         axisLabel: {
           fontSize: scaleFontSize(11, densityFontMultiplier),
+          hideOverlap: true,
           formatter: (v: number) => fmt(v),
         },
         splitLine: {
@@ -274,6 +312,7 @@ const LineChartInner = React.forwardRef<
       },
     } as EChartsOption;
   }, [
+    safeSeries,
     seriesData,
     labels,
     showDots,
@@ -287,12 +326,17 @@ const LineChartInner = React.forwardRef<
     description,
     onDataPointClick,
     isEmpty,
+    hasMultiSeries,
+    fmt,
     decalEnabled,
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
     effectivePalette,
+    // Breakpoint drives axisLabel rotation/interval, legend orientation,
+    // grid padding, and dataZoom enablement (Codex 019defa5).
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -339,6 +383,9 @@ const LineChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      // Same DOM node feeds both the breakpoint observer (own ref) and the
+      // ECharts renderer (containerRef from useEChartsRenderer).
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

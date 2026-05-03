@@ -8,7 +8,7 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
@@ -21,10 +21,17 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing, scalePadding } from './theme/density-helpers';
+import { scaleFontSize, scalePadding } from './theme/density-helpers';
 import { formatCompact } from './utils/formatters';
 import { sanitizeSeries } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import {
+  buildResponsiveAxisLabel,
+  buildResponsiveLegend,
+  buildResponsiveGrid,
+  buildResponsiveDataZoom,
+} from './responsive';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -175,6 +182,11 @@ const AreaChartInner = React.forwardRef<
   const safeSeries = useMemo(() => sanitizeSeries(seriesData), [seriesData]);
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;
+  const hasMultiSeries = safeSeries.length > 1;
+
+  // Same DOM node feeds breakpoint observer and ECharts renderer.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
   const {
     themeObject,
@@ -195,6 +207,24 @@ const AreaChartInner = React.forwardRef<
     if (isEmpty) return null;
 
     const palette = effectivePalette ?? DEFAULT_PALETTE;
+
+    // Compute dataZoom once — option object spreads it conditionally.
+    const dataZoom = buildResponsiveDataZoom({
+      breakpoint,
+      labelCount: labels.length,
+    });
+
+    // Resolve legend before grid so the grid helper can read its orient
+    // (Codex 019defa5 PARTIAL fix).
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
+      showLegend,
+      hasMultiSeries,
+      seriesCount: safeSeries.length,
+      densitySpacingMultiplier,
+      densityFontMultiplier,
+      icon: 'roundRect',
+    });
 
     const echartsSeriesList = safeSeries.map((s, i) => {
       const color = s.color ?? palette[i % palette.length];
@@ -237,36 +267,40 @@ const AreaChartInner = React.forwardRef<
         confine: true,
         valueFormatter: (v: unknown) => fmt(v as number),
       },
-      legend: {
-        show: showLegend || safeSeries.length > 1,
-        bottom: 0,
-        icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
-      grid: {
-        top: title
-          ? scalePadding(60, densityPaddingMultiplier)
-          : scalePadding(24, densityPaddingMultiplier),
-        right: scalePadding(16, densityPaddingMultiplier),
-        bottom:
-          showLegend || safeSeries.length > 1
-            ? scalePadding(48, densityPaddingMultiplier)
-            : scalePadding(24, densityPaddingMultiplier),
-        left: scalePadding(16, densityPaddingMultiplier),
-        containLabel: true,
-      },
+      legend: responsiveLegend,
+      grid: buildResponsiveGrid({
+        breakpoint,
+        hasTitle: !!title,
+        // Codex 019defa5 PARTIAL fix: derive padding from the resolved
+        // legend instead of hardcoding `!= 'mobile'`. Otherwise mobile
+        // bottom legends overlap the x-axis when seriesCount <= 5.
+        hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+        hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
+        density: {
+          titleTop: scalePadding(60, densityPaddingMultiplier),
+          contentTop: scalePadding(24, densityPaddingMultiplier),
+          sidePadding: scalePadding(16, densityPaddingMultiplier),
+          legendBottom: scalePadding(48, densityPaddingMultiplier),
+          plainBottom: scalePadding(24, densityPaddingMultiplier),
+        },
+      }),
+      ...(dataZoom ? { dataZoom } : {}),
       xAxis: {
         type: 'category',
         data: labels,
         boundaryGap: false,
-        axisLabel: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+        axisLabel: buildResponsiveAxisLabel({
+          breakpoint,
+          labelCount: labels.length,
+          densityFontMultiplier,
+          baseFontSize: 11,
+        }),
       },
       yAxis: {
         type: 'value',
         axisLabel: {
           fontSize: scaleFontSize(11, densityFontMultiplier),
+          hideOverlap: true,
           formatter: (v: number) => fmt(v),
         },
         splitLine: {
@@ -288,6 +322,7 @@ const AreaChartInner = React.forwardRef<
       },
     } as EChartsOption;
   }, [
+    safeSeries,
     seriesData,
     labels,
     stacked,
@@ -301,12 +336,15 @@ const AreaChartInner = React.forwardRef<
     title,
     description,
     isEmpty,
+    hasMultiSeries,
+    fmt,
     decalEnabled,
     decalPatterns,
     densityFontMultiplier,
     densitySpacingMultiplier,
     densityPaddingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const { containerRef, instance } = useEChartsRenderer({
@@ -336,6 +374,7 @@ const AreaChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)
