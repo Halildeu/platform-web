@@ -218,9 +218,13 @@ const PieChartInner = React.forwardRef<
           return `${escapeHtml(p.name)}: ${escapeHtml(formatted)} (${p.percent}%)`;
         },
       },
+      // Codex 019defa5 PARTIAL fix: when mobile suppresses outer slice
+      // labels (collision avoidance), force the legend on so users still
+      // see slice names / percentages — otherwise the chart renders pure
+      // colour swatches with no textual context.
       legend: buildResponsiveLegend({
         breakpoint,
-        showLegend,
+        showLegend: showLegend || (breakpoint === 'mobile' && (showLabels || showPercentage)),
         // Pie's "series" is one but legend entries = slice count.
         hasMultiSeries: false,
         seriesCount: validData.length,

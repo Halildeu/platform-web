@@ -204,6 +204,18 @@ const LineChartInner = React.forwardRef<
       labelCount: labels.length,
     });
 
+    // Resolve legend before grid so the grid helper can read its `show` /
+    // `orient` to decide which side needs padding (Codex 019defa5 PARTIAL).
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
+      showLegend,
+      hasMultiSeries,
+      seriesCount: safeSeries.length,
+      densitySpacingMultiplier,
+      densityFontMultiplier,
+      icon: 'roundRect',
+    });
+
     const echartsSeriesList = safeSeries.map((s, i) => ({
       type: 'line' as const,
       name: s.name,
@@ -244,23 +256,16 @@ const LineChartInner = React.forwardRef<
         confine: true,
         valueFormatter: (v: unknown) => fmt(v as number),
       },
-      legend: buildResponsiveLegend({
-        breakpoint,
-        showLegend,
-        hasMultiSeries,
-        seriesCount: safeSeries.length,
-        densitySpacingMultiplier,
-        densityFontMultiplier,
-        icon: 'roundRect',
-      }),
+      legend: responsiveLegend,
       grid: buildResponsiveGrid({
         breakpoint,
         hasTitle: !!title,
-        hasBottomLegend: (showLegend || hasMultiSeries) && breakpoint !== 'mobile',
-        // Mobile with many series → vertical right legend; helper handles
-        // the right padding so the chart shrinks instead of clipping.
-        hasRightLegend:
-          (showLegend || hasMultiSeries) && breakpoint === 'mobile' && safeSeries.length > 5,
+        // Codex 019defa5 PARTIAL fix: derive bottom-legend padding from
+        // the resolved legend's orient — earlier draft hardcoded
+        // `breakpoint !== 'mobile'` which left mobile bottom legends
+        // overlapping the x-axis when seriesCount <= 5.
+        hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+        hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
         density: {
           titleTop: scalePadding(60, densityPaddingMultiplier),
           contentTop: scalePadding(24, densityPaddingMultiplier),

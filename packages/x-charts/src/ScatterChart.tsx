@@ -217,6 +217,19 @@ const ScatterChartInner = React.forwardRef<
         }
       : 8;
 
+    // Resolve legend before returning so the grid helper can read its
+    // `show` / `orient` (Codex 019defa5 PARTIAL).
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
+      showLegend,
+      // Scatter is single-series at the legend level (one symbol type).
+      hasMultiSeries: false,
+      seriesCount: 1,
+      densitySpacingMultiplier,
+      densityFontMultiplier,
+      icon: 'circle',
+    });
+
     return {
       animation: animate,
       animationDuration: animate ? 500 : 0,
@@ -252,16 +265,7 @@ const ScatterChartInner = React.forwardRef<
         },
       },
       legend: {
-        ...buildResponsiveLegend({
-          breakpoint,
-          showLegend,
-          // Scatter is single-series at the legend level (one symbol type).
-          hasMultiSeries: false,
-          seriesCount: 1,
-          densitySpacingMultiplier,
-          densityFontMultiplier,
-          icon: 'circle',
-        }),
+        ...responsiveLegend,
         // Preserve the explicit text style so the scatter chart keeps its
         // CSS-var-driven palette even when the helper's textStyle wins.
         textStyle: {
@@ -273,8 +277,10 @@ const ScatterChartInner = React.forwardRef<
       grid: buildResponsiveGrid({
         breakpoint,
         hasTitle: !!title,
-        hasBottomLegend: showLegend && breakpoint !== 'mobile',
-        hasRightLegend: false,
+        // Codex 019defa5 PARTIAL fix: derive padding from the resolved
+        // legend's orient so mobile bottom legends don't overlap axes.
+        hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+        hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
         density: {
           titleTop: scalePadding(60, densityPaddingMultiplier),
           contentTop: scalePadding(24, densityPaddingMultiplier),

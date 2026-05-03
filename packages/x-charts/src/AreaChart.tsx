@@ -214,6 +214,18 @@ const AreaChartInner = React.forwardRef<
       labelCount: labels.length,
     });
 
+    // Resolve legend before grid so the grid helper can read its orient
+    // (Codex 019defa5 PARTIAL fix).
+    const responsiveLegend = buildResponsiveLegend({
+      breakpoint,
+      showLegend,
+      hasMultiSeries,
+      seriesCount: safeSeries.length,
+      densitySpacingMultiplier,
+      densityFontMultiplier,
+      icon: 'roundRect',
+    });
+
     const echartsSeriesList = safeSeries.map((s, i) => {
       const color = s.color ?? palette[i % palette.length];
       return {
@@ -255,21 +267,15 @@ const AreaChartInner = React.forwardRef<
         confine: true,
         valueFormatter: (v: unknown) => fmt(v as number),
       },
-      legend: buildResponsiveLegend({
-        breakpoint,
-        showLegend,
-        hasMultiSeries,
-        seriesCount: safeSeries.length,
-        densitySpacingMultiplier,
-        densityFontMultiplier,
-        icon: 'roundRect',
-      }),
+      legend: responsiveLegend,
       grid: buildResponsiveGrid({
         breakpoint,
         hasTitle: !!title,
-        hasBottomLegend: (showLegend || hasMultiSeries) && breakpoint !== 'mobile',
-        hasRightLegend:
-          (showLegend || hasMultiSeries) && breakpoint === 'mobile' && safeSeries.length > 5,
+        // Codex 019defa5 PARTIAL fix: derive padding from the resolved
+        // legend instead of hardcoding `!= 'mobile'`. Otherwise mobile
+        // bottom legends overlap the x-axis when seriesCount <= 5.
+        hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
+        hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
         density: {
           titleTop: scalePadding(60, densityPaddingMultiplier),
           contentTop: scalePadding(24, densityPaddingMultiplier),
