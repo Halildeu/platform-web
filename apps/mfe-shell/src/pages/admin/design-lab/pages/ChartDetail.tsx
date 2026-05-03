@@ -3905,12 +3905,16 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
           */}
           <div className="flex-1 rounded-2xl border border-border-subtle bg-surface-canvas p-3 sm:p-6 lg:p-8">
             <div className="flex min-h-[240px] items-center justify-center sm:min-h-[320px] lg:min-h-[360px]">
-              <ChartPreviewLive
-                chartId={chart.id}
-                chartName={chart.name}
-                toggles={pgState}
-                height={360}
-              />
+              {/*
+                Codex 019defa5 PARTIAL fix: do NOT pass `height={360}`.
+                That value used to be a fixed render height; with PR2 it
+                became a *floor* on top of `responsiveHeight(clampedSize)`
+                — and a 360 floor cancelled the mobile/tablet shrink the
+                whole responsive overhaul was supposed to deliver. Letting
+                the prop default keeps `floor=0` so the chart-size-derived
+                height (220 / 320 / 420) wins on every breakpoint.
+              */}
+              <ChartPreviewLive chartId={chart.id} chartName={chart.name} toggles={pgState} />
             </div>
           </div>
 

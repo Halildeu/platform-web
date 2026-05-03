@@ -181,15 +181,18 @@ export const CHART_CANVAS_HEIGHT: Record<ChartSize, number> = {
  *   desktop + lg → clampedSize 'lg' → 400 + 20 = 420
  *
  * The optional `floor` argument lets the caller insist on a minimum
- * height (useful for theme-only previews that don't have a chart).
+ * height — but the playground call-site keeps it at 0 so the responsive
+ * shrink actually takes effect. (Codex 019defa5 PARTIAL fix: an earlier
+ * draft passed `floor={360}` which kept mobile previews at 360px even
+ * after the chart canvas clamped down to `sm`.)
+ *
+ * Breakpoint isn't a parameter because `clampedSize` already encodes the
+ * breakpoint cap upstream; passing it twice would invite a re-derive bug.
  *
  * Exported for unit tests.
  */
-export const responsiveHeight = (
-  _breakpoint: 'mobile' | 'tablet' | 'desktop',
-  clampedSize: ChartSize,
-  floor = 0,
-): number => Math.max(floor, CHART_CANVAS_HEIGHT[clampedSize] + 20);
+export const responsiveHeight = (clampedSize: ChartSize, floor = 0): number =>
+  Math.max(floor, CHART_CANVAS_HEIGHT[clampedSize] + 20);
 
 const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
   chartId,
@@ -210,9 +213,11 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
   // Height is driven by the clamped chart size, not the user's `height`
   // prop, so the PreviewBox is always exactly 20px taller than the chart
   // canvas — preventing the original screenshot bug where a 400px lg
-  // canvas overflowed a 360px container. The `height` prop is treated as
-  // a floor so theme-only previews keep a sensible minimum.
-  const finalHeight = responsiveHeight(breakpoint, clampedSize, height);
+  // canvas overflowed a 360px container. `height` is treated as a *floor*
+  // (theme-only previews can insist on a minimum), but the design-lab
+  // call-site no longer passes a non-zero floor so the responsive shrink
+  // actually wins on mobile/tablet.
+  const finalHeight = responsiveHeight(clampedSize, height);
 
   /**
    * Resolve the chart `size` prop from the playground toggles, then clamp
@@ -428,7 +433,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             title={chartName}
             showLegend={isOn(toggles, 'showLegend', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
@@ -456,7 +461,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               },
             ]}
             title={chartName}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
@@ -486,7 +491,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             yLabels={['Sabah', 'Öğle', 'Akşam']}
             title={chartName}
             showValues={isOn(toggles, 'showValues', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
@@ -505,7 +510,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             title={chartName}
             showValues={isOn(toggles, 'showValues', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
@@ -522,7 +527,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             title={chartName}
             showConversion={isOn(toggles, 'showConversion', true)}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
@@ -544,7 +549,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { source: 'Kaynak B', target: 'Hedef Y', value: 40 },
             ]}
             title={chartName}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );
@@ -575,7 +580,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               },
             ]}
             title={chartName}
-            size="lg"
+            size={sizeFor('lg')}
           />
         </PreviewBox>
       );

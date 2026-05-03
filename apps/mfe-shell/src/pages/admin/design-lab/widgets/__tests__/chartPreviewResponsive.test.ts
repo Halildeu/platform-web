@@ -39,26 +39,33 @@ describe('clampChartSize', () => {
 
 describe('responsiveHeight', () => {
   it('returns 220 for "sm" canvas (200 + 20 padding)', () => {
-    expect(responsiveHeight('mobile', 'sm')).toBe(220);
-    expect(responsiveHeight('desktop', 'sm')).toBe(220);
+    expect(responsiveHeight('sm')).toBe(220);
   });
 
   it('returns 320 for "md" canvas (300 + 20)', () => {
-    expect(responsiveHeight('tablet', 'md')).toBe(320);
-    expect(responsiveHeight('desktop', 'md')).toBe(320);
+    expect(responsiveHeight('md')).toBe(320);
   });
 
   it('returns 420 for "lg" canvas (400 + 20)', () => {
-    expect(responsiveHeight('desktop', 'lg')).toBe(420);
+    expect(responsiveHeight('lg')).toBe(420);
   });
 
   it('honours an explicit floor when greater than the chart-derived height', () => {
     // sm chart needs 220px; caller wants at least 280 → 280 wins.
-    expect(responsiveHeight('mobile', 'sm', 280)).toBe(280);
+    expect(responsiveHeight('sm', 280)).toBe(280);
   });
 
   it('ignores the floor when the chart-derived height is already taller', () => {
-    expect(responsiveHeight('desktop', 'lg', 360)).toBe(420);
+    expect(responsiveHeight('lg', 360)).toBe(420);
+  });
+
+  it('Codex 019defa5 PARTIAL fix: legacy 360 floor would have bypassed mobile shrink', () => {
+    // The original PR2 draft passed `floor=360` from the design-lab
+    // call-site; with that, mobile previews stayed at 360 even after the
+    // chart canvas clamped to 'sm' (220). The fix removes the floor at
+    // the call-site so the chart-size-derived height wins.
+    expect(responsiveHeight('sm')).toBe(220);
+    expect(responsiveHeight('sm', 360)).toBe(360); // documents the bypass that USED to happen
   });
 });
 
@@ -81,7 +88,7 @@ describe('clampChartSize + responsiveHeight invariant', () => {
     for (const bp of ['mobile', 'tablet', 'desktop'] as const) {
       it(`${userSize} on ${bp}: chart canvas fits inside PreviewBox`, () => {
         const clampedSize = clampChartSize(userSize, bp);
-        const previewHeight = responsiveHeight(bp, clampedSize);
+        const previewHeight = responsiveHeight(clampedSize);
         expect(previewHeight).toBeGreaterThanOrEqual(SIZE_HEIGHT[clampedSize] + MIN_BREATHING_ROOM);
       });
     }
