@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * PieChart -- ECharts-powered pie/donut chart
  *

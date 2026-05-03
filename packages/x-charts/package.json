@@ -21,6 +21,16 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/client/index.ts",
+      "import": "./src/client/index.ts",
+      "default": "./src/client/index.ts"
+    },
+    "./ssr": {
+      "types": "./src/ssr/index.ts",
+      "import": "./src/ssr/index.ts",
+      "default": "./src/ssr/index.ts"
     }
   },
   "files": [

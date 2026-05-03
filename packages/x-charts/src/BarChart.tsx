@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * BarChart -- ECharts-powered bar chart
  *

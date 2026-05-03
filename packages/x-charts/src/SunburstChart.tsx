@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * SunburstChart -- ECharts-powered hierarchical sunburst chart
  *

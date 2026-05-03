@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useCallback } from 'react';
 import { cn } from './utils/cn';
 import type { ChartInteractionState } from './useChartInteractions';

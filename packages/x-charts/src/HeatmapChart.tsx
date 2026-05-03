@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * HeatmapChart -- ECharts-powered heatmap grid
  *

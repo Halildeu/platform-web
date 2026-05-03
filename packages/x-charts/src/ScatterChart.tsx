@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * ScatterChart — ECharts-powered scatter/bubble chart with Design Lab integration
  *

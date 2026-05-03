@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * GaugeChart -- ECharts-powered gauge with threshold zones
  *

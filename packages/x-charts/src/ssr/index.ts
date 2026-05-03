@@ -1,25 +1,72 @@
-'use client';
-
 /**
- * SSR/RSC Client Boundary
+ * SSR Subpath — `@mfe/x-charts/ssr`
  *
- * ECharts requires DOM access (canvas/svg) and cannot render server-side.
- * This module re-exports chart components wrapped with 'use client' directive
- * so Next.js RSC and other SSR frameworks skip server rendering.
+ * Server-safe re-exports — types and pure helpers only. Anything that
+ * imports ECharts, touches the DOM, or uses React hooks is intentionally
+ * routed through `@mfe/x-charts/client` instead.
  *
- * All chart components that touch ECharts must go through this boundary.
+ * Faz 21.8 PR-X2: previously this file used `'use client'` and re-exported
+ * ChartContainer + ChartDashboard, which is the opposite of what an SSR
+ * boundary should be. Those components now live in `./client` (still
+ * `'use client'`-marked at the file level), and this barrel is reserved
+ * for genuinely server-safe public types.
  *
  * Usage in RSC context:
  * ```tsx
- * import { ClientChartContainer } from '@mfe/x-charts/ssr';
+ * // server component / RSC
+ * import type { ChartSpec, BarChartProps } from '@mfe/x-charts/ssr';
+ * // client component
+ * import { BarChart } from '@mfe/x-charts/client';
  * ```
  *
  * @see R-004 risk: ECharts SSR incompatibility
+ * @see PR #174 (reality-parity plan)
  */
 
-export { ChartContainer } from '../ChartContainer';
-export { ChartDashboard } from '../ChartDashboard';
+/* ------------------------------------------------------------------ */
+/*  Public type re-exports (no runtime, no DOM)                        */
+/* ------------------------------------------------------------------ */
 
-// Re-export types (types are safe in RSC)
+// Chart wrapper prop types — re-exported as types only so consumers in
+// server components can declare props without pulling in ECharts.
+export type { AreaChartProps } from '../AreaChart';
+export type { BarChartProps } from '../BarChart';
+export type { FunnelChartProps } from '../FunnelChart';
+export type { GaugeChartProps } from '../GaugeChart';
+export type { HeatmapChartProps } from '../HeatmapChart';
+export type { LineChartProps } from '../LineChart';
+export type { PieChartProps } from '../PieChart';
+export type { RadarChartProps } from '../RadarChart';
+export type { SankeyChartProps } from '../SankeyChart';
+export type { ScatterChartProps } from '../ScatterChart';
+export type { SunburstChartProps } from '../SunburstChart';
+export type { TreemapChartProps } from '../TreemapChart';
+export type { WaterfallChartProps } from '../WaterfallChart';
+
+// Composite types
 export type { ChartContainerProps } from '../ChartContainer';
 export type { ChartDashboardProps } from '../ChartDashboard';
+export type { ChartLegendProps } from '../ChartLegend';
+export type { ChartToolbarProps } from '../ChartToolbar';
+export type { KPICardProps } from '../KPICard';
+export type { MiniChartProps } from '../MiniChart';
+export type { SparklineChartProps } from '../SparklineChart';
+export type { StatWidgetProps } from '../StatWidget';
+
+// Cross-filter / drill-down types
+export type {
+  CrossFilterEntry,
+  DrillLevel,
+  HistoryEntry,
+  Bookmark,
+  CrossFilterState,
+  CrossFilterActions,
+  CrossFilterStore,
+  CrossFilterEventType,
+  CrossFilterEvent,
+  CrossFilterEventListener,
+  FilterOperator,
+} from '../cross-filter/types';
+
+// AccessControlledProps + access vocabulary (shared-types)
+export type { AccessLevel, AccessControlledProps } from '@mfe/shared-types';
