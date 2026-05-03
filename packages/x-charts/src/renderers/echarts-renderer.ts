@@ -117,9 +117,13 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     setInstanceVersion((v) => v + 1);
     onReady?.(instance);
 
-    // ResizeObserver for responsive
+    // ResizeObserver for responsive — Faz 21.9 PR3b (Codex `019defa5`):
+    // respect prefers-reduced-motion. The previous default `duration: 200`
+    // ignored the user's OS-level setting and produced a janky 200ms
+    // bounce on every container size change in reduced-motion mode.
     const observer = new ResizeObserver(() => {
-      instance.resize({ animation: { duration: 200 } });
+      const duration = respectReducedMotion && prefersReducedMotion() ? 0 : 200;
+      instance.resize({ animation: { duration } });
     });
     observer.observe(container);
 
@@ -132,7 +136,9 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     };
     // Faz 21.5-A1: re-init when the active charts locale flips so
     // ECharts re-resolves toolbox/legend/dataZoom strings.
-  }, [renderer, theme, echartsLocaleKey]);
+    // PR3b: respectReducedMotion is also a dep — the resize-animation
+    // duration we close over above changes when the consumer toggles it.
+  }, [renderer, theme, echartsLocaleKey, respectReducedMotion]);
 
   // Click handler lifecycle (Faz 21.4 PR-E2 must-fix #1, iter-2).
   //
