@@ -16,6 +16,7 @@ import {
   getEnumOptions,
   getNum,
   getOptStr,
+  getSampleData,
   getStr,
   isLiveEditable,
   parseDefault,
@@ -239,7 +240,7 @@ describe('chartPlaygroundModel — codegen serialisation', () => {
     expect(serialisePropToCode(d, undefined)).toBeNull();
   });
 
-  it('renders a full prop list using generatePlaygroundCode', () => {
+  it('renders a legacy snippet when no chartId is passed (no scaffold preamble)', () => {
     const props: ChartProp[] = [
       mkProp({ name: 'data', type: 'ChartDataPoint[]', required: true }),
       mkProp({ name: 'showValues', type: 'boolean', default: 'false' }),
@@ -262,6 +263,59 @@ describe('chartPlaygroundModel — codegen serialisation', () => {
         '/>',
       ].join('\n'),
     );
+  });
+
+  it('emits compile-ready preamble when chartId scaffold exists (bar-chart)', () => {
+    const props: ChartProp[] = [
+      mkProp({ name: 'data', type: 'ChartDataPoint[]', required: true }),
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+    ];
+    const descriptors = buildDescriptors('bar-chart', props);
+    const code = generatePlaygroundCode('BarChart', descriptors, { animate: false }, 'bar-chart');
+    // Preamble defines `const sampleData = [...]` before the chart usage.
+    expect(code.startsWith('const sampleData = [')).toBe(true);
+    expect(code).toContain("{ label: 'Ocak', value: 320 }");
+    // Snippet still references the local var, not a free-floating identifier.
+    expect(code).toContain('  data={sampleData}');
+    expect(code).toContain('  animate={false}');
+    // The catalog-declared `data` prop is NOT emitted as a duplicate prop
+    // line by the descriptor walker — the scaffold owns it.
+    const dataLines = code.split('\n').filter((l) => /^\s*data=/.test(l));
+    expect(dataLines).toHaveLength(1);
+  });
+
+  it('emits multiple consts for charts with auxiliary props (line-chart)', () => {
+    const props: ChartProp[] = [
+      mkProp({ name: 'series', type: 'ChartSeries[]', required: true }),
+      mkProp({ name: 'animate', type: 'boolean', default: 'true' }),
+    ];
+    const descriptors = buildDescriptors('line-chart', props);
+    const code = generatePlaygroundCode('LineChart', descriptors, {}, 'line-chart');
+    expect(code).toContain('const series = [');
+    expect(code).toContain('const labels = [');
+    expect(code).toContain('  series={series}');
+    expect(code).toContain('  labels={labels}');
+  });
+});
+
+describe('chartPlaygroundModel — sample data', () => {
+  it('returns scaffold for known chart ids', () => {
+    const bar = getSampleData('bar-chart');
+    expect(bar?.scaffold[0].propName).toBe('data');
+    expect(bar?.scaffold[0].varName).toBe('sampleData');
+    expect(bar?.scaffold[0].jsLiteral).toContain("label: 'Ocak'");
+  });
+
+  it('exposes auxiliary props for series-based charts', () => {
+    const line = getSampleData('line-chart');
+    expect(line?.auxiliaryProps?.[0].propName).toBe('labels');
+    expect(line?.auxiliaryProps?.[0].varName).toBe('labels');
+    const area = getSampleData('area-chart');
+    expect(area?.auxiliaryProps?.[0].propName).toBe('labels');
+  });
+
+  it('returns null for unknown chart ids', () => {
+    expect(getSampleData('non-existent-chart')).toBeNull();
   });
 });
 
