@@ -617,6 +617,20 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   //     Adds a typed search of >= MIN_QUERY chars unlocks the full search:
   //     selected rows + top MAX_RENDER unselected matches. The cap means
   //     even single-letter input never spawns 5k DOM nodes.
+  //
+  // 2026-05-04 Session 37 fourth pass — preserve query across multi-select
+  // (kullanıcı feedback: "users drawerinda bir tanesi seçince liste
+  // kapanıyor diğerini seçmek için tekrra açıp yazmak gerekiyor tek filtre
+  // ile çoklu seçim olabilmeli"). The DS Combobox primitive auto-clears
+  // the input on each multi-select pick. For large lists this collapses
+  // the visible match set back to selected-only (since q.length drops to
+  // 0), forcing the admin to retype to add a second project from the same
+  // search. The fix gates the post-select clear: when handleValuesChange
+  // fires with a non-empty query, the next onInputChange('') (the
+  // Combobox's built-in clear) is skipped so the query — and therefore
+  // the visible matches — survives the selection. Small lists keep the
+  // primitive's default behavior (clear on select) since they don't rely
+  // on the query to render rows.
   const LARGE_LIST_THRESHOLD = 200;
   const MIN_QUERY = 2;
   const MAX_RENDER = 50;
@@ -628,6 +642,10 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   }> = ({ items, selected, setter }) => {
     const isLargeList = items.length > LARGE_LIST_THRESHOLD;
     const [inputValue, setInputValue] = React.useState('');
+    // Skip flag for the Combobox's post-select input-clear — see header
+    // comment "fourth pass". Set in handleValuesChange, consumed in
+    // handleInputChange.
+    const skipNextClearRef = React.useRef(false);
 
     // ScopeEntity.id is numeric; ComboboxOption.value is string. Map both
     // directions so the Combobox round-trips ids without coercion drift.
@@ -681,9 +699,26 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           .filter((id) => Number.isFinite(id));
         setter(nextIds);
         setDirty(true);
+        // Combobox auto-clears the input after a multi-select pick. For
+        // large lists that obliterates the visible match set; signal
+        // handleInputChange to swallow the next ''-event so the query
+        // (and therefore the visible matches) survives the selection.
+        // Only matters when the user actually has a query — otherwise
+        // the clear is already a no-op.
+        if (isLargeList && inputValue.length > 0) {
+          skipNextClearRef.current = true;
+        }
       },
-      [setter],
+      [setter, isLargeList, inputValue],
     );
+
+    const handleInputChange = React.useCallback((value: string) => {
+      if (value === '' && skipNextClearRef.current) {
+        skipNextClearRef.current = false;
+        return;
+      }
+      setInputValue(value);
+    }, []);
 
     // Dynamic empty-state copy for large lists — guides the admin towards
     // typing instead of just saying "no results" when they haven't searched.
@@ -711,7 +746,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           values={values}
           onValuesChange={handleValuesChange}
           inputValue={inputValue}
-          onInputChange={(value) => setInputValue(value)}
+          onInputChange={handleInputChange}
           clearable
           placeholder={placeholderCopy}
           noOptionsText={noOptionsCopy}
