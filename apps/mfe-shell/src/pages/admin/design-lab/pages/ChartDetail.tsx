@@ -249,7 +249,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -431,7 +430,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -605,7 +603,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -785,7 +782,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -964,7 +960,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -1146,7 +1141,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -1319,7 +1313,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -1494,7 +1487,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -1679,7 +1671,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -1845,7 +1836,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -2032,7 +2022,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -2223,7 +2212,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -2395,7 +2383,6 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'decal',
       'density-aware',
       'accent-aware',
-      'mutation-tested',
       'axe-gated',
       'contrast-gated-static',
       'bundle-gated',
@@ -4187,12 +4174,22 @@ function buildExamples(chart: ChartMeta): ExampleItem[] {
     });
   }
 
-  // Common: theme variant example
+  // Common: theme variant example.
+  //
+  // Two equivalent ways to drive a chart into dark mode — both work
+  // because every wrapper accepts the `theme` prop directly AND honours
+  // the shell-level `data-appearance` attribute set by `ThemeProvider`.
+  //
+  // The earlier example used `<ThemeProvider theme="dark">` which is
+  // NOT the real API: `ThemeProvider` accepts `defaultAxes`, not a
+  // `theme` shorthand. Replaced with the chart's own `theme` prop —
+  // the simplest correct path. ThemeProvider scope is documented as
+  // an alternative beneath.
   items.push({
     title: 'Dark Theme',
     tag: 'theme',
-    description: `${chart.name} rendered within a dark theme context.`,
-    code: `<ThemeProvider theme="dark">\n  ${chart.sampleCode.split('\n')[0]}\n    {...props}\n  />\n</ThemeProvider>`,
+    description: `${chart.name} rendered with an explicit dark theme override.`,
+    code: `<${chart.name}\n  data={data}\n  theme="dark"\n/>\n\n// Or scope at the provider level:\n// <ThemeProvider defaultAxes={{ appearance: 'dark' }}>\n//   <${chart.name} data={data} />\n// </ThemeProvider>`,
   });
 
   return items;
