@@ -36,10 +36,16 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
   const dotEnv = loadDotEnvLocal();
   // process.env takes priority over .env.local (same as webpack.common.js)
   const merged = { ...dotEnv, ...process.env };
+  // AG Grid lisansı: VITE_ prefix yeterli (allowlist'a eklemeye gerek yok).
+  // Tek-kaynak (single source of truth): GitHub Secret AG_GRID_LICENSE_KEY →
+  // CI build-arg VITE_AG_GRID_LICENSE_KEY → Vite buildRuntimeEnv → bundle.
   const allowlist = new Set([
     'NODE_ENV',
     'AUTH_MODE',
-    'AG_GRID_LICENSE_KEY',
+    // AG_GRID_LICENSE_KEY removed (hotfix single-source refactor): the
+    // VITE_AG_GRID_LICENSE_KEY env is already picked up by the
+    // `key.startsWith('VITE_')` filter below — explicit allowlist entry
+    // is now redundant.
     'SHELL_SKIP_REMOTE_SERVICES',
     'SHELL_ENABLE_SUGGESTIONS_REMOTE',
     'SHELL_ENABLE_ETHIC_REMOTE',

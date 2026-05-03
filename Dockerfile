@@ -25,7 +25,10 @@ ARG VITE_KEYCLOAK_CLIENT_ID=frontend
 ARG VITE_FRONTEND_PUBLIC_ORIGIN=https://ai.acik.com
 ARG VITE_GATEWAY_URL=https://ai.acik.com
 ARG VITE_AUTH_MODE=keycloak
-ARG AG_GRID_LICENSE_KEY=""
+# AG Grid lisansı: TEK KAYNAK = GitHub Secret AG_GRID_LICENSE_KEY (CI build-arg
+# olarak VITE_AG_GRID_LICENSE_KEY ismiyle pass edilir). Bundle'da tek kez
+# (`window.__env__.VITE_AG_GRID_LICENSE_KEY`) görünür; non-VITE alias yok.
+ARG VITE_AG_GRID_LICENSE_KEY=""
 # iter-50 Step 3.1 (Codex 019dded6): build-info.json sentinel için explicit
 # SHA/REF — `.git` kontekste güvenmek riskli (Docker build context çoğu
 # zaman .dockerignore git'i hariç tutar; CI'da git context yok).
@@ -38,8 +41,7 @@ ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_FRONTEND_PUBLIC_ORIGIN=${VITE_FRONTEND_PUBLIC_ORIGIN} \
     VITE_GATEWAY_URL=${VITE_GATEWAY_URL} \
     VITE_AUTH_MODE=${VITE_AUTH_MODE} \
-    AG_GRID_LICENSE_KEY=${AG_GRID_LICENSE_KEY} \
-    VITE_AG_GRID_LICENSE_KEY=${AG_GRID_LICENSE_KEY} \
+    VITE_AG_GRID_LICENSE_KEY=${VITE_AG_GRID_LICENSE_KEY} \
     BUILD_SHA=${BUILD_SHA} \
     BUILD_REF=${BUILD_REF}
 
@@ -60,8 +62,13 @@ COPY . .
 RUN pnpm install --frozen-lockfile --prod=false
 
 # Build (scripts/deploy/build-single-domain.mjs → dist/ubuntu-single-domain)
-# Build-time VITE_* env vars webpack DefinePlugin inline eder bundle'a
-RUN pnpm run build:ubuntu:single-domain
+# Build-time VITE_* env vars webpack DefinePlugin inline eder bundle'a.
+# CACHE-BUST: RUN line'ında BUILD_SHA referansı buildx cache key'ine girer.
+# Her commit'te BUILD_SHA değişir → cache invalidate. Bu olmadan ARG/ENV
+# değişimleri RUN cache'i invalidate etmiyordu (Secret update edilse bile
+# eski bundle output cached). License key gibi build-time-injected env
+# değişimleri için bu satır kritik.
+RUN echo "build-rev=${BUILD_SHA}" && pnpm run build:ubuntu:single-domain
 
 # Stage 2: Runtime (nginx serve)
 FROM nginx:1.27-alpine

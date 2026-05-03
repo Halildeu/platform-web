@@ -30,12 +30,12 @@ function loadShellDotEnvLocal(): Record<string, string> {
 function buildRuntimeEnv(mode: string): Record<string, string> {
   const dotEnv = loadShellDotEnvLocal();
   const merged = { ...dotEnv, ...process.env };
-  const allowlist = new Set([
-    'NODE_ENV',
-    'AUTH_MODE',
-    'AG_GRID_LICENSE_KEY',
-    'VITE_AG_GRID_LICENSE_KEY',
-  ]);
+  // AG Grid lisansı: VITE_ prefix filter zaten yakalar (single source =
+  // VITE_AG_GRID_LICENSE_KEY). Hotfix single-source refactor; both
+  // AG_GRID_LICENSE_KEY and VITE_AG_GRID_LICENSE_KEY explicit entries
+  // dropped — the second flowed through `key.startsWith('VITE_')` already
+  // and the first is no longer the canonical name.
+  const allowlist = new Set(['NODE_ENV', 'AUTH_MODE']);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
     if (!allowlist.has(key) && !key.startsWith('VITE_')) continue;
@@ -162,6 +162,9 @@ export default defineConfig(({ mode }) => {
                 ...(mode === 'production' ? sharedProdOnly : {}),
               },
             }),
+            // Faz 21.8 PR-X8 (kept from origin/main): mfPreloadHelperIsolation
+            // breaks the auth ↔ design-system MF loadShare runtime cycle by
+            // inlining the modulepreload helper inside design-system.
             mfPreloadHelperIsolation(),
           ]),
     ],

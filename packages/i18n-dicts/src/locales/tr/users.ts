@@ -168,6 +168,13 @@ const users = {
   'users.detail.scopes.selectAll': 'Tümünü Seç',
   'users.detail.scopes.searchPlaceholder': 'İsim veya kod ile ara...',
   'users.detail.scopes.searchEmpty': '"{query}" ile eşleşen sonuç bulunamadı.',
+  // 2026-05-04 Session 37 UX (revised) — multi-select Combobox (chip + dropdown)
+  // primitive replaces the assigned-only-toggle pattern; the prior keys
+  // (assignedOnly/assignedEmpty/countBadge/showMore) are removed since the
+  // single Combobox handles all of those concerns natively.
+  'users.detail.scopes.placeholder': 'Yetki eklemek için tıklayın veya arayın...',
+  'users.detail.scopes.noOptions': 'Sonuç bulunamadı.',
+  'users.detail.scopes.tagRemoveLabel': 'Yetkiyi kaldır',
   'users.detail.save': 'Kaydet',
   'users.detail.save.scope': 'Rol ve veri erişimini kaydet',
   'users.detail.saving': 'Kaydediliyor...',
