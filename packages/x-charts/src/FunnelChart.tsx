@@ -11,13 +11,15 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -26,7 +28,7 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeDataPoints } from './utils/data-validation';
@@ -185,6 +187,10 @@ const FunnelChartInner = React.forwardRef<
     () => sanitizeDataPoints(data as never) as unknown as FunnelDataPoint[],
     [data],
   );
+
+  // Faz 21.9 PR3d: container ref + breakpoint for responsive funnel.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
   const fmt = valueFormatter ?? formatCompact;
 
   const {
@@ -254,14 +260,17 @@ const FunnelChartInner = React.forwardRef<
           return tip;
         },
       },
-      legend: {
-        show: showLegend,
-        bottom: 0,
+      legend: buildResponsiveLegend({
+        breakpoint,
+        showLegend,
+        // Funnel is single-series at the legend level (one tier breakdown).
+        hasMultiSeries: false,
+        seriesCount: safeData.length,
+        densitySpacingMultiplier,
+        densityFontMultiplier,
         icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
-      },
+        truncateAt: breakpoint === 'mobile' ? 12 : 18,
+      }),
       series: [
         {
           type: 'funnel' as const,
@@ -276,10 +285,17 @@ const FunnelChartInner = React.forwardRef<
           data: seriesData,
           label: showLabels
             ? {
-                show: true,
+                // Mobile suppresses outside labels — they collide with the
+                // shrunken funnel envelope. Inside-position labels keep
+                // showing (funnel slices have room internally even on
+                // mobile).
+                show: !(breakpoint === 'mobile' && labelPosition !== 'inside'),
                 position: labelPosition,
                 formatter: labelFormatter,
-                fontSize: scaleFontSize(12, densityFontMultiplier),
+                fontSize:
+                  breakpoint === 'mobile'
+                    ? Math.max(10, Math.round(12 * 0.9))
+                    : scaleFontSize(12, densityFontMultiplier),
               }
             : { show: false },
           emphasis: {
@@ -325,6 +341,7 @@ const FunnelChartInner = React.forwardRef<
     densityFontMultiplier,
     densitySpacingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -358,6 +375,7 @@ const FunnelChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

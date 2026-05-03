@@ -11,13 +11,15 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -26,7 +28,7 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -175,6 +177,10 @@ const SankeyChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !nodes || nodes.length === 0 || !links || links.length === 0;
+
+  // Faz 21.9 PR3d: container ref + breakpoint for responsive sankey.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
   const fmt = valueFormatter ?? formatCompact;
 
   const {
@@ -244,12 +250,19 @@ const SankeyChartInner = React.forwardRef<
         },
       },
       legend: {
-        show: showLegend,
-        bottom: 0,
-        icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
+        ...buildResponsiveLegend({
+          breakpoint,
+          showLegend,
+          hasMultiSeries: false,
+          seriesCount: coloredNodes.length,
+          densitySpacingMultiplier,
+          densityFontMultiplier,
+          icon: 'roundRect',
+          truncateAt: breakpoint === 'mobile' ? 12 : 18,
+        }),
+        // Sankey legend lists all node names — preserve the explicit
+        // data list so ECharts renders entries even when many nodes share
+        // a colour palette index.
         data: coloredNodes.map((n) => n.name),
       },
       series: [
@@ -275,9 +288,15 @@ const SankeyChartInner = React.forwardRef<
             curveness: 0.5,
           },
           label: {
-            show: true,
+            // Mobile shrinks the sankey envelope; node labels then collide
+            // with neighbouring nodes. Suppress on mobile when there are
+            // too many nodes to fit; tooltip + a11y still expose names.
+            show: !(breakpoint === 'mobile' && coloredNodes.length > 6),
             position: orient === 'horizontal' ? 'right' : 'bottom',
-            fontSize: scaleFontSize(11, densityFontMultiplier),
+            fontSize:
+              breakpoint === 'mobile'
+                ? Math.max(9, Math.round(11 * 0.9))
+                : scaleFontSize(11, densityFontMultiplier),
             color: 'inherit',
           },
           itemStyle: {
@@ -316,6 +335,7 @@ const SankeyChartInner = React.forwardRef<
     densityFontMultiplier,
     densitySpacingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -366,6 +386,7 @@ const SankeyChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)

@@ -11,13 +11,15 @@
  *
  * @migration AG Charts -> ECharts (P3)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
+import { useResponsiveBreakpoint } from './useResponsiveChart';
+import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -26,7 +28,7 @@ import type {
   ChartDensityPreference,
   ChartAccentPreference,
 } from './theme/useChartTheme';
-import { scaleFontSize, scaleSpacing } from './theme/density-helpers';
+import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -258,6 +260,10 @@ const SunburstChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
+
+  // Faz 21.9 PR3d: container ref + breakpoint for responsive sunburst.
+  const ownContainerRef = useRef<HTMLDivElement | null>(null);
+  const breakpoint = useResponsiveBreakpoint(ownContainerRef);
   const fmt = valueFormatter ?? formatCompact;
 
   const {
@@ -316,12 +322,18 @@ const SunburstChartInner = React.forwardRef<
         },
       },
       legend: {
-        show: showLegend,
-        bottom: 0,
-        icon: 'roundRect',
-        itemWidth: scaleSpacing(12, densitySpacingMultiplier),
-        itemHeight: scaleSpacing(8, densitySpacingMultiplier),
-        textStyle: { fontSize: scaleFontSize(12, densityFontMultiplier) },
+        ...buildResponsiveLegend({
+          breakpoint,
+          showLegend,
+          hasMultiSeries: false,
+          seriesCount: coloredData.length,
+          densitySpacingMultiplier,
+          densityFontMultiplier,
+          icon: 'roundRect',
+          truncateAt: breakpoint === 'mobile' ? 12 : 18,
+        }),
+        // Sunburst legend lists root-level node names — preserve the
+        // explicit data list.
         data: coloredData.map((n) => n.name),
       },
       series: [
@@ -387,6 +399,7 @@ const SunburstChartInner = React.forwardRef<
     densityFontMultiplier,
     densitySpacingMultiplier,
     effectivePalette,
+    breakpoint,
   ]);
 
   const handleClick = useCallback(
@@ -425,6 +438,7 @@ const SunburstChartInner = React.forwardRef<
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
+      ownContainerRef.current = node;
       (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef)
