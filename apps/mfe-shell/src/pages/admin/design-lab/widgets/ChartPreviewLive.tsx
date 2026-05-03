@@ -76,7 +76,9 @@ export interface ChartPreviewLiveProps {
 const isOn = (toggles: PlaygroundState | undefined, key: string, fallback: boolean): boolean =>
   getBool(toggles, key, fallback);
 
-type ChartSize = 'sm' | 'md' | 'lg' | 'xl';
+// Mirror of `packages/x-charts/src/types.ts` `ChartSize`. Keep in sync if
+// the wrapper extends the size axis.
+type ChartSize = 'sm' | 'md' | 'lg';
 
 interface PreviewBoxProps {
   testId: string;
