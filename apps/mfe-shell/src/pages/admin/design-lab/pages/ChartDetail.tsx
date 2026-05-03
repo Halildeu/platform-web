@@ -28,6 +28,9 @@ import {
   deriveDefaults,
   generatePlaygroundCode,
   getChartPresets,
+  getFaq,
+  getFeatureBadge,
+  getPerformanceGuidance,
   getSampleData,
   CATEGORY_DEFAULT_OPEN,
   CATEGORY_LABEL,
@@ -3489,6 +3492,39 @@ const ChartDetail: React.FC = () => {
                 {chip.label}
               </span>
             ))}
+            {/*
+              Beta / new feature badges (Codex thread `019def27` PR3):
+              MUI X uses "New" pills to advertise recently-added capabilities
+              (Range bar variant, Data Grid integration). We surface our own
+              betas directly next to the metric chips so developers see at a
+              glance which features are still stabilising before they wire
+              them into production code.
+            */}
+            {chart.features
+              .map((f) => ({ feature: f, badge: getFeatureBadge(f) }))
+              .filter(
+                (entry): entry is { feature: string; badge: NonNullable<typeof entry.badge> } =>
+                  entry.badge !== null,
+              )
+              .map(({ feature, badge }) => (
+                <span
+                  key={`badge-${feature}`}
+                  className={[
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                    badge.label === 'beta'
+                      ? 'border-state-warning-text/30 bg-state-warning-bg text-state-warning-text'
+                      : badge.label === 'new'
+                        ? 'border-state-info-text/30 bg-state-info-bg text-state-info-text'
+                        : 'border-border-subtle bg-surface-canvas text-text-secondary',
+                  ].join(' ')}
+                  title={badge.tooltip ?? undefined}
+                >
+                  <span>{feature}</span>
+                  <span className="rounded bg-white/40 px-1 py-0 font-semibold uppercase tracking-wider">
+                    {badge.label}
+                  </span>
+                </span>
+              ))}
           </div>
         </div>
 
@@ -3557,6 +3593,16 @@ const ChartDetail: React.FC = () => {
         <ApiTab chart={chart} />
       </CollapsibleDetailSection>
 
+      {/* PERFORMANCE — large-data guidance (Codex thread `019def27` PR3) */}
+      <CollapsibleDetailSection id="performance" title="Performance" defaultOpen={false}>
+        <PerformanceSection />
+      </CollapsibleDetailSection>
+
+      {/* FAQ — competitor-parity Q&A (Ant Design pattern) */}
+      <CollapsibleDetailSection id="faq" title="FAQ" defaultOpen={false}>
+        <FaqSection />
+      </CollapsibleDetailSection>
+
       {/* QUALITY — audit gates, collapsed by default */}
       <CollapsibleDetailSection id="quality" title="Quality" defaultOpen={false}>
         <QualityTab chart={chart} />
@@ -3564,6 +3610,73 @@ const ChartDetail: React.FC = () => {
     </div>
   );
 };
+
+/* ================================================================== */
+/*  PerformanceSection — large-data guidance                           */
+/*                                                                     */
+/*  Codex thread `019def27` PR3: MUI X documents recommended data      */
+/*  sizes + reduced-motion + SVG-batch trade-offs. Our previous Quality */
+/*  section listed CI gates ("axe-gated", "tree-shake-gated") but      */
+/*  never answered "ne zaman sorun yaşarım?" in user-facing language.   */
+/*  Plain-language playbook lives in `chartPlaygroundModel`             */
+/*  `getPerformanceGuidance()`.                                         */
+/* ================================================================== */
+
+function PerformanceSection() {
+  const guidance = useMemo(() => getPerformanceGuidance(), []);
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-text-tertiary">
+        Wrappers are wired to handle the common scale-up paths automatically — the notes below cover
+        the breakpoints where you should reach for the performance utilities (LTTB, progressive
+        render, lazy-chart, lru-cache, code-split).
+      </p>
+      <ul className="flex flex-col gap-2">
+        {guidance.map((item) => (
+          <li
+            key={item.label}
+            className="rounded-xl border border-border-subtle bg-surface-canvas p-4"
+          >
+            <p className="text-sm font-semibold text-text-primary">{item.label}</p>
+            <p className="mt-1 text-xs leading-relaxed text-text-secondary">{item.body}</p>
+            {item.reference && (
+              <span className="mt-2 inline-block rounded-full bg-surface-muted px-2 py-0.5 font-mono text-[10px] text-text-tertiary">
+                {item.reference}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  FaqSection — competitor-parity Q&A                                 */
+/*                                                                     */
+/*  Codex thread `019def27` PR3: Ant Design Charts ships a per-component */
+/*  FAQ that disambiguates the most common ramp-up questions. We mirror */
+/*  that pattern globally (the answers cover wrapper conventions, not  */
+/*  chart-specific behaviour) so every chart's detail page benefits     */
+/*  from the same Q&A list. Source: `chartPlaygroundModel.getFaq()`.    */
+/* ================================================================== */
+
+function FaqSection() {
+  const entries = useMemo(() => getFaq(), []);
+  return (
+    <ul className="flex flex-col gap-3">
+      {entries.map((entry) => (
+        <li
+          key={entry.question}
+          className="rounded-xl border border-border-subtle bg-surface-canvas p-4"
+        >
+          <p className="text-sm font-semibold text-text-primary">{entry.question}</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-text-secondary">{entry.answer}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /* ================================================================== */
 /*  DetailSection — REMOVED                                            */
