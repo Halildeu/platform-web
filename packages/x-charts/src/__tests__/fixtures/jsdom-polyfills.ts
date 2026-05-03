@@ -4,7 +4,9 @@
  * - ResizeObserver: not shipped by jsdom; chart wrappers observe their
  *   container. The polyfill is no-op (constructor + observe/unobserve/
  *   disconnect stubs); the resize callback never has to fire because
- *   chart-options-shape tests assert on the FIRST setOption() dispatch.
+ *   chart-options-shape tests assert on the LAST setOption() dispatch
+ *   (theme reactive store may rebroadcast — last call is the canonical
+ *   one for steady-state assertions).
  * - matchMedia: not shipped by jsdom; the renderer's
  *   prefers-reduced-motion check needs it. Stub returns `matches: false`.
  *

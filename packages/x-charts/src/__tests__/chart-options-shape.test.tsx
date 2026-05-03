@@ -104,7 +104,17 @@ describe('BarChart option shape', () => {
     );
     const s = series();
     expect(s[0].type).toBe('bar');
+    // Value extraction: the canonical sequence after unwrapping per-bar
+    // colour metadata.
     expect(extractValues(s)).toEqual([10, 20]);
+    // Wrapper shape: each entry MUST be an object carrying both `value`
+    // and `itemStyle.color` (per-bar coloring contract). A regression
+    // that flattens to raw numbers would make extractValues() still pass
+    // but should still fail this gate.
+    const data = s[0].data as Array<{ value?: number; itemStyle?: { color?: string } }>;
+    expect(typeof data[0]).toBe('object');
+    expect(data[0]).toHaveProperty('value', 10);
+    expect(data[0]?.itemStyle?.color).toEqual(expect.any(String));
   });
 
   it('default orientation = vertical → xAxis category, yAxis value', () => {
