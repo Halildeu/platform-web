@@ -78,6 +78,11 @@ vi.mock('@mfe/x-charts', () => {
       },
       {},
     ],
+    // Faz 21.9 PR2: useResponsiveBreakpoint drives PreviewBox height +
+    // chart `size` clamp. The mock returns a stable 'desktop' breakpoint
+    // so existing chart-routing tests keep matching their previous
+    // baseline (no clamp, no height shrink).
+    useResponsiveBreakpoint: () => 'desktop',
     CrossFilterProvider: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
     useChartCrossFilter: () => ({
