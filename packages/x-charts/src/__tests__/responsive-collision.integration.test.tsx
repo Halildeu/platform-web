@@ -84,9 +84,14 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Codex 019defa5 iter-2: teardown order matters. `unstubAllGlobals` first
+  // pops the test-scoped ResizeObserver back to the fixture polyfill, then
+  // `restoreJsdomPolyfills` returns globalThis to whatever existed before
+  // the suite installed its polyfill. Reversing the order would let the
+  // polyfill leak past the suite boundary.
+  vi.unstubAllGlobals();
   restoreJsdomPolyfills();
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 /* ------------------------------------------------------------------ */
