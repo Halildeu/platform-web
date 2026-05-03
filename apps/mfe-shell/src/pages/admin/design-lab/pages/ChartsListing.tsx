@@ -219,8 +219,8 @@ const CHART_ITEMS: ChartItem[] = [
   },
   {
     id: 'drill-down-history',
-    name: 'useDrillDown (history)',
-    description: 'Drill state + undo/redo snapshot stack.',
+    name: 'useDrillDown (with undo)',
+    description: 'Drill state + Undo (drillUp) + Reset + depth/drill counter.',
     group: 'charts_interaction',
     tier: 'interaction',
     icon: 'history',
