@@ -350,6 +350,11 @@ function normalizeMd(s) {
       return line.trimEnd();
     })
     .join('\n')
+    // Strip Prettier markdown escape sequences (e.g. `\*` → `*`, `\_`,
+    // `\(`, `\)`, `\[`, `\]`, `\\`) so generator raw output and
+    // committed prettier-formatted output normalize identically.
+    // Codex iter-2 PR-X5 fix.
+    .replace(/\\([*_()[\]\\])/g, '$1')
     .replace(/\n+$/, '\n');
 }
 
