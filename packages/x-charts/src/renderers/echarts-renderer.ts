@@ -11,6 +11,27 @@
  * - Memory-safe dispose (prevents leaks)
  * - Reduced motion respect
  * - Error boundary integration
+ *
+ * --------------------------------------------------------------------
+ * Faz 21.9 PR3h: additive callback-ref API
+ * --------------------------------------------------------------------
+ *
+ * In addition to the existing object ref (`containerRef`, idiomatic
+ * React 18 mutable ref pattern that wrappers like BarChart already
+ * mutate via `containerRef.current = node`), the hook now exposes a
+ * stable RefCallback (`setContainerRef`) so consumers can compose
+ * forwarded refs without writing a manual mutation step.
+ *
+ * The lifecycle effect itself is intentionally unchanged from the
+ * pre-PR3h shape — it stays gated by the same `[renderer, theme,
+ * echartsLocaleKey, respectReducedMotion]` dep array and reads
+ * `containerRef.current` after the DOM commit. This deliberately
+ * avoids the useState(node) bridge: that pattern races against
+ * synchronous test mocks and React 18 Strict Mode's double-effect,
+ * which previously broke 182 tests in a single rebuild attempt. The
+ * additive callback API is the actual product win here; lifecycle
+ * reconciliation can be tightened in a follow-up sprint with
+ * dedicated test coverage for double-mount scenarios.
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
@@ -43,8 +64,28 @@ export interface EChartsRendererOptions {
 }
 
 export interface EChartsRendererState {
-  /** The ECharts container ref — attach to a div. */
+  /**
+   * The ECharts container ref — attach to a div via `ref={...}`.
+   *
+   * This remains the canonical mutable object ref. Chart wrappers that
+   * pre-date the callback-ref change keep mutating
+   * `containerRef.current` directly; that contract is preserved.
+   */
   containerRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * Faz 21.9 PR3h: stable callback ref alternative. Useful for
+   * `forwardRef` composition and any consumer that prefers a callable
+   * ref over the object ref above. Internally writes to the same
+   * `containerRef.current`. The lifecycle effect remains gated by
+   * `[renderer, theme, locale, respectReducedMotion]` — it picks up
+   * the node during a normal mount or whenever one of those deps
+   * changes. Late conditional node attachment (deps unchanged, node
+   * appearing in a later render) is NOT covered by this PR; that
+   * requires the deferred lifecycle reconcile bridge (tracked as a
+   * follow-up sprint, leaning on the new mock fixture's
+   * duplicate-init counter as a regression net).
+   */
+  setContainerRef: React.RefCallback<HTMLDivElement>;
   /** The ECharts instance (null until mounted). */
   instance: ECharts | null;
   /** Whether the chart has rendered at least once. */
@@ -101,6 +142,17 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
   // the ECharts instance with the new locale string.
   const currentLocale = useChartsLocale();
   const echartsLocaleKey = registerEChartsLocale(currentLocale) ?? 'EN';
+
+  /*
+   * Faz 21.9 PR3h: stable callback ref alternative to the object ref.
+   * Writes go to the same `containerRef.current` that wrappers mutate
+   * manually, so both patterns share a single source of truth. The
+   * identity is locked across renders so passing this to
+   * `<div ref={...} />` doesn't trigger spurious re-mounts.
+   */
+  const setContainerRef = useCallback<React.RefCallback<HTMLDivElement>>((node) => {
+    containerRef.current = node;
+  }, []);
 
   // Init / Dispose
   useEffect(() => {
@@ -196,6 +248,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
 
   return {
     containerRef,
+    setContainerRef,
     instance: instanceRef.current,
     isReady,
     resize,
