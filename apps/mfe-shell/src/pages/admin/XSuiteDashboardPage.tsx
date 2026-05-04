@@ -1,20 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { Text } from '@mfe/design-system';
+import type {
+  ChartContainerProps,
+  ChartDashboardProps,
+  ChartLegendProps,
+  KPICardProps,
+  SparklineChartProps,
+  StatWidgetProps,
+} from '@mfe/x-charts';
 import { isEnabled } from '../../lib/feature-flags';
 
 /* ---- Types ---- */
 
+/**
+ * Dynamic-loaded x-charts and design-system components — chart slots have
+ * public Props types we can reference; some design-system slots (DataGrid
+ * helpers, RichTextEditor, FormRenderer) don't expose their props as a
+ * public type yet, so we localize the `any`-escape hatch in a single
+ * generic alias instead of repeating it across every declaration.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LazyComponent<P = any> = React.ComponentType<P>;
+
 interface XSuiteModules {
-  ChartDashboard: React.FC<any> | null;
-  KPICard: React.FC<any> | null;
-  StatWidget: React.FC<any> | null;
-  SparklineChart: React.FC<any> | null;
-  ChartContainer: React.FC<any> | null;
-  ChartLegend: React.FC<any> | null;
-  DataGridFilterChips: React.FC<any> | null;
-  DataGridSelectionBar: React.FC<any> | null;
-  RichTextEditor: React.FC<any> | null;
-  FormRenderer: React.FC<any> | null;
+  ChartDashboard: LazyComponent<ChartDashboardProps> | null;
+  KPICard: LazyComponent<KPICardProps> | null;
+  StatWidget: LazyComponent<StatWidgetProps> | null;
+  SparklineChart: LazyComponent<SparklineChartProps> | null;
+  ChartContainer: LazyComponent<ChartContainerProps> | null;
+  ChartLegend: LazyComponent<ChartLegendProps> | null;
+  DataGridFilterChips: LazyComponent | null;
+  DataGridSelectionBar: LazyComponent | null;
+  RichTextEditor: LazyComponent | null;
+  FormRenderer: LazyComponent | null;
   loading: boolean;
 }
 
@@ -95,19 +113,31 @@ export default function XSuiteDashboardPage() {
         setM({ ...result, loading: false });
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const {
-    ChartDashboard, KPICard, StatWidget, SparklineChart,
-    ChartContainer, ChartLegend, DataGridFilterChips,
-    DataGridSelectionBar, RichTextEditor, FormRenderer, loading,
+    ChartDashboard,
+    KPICard,
+    StatWidget,
+    SparklineChart,
+    ChartContainer,
+    ChartLegend,
+    DataGridFilterChips,
+    DataGridSelectionBar,
+    RichTextEditor,
+    FormRenderer,
+    loading,
   } = m;
 
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-6">
-        <Text variant="secondary" className="text-sm">Loading X Suite packages…</Text>
+        <Text variant="secondary" className="text-sm">
+          Loading X Suite packages…
+        </Text>
       </div>
     );
   }
@@ -126,31 +156,39 @@ export default function XSuiteDashboardPage() {
       {/* Section 1: KPI Cards */}
       {ChartDashboard && KPICard && SparklineChart && (
         <section>
-          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">KPI Overview</Text>
+          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">
+            KPI Overview
+          </Text>
           <ChartDashboard columns={4} gap="md">
             <KPICard
               title="Toplam Kullanıcı"
               value="12,847"
               trend={{ direction: 'up', value: '+12.5%', positive: true }}
-              chart={<SparklineChart data={[10, 12, 8, 15, 13, 17, 20]} type="area" />}
+              chart={<SparklineChart data={[10, 12, 8, 15, 13, 17, 20]} type="area" width="auto" />}
             />
             <KPICard
               title="Aktif Oturum"
               value="1,234"
               trend={{ direction: 'up', value: '+3.2%', positive: true }}
-              chart={<SparklineChart data={[5, 8, 6, 9, 7, 11, 12]} type="line" />}
+              chart={<SparklineChart data={[5, 8, 6, 9, 7, 11, 12]} type="line" width="auto" />}
             />
             <KPICard
               title="Hata Oranı"
               value="0.12%"
               trend={{ direction: 'down', value: '-0.03%', positive: true }}
-              chart={<SparklineChart data={[3, 2, 4, 1, 2, 1, 1]} type="bar" />}
+              chart={<SparklineChart data={[3, 2, 4, 1, 2, 1, 1]} type="bar" width="auto" />}
             />
             <KPICard
               title="Ortalama Yanıt"
               value="142ms"
               trend={{ direction: 'down', value: '-8ms', positive: true }}
-              chart={<SparklineChart data={[180, 165, 150, 155, 148, 145, 142]} type="line" />}
+              chart={
+                <SparklineChart
+                  data={[180, 165, 150, 155, 148, 145, 142]}
+                  type="line"
+                  width="auto"
+                />
+              }
             />
           </ChartDashboard>
         </section>
@@ -159,10 +197,18 @@ export default function XSuiteDashboardPage() {
       {/* Section 2: Stat Widgets */}
       {StatWidget && (
         <section>
-          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">Stats</Text>
+          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">
+            Stats
+          </Text>
           <div className="grid grid-cols-3 gap-4">
             <StatWidget label="API Çağrıları" value={45230} previousValue={42100} format="number" />
-            <StatWidget label="Gelir" value={128500} previousValue={115000} format="currency" prefix="₺" />
+            <StatWidget
+              label="Gelir"
+              value={128500}
+              previousValue={115000}
+              format="currency"
+              prefix="₺"
+            />
             <StatWidget label="Dönüşüm" value={0.0342} previousValue={0.031} format="percent" />
           </div>
         </section>
@@ -171,7 +217,9 @@ export default function XSuiteDashboardPage() {
       {/* Section 3: Charts */}
       {ChartContainer && (
         <section>
-          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">Charts</Text>
+          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">
+            Charts
+          </Text>
           <div className="grid grid-cols-2 gap-4">
             <ChartContainer title="Aylık Trafik" description="Son 6 ay" height={300}>
               <div className="flex h-full items-end gap-2 px-4 pb-4">
@@ -190,10 +238,43 @@ export default function XSuiteDashboardPage() {
             </ChartContainer>
             <ChartContainer title="Kategori Dağılımı" height={300}>
               <div className="flex h-full items-center justify-center gap-8 px-4">
-                <svg width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="Pie chart">
-                  <circle cx="80" cy="80" r="60" fill="none" stroke="var(--action-primary))" strokeWidth="30" strokeDasharray="170 377" strokeDashoffset="0" />
-                  <circle cx="80" cy="80" r="60" fill="none" stroke="var(--state-success-text))" strokeWidth="30" strokeDasharray="113 377" strokeDashoffset="-170" />
-                  <circle cx="80" cy="80" r="60" fill="none" stroke="var(--state-warning-text))" strokeWidth="30" strokeDasharray="94 377" strokeDashoffset="-283" />
+                <svg
+                  width="160"
+                  height="160"
+                  viewBox="0 0 160 160"
+                  role="img"
+                  aria-label="Pie chart"
+                >
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="60"
+                    fill="none"
+                    stroke="var(--action-primary))"
+                    strokeWidth="30"
+                    strokeDasharray="170 377"
+                    strokeDashoffset="0"
+                  />
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="60"
+                    fill="none"
+                    stroke="var(--state-success-text))"
+                    strokeWidth="30"
+                    strokeDasharray="113 377"
+                    strokeDashoffset="-170"
+                  />
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="60"
+                    fill="none"
+                    stroke="var(--state-warning-text))"
+                    strokeWidth="30"
+                    strokeDasharray="94 377"
+                    strokeDashoffset="-283"
+                  />
                 </svg>
                 {ChartLegend && (
                   <ChartLegend
@@ -214,7 +295,9 @@ export default function XSuiteDashboardPage() {
       {/* Section 4: Data Grid Filter Chips */}
       {DataGridFilterChips && (
         <section>
-          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">Data Grid</Text>
+          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">
+            Data Grid
+          </Text>
           <DataGridFilterChips
             filters={[
               { id: '1', field: 'status', label: 'Durum', value: 'Aktif' },
@@ -242,7 +325,9 @@ export default function XSuiteDashboardPage() {
       {/* Section 5: Rich Text Editor */}
       {RichTextEditor && (
         <section>
-          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">Rich Text Editor</Text>
+          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">
+            Rich Text Editor
+          </Text>
           <RichTextEditor placeholder="İçerik yazın..." minHeight={200} />
         </section>
       )}
@@ -250,25 +335,48 @@ export default function XSuiteDashboardPage() {
       {/* Section 6: Form Builder */}
       {FormRenderer && (
         <section>
-          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">Form Builder</Text>
+          <Text as="h2" className="mb-4 text-lg font-semibold text-text-primary">
+            Form Builder
+          </Text>
           <FormRenderer
             schema={{
               id: 'demo-form',
               title: 'Kullanıcı Bilgileri',
               columns: 2,
               fields: [
-                { id: 'name', type: 'text', name: 'name', label: 'Ad Soyad', required: true, span: 1 },
-                { id: 'email', type: 'email', name: 'email', label: 'E-posta', required: true, span: 1 },
-                { id: 'role', type: 'select', name: 'role', label: 'Rol', options: [
-                  { label: 'Admin', value: 'admin' },
-                  { label: 'Kullanıcı', value: 'user' },
-                  { label: 'Editör', value: 'editor' },
-                ], span: 1 },
+                {
+                  id: 'name',
+                  type: 'text',
+                  name: 'name',
+                  label: 'Ad Soyad',
+                  required: true,
+                  span: 1,
+                },
+                {
+                  id: 'email',
+                  type: 'email',
+                  name: 'email',
+                  label: 'E-posta',
+                  required: true,
+                  span: 1,
+                },
+                {
+                  id: 'role',
+                  type: 'select',
+                  name: 'role',
+                  label: 'Rol',
+                  options: [
+                    { label: 'Admin', value: 'admin' },
+                    { label: 'Kullanıcı', value: 'user' },
+                    { label: 'Editör', value: 'editor' },
+                  ],
+                  span: 1,
+                },
                 { id: 'bio', type: 'textarea', name: 'bio', label: 'Biyografi', span: 2 },
               ],
               submitLabel: 'Kaydet',
             }}
-            onSubmit={(values: any) => console.log('submit', values)}
+            onSubmit={(values: Record<string, unknown>) => console.log('submit', values)}
           />
         </section>
       )}

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-03T23:23:54.507Z",
+  "generatedAt": "2026-05-04T12:48:37.104Z",
   "totalConsumers": 42,
   "byBucket": {
     "production": 17,
@@ -379,8 +379,16 @@
       "subpaths": [
         "@mfe/x-charts"
       ],
-      "symbols": [],
+      "symbols": [
+        "ChartContainerProps",
+        "ChartDashboardProps",
+        "ChartLegendProps",
+        "KPICardProps",
+        "SparklineChartProps",
+        "StatWidgetProps"
+      ],
       "kinds": [
+        "ImportDeclaration",
         "ImportExpression"
       ]
     },
