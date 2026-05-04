@@ -10,6 +10,7 @@ import {
   useCrossFilter,
 } from '@mfe/x-charts';
 import type { ChartClickEvent, CrossFilterEntry } from '@mfe/x-charts';
+import { KPICard as XKPICard } from '@mfe/x-charts';
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef } from 'ag-grid-community';
 import type { CrossFilter } from './crossFilterTypes';
@@ -72,15 +73,17 @@ const chartFullClass = 'grid grid-cols-1 gap-4 mb-6';
 const cardClass = 'rounded-lg border border-border-subtle bg-surface-default p-4';
 const kpiStripClass = 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6';
 
-const toneColors: Record<string, string> = {
-  success: 'text-state-success-text',
-  warning: 'text-state-warning-text',
-  danger: 'text-state-danger-text',
-  info: 'text-action-primary',
-};
-
 /* ------------------------------------------------------------------ */
-/*  KPI Card                                                           */
+/*  KPI Card \u2014 thin shim around `@mfe/x-charts/KPICard`                */
+/*                                                                     */
+/*  Faz 21.10 wave 1-7 primitives (mobile padding `p-3 sm:p-5`, value  */
+/*  font `text-xl sm:text-2xl`, accessible click handling, semantic    */
+/*  trend coloring) live in the x-charts component. This shim adapts   */
+/*  the local `DashboardKPI` shape to the public KPICard contract,     */
+/*  layers the cross-filter `active` ring on top via className, and    */
+/*  forwards the click handler. The standalone div implementation was  */
+/*  removed because every responsive primitive in waves 1-7 was being  */
+/*  bypassed.                                                          */
 /* ------------------------------------------------------------------ */
 
 const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: boolean }> = ({
@@ -88,51 +91,51 @@ const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: bool
   onClick,
   active,
 }) => {
-  const toneClass = toneColors[kpi.tone ?? 'info'] ?? 'text-text-primary';
-  const trendIcon =
-    kpi.trend?.direction === 'up' ? '\u2191' : kpi.trend?.direction === 'down' ? '\u2193' : '';
-  const interactiveClass = onClick
-    ? 'cursor-pointer hover:ring-2 hover:ring-action-primary/40 transition'
-    : '';
-  const activeClass = active ? 'ring-2 ring-action-primary' : '';
+  const trendValue =
+    kpi.trend?.percentage != null
+      ? `${kpi.trend.percentage > 0 ? '+' : ''}${kpi.trend.percentage.toFixed(1)}%`
+      : '';
+
+  /*
+   * x-charts KPICard derives the trend color from `trend.positive`. The
+   * local KPI tone (`info` / `positive` / `negative`) is independent
+   * of the arrow direction \u2014 a downward salary trend can be "positive"
+   * for cost reduction. Map tone \u2192 positive flag so the trend color
+   * tracks the metric's intent, not the arrow direction. The active
+   * cross-filter ring rides on the `className` slot so x-charts root
+   * picks it up via cn() merge.
+   */
+  const subtitle =
+    kpi.benchmark?.label && kpi.benchmark.value != null
+      ? `${kpi.benchmark.label}: ${formatValue(kpi.benchmark.value, kpi.format)}`
+      : kpi.benchmark?.label
+        ? `${kpi.benchmark.label}: N/A`
+        : undefined;
+
   return (
-    <div
-      className={`${cardClass} flex flex-col gap-1 ${interactiveClass} ${activeClass}`}
-      onClick={onClick}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onClick();
-              }
+    <XKPICard
+      title={kpi.title}
+      value={formatValue(kpi.value, kpi.format)}
+      subtitle={subtitle}
+      trend={
+        kpi.trend && trendValue
+          ? {
+              // Backend trend.direction is loosely typed as string; clamp
+              // to the x-charts literal union so an unknown value falls
+              // through to "flat" instead of producing an invalid chip.
+              direction:
+                kpi.trend.direction === 'up' || kpi.trend.direction === 'down'
+                  ? kpi.trend.direction
+                  : 'flat',
+              value: trendValue,
+              positive:
+                kpi.tone === 'positive' ? true : kpi.tone === 'negative' ? false : undefined,
             }
           : undefined
       }
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-    >
-      <span className="text-xs text-text-subtle truncate" title={kpi.title}>
-        {kpi.title}
-      </span>
-      <span className={`text-lg font-semibold ${toneClass}`}>
-        {formatValue(kpi.value, kpi.format)}
-      </span>
-      {kpi.trend && (
-        <span className="text-xs text-text-subtle">
-          {trendIcon}{' '}
-          {kpi.trend.percentage != null
-            ? `${kpi.trend.percentage > 0 ? '+' : ''}${kpi.trend.percentage.toFixed(1)}%`
-            : ''}
-        </span>
-      )}
-      {kpi.benchmark?.label && (
-        <span className="text-xs text-text-subtle">
-          {kpi.benchmark.label}:{' '}
-          {kpi.benchmark.value != null ? formatValue(kpi.benchmark.value, kpi.format) : 'N/A'}
-        </span>
-      )}
-    </div>
+      onClick={onClick}
+      className={active ? 'ring-2 ring-action-primary' : undefined}
+    />
   );
 };
 
