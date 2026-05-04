@@ -55,20 +55,27 @@ export function ChartContainer({
         className,
       )}
     >
-      {/* ---- header ---- */}
+      {/*
+        Header — Faz 21.10 wave 2: mobile-first padding + min-width-zero
+        so the title ellipsizes when actions take up row space.
+        `actions` group keeps its size with shrink-0 so a 3-button
+        toolbar doesn't push the title off on a narrow viewport.
+      */}
       {(title || actions) && (
-        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-3">
-          <div>
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2 sm:px-5 sm:py-3">
+          <div className="min-w-0 flex-1">
             {title && (
-              <Text as="div" className="text-sm font-semibold text-[var(--text-primary)]">
+              <Text as="div" className="truncate text-sm font-semibold text-[var(--text-primary)]">
                 {title}
               </Text>
             )}
             {description && (
-              <Text className="text-[11px] text-[var(--text-secondary)]">{description}</Text>
+              <Text className="truncate text-[11px] text-[var(--text-secondary)]">
+                {description}
+              </Text>
             )}
           </div>
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          {actions && <div className="flex shrink-0 items-center gap-1 sm:gap-2">{actions}</div>}
         </div>
       )}
 
