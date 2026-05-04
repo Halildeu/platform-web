@@ -12,6 +12,34 @@
  *
  * Re-using this fixture from multiple test files keeps the mock surface
  * single-source-of-truth.
+ *
+ * --------------------------------------------------------------------
+ * Faz 21.9 PR3h: per-container alive instance map
+ * --------------------------------------------------------------------
+ *
+ * The previous shape returned a SINGLE shared mock instance from every
+ * `init()` call regardless of container, which made it impossible to
+ * model the real ECharts lifecycle: a stale `dispose()` from a torn-down
+ * effect could appear to kill a freshly-mounted instance, masking
+ * double-init bugs in the renderer. The redesign tracks one instance
+ * per container DOM element with idempotent dispose semantics so:
+ *
+ *   - `echarts.init(dom)` produces a fresh instance and registers it as
+ *     alive against `dom`. If `dom` already has an alive instance, the
+ *     existing one is returned (matching real ECharts behaviour) and a
+ *     duplicate-init counter is bumped — tests can assert on it.
+ *   - `instance.dispose()` is idempotent and only removes the instance
+ *     from `aliveByDom` if it's still the current alive one — a stale
+ *     dispose call cannot evict a fresher instance from the map.
+ *   - `echarts.getInstanceByDom(dom)` returns the current alive instance
+ *     or undefined if disposed.
+ *
+ * Backwards compatibility: every public helper from the original fixture
+ * (`setOptionMock`, `dispatchMock`, `onMock`, `offMock`, `lastDispatchedOption`,
+ * `allDispatchedOptions`, `seriesTypes`, `resetEChartsMock`,
+ * `clickListenerRegistrations`, `clickListenerUnregistrations`) keeps the
+ * same name and behaviour so the existing ~70 tests continue to pass
+ * without edits. New introspection helpers are additive.
  */
 import { vi } from 'vitest';
 
@@ -21,41 +49,141 @@ import { vi } from 'vitest';
  * variables; consumers go through `lastDispatchedOption()`, `resetEChartsMock()`
  * etc. below.
  */
-const { setOptionMock, dispatchMock, onMock, offMock } = vi.hoisted(() => ({
+const { setOptionMock, dispatchMock, onMock, offMock, mockState } = vi.hoisted(() => ({
   setOptionMock: vi.fn(),
   dispatchMock: vi.fn(),
   onMock: vi.fn(),
   offMock: vi.fn(),
+  /**
+   * Per-container lifecycle state. The map is hoisted so the shared mock
+   * factory closes over the same instance even though the factory body
+   * runs at module init time before `vi.mock` rewrites import paths.
+   */
+  mockState: {
+    /** Currently-alive mock instance for each DOM container. */
+    aliveByDom: new Map<HTMLElement, MockInstance>(),
+    /** All instances ever created (alive + disposed). */
+    allInstances: [] as MockInstance[],
+    /** Number of times init() was called against an already-alive DOM. */
+    duplicateInitCount: 0,
+    /** Counter for assigning unique instance ids. */
+    nextInstanceId: 1,
+  },
 }));
 
+/* ------------------------------------------------------------------ */
+/*  Mock instance shape                                                */
+/* ------------------------------------------------------------------ */
+
+interface MockInstance {
+  __id: number;
+  __dom: HTMLElement | null;
+  __disposed: boolean;
+  setOption: typeof setOptionMock;
+  dispose: ReturnType<typeof vi.fn>;
+  resize: ReturnType<typeof vi.fn>;
+  on: typeof onMock;
+  off: typeof offMock;
+  getZr: () => { on: ReturnType<typeof vi.fn>; off: ReturnType<typeof vi.fn> };
+  dispatchAction: typeof dispatchMock;
+  getDataURL: ReturnType<typeof vi.fn>;
+  getOption: () => { series: unknown[] };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mock factory                                                       */
+/* ------------------------------------------------------------------ */
+
 vi.mock('../../renderers/echarts-imports', () => {
-  const instance = {
-    setOption: setOptionMock,
-    dispose: vi.fn(),
-    resize: vi.fn(),
-    on: onMock,
-    off: offMock,
-    getZr: () => ({ on: vi.fn(), off: vi.fn() }),
-    dispatchAction: dispatchMock,
-    getDataURL: vi.fn(() => 'data:image/png;base64,'),
-    getOption: () => ({ series: [] }),
-  };
+  function createInstance(dom: HTMLElement): MockInstance {
+    const id = mockState.nextInstanceId++;
+    const instance: MockInstance = {
+      __id: id,
+      __dom: dom,
+      __disposed: false,
+      setOption: setOptionMock,
+      // Local dispose mock so each instance can be inspected independently;
+      // real disposal logic lives in `disposeInstance` below.
+      dispose: vi.fn(),
+      resize: vi.fn(),
+      on: onMock,
+      off: offMock,
+      getZr: () => ({ on: vi.fn(), off: vi.fn() }),
+      dispatchAction: dispatchMock,
+      getDataURL: vi.fn(() => 'data:image/png;base64,'),
+      getOption: () => ({ series: [] }),
+    };
+
+    // Hook the dispose mock so calling it routes through the lifecycle
+    // bookkeeping. The mock function still records the call for
+    // assertions (`instance.dispose.mock.calls.length`).
+    const originalDispose = instance.dispose;
+    instance.dispose = vi.fn((...args: unknown[]) => {
+      disposeInstance(instance);
+      return originalDispose(...args);
+    });
+
+    mockState.allInstances.push(instance);
+    return instance;
+  }
+
+  function disposeInstance(instance: MockInstance): void {
+    if (instance.__disposed) return; // idempotent
+    instance.__disposed = true;
+
+    const dom = instance.__dom;
+    if (dom && mockState.aliveByDom.get(dom) === instance) {
+      // Only evict if this instance is still the current alive one for
+      // its dom. A stale dispose call (e.g. from an effect cleanup that
+      // ran AFTER a fresh init replaced the entry) cannot kill a newer
+      // instance.
+      mockState.aliveByDom.delete(dom);
+    }
+  }
+
+  function init(dom: HTMLElement, _theme?: unknown, _opts?: unknown): MockInstance {
+    const existing = mockState.aliveByDom.get(dom);
+    if (existing && !existing.__disposed) {
+      // Real ECharts returns the existing instance for the same DOM; we
+      // mirror that and surface a counter so tests can detect renderer
+      // bugs that init twice without disposing first.
+      mockState.duplicateInitCount++;
+      return existing;
+    }
+    const instance = createInstance(dom);
+    mockState.aliveByDom.set(dom, instance);
+    return instance;
+  }
+
+  function getInstanceByDom(dom: HTMLElement): MockInstance | undefined {
+    const inst = mockState.aliveByDom.get(dom);
+    return inst && !inst.__disposed ? inst : undefined;
+  }
+
+  function disposeStatic(domOrInstance: HTMLElement | MockInstance): void {
+    if (domOrInstance instanceof HTMLElement) {
+      const inst = mockState.aliveByDom.get(domOrInstance);
+      if (inst) inst.dispose();
+      return;
+    }
+    domOrInstance.dispose();
+  }
 
   return {
     echarts: {
-      init: vi.fn(() => instance),
+      init: vi.fn(init),
       use: vi.fn(),
       registerTheme: vi.fn(),
       registerLocale: vi.fn(),
-      getInstanceByDom: vi.fn(() => instance),
-      dispose: vi.fn(),
+      getInstanceByDom: vi.fn(getInstanceByDom),
+      dispose: vi.fn(disposeStatic),
     },
     registerECharts: vi.fn(),
   };
 });
 
 /* ------------------------------------------------------------------ */
-/*  Public API                                                         */
+/*  Public API — option dispatch (backcompat)                          */
 /* ------------------------------------------------------------------ */
 
 export type DispatchedOption = Record<string, unknown>;
@@ -83,6 +211,14 @@ export const resetEChartsMock = (): void => {
   dispatchMock.mockClear();
   onMock.mockClear();
   offMock.mockClear();
+  // Faz 21.9 PR3h: also reset the per-container lifecycle bookkeeping
+  // so `aliveInstanceCount()` / `initCallCount()` etc. are isolated
+  // across test cases. Existing per-instance dispose mocks survive
+  // because they are owned by the (now-discarded) instances.
+  mockState.aliveByDom.clear();
+  mockState.allInstances.length = 0;
+  mockState.duplicateInitCount = 0;
+  mockState.nextInstanceId = 1;
 };
 
 /* ------------------------------------------------------------------ */
@@ -108,3 +244,31 @@ export const clickListenerUnregistrations = (): Array<(...args: unknown[]) => vo
   offMock.mock.calls
     .filter((args) => args[0] === 'click')
     .map((args) => args[1] as (...args: unknown[]) => void);
+
+/* ------------------------------------------------------------------ */
+/*  Faz 21.9 PR3h — lifecycle introspection helpers                    */
+/* ------------------------------------------------------------------ */
+
+/** Number of fresh instances ever created since the last reset. */
+export const initCallCount = (): number => mockState.allInstances.length;
+
+/**
+ * Number of dispose() calls across every instance since the last reset.
+ * Sums per-instance dispose mock counts, so an idempotent double-dispose
+ * counts as 2 even though the instance only transitions to disposed once.
+ */
+export const disposeCallCount = (): number =>
+  mockState.allInstances.reduce((sum, inst) => sum + inst.dispose.mock.calls.length, 0);
+
+/** Number of instances currently alive (created and not yet disposed). */
+export const aliveInstanceCount = (): number => mockState.aliveByDom.size;
+
+/**
+ * Number of init() calls that hit an already-alive DOM container. A
+ * healthy renderer should keep this at 0 — anything higher signals a
+ * double-mount bug.
+ */
+export const duplicateInitCount = (): number => mockState.duplicateInitCount;
+
+/** Snapshot of every instance ever created (alive + disposed). */
+export const allMockInstances = (): readonly MockInstance[] => mockState.allInstances;
