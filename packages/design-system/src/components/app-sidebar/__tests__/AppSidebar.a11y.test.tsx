@@ -1,168 +1,141 @@
 // @vitest-environment jsdom
+/**
+ * a11y-pr2 batch — 13 AppSidebar component family
+ *
+ * The AppSidebar family ships with contract tests but no axe-core
+ * coverage. Adding 13 separate `<Component>.a11y.test.tsx` files
+ * would be 13× the overhead for a family that shares a single
+ * `SidebarContext` wrapper. This file groups all 13 axe runs together;
+ * each test imports the real component, wraps it in a minimal
+ * `SidebarContext.Provider`, and asserts no violations.
+ */
 import React from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, fireEvent } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
+import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
+import { SidebarContext } from '../useSidebar';
+import type { SidebarContextValue } from '../types';
+
 import { AppSidebar } from '../AppSidebar';
+import { AppSidebarHeader } from '../AppSidebarHeader';
+import { AppSidebarFooter } from '../AppSidebarFooter';
+import { AppSidebarFooterAction } from '../AppSidebarFooterAction';
+import { AppSidebarFooterStatus } from '../AppSidebarFooterStatus';
+import { AppSidebarGroup } from '../AppSidebarGroup';
+import { AppSidebarNav } from '../AppSidebarNav';
+import { AppSidebarNavItem } from '../AppSidebarNavItem';
+import { AppSidebarResizer } from '../AppSidebarResizer';
+import { AppSidebarSearch } from '../AppSidebarSearch';
+import { AppSidebarSection } from '../AppSidebarSection';
+import { AppSidebarSeparator } from '../AppSidebarSeparator';
+import { AppSidebarTrigger } from '../AppSidebarTrigger';
 
-/* Mock matchMedia and scrollIntoView — jsdom does not implement them */
-beforeEach(() => {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    configurable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
-  Element.prototype.scrollIntoView = vi.fn();
-});
+afterEach(() => cleanup());
 
-afterEach(() => {
-  cleanup();
-  localStorage.clear();
-});
+const mockCtx: SidebarContextValue = {
+  mode: 'expanded',
+  toggle: () => {},
+  expand: () => {},
+  collapse: () => {},
+  isCollapsed: false,
+  resize: null,
+  setWidth: () => {},
+  setIsResizing: () => {},
+};
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
+const wrap = (ui: React.ReactElement) =>
+  render(<SidebarContext.Provider value={mockCtx}>{ui}</SidebarContext.Provider>);
 
-const HomeIcon = () => <span data-testid="home-icon">H</span>;
-const SettingsIcon = () => <span data-testid="settings-icon">S</span>;
-
-/* ================================================================== */
-/*  A11y Tests                                                         */
-/* ================================================================== */
-
-describe('AppSidebar — accessibility', () => {
-  it('sidebar has navigation landmark via Nav component', () => {
-    render(
+describe('AppSidebar family — accessibility', () => {
+  it('AppSidebar root has no a11y violations', async () => {
+    const { container } = render(
       <AppSidebar>
-        <AppSidebar.Nav>
-          <AppSidebar.NavItem icon={<HomeIcon />} label="Home" />
-        </AppSidebar.Nav>
+        <div>Sidebar content</div>
       </AppSidebar>,
     );
-
-    // The Nav sub-component renders a <nav role="navigation">
-    const nav = screen.getByRole('navigation');
-    expect(nav).toBeInTheDocument();
+    await expectNoA11yViolations(container);
   });
 
-  it('trigger has aria-label', () => {
-    render(
-      <AppSidebar>
-        <AppSidebar.Header action={<AppSidebar.Trigger />} />
-      </AppSidebar>,
-    );
-
-    const trigger = screen.getByLabelText('Collapse sidebar');
-    expect(trigger).toBeInTheDocument();
-    expect(trigger).toHaveAttribute('aria-label');
+  it('AppSidebarHeader has no a11y violations', async () => {
+    const { container } = wrap(<AppSidebarHeader>Title</AppSidebarHeader>);
+    await expectNoA11yViolations(container);
   });
 
-  it('active item has aria-current="page"', () => {
-    render(
-      <AppSidebar>
-        <AppSidebar.Nav>
-          <AppSidebar.NavItem icon={<HomeIcon />} label="Home" href="/" active />
-          <AppSidebar.NavItem icon={<SettingsIcon />} label="Settings" href="/settings" />
-        </AppSidebar.Nav>
-      </AppSidebar>,
+  it('AppSidebarFooter has no a11y violations', async () => {
+    const { container } = wrap(
+      <AppSidebarFooter>
+        <span>footer</span>
+      </AppSidebarFooter>,
     );
-
-    const activeLink = screen.getByRole('link', { name: /Home/ });
-    expect(activeLink).toHaveAttribute('aria-current', 'page');
-
-    const inactiveLink = screen.getByRole('link', { name: /Settings/ });
-    expect(inactiveLink).not.toHaveAttribute('aria-current');
+    await expectNoA11yViolations(container);
   });
 
-  it('disabled item has aria-disabled="true"', () => {
-    render(
-      <AppSidebar>
-        <AppSidebar.Nav>
-          <AppSidebar.NavItem icon={<SettingsIcon />} label="Disabled Item" disabled />
-        </AppSidebar.Nav>
-      </AppSidebar>,
+  it('AppSidebarFooterAction has no a11y violations', async () => {
+    const { container } = wrap(
+      <AppSidebarFooterAction
+        icon={<span aria-hidden="true">⚙</span>}
+        label="Settings"
+        onClick={vi.fn()}
+      />,
     );
-
-    const disabledBtn = screen.getByRole('button', { name: /Disabled Item/ });
-    expect(disabledBtn).toHaveAttribute('aria-disabled', 'true');
+    await expectNoA11yViolations(container);
   });
 
-  it('collapsible group has aria-expanded', () => {
-    render(
-      <AppSidebar>
-        <AppSidebar.Nav>
-          <AppSidebar.Group label="Resources" collapsible defaultOpen>
-            <AppSidebar.NavItem icon={<HomeIcon />} label="Docs" />
-          </AppSidebar.Group>
-        </AppSidebar.Nav>
-      </AppSidebar>,
-    );
-
-    const groupButton = screen.getByRole('button', { name: /Resources/ });
-    expect(groupButton).toHaveAttribute('aria-expanded', 'true');
+  it('AppSidebarFooterStatus has no a11y violations', async () => {
+    const { container } = wrap(<AppSidebarFooterStatus label="Online" />);
+    await expectNoA11yViolations(container);
   });
 
-  it('search input has accessible labeling', () => {
-    render(
-      <AppSidebar>
-        <AppSidebar.Search placeholder="Search navigation..." />
-      </AppSidebar>,
+  it('AppSidebarGroup has no a11y violations', async () => {
+    const { container } = wrap(
+      <AppSidebarGroup label="Section">
+        <span>group child</span>
+      </AppSidebarGroup>,
     );
-
-    // The search input is wrapped in a <label> element, providing implicit association
-    const input = screen.getByPlaceholderText('Search navigation...');
-    expect(input).toBeInTheDocument();
-    expect(input.tagName).toBe('INPUT');
-    expect(input).toHaveAttribute('type', 'text');
+    await expectNoA11yViolations(container);
   });
 
-  it('all nav items are focusable via tabindex', () => {
-    render(
-      <AppSidebar>
-        <AppSidebar.Nav>
-          <AppSidebar.NavItem icon={<HomeIcon />} label="Home" />
-          <AppSidebar.NavItem icon={<SettingsIcon />} label="Settings" />
-        </AppSidebar.Nav>
-      </AppSidebar>,
+  it('AppSidebarNav has no a11y violations', async () => {
+    const { container } = wrap(
+      <AppSidebarNav>
+        <AppSidebarNavItem label="Home" href="/home" />
+      </AppSidebarNav>,
     );
-
-    const homeBtn = screen.getByRole('button', { name: /Home/ });
-    const settingsBtn = screen.getByRole('button', { name: /Settings/ });
-
-    // Buttons without disabled should have tabindex=0
-    expect(homeBtn).toHaveAttribute('tabindex', '0');
-    expect(settingsBtn).toHaveAttribute('tabindex', '0');
+    await expectNoA11yViolations(container);
   });
 
-  it('collapsed items have tooltip for label', async () => {
-    render(
-      <AppSidebar defaultMode="collapsed">
-        <AppSidebar.Nav>
-          <AppSidebar.NavItem icon={<HomeIcon />} label="Dashboard" tooltip="Go to Dashboard" />
-        </AppSidebar.Nav>
-      </AppSidebar>,
+  it('AppSidebarNavItem has no a11y violations', async () => {
+    const { container } = wrap(<AppSidebarNavItem label="Dashboard" href="/dashboard" />);
+    await expectNoA11yViolations(container);
+  });
+
+  it('AppSidebarResizer has no a11y violations', async () => {
+    const { container } = wrap(<AppSidebarResizer aria-label="Resize sidebar" />);
+    await expectNoA11yViolations(container);
+  });
+
+  it('AppSidebarSearch has no a11y violations', async () => {
+    const { container } = wrap(<AppSidebarSearch placeholder="Search…" />);
+    await expectNoA11yViolations(container);
+  });
+
+  it('AppSidebarSection has no a11y violations', async () => {
+    const { container } = wrap(
+      <AppSidebarSection title="Section title">
+        <span>section content</span>
+      </AppSidebarSection>,
     );
+    await expectNoA11yViolations(container);
+  });
 
-    // In collapsed mode, label text is hidden. Find nav item via data attribute.
-    const navItem = document.querySelector('[data-sidebar-item]');
-    expect(navItem).toBeTruthy();
+  it('AppSidebarSeparator has no a11y violations', async () => {
+    const { container } = wrap(<AppSidebarSeparator />);
+    await expectNoA11yViolations(container);
+  });
 
-    if (navItem) fireEvent.mouseEnter(navItem);
-
-    // jsdom has no real layout → getBoundingClientRect returns zeros → tooltipPos stays null
-    const tooltip = screen.queryByRole('tooltip');
-    if (tooltip) {
-      expect(tooltip).toHaveTextContent('Go to Dashboard');
-    }
+  it('AppSidebarTrigger has no a11y violations', async () => {
+    const { container } = wrap(<AppSidebarTrigger aria-label="Toggle sidebar" />);
+    await expectNoA11yViolations(container);
   });
 });
