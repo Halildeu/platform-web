@@ -158,10 +158,15 @@ export const StatWidget = React.forwardRef<HTMLDivElement, StatWidgetProps>(func
       {/* ---- optional sparkline ---- */}
       {hasSparkline && (
         <div className="mt-2">
+          {/*
+            Faz 21.10 wave 3: sparkline fills the StatWidget body width
+            instead of the previous fixed 160px. Mobile-friendly inside
+            stacked KPI grids where the parent column may be ~120px.
+          */}
           <SparklineChart
             data={sparkData}
             type="area"
-            width={160}
+            width="auto"
             height={24}
             color={
               change != null && change >= 0

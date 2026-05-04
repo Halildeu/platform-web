@@ -605,7 +605,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               title="Revenue"
               value="$128,500"
               trend={{ direction: 'up', value: '+12.5%', positive: true }}
-              chart={<SparklineChart data={values1} type="area" />}
+              chart={<SparklineChart data={values1} type="area" width="auto" />}
             />
           </div>
         </PreviewBox>
@@ -615,22 +615,27 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       return (
         <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
           <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-4">
+            {/*
+              Faz 21.10 wave 3: showcase the new fluid-width mode. Each
+              row's flex-1 slot receives `width="auto"` so the sparkline
+              fills the container instead of clipping at 120px.
+            */}
             <div className="flex w-full max-w-md items-center gap-3 text-xs text-text-secondary">
               <span className="w-20 shrink-0">line</span>
               <div className="flex-1">
-                <SparklineChart data={values1} type="line" />
+                <SparklineChart data={values1} type="line" width="auto" />
               </div>
             </div>
             <div className="flex w-full max-w-md items-center gap-3 text-xs text-text-secondary">
               <span className="w-20 shrink-0">area</span>
               <div className="flex-1">
-                <SparklineChart data={values1} type="area" />
+                <SparklineChart data={values1} type="area" width="auto" />
               </div>
             </div>
             <div className="flex w-full max-w-md items-center gap-3 text-xs text-text-secondary">
               <span className="w-20 shrink-0">bar</span>
               <div className="flex-1">
-                <SparklineChart data={values1} type="bar" />
+                <SparklineChart data={values1} type="bar" width="auto" />
               </div>
             </div>
           </div>
@@ -645,19 +650,19 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               title="Revenue"
               value="$128K"
               trend={{ direction: 'up', value: '+12%', positive: true }}
-              chart={<SparklineChart data={values1} type="area" />}
+              chart={<SparklineChart data={values1} type="area" width="auto" />}
             />
             <KPICard
               title="Users"
               value="12,847"
               trend={{ direction: 'up', value: '+3.2%', positive: true }}
-              chart={<SparklineChart data={values2} type="line" />}
+              chart={<SparklineChart data={values2} type="line" width="auto" />}
             />
             <KPICard
               title="Errors"
               value="42"
               trend={{ direction: 'down', value: '-18%', positive: true }}
-              chart={<SparklineChart data={[20, 18, 15, 12, 10, 8, 6]} type="bar" />}
+              chart={<SparklineChart data={[20, 18, 15, 12, 10, 8, 6]} type="bar" width="auto" />}
             />
           </ChartDashboard>
         </PreviewBox>

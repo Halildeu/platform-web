@@ -2443,7 +2443,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Revenue"
   value="$128,500"
   trend={{ direction: "up", value: "+12.5%", positive: true }}
-  chart={<SparklineChart data={[10, 12, 8, 15, 13, 17, 20]} type="area" />}
+  chart={<SparklineChart data={[10, 12, 8, 15, 13, 17, 20]} type="area" width="auto" />}
 />`,
     features: ['composable', 'sparkline-slot', 'trend-indicator', 'theme-aware'],
     a11y: ['aria-label', 'screen-reader-friendly'],
@@ -2483,6 +2483,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     sampleCode: `<SparklineChart
   data={[10, 12, 8, 15, 13, 17, 20]}
   type="area"
+  width="auto"
 />`,
     features: ['inline', 'no-axes', 'theme-aware', 'lightweight'],
     a11y: ['aria-hidden-by-default', 'expose-via-parent-aria-label'],
