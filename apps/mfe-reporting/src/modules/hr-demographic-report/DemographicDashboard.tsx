@@ -5,7 +5,7 @@ import {
   PieChart as XPieChart,
   BarChart as XBarChart,
   TreemapChart as XTreemapChart,
-  RadarChart as XRadarChart,
+  ChartContainer as XChartContainer,
 } from '@mfe/x-charts';
 
 // ---------------------------------------------------------------------------
@@ -54,9 +54,7 @@ const KPICard: React.FC<{
     >
       {label}
     </div>
-    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)' }}>
-      {value}
-    </div>
+    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</div>
     {trend !== undefined && (
       <div
         style={{
@@ -70,61 +68,46 @@ const KPICard: React.FC<{
           marginTop: 4,
         }}
       >
-        {trend > 0 ? '\u2191' : trend < 0 ? '\u2193' : '\u2192'}{' '}
-        {Math.abs(trend)}% {trendLabel}
+        {trend > 0 ? '\u2191' : trend < 0 ? '\u2193' : '\u2192'} {Math.abs(trend)}% {trendLabel}
       </div>
     )}
   </div>
 );
 
 // ---------------------------------------------------------------------------
-// Chart Card wrapper
+// Chart Card wrapper — thin shim around `@mfe/x-charts/ChartContainer`
+//
+// Faz 21.10 wave 1-7 mobile primitives (header padding `px-3 py-2 sm:px-5
+// sm:py-3`, title truncate with min-w-0, wave 4 actions slot mobile
+// shrink/wrap, wave 7 ChartLegend gap if children include a legend) live
+// in the x-charts component. The previous standalone div with hard-coded
+// inline `style={{ padding: 20, borderRadius: 12, ... }}` bypassed every
+// one of them.
+//
+// We still need the `span` prop to drive `gridColumn` — the dashboard
+// section uses inline grids with explicit column counts, and ChartContainer
+// itself doesn't accept `span`. The shim therefore wraps the
+// ChartContainer in a span-aware grid item so the call sites
+// (`<ChartCard span={2}>...</ChartCard>`) remain unchanged.
 // ---------------------------------------------------------------------------
 const ChartCard: React.FC<{
   title: string;
   children: React.ReactNode;
   span?: number;
 }> = ({ title, children, span = 1 }) => (
-  <div
-    style={{
-      gridColumn: `span ${span}`,
-      padding: 20,
-      borderRadius: 12,
-      border: '1px solid var(--border-subtle)',
-      background: 'var(--surface-default)',
-    }}
-  >
-    <h3
-      style={{
-        fontSize: 14,
-        fontWeight: 600,
-        color: 'var(--text-primary)',
-        marginBottom: 16,
-        margin: 0,
-        paddingBottom: 16,
-      }}
-    >
-      {title}
-    </h3>
-    {children}
+  <div style={{ gridColumn: `span ${span}` }}>
+    <XChartContainer title={title}>{children}</XChartContainer>
   </div>
 );
 
 // ---------------------------------------------------------------------------
 // SVG Legend
 // ---------------------------------------------------------------------------
-function Legend({
-  items,
-}: {
-  items: Array<{ label: string; value: number; color: string }>;
-}) {
+function Legend({ items }: { items: Array<{ label: string; value: number; color: string }> }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
       {items.map((d, i) => (
-        <div
-          key={i}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
-        >
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
           <span
             style={{
               width: 10,
@@ -136,9 +119,7 @@ function Legend({
             }}
           />
           <span style={{ color: 'var(--text-secondary)' }}>{d.label}</span>
-          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-            {d.value}
-          </span>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{d.value}</span>
         </div>
       ))}
     </div>
@@ -151,7 +132,7 @@ function Legend({
 
 function PieChartLocal({
   data,
-  size = 180,
+  size: _size = 180,
 }: {
   data: Array<{ label: string; value: number }>;
   size?: number;
@@ -164,20 +145,12 @@ function PieChartLocal({
   );
 }
 
-function VerticalBarChartLocal({
-  data,
-}: {
-  data: Array<{ label: string; value: number }>;
-}) {
+function VerticalBarChartLocal({ data }: { data: Array<{ label: string; value: number }> }) {
   if (!data.length) return null;
   return <XBarChart data={data} size="sm" showValues />;
 }
 
-function HorizontalBarChartLocal({
-  data,
-}: {
-  data: Array<{ label: string; value: number }>;
-}) {
+function HorizontalBarChartLocal({ data }: { data: Array<{ label: string; value: number }> }) {
   if (!data.length) return null;
   return <XBarChart data={data} orientation="horizontal" size="sm" />;
 }
@@ -190,7 +163,7 @@ function TreemapLocal({ data }: { data: Array<{ label: string; value: number }> 
 function GaugeLocal({
   value,
   label,
-  max = 100,
+  max: _max = 100,
 }: {
   value: number;
   label: string;
@@ -202,15 +175,6 @@ function GaugeLocal({
       <div className="text-xs text-text-secondary">{label}</div>
     </div>
   );
-}
-
-function RadarLocal({
-  data,
-}: {
-  data: Array<{ label: string; value: number }>;
-}) {
-  if (!data.length) return null;
-  return <XRadarChart data={data} size="sm" />;
 }
 
 // Legacy SVG PieChart (preserved for reference, replaced by PieChartLocal above)
@@ -276,13 +240,7 @@ function _LegacyPieChart({
         >
           {total}
         </text>
-        <text
-          x={cx}
-          y={cy + 10}
-          textAnchor="middle"
-          fontSize="10"
-          fill="var(--text-secondary)"
-        >
+        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
           Toplam
         </text>
       </svg>
@@ -294,11 +252,7 @@ function _LegacyPieChart({
 // ---------------------------------------------------------------------------
 // Vertical Bar Chart
 // ---------------------------------------------------------------------------
-function _LegacyVerticalBarChart({
-  data,
-}: {
-  data: Array<{ label: string; value: number }>;
-}) {
+function _LegacyVerticalBarChart({ data }: { data: Array<{ label: string; value: number }> }) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const barAreaLeft = 35;
   const barAreaTop = 10;
@@ -377,11 +331,7 @@ function _LegacyVerticalBarChart({
 // ---------------------------------------------------------------------------
 // Horizontal Bar Chart (legacy SVG)
 // ---------------------------------------------------------------------------
-function _LegacyHorizontalBarChart({
-  data,
-}: {
-  data: Array<{ label: string; value: number }>;
-}) {
+function _LegacyHorizontalBarChart({ data }: { data: Array<{ label: string; value: number }> }) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const barHeight = 24;
   const gap = 6;
@@ -410,7 +360,15 @@ function _LegacyHorizontalBarChart({
             >
               {d.label.length > 14 ? d.label.slice(0, 13) + '\u2026' : d.label}
             </text>
-            <rect x={labelWidth} y={y} width={w} height={barHeight} rx={4} fill={color} opacity={0.85}>
+            <rect
+              x={labelWidth}
+              y={y}
+              width={w}
+              height={barHeight}
+              rx={4}
+              fill={color}
+              opacity={0.85}
+            >
               <title>
                 {d.label}: {d.value}
               </title>
@@ -443,7 +401,14 @@ function _LegacyTreemap({ data }: { data: Array<{ label: string; value: number }
   const height = 200;
 
   // Simple squarified-ish layout: split into rows
-  const rects: Array<{ x: number; y: number; w: number; h: number; item: typeof sorted[0]; color: string }> = [];
+  const rects: Array<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    item: (typeof sorted)[0];
+    color: string;
+  }> = [];
   let remainingItems = [...sorted];
   let currentY = 0;
   let remainingHeight = height;
@@ -458,7 +423,8 @@ function _LegacyTreemap({ data }: { data: Array<{ label: string; value: number }
     for (const item of remainingItems) {
       rowItems.push(item);
       rowTotal += item.value;
-      if (rowTotal / remainingTotal >= targetRowFraction && remainingItems.length > rowItems.length) break;
+      if (rowTotal / remainingTotal >= targetRowFraction && remainingItems.length > rowItems.length)
+        break;
     }
 
     remainingItems = remainingItems.slice(rowItems.length);
@@ -478,7 +444,7 @@ function _LegacyTreemap({ data }: { data: Array<{ label: string; value: number }
         w: itemWidth,
         h: rowHeight,
         item,
-        color: SERIES_COLORS[(rects.length) % SERIES_COLORS.length],
+        color: SERIES_COLORS[rects.length % SERIES_COLORS.length],
       });
       currentX += itemWidth;
     }
@@ -589,22 +555,48 @@ function _LegacyGauge({
       >
         {label}
       </div>
-      <svg viewBox="0 0 160 90" width="100%" style={{ maxWidth: 160, display: 'block', margin: '0 auto' }}>
+      <svg
+        viewBox="0 0 160 90"
+        width="100%"
+        style={{ maxWidth: 160, display: 'block', margin: '0 auto' }}
+      >
         {/* Background arc */}
-        <path d={arc(0, maxAngle)} fill="none" stroke="var(--surface-muted)" strokeWidth="10" strokeLinecap="round" />
+        <path
+          d={arc(0, maxAngle)}
+          fill="none"
+          stroke="var(--surface-muted)"
+          strokeWidth="10"
+          strokeLinecap="round"
+        />
         {/* Value arc */}
         {valueAngle > 0.01 && (
-          <path d={arc(0, valueAngle)} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round" />
+          <path
+            d={arc(0, valueAngle)}
+            fill="none"
+            stroke={color}
+            strokeWidth="10"
+            strokeLinecap="round"
+          />
         )}
         {/* Target marker */}
         <circle cx={needleX} cy={needleY} r="3" fill="var(--text-primary)" />
         {/* Value text */}
-        <text x={cx} y={cy - 8} textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--text-primary)">
+        <text
+          x={cx}
+          y={cy - 8}
+          textAnchor="middle"
+          fontSize="18"
+          fontWeight="700"
+          fill="var(--text-primary)"
+        >
           {value}
-          <tspan fontSize="10" fill="var(--text-secondary)">{unit}</tspan>
+          <tspan fontSize="10" fill="var(--text-secondary)">
+            {unit}
+          </tspan>
         </text>
         <text x={cx} y={cy + 4} textAnchor="middle" fontSize="8" fill="var(--text-secondary)">
-          Hedef: {target}{unit}
+          Hedef: {target}
+          {unit}
         </text>
       </svg>
     </div>
@@ -614,11 +606,7 @@ function _LegacyGauge({
 // ---------------------------------------------------------------------------
 // Stacked Horizontal Bar
 // ---------------------------------------------------------------------------
-function StackedBar({
-  data,
-}: {
-  data: Array<{ label: string; value: number }>;
-}) {
+function StackedBar({ data }: { data: Array<{ label: string; value: number }> }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return null;
 
@@ -727,9 +715,13 @@ function BulletChart({
       >
         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-          {actual}{unit}
-          <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4 }}>
-            / {target}{unit}
+          {actual}
+          {unit}
+          <span
+            style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4 }}
+          >
+            / {target}
+            {unit}
           </span>
         </span>
       </div>
@@ -739,7 +731,14 @@ function BulletChart({
         {/* Actual */}
         <rect x={0} y={8} width={actualW} height={barH} rx={4} fill={color} opacity={0.85} />
         {/* Target line */}
-        <line x1={targetX} y1={4} x2={targetX} y2={28} stroke="var(--text-primary)" strokeWidth="2" />
+        <line
+          x1={targetX}
+          y1={4}
+          x2={targetX}
+          y2={28}
+          stroke="var(--text-primary)"
+          strokeWidth="2"
+        />
       </svg>
     </div>
   );
@@ -779,7 +778,8 @@ function ProgressBar({
       >
         <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-          {value}{unit}
+          {value}
+          {unit}
         </span>
       </div>
       <div
@@ -874,10 +874,24 @@ function AgePyramidChart({
     <div>
       <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} width="100%" style={{ display: 'block' }}>
         {/* Header */}
-        <text x={centerX - sideWidth / 2} y={12} textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--action-primary)">
+        <text
+          x={centerX - sideWidth / 2}
+          y={12}
+          textAnchor="middle"
+          fontSize="9"
+          fontWeight="600"
+          fill="var(--action-primary)"
+        >
           Erkek
         </text>
-        <text x={centerX + sideWidth / 2} y={12} textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--accent-soft)">
+        <text
+          x={centerX + sideWidth / 2}
+          y={12}
+          textAnchor="middle"
+          fontSize="9"
+          fontWeight="600"
+          fill="var(--accent-soft)"
+        >
           Kadin
         </text>
         {data.map((d, i) => {
@@ -896,7 +910,9 @@ function AgePyramidChart({
                 fill="var(--action-primary)"
                 opacity={0.8}
               >
-                <title>Erkek {d.ageGroup}: {d.male}</title>
+                <title>
+                  Erkek {d.ageGroup}: {d.male}
+                </title>
               </rect>
               {d.male > 0 && (
                 <text
@@ -930,7 +946,9 @@ function AgePyramidChart({
                 fill="var(--accent-soft)"
                 opacity={0.8}
               >
-                <title>Kadin {d.ageGroup}: {d.female}</title>
+                <title>
+                  Kadin {d.ageGroup}: {d.female}
+                </title>
               </rect>
               {d.female > 0 && (
                 <text
@@ -1002,8 +1020,19 @@ const DemographicDashboard: React.FC = () => {
   );
 
   // ── Canlı Workcube verisi ──
-  const [liveKPIs, setLiveKPIs] = useState<Array<{ id: string; title: string; value: number | null; formattedValue: string; trend?: { direction: string; percentage: number } | null }> | null>(null);
-  const [liveCharts, setLiveCharts] = useState<Array<{ id: string; title: string; chartType: string; data: Array<{ label: string; value: number }> }> | null>(null);
+  const [liveKPIs, setLiveKPIs] = useState<Array<{
+    id: string;
+    title: string;
+    value: number | null;
+    formattedValue: string;
+    trend?: { direction: string; percentage: number } | null;
+  }> | null>(null);
+  const [liveCharts, setLiveCharts] = useState<Array<{
+    id: string;
+    title: string;
+    chartType: string;
+    data: Array<{ label: string; value: number }>;
+  }> | null>(null);
   const [dataSource, setDataSource] = useState<'loading' | 'live' | 'mock'>('loading');
 
   useEffect(() => {
@@ -1019,8 +1048,12 @@ const DemographicDashboard: React.FC = () => {
           setDataSource('mock');
         }
       })
-      .catch(() => { if (active) setDataSource('mock'); });
-    return () => { active = false; };
+      .catch(() => {
+        if (active) setDataSource('mock');
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Helper: canlı chart verisini al, yoksa mock summary'den düş
@@ -1043,10 +1076,15 @@ const DemographicDashboard: React.FC = () => {
   const getKPIValue = (kpiId: string): { value: string; trend?: number } | null => {
     if (liveKPIs) {
       const kpi = liveKPIs.find((k) => k.id === kpiId);
-      if (kpi) return {
-        value: kpi.formattedValue,
-        trend: kpi.trend ? (kpi.trend.direction === 'down' ? -kpi.trend.percentage : kpi.trend.percentage) : undefined,
-      };
+      if (kpi)
+        return {
+          value: kpi.formattedValue,
+          trend: kpi.trend
+            ? kpi.trend.direction === 'down'
+              ? -kpi.trend.percentage
+              : kpi.trend.percentage
+            : undefined,
+        };
     }
     return null;
   };
@@ -1065,15 +1103,31 @@ const DemographicDashboard: React.FC = () => {
     <div style={{ marginBottom: 24 }}>
       {/* Data source indicator */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8, gap: 8 }}>
-        <span style={{
-          fontSize: 11,
-          padding: '2px 8px',
-          borderRadius: 4,
-          background: dataSource === 'live' ? 'var(--state-success-bg)' : dataSource === 'mock' ? 'var(--state-warning-bg)' : 'var(--surface-muted)',
-          color: dataSource === 'live' ? 'var(--state-success-text)' : dataSource === 'mock' ? 'var(--state-warning-text)' : 'var(--text-secondary)',
-          fontWeight: 600,
-        }}>
-          {dataSource === 'live' ? '● Canlı Veri (Workcube SQL)' : dataSource === 'mock' ? '○ Mock Veri' : '◌ Yükleniyor...'}
+        <span
+          style={{
+            fontSize: 11,
+            padding: '2px 8px',
+            borderRadius: 4,
+            background:
+              dataSource === 'live'
+                ? 'var(--state-success-bg)'
+                : dataSource === 'mock'
+                  ? 'var(--state-warning-bg)'
+                  : 'var(--surface-muted)',
+            color:
+              dataSource === 'live'
+                ? 'var(--state-success-text)'
+                : dataSource === 'mock'
+                  ? 'var(--state-warning-text)'
+                  : 'var(--text-secondary)',
+            fontWeight: 600,
+          }}
+        >
+          {dataSource === 'live'
+            ? '● Canlı Veri (Workcube SQL)'
+            : dataSource === 'mock'
+              ? '○ Mock Veri'
+              : '◌ Yükleniyor...'}
         </span>
       </div>
       {/* ── KPI Strip ─────────────────────────────────────────── */}
@@ -1092,7 +1146,10 @@ const DemographicDashboard: React.FC = () => {
         />
         <KPICard
           label="Kadin / Erkek"
-          value={getKPIValue('female-ratio')?.value ?? `${summary.genderRatio.female}/${summary.genderRatio.male}%`}
+          value={
+            getKPIValue('female-ratio')?.value ??
+            `${summary.genderRatio.female}/${summary.genderRatio.male}%`
+          }
           trend={trends.genderRatio}
         />
         <KPICard
@@ -1102,19 +1159,15 @@ const DemographicDashboard: React.FC = () => {
         />
         <KPICard
           label="Ort. Kidem"
-          value={getKPIValue('avg-tenure')?.value ? `${getKPIValue('avg-tenure')!.value} yil` : `${summary.avgTenure.toFixed(1)} yil`}
+          value={
+            getKPIValue('avg-tenure')?.value
+              ? `${getKPIValue('avg-tenure')!.value} yil`
+              : `${summary.avgTenure.toFixed(1)} yil`
+          }
           trend={trends.tenure}
         />
-        <KPICard
-          label="Devir Hizi"
-          value={`${summary.turnoverRate}%`}
-          trend={trends.turnover}
-        />
-        <KPICard
-          label="DEI Skoru"
-          value={`${summary.deiScore}/100`}
-          trend={trends.dei}
-        />
+        <KPICard label="Devir Hizi" value={`${summary.turnoverRate}%`} trend={trends.turnover} />
+        <KPICard label="DEI Skoru" value={`${summary.deiScore}/100`} trend={trends.dei} />
       </div>
 
       <DashboardSection>
@@ -1127,14 +1180,16 @@ const DemographicDashboard: React.FC = () => {
             marginBottom: 16,
           }}
         >
-          <ChartCard title={chartTitle("Cinsiyet Dagilimi", "gender-distribution")}>
+          <ChartCard title={chartTitle('Cinsiyet Dagilimi', 'gender-distribution')}>
             <PieChart data={getChartData('gender-distribution') ?? summary.genderDistribution} />
           </ChartCard>
-          <ChartCard title={chartTitle("Yas Grubu Dagilimi", "age-distribution")}>
+          <ChartCard title={chartTitle('Yas Grubu Dagilimi', 'age-distribution')}>
             <VerticalBarChart data={getChartData('age-distribution') ?? summary.ageGroups} />
           </ChartCard>
-          <ChartCard title={chartTitle("Egitim Seviyesi", "education-distribution")}>
-            <HorizontalBarChart data={getChartData('education-distribution') ?? summary.educationLevels} />
+          <ChartCard title={chartTitle('Egitim Seviyesi', 'education-distribution')}>
+            <HorizontalBarChart
+              data={getChartData('education-distribution') ?? summary.educationLevels}
+            />
           </ChartCard>
         </div>
 
@@ -1147,13 +1202,15 @@ const DemographicDashboard: React.FC = () => {
             marginBottom: 16,
           }}
         >
-          <ChartCard title={chartTitle("Departman Dagilimi", "dept-headcount")}>
+          <ChartCard title={chartTitle('Departman Dagilimi', 'dept-headcount')}>
             <Treemap data={getChartData('dept-headcount') ?? summary.departments} />
           </ChartCard>
-          <ChartCard title={chartTitle("Kidem Dagilimi", "tenure-distribution")}>
-            <VerticalBarChart data={getChartData('tenure-distribution') ?? summary.tenureDistribution} />
+          <ChartCard title={chartTitle('Kidem Dagilimi', 'tenure-distribution')}>
+            <VerticalBarChart
+              data={getChartData('tenure-distribution') ?? summary.tenureDistribution}
+            />
           </ChartCard>
-          <ChartCard title={chartTitle("Istihdam Turu", "duty-type")}>
+          <ChartCard title={chartTitle('Istihdam Turu', 'duty-type')}>
             <PieChart data={getChartData('duty-type') ?? summary.employmentTypes} />
           </ChartCard>
         </div>
@@ -1167,7 +1224,7 @@ const DemographicDashboard: React.FC = () => {
             marginBottom: 16,
           }}
         >
-          <ChartCard title={chartTitle("DEI Gostergeleri", "female-manager-ratio")}>
+          <ChartCard title={chartTitle('DEI Gostergeleri', 'female-manager-ratio')}>
             <div
               style={{
                 display: 'grid',
@@ -1175,20 +1232,24 @@ const DemographicDashboard: React.FC = () => {
                 gap: 8,
               }}
             >
-              <Gauge value={(() => {
-                const fmData = getChartData('female-manager-ratio');
-                if (fmData) {
-                  const mgr = fmData.find(d => d.label === 'Yonetici')?.value ?? 0;
-                  const total = fmData.reduce((s, d) => s + d.value, 0);
-                  return total > 0 ? Math.round((mgr / total) * 100) : 0;
-                }
-                return summary.femaleManagerRate;
-              })()} target={50} label="Kadin Yonetici %" />
+              <Gauge
+                value={(() => {
+                  const fmData = getChartData('female-manager-ratio');
+                  if (fmData) {
+                    const mgr = fmData.find((d) => d.label === 'Yonetici')?.value ?? 0;
+                    const total = fmData.reduce((s, d) => s + d.value, 0);
+                    return total > 0 ? Math.round((mgr / total) * 100) : 0;
+                  }
+                  return summary.femaleManagerRate;
+                })()}
+                target={50}
+                label="Kadin Yonetici %"
+              />
               <Gauge
                 value={(() => {
                   const disData = getChartData('disability-employment');
                   if (disData) {
-                    const disabled = disData.find(d => d.label === 'Engelli')?.value ?? 0;
+                    const disabled = disData.find((d) => d.label === 'Engelli')?.value ?? 0;
                     const total = disData.reduce((s, d) => s + d.value, 0);
                     return total > 0 ? Math.round((disabled / total) * 1000) / 10 : 0;
                   }
@@ -1198,21 +1259,32 @@ const DemographicDashboard: React.FC = () => {
                 label="Engelli Istihdam"
                 unit="/100"
               />
-              <Gauge value={(() => {
-                const genData = getChartData('generation-distribution');
-                return genData ? computeDiversityIndex(genData) : diversityIndex;
-              })()} target={70} label="Nesil Cesitliligi" unit="/100" />
+              <Gauge
+                value={(() => {
+                  const genData = getChartData('generation-distribution');
+                  return genData ? computeDiversityIndex(genData) : diversityIndex;
+                })()}
+                target={70}
+                label="Nesil Cesitliligi"
+                unit="/100"
+              />
               <Gauge value={summary.deiScore} target={80} label="Genel DEI" unit="/100" />
             </div>
           </ChartCard>
-          <ChartCard title={chartTitle("Nesil Dagilimi", "generation-distribution")}>
-            <StackedBar data={getChartData('generation-distribution') ?? summary.generationDistribution} />
+          <ChartCard title={chartTitle('Nesil Dagilimi', 'generation-distribution')}>
+            <StackedBar
+              data={getChartData('generation-distribution') ?? summary.generationDistribution}
+            />
             <div style={{ marginTop: 12 }}>
-              <HorizontalBarChart data={getChartData('generation-distribution') ?? summary.generationDistribution} />
+              <HorizontalBarChart
+                data={getChartData('generation-distribution') ?? summary.generationDistribution}
+              />
             </div>
           </ChartCard>
-          <ChartCard title={chartTitle("Lokasyon Dagilimi", "location-distribution")}>
-            <PieChart data={getChartData('location-distribution') ?? summary.locationDistribution} />
+          <ChartCard title={chartTitle('Lokasyon Dagilimi', 'location-distribution')}>
+            <PieChart
+              data={getChartData('location-distribution') ?? summary.locationDistribution}
+            />
           </ChartCard>
         </div>
 
@@ -1225,13 +1297,13 @@ const DemographicDashboard: React.FC = () => {
             marginBottom: 16,
           }}
         >
-          <ChartCard title={chartTitle("Yonetici / Calisan Oranlari", "manager-ratio")}>
+          <ChartCard title={chartTitle('Yonetici / Calisan Oranlari', 'manager-ratio')}>
             <BulletChart
               label="Kadin Yonetici Orani"
               actual={(() => {
                 const fmData = getChartData('female-manager-ratio');
                 if (fmData) {
-                  const mgr = fmData.find(d => d.label === 'Yonetici')?.value ?? 0;
+                  const mgr = fmData.find((d) => d.label === 'Yonetici')?.value ?? 0;
                   const total = fmData.reduce((s, d) => s + d.value, 0);
                   return total > 0 ? Math.round((mgr / total) * 100) : 0;
                 }
@@ -1245,7 +1317,7 @@ const DemographicDashboard: React.FC = () => {
               actual={(() => {
                 const disData = getChartData('disability-employment');
                 if (disData) {
-                  const disabled = disData.find(d => d.label === 'Engelli')?.value ?? 0;
+                  const disabled = disData.find((d) => d.label === 'Engelli')?.value ?? 0;
                   const total = disData.reduce((s, d) => s + d.value, 0);
                   return total > 0 ? Math.round((disabled / total) * 1000) / 10 : 0;
                 }
@@ -1259,7 +1331,7 @@ const DemographicDashboard: React.FC = () => {
               actual={(() => {
                 const mrData = getChartData('manager-ratio');
                 if (mrData) {
-                  const mgr = mrData.find(d => d.label === 'Yonetici')?.value ?? 0;
+                  const mgr = mrData.find((d) => d.label === 'Yonetici')?.value ?? 0;
                   const total = mrData.reduce((s, d) => s + d.value, 0);
                   return total > 0 ? Math.round((mgr / total) * 1000) / 10 : 0;
                 }
@@ -1269,7 +1341,7 @@ const DemographicDashboard: React.FC = () => {
               max={30}
             />
           </ChartCard>
-          <ChartCard title={chartTitle("Etik ve Uyum")}>
+          <ChartCard title={chartTitle('Etik ve Uyum')}>
             <ProgressBar label="Etik Egitim Tamamlama" value={88} target={95} />
             <ProgressBar label="Veri Gizliligi Uyumu" value={92} target={100} />
             <ProgressBar label="Davranis Kurallari Onayi" value={96} target={100} />
@@ -1287,14 +1359,18 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <SectionHeader>Temel Demografik (APQC HC-1)</SectionHeader>
-          <ChartCard title={chartTitle("Medeni Durum", "marital-status")}>
+          <ChartCard title={chartTitle('Medeni Durum', 'marital-status')}>
             <PieChart data={getChartData('marital-status') ?? summary.maritalStatusDistribution} />
           </ChartCard>
-          <ChartCard title={chartTitle("Askerlik Durumu (Erkek)", "military-status")}>
-            <VerticalBarChart data={getChartData('military-status') ?? summary.militaryStatusDistribution} />
+          <ChartCard title={chartTitle('Askerlik Durumu (Erkek)', 'military-status')}>
+            <VerticalBarChart
+              data={getChartData('military-status') ?? summary.militaryStatusDistribution}
+            />
           </ChartCard>
-          <ChartCard title={chartTitle("Engel Durumu", "disability-distribution")}>
-            <PieChart data={getChartData('disability-distribution') ?? summary.disabilityDistribution} />
+          <ChartCard title={chartTitle('Engel Durumu', 'disability-distribution')}>
+            <PieChart
+              data={getChartData('disability-distribution') ?? summary.disabilityDistribution}
+            />
           </ChartCard>
         </div>
 
@@ -1308,27 +1384,35 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <SectionHeader>Organizasyonel (APQC HC-2)</SectionHeader>
-          <ChartCard title={chartTitle("Lokasyon Dagilimi", "location-distribution")}>
-            <PieChart data={getChartData('location-distribution') ?? summary.locationDistribution} />
+          <ChartCard title={chartTitle('Lokasyon Dagilimi', 'location-distribution')}>
+            <PieChart
+              data={getChartData('location-distribution') ?? summary.locationDistribution}
+            />
           </ChartCard>
-          <ChartCard title={chartTitle("Pozisyon Seviyesi", "position-level")}>
-            <VerticalBarChart data={getChartData('position-level') ?? summary.positionLevelDistribution} />
+          <ChartCard title={chartTitle('Pozisyon Seviyesi', 'position-level')}>
+            <VerticalBarChart
+              data={getChartData('position-level') ?? summary.positionLevelDistribution}
+            />
           </ChartCard>
-          <ChartCard title={chartTitle("Yas Piramidi (Erkek / Kadin)", "age-pyramid-male")}>
-            <AgePyramidChart data={(() => {
-              const maleData = getChartData('age-pyramid-male');
-              const femaleData = getChartData('age-pyramid-female');
-              if (maleData && femaleData) {
-                // Merge live data into pyramid format
-                const groups = Array.from(new Set([...maleData.map(d => d.label), ...femaleData.map(d => d.label)])).sort();
-                return groups.map(g => ({
-                  ageGroup: g,
-                  male: maleData.find(d => d.label === g)?.value ?? 0,
-                  female: femaleData.find(d => d.label === g)?.value ?? 0,
-                }));
-              }
-              return summary.agePyramid;
-            })()} />
+          <ChartCard title={chartTitle('Yas Piramidi (Erkek / Kadin)', 'age-pyramid-male')}>
+            <AgePyramidChart
+              data={(() => {
+                const maleData = getChartData('age-pyramid-male');
+                const femaleData = getChartData('age-pyramid-female');
+                if (maleData && femaleData) {
+                  // Merge live data into pyramid format
+                  const groups = Array.from(
+                    new Set([...maleData.map((d) => d.label), ...femaleData.map((d) => d.label)]),
+                  ).sort();
+                  return groups.map((g) => ({
+                    ageGroup: g,
+                    male: maleData.find((d) => d.label === g)?.value ?? 0,
+                    female: femaleData.find((d) => d.label === g)?.value ?? 0,
+                  }));
+                }
+                return summary.agePyramid;
+              })()}
+            />
           </ChartCard>
         </div>
 
@@ -1342,11 +1426,18 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <SectionHeader>Isgucu Dinamikleri (APQC HC-4)</SectionHeader>
-          <ChartCard title={chartTitle("Devamsizlik & Ise Alim", "new-hires-12m")}>
+          <ChartCard title={chartTitle('Devamsizlik & Ise Alim', 'new-hires-12m')}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <Gauge value={summary.absenteeismRate} target={3} label="Devamsizlik Orani" />
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 500 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-secondary)',
+                    marginBottom: 4,
+                    fontWeight: 500,
+                  }}
+                >
                   Yeni Ise Alim (12 ay)
                 </div>
                 <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -1359,10 +1450,17 @@ const DemographicDashboard: React.FC = () => {
               </div>
             </div>
           </ChartCard>
-          <ChartCard title={chartTitle("Ic Transfer & Terfi", "internal-transfers")}>
+          <ChartCard title={chartTitle('Ic Transfer & Terfi', 'internal-transfers')}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 500 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-secondary)',
+                    marginBottom: 4,
+                    fontWeight: 500,
+                  }}
+                >
                   Ic Transfer (Son 1 Yil)
                 </div>
                 <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -1376,7 +1474,7 @@ const DemographicDashboard: React.FC = () => {
               <Gauge value={summary.promotionRate} target={8} label="Terfi Orani" />
             </div>
           </ChartCard>
-          <ChartCard title={chartTitle("Ayrilma Oranlari", "turnover-reasons")}>
+          <ChartCard title={chartTitle('Ayrilma Oranlari', 'turnover-reasons')}>
             {(() => {
               const reasonData = getChartData('turnover-reasons');
               if (reasonData && reasonData.length > 0) {
@@ -1400,15 +1498,19 @@ const DemographicDashboard: React.FC = () => {
               );
             })()}
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
-              Kontrol Araligi: <strong style={{ color: 'var(--text-primary)' }}>{(() => {
-                const mrData = getChartData('manager-ratio');
-                if (mrData) {
-                  const mgr = mrData.find(d => d.label === 'Yonetici')?.value ?? 0;
-                  const total = mrData.reduce((s, d) => s + d.value, 0);
-                  return mgr > 0 ? Math.round((total / mgr) * 10) / 10 : 0;
-                }
-                return summary.spanOfControl;
-              })()}</strong> calisan/yonetici
+              Kontrol Araligi:{' '}
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {(() => {
+                  const mrData = getChartData('manager-ratio');
+                  if (mrData) {
+                    const mgr = mrData.find((d) => d.label === 'Yonetici')?.value ?? 0;
+                    const total = mrData.reduce((s, d) => s + d.value, 0);
+                    return mgr > 0 ? Math.round((total / mgr) * 10) / 10 : 0;
+                  }
+                  return summary.spanOfControl;
+                })()}
+              </strong>{' '}
+              calisan/yonetici
             </div>
           </ChartCard>
         </div>
@@ -1423,9 +1525,17 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <SectionHeader>Etik & Uyum</SectionHeader>
-          <ChartCard title={chartTitle("Etik Metrikler")}>
-            <ProgressBar label="Etik Egitim Tamamlama" value={summary.ethicsTrainingRate} target={95} />
-            <ProgressBar label="Veri Gizliligi Uyumu" value={summary.dataPrivacyComplianceRate} target={100} />
+          <ChartCard title={chartTitle('Etik Metrikler')}>
+            <ProgressBar
+              label="Etik Egitim Tamamlama"
+              value={summary.ethicsTrainingRate}
+              target={95}
+            />
+            <ProgressBar
+              label="Veri Gizliligi Uyumu"
+              value={summary.dataPrivacyComplianceRate}
+              target={100}
+            />
             <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
               Ihbar Hatti Basvuru (12 ay):{' '}
               <strong style={{ color: 'var(--text-primary)', fontSize: 18 }}>
@@ -1433,10 +1543,10 @@ const DemographicDashboard: React.FC = () => {
               </strong>
             </div>
           </ChartCard>
-          <ChartCard title={chartTitle("Disiplin Islemleri")}>
+          <ChartCard title={chartTitle('Disiplin Islemleri')}>
             <VerticalBarChart data={summary.disciplinaryActions} />
           </ChartCard>
-          <ChartCard title={chartTitle("Uyum Ozeti")}>
+          <ChartCard title={chartTitle('Uyum Ozeti')}>
             <BulletChart
               label="Etik Egitim"
               actual={summary.ethicsTrainingRate}
@@ -1462,15 +1572,26 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <SectionHeader>Maas & Esitlik</SectionHeader>
-          <ChartCard title={chartTitle("Cinsiyet Maas Karsilastirma", "salary-by-gender")}>
-            <HorizontalBarChart data={getChartData('salary-by-gender') ?? summary.avgSalaryByGender} />
+          <ChartCard title={chartTitle('Cinsiyet Maas Karsilastirma', 'salary-by-gender')}>
+            <HorizontalBarChart
+              data={getChartData('salary-by-gender') ?? summary.avgSalaryByGender}
+            />
           </ChartCard>
-          <ChartCard title={chartTitle("Maas Farki", "salary-by-gender")}>
+          <ChartCard title={chartTitle('Maas Farki', 'salary-by-gender')}>
             {(() => {
               const salData = getChartData('salary-by-gender');
-              const male = salData?.find(d => d.label === 'Erkek')?.value ?? summary.avgSalaryByGender.find(d => d.label === 'Erkek')?.value ?? 0;
-              const female = salData?.find(d => d.label === 'Kadın' || d.label === 'Kadin')?.value ?? summary.avgSalaryByGender.find(d => d.label === 'Kadın')?.value ?? 0;
-              const gap = male > 0 ? Math.round(((male - female) / male) * 1000) / 10 : summary.genderPayGapPercent;
+              const male =
+                salData?.find((d) => d.label === 'Erkek')?.value ??
+                summary.avgSalaryByGender.find((d) => d.label === 'Erkek')?.value ??
+                0;
+              const female =
+                salData?.find((d) => d.label === 'Kadın' || d.label === 'Kadin')?.value ??
+                summary.avgSalaryByGender.find((d) => d.label === 'Kadın')?.value ??
+                0;
+              const gap =
+                male > 0
+                  ? Math.round(((male - female) / male) * 1000) / 10
+                  : summary.genderPayGapPercent;
               return (
                 <>
                   <BulletChart label="Cinsiyet Maas Farki" actual={gap} target={0} max={20} />
@@ -1482,7 +1603,7 @@ const DemographicDashboard: React.FC = () => {
               );
             })()}
           </ChartCard>
-          <ChartCard title={chartTitle("Maas Farki Trendi", "salary-gender-trend")}>
+          <ChartCard title={chartTitle('Maas Farki Trendi', 'salary-gender-trend')}>
             {(() => {
               const trendData = getChartData('salary-gender-trend');
               // Use live trend data if available, compute pay gap % per year
@@ -1492,14 +1613,21 @@ const DemographicDashboard: React.FC = () => {
                   const maleAvg = (row as Record<string, unknown>).male_avg as number | null;
                   const femaleAvg = (row as Record<string, unknown>).female_avg as number | null;
                   if (maleAvg && femaleAvg && maleAvg > 0) {
-                    trendPoints.push({ label: row.label, gap: Math.round(((maleAvg - femaleAvg) / maleAvg) * 1000) / 10 });
+                    trendPoints.push({
+                      label: row.label,
+                      gap: Math.round(((maleAvg - femaleAvg) / maleAvg) * 1000) / 10,
+                    });
                   }
                 }
               }
               const useMock = trendPoints.length === 0;
-              const points = useMock ? [8.2, 7.5, 7.1, 6.8, 6.3, 5.9] : trendPoints.map(p => p.gap);
-              const labels = useMock ? ['Q1-25', 'Q2-25', 'Q3-25', 'Q4-25', 'Q1-26', 'Q2-26'] : trendPoints.map(p => p.label);
-              const maxY = Math.max(10, ...points.map(p => Math.ceil(p)));
+              const points = useMock
+                ? [8.2, 7.5, 7.1, 6.8, 6.3, 5.9]
+                : trendPoints.map((p) => p.gap);
+              const labels = useMock
+                ? ['Q1-25', 'Q2-25', 'Q3-25', 'Q4-25', 'Q1-26', 'Q2-26']
+                : trendPoints.map((p) => p.label);
+              const maxY = Math.max(10, ...points.map((p) => Math.ceil(p)));
               const xStart = 40;
               const xEnd = 260;
               const xStep = (xEnd - xStart) / Math.max(points.length - 1, 1);
@@ -1515,16 +1643,43 @@ const DemographicDashboard: React.FC = () => {
               return (
                 <svg viewBox="0 0 280 120" width="100%" style={{ display: 'block' }}>
                   {[0, 30, 60, 90, 120].map((y, i) => (
-                    <line key={i} x1={30} y1={y} x2={270} y2={y} stroke="var(--border-subtle)" strokeWidth="0.5" />
+                    <line
+                      key={i}
+                      x1={30}
+                      y1={y}
+                      x2={270}
+                      y2={y}
+                      stroke="var(--border-subtle)"
+                      strokeWidth="0.5"
+                    />
                   ))}
-                  <polyline points={polyline} fill="none" stroke="var(--state-warning-text)" strokeWidth="2" strokeLinejoin="round" />
+                  <polyline
+                    points={polyline}
+                    fill="none"
+                    stroke="var(--state-warning-text)"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
                   {pts.map((p, idx) => (
                     <g key={idx}>
                       <circle cx={p.x} cy={p.y} r="3" fill="var(--state-warning-text)" />
-                      <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="8" fontWeight="600" fill="var(--text-primary)">
+                      <text
+                        x={p.x}
+                        y={p.y - 8}
+                        textAnchor="middle"
+                        fontSize="8"
+                        fontWeight="600"
+                        fill="var(--text-primary)"
+                      >
                         %{p.v}
                       </text>
-                      <text x={p.x} y={115} textAnchor="middle" fontSize="7" fill="var(--text-secondary)">
+                      <text
+                        x={p.x}
+                        y={115}
+                        textAnchor="middle"
+                        fontSize="7"
+                        fill="var(--text-secondary)"
+                      >
                         {p.label}
                       </text>
                     </g>
