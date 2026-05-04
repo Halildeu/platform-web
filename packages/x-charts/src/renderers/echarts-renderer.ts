@@ -73,11 +73,17 @@ export interface EChartsRendererState {
    */
   containerRef: React.RefObject<HTMLDivElement | null>;
   /**
-   * Faz 21.9 PR3h: stable callback ref alternative. Composes naturally
-   * with `forwardRef` chains and conditional rendering. Internally it
-   * just writes to the same `containerRef.current`; the lifecycle
-   * effect picks up the new node on its next pass via the existing
-   * dep-array gating.
+   * Faz 21.9 PR3h: stable callback ref alternative. Useful for
+   * `forwardRef` composition and any consumer that prefers a callable
+   * ref over the object ref above. Internally writes to the same
+   * `containerRef.current`. The lifecycle effect remains gated by
+   * `[renderer, theme, locale, respectReducedMotion]` — it picks up
+   * the node during a normal mount or whenever one of those deps
+   * changes. Late conditional node attachment (deps unchanged, node
+   * appearing in a later render) is NOT covered by this PR; that
+   * requires the deferred lifecycle reconcile bridge (tracked as a
+   * follow-up sprint, leaning on the new mock fixture's
+   * duplicate-init counter as a regression net).
    */
   setContainerRef: React.RefCallback<HTMLDivElement>;
   /** The ECharts instance (null until mounted). */
