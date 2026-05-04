@@ -177,4 +177,55 @@ describe('SparklineChart', () => {
     const fixedLine = fixedC.querySelector('polyline');
     expect(fixedLine!.getAttribute('vector-effect')).toBeNull();
   });
+
+  /* ---------- Faz 21.10 wave 5: fluid height ---------- */
+
+  it('Faz 21.10 wave 5: height="auto" renders SVG with height=100% + h-full root + numeric width grid', () => {
+    const { container } = render(<SparklineChart data={sampleData} width={120} height="auto" />);
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain('inline-block');
+    expect(root.className).toContain('h-full');
+    expect(root.style.height).toBe('');
+    expect(root.style.width).toBe('120px');
+
+    const svg = container.querySelector('svg');
+    expect(svg!.getAttribute('width')).toBe('120');
+    expect(svg!.getAttribute('height')).toBe('100%');
+    expect(svg!.getAttribute('viewBox')).toBe('0 0 120 32');
+    expect(svg!.getAttribute('preserveAspectRatio')).toBe('none');
+  });
+
+  it('Faz 21.10 wave 5: width="auto" + height="auto" renders fully fluid SVG', () => {
+    const { container } = render(<SparklineChart data={sampleData} width="auto" height="auto" />);
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain('block');
+    expect(root.className).toContain('w-full');
+    expect(root.className).toContain('h-full');
+    expect(root.style.width).toBe('');
+    expect(root.style.height).toBe('');
+
+    const svg = container.querySelector('svg');
+    expect(svg!.getAttribute('width')).toBe('100%');
+    expect(svg!.getAttribute('height')).toBe('100%');
+    expect(svg!.getAttribute('viewBox')).toBe('0 0 100 32');
+    expect(svg!.getAttribute('preserveAspectRatio')).toBe('none');
+  });
+
+  it('Faz 21.10 wave 5: vector-effect activates when only height is auto', () => {
+    const { container } = render(
+      <SparklineChart data={sampleData} type="line" width={120} height="auto" />,
+    );
+    const line = container.querySelector('polyline');
+    expect(line!.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+  });
+
+  it('Faz 21.10 wave 5: empty data + height="auto" keeps fluid root sizing', () => {
+    const { container } = render(<SparklineChart data={[]} width={120} height="auto" />);
+    const empty = container.querySelector('[data-testid="sparkline-chart-empty"]') as HTMLElement;
+    expect(empty).toBeTruthy();
+    expect(empty.className).toContain('inline-block');
+    expect(empty.className).toContain('h-full');
+    expect(empty.style.width).toBe('120px');
+    expect(empty.style.height).toBe('');
+  });
 });

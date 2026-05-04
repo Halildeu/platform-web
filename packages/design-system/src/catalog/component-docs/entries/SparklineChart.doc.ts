@@ -75,10 +75,10 @@ const entry: DesignLabComponentDocEntry = {
       },
       {
         name: 'height',
-        type: 'number',
+        type: "number | 'auto'",
         default: '32',
         required: false,
-        description: 'Grafik yuksekligi (piksel).',
+        description: "Grafik yuksekligi (piksel) veya `'auto'` ile parent container'a sigdir.",
       },
       {
         name: 'className',
