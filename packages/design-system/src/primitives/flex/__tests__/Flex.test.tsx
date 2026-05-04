@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Flex } from '../Flex';
+import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
 
-afterEach(() => { cleanup(); });
+afterEach(() => {
+  cleanup();
+});
 
 describe('Flex — temel render', () => {
   it('flex container render eder', () => {
@@ -33,9 +36,30 @@ describe('Flex — temel render', () => {
     expect(container.firstElementChild?.className).toContain('flex-wrap');
   });
   it('align ve justify birlikte calisir', () => {
-    const { container } = render(<Flex align="center" justify="between">A</Flex>);
+    const { container } = render(
+      <Flex align="center" justify="between">
+        A
+      </Flex>,
+    );
     const cls = container.firstElementChild?.className ?? '';
     expect(cls).toContain('items-center');
     expect(cls).toContain('justify-between');
+  });
+});
+
+describe('Flex — accessibility', () => {
+  it('has no a11y violations (default row layout)', async () => {
+    const { container } = render(<Flex>Inline content</Flex>);
+    await expectNoA11yViolations(container);
+  });
+
+  it('has no a11y violations (column with align/justify)', async () => {
+    const { container } = render(
+      <Flex direction="column" align="center" justify="between" gap={2}>
+        <span>A</span>
+        <span>B</span>
+      </Flex>,
+    );
+    await expectNoA11yViolations(container);
   });
 });
