@@ -640,7 +640,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'chart-dashboard':
       return (
         <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
-          <ChartDashboard columns={{ sm: 1, md: 2, lg: 3 }} gap={12}>
+          <ChartDashboard columns={{ sm: 1, md: 2, lg: 3 }} gap="md">
             <KPICard
               title="Revenue"
               value="$128K"
