@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Statistic } from '../Statistic';
+import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
 
-afterEach(() => { cleanup(); });
+afterEach(() => {
+  cleanup();
+});
 
 describe('Statistic — temel render', () => {
   it('value gosterir', () => {
@@ -61,5 +64,19 @@ describe('Statistic — a11y', () => {
   it('data-component attribute vardir', () => {
     const { container } = render(<Statistic value={100} />);
     expect(container.querySelector('[data-component="statistic"]')).toBeInTheDocument();
+  });
+});
+
+describe('Statistic — accessibility', () => {
+  it('has no a11y violations (numeric value)', async () => {
+    const { container } = render(<Statistic title="Total Sales" value={1128} />);
+    await expectNoA11yViolations(container);
+  });
+
+  it('has no a11y violations (with prefix and trend)', async () => {
+    const { container } = render(
+      <Statistic title="Revenue" value={9999} prefix="$" trend="up" trendValue="+12.5%" />,
+    );
+    await expectNoA11yViolations(container);
   });
 });

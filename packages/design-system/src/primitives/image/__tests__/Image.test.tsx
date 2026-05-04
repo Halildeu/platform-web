@@ -4,17 +4,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Image } from '../Image';
+import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
 
-afterEach(() => { cleanup(); });
+afterEach(() => {
+  cleanup();
+});
 
 beforeEach(() => {
-  vi.stubGlobal('IntersectionObserver', class MockIO {
-    private cb: IntersectionObserverCallback;
-    constructor(cb: IntersectionObserverCallback) { this.cb = cb; }
-    observe() { this.cb([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver); }
-    unobserve() {}
-    disconnect() {}
-  });
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class MockIO {
+      private cb: IntersectionObserverCallback;
+      constructor(cb: IntersectionObserverCallback) {
+        this.cb = cb;
+      }
+      observe() {
+        this.cb(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  );
 });
 
 describe('Image — temel render', () => {
@@ -46,8 +59,25 @@ describe('Image.Group', () => {
       <Image.Group>
         <Image src="/1.jpg" alt="1" />
         <Image src="/2.jpg" alt="2" />
-      </Image.Group>
+      </Image.Group>,
     );
     expect(container.querySelector('[data-component="image-group"]')).toBeInTheDocument();
+  });
+});
+
+describe('Image — accessibility', () => {
+  it('has no a11y violations (with alt text)', async () => {
+    const { container } = render(
+      <Image src="https://example.com/photo.jpg" alt="A descriptive label" lazy={false} />,
+    );
+    await expectNoA11yViolations(container);
+  });
+
+  it('has no a11y violations (decorative — empty alt)', async () => {
+    // Decorative images use alt="" so screen readers skip them.
+    const { container } = render(
+      <Image src="https://example.com/decorative.jpg" alt="" lazy={false} />,
+    );
+    await expectNoA11yViolations(container);
   });
 });

@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { Container } from '../Container';
+import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
 
-afterEach(() => { cleanup(); });
+afterEach(() => {
+  cleanup();
+});
 
 describe('Container — temel render', () => {
   it('container render eder', () => {
@@ -31,5 +34,17 @@ describe('Container — temel render', () => {
   it('padding=false padding kaldırır', () => {
     const { container } = render(<Container padding={false}>A</Container>);
     expect(container.firstElementChild?.className).not.toContain('px-4');
+  });
+});
+
+describe('Container — accessibility', () => {
+  it('has no a11y violations (default)', async () => {
+    const { container } = render(<Container>Hello</Container>);
+    await expectNoA11yViolations(container);
+  });
+
+  it('has no a11y violations (semantic main element)', async () => {
+    const { container } = render(<Container as="main">Page content</Container>);
+    await expectNoA11yViolations(container);
   });
 });
