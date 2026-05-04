@@ -48,7 +48,11 @@ export const ChartLegend = React.forwardRef<HTMLDivElement, ChartLegendProps>(fu
       ref={forwardedRef}
       className={cn(
         'flex flex-wrap',
-        isVertical ? 'flex-col gap-1.5' : 'flex-row items-center gap-x-4 gap-y-1',
+        // Faz 21.10 wave 7: tighter horizontal gap on mobile so a 5-6
+        // entry legend doesn't burn 80+ px of card width on horizontal
+        // gap alone. Tablet+ keeps the wave-1 gap-x-4 rhythm so the
+        // entries don't visually crowd at desktop densities.
+        isVertical ? 'flex-col gap-1.5' : 'flex-row items-center gap-x-3 gap-y-1 sm:gap-x-4',
         className,
       )}
       role="list"

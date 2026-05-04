@@ -114,6 +114,26 @@ describe('ChartLegend', () => {
     expect(el.className).toContain('legend-extra');
   });
 
+  /* -------- Faz 21.10 wave 7: mobile-tight horizontal gap -------- */
+
+  it('Faz 21.10 wave 7: horizontal layout uses gap-x-3 on mobile and sm:gap-x-4 on tablet+', () => {
+    render(<ChartLegend items={baseItems} />);
+    const el = screen.getByTestId('chart-legend');
+    // classList.contains avoids substring false-matches between gap-x-3
+    // and sm:gap-x-3, etc.
+    expect(el.classList.contains('gap-x-3')).toBe(true);
+    expect(el.classList.contains('sm:gap-x-4')).toBe(true);
+  });
+
+  it('Faz 21.10 wave 7: vertical layout keeps the existing gap-1.5 (no mobile-specific change)', () => {
+    render(<ChartLegend items={baseItems} direction="vertical" />);
+    const el = screen.getByTestId('chart-legend');
+    expect(el.classList.contains('gap-1.5')).toBe(true);
+    // Vertical mode does NOT apply the mobile/tablet horizontal-gap split.
+    expect(el.classList.contains('gap-x-3')).toBe(false);
+    expect(el.classList.contains('sm:gap-x-4')).toBe(false);
+  });
+
   it('has role=list and items have role=listitem', () => {
     render(<ChartLegend items={baseItems} />);
 
