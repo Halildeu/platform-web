@@ -91,6 +91,25 @@ describe('KPICard', () => {
     expect(screen.getByTestId('kpi-chart')).toBeInTheDocument();
   });
 
+  it('Faz 21.10: card surface uses mobile-first padding (p-3 sm:p-5)', () => {
+    // Locks the responsive primitive added in the composite-widget rollout.
+    // Mobile cards in 4-up dashboards used to waste 32% of their width on
+    // chrome; the responsive padding closes that.
+    render(<KPICard title="Revenue" value="$12,345" />);
+    const card = screen.getByTestId('kpi-card');
+    expect(card.className).toContain('p-3');
+    expect(card.className).toContain('sm:p-5');
+  });
+
+  it('Faz 21.10: value text uses mobile-first font (text-xl sm:text-2xl)', () => {
+    // Locks the responsive value-font sizing so 4 KPI cards fit on a
+    // 375px viewport without truncating the metric.
+    render(<KPICard title="Revenue" value="$12,345" />);
+    const value = screen.getByText('$12,345');
+    expect(value.className).toContain('text-xl');
+    expect(value.className).toContain('sm:text-2xl');
+  });
+
   it('fires onClick when clicked', () => {
     const handleClick = vi.fn();
     render(<KPICard title="Users" value="1,234" onClick={handleClick} />);

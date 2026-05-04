@@ -58,7 +58,9 @@ export const KPICard = React.forwardRef<HTMLDivElement, KPICardProps>(function K
     <div
       ref={forwardedRef}
       className={cn(
-        'overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-default)] p-5',
+        // Faz 21.10: mobile-first padding so cards in 4-up dashboards
+        // don't waste 32% of their width on chrome on phones.
+        'overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-default)] p-3 sm:p-5',
         onClick && 'cursor-pointer transition-shadow hover:shadow-md',
         className,
       )}
@@ -96,7 +98,15 @@ export const KPICard = React.forwardRef<HTMLDivElement, KPICardProps>(function K
 
       {/* ---- value + trend row ---- */}
       <div className="mt-2 flex items-end gap-2">
-        <Text as="div" className="text-2xl font-bold leading-none text-[var(--text-primary)]">
+        {/*
+          Faz 21.10: mobile-first value font. text-xl on mobile so 4 KPI
+          cards fit on a 375px viewport without truncating; text-2xl on
+          sm+ so the metric still feels heavy on tablet/desktop.
+        */}
+        <Text
+          as="div"
+          className="text-xl font-bold leading-none text-[var(--text-primary)] sm:text-2xl"
+        >
           {value}
         </Text>
 
