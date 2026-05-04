@@ -29,12 +29,21 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
   getColumns: (t: TranslateFn) => ColumnDef<TRow>[];
   /** Declarative column metadata — preferred over getColumns. Skeleton auto-generates renderers. */
   getColumnMeta?: () => ColumnMeta[];
+  /**
+   * Optional async hook for modules whose column metadata is fetched at
+   * runtime (e.g. dynamic reports loading from `/v1/reports/{key}/metadata`).
+   * When present, ReportPage awaits this before computing column defs so
+   * the grid never mounts with an empty column set while data is in
+   * flight. Modules with statically-defined `getColumnMeta()` may omit
+   * this — the sync getter is then trusted as ready immediately.
+   */
+  ensureColumnMeta?: () => Promise<ColumnMeta[]>;
   fetchRows: (filters: TFilters, request: GridRequest) => Promise<GridResponse<TRow>>;
   renderDashboard?: (t: TranslateFn, filters?: TFilters) => ReactNode;
   renderDetail?: (row: TRow | null, t: TranslateFn) => ReactNode;
   exportRows?: (
     filters: TFilters,
-    format: "csv" | "json",
+    format: 'csv' | 'json',
   ) => Promise<{ blob: Blob; filename: string }>;
 
   /** Database tables this report reads from — enables schema lineage, related reports, FK lookup */
