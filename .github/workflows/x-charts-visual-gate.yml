@@ -28,7 +28,9 @@ on:
     paths:
       - 'packages/x-charts/**'
       - 'packages/design-system/src/__visual__/x-charts.visual.ts'
+      - 'packages/design-system/src/__visual__/x-charts-mobile.visual.ts'
       - 'packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts/**'
+      - 'packages/design-system/src/__visual__/__snapshots__/x-charts-mobile.visual.ts/**'
       - 'packages/design-system/playwright.config.ts'
       - '.storybook-k5/**'
       - '.github/workflows/x-charts-visual-gate.yml'
@@ -137,6 +139,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: x-charts-linux-baseline
-          path: packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts
+          # Include both desktop and mobile (Faz 21.10 W8) baselines so
+          # maintainers grab one tarball that covers every project.
+          path: |
+            packages/design-system/src/__visual__/__snapshots__/x-charts.visual.ts
+            packages/design-system/src/__visual__/__snapshots__/x-charts-mobile.visual.ts
           if-no-files-found: error
           retention-days: 30
