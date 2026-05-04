@@ -15,6 +15,7 @@ import {
   disposeCallCount,
   aliveInstanceCount,
   duplicateInitCount,
+  allMockInstances,
 } from '../../__tests__/fixtures/echarts-mock';
 import React from 'react';
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -159,23 +160,22 @@ describe('useEChartsRenderer ref lifecycle (PR3h)', () => {
   it('unmount disposes instance, leaves zero alive, and an explicit second dispose is idempotent', () => {
     const { unmount } = render(<ChartHost />);
     expect(aliveInstanceCount()).toBe(1);
+    const disposesAfterMount = disposeCallCount();
 
     unmount();
     expect(aliveInstanceCount()).toBe(0);
+    const disposesAfterUnmount = disposeCallCount();
+    expect(disposesAfterUnmount).toBeGreaterThan(disposesAfterMount);
 
-    // The renderer's React cleanup is one-shot, but the fixture's
-    // dispose contract must stay idempotent so a stale closure that
-    // fires after the alive entry is gone does not throw or revive
-    // anything. Reach for the first (and only) instance directly and
-    // call dispose() a second time.
-    const inst = (mockedEcharts.init as unknown as { mock: { calls: unknown[] } }).mock.calls; // touch
-    void inst;
-    // Use the renderer's existing instance via aliveInstanceCount path:
-    // we know exactly one instance was created, the cleanup disposed
-    // it once, and we want a second .dispose() invocation to no-op.
-    // The mock fixture's per-instance dispose mock survives unmount.
-    // No exception thrown == idempotency holds.
+    // Reach for the (single) instance directly and call dispose() a
+    // SECOND time. The fixture's idempotency contract says this must
+    // not throw and must not revive the alive entry. Locking it here
+    // is the regression net for PR3i lifecycle reconcile work.
+    const [instance] = allMockInstances();
+    expect(() => instance.dispose()).not.toThrow();
     expect(aliveInstanceCount()).toBe(0);
+    // Dispose mock recorded the second call too.
+    expect(disposeCallCount()).toBeGreaterThan(disposesAfterUnmount);
   });
 
   it('duplicate init on the same DOM returns the existing instance and bumps duplicateInitCount', () => {
