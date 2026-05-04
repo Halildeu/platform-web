@@ -1,7 +1,25 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ChartContainer } from '../ChartContainer';
+import { ChartToolbar } from '../ChartToolbar';
+import type { ChartInteractionState } from '../useChartInteractions';
+
+function makeInteractions(over: Partial<ChartInteractionState> = {}): ChartInteractionState {
+  return {
+    zoomLevel: 1,
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    resetZoom: vi.fn(),
+    isPanning: false,
+    panOffset: { x: 0, y: 0 },
+    isBrushing: false,
+    brushRange: null,
+    clearBrush: vi.fn(),
+    crosshairPosition: null,
+    ...over,
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /*  Tests — uses x-charts internal cn / Text / Spinner                 */
@@ -136,5 +154,65 @@ describe('ChartContainer', () => {
 
     const outer = container.firstChild as HTMLElement;
     expect(outer.className).toContain('custom-class');
+  });
+
+  /* -------- Faz 21.10 wave 4: actions slot mobile shrink/wrap -------- */
+
+  it('Faz 21.10 wave 4: actions wrapper allows mobile wrap (min-w-0 + flex-wrap)', () => {
+    render(
+      <ChartContainer title="Sales" actions={<button>Export</button>}>
+        <div>chart</div>
+      </ChartContainer>,
+    );
+    // The actions wrapper is the parent of the action button(s).
+    const button = screen.getByText('Export');
+    const actionsWrapper = button.parentElement as HTMLElement;
+    expect(actionsWrapper.classList.contains('min-w-0')).toBe(true);
+    expect(actionsWrapper.classList.contains('max-w-full')).toBe(true);
+    expect(actionsWrapper.classList.contains('flex-wrap')).toBe(true);
+    // Mobile no longer locks shrink-0 — wave 2 unconditional class is gone.
+    expect(actionsWrapper.classList.contains('shrink-0')).toBe(false);
+  });
+
+  it('Faz 21.10 wave 4: actions wrapper retains wave-2 shrink lock on sm+ (sm:shrink-0)', () => {
+    render(
+      <ChartContainer title="Sales" actions={<button>Export</button>}>
+        <div>chart</div>
+      </ChartContainer>,
+    );
+    const button = screen.getByText('Export');
+    const actionsWrapper = button.parentElement as HTMLElement;
+    expect(actionsWrapper.classList.contains('sm:shrink-0')).toBe(true);
+    expect(actionsWrapper.classList.contains('sm:flex-nowrap')).toBe(true);
+  });
+
+  it('Faz 21.10 wave 4: actions wrapper hosts a wrapping ChartToolbar on mobile', () => {
+    render(
+      <ChartContainer
+        title="Long chart title that would push actions on a narrow viewport"
+        actions={
+          <ChartToolbar
+            interactions={makeInteractions()}
+            onExportPNG={vi.fn()}
+            onExportSVG={vi.fn()}
+          />
+        }
+      >
+        <div>chart</div>
+      </ChartContainer>,
+    );
+
+    const toolbar = screen.getByRole('toolbar', { name: /chart toolbar/i });
+    const actionsWrapper = toolbar.parentElement as HTMLElement;
+
+    // Outer slot can shrink and wrap on mobile…
+    expect(actionsWrapper.classList.contains('min-w-0')).toBe(true);
+    expect(actionsWrapper.classList.contains('flex-wrap')).toBe(true);
+    expect(actionsWrapper.classList.contains('sm:shrink-0')).toBe(true);
+
+    // …and the toolbar itself contributes its own wrap-capable class so
+    // the wave-3 + wave-4 contracts compose end-to-end.
+    expect(toolbar.className).toContain('flex-wrap');
+    expect(toolbar.className).toContain('max-w-full');
   });
 });
