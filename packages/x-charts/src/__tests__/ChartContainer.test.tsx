@@ -83,6 +83,38 @@ describe('ChartContainer', () => {
     expect(screen.getByText('Export')).toBeInTheDocument();
   });
 
+  it('Faz 21.10 wave 2: header uses mobile-first padding (px-3 py-2 sm:px-5 sm:py-3)', () => {
+    const { container } = render(
+      <ChartContainer title="Sales" actions={<button>Export</button>}>
+        <div>chart</div>
+      </ChartContainer>,
+    );
+    // Header is the first border-b div
+    const header = container.querySelector('.border-b') as HTMLElement;
+    expect(header).toBeTruthy();
+    expect(header.className).toContain('px-3');
+    expect(header.className).toContain('sm:px-5');
+    expect(header.className).toContain('py-2');
+    expect(header.className).toContain('sm:py-3');
+  });
+
+  it('Faz 21.10 wave 2: title truncates when actions take row space', () => {
+    const { container } = render(
+      <ChartContainer
+        title="Very long chart title that would otherwise wrap and break the header layout"
+        actions={<button>Export</button>}
+      >
+        <div>chart</div>
+      </ChartContainer>,
+    );
+    // The title node has the `truncate` class so overflow ellipsizes
+    // instead of pushing the actions group offscreen.
+    const titleEls = Array.from(container.querySelectorAll('div'))
+      .map((el) => el)
+      .filter((el) => el.className.includes('truncate') && el.className.includes('font-semibold'));
+    expect(titleEls.length).toBeGreaterThan(0);
+  });
+
   it('applies height style', () => {
     const { container } = render(
       <ChartContainer height={400}>
