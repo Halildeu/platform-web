@@ -56,10 +56,14 @@ export function ChartContainer({
       )}
     >
       {/*
-        Header — Faz 21.10 wave 2: mobile-first padding + min-width-zero
-        so the title ellipsizes when actions take up row space.
-        `actions` group keeps its size with shrink-0 so a 3-button
-        toolbar doesn't push the title off on a narrow viewport.
+        Header — Faz 21.10 waves 2 & 4: mobile-first padding plus title
+        truncation via min-w-0 on the title column.
+
+        Actions slot is mobile-shrinkable (wave 4): on <640px the wrapper
+        wraps and lets its child (e.g. a wrapping ChartToolbar or multi-
+        button cluster) reflow inside narrow cards. On sm+ we lock the
+        wave-2 `shrink-0` behavior so a long title still ellipsizes
+        instead of squishing the actions group on tablet/desktop.
       */}
       {(title || actions) && (
         <div className="flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2 sm:px-5 sm:py-3">
@@ -75,7 +79,11 @@ export function ChartContainer({
               </Text>
             )}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-1 sm:gap-2">{actions}</div>}
+          {actions && (
+            <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:shrink-0 sm:flex-nowrap sm:gap-2">
+              {actions}
+            </div>
+          )}
         </div>
       )}
 
