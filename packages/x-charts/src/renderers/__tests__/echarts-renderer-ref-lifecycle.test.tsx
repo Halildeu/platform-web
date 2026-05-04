@@ -202,4 +202,66 @@ describe('useEChartsRenderer ref lifecycle (PR3h)', () => {
 
     document.body.removeChild(node);
   });
+
+  /* ----------------------------------------------------------------- */
+  /*  PR3i deferred — failing repro (skipped pending implementation)   */
+  /*                                                                   */
+  /*  PR3h (#210) deliberately deferred the lifecycle reconcile bridge:*/
+  /*  the additive `setContainerRef` lands the ref shape, but the      */
+  /*  `useEffect` that drives ECharts init is still gated by           */
+  /*  `[renderer, theme, locale, respectReducedMotion]` only. A        */
+  /*  consumer that attaches the container node AFTER initial mount    */
+  /*  (lifecycle deps unchanged, node appearing later) does not        */
+  /*  trigger init.                                                    */
+  /*                                                                   */
+  /*  This block stays `it.skip(...)` so CI is green, but the test     */
+  /*  bodies are exact reproducers — un-skipping them is the           */
+  /*  acceptance criterion for PR3i. When PR3i lands, drop the         */
+  /*  `.skip` and the implementation must make these pass without      */
+  /*  re-introducing the 182-test stack-overflow regression that the   */
+  /*  earlier reconcile-effect attempt produced (see PR3h commit body  */
+  /*  ccdabae6 for the prior failure mode).                            */
+  /* ----------------------------------------------------------------- */
+
+  it.skip('PR3i: callback ref attached AFTER initial mount triggers a fresh init', () => {
+    // Simulates a late conditional render: the chart hook runs first
+    // with no container, then a parent renders the host div on the
+    // next render pass. Today the dep-array effect won't refire, so
+    // no instance is created. PR3i must close this gap.
+    function LateMount({ show }: { show: boolean }) {
+      const { setContainerRef } = useEChartsRenderer({
+        option: { series: [] },
+      });
+      return show ? <div ref={setContainerRef} data-testid="late-host" /> : null;
+    }
+
+    const { rerender } = render(<LateMount show={false} />);
+    expect(initCallCount()).toBe(0); // no node yet — fine.
+
+    rerender(<LateMount show />);
+    // PR3i acceptance: an instance is created on the late mount.
+    expect(initCallCount()).toBe(1);
+    expect(aliveInstanceCount()).toBe(1);
+  });
+
+  it.skip('PR3i: callback ref pointing to null after a real mount disposes the instance', () => {
+    // Inverse: first the host is mounted (init fires), then the
+    // parent un-renders the host on the next pass. Today the
+    // dep-array effect won't refire on node detach either, so the
+    // instance is leaked until the component itself unmounts. PR3i
+    // must close this gap.
+    function MountToggle({ show }: { show: boolean }) {
+      const { setContainerRef } = useEChartsRenderer({
+        option: { series: [] },
+      });
+      return show ? <div ref={setContainerRef} data-testid="toggle-host" /> : null;
+    }
+
+    const { rerender } = render(<MountToggle show />);
+    expect(aliveInstanceCount()).toBe(1);
+
+    rerender(<MountToggle show={false} />);
+    // PR3i acceptance: detaching the container disposes the instance.
+    expect(aliveInstanceCount()).toBe(0);
+  });
 });
