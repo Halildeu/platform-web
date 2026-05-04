@@ -32,14 +32,32 @@ export default defineConfig({
     {
       name: 'desktop-light',
       use: { ...devices['Desktop Chrome'] },
+      // Faz 21.10 wave 8 — mobile-only fixtures (`*-mobile.visual.ts`)
+      // carry their own viewport assumptions and snapshot baselines;
+      // desktop projects skip them so we don't double-snapshot the
+      // same composites at desktop resolution.
+      testIgnore: '**/*-mobile.visual.ts',
     },
     {
       name: 'desktop-firefox',
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: '**/*-mobile.visual.ts',
     },
     {
       name: 'desktop-webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: '**/*-mobile.visual.ts',
+    },
+    {
+      // Faz 21.10 wave 8 — mobile baseline (Pixel 5 ≈ 393×851 viewport).
+      // Locks the wave 1-7 responsive primitives (KPICard padding,
+      // ChartContainer header, ChartDashboard per-breakpoint columns,
+      // SparklineChart fluid width/height, ChartToolbar wrap, ChartLegend
+      // mobile gap) so future regressions are caught at the actual
+      // viewport where the responsive fix is meaningful.
+      name: 'mobile-pixel5',
+      use: { ...devices['Pixel 5'] },
+      testMatch: '**/*-mobile.visual.ts',
     },
   ],
   // PW_STORYBOOK_STATIC_DIR → serve a pre-built Storybook from that
