@@ -183,7 +183,12 @@ function ToolbarButton({ label, onClick, active = false, disabled = false, child
 /* ------------------------------------------------------------------ */
 
 function Sep() {
-  return <div className="mx-0.5 h-5 w-px bg-[var(--border-subtle)]" aria-hidden="true" />;
+  // Faz 21.10 wave 3: hide separators on mobile so they don't appear
+  // orphaned at the start of a wrapped row. Tablet+ keeps the original
+  // single-row visual rhythm.
+  return (
+    <div className="mx-0.5 hidden h-5 w-px bg-[var(--border-subtle)] sm:block" aria-hidden="true" />
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,8 +238,16 @@ export function ChartToolbar({
 
   return (
     <div
+      // Faz 21.10 wave 3: mobile-first wrap so a fully-loaded toolbar
+      // (zoom×3 + brush + export×2 + undo/redo + drill + fullscreen ≈
+      // 280px wide) doesn't overflow inside a 320–375px chart card.
+      // - mobile: flex w-full max-w-full min-w-0 → wrap onto multiple
+      //   rows when needed.
+      // - sm+: inline-flex w-auto flex-nowrap → original single-row
+      //   compact layout returns.
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-default)] px-1 py-0.5',
+        'flex w-full min-w-0 max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-default)] px-1 py-0.5',
+        'sm:inline-flex sm:w-auto sm:flex-nowrap',
         className,
       )}
       role="toolbar"

@@ -12,8 +12,17 @@ export interface SparklineChartProps {
   data: number[];
   /** Visual style of the sparkline. @default "line" */
   type?: 'line' | 'bar' | 'area';
-  /** Width in pixels. @default 120 */
-  width?: number;
+  /**
+   * Width in pixels, or `'auto'` to fill the parent container horizontally.
+   *
+   * Faz 21.10 wave 3: when `'auto'`, the sparkline renders at parent width
+   * with a fixed internal coordinate system (100×height). The SVG keeps a
+   * numeric height so vertical scale stays 1:1 — markers and stroke remain
+   * readable while the line stretches across responsive containers.
+   *
+   * @default 120
+   */
+  width?: number | 'auto';
   /** Height in pixels. @default 32 */
   height?: number;
   /** Stroke / fill colour (CSS value or custom property). @default "var(--action-primary)" */
@@ -99,6 +108,19 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
   ) {
     const PADDING = 4;
 
+    /*
+     * Faz 21.10 wave 3: split the public `width` prop from the internal
+     * coordinate-space width. When `width === 'auto'`, the sparkline fills
+     * its parent horizontally; the SVG attribute becomes "100%" but we
+     * keep computing geometry on a fixed 100-unit grid so polylines, bars,
+     * and markers remain stable across containers.
+     */
+    const isAutoWidth = width === 'auto';
+    const logicalWidth = isAutoWidth ? 100 : width;
+    const svgWidthAttr: number | string = isAutoWidth ? '100%' : width;
+    const rootClassName = isAutoWidth ? 'block w-full' : 'inline-block';
+    const rootStyle: React.CSSProperties = isAutoWidth ? { height } : { width, height };
+
     const { points, areaPath, bars, lastPt, minPt, maxPt } = useMemo(() => {
       if (!data || data.length === 0) {
         return { points: '', areaPath: '', bars: [], lastPt: null, minPt: null, maxPt: null };
@@ -107,11 +129,11 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
       const min = Math.min(...data);
       const max = Math.max(...data);
       const range = max - min || 1;
-      const innerW = width - PADDING * 2;
+      const innerW = logicalWidth - PADDING * 2;
       const innerH = height - PADDING * 2;
 
-      const pts = buildPolylinePoints(data, width, height, PADDING);
-      const area = buildAreaPath(data, width, height, PADDING);
+      const pts = buildPolylinePoints(data, logicalWidth, height, PADDING);
+      const area = buildAreaPath(data, logicalWidth, height, PADDING);
 
       // Bar rects
       const barGap = 1;
@@ -152,14 +174,14 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
         minPt: minCoord,
         maxPt: maxCoord,
       };
-    }, [data, width, height, showMinMax]);
+    }, [data, logicalWidth, height, showMinMax]);
 
     if (!data || data.length === 0) {
       return (
         <div
           ref={forwardedRef}
-          className={cn('inline-block text-text-primary', className)}
-          style={{ width, height }}
+          className={cn(rootClassName, 'text-text-primary', className)}
+          style={rootStyle}
           role="img"
           aria-label="Sparkline chart — no data"
           data-testid="sparkline-chart-empty"
@@ -171,15 +193,22 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
     return (
       <div
         ref={forwardedRef}
-        className={cn('inline-block text-text-primary', className)}
-        style={{ width, height }}
+        className={cn(rootClassName, 'text-text-primary', className)}
+        style={rootStyle}
         data-testid="sparkline-chart"
         {...rest}
       >
         <svg
-          viewBox={`0 0 ${width} ${height}`}
-          width={width}
+          viewBox={`0 0 ${logicalWidth} ${height}`}
+          width={svgWidthAttr}
           height={height}
+          /*
+           * Auto-width sparkline keeps a fixed viewBox; let the SVG
+           * stretch horizontally to fill its parent without preserving
+           * aspect ratio. Markers/bars deform horizontally (acceptable
+           * for sparkline UX); strokes stay 1.5px via vectorEffect.
+           */
+          preserveAspectRatio={isAutoWidth ? 'none' : undefined}
           role="img"
           aria-label={`Sparkline chart: ${data.length} data points, last value ${data[data.length - 1]}`}
         >
@@ -222,6 +251,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
                 strokeWidth="1.5"
                 strokeLinejoin="round"
                 strokeLinecap="round"
+                vectorEffect={isAutoWidth ? 'non-scaling-stroke' : undefined}
               >
                 {animate && (
                   <animate attributeName="opacity" from="0" to="1" dur="0.4s" fill="freeze" />
@@ -237,6 +267,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
               strokeWidth="1.5"
               strokeLinejoin="round"
               strokeLinecap="round"
+              vectorEffect={isAutoWidth ? 'non-scaling-stroke' : undefined}
             >
               {animate && (
                 <animate attributeName="opacity" from="0" to="1" dur="0.4s" fill="freeze" />

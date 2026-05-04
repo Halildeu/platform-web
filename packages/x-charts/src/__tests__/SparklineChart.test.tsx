@@ -104,4 +104,77 @@ describe('SparklineChart', () => {
     const svg = container.querySelector('svg');
     expect(svg!.getAttribute('aria-label')).toBe('Sparkline chart: 3 data points, last value 15');
   });
+
+  /* ---------- Faz 21.10 wave 3: fluid width API ---------- */
+
+  it('Faz 21.10 wave 3: width="auto" renders SVG with width=100% + viewBox 0 0 100 h + preserveAspectRatio="none"', () => {
+    const { container } = render(<SparklineChart data={sampleData} width="auto" height={32} />);
+    const svg = container.querySelector('svg');
+    expect(svg).toBeTruthy();
+    expect(svg!.getAttribute('width')).toBe('100%');
+    expect(svg!.getAttribute('height')).toBe('32');
+    expect(svg!.getAttribute('viewBox')).toBe('0 0 100 32');
+    expect(svg!.getAttribute('preserveAspectRatio')).toBe('none');
+  });
+
+  it('Faz 21.10 wave 3: width="auto" root uses block w-full instead of inline-block', () => {
+    const { container } = render(<SparklineChart data={sampleData} width="auto" height={32} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain('block');
+    expect(root.className).toContain('w-full');
+    expect(root.className).not.toMatch(/\binline-block\b/);
+    // Inline width is dropped — only height remains.
+    expect(root.style.width).toBe('');
+    expect(root.style.height).toBe('32px');
+  });
+
+  it('Faz 21.10 wave 3: empty data + width="auto" keeps fluid root sizing', () => {
+    const { container } = render(<SparklineChart data={[]} width="auto" height={32} />);
+    const empty = container.querySelector('[data-testid="sparkline-chart-empty"]') as HTMLElement;
+    expect(empty).toBeTruthy();
+    expect(empty.className).toContain('block');
+    expect(empty.className).toContain('w-full');
+    expect(empty.style.width).toBe('');
+    expect(empty.style.height).toBe('32px');
+    // No SVG in empty state.
+    expect(empty.querySelector('svg')).toBeNull();
+  });
+
+  it('Faz 21.10 wave 3: default numeric width keeps inline-block + fixed viewBox (backwards compat)', () => {
+    const { container } = render(<SparklineChart data={sampleData} />);
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain('inline-block');
+    expect(root.className).not.toContain('w-full');
+    const svg = container.querySelector('svg');
+    expect(svg!.getAttribute('width')).toBe('120');
+    expect(svg!.getAttribute('viewBox')).toBe('0 0 120 32');
+    // No preserveAspectRatio when width is numeric.
+    expect(svg!.getAttribute('preserveAspectRatio')).toBeNull();
+  });
+
+  it('Faz 21.10 wave 3: type="bar" + width="auto" renders bars on the 100-unit grid', () => {
+    const { container } = render(
+      <SparklineChart data={sampleData} type="bar" width="auto" height={32} />,
+    );
+    const rects = container.querySelectorAll('rect');
+    expect(rects.length).toBe(sampleData.length);
+    // viewBox uses logicalWidth=100 — bar geometry must stay inside that grid.
+    const svg = container.querySelector('svg');
+    expect(svg!.getAttribute('viewBox')).toBe('0 0 100 32');
+  });
+
+  it('Faz 21.10 wave 3: line stroke gets vector-effect="non-scaling-stroke" only in auto mode', () => {
+    const { container: autoC } = render(
+      <SparklineChart data={sampleData} type="line" width="auto" />,
+    );
+    const autoLine = autoC.querySelector('polyline');
+    // React renders the JSX `vectorEffect` prop as the DOM attribute
+    // `vector-effect` (kebab-case). querying by either getAttribute name
+    // is normalized to lowercase by jsdom.
+    expect(autoLine!.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+
+    const { container: fixedC } = render(<SparklineChart data={sampleData} type="line" />);
+    const fixedLine = fixedC.querySelector('polyline');
+    expect(fixedLine!.getAttribute('vector-effect')).toBeNull();
+  });
 });
