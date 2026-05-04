@@ -1,0 +1,97 @@
+name: Backend Contract Smoke
+
+# a11y-pr1 follow-up (Codex REAL #7): exercises the SSRM contract
+# documented in `.claude/rules/backend-integration.md` against a real
+# stage backend. NOT a PR gate — runs on workflow_dispatch (manual
+# trigger when stage is healthy) and on a nightly schedule (so contract
+# drift surfaces overnight, not on a hot-path PR).
+#
+# Why opt-in:
+#   - Real backend smoke is flaky if it fires every PR (network, stage
+#     uptime, seed-data drift). Pin it to manual + nightly so the
+#     signal stays trustworthy.
+#   - Stage env + seed token must exist; secret `BACKEND_SMOKE_TOKEN`
+#     is the agent role JWT.
+#   - Failing this workflow does NOT block merges; failures route to
+#     the on-call channel as advisory until contract enforcement is
+#     promoted to a PR gate (separate decision).
+
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: 'Backend endpoint base URL (e.g. https://stage-api.example.internal)'
+        required: true
+        type: string
+      module:
+        description: 'Which contract surface to exercise'
+        required: true
+        default: 'users'
+        type: choice
+        options:
+          - users
+          - reports
+  schedule:
+    # 03:17 UTC nightly — off-peak for stage; primes data for the
+    # morning standup signal.
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-smoke:
+    name: SSRM contract smoke (${{ github.event.inputs.module || 'users' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Don't fail the workflow surface — failures are advisory while
+    # this scaffold is in soak mode. Promote to hard-gate (`continue-on-
+    # error: false`) after stage is provisioned and the assertion
+    # library lands (see scripts/ci/backend-contract-smoke.mjs header).
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+
+      - name: Resolve endpoint
+        id: resolve
+        run: |
+          # Manual trigger uses input; nightly schedule reads
+          # secrets.STAGE_BACKEND_URL set at the org level.
+          if [ -n "${{ github.event.inputs.endpoint }}" ]; then
+            echo "endpoint=${{ github.event.inputs.endpoint }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "endpoint=${{ secrets.STAGE_BACKEND_URL }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if endpoint missing
+        if: steps.resolve.outputs.endpoint == ''
+        run: |
+          echo "::warning::No endpoint resolved (missing secrets.STAGE_BACKEND_URL); skipping smoke."
+          exit 0
+
+      - name: Run contract smoke
+        env:
+          BACKEND_SMOKE_TOKEN: ${{ secrets.BACKEND_SMOKE_TOKEN }}
+        run: |
+          node scripts/ci/backend-contract-smoke.mjs \
+            --endpoint="${{ steps.resolve.outputs.endpoint }}" \
+            --module="${{ github.event.inputs.module || 'users' }}" \
+            --json \
+            > smoke-result.json
+          cat smoke-result.json
+
+      - name: Upload smoke result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-contract-smoke-result
+          path: smoke-result.json
+          if-no-files-found: warn
+          retention-days: 14
