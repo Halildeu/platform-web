@@ -8,15 +8,17 @@ import { expectToken, withTheme, getResolvedToken } from '../../../__tests__/css
  * Dialog — seventh L4-foundation real-component CSSOM canary.
  *
  * Dialog uses the native HTML `<dialog>` element (top-layer when
- * opened with `showModal()`). What this canary locks is the panel
- * token cascade — if a token rename lands on `--surface-default` or
- * `--border-subtle` without updating Dialog, the modal collapses to
- * an unstyled box. That regression is invisible to jsdom.
+ * opened with `showModal()`). What this canary locks:
  *
- * Backdrop pseudo-element styling (`::backdrop`) is intentionally NOT
- * asserted: cross-browser pseudo-element computed-style read is
- * unreliable for canary-grade signal. The panel cascade alone is
- * sufficient for token-rename detection.
+ * - Panel token cascade — `--surface-default` bg + `--border-subtle`
+ *   border. A token rename without updating Dialog collapses the
+ *   modal to an unstyled box. Invisible to jsdom.
+ * - `::backdrop` pseudo-element cascade — `--surface-overlay/50`
+ *   color-mix. The original PR-12 production bug (Tailwind class
+ *   `bg-surface-inverse/50` was unregistered, never compiled, made
+ *   the backdrop transparent) lives here; this assertion guards it.
+ *   Browser provider is Chromium-only, so the
+ *   `getComputedStyle(el, '::backdrop')` read is reliable.
  */
 
 describe('Dialog CSSOM canary', () => {
