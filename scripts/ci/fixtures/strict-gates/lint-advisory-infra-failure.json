@@ -1,0 +1,14 @@
+{
+  "_description": "lint-warn-visibility-advisory infra failure (eslint-report.json missing/empty/invalid, or summarize/comment script crashed). Step outcome=failure. Note: warning *count* is intentionally NOT a STRICT_GATES blocker — only infra failures (parse error, missing report, etc.) are.",
+  "strict_gates": "true",
+  "required": {
+    "unit": { "result": "success" },
+    "token_drift": { "result": "success" },
+    "cssom_canary": { "result": "success" },
+    "visual_invariant": { "result": "success" }
+  },
+  "advisory": {
+    "cssom_full": { "result": "success", "outcome": "success" },
+    "lint": { "result": "success", "outcome": "failure" }
+  }
+}

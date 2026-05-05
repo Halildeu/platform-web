@@ -60,7 +60,13 @@
       tracked as separate debt). Warning **count** is intentionally
       NOT promoted by STRICT_GATES — that needs a baseline shrink
       first. Aggregator branch logic simulated 7/7 scenarios green
-      in PR-6 (logs in commit message).
+      in PR-6 (logs in commit message). PR-13 added a runnable
+      dry-run: `pnpm gate:dry-run <fixture>`. Pre-cutover, run
+      `pnpm gate:dry-run:smoke` and walk through the fixtures in
+      `scripts/ci/fixtures/strict-gates/` to confirm the
+      aggregator's behavior matches expectations. Full operator
+      reference:
+      [`docs/operations/strict-gates-cheat-sheet.md`](operations/strict-gates-cheat-sheet.md).
 - [ ] Comms message draft (T-D7 send).
 
 ### §1.2 Credential / secret materials map
