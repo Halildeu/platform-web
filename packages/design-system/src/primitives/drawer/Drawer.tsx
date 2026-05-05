@@ -192,7 +192,14 @@ export const Drawer = React.forwardRef<HTMLDivElement, DrawerProps>(
         {/* Backdrop */}
         {showOverlay && (
           <div
-            className="absolute inset-0 bg-surface-inverse/40 animate-in fade-in-0"
+            // PR-12: bg-surface-inverse/40 was a production bug — Tailwind
+            // doesn't have `--color-surface-inverse` registered, so the
+            // utility never compiled and the backdrop was invisible.
+            // `surface-overlay` is the registered Tailwind color and
+            // resolves to the same value (`--surface-inverse` is aliased
+            // to `var(--surface-overlay-bg)` in theme.css). Identical
+            // visual outcome, correct cascade.
+            className="absolute inset-0 bg-surface-overlay/40 animate-in fade-in-0"
             onClick={handleOverlayClick}
             data-testid="drawer-overlay"
             aria-hidden
