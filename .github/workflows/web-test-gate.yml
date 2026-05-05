@@ -153,19 +153,34 @@ jobs:
           # true outcome via job outputs; we read those outputs here so a
           # genuine advisory failure can fail the aggregator without
           # blocking merge under default (non-strict) operation.
+          #
+          # We check three conditions independently because the edge cases
+          # don't combine cleanly into one expression:
+          #   - job result = failure/cancelled but outcome = skipped happens
+          #     when the run step never executes (e.g. dependency install
+          #     fails). The boolean AND in the previous version let this
+          #     slip through under STRICT_GATES.
+          #   - outcome = failure is the obvious bad case.
+          #   - any unfamiliar outcome value (e.g. cancelled in a future
+          #     Actions runtime) should also fail loudly under strict mode.
           # PR-1 only wires cssom-full-advisory; future advisories
           # (visual-full, browser-full) will be added the same way.
           full_outcome="${{ needs.cssom-full-advisory.outputs.cssom_full_outcome || 'skipped' }}"
           full_result="${{ needs.cssom-full-advisory.result || 'skipped' }}"
           echo "cssom-full-advisory job result: $full_result"
           echo "cssom-full-advisory step outcome: $full_outcome"
+
+          if [[ "$full_result" != "success" && "$full_result" != "skipped" ]]; then
+            echo "::error::Advisory job result '$full_result' is not acceptable under STRICT_GATES=true (install/setup failure?)."
+            exit 1
+          fi
+
           if [[ "$full_outcome" == "failure" ]]; then
             echo "::error::Advisory job cssom-full-advisory failed under STRICT_GATES=true."
             exit 1
           fi
-          # Defensive: if the job itself was cancelled or the output is
-          # missing in an unexpected way, fall back to the job result.
-          if [[ "$full_result" != "success" && "$full_result" != "skipped" && "$full_outcome" != "success" && "$full_outcome" != "skipped" ]]; then
-            echo "::error::Advisory job result $full_result is not acceptable under STRICT_GATES=true."
+
+          if [[ "$full_outcome" != "success" && "$full_outcome" != "skipped" ]]; then
+            echo "::error::Advisory step outcome '$full_outcome' is not acceptable under STRICT_GATES=true."
             exit 1
           fi
