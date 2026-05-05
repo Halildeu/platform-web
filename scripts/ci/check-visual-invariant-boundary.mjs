@@ -70,9 +70,16 @@ const ALLOW_PATTERNS = [
   /^packages\/design-system\/src\/__visual__\/__snapshots__\/x-charts-mobile\.visual\.ts\//,
 ];
 
+// Visual boundary candidate set — anything that could meaningfully add
+// or refresh a visual snapshot. Codex iter-4 MEDIUM: legacy snapshot
+// PNG additions also fall under the boundary; without this PNG match,
+// a contributor could refresh `__snapshots__/components.visual.ts/.../new.png`
+// and the guard would be silent. Allowed snapshot dirs are explicitly
+// listed in ALLOW_PATTERNS above.
 const VISUAL_FILE_PATTERNS = [
   /^packages\/design-system\/src\/.*\.visual\.test\.tsx?$/,
   /^packages\/design-system\/src\/.*\.visual\.tsx?$/,
+  /^packages\/design-system\/src\/__visual__\/__snapshots__\/.+\.png$/,
 ];
 
 function isVisualFile(path) {
