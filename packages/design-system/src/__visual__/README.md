@@ -2,13 +2,14 @@
 
 Playwright-based visual regression testing for design-system components via Storybook.
 
-## Status (PR-3, 2026-05)
+## Status (PR-4b, 2026-05)
 
-Three distinct lanes live in this directory:
+Two CI-gated lanes live in this directory:
 
-1. **`invariants/`** — **Authoritative L4 lane** (PR-3). 9 chromium-only matrix snapshots covering theme/focus/density/RTL invariants. Gated by `web-test-gate.yml` `visual-invariant-required` (hard gate). New visual snapshots must go here. Run via `pnpm test:visual:invariants` (uses `playwright.invariants.config.ts` + `.storybook-invariants`).
+1. **`invariants/`** — **Authoritative L4 lane** (PR-3). 9 chromium-only matrix snapshots covering theme/focus/density/RTL invariants. Gated by `web-test-gate.yml` `visual-invariant-required` (hard gate). New visual snapshots **must** go here. Run via `pnpm test:visual:invariants` (uses `playwright.invariants.config.ts` + `.storybook-invariants`).
 2. **`x-charts*.visual.ts`** — Component-level chart gate, governed by `.github/workflows/x-charts-visual-gate.yml`. Exempt from the L4 boundary; remains a hard merge gate. Uses `.storybook-k5`.
-3. **All other `*.visual.ts` files** (primitives, components, patterns, dark-mode, rtl, providers, interactions, internals, enterprise, performance, app-sidebar, components-extra) — **Deprecated, non-authoritative, manual-only**. Predate the L4 invariant matrix pattern. Not CI-owned. Will be archived in a separate cleanup PR. **Do not add new files** to this lane — the CI guard `scripts/ci/check-visual-invariant-boundary.mjs` enforces this on touched files.
+
+The legacy non-x-charts visual specs (12 spec files + 588 baselines) were removed in PR-4b after PR-3 established the L4 invariant matrix as the authoritative DS-wide visual gate. The forward-looking guard `scripts/ci/check-visual-invariant-boundary.mjs` blocks new visual snapshot files outside these two lanes on touched files.
 
 See [`docs/architecture/frontend/adr-test-environment-strategy.md`](../../../../docs/architecture/frontend/adr-test-environment-strategy.md) §L4 for the full boundary contract.
 
@@ -28,63 +29,44 @@ pnpm --filter @mfe/design-system run test:visual:invariants
 pnpm --filter @mfe/design-system run test:visual:invariants:update
 ```
 
-## Legacy manual sweep (deprecated, non-authoritative)
+## x-charts visual gate (manual sweep only)
 
-> The commands below are for the **legacy `*.visual.ts` lane**
-> (`primitives`, `components`, `patterns`, `dark-mode`, `rtl`, etc.) —
-> they predate the L4 invariant matrix and are NOT CI-gated. Use them
-> only to inspect existing legacy baselines; do not add new files to
-> this lane (the CI guard `scripts/ci/check-visual-invariant-boundary.mjs`
-> blocks new entries on touched files).
+`x-charts.visual.ts` and `x-charts-mobile.visual.ts` use the legacy
+`playwright.config.ts` runner (now scoped to `testMatch:
+'x-charts*.visual.ts'`). The hard gate runs in CI under
+`x-charts-visual-gate.yml`, not under `web-test-gate.yml`.
 
-### Prerequisites
-
-- Storybook running on port 6006 (`npm run storybook`)
-- Playwright installed (`npx playwright install chromium`)
-
-### Running legacy tests
+Local manual sweep (rare — usually only when debugging a baseline
+mismatch flagged by the gate):
 
 ```bash
-# Auto-starts Storybook if not already running
-npx playwright test
+# Storybook on port 6006 (full config is heavy; the gate uses
+# .storybook-k5 instead — match that locally to mirror CI):
+pnpm --filter @mfe/design-system run start
 
-# Or use the CI script
-./scripts/ci/visual-regression.sh
+# Run x-charts visual specs:
+pnpm --filter @mfe/design-system run test:visual
+
+# Update baselines: NEVER do this from macOS — Linux baselines come
+# from the workflow_dispatch pattern in x-charts-visual-gate.yml.
 ```
-
-### Updating legacy snapshots (manual only — not CI-gated)
-
-```bash
-npx playwright test --update-snapshots
-
-# Or via CI script
-./scripts/ci/visual-regression.sh --update
-```
-
-## Test Structure (legacy)
-
-| File                     | Purpose                                         |
-| ------------------------ | ----------------------------------------------- |
-| `components.visual.ts`   | Static screenshots of 21 components + dark mode |
-| `interactions.visual.ts` | Hover, focus, checked, toggled states           |
 
 ## Snapshots
 
-- Stored in `__snapshots__/` (committed to git)
+- Stored in `__snapshots__/` (committed to git, two CI-gated subtrees only)
 - Test artifacts in `test-results/` (gitignored)
-- `maxDiffPixelRatio: 0.01` threshold (1% pixel tolerance)
+- L4 invariant `maxDiffPixelRatio: 0.01` — tighter than x-charts 0.02; matrix is small enough to tolerate the strict threshold
 
 ## Story IDs
 
-Story IDs are derived from the Storybook `title` field and export name:
+L4 invariant matrix story IDs follow the `Visual/Invariants/<Matrix>--<variant>` Storybook convention:
 
 ```
-title: 'Components/Primitives/Button'  +  export Default
-  =>  components-primitives-button--default
+title: 'Visual/Invariants/ThemeMatrix'  +  export Light
+  =>  visual-invariants-themematrix--light
 ```
 
-If a story ID changes (e.g. component is reorganized), update the corresponding
-entry in `components.visual.ts`.
+x-charts gate story IDs are documented inline in `x-charts.visual.ts`.
 
 ## CI Integration
 
