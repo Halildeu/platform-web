@@ -1,8 +1,14 @@
 import React from 'react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from 'vitest-browser-react';
+import { userEvent } from 'vitest/browser';
 import { Checkbox } from '../Checkbox';
-import { expectToken, withTheme, getResolvedToken } from '../../../__tests__/cssom-harness';
+import {
+  expectToken,
+  withTheme,
+  expectFocusRing,
+  getResolvedToken,
+} from '../../../__tests__/cssom-harness';
 
 /**
  * Checkbox — third L4-foundation real-component CSSOM canary
@@ -73,15 +79,36 @@ describe('Checkbox CSSOM canary', () => {
     });
   });
 
-  // NOTE — focus-ring CSSOM test for Checkbox is intentionally NOT
-  // included in this canary. The Checkbox source uses an sr-only
-  // <input> + visible proxy <span>, but the proxy has no
-  // `peer-focus-visible:` (or `focus-within:`) ring rule, so the
-  // visible focus indicator is missing in production. Adding a test
-  // that asserts a non-existent ring would be a false-positive lie;
-  // adding a test that asserts the input outline (which is sr-only
-  // and invisible) tests nothing the user can see. The correct fix
-  // is in production code (separate PR): add a focus-within or
-  // peer-focus-visible ring rule on the proxy. After that lands,
-  // this canary should grow a focus-ring test.
+  it('renders a focus ring on proxy span when input gets :focus-visible (Tab)', async () => {
+    // PR-10: restored after the production a11y fix landed (Checkbox
+    // source now has `peer` on the sr-only input and
+    // `peerFocusVisibleRingClass("ring")` on the proxy span).
+    const screen = await render(<Checkbox label="Confirm" />);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const input = screen.getByRole('checkbox', { name: 'Confirm' }).element() as HTMLElement;
+
+    // Real keyboard Tab. Programmatic .focus() is unreliable for
+    // :focus-visible in Chromium (Codex thread 019df8a4 iter-3 K4).
+    await userEvent.keyboard('{Tab}');
+
+    // Wait for :focus-visible to settle on the (sr-only) input.
+    await new Promise<void>((resolve, reject) => {
+      const start = Date.now();
+      const tick = () => {
+        if (input.matches(':focus-visible')) return resolve();
+        if (Date.now() - start > 2000)
+          return reject(new Error('Checkbox input never received :focus-visible after Tab'));
+        setTimeout(tick, 16);
+      };
+      tick();
+    });
+
+    // The visible ring is on the proxy <span> via Tailwind's
+    // `peer-focus-visible:` cascade. Find it via the shared parent.
+    const parent = input.parentElement as HTMLElement;
+    const proxy = parent.querySelector('span[aria-hidden]') as HTMLElement | null;
+    expect(proxy).not.toBeNull();
+
+    expectFocusRing(proxy as HTMLElement);
+  });
 });

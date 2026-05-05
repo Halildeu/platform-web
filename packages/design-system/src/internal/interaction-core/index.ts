@@ -28,17 +28,19 @@ export {
   type StateAttributes,
   type ComponentState,
   type ComponentStatus,
-} from "./state-attributes";
+} from './state-attributes';
 
 // Focus Policy — focus ring management
 export {
   focusRingClass,
   focusRingClassWithColor,
+  hasFocusVisibleRingClass,
+  peerFocusVisibleRingClass,
   defaultFocusStrategy,
   isKeyboardInteraction,
   FOCUS_TRAP_ATTR,
   type FocusStrategy,
-} from "./focus-policy";
+} from './focus-policy';
 
 // Keyboard Contract — WAI-ARIA keyboard patterns
 export {
@@ -50,7 +52,7 @@ export {
   type KeyboardAction,
   type KeyBinding,
   type ComponentKeyboardContract,
-} from "./keyboard-contract";
+} from './keyboard-contract';
 
 // Event Guard — interaction blocking
 export {
@@ -60,7 +62,7 @@ export {
   guardAria,
   type EventGuardOptions,
   type EventGuardResult,
-} from "./event-guard";
+} from './event-guard';
 
 // Semantic Intent — interaction intent resolver
 export {
@@ -69,7 +71,7 @@ export {
   type SemanticIntent,
   type NavigationDirection,
   type ResolvedIntent,
-} from "./semantic-intent";
+} from './semantic-intent';
 
 // Re-export access-controller for convenience
 export {
@@ -80,4 +82,4 @@ export {
   type AccessLevel,
   type AccessControlledProps,
   type AccessResolution,
-} from "../access-controller";
+} from '../access-controller';
