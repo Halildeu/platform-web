@@ -197,7 +197,8 @@ export const FormDrawer = React.forwardRef<HTMLDivElement, FormDrawerProps>(
         {/* Backdrop */}
         <div
           data-access-state={accessState.state}
-          className="absolute inset-0 bg-surface-inverse/40 animate-in fade-in-0"
+          // PR-12: surface-inverse → surface-overlay (same token, registered class).
+          className="absolute inset-0 bg-surface-overlay/40 animate-in fade-in-0"
           onClick={handleBackdropClick}
           aria-hidden
         />

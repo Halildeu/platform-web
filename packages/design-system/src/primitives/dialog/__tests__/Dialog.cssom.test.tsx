@@ -81,4 +81,49 @@ describe('Dialog CSSOM canary', () => {
     // hooks; locking it at the canary keeps it stable.
     expect(dialog.getAttribute('data-state')).toBe('open');
   });
+
+  it('::backdrop pseudo-element resolves --surface-overlay/50 (color-mix)', async () => {
+    // PR-12 Codex thread 019dfa4b iter-1: this assertion locks the
+    // production fix on Dialog (`backdrop:bg-surface-overlay/50`).
+    // Without this canary, regressing Dialog's backdrop class to an
+    // unregistered Tailwind color (the original bug — `surface-inverse`)
+    // would slip through unnoticed. Drawer's backdrop test already
+    // locks the same cascade for the overlay div pattern; this locks
+    // the equivalent for the native <dialog> ::backdrop pseudo-element.
+    const screen = await render(
+      <Dialog open onClose={() => {}}>
+        <div>Body</div>
+      </Dialog>,
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const dialog = findDialog(screen.container as HTMLElement);
+
+    // Reference element with the production cascade target. Stamp it
+    // on a sibling div and read computed values for byte-for-byte
+    // comparison.
+    const ref = document.createElement('div');
+    ref.style.backgroundColor = 'color-mix(in oklab, var(--surface-overlay-bg) 50%, transparent)';
+    document.body.appendChild(ref);
+
+    try {
+      // Chromium's window.getComputedStyle(el, '::backdrop') returns
+      // a CSSStyleDeclaration scoped to that pseudo. If the compiled
+      // CSS for the backdrop variant didn't emit, backgroundColor
+      // falls back to the UA stylesheet (typically rgba(0,0,0,0.4)
+      // or transparent), neither of which matches the reference.
+      const got = window
+        .getComputedStyle(dialog, '::backdrop')
+        .backgroundColor.replace(/\s+/g, '')
+        .toLowerCase();
+      const want = window.getComputedStyle(ref).backgroundColor.replace(/\s+/g, '').toLowerCase();
+      expect(want).not.toBe('');
+      expect(got).toBe(want);
+    } finally {
+      ref.remove();
+    }
+
+    // Sanity floor: --surface-overlay-bg resolves at root.
+    const overlayToken = getResolvedToken('surface-overlay-bg');
+    expect(overlayToken).not.toBe('');
+  });
 });

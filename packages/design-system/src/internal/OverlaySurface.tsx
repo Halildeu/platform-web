@@ -1,14 +1,14 @@
-import React from "react";
-import { createPortal } from "react-dom";
-import { cn } from "../utils/cn";
+import React from 'react';
+import { createPortal } from 'react-dom';
+import { cn } from '../utils/cn';
 
-export type OverlayCloseReason = "close-button" | "overlay" | "escape";
+export type OverlayCloseReason = 'close-button' | 'overlay' | 'escape';
 
 export const premiumOverlayPanelClassName =
-  "rounded-[28px] border border-border-subtle/80 ring-1 ring-border-subtle/20 shadow-[0_30px_70px_-40px_var(--shadow-color)] backdrop-blur-md";
+  'rounded-[28px] border border-border-subtle/80 ring-1 ring-border-subtle/20 shadow-[0_30px_70px_-40px_var(--shadow-color)] backdrop-blur-md';
 
 export const premiumOverlayCloseButtonClassName =
-  "inline-flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/70 bg-[var(--surface-card))] text-text-subtle shadow-[0_14px_28px_-24px_var(--shadow-color)] transition hover:-translate-y-px hover:border-border-default hover:bg-[var(--surface-card))] hover:text-text-primary hover:shadow-[0_18px_32px_-22px_var(--shadow-color)]";
+  'inline-flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/70 bg-[var(--surface-card))] text-text-subtle shadow-[0_14px_28px_-24px_var(--shadow-color)] transition hover:-translate-y-px hover:border-border-default hover:bg-[var(--surface-card))] hover:text-text-primary hover:shadow-[0_18px_32px_-22px_var(--shadow-color)]';
 
 /** Props for {@link OverlaySurface}. */
 interface OverlaySurfaceProps {
@@ -27,9 +27,9 @@ interface OverlaySurfaceProps {
   /** Destroy the DOM node after the close transition ends. @default true */
   destroyOnHidden?: boolean;
   /** Horizontal placement of the surface panel. @default "center" */
-  placement?: "right" | "left" | "center";
+  placement?: 'right' | 'left' | 'center';
   /** Transition animation preset. @default "fade" */
-  transitionPreset?: "slide" | "fade" | "scale";
+  transitionPreset?: 'slide' | 'fade' | 'scale';
   /** Custom DOM element to portal into, or null for document.body. */
   portalTarget?: HTMLElement | null;
   /** Render inline instead of using a portal. @default false */
@@ -41,7 +41,7 @@ interface OverlaySurfaceProps {
   /** Additional CSS class for the inner surface panel. */
   surfaceClassName?: string;
   /** Visual style variant for the surface panel. @default "default" */
-  surfaceAppearance?: "premium" | "default";
+  surfaceAppearance?: 'premium' | 'default';
   /** Content rendered inside the surface panel. */
   children: React.ReactNode;
 }
@@ -62,14 +62,14 @@ export const OverlaySurface: React.FC<OverlaySurfaceProps> = ({
   closeOnEscape = true,
   keepMounted = false,
   destroyOnHidden = true,
-  placement = "center",
-  transitionPreset: _transitionPreset = "fade",
+  placement = 'center',
+  transitionPreset: _transitionPreset = 'fade',
   portalTarget,
   disablePortal = false,
   ariaLabel,
   viewportClassName,
   surfaceClassName,
-  surfaceAppearance: _surfaceAppearance = "default",
+  surfaceAppearance: _surfaceAppearance = 'default',
   children,
 }) => {
   const [mounted, setMounted] = React.useState(open);
@@ -89,15 +89,15 @@ export const OverlaySurface: React.FC<OverlaySurfaceProps> = ({
     if (!open || !closeOnEscape) return undefined;
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        onClose?.("escape");
+        onClose?.('escape');
       }
     };
 
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
   }, [open, closeOnEscape, onClose]);
 
   if (!mounted && !keepMounted) {
@@ -109,11 +109,8 @@ export const OverlaySurface: React.FC<OverlaySurfaceProps> = ({
   }
 
   const handleOverlayClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (
-      closeOnOverlayClick &&
-      event.target === overlayRef.current
-    ) {
-      onClose?.("overlay");
+    if (closeOnOverlayClick && event.target === overlayRef.current) {
+      onClose?.('overlay');
     }
   };
 
@@ -124,17 +121,20 @@ export const OverlaySurface: React.FC<OverlaySurfaceProps> = ({
       aria-label={ariaLabel}
       aria-modal="true"
       className={cn(
-        "fixed inset-0 z-50 bg-surface-inverse/30 backdrop-blur-xs transition-opacity duration-(--motion-duration-slow)",
-        open ? "opacity-100" : "pointer-events-none opacity-0",
+        // PR-12: bg-surface-inverse was unregistered in Tailwind theme;
+        // backdrop was invisible. surface-overlay resolves to the same
+        // underlying token (alias chain in theme.css).
+        'fixed inset-0 z-50 bg-surface-overlay/30 backdrop-blur-xs transition-opacity duration-(--motion-duration-slow)',
+        open ? 'opacity-100' : 'pointer-events-none opacity-0',
         viewportClassName,
       )}
       onClick={handleOverlayClick}
     >
       <div
         className={cn(
-          "transition-[translate] duration-(--motion-duration-slow)",
-          placement === "right" && (open ? "translate-x-0" : "translate-x-full"),
-          placement === "left" && (open ? "translate-x-0" : "-translate-x-full"),
+          'transition-[translate] duration-(--motion-duration-slow)',
+          placement === 'right' && (open ? 'translate-x-0' : 'translate-x-full'),
+          placement === 'left' && (open ? 'translate-x-0' : '-translate-x-full'),
           surfaceClassName,
         )}
       >
@@ -143,14 +143,14 @@ export const OverlaySurface: React.FC<OverlaySurfaceProps> = ({
     </div>
   );
 
-  if (disablePortal || typeof document === "undefined") {
+  if (disablePortal || typeof document === 'undefined') {
     return content;
   }
 
   return createPortal(content, portalTarget ?? document.body);
 };
 
-OverlaySurface.displayName = "OverlaySurface";
+OverlaySurface.displayName = 'OverlaySurface';
 
 /** Type alias for OverlaySurface ref. */
 export type OverlaySurfaceRef = React.Ref<HTMLElement>;

@@ -20,7 +20,11 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Filter, X, Trash2, Check } from 'lucide-react';
 import type { ColDef, GridApi } from 'ag-grid-community';
 import { useFilterBuilder, createEmptyGroup } from './useFilterBuilder';
-import { treeToFilterModel, filterModelToTree, extractMultiSearchParams } from './filterModelConverter';
+import {
+  treeToFilterModel,
+  filterModelToTree,
+  extractMultiSearchParams,
+} from './filterModelConverter';
 import { FilterGroupNode } from './FilterGroupNode';
 import type { FilterGroup } from './types';
 
@@ -38,11 +42,21 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
   onClose,
 }) => {
   const {
-    root, setRoot,
-    addCondition, addGroup, removeNode, updateCondition, setLogic,
-    moveNode, moveNodeDnD,
-    cloneNode, toggleLock, toggleNot,
-    clear, isEmpty, maxDepthReached,
+    root,
+    setRoot,
+    addCondition,
+    addGroup,
+    removeNode,
+    updateCondition,
+    setLogic,
+    moveNode,
+    moveNodeDnD,
+    cloneNode,
+    toggleLock,
+    toggleNot,
+    clear,
+    isEmpty,
+    maxDepthReached,
   } = useFilterBuilder(3);
 
   const [matchCount, setMatchCount] = useState<number | null>(null);
@@ -57,14 +71,15 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
   const prevOpenRef = React.useRef(false);
   useEffect(() => {
     if (open && !prevOpenRef.current && gridApi) {
-      const savedTree = (gridApi as unknown as Record<string, unknown>).__filterBuilderTree as FilterGroup | undefined;
+      const savedTree = (gridApi as unknown as Record<string, unknown>).__filterBuilderTree as
+        | FilterGroup
+        | undefined;
       if (savedTree && Array.isArray(savedTree.children) && savedTree.children.length > 0) {
         setRoot(savedTree);
       } else {
         const model = gridApi.getFilterModel?.() ?? {};
-        const imported = Object.keys(model).length > 0
-          ? filterModelToTree(model, columnDefs)
-          : createEmptyGroup();
+        const imported =
+          Object.keys(model).length > 0 ? filterModelToTree(model, columnDefs) : createEmptyGroup();
         setRoot(imported);
       }
     }
@@ -73,9 +88,15 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
 
   // Live match count (meaningful only for client-side row model)
   useEffect(() => {
-    if (!open || !gridApi) { setMatchCount(null); return; }
-    try { setMatchCount(gridApi.getDisplayedRowCount?.() ?? null); }
-    catch { setMatchCount(null); }
+    if (!open || !gridApi) {
+      setMatchCount(null);
+      return;
+    }
+    try {
+      setMatchCount(gridApi.getDisplayedRowCount?.() ?? null);
+    } catch {
+      setMatchCount(null);
+    }
   }, [open, gridApi, root]);
 
   const handleApply = useCallback(() => {
@@ -105,23 +126,26 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
     onClose();
   }, [gridApi, clear, onClose]);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      moveNodeDnD(String(active.id), String(over.id));
-    }
-  }, [moveNodeDnD]);
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (over && active.id !== over.id) {
+        moveNodeDnD(String(active.id), String(over.id));
+      }
+    },
+    [moveNodeDnD],
+  );
 
   if (!open) return null;
 
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-surface-inverse/20" onClick={onClose} />
+      {/* PR-12: surface-inverse → surface-overlay (same token, registered class). */}
+      <div className="fixed inset-0 z-40 bg-surface-overlay/20" onClick={onClose} />
 
       {/* Panel */}
       <div className="fixed bottom-0 right-0 top-0 z-50 flex w-[620px] flex-col bg-surface-default shadow-2xl">
-
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
           <div className="flex items-center gap-2.5">
@@ -130,7 +154,9 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-semibold text-text-primary">Filtre Oluşturucu</h2>
-              <p className="text-[10px] text-text-subtle">Bağımsız VE/VEYA koşullarıyla gelişmiş filtre</p>
+              <p className="text-[10px] text-text-subtle">
+                Bağımsız VE/VEYA koşullarıyla gelişmiş filtre
+              </p>
             </div>
           </div>
           <button
@@ -218,7 +244,11 @@ export const FilterBuilderButton: React.FC<{
     handler();
     gridApi.addEventListener('filterChanged', handler);
     return () => {
-      try { gridApi.removeEventListener('filterChanged', handler); } catch { /* */ }
+      try {
+        gridApi.removeEventListener('filterChanged', handler);
+      } catch {
+        /* */
+      }
     };
   }, [gridApi]);
 
