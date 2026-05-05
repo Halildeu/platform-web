@@ -18,7 +18,7 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { useChartA11y } from '../a11y/useChartA11y';
@@ -383,8 +383,18 @@ describe('useChartA11y — ECharts dispatchAction sync', () => {
       />,
     );
 
-    // Should not throw despite disposed instance.
-    expect(() => act(() => user.click(screen.getByTestId('chart-container')))).not.toThrow();
+    // Disposed instance dispatchAction throws internally; the hook must
+    // swallow the error so the click handler does not surface it. The
+    // previous `expect(() => act(() => user.click(...))).not.toThrow()`
+    // wrapped an async user.click() inside a sync arrow, returning the
+    // pending Promise without awaiting it. The internal rejection then
+    // surfaced as an unhandled rejection and crashed the workspace gate
+    // under jsdom 29 + user-event 14 (see Codex thread 019df7a1 iter-2).
+    // Awaiting click directly preserves the swallow contract: if the
+    // hook re-throws, the promise rejects here. Asserting dispatchAction
+    // was called proves the click reached the hook.
+    await user.click(screen.getByTestId('chart-container'));
+    expect(dispatchAction).toHaveBeenCalled();
   });
 });
 

@@ -11,6 +11,7 @@ export default defineConfig({
   },
   plugins: [react()],
   test: {
+    name: 'x-editor',
     root: __dirname,
     globals: true,
     environment: 'jsdom',

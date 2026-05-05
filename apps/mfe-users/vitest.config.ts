@@ -42,6 +42,7 @@ export default defineConfig({
     },
   },
   test: {
+    name: 'mfe-users',
     root: __dirname,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     environment: 'jsdom',
