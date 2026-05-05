@@ -53,33 +53,58 @@ if (
 // Provide a no-op CanvasRenderingContext2D-shaped object so chart code
 // can call rendering methods without throwing. Real visual fidelity
 // belongs in *.cssom.test or *.visual.test, not in jsdom.
-const createCanvasContextStub = () => ({
-  fillRect: () => undefined,
-  clearRect: () => undefined,
-  getImageData: () => ({ data: [] }),
-  putImageData: () => undefined,
-  createImageData: () => [],
-  setTransform: () => undefined,
-  drawImage: () => undefined,
-  save: () => undefined,
-  restore: () => undefined,
-  fillText: () => undefined,
-  strokeText: () => undefined,
-  beginPath: () => undefined,
-  moveTo: () => undefined,
-  lineTo: () => undefined,
-  closePath: () => undefined,
-  stroke: () => undefined,
-  translate: () => undefined,
-  scale: () => undefined,
-  rotate: () => undefined,
-  arc: () => undefined,
-  fill: () => undefined,
-  measureText: () => ({ width: 0 }),
-  transform: () => undefined,
-  rect: () => undefined,
-  clip: () => undefined,
-});
+const createCanvasContextStub = () => {
+  const noop = () => undefined;
+  // Gradients and patterns return shape-compatible objects with
+  // addColorStop/setTransform so chained renderer code does not crash.
+  // These produce no real pixels.
+  const gradientStub = () => ({ addColorStop: noop });
+  const patternStub = () => ({ setTransform: noop });
+  return {
+    fillRect: noop,
+    clearRect: noop,
+    getImageData: () => ({ data: [] }),
+    putImageData: noop,
+    createImageData: () => [],
+    setTransform: noop,
+    drawImage: noop,
+    save: noop,
+    restore: noop,
+    fillText: noop,
+    strokeText: noop,
+    beginPath: noop,
+    moveTo: noop,
+    lineTo: noop,
+    closePath: noop,
+    stroke: noop,
+    translate: noop,
+    scale: noop,
+    rotate: noop,
+    arc: noop,
+    fill: noop,
+    measureText: () => ({ width: 0 }),
+    transform: noop,
+    rect: noop,
+    clip: noop,
+    // Gradient + pattern surface used by chart libraries
+    // (ECharts/zrender, Chart.js). Without these,
+    // `ctx.createLinearGradient(...).addColorStop(...)` throws an
+    // unhandled error in jsdom and fails the workspace runner even
+    // when no test asserts on the result.
+    createLinearGradient: gradientStub,
+    createRadialGradient: gradientStub,
+    createConicGradient: gradientStub,
+    createPattern: patternStub,
+    quadraticCurveTo: noop,
+    bezierCurveTo: noop,
+    arcTo: noop,
+    ellipse: noop,
+    setLineDash: noop,
+    getLineDash: () => [],
+    isPointInPath: () => false,
+    isPointInStroke: () => false,
+  };
+};
 if (typeof HTMLCanvasElement !== 'undefined') {
   // Always override: jsdom's default returns null which is what crashes
   // ECharts. We do not gate on existence because the default exists but
