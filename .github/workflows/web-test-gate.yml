@@ -6,9 +6,10 @@ name: Web Test Gate
 #   - unit-required          — Vitest jsdom across the workspace
 #   - token-drift-required   — tokens:build --check + tokens:build:theme --check
 #   - cssom-canary-required  — curated manifest: Tailwind layer sentinel +
-#                              ThemeProvider + Button + Input + Checkbox + Switch
-#                              (PR-9: promoted Input/Checkbox/Switch from
-#                              cssom-full-advisory after PR-8 stabilized them).
+#                              ThemeProvider + Button + Input + Checkbox +
+#                              Switch + Radio + Card (PR-9 first cutover,
+#                              PR-10 added Radio after a11y fix, PR-11
+#                              added Card variant-token lock).
 #
 # Advisory jobs (run, but do not block merge by default):
 #   - cssom-full-advisory          — full *.cssom.test.{ts,tsx} suite
@@ -103,7 +104,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium (browser provider runtime)
         run: pnpm exec playwright install --with-deps chromium
-      - name: CSSOM canary suite (Tailwind layer + ThemeProvider + 4 primitives)
+      - name: CSSOM canary suite (Tailwind layer + ThemeProvider + 6 primitives)
         run: pnpm run test:cssom:canary
 
   cssom-full-advisory:
