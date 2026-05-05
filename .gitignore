@@ -5,6 +5,14 @@ package-lock.json
 security-reports
 packages/design-system/dist
 
+# PR-7a (2026-05): generated declaration files must NOT live under src/.
+# tsconfig.build.json correctly emits to dist/, but historic build runs
+# left 619 .d.ts artifacts committed under src/. Removed in PR-7a; this
+# pattern prevents them from re-entering the tree if a stray local build
+# misconfigures emission.
+packages/design-system/src/**/*.d.ts
+packages/design-system/src/**/*.d.ts.map
+
 *storybook.log
 storybook-static
 apps/docs/.next/
