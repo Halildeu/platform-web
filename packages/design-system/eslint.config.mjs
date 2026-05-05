@@ -25,6 +25,15 @@ export default tseslint.config(
       'vite.config.ts',
       '*.config.ts',
       '*.config.js',
+      // PR-4a (Codex thread 019df8cc iter-1 follow-up): `.d.ts`
+      // declaration files committed under src/ (619 files) cause
+      // 664 fatal `parserOptions.project` errors in DS Lint
+      // Warnings (advisory) — they aren't included in
+      // tsconfig.eslint.json. They're build artifacts (tsup
+      // output mirrored under src/) and should not be linted.
+      // Deeper fix (move .d.ts emission to dist/ only + git rm
+      // src/**/*.d.ts) is a separate cleanup PR.
+      'src/**/*.d.ts',
     ],
   },
   js.configs.recommended,
