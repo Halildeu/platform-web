@@ -57,12 +57,16 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // The CI workflow builds `.storybook-invariants` into
+    // CI workflow builds `.storybook-invariants` into
     // `storybook-static-invariants/` and points
     // PW_STORYBOOK_INVARIANTS_STATIC_DIR at it. Locally, run:
     //   pnpm exec storybook build -c .storybook-invariants -o storybook-static-invariants
     // before invoking `playwright test --config playwright.invariants.config.ts`.
-    command: `npx --yes http-server "${storybookStaticDir}" -p 6007 -s --cors`,
+    //
+    // Codex iter-3 LOW 4: `python3 -m http.server` over `npx http-server`
+    // — first-time npx fetch is unnecessary network risk for a hard gate,
+    // and python3 is preinstalled on every reasonable runner.
+    command: `python3 -m http.server 6007 --directory "${storybookStaticDir}"`,
     url: 'http://127.0.0.1:6007/iframe.html?id=visual-invariants-themematrix--light',
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,

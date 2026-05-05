@@ -38,15 +38,16 @@ export function MatrixCanvas({
   mode = 'light',
   density = 'comfortable',
   dir = 'ltr',
-  focusFirst = false,
+  focusFirst: _focusFirst = false,
 }: MatrixCanvasProps) {
-  const buttonRef = React.useRef<HTMLButtonElement>(null);
-
-  React.useEffect(() => {
-    if (focusFirst && buttonRef.current) {
-      buttonRef.current.focus();
-    }
-  }, [focusFirst]);
+  // Note: focus is no longer applied programmatically. Codex thread
+  // 019df8eb iter-3: programmatic .focus() in Chromium does not
+  // guarantee `:focus-visible`, which is what DS focus tokens key
+  // off. The FocusMatrix visual.test.ts now drives a real Tab press
+  // and asserts `:focus-visible` resolves before screenshotting.
+  // The `focusFirst` prop is kept for backward-compat (callers that
+  // previously toggled it now have no behavioral effect; deletion
+  // would break the story args type without a Storybook re-deploy).
 
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -86,12 +87,16 @@ export function MatrixCanvas({
       <section style={{ marginTop: 24 }}>
         <h3>Buttons</h3>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Button ref={buttonRef} variant="primary">
+          <Button variant="primary" density={density}>
             Primary
           </Button>
-          <Button variant="secondary">Secondary</Button>
-          <Button variant="ghost">Ghost</Button>
-          <Button variant="primary" disabled>
+          <Button variant="secondary" density={density}>
+            Secondary
+          </Button>
+          <Button variant="ghost" density={density}>
+            Ghost
+          </Button>
+          <Button variant="primary" density={density} disabled>
             Disabled
           </Button>
         </div>
@@ -100,9 +105,9 @@ export function MatrixCanvas({
       <section style={{ marginTop: 24 }}>
         <h3>Form Controls</h3>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Input placeholder="Enter text" defaultValue="Sample" />
-          <Checkbox defaultChecked aria-label="Checkbox" />
-          <Switch defaultChecked aria-label="Switch" />
+          <Input placeholder="Enter text" defaultValue="Sample" density={density} />
+          <Checkbox defaultChecked density={density} aria-label="Checkbox" />
+          <Switch defaultChecked density={density} aria-label="Switch" />
         </div>
       </section>
 

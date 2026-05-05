@@ -15,13 +15,17 @@ type Story = StoryObj<typeof MatrixCanvas>;
 
 /**
  * Focus matrix asserts that the focus ring token resolves consistently
- * across light and dark modes. The first interactive element is auto-
- * focused so the snapshot captures the focus-visible cascade.
+ * across light and dark modes.
+ *
+ * Note: focus is driven by the visual.test.ts via a real Tab keystroke
+ * AFTER the page loads, not by a story-level prop. Programmatic
+ * `element.focus()` does not reliably trigger `:focus-visible` in
+ * Chromium. See Codex thread 019df8eb iter-3 (HIGH 2).
  */
 export const Light: Story = {
-  args: { mode: 'light', density: 'comfortable', dir: 'ltr', focusFirst: true },
+  args: { mode: 'light', density: 'comfortable', dir: 'ltr' },
 };
 
 export const Dark: Story = {
-  args: { mode: 'dark', density: 'comfortable', dir: 'ltr', focusFirst: true },
+  args: { mode: 'dark', density: 'comfortable', dir: 'ltr' },
 };

@@ -12,12 +12,37 @@ Three distinct lanes live in this directory:
 
 See [`docs/architecture/frontend/adr-test-environment-strategy.md`](../../../../docs/architecture/frontend/adr-test-environment-strategy.md) §L4 for the full boundary contract.
 
-## Prerequisites
+## L4 Invariant Matrix (authoritative — PR-3)
+
+```bash
+# From repo root: build the dedicated minimal Storybook
+pnpm --filter @mfe/design-system run build:invariants
+
+# Then run the chromium-only invariant matrix:
+pnpm --filter @mfe/design-system run test:visual:invariants
+
+# Update baselines (Linux baseline must come from CI workflow_dispatch
+# — see web-test-gate.yml mode=invariant-baseline). Local
+# --update-snapshots regenerates macOS pixels which will fail on the
+# Linux gate.
+pnpm --filter @mfe/design-system run test:visual:invariants:update
+```
+
+## Legacy manual sweep (deprecated, non-authoritative)
+
+> The commands below are for the **legacy `*.visual.ts` lane**
+> (`primitives`, `components`, `patterns`, `dark-mode`, `rtl`, etc.) —
+> they predate the L4 invariant matrix and are NOT CI-gated. Use them
+> only to inspect existing legacy baselines; do not add new files to
+> this lane (the CI guard `scripts/ci/check-visual-invariant-boundary.mjs`
+> blocks new entries on touched files).
+
+### Prerequisites
 
 - Storybook running on port 6006 (`npm run storybook`)
 - Playwright installed (`npx playwright install chromium`)
 
-## Running Tests
+### Running legacy tests
 
 ```bash
 # Auto-starts Storybook if not already running
@@ -27,9 +52,7 @@ npx playwright test
 ./scripts/ci/visual-regression.sh
 ```
 
-## Updating Snapshots
-
-When a visual change is intentional, update the baseline screenshots:
+### Updating legacy snapshots (manual only — not CI-gated)
 
 ```bash
 npx playwright test --update-snapshots
@@ -38,7 +61,7 @@ npx playwright test --update-snapshots
 ./scripts/ci/visual-regression.sh --update
 ```
 
-## Test Structure
+## Test Structure (legacy)
 
 | File                     | Purpose                                         |
 | ------------------------ | ----------------------------------------------- |

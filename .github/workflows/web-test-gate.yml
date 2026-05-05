@@ -388,9 +388,24 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline'
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Codex iter-3 MEDIUM 3: full history needed for the boundary
+          # guard's `git diff origin/<base>...HEAD` call. Default
+          # checkout depth=1 makes the guard fall back to warn-only
+          # silently, defeating the L4 enforcement.
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
+      - name: Forward-looking visual boundary guard
+        # Run BEFORE pnpm install / Playwright install: this is a git-
+        # only check and we don't want install crashes to mask a guard
+        # violation. Codex iter-3 MEDIUM 3.
+        run: |
+          # Ensure we have the base ref locally (PR shallow clones may
+          # not fetch it by default even with fetch-depth: 0 on a fork).
+          git fetch origin "${{ github.base_ref || 'main' }}" --depth=1 || true
+          node scripts/ci/check-visual-invariant-boundary.mjs --base=origin/${{ github.base_ref || 'main' }}
       - uses: pnpm/action-setup@v6
       - uses: actions/cache@v5
         with:
@@ -399,8 +414,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: Forward-looking visual boundary guard
-        run: node scripts/ci/check-visual-invariant-boundary.mjs --base=origin/${{ github.base_ref || 'main' }}
       - name: Build invariant Storybook
         run: pnpm exec storybook build -c .storybook-invariants -o storybook-static-invariants
       - name: Run invariant matrix snapshots
