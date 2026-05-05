@@ -42,6 +42,25 @@
       audit trail (not a fly-away file).
 - [ ] Lock branch protection: only owner + CI bot can push to `main`
       during the cutover window.
+- [ ] **Pin `web-test-gate-required` aggregator as required check** in
+      branch protection (Settings → Branches → main → Required status
+      checks). Do NOT pin individual jobs — the aggregator already
+      `needs:` the required set and is the single intentional pin
+      point. Pre-prod state: branch protection currently OFF (verified
+      via `gh api repos/<owner>/<repo>/branches/main/protection`); this
+      step flips it on.
+- [ ] **Flip `STRICT_GATES=true` repo Actions variable** (Settings →
+      Secrets and variables → Actions → Variables). Pre-prod default
+      is unset (advisory). Once flipped, advisory job **infra**
+      failures fail the aggregator: cssom-full install crash, lint
+      job install crash, missing/empty/invalid `eslint-report.json`,
+      or a crash in the summarize/comment script. ESLint's own exit
+      code is masked by `|| true` in the lint step (intentional —
+      severity-2 diagnostics are counted as `ignored_errors` and
+      tracked as separate debt). Warning **count** is intentionally
+      NOT promoted by STRICT_GATES — that needs a baseline shrink
+      first. Aggregator branch logic simulated 7/7 scenarios green
+      in PR-6 (logs in commit message).
 - [ ] Comms message draft (T-D7 send).
 
 ### §1.2 Credential / secret materials map

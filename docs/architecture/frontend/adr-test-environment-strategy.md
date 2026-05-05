@@ -8,14 +8,14 @@
 
 Test files declare their target environment through naming. Every file maps to exactly one runner. CSSOM, computed style, theme switch, real cascade and WCAG contrast belong to a real browser environment; jsdom is reserved for DOM logic, ARIA semantics, hooks and prop contract. The boundary is enforced by lint, not by convention alone.
 
-| Suffix                     | Environment                        | What it tests                                                            | Default gate                           |
-| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
-| `*.unit.test.{ts,tsx}`     | jsdom (Vitest)                     | DOM structure, ARIA, hooks, prop contract, event dispatch                | required                               |
-| `*.contract.test.tsx`      | jsdom (Vitest)                     | Public API surface, displayName, ref forwarding                          | required                               |
-| `*.cssom.test.{ts,tsx}`    | Chromium (Vitest browser provider) | Resolved CSS, token variables, theme switch, focus ring, container query | required (canary) + advisory (full)    |
-| `*.visual.test.ts`         | Playwright                         | Invariant matrices (theme/focus/density/RTL)                             | required (invariant) + advisory (full) |
-| `*.e2e.test.ts`            | Playwright + dev server            | User journeys against `apps/`                                            | nightly                                |
-| `*.test.{ts,tsx}` (legacy) | jsdom (Vitest)                     | Legacy unit, treated as `unit` until renamed                             | required                               |
+| Suffix                     | Environment                        | What it tests                                                            | Default gate                                    |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
+| `*.unit.test.{ts,tsx}`     | jsdom (Vitest)                     | DOM structure, ARIA, hooks, prop contract, event dispatch                | required                                        |
+| `*.contract.test.tsx`      | jsdom (Vitest)                     | Public API surface, displayName, ref forwarding                          | required                                        |
+| `*.cssom.test.{ts,tsx}`    | Chromium (Vitest browser provider) | Resolved CSS, token variables, theme switch, focus ring, container query | required (canary) + advisory (full)             |
+| `*.visual.test.ts`         | Playwright                         | Invariant matrices (theme/focus/density/RTL)                             | required (invariant); x-charts has its own gate |
+| `*.e2e.test.ts`            | Playwright + dev server            | User journeys against `apps/`                                            | nightly                                         |
+| `*.test.{ts,tsx}` (legacy) | jsdom (Vitest)                     | Legacy unit, treated as `unit` until renamed                             | required                                        |
 
 ## Context
 
@@ -26,7 +26,7 @@ Test infrastructure had drifted into an environment-confused state:
 - Two real call sites (`a11y-guardian.test.ts`, `useAutoThemeAdapter.test.ts`) mock `window.getComputedStyle` to inject synthetic values.
 - Of 1031 unit-style tests, only three use `toHaveStyle`. CSSOM-driven assertions are effectively absent.
 - 99 `*.browser.test.tsx` files exist and target a real Chromium provider via `@vitest/browser-playwright`, but the CI workflow that runs them has never been created. The `npm run test:browser` script is not invoked by any workflow.
-- 194 `*.visual.test.ts` files exist; only the `x-charts` subset is enforced as a hard gate (`x-charts-visual-gate.yml`). The remainder is dormant.
+- 194 `*.visual.test.ts` / `*.visual.ts` files existed at the time of this audit; only the `x-charts` subset was enforced as a hard gate (`x-charts-visual-gate.yml`). The remainder was dormant. _(Inventory at PR-1 commit; PR-4b later removed the dormant non-x-charts files. Current `__visual__/` tree is `invariants/` (4 files) + `x-charts*.visual.ts`.)_
 
 The result: token rename, theme switch, real cascade conflicts, container queries and WCAG contrast regressions are not caught by any automated gate before merge.
 
@@ -58,7 +58,7 @@ A second-wave PR adds the impacted-component map (which components consume which
 A small, taste-driven matcher set lives at `packages/design-system/src/__tests__/cssom-harness.ts`:
 
 - `expectToken(el, property, tokenName)` — reads computed style, compares to the resolved CSS variable for `--{tokenName}`.
-- `withTheme(themeName, fn)` — toggles `data-theme` on `documentElement`, runs assertions, restores.
+- `withTheme(themeName, fn)` — toggles `data-mode` on `documentElement` (the attribute the Tailwind 4 `dark` variant reads in this repo), runs assertions, restores.
 - `expectFocusRing(el)` — asserts non-empty box-shadow / outline after `focus-visible`.
 
 Container query support is deferred to a follow-up: the API requires a host element with `container-type: inline-size` and explicit width transitions, which warrants a separate harness rather than a one-liner.
@@ -103,12 +103,15 @@ A single workflow `web-test-gate.yml` runs:
 
 - `unit-required` — Vitest jsdom across the workspace.
 - `token-drift-required` — `tokens:build --check` and `tokens:build:theme --check`.
-- `cssom-canary-required` — Vitest browser provider, canary suite (Tailwind 4 sentinel + ThemeProvider + theme switch).
+- `cssom-canary-required` — Vitest browser provider, canary suite (Tailwind 4 sentinel + ThemeProvider + Button primitive).
 - `cssom-full-advisory` — Vitest browser provider, full `*.cssom.test` set (when populated).
-- `visual-invariant-required` — Playwright on invariant matrices (post-L4).
-- `visual-full-advisory` — Playwright on remaining visual specs.
+- `lint-warn-visibility-advisory` — DS ESLint warning report (PR-2B-3): surfaces touched-file warning counts and rule top-10 in a sticky PR comment, fails only on ESLint infra errors, never on warning count.
+- `visual-invariant-required` — Playwright on `__visual__/invariants/` matrices (post-L4).
+- `visual-invariant-baseline` — manual `workflow_dispatch` (mode=`invariant-baseline`) for Linux baseline regeneration; uploads artifact, no auto-commit.
 
-Each job uses a static name so branch protection rules can require the desired set. An aggregator job `web-test-gate-required` declares `needs:` against the required set; branch protection requires only the aggregator. `STRICT_GATES` lifts advisory checks into required by routing them through a small results script in the aggregator (advisory job results are read from the workflow context; failures fail the aggregator). The "single env-var toggle" framing is intentionally a strict-gates aggregator script, not a literal `needs:` mutation, because GitHub Actions does not allow runtime `needs:` injection.
+`x-charts*.visual.ts` is gated by a separate workflow (`x-charts-visual-gate.yml`); it is intentionally not part of this aggregator because chart pixel-diff economics differ from invariant matrix economics. There is no `visual-full-advisory` job — legacy non-x-charts visual specs were removed in PR-4b.
+
+Each job uses a static name so branch protection rules can require the desired set. An aggregator job `web-test-gate-required` declares `needs:` against the required set; branch protection requires only the aggregator. `STRICT_GATES` lifts advisory checks into required by routing them through a small results script in the aggregator (advisory job results are read from the workflow context; failures fail the aggregator). The "single env-var toggle" framing is intentionally a strict-gates aggregator script, not a literal `needs:` mutation, because GitHub Actions does not allow runtime `needs:` injection. For `lint-warn-visibility-advisory` specifically, the strict-gates aggregator catches **infra** failures only — install crash, missing/empty/invalid `eslint-report.json`, or a crash in the summarize/comment script. The lint step itself runs ESLint with `|| true` so its exit code never bubbles up; severity-2 ESLint diagnostics are counted as `ignored_errors` and labelled separate debt. Warning _count_ is intentionally NOT a strict-gates blocker (current baseline ~800 would lock every PR).
 
 ## Consequences
 
