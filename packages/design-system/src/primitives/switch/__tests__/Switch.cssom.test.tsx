@@ -1,12 +1,17 @@
 import React from 'react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from 'vitest-browser-react';
+import { userEvent } from 'vitest/browser';
 import { Switch } from '../Switch';
-import { expectToken, withTheme, getResolvedToken } from '../../../__tests__/cssom-harness';
+import {
+  expectToken,
+  withTheme,
+  expectFocusRing,
+  getResolvedToken,
+} from '../../../__tests__/cssom-harness';
 
 /**
- * Switch — fourth L4-foundation real-component CSSOM canary
- * (PR-8 wave 3).
+ * Switch — fourth L4-foundation real-component CSSOM canary.
  *
  * Verifies the harness on a primitive that sets the token via inline
  * `style={{ backgroundColor: 'var(--action-primary)' }}` rather than
@@ -16,8 +21,14 @@ import { expectToken, withTheme, getResolvedToken } from '../../../__tests__/css
  * `var()` reference (Switch). The thumb uses `bg-surface-default`
  * (utility class) so we cover both paths in the same primitive.
  *
- * Production behavior is NOT changed by this PR; the Switch source and
- * tokens are untouched.
+ * History:
+ * - PR-8 (Codex 019df9f5) — added the variant + theme-switch tests.
+ *   Dropped a focus-ring test because the label's `focus-visible:`
+ *   rule never fired (label not the focused element).
+ * - PR-10 (Codex 019dfa25) — fixed the production a11y gap
+ *   (`hasFocusVisibleRingClass` on label, using `:has(:focus-visible)`)
+ *   and restored the focus-ring test. The last assertion below now
+ *   locks the keyboard-focus visible cascade.
  */
 
 describe('Switch CSSOM canary', () => {
@@ -101,15 +112,36 @@ describe('Switch CSSOM canary', () => {
     });
   });
 
-  // NOTE — focus-ring CSSOM test for Switch is intentionally NOT
-  // included in this canary. The Switch source applies
-  // `focusRingClass("ring")` (which expands to
-  // `focus-visible:ring-2 ...`) on the wrapping <label> element,
-  // but `focus-visible:` only fires when the LABEL itself is the
-  // focused element. In practice the inner sr-only <input> receives
-  // focus, not the label, so the visible ring never appears. The
-  // correct fix is in production code (separate PR): switch the
-  // label's variant from `focus-visible:` to `focus-within:` (or
-  // use a `:has(:focus-visible)` rule). After that lands, this
-  // canary should grow a focus-ring test.
+  it('renders a focus ring on the wrapping label when input gets :focus-visible (Tab)', async () => {
+    // PR-10: restored after the production a11y fix landed (Switch
+    // source now uses `hasFocusVisibleRingClass("ring")` instead of
+    // `focusRingClass("ring")` on the <label>; `:has(:focus-visible)`
+    // fires when the inner sr-only input is keyboard-focused).
+    const screen = await render(<Switch label="Toggle" />);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const input = screen.getByRole('switch', { name: 'Toggle' }).element() as HTMLElement;
+
+    await userEvent.keyboard('{Tab}');
+
+    await new Promise<void>((resolve, reject) => {
+      const start = Date.now();
+      const tick = () => {
+        if (input.matches(':focus-visible')) return resolve();
+        if (Date.now() - start > 2000)
+          return reject(new Error('Switch input never received :focus-visible after Tab'));
+        setTimeout(tick, 16);
+      };
+      tick();
+    });
+
+    // The visible ring is on the wrapping <label> via the
+    // `has-[:focus-visible]:ring-*` cascade. Walk up to the label.
+    let label: HTMLElement | null = input;
+    while (label && label.tagName !== 'LABEL') {
+      label = label.parentElement;
+    }
+    expect(label).not.toBeNull();
+
+    expectFocusRing(label as HTMLElement);
+  });
 });

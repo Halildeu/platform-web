@@ -1,21 +1,23 @@
-import React, { forwardRef, useId, useState } from "react";
-import { cn } from "../../utils/cn";
+import React, { forwardRef, useId, useState } from 'react';
+import { cn } from '../../utils/cn';
 import {
   resolveAccessState,
   withAccessGuard,
   stateAttrs,
+  peerFocusVisibleRingClass,
   type AccessControlledProps,
-} from "../../internal/interaction-core";
+} from '../../internal/interaction-core';
 
 /* ------------------------------------------------------------------ */
 /*  Radio — Single-select option within a RadioGroup                   */
 /* ------------------------------------------------------------------ */
 
-export type RadioSize = "sm" | "md" | "lg";
+export type RadioSize = 'sm' | 'md' | 'lg';
 
 /** Props for the Radio component. */
 export interface RadioProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size" | "type">,
+  extends
+    Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size' | 'type'>,
     AccessControlledProps {
   label?: string;
   description?: string;
@@ -24,24 +26,24 @@ export interface RadioProps
   /** @deprecated Use `size` instead. Will be removed in v3.0.0. */
   radioSize?: RadioSize;
   /** Density controls gap and text size */
-  density?: "compact" | "comfortable" | "spacious";
+  density?: 'compact' | 'comfortable' | 'spacious';
   error?: boolean | string | React.ReactNode;
   /** Show a loading indicator on the radio; makes it non-interactive */
   loading?: boolean;
 }
 
-export type RadioDensity = "compact" | "comfortable" | "spacious";
+export type RadioDensity = 'compact' | 'comfortable' | 'spacious';
 
 const densityStyles: Record<RadioDensity, { gap: string; text: string }> = {
-  compact: { gap: "gap-1.5", text: "text-xs" },
-  comfortable: { gap: "gap-2.5", text: "text-sm" },
-  spacious: { gap: "gap-3.5", text: "text-base" },
+  compact: { gap: 'gap-1.5', text: 'text-xs' },
+  comfortable: { gap: 'gap-2.5', text: 'text-sm' },
+  spacious: { gap: 'gap-3.5', text: 'text-base' },
 };
 
 const dotSizes: Record<RadioSize, { outer: string; inner: string }> = {
-  sm: { outer: "h-3.5 w-3.5", inner: "h-1.5 w-1.5" },
-  md: { outer: "h-4 w-4", inner: "h-2 w-2" },
-  lg: { outer: "h-5 w-5", inner: "h-2.5 w-2.5" },
+  sm: { outer: 'h-3.5 w-3.5', inner: 'h-1.5 w-1.5' },
+  md: { outer: 'h-4 w-4', inner: 'h-2 w-2' },
+  lg: { outer: 'h-5 w-5', inner: 'h-2.5 w-2.5' },
 };
 
 /**
@@ -62,22 +64,22 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(
       description,
       size: sizeProp,
       radioSize,
-      density = "comfortable",
+      density = 'comfortable',
       error = false,
       loading = false,
       disabled,
       checked,
       className,
       id: externalId,
-      access = "full",
+      access = 'full',
       accessReason,
       ...rest
     },
     ref,
   ) => {
-    const resolvedSize = sizeProp ?? radioSize ?? "md";
+    const resolvedSize = sizeProp ?? radioSize ?? 'md';
 
-    if (process.env.NODE_ENV !== "production" && radioSize !== undefined) {
+    if (process.env.NODE_ENV !== 'production' && radioSize !== undefined) {
       console.warn(
         '[DesignSystem] "Radio" prop "radioSize" is deprecated. Use "size" instead. "radioSize" will be removed in v3.0.0.',
       );
@@ -101,9 +103,12 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(
     );
 
     // Block label click delegation for readonly/disabled
-    const handleLabelClick = (isReadonly || isDisabled)
-      ? (e: React.MouseEvent) => { e.preventDefault(); }
-      : undefined;
+    const handleLabelClick =
+      isReadonly || isDisabled
+        ? (e: React.MouseEvent) => {
+            e.preventDefault();
+          }
+        : undefined;
 
     // Strip onChange from rest so guardedChange takes over
     const { onChange: _onChange, ...restWithoutChange } = rest;
@@ -113,21 +118,21 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(
         htmlFor={isReadonly ? undefined : id}
         onClick={handleLabelClick}
         className={cn(
-          "inline-flex cursor-pointer items-start",
+          'inline-flex cursor-pointer items-start',
           densityStyles[density].gap,
-          isDisabled && "cursor-not-allowed opacity-50",
-          isReadonly && "cursor-default opacity-70",
+          isDisabled && 'cursor-not-allowed opacity-50',
+          isReadonly && 'cursor-default opacity-70',
           className,
         )}
         title={accessReason}
         {...stateAttrs({
           access,
-          state: checked ? "checked" : "unchecked",
+          state: checked ? 'checked' : 'unchecked',
           disabled: isDisabled,
           readonly: isReadonly,
           error,
           loading,
-          component: "radio",
+          component: 'radio',
         })}
         aria-readonly={isReadonly || undefined}
       >
@@ -142,36 +147,35 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(
             aria-readonly={isReadonly || undefined}
             onChange={guardedChange}
             onClick={isReadonly ? (e) => e.preventDefault() : undefined}
-            className="sr-only"
+            // PR-10: `peer` is required for the proxy span's
+            // `peer-focus-visible:` rules below to fire (same pattern
+            // as Checkbox).
+            className="peer sr-only"
             {...restWithoutChange}
           />
           <span
             className={cn(
-              "flex items-center justify-center rounded-full border-2 transition-colors duration-(--motion-duration-fast)",
+              'flex items-center justify-center rounded-full border-2 transition-colors duration-(--motion-duration-fast)',
               dotSizes[resolvedSize].outer,
               checked
-                ? "border-action-primary"
+                ? 'border-action-primary'
                 : error
-                  ? "border-state-danger-text"
-                  : "border-border-default",
+                  ? 'border-state-danger-text'
+                  : 'border-border-default',
+              // PR-10: visible focus ring on the proxy span when the
+              // sr-only input has :focus-visible (keyboard nav).
+              peerFocusVisibleRingClass('ring'),
             )}
             aria-hidden
           >
             {loading ? (
               <svg
-                className={cn("animate-spin text-text-secondary", dotSizes[resolvedSize].inner)}
+                className={cn('animate-spin text-text-secondary', dotSizes[resolvedSize].inner)}
                 viewBox="0 0 16 16"
                 fill="none"
                 aria-hidden
               >
-                <circle
-                  cx="8"
-                  cy="8"
-                  r="6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  opacity="0.25"
-                />
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" opacity="0.25" />
                 <path
                   d="M14 8a6 6 0 00-6-6"
                   stroke="currentColor"
@@ -181,10 +185,7 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(
               </svg>
             ) : checked ? (
               <span
-                className={cn(
-                  "rounded-full bg-action-primary",
-                  dotSizes[resolvedSize].inner,
-                )}
+                className={cn('rounded-full bg-action-primary', dotSizes[resolvedSize].inner)}
               />
             ) : null}
           </span>
@@ -192,15 +193,11 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(
         {(label || description) && (
           <span className="flex flex-col">
             {label && (
-              <span className={cn(densityStyles[density].text, "font-medium text-text-primary")}>
+              <span className={cn(densityStyles[density].text, 'font-medium text-text-primary')}>
                 {label}
               </span>
             )}
-            {description && (
-              <span className="text-xs text-text-secondary">
-                {description}
-              </span>
-            )}
+            {description && <span className="text-xs text-text-secondary">{description}</span>}
           </span>
         )}
       </label>
@@ -208,7 +205,7 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(
   },
 );
 
-Radio.displayName = "Radio";
+Radio.displayName = 'Radio';
 
 /* ------------------------------------------------------------------ */
 /*  RadioGroup — Manages a set of Radio buttons                        */
@@ -221,7 +218,7 @@ export interface RadioGroupProps {
   defaultValue?: string;
   onChange?: (value: string) => void;
   /** Layout direction */
-  direction?: "horizontal" | "vertical";
+  direction?: 'horizontal' | 'vertical';
   className?: string;
   children: React.ReactNode;
 }
@@ -231,11 +228,11 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
   value: valueProp,
   defaultValue,
   onChange,
-  direction = "vertical",
+  direction = 'vertical',
   className,
   children,
 }) => {
-  const [internalValue, setInternalValue] = useState(defaultValue ?? "");
+  const [internalValue, setInternalValue] = useState(defaultValue ?? '');
   const isControlled = valueProp !== undefined;
   const currentValue = isControlled ? valueProp : internalValue;
 
@@ -250,8 +247,8 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
     <div
       role="radiogroup"
       className={cn(
-        "flex",
-        direction === "vertical" ? "flex-col gap-2.5" : "flex-row flex-wrap gap-4",
+        'flex',
+        direction === 'vertical' ? 'flex-col gap-2.5' : 'flex-row flex-wrap gap-4',
         className,
       )}
     >
@@ -267,4 +264,4 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
   );
 };
 
-RadioGroup.displayName = "RadioGroup";
+RadioGroup.displayName = 'RadioGroup';
