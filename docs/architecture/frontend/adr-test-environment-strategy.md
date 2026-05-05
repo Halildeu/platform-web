@@ -67,9 +67,40 @@ The harness is gated by the Tailwind 4 layer build sentinel, which proves on eve
 
 ### L4 — Visual Diff Economy
 
-Visual snapshots are limited to invariant matrix pages. Component-level snapshots are forbidden outside `x-charts` (which has its own gate established in K5). Matrix pages live under `packages/design-system/src/__visual__/invariants/` and consolidate primitives, form controls, overlays, and theme into a small set of pages (8–12 snapshots total). One token change produces one expected diff, not a per-component fan-out.
+Visual snapshots are limited to invariant matrix pages. Component-level snapshots are forbidden outside `x-charts` (which has its own gate established in K5). Matrix pages live under `packages/design-system/src/__visual__/invariants/` and consolidate primitives, form controls, overlays, and theme into a small set of pages (9 snapshots in PR-3, target 8–12 total). One token change produces one expected diff, not a per-component fan-out.
 
-PR-1 does not introduce visual matrices — it documents the boundary and forbids new component-level snapshots. The matrix pages are built in a follow-up PR.
+**PR-3 implementation** (Codex thread `019df8eb`):
+
+- Dedicated `playwright.invariants.config.ts` (chromium-only, snapshot dir `__snapshots__/invariants/`)
+- Dedicated `.storybook-invariants/` minimal config (K5 pattern: zero addons, autodocs false, reactDocgen false)
+- Four matrix files in `packages/design-system/src/__visual__/invariants/`:
+  - `theme-matrix.visual.test.ts` — 2 snapshots (light + dark)
+  - `focus-matrix.visual.test.ts` — 2 snapshots (light + dark, focus ring)
+  - `density-matrix.visual.test.ts` — 3 snapshots (compact + comfortable + spacious)
+  - `rtl-matrix.visual.test.ts` — 2 snapshots (LTR + RTL)
+- Total: 9 chromium snapshots
+- Test suffix: `*.visual.test.ts` (Vitest convention parity, not legacy `*.visual.ts`)
+- `maxDiffPixelRatio: 0.01` (tighter than x-charts 0.02; invariant scope is small enough to tolerate the strict threshold)
+- Baseline production: `gh workflow run web-test-gate.yml -f mode=invariant-baseline` → Linux artifact → maintainer commit (no auto-commit), pattern shared with x-charts
+
+**Legacy non-x-charts visual specs** (`packages/design-system/src/__visual__/*.visual.ts` excluding `x-charts*.visual.ts`):
+
+PR-3 retains but does not gate them. They are **deprecated, non-authoritative, manual-only**, and not CI-owned. The 12 legacy spec files and their committed baselines (`__snapshots__/<spec-name>/<browser>/...`) remain in the tree to preserve history but:
+
+- Are not run by `web-test-gate.yml` `visual-invariant-required`
+- Have no advisory CI lane
+- Should not receive new snapshots or baseline updates
+- Will be archived/removed in a separate cleanup PR (not PR-3)
+
+**Forward-looking guard** (`scripts/ci/check-visual-invariant-boundary.mjs`):
+
+A changed-files audit script fails CI when a PR introduces:
+
+- New `*.visual.test.ts` outside `__visual__/invariants/`
+- New `*.visual.ts` outside the existing `x-charts.visual.ts` / `x-charts-mobile.visual.ts` allowlist
+- New `*.visual.test.tsx` colocated with components
+
+The script is touched-files-aware (uses `origin/main...HEAD` diff) so the existing legacy file inventory does not trigger a fail at install time.
 
 ### L5 — CI Orchestration
 

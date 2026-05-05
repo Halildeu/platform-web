@@ -35,7 +35,10 @@
 
 - ❌ Per-component snapshots outside `x-charts`. One snapshot per matrix page.
 - ❌ Importing component sources directly to render — render through Storybook (`.storybook-invariants` config) or a standalone Playwright fixture page.
+- ❌ Adding new files outside `packages/design-system/src/__visual__/invariants/` (CI guard `scripts/ci/check-visual-invariant-boundary.mjs` blocks this on touched files).
 - ✅ Theme/focus/density/RTL matrix snapshots that consolidate many primitives onto one page.
+
+**Legacy `*.visual.ts` files** (`__visual__/{components,patterns,primitives,...}.visual.ts`): retained for history, **not CI-gated**, no new additions or baseline updates. These pre-date the L4 invariant matrix pattern and will be archived in a separate cleanup PR.
 
 ## How the gate sees you
 
