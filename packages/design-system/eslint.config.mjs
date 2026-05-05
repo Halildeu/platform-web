@@ -22,6 +22,16 @@ export default tseslint.config(
       'src/__visual__/**',
       '**/*.stories.ts',
       '**/*.stories.tsx',
+      // PR-7b (2026-05): Figma Code Connect templates use a macro-style
+      // syntax (placeholder URLs, untyped prop bindings, hyphenated keys
+      // like `very-high:`) that the TypeScript parser cannot ingest as
+      // standard TS. The root `eslint.config.mjs` already excludes these
+      // (`**/*.figma.{ts,tsx}`); the DS-scoped config was missing the
+      // same exclusion, surfacing 14 parser errors + 12 no-empty-pattern
+      // errors on files that are processed by `@figma/code-connect`,
+      // not by the build.
+      '**/*.figma.ts',
+      '**/*.figma.tsx',
       'vite.config.ts',
       '*.config.ts',
       '*.config.js',
@@ -106,6 +116,12 @@ export default tseslint.config(
   // Layer boundary: internal/ (headless) must not import styled components
   {
     files: ['src/internal/**/*.{ts,tsx}'],
+    // PR-7b (2026-05): test files under `internal/__tests__/` legitimately
+    // import public components to exercise internal hooks end-to-end (e.g.
+    // overlay-a11y-matrix.test.tsx imports FormDrawer to verify the
+    // focus-trap / scroll-lock contract through the canonical consumer).
+    // The layer-boundary rule applies to runtime sources only.
+    ignores: ['src/internal/**/__tests__/**', 'src/internal/**/*.{test,spec}.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [{

@@ -1,13 +1,15 @@
-import React, { forwardRef } from "react";
-import { cn } from "../../utils/cn";
-import { stateAttrs } from "../../internal/interaction-core";
+import React, { forwardRef } from 'react';
+import { cn } from '../../utils/cn';
+import { stateAttrs } from '../../internal/interaction-core';
 
 /* ------------------------------------------------------------------ */
 /*  CommandPaletteTrigger — Search / command palette trigger button     */
 /* ------------------------------------------------------------------ */
 
-export interface CommandPaletteTriggerProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+export interface CommandPaletteTriggerProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'children'
+> {
   /** Placeholder text shown in expanded mode. @default "Search…" */
   placeholder?: string;
   /** Keyboard shortcut hint (e.g. "Ctrl+K"). */
@@ -47,48 +49,42 @@ const SearchIcon: React.FC<{ className?: string }> = ({ className }) => (
  * <CommandPaletteTrigger compact onClick={openSearch} />
  * ```
  */
-export const CommandPaletteTrigger = forwardRef<
-  HTMLButtonElement,
-  CommandPaletteTriggerProps
->(function CommandPaletteTrigger(
-  {
-    placeholder = "Search\u2026",
-    shortcut,
-    compact = false,
-    icon,
-    className,
-    ...rest
-  },
-  ref,
-) {
-  const searchIcon = icon ?? <SearchIcon className="h-[18px] w-[18px]" />;
+export const CommandPaletteTrigger = forwardRef<HTMLButtonElement, CommandPaletteTriggerProps>(
+  function CommandPaletteTrigger(
+    { placeholder = 'Search\u2026', shortcut, compact = false, icon, className, ...rest },
+    ref,
+  ) {
+    const searchIcon = icon ?? <SearchIcon className="h-[18px] w-[18px]" />;
 
-  return (
-    <button
-      ref={ref}
-      type="button"
-      {...stateAttrs({ component: "command-palette-trigger" })}
-      title={shortcut ? `${placeholder} (${shortcut})` : placeholder}
-      aria-label={placeholder}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-2xl border border-border-subtle bg-surface-default text-sm text-text-secondary shadow-xs transition",
-        "hover:bg-surface-muted hover:text-text-primary",
-        compact ? "justify-center px-2 py-2" : "px-3 py-2 text-left",
-        className,
-      )}
-      {...rest}
-    >
-      {searchIcon}
-      {!compact && (
-        <>
-          <span className="flex-1">{placeholder}</span>
-          {shortcut && (
-            <kbd className="rounded-lg border border-border-subtle bg-surface-panel px-2 py-0.5 text-[10px] font-semibold text-text-subtle">
-              {shortcut}
-            </kbd>
-          )}
-        </>
-      )}
-    </button>
-  );
-});
+    return (
+      <button
+        ref={ref}
+        type="button"
+        {...stateAttrs({ component: 'command-palette-trigger' })}
+        title={shortcut ? `${placeholder} (${shortcut})` : placeholder}
+        aria-label={placeholder}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-2xl border border-border-subtle bg-surface-default text-sm text-text-secondary shadow-xs transition',
+          'hover:bg-surface-muted hover:text-text-primary',
+          compact ? 'justify-center px-2 py-2' : 'px-3 py-2 text-left',
+          className,
+        )}
+        {...rest}
+      >
+        {searchIcon}
+        {!compact && (
+          <>
+            <span className="flex-1">{placeholder}</span>
+            {shortcut && (
+              <kbd className="rounded-lg border border-border-subtle bg-surface-panel px-2 py-0.5 text-[10px] font-semibold text-text-subtle">
+                {shortcut}
+              </kbd>
+            )}
+          </>
+        )}
+      </button>
+    );
+  },
+);
+
+CommandPaletteTrigger.displayName = 'CommandPaletteTrigger';

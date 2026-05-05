@@ -1,22 +1,16 @@
-import React, { forwardRef } from "react";
-import { cn } from "../../utils/cn";
-import { stateAttrs } from "../../internal/interaction-core";
+import React, { forwardRef } from 'react';
+import { cn } from '../../utils/cn';
+import { stateAttrs } from '../../internal/interaction-core';
 
 /* ------------------------------------------------------------------ */
 /*  StatusIndicator — Online / offline / busy status dot with label    */
 /* ------------------------------------------------------------------ */
 
-export type StatusIndicatorStatus =
-  | "online"
-  | "offline"
-  | "busy"
-  | "away"
-  | "unknown";
+export type StatusIndicatorStatus = 'online' | 'offline' | 'busy' | 'away' | 'unknown';
 
-export type StatusIndicatorSize = "sm" | "md" | "lg";
+export type StatusIndicatorSize = 'sm' | 'md' | 'lg';
 
-export interface StatusIndicatorProps
-  extends React.HTMLAttributes<HTMLSpanElement> {
+export interface StatusIndicatorProps extends React.HTMLAttributes<HTMLSpanElement> {
   /** Status value controlling dot color. @default "online" */
   status?: StatusIndicatorStatus;
   /** Dot size. @default "md" */
@@ -30,23 +24,23 @@ export interface StatusIndicatorProps
 }
 
 const statusStyles: Record<StatusIndicatorStatus, string> = {
-  online: "bg-state-success-text",
-  offline: "bg-border-subtle",
-  busy: "bg-state-danger-text",
-  away: "bg-state-warning-text",
-  unknown: "bg-text-secondary",
+  online: 'bg-state-success-text',
+  offline: 'bg-border-subtle',
+  busy: 'bg-state-danger-text',
+  away: 'bg-state-warning-text',
+  unknown: 'bg-text-secondary',
 };
 
 const sizeStyles: Record<StatusIndicatorSize, string> = {
-  sm: "h-2 w-2",
-  md: "h-2.5 w-2.5",
-  lg: "h-3 w-3",
+  sm: 'h-2 w-2',
+  md: 'h-2.5 w-2.5',
+  lg: 'h-3 w-3',
 };
 
 const labelSizeStyles: Record<StatusIndicatorSize, string> = {
-  sm: "text-xs",
-  md: "text-xs",
-  lg: "text-sm",
+  sm: 'text-xs',
+  md: 'text-xs',
+  lg: 'text-sm',
 };
 
 /**
@@ -61,19 +55,11 @@ const labelSizeStyles: Record<StatusIndicatorSize, string> = {
  */
 export const StatusIndicator = forwardRef<HTMLSpanElement, StatusIndicatorProps>(
   function StatusIndicator(
-    {
-      status = "online",
-      size = "md",
-      label,
-      showLabel = true,
-      pulse = false,
-      className,
-      ...rest
-    },
+    { status = 'online', size = 'md', label, showLabel = true, pulse = false, className, ...rest },
     ref,
   ) {
     const dotClass = cn(
-      "inline-block shrink-0 rounded-full",
+      'inline-block shrink-0 rounded-full',
       statusStyles[status],
       sizeStyles[size],
     );
@@ -83,10 +69,10 @@ export const StatusIndicator = forwardRef<HTMLSpanElement, StatusIndicatorProps>
     return (
       <span
         ref={ref}
-        {...stateAttrs({ component: "status-indicator" })}
+        {...stateAttrs({ component: 'status-indicator' })}
         data-status={status}
         className={cn(
-          "inline-flex items-center gap-2 font-semibold text-text-secondary",
+          'inline-flex items-center gap-2 font-semibold text-text-secondary',
           labelSizeStyles[size],
           className,
         )}
@@ -94,10 +80,10 @@ export const StatusIndicator = forwardRef<HTMLSpanElement, StatusIndicatorProps>
       >
         <span className="relative inline-flex">
           <span className={dotClass} aria-hidden />
-          {pulse && status === "online" && (
+          {pulse && status === 'online' && (
             <span
               className={cn(
-                "absolute inset-0 animate-ping rounded-full opacity-75",
+                'absolute inset-0 animate-ping rounded-full opacity-75',
                 statusStyles[status],
               )}
               aria-hidden
@@ -105,10 +91,10 @@ export const StatusIndicator = forwardRef<HTMLSpanElement, StatusIndicatorProps>
           )}
         </span>
         {showLabel && <span>{resolvedLabel}</span>}
-        {!showLabel && (
-          <span className="sr-only">{resolvedLabel}</span>
-        )}
+        {!showLabel && <span className="sr-only">{resolvedLabel}</span>}
       </span>
     );
   },
 );
+
+StatusIndicator.displayName = 'StatusIndicator';

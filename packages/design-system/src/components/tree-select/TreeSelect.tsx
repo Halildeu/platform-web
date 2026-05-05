@@ -18,7 +18,10 @@ export interface TreeSelectNode {
 
 export type TreeSelectSize = 'sm' | 'md' | 'lg';
 
-export interface TreeSelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'defaultValue'> {
+export interface TreeSelectProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onChange' | 'defaultValue'
+> {
   /** Tree data source. */
   data: TreeSelectNode[];
   /** Selected value(s). */
@@ -54,25 +57,62 @@ export interface TreeSelectProps extends Omit<React.HTMLAttributes<HTMLDivElemen
 /* ---- Icons ---- */
 
 const ChevronDownIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
     <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
 const ChevronRightIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
     <polyline points="9 18 15 12 9 6" />
   </svg>
 );
 
 const XIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
 
 const CheckIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
@@ -125,9 +165,13 @@ const sizeMap: Record<TreeSelectSize, { trigger: string; text: string; tag: stri
 /* ---- Tree Node Renderer ---- */
 
 const TreeNode: React.FC<{
-  node: TreeSelectNode; depth: number; selectedValues: Set<string>;
-  expandedValues: Set<string>; onToggleExpand: (v: string) => void;
-  onSelect: (node: TreeSelectNode) => void; treeCheckable: boolean;
+  node: TreeSelectNode;
+  depth: number;
+  selectedValues: Set<string>;
+  expandedValues: Set<string>;
+  onToggleExpand: (v: string) => void;
+  onSelect: (node: TreeSelectNode) => void;
+  treeCheckable: boolean;
 }> = ({ node, depth, selectedValues, expandedValues, onToggleExpand, onSelect, treeCheckable }) => {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedValues.has(node.value);
@@ -140,7 +184,9 @@ const TreeNode: React.FC<{
       <div
         className={cn(
           'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors',
-          isSelected ? 'bg-action-primary/10 text-action-primary font-medium' : 'text-text-primary hover:bg-surface-muted',
+          isSelected
+            ? 'bg-action-primary/10 text-action-primary font-medium'
+            : 'text-text-primary hover:bg-surface-muted',
           isDisabled && 'pointer-events-none opacity-40',
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -154,31 +200,64 @@ const TreeNode: React.FC<{
         aria-disabled={isDisabled}
       >
         {hasChildren ? (
-          <span className="shrink-0 text-text-secondary cursor-pointer" role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onToggleExpand(node.value); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggleExpand(node.value); } }} aria-label={isExpanded ? 'Collapse' : 'Expand'}>
-            {isExpanded ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronRightIcon className="h-3.5 w-3.5" />}
+          <span
+            className="shrink-0 text-text-secondary cursor-pointer"
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(node.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleExpand(node.value);
+              }
+            }}
+            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+          >
+            {isExpanded ? (
+              <ChevronDownIcon className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRightIcon className="h-3.5 w-3.5" />
+            )}
           </span>
         ) : (
           <span className="w-3.5 shrink-0" />
         )}
         {treeCheckable && (
-          <span className={cn(
-            'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
-            isSelected ? 'border-action-primary bg-action-primary' : 'border-border-default bg-surface-default',
-          )}>
+          <span
+            className={cn(
+              'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+              isSelected
+                ? 'border-action-primary bg-action-primary'
+                : 'border-border-default bg-surface-default',
+            )}
+          >
             {isSelected && <CheckIcon className="h-3 w-3 text-white" />}
           </span>
         )}
         {node.icon && <span className="shrink-0 [&>svg]:h-4 [&>svg]:w-4">{node.icon}</span>}
         <span className="min-w-0 flex-1 truncate">{node.label}</span>
-        {!treeCheckable && isSelected && <CheckIcon className="h-4 w-4 shrink-0 text-action-primary" />}
+        {!treeCheckable && isSelected && (
+          <CheckIcon className="h-4 w-4 shrink-0 text-action-primary" />
+        )}
       </div>
-      {hasChildren && isExpanded && node.children!.map((child) => (
-        <TreeNode
-          key={child.value} node={child} depth={depth + 1}
-          selectedValues={selectedValues} expandedValues={expandedValues}
-          onToggleExpand={onToggleExpand} onSelect={onSelect} treeCheckable={treeCheckable}
-        />
-      ))}
+      {hasChildren &&
+        isExpanded &&
+        node.children!.map((child) => (
+          <TreeNode
+            key={child.value}
+            node={child}
+            depth={depth + 1}
+            selectedValues={selectedValues}
+            expandedValues={expandedValues}
+            onToggleExpand={onToggleExpand}
+            onSelect={onSelect}
+            treeCheckable={treeCheckable}
+          />
+        ))}
     </div>
   );
 };
@@ -204,66 +283,70 @@ const TreeNode: React.FC<{
  *
  * @since 1.1.0
  */
-export const TreeSelect = forwardRef<HTMLDivElement, TreeSelectProps>(
-  function TreeSelect(
-    {
-      data,
-      value: controlledValue,
-      defaultValue,
-      onChange,
-      multiple = false,
-      searchable = false,
-      placeholder = 'Select...',
-      treeCheckable = false,
-      treeDefaultExpandAll = false,
-      maxTagCount = 3,
-      size = 'md',
-      loading = false,
-      disabled = false,
-      allowClear = true,
-      className,
-      ...rest
-    },
-    ref,
-  ) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-    const triggerRef = useRef<HTMLDivElement>(null);
-    const dropdownRef = useRef<HTMLDivElement>(null);
+export const TreeSelect = forwardRef<HTMLDivElement, TreeSelectProps>(function TreeSelect(
+  {
+    data,
+    value: controlledValue,
+    defaultValue,
+    onChange,
+    multiple = false,
+    searchable = false,
+    placeholder = 'Select...',
+    treeCheckable = false,
+    treeDefaultExpandAll = false,
+    maxTagCount = 3,
+    size = 'md',
+    loading: _loading = false,
+    disabled = false,
+    allowClear = true,
+    className,
+    ...rest
+  },
+  ref,
+) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Selection state
-    const isControlled = controlledValue !== undefined;
-    const [internalValue, setInternalValue] = useState<string[]>(() => {
-      const dv = defaultValue;
-      if (!dv) return [];
-      return Array.isArray(dv) ? dv : [dv];
+  // Selection state
+  const isControlled = controlledValue !== undefined;
+  const [internalValue, setInternalValue] = useState<string[]>(() => {
+    const dv = defaultValue;
+    if (!dv) return [];
+    return Array.isArray(dv) ? dv : [dv];
+  });
+  const selectedValues = useMemo(() => {
+    const cv = controlledValue;
+    if (cv !== undefined) return new Set(Array.isArray(cv) ? cv : [cv]);
+    return new Set(internalValue);
+  }, [controlledValue, internalValue]);
+
+  // Expansion state
+  const [expandedValues, setExpandedValues] = useState<Set<string>>(() => {
+    if (!treeDefaultExpandAll) return new Set();
+    const all = flattenNodes(data)
+      .filter((n) => n.children?.length)
+      .map((n) => n.value);
+    return new Set(all);
+  });
+
+  const onToggleExpand = useCallback((value: string) => {
+    setExpandedValues((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
     });
-    const selectedValues = useMemo(() => {
-      const cv = controlledValue;
-      if (cv !== undefined) return new Set(Array.isArray(cv) ? cv : [cv]);
-      return new Set(internalValue);
-    }, [controlledValue, internalValue]);
+  }, []);
 
-    // Expansion state
-    const [expandedValues, setExpandedValues] = useState<Set<string>>(() => {
-      if (!treeDefaultExpandAll) return new Set();
-      const all = flattenNodes(data).filter((n) => n.children?.length).map((n) => n.value);
-      return new Set(all);
-    });
-
-    const onToggleExpand = useCallback((value: string) => {
-      setExpandedValues((prev) => {
-        const next = new Set(prev);
-        next.has(value) ? next.delete(value) : next.add(value);
-        return next;
-      });
-    }, []);
-
-    const onSelect = useCallback((node: TreeSelectNode) => {
+  const onSelect = useCallback(
+    (node: TreeSelectNode) => {
       const newValues = (() => {
         if (multiple || treeCheckable) {
           const current = new Set(selectedValues);
-          current.has(node.value) ? current.delete(node.value) : current.add(node.value);
+          if (current.has(node.value)) current.delete(node.value);
+          else current.add(node.value);
           return Array.from(current);
         }
         return [node.value];
@@ -278,128 +361,182 @@ export const TreeSelect = forwardRef<HTMLDivElement, TreeSelectProps>(
         onChange?.(newValues[0], node);
         setIsOpen(false);
       }
-    }, [selectedValues, multiple, treeCheckable, isControlled, onChange, data]);
+    },
+    [selectedValues, multiple, treeCheckable, isControlled, onChange, data],
+  );
 
-    const handleClear = useCallback((e: React.MouseEvent) => {
+  const handleClear = useCallback(
+    (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!isControlled) setInternalValue([]);
       onChange?.(multiple ? [] : '', multiple ? [] : (undefined as unknown as TreeSelectNode));
-    }, [isControlled, onChange, multiple]);
+    },
+    [isControlled, onChange, multiple],
+  );
 
-    // Close on click outside
-    useEffect(() => {
-      if (!isOpen) return;
-      const handleClick = (e: MouseEvent) => {
-        if (triggerRef.current?.contains(e.target as Node)) return;
-        if (dropdownRef.current?.contains(e.target as Node)) return;
-        setIsOpen(false);
-      };
-      document.addEventListener('mousedown', handleClick);
-      return () => document.removeEventListener('mousedown', handleClick);
-    }, [isOpen]);
+  // Close on click outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      if (dropdownRef.current?.contains(e.target as Node)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isOpen]);
 
-    // Close on Escape
-    useEffect(() => {
-      if (!isOpen) return;
-      const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
-      document.addEventListener('keydown', handleKey);
-      return () => document.removeEventListener('keydown', handleKey);
-    }, [isOpen]);
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen]);
 
-    const filteredData = searchQuery ? filterNodes(data, searchQuery) : data;
-    const styles = sizeMap[size];
-    const selectedNodes = useMemo(() => Array.from(selectedValues).map((v) => findNode(data, v)).filter(Boolean) as TreeSelectNode[], [selectedValues, data]);
+  const filteredData = searchQuery ? filterNodes(data, searchQuery) : data;
+  const styles = sizeMap[size];
+  const selectedNodes = useMemo(
+    () =>
+      Array.from(selectedValues)
+        .map((v) => findNode(data, v))
+        .filter(Boolean) as TreeSelectNode[],
+    [selectedValues, data],
+  );
 
-    return (
-      <div ref={ref} {...stateAttrs({ component: 'tree-select' })} className={cn('relative w-full', className)} {...rest}>
-        {/* Trigger */}
-        <div
-          ref={triggerRef}
-          role="combobox"
-          tabIndex={disabled ? -1 : 0}
-          aria-expanded={isOpen}
-          aria-haspopup="tree"
-          aria-disabled={disabled || undefined}
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          onKeyDown={(e) => {
-            if (disabled) return;
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsOpen(!isOpen); }
-            if (e.key === 'Escape' && isOpen) { e.preventDefault(); setIsOpen(false); }
-          }}
-          className={cn(
-            'flex w-full cursor-pointer items-center gap-1.5 rounded-lg border px-3 transition-colors',
-            styles.trigger,
-            isOpen ? 'border-action-primary ring-2 ring-action-primary/20' : 'border-border-default',
-            'bg-surface-default hover:border-border-strong',
-            disabled && 'pointer-events-none opacity-50',
-          )}
-        >
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 py-1">
-            {selectedNodes.length === 0 && (
-              <span className="text-text-secondary">{placeholder}</span>
-            )}
-            {multiple && selectedNodes.length > 0 ? (
-              <>
-                {selectedNodes.slice(0, maxTagCount).map((node) => (
-                  <span key={node.value} className={cn('inline-flex items-center gap-1 rounded-md bg-surface-muted font-medium', styles.tag)}>
-                    {node.label}
-                    <button type="button" onClick={(e) => { e.stopPropagation(); onSelect(node); }} className="hover:text-state-danger-text" aria-label={`Remove ${node.label}`}>
-                      <XIcon className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                {selectedNodes.length > maxTagCount && (
-                  <span className={cn('rounded-md bg-surface-muted font-medium', styles.tag)}>+{selectedNodes.length - maxTagCount}</span>
-                )}
-              </>
-            ) : selectedNodes.length === 1 ? (
-              <span className="truncate">{selectedNodes[0].label}</span>
-            ) : null}
-          </div>
-          {allowClear && selectedNodes.length > 0 && (
-            <button type="button" onClick={handleClear} className="shrink-0 text-text-secondary hover:text-text-primary" aria-label="Clear">
-              <XIcon className="h-4 w-4" />
-            </button>
-          )}
-          <ChevronDownIcon className={cn('h-4 w-4 shrink-0 text-text-secondary transition-transform', isOpen && 'rotate-180')} />
-        </div>
-
-        {/* Dropdown */}
-        {isOpen && (
-          <div
-            ref={dropdownRef}
-            className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-auto rounded-lg border border-border-subtle bg-surface-panel p-1 shadow-xl"
-          >
-            {searchable && (
-              <div className="mb-1 px-1">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search..."
-                  className="w-full rounded-md border border-border-subtle bg-surface-default px-2 py-1.5 text-sm outline-none focus:border-action-primary"
-                  autoFocus
-                />
-              </div>
-            )}
-            <div role="tree" aria-multiselectable={multiple || treeCheckable}>
-              {filteredData.length === 0 ? (
-                <div className="px-3 py-4 text-center text-sm text-text-secondary">No results found</div>
-              ) : (
-                filteredData.map((node) => (
-                  <TreeNode
-                    key={node.value} node={node} depth={0}
-                    selectedValues={selectedValues} expandedValues={expandedValues}
-                    onToggleExpand={onToggleExpand} onSelect={onSelect} treeCheckable={treeCheckable}
-                  />
-                ))
-              )}
-            </div>
-          </div>
+  return (
+    <div
+      ref={ref}
+      {...stateAttrs({ component: 'tree-select' })}
+      className={cn('relative w-full', className)}
+      {...rest}
+    >
+      {/* Trigger */}
+      <div
+        ref={triggerRef}
+        role="combobox"
+        tabIndex={disabled ? -1 : 0}
+        aria-expanded={isOpen}
+        aria-haspopup="tree"
+        aria-disabled={disabled || undefined}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          }
+          if (e.key === 'Escape' && isOpen) {
+            e.preventDefault();
+            setIsOpen(false);
+          }
+        }}
+        className={cn(
+          'flex w-full cursor-pointer items-center gap-1.5 rounded-lg border px-3 transition-colors',
+          styles.trigger,
+          isOpen ? 'border-action-primary ring-2 ring-action-primary/20' : 'border-border-default',
+          'bg-surface-default hover:border-border-strong',
+          disabled && 'pointer-events-none opacity-50',
         )}
+      >
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 py-1">
+          {selectedNodes.length === 0 && <span className="text-text-secondary">{placeholder}</span>}
+          {multiple && selectedNodes.length > 0 ? (
+            <>
+              {selectedNodes.slice(0, maxTagCount).map((node) => (
+                <span
+                  key={node.value}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-md bg-surface-muted font-medium',
+                    styles.tag,
+                  )}
+                >
+                  {node.label}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect(node);
+                    }}
+                    className="hover:text-state-danger-text"
+                    aria-label={`Remove ${node.label}`}
+                  >
+                    <XIcon className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              {selectedNodes.length > maxTagCount && (
+                <span className={cn('rounded-md bg-surface-muted font-medium', styles.tag)}>
+                  +{selectedNodes.length - maxTagCount}
+                </span>
+              )}
+            </>
+          ) : selectedNodes.length === 1 ? (
+            <span className="truncate">{selectedNodes[0].label}</span>
+          ) : null}
+        </div>
+        {allowClear && selectedNodes.length > 0 && (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="shrink-0 text-text-secondary hover:text-text-primary"
+            aria-label="Clear"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        )}
+        <ChevronDownIcon
+          className={cn(
+            'h-4 w-4 shrink-0 text-text-secondary transition-transform',
+            isOpen && 'rotate-180',
+          )}
+        />
       </div>
-    );
-  },
-);
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div
+          ref={dropdownRef}
+          className="absolute left-0 right-0 z-50 mt-1 max-h-64 overflow-auto rounded-lg border border-border-subtle bg-surface-panel p-1 shadow-xl"
+        >
+          {searchable && (
+            <div className="mb-1 px-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="w-full rounded-md border border-border-subtle bg-surface-default px-2 py-1.5 text-sm outline-none focus:border-action-primary"
+                autoFocus
+              />
+            </div>
+          )}
+          <div role="tree" aria-multiselectable={multiple || treeCheckable}>
+            {filteredData.length === 0 ? (
+              <div className="px-3 py-4 text-center text-sm text-text-secondary">
+                No results found
+              </div>
+            ) : (
+              filteredData.map((node) => (
+                <TreeNode
+                  key={node.value}
+                  node={node}
+                  depth={0}
+                  selectedValues={selectedValues}
+                  expandedValues={expandedValues}
+                  onToggleExpand={onToggleExpand}
+                  onSelect={onSelect}
+                  treeCheckable={treeCheckable}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 TreeSelect.displayName = 'TreeSelect';

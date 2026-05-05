@@ -1,16 +1,18 @@
-import React, { forwardRef, useCallback, useEffect, useState } from "react";
-import { cn } from "../../utils/cn";
-import { stateAttrs } from "../../internal/interaction-core";
+import React, { forwardRef, useCallback, useEffect, useState } from 'react';
+import { cn } from '../../utils/cn';
+import { stateAttrs } from '../../internal/interaction-core';
 
 /* ------------------------------------------------------------------ */
 /*  FullscreenToggle — Enter / exit browser fullscreen                 */
 /* ------------------------------------------------------------------ */
 
-export type FullscreenToggleSize = "sm" | "md" | "lg";
-export type FullscreenToggleVariant = "ghost" | "outline";
+export type FullscreenToggleSize = 'sm' | 'md' | 'lg';
+export type FullscreenToggleVariant = 'ghost' | 'outline';
 
-export interface FullscreenToggleProps
-  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children"> {
+export interface FullscreenToggleProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'children'
+> {
   /** Button size. @default "md" */
   size?: FullscreenToggleSize;
   /** Visual variant. @default "ghost" */
@@ -64,22 +66,21 @@ const MinimizeIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 const sizeStyles: Record<FullscreenToggleSize, string> = {
-  sm: "h-8 text-xs gap-1.5",
-  md: "h-9 text-sm gap-2",
-  lg: "h-10 text-sm gap-2",
+  sm: 'h-8 text-xs gap-1.5',
+  md: 'h-9 text-sm gap-2',
+  lg: 'h-10 text-sm gap-2',
 };
 
 const iconSizeStyles: Record<FullscreenToggleSize, string> = {
-  sm: "h-4 w-4",
-  md: "h-[18px] w-[18px]",
-  lg: "h-5 w-5",
+  sm: 'h-4 w-4',
+  md: 'h-[18px] w-[18px]',
+  lg: 'h-5 w-5',
 };
 
 const variantStyles: Record<FullscreenToggleVariant, string> = {
-  ghost:
-    "bg-transparent hover:bg-surface-muted text-text-secondary hover:text-text-primary",
+  ghost: 'bg-transparent hover:bg-surface-muted text-text-secondary hover:text-text-primary',
   outline:
-    "border border-border-subtle bg-surface-default hover:bg-surface-muted text-text-secondary hover:text-text-primary",
+    'border border-border-subtle bg-surface-default hover:bg-surface-muted text-text-secondary hover:text-text-primary',
 };
 
 /**
@@ -92,69 +93,70 @@ const variantStyles: Record<FullscreenToggleVariant, string> = {
  * <FullscreenToggle showLabel={false} variant="outline" />
  * ```
  */
-export const FullscreenToggle = forwardRef<
-  HTMLButtonElement,
-  FullscreenToggleProps
->(function FullscreenToggle(
-  {
-    size = "md",
-    variant = "ghost",
-    showLabel = true,
-    expandLabel = "Fullscreen",
-    collapseLabel = "Exit Fullscreen",
-    onToggle,
-    className,
-    ...rest
+export const FullscreenToggle = forwardRef<HTMLButtonElement, FullscreenToggleProps>(
+  function FullscreenToggle(
+    {
+      size = 'md',
+      variant = 'ghost',
+      showLabel = true,
+      expandLabel = 'Fullscreen',
+      collapseLabel = 'Exit Fullscreen',
+      onToggle,
+      className,
+      ...rest
+    },
+    ref,
+  ) {
+    const [isFs, setIsFs] = useState(
+      typeof document !== 'undefined' ? !!document.fullscreenElement : false,
+    );
+
+    useEffect(() => {
+      if (typeof document === 'undefined') return;
+      const handler = () => {
+        const next = !!document.fullscreenElement;
+        setIsFs(next);
+        onToggle?.(next);
+      };
+      document.addEventListener('fullscreenchange', handler);
+      return () => document.removeEventListener('fullscreenchange', handler);
+    }, [onToggle]);
+
+    const toggle = useCallback(() => {
+      if (typeof document === 'undefined') return;
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    }, []);
+
+    const label = isFs ? collapseLabel : expandLabel;
+    const Icon = isFs ? MinimizeIcon : MaximizeIcon;
+
+    return (
+      <button
+        ref={ref}
+        type="button"
+        onClick={toggle}
+        {...stateAttrs({ component: 'fullscreen-toggle' })}
+        data-fullscreen={isFs ? 'true' : 'false'}
+        title={label}
+        aria-label={label}
+        className={cn(
+          'inline-flex items-center rounded-xl transition',
+          sizeStyles[size],
+          variantStyles[variant],
+          showLabel ? 'px-3' : 'justify-center px-2',
+          className,
+        )}
+        {...rest}
+      >
+        <Icon className={iconSizeStyles[size]} />
+        {showLabel && <span className="flex-1">{label}</span>}
+      </button>
+    );
   },
-  ref,
-) {
-  const [isFs, setIsFs] = useState(
-    typeof document !== "undefined" ? !!document.fullscreenElement : false,
-  );
+);
 
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const handler = () => {
-      const next = !!document.fullscreenElement;
-      setIsFs(next);
-      onToggle?.(next);
-    };
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, [onToggle]);
-
-  const toggle = useCallback(() => {
-    if (typeof document === "undefined") return;
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
-    } else {
-      document.exitFullscreen?.().catch(() => {});
-    }
-  }, []);
-
-  const label = isFs ? collapseLabel : expandLabel;
-  const Icon = isFs ? MinimizeIcon : MaximizeIcon;
-
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={toggle}
-      {...stateAttrs({ component: "fullscreen-toggle" })}
-      data-fullscreen={isFs ? "true" : "false"}
-      title={label}
-      aria-label={label}
-      className={cn(
-        "inline-flex items-center rounded-xl transition",
-        sizeStyles[size],
-        variantStyles[variant],
-        showLabel ? "px-3" : "justify-center px-2",
-        className,
-      )}
-      {...rest}
-    >
-      <Icon className={iconSizeStyles[size]} />
-      {showLabel && <span className="flex-1">{label}</span>}
-    </button>
-  );
-});
+FullscreenToggle.displayName = 'FullscreenToggle';
