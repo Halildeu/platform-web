@@ -58,7 +58,7 @@ A second-wave PR adds the impacted-component map (which components consume which
 A small, taste-driven matcher set lives at `packages/design-system/src/__tests__/cssom-harness.ts`:
 
 - `expectToken(el, property, tokenName)` — reads computed style, compares to the resolved CSS variable for `--{tokenName}`.
-- `withTheme(themeName, fn)` — toggles `data-theme` on `documentElement`, runs assertions, restores.
+- `withTheme(themeName, fn)` — toggles `data-mode` on `documentElement` (the attribute the Tailwind 4 `dark` variant reads in this repo), runs assertions, restores.
 - `expectFocusRing(el)` — asserts non-empty box-shadow / outline after `focus-visible`.
 
 Container query support is deferred to a follow-up: the API requires a host element with `container-type: inline-size` and explicit width transitions, which warrants a separate harness rather than a one-liner.
@@ -103,12 +103,15 @@ A single workflow `web-test-gate.yml` runs:
 
 - `unit-required` — Vitest jsdom across the workspace.
 - `token-drift-required` — `tokens:build --check` and `tokens:build:theme --check`.
-- `cssom-canary-required` — Vitest browser provider, canary suite (Tailwind 4 sentinel + ThemeProvider + theme switch).
+- `cssom-canary-required` — Vitest browser provider, canary suite (Tailwind 4 sentinel + ThemeProvider + Button primitive).
 - `cssom-full-advisory` — Vitest browser provider, full `*.cssom.test` set (when populated).
-- `visual-invariant-required` — Playwright on invariant matrices (post-L4).
-- `visual-full-advisory` — Playwright on remaining visual specs.
+- `lint-warn-visibility-advisory` — DS ESLint warning report (PR-2B-3): surfaces touched-file warning counts and rule top-10 in a sticky PR comment, fails only on ESLint infra errors, never on warning count.
+- `visual-invariant-required` — Playwright on `__visual__/invariants/` matrices (post-L4).
+- `visual-invariant-baseline` — manual `workflow_dispatch` (mode=`invariant-baseline`) for Linux baseline regeneration; uploads artifact, no auto-commit.
 
-Each job uses a static name so branch protection rules can require the desired set. An aggregator job `web-test-gate-required` declares `needs:` against the required set; branch protection requires only the aggregator. `STRICT_GATES` lifts advisory checks into required by routing them through a small results script in the aggregator (advisory job results are read from the workflow context; failures fail the aggregator). The "single env-var toggle" framing is intentionally a strict-gates aggregator script, not a literal `needs:` mutation, because GitHub Actions does not allow runtime `needs:` injection.
+`x-charts*.visual.ts` is gated by a separate workflow (`x-charts-visual-gate.yml`); it is intentionally not part of this aggregator because chart pixel-diff economics differ from invariant matrix economics. There is no `visual-full-advisory` job — legacy non-x-charts visual specs were removed in PR-4b.
+
+Each job uses a static name so branch protection rules can require the desired set. An aggregator job `web-test-gate-required` declares `needs:` against the required set; branch protection requires only the aggregator. `STRICT_GATES` lifts advisory checks into required by routing them through a small results script in the aggregator (advisory job results are read from the workflow context; failures fail the aggregator). The "single env-var toggle" framing is intentionally a strict-gates aggregator script, not a literal `needs:` mutation, because GitHub Actions does not allow runtime `needs:` injection. For `lint-warn-visibility-advisory` specifically, STRICT*GATES checks for ESLint \_infra* failure (parse/config crash), not warning count — promoting warning-count to a blocker is a separate decision that requires a baseline shrink first.
 
 ## Consequences
 

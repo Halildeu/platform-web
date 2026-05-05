@@ -38,22 +38,25 @@
 - ❌ Adding new files outside `packages/design-system/src/__visual__/invariants/` (CI guard `scripts/ci/check-visual-invariant-boundary.mjs` blocks this on touched files).
 - ✅ Theme/focus/density/RTL matrix snapshots that consolidate many primitives onto one page.
 
-**Legacy `*.visual.ts` files** (`__visual__/{components,patterns,primitives,...}.visual.ts`): retained for history, **not CI-gated**, no new additions or baseline updates. These pre-date the L4 invariant matrix pattern and will be archived in a separate cleanup PR.
+**Legacy non-x-charts `*.visual.ts` files** were removed in PR-4b (12 spec files + 588 PNG baselines). Two CI-gated lanes remain in `__visual__/`: `invariants/` (this gate) and `x-charts*.visual.ts` (separate `x-charts-visual-gate.yml` workflow). New visual snapshots **must** go under `invariants/`.
 
 ## How the gate sees you
 
 CI workflow `web-test-gate.yml` wires each suffix to a static-named job:
 
-| Job                         | Suffix it runs                                                       | Status             |
-| --------------------------- | -------------------------------------------------------------------- | ------------------ |
-| `unit-required`             | `*.unit.test.{ts,tsx}` + legacy `*.test.tsx` + `*.contract.test.tsx` | required           |
-| `token-drift-required`      | `tokens:build --check` + `tokens:build:theme --check`                | required           |
-| `cssom-canary-required`     | curated canary subset of `*.cssom.test.{ts,tsx}`                     | required           |
-| `cssom-full-advisory`       | full `*.cssom.test.{ts,tsx}`                                         | advisory           |
-| `visual-invariant-required` | `*.visual.test.ts` under `__visual__/invariants/`                    | required (post-L4) |
-| `visual-full-advisory`      | remaining `*.visual.test.ts`                                         | advisory           |
+| Job                             | Suffix it runs                                                       | Status   |
+| ------------------------------- | -------------------------------------------------------------------- | -------- |
+| `unit-required`                 | `*.unit.test.{ts,tsx}` + legacy `*.test.tsx` + `*.contract.test.tsx` | required |
+| `token-drift-required`          | `tokens:build --check` + `tokens:build:theme --check`                | required |
+| `cssom-canary-required`         | curated canary subset of `*.cssom.test.{ts,tsx}`                     | required |
+| `cssom-full-advisory`           | full `*.cssom.test.{ts,tsx}`                                         | advisory |
+| `lint-warn-visibility-advisory` | DS ESLint warning report (severity 1 only)                           | advisory |
+| `visual-invariant-required`     | `*.visual.test.ts` under `__visual__/invariants/`                    | required |
+| `web-test-gate-required`        | aggregator (`needs:` against the required set + STRICT_GATES guard)  | required |
 
-Branch protection requires only the aggregator `web-test-gate-required`. To promote advisory → required, set repo variable `STRICT_GATES=true`; the aggregator script reads advisory job results and fails if any required-by-strict-mode job failed. See ADR for why this is not a literal `needs:` mutation.
+`x-charts*.visual.ts` runs in its own workflow (`x-charts-visual-gate.yml`), not in `web-test-gate.yml`. Legacy non-x-charts `*.visual.ts` specs were removed in PR-4b; there is no `visual-full-advisory` lane.
+
+Branch protection requires only the aggregator `web-test-gate-required`. To promote advisory → required, set repo variable `STRICT_GATES=true`; the aggregator reads `cssom-full-advisory` and `lint-warn-visibility-advisory` job outputs and fails on advisory infra failure (NOT on lint warning count — see ADR §L5). This is an aggregator script, not a literal `needs:` mutation, because GitHub Actions does not allow runtime `needs:` injection.
 
 ## Migration policy
 
