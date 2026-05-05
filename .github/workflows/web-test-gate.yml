@@ -218,9 +218,13 @@ jobs:
           total=$(node -e "console.log(JSON.parse(require('fs').readFileSync('eslint-summary.json', 'utf8')).total)")
           test_env=$(node -e "console.log(JSON.parse(require('fs').readFileSync('eslint-summary.json', 'utf8')).testEnv)")
           errors=$(node -e "console.log(JSON.parse(require('fs').readFileSync('eslint-summary.json', 'utf8')).errors)")
-          echo "total_warnings=$total" >> "$GITHUB_OUTPUT"
-          echo "test_env_warnings=$test_env" >> "$GITHUB_OUTPUT"
-          echo "ignored_errors=$errors" >> "$GITHUB_OUTPUT"
+          # Block-grouped redirect (ShellCheck SC2129): single open of
+          # $GITHUB_OUTPUT instead of three sequential `>>` redirects.
+          {
+            echo "total_warnings=$total"
+            echo "test_env_warnings=$test_env"
+            echo "ignored_errors=$errors"
+          } >> "$GITHUB_OUTPUT"
           echo ""
           echo "=== ESLint Warning Summary (DS) ==="
           echo "Total warnings:   $total"
