@@ -51,11 +51,16 @@
       step flips it on.
 - [ ] **Flip `STRICT_GATES=true` repo Actions variable** (Settings →
       Secrets and variables → Actions → Variables). Pre-prod default
-      is unset (advisory). Once flipped, advisory job _infra_ failures
-      (cssom-full install crash, ESLint parse error) fail the
-      aggregator. Warning _count_ is intentionally NOT promoted —
-      that needs a baseline shrink first. Aggregator script
-      simulated 7/7 scenarios green in PR-6 (logs in commit message).
+      is unset (advisory). Once flipped, advisory job **infra**
+      failures fail the aggregator: cssom-full install crash, lint
+      job install crash, missing/empty/invalid `eslint-report.json`,
+      or a crash in the summarize/comment script. ESLint's own exit
+      code is masked by `|| true` in the lint step (intentional —
+      severity-2 diagnostics are counted as `ignored_errors` and
+      tracked as separate debt). Warning **count** is intentionally
+      NOT promoted by STRICT_GATES — that needs a baseline shrink
+      first. Aggregator branch logic simulated 7/7 scenarios green
+      in PR-6 (logs in commit message).
 - [ ] Comms message draft (T-D7 send).
 
 ### §1.2 Credential / secret materials map

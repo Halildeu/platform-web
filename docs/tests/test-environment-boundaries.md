@@ -5,14 +5,14 @@
 
 ## Pick the right suffix
 
-| If you are testing…                                       | Use suffix            | Runner                    | Example                    |
-| --------------------------------------------------------- | --------------------- | ------------------------- | -------------------------- |
-| DOM structure, ARIA, hooks, prop contract, event dispatch | `*.unit.test.tsx`     | Vitest jsdom              | `Button.unit.test.tsx`     |
-| Public API surface, displayName, ref forwarding           | `*.contract.test.tsx` | Vitest jsdom              | `Button.contract.test.tsx` |
-| Resolved CSS, token variables, theme switch, focus ring   | `*.cssom.test.tsx`    | Vitest browser (Chromium) | `Button.cssom.test.tsx`    |
-| Invariant snapshot (theme/focus/density/RTL matrix)       | `*.visual.test.ts`    | Playwright                | `theme-matrix.visual.ts`   |
-| End-to-end user journey                                   | `*.e2e.test.ts`       | Playwright + dev server   | placed under `e2e/`        |
-| Legacy untyped unit (existing files)                      | `*.test.tsx`          | Vitest jsdom              | retained as-is             |
+| If you are testing…                                       | Use suffix            | Runner                    | Example                       |
+| --------------------------------------------------------- | --------------------- | ------------------------- | ----------------------------- |
+| DOM structure, ARIA, hooks, prop contract, event dispatch | `*.unit.test.tsx`     | Vitest jsdom              | `Button.unit.test.tsx`        |
+| Public API surface, displayName, ref forwarding           | `*.contract.test.tsx` | Vitest jsdom              | `Button.contract.test.tsx`    |
+| Resolved CSS, token variables, theme switch, focus ring   | `*.cssom.test.tsx`    | Vitest browser (Chromium) | `Button.cssom.test.tsx`       |
+| Invariant snapshot (theme/focus/density/RTL matrix)       | `*.visual.test.ts`    | Playwright                | `theme-matrix.visual.test.ts` |
+| End-to-end user journey                                   | `*.e2e.test.ts`       | Playwright + dev server   | placed under `e2e/`           |
+| Legacy untyped unit (existing files)                      | `*.test.tsx`          | Vitest jsdom              | retained as-is                |
 
 ## What you may NOT do
 
