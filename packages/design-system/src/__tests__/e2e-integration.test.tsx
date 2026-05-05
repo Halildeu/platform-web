@@ -723,17 +723,29 @@ describe('Drawer + form flow', () => {
     await user.click(screen.getByTestId('drawer-trigger'));
     expect(screen.getByText('Edit Settings')).toBeInTheDocument();
 
-    // Fill form. user-event 14 + jsdom 29 occasionally drops the trailing
-    // keystroke under CI runner timing — `waitFor(toHaveValue)` settles the
-    // controlled input's React state before the submit click. Without this
-    // gate, PR #240 CI saw an intermittent `'New Settin'` (final 'g'
-    // dropped) failure. Codex thread 019df8a4 plan-time AGREE.
+    // Drawer's useFocusTrap auto-focuses the first focusable element via a
+    // 50ms setTimeout (see focus-trap.tsx). On a fast local machine, typing
+    // `New Setting` finishes before that timer fires; on a slow CI runner
+    // the timer fires mid-type, stealing focus from the input to the close
+    // button and dropping the trailing keystrokes — surfaced in PR #240/#241
+    // CI as `'New Settin'` / `'New Setti'`. Waiting for the close button to
+    // own focus settles the focus-trap lifecycle BEFORE typing begins, so
+    // userEvent doesn't race the timer. Codex thread 019df8a4 iter-3 K4
+    // root cause + F-path fix.
+    await waitFor(() => {
+      expect(screen.getByLabelText('Close')).toHaveFocus();
+    });
+
+    // Fill form (focus-trap is now settled; userEvent.type handles its own
+    // input focus). The waitFor(toHaveValue) gate stays as a defense-in-
+    // depth assertion that the controlled input's React state settled
+    // before the submit click runs.
     const input = screen.getByTestId('drawer-input');
     await user.type(input, 'New Setting');
     await waitFor(() => expect(input).toHaveValue('New Setting'));
 
-    // Save — wrap callback assertion in waitFor too, so the test surfaces a
-    // race in the right place (input typing) rather than at the callback.
+    // Save — waitFor around the callback assertion so any future race
+    // surfaces at the typing layer rather than the submit callback.
     await user.click(screen.getByTestId('drawer-save'));
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith('New Setting');
