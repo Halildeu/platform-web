@@ -2,11 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AppSidebar, useSidebar } from '../../components/app-sidebar';
 import { CommandPaletteTrigger } from '../../primitives/command-palette-trigger';
 import { FullscreenToggle } from '../../primitives/fullscreen-toggle';
-import type {
-  ShellSidebarProps,
-  ShellSidebarNavItem,
-  ShellSidebarFolderItem,
-} from './types';
+import type { ShellSidebarProps, ShellSidebarNavItem, ShellSidebarFolderItem } from './types';
 
 /* ------------------------------------------------------------------ */
 /*  ShellSidebar — Ready-made app shell sidebar pattern                */
@@ -34,21 +30,47 @@ const FolderIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 const ChevronDownIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
 const ChevronRightIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="9 18 15 12 9 6" />
   </svg>
 );
 
 /* ---- Inner content (needs sidebar context) ---- */
 
-interface ShellSidebarInnerProps
-  extends Omit<ShellSidebarProps, 'storageKey' | 'defaultMode' | 'resizable' | 'resizeStorageKey' | 'minWidth' | 'maxWidth' | 'className'> {}
+type ShellSidebarInnerProps = Omit<
+  ShellSidebarProps,
+  | 'storageKey'
+  | 'defaultMode'
+  | 'resizable'
+  | 'resizeStorageKey'
+  | 'minWidth'
+  | 'maxWidth'
+  | 'className'
+>;
 
 const ShellSidebarInner: React.FC<ShellSidebarInnerProps> = ({
   navItems,
@@ -56,7 +78,7 @@ const ShellSidebarInner: React.FC<ShellSidebarInnerProps> = ({
   onNavigate,
   brandTitle,
   brandSubtitle,
-  brandLogo,
+  brandLogo: _brandLogo,
   onSearch,
   searchPlaceholder = 'Search\u2026',
   searchShortcut,
@@ -166,9 +188,7 @@ const ShellSidebarInner: React.FC<ShellSidebarInnerProps> = ({
               )}
             </button>
 
-            {foldersOpen && !isCollapsed && (
-              <FolderList items={folderItems} />
-            )}
+            {foldersOpen && !isCollapsed && <FolderList items={folderItems} />}
           </div>
         )}
       </AppSidebar.Nav>
@@ -192,11 +212,7 @@ const ShellSidebarInner: React.FC<ShellSidebarInnerProps> = ({
 
           {showFullscreenToggle && (
             <div className={isCollapsed ? 'flex justify-center' : ''}>
-              <FullscreenToggle
-                showLabel={!isCollapsed}
-                variant="outline"
-                className="w-full"
-              />
+              <FullscreenToggle showLabel={!isCollapsed} variant="outline" className="w-full" />
             </div>
           )}
 
@@ -295,3 +311,5 @@ export const ShellSidebar: React.FC<ShellSidebarProps> = ({
     />
   </AppSidebar>
 );
+
+ShellSidebar.displayName = 'ShellSidebar';

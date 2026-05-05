@@ -34,82 +34,70 @@ export interface HeaderBarProps extends React.HTMLAttributes<HTMLElement> {
  *
  * @since 1.1.0
  */
-export const HeaderBar = forwardRef<HTMLElement, HeaderBarProps>(
-  function HeaderBar(
-    {
-      cssHeightVar,
-      blur = true,
-      card = true,
-      cardClassName,
-      className,
-      children,
-      style,
-      ...rest
+export const HeaderBar = forwardRef<HTMLElement, HeaderBarProps>(function HeaderBar(
+  { cssHeightVar, blur = true, card = true, cardClassName, className, children, style, ...rest },
+  ref,
+) {
+  const syncHeight = React.useCallback(
+    (el: HTMLElement | null) => {
+      if (!el || !cssHeightVar) return;
+      const h = el.getBoundingClientRect().height;
+      document.documentElement.style.setProperty(cssHeightVar, `${h}px`);
     },
-    ref,
-  ) {
-    const syncHeight = React.useCallback(
-      (el: HTMLElement | null) => {
-        if (!el || !cssHeightVar) return;
+    [cssHeightVar],
+  );
+
+  const mergedRef = React.useCallback(
+    (el: HTMLElement | null) => {
+      syncHeight(el);
+      if (typeof ref === 'function') ref(el);
+      else if (ref) (ref as React.MutableRefObject<HTMLElement | null>).current = el;
+    },
+    [ref, syncHeight],
+  );
+
+  /* Re-sync on resize */
+  React.useEffect(() => {
+    if (!cssHeightVar) return;
+    const handleResize = () => {
+      const el = document.querySelector('[data-header-bar]') as HTMLElement | null;
+      if (el) {
         const h = el.getBoundingClientRect().height;
         document.documentElement.style.setProperty(cssHeightVar, `${h}px`);
-      },
-      [cssHeightVar],
-    );
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [cssHeightVar]);
 
-    const mergedRef = React.useCallback(
-      (el: HTMLElement | null) => {
-        syncHeight(el);
-        if (typeof ref === 'function') ref(el);
-        else if (ref) (ref as React.MutableRefObject<HTMLElement | null>).current = el;
-      },
-      [ref, syncHeight],
-    );
+  return (
+    <header
+      ref={mergedRef}
+      data-header-bar=""
+      {...stateAttrs({ component: 'header-bar' })}
+      style={{
+        ...(blur
+          ? { backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }
+          : undefined),
+        ...style,
+      }}
+      className={cn('fixed inset-x-0 top-0 z-50 bg-surface-header px-3 py-2', className)}
+      {...rest}
+    >
+      {card ? (
+        <div
+          className={cn(
+            'flex items-center justify-between gap-3 rounded-xl border border-border-subtle bg-surface-panel px-3 py-2 shadow-xs',
+            cardClassName,
+          )}
+        >
+          {children}
+        </div>
+      ) : (
+        children
+      )}
+    </header>
+  );
+});
 
-    /* Re-sync on resize */
-    React.useEffect(() => {
-      if (!cssHeightVar) return;
-      const handleResize = () => {
-        const el = document.querySelector('[data-header-bar]') as HTMLElement | null;
-        if (el) {
-          const h = el.getBoundingClientRect().height;
-          document.documentElement.style.setProperty(cssHeightVar, `${h}px`);
-        }
-      };
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }, [cssHeightVar]);
-
-    return (
-      <header
-        ref={mergedRef}
-        data-header-bar=""
-        {...stateAttrs({ component: 'header-bar' })}
-        style={{
-          ...(blur
-            ? { backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }
-            : undefined),
-          ...style,
-        }}
-        className={cn(
-          'fixed inset-x-0 top-0 z-50 bg-surface-header px-3 py-2',
-          className,
-        )}
-        {...rest}
-      >
-        {card ? (
-          <div
-            className={cn(
-              'flex items-center justify-between gap-3 rounded-xl border border-border-subtle bg-surface-panel px-3 py-2 shadow-xs',
-              cardClassName,
-            )}
-          >
-            {children}
-          </div>
-        ) : (
-          children
-        )}
-      </header>
-    );
-  },
-);
+HeaderBar.displayName = 'HeaderBar';

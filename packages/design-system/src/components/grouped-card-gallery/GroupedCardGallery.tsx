@@ -1,27 +1,24 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react";
-import { cn } from "../../utils/cn";
-import { GallerySearchBar } from "./GallerySearchBar";
-import { GalleryGroup } from "./GalleryGroup";
-import { GalleryCard } from "./GalleryCard";
-import type { GalleryItem, GroupedCardGalleryProps, GalleryColumns } from "./types";
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { cn } from '../../utils/cn';
+import { GallerySearchBar } from './GallerySearchBar';
+import { GalleryGroup } from './GalleryGroup';
+import { GalleryCard } from './GalleryCard';
+import type { GalleryItem, GroupedCardGalleryProps, GalleryColumns } from './types';
 
 /* ------------------------------------------------------------------ */
 /*  GroupedCardGallery — Collapse/expand grouped card gallery           */
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_COLUMNS: GalleryColumns = { sm: 1, md: 2, lg: 3, xl: 4 };
-const DEFAULT_SEARCH_FIELDS = ["title", "description", "tags"] as const;
+const DEFAULT_SEARCH_FIELDS = ['title', 'description', 'tags'] as const;
 const DEBOUNCE_MS = 300;
 
 /* -- Helpers -------------------------------------------------------- */
 
-function groupItems<T extends GalleryItem>(
-  items: T[],
-  groupBy: string,
-): Map<string, T[]> {
+function groupItems<T extends GalleryItem>(items: T[], groupBy: string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const item of items) {
-    const key = String((item as Record<string, unknown>)[groupBy] ?? "Other");
+    const key = String((item as Record<string, unknown>)[groupBy] ?? 'Other');
     const list = map.get(key);
     if (list) {
       list.push(item);
@@ -32,20 +29,16 @@ function groupItems<T extends GalleryItem>(
   return map;
 }
 
-function matchItem<T extends GalleryItem>(
-  item: T,
-  query: string,
-  fields: string[],
-): boolean {
+function matchItem<T extends GalleryItem>(item: T, query: string, fields: string[]): boolean {
   const lower = query.toLowerCase();
   for (const field of fields) {
     const val = (item as Record<string, unknown>)[field];
-    if (typeof val === "string" && val.toLowerCase().includes(lower)) {
+    if (typeof val === 'string' && val.toLowerCase().includes(lower)) {
       return true;
     }
     if (Array.isArray(val)) {
       for (const v of val) {
-        if (typeof v === "string" && v.toLowerCase().includes(lower)) {
+        if (typeof v === 'string' && v.toLowerCase().includes(lower)) {
           return true;
         }
       }
@@ -59,7 +52,7 @@ function sortGroups(
   order?: string[] | ((a: string, b: string) => number),
 ): string[] {
   if (!order) return keys.sort();
-  if (typeof order === "function") return keys.sort(order);
+  if (typeof order === 'function') return keys.sort(order);
   // Array order: listed groups first in given order, rest alphabetical
   const orderMap = new Map(order.map((k, i) => [k, i]));
   return keys.sort((a, b) => {
@@ -107,11 +100,7 @@ function saveExpanded(key: string | undefined, expanded: Set<string>): void {
 
 const DefaultEmptyState: React.FC = () => (
   <div className="flex flex-col items-center gap-2 py-12 text-center">
-    <svg
-      className="h-10 w-10 text-text-secondary/40"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
+    <svg className="h-10 w-10 text-text-secondary/40" viewBox="0 0 24 24" fill="none">
       <path
         d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"
         stroke="currentColor"
@@ -146,16 +135,13 @@ const DefaultEmptyState: React.FC = () => (
  * />
  * ```
  */
-export const GroupedCardGallery = React.forwardRef<
-  HTMLDivElement,
-  GroupedCardGalleryProps
->(
+export const GroupedCardGallery = React.forwardRef<HTMLDivElement, GroupedCardGalleryProps>(
   <T extends GalleryItem>(
     {
       items: rawItems,
-      groupBy = "group" as keyof T & string,
+      groupBy = 'group' as keyof T & string,
       searchFields,
-      searchPlaceholder = "Search...",
+      searchPlaceholder = 'Search...',
       defaultExpandedGroups,
       groupOrder,
       onItemClick,
@@ -171,8 +157,8 @@ export const GroupedCardGallery = React.forwardRef<
     const items = Array.isArray(rawItems) ? rawItems : ([] as T[]);
 
     /* -- Search state (debounced) ---------------------------------- */
-    const [inputValue, setInputValue] = useState("");
-    const [query, setQuery] = useState("");
+    const [inputValue, setInputValue] = useState('');
+    const [query, setQuery] = useState('');
 
     useEffect(() => {
       const timer = setTimeout(() => setQuery(inputValue), DEBOUNCE_MS);
@@ -180,10 +166,7 @@ export const GroupedCardGallery = React.forwardRef<
     }, [inputValue]);
 
     /* -- Grouped data ---------------------------------------------- */
-    const grouped = useMemo(
-      () => groupItems(items as GalleryItem[], groupBy),
-      [items, groupBy],
-    );
+    const grouped = useMemo(() => groupItems(items as GalleryItem[], groupBy), [items, groupBy]);
     const sortedGroupKeys = useMemo(
       () => sortGroups([...grouped.keys()], groupOrder),
       [grouped, groupOrder],
@@ -194,8 +177,7 @@ export const GroupedCardGallery = React.forwardRef<
       const stored = loadExpanded(storageKey);
       if (stored) return stored;
       // Default: first 2 groups
-      const defaultGroups =
-        defaultExpandedGroups ?? sortedGroupKeys.slice(0, 2);
+      const defaultGroups = defaultExpandedGroups ?? sortedGroupKeys.slice(0, 2);
       return new Set(defaultGroups);
     });
 
@@ -217,36 +199,25 @@ export const GroupedCardGallery = React.forwardRef<
     }, []);
 
     /* -- Filtered data --------------------------------------------- */
-    const resolvedSearchFields = (searchFields ??
-      DEFAULT_SEARCH_FIELDS) as string[];
+    const resolvedSearchFields = (searchFields ?? DEFAULT_SEARCH_FIELDS) as string[];
 
     const filteredGrouped = useMemo(() => {
       if (!query) return grouped;
       const result = new Map<string, GalleryItem[]>();
       for (const [group, groupItems] of grouped) {
-        const matches = groupItems.filter((item) =>
-          matchItem(item, query, resolvedSearchFields),
-        );
+        const matches = groupItems.filter((item) => matchItem(item, query, resolvedSearchFields));
         if (matches.length > 0) result.set(group, matches);
       }
       return result;
     }, [grouped, query, resolvedSearchFields]);
 
     const filteredKeys = useMemo(
-      () =>
-        sortGroups(
-          [...filteredGrouped.keys()],
-          groupOrder,
-        ),
+      () => sortGroups([...filteredGrouped.keys()], groupOrder),
       [filteredGrouped, groupOrder],
     );
 
     const totalFiltered = useMemo(
-      () =>
-        [...filteredGrouped.values()].reduce(
-          (sum, list) => sum + list.length,
-          0,
-        ),
+      () => [...filteredGrouped.values()].reduce((sum, list) => sum + list.length, 0),
       [filteredGrouped],
     );
 
@@ -261,14 +232,7 @@ export const GroupedCardGallery = React.forwardRef<
         return `${totalFiltered} / ${items.length} results`;
       }
       return `${items.length} items`;
-    }, [
-      summaryFormatter,
-      grouped,
-      filteredGrouped,
-      query,
-      totalFiltered,
-      items.length,
-    ]);
+    }, [summaryFormatter, grouped, filteredGrouped, query, totalFiltered, items.length]);
 
     /* -- Grid class ------------------------------------------------ */
     const gridClass = useMemo(() => gridColsClass(columns), [columns]);
@@ -280,7 +244,7 @@ export const GroupedCardGallery = React.forwardRef<
     return (
       <div
         ref={ref}
-        className={cn("flex flex-col gap-4", className)}
+        className={cn('flex flex-col gap-4', className)}
         data-component="grouped-card-gallery"
       >
         {/* Search bar */}
@@ -307,21 +271,15 @@ export const GroupedCardGallery = React.forwardRef<
               expanded={isExpanded}
               onToggle={() => toggleGroup(groupName)}
             >
-              <div className={cn("grid gap-3", gridClass)}>
+              <div className={cn('grid gap-3', gridClass)}>
                 {groupItems.map((item) =>
                   renderCard ? (
-                    <React.Fragment key={item.id}>
-                      {renderCard(item as T)}
-                    </React.Fragment>
+                    <React.Fragment key={item.id}>{renderCard(item as T)}</React.Fragment>
                   ) : (
                     <GalleryCard
                       key={item.id}
                       item={item}
-                      onClick={
-                        onItemClick
-                          ? () => onItemClick(item as T)
-                          : undefined
-                      }
+                      onClick={onItemClick ? () => onItemClick(item as T) : undefined}
                     />
                   ),
                 )}
@@ -332,9 +290,8 @@ export const GroupedCardGallery = React.forwardRef<
       </div>
     );
   },
-) as <T extends GalleryItem>(
+) as (<T extends GalleryItem>(
   props: GroupedCardGalleryProps<T> & { ref?: React.Ref<HTMLDivElement> },
-) => React.ReactElement | null;
+) => React.ReactElement | null) & { displayName?: string };
 
-(GroupedCardGallery as { displayName?: string }).displayName =
-  "GroupedCardGallery";
+GroupedCardGallery.displayName = 'GroupedCardGallery';

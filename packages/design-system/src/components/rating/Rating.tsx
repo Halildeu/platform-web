@@ -1,15 +1,16 @@
-import React from "react";
-import { cn } from "../../utils/cn";
+import React from 'react';
+import { cn } from '../../utils/cn';
 import {
-  resolveAccessState, _accessStyles,
+  resolveAccessState,
+  _accessStyles,
   type AccessControlledProps,
-} from "../../internal/access-controller";
+} from '../../internal/access-controller';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type RatingSize = "sm" | "md" | "lg";
+export type RatingSize = 'sm' | 'md' | 'lg';
 
 export interface RatingProps extends AccessControlledProps {
   /** Current value (0-max). Makes the component controlled. */
@@ -45,13 +46,13 @@ export interface RatingProps extends AccessControlledProps {
   /** Additional class name for the root element. */
   className?: string;
   /** Accessible label for the rating group. @default "Degerlendirme" */
-  "aria-label"?: string;
+  'aria-label'?: string;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Size map                                                           */
 /* ------------------------------------------------------------------
-   */
+ */
 
 const SIZE_PX: Record<RatingSize, number> = {
   sm: 16,
@@ -102,13 +103,7 @@ const StarHalf: React.FC<{ size: number; filledColor: string; emptyColor: string
   filledColor,
   emptyColor,
 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    aria-hidden="true"
-    focusable="false"
-  >
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <defs>
       <clipPath id="star-half-left">
         <rect x="0" y="0" width="12" height="24" />
@@ -142,10 +137,9 @@ function clamp(val: number, min: number, max: number) {
   return Math.min(Math.max(val, min), max);
 }
 
-
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
-/* ------------------------------------------------------------------ 
+/* ------------------------------------------------------------------
  * @example
  * ```tsx
  * <Rating />
@@ -160,7 +154,7 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
     max = 5,
     allowHalf = false,
     allowClear = true,
-    size = "md",
+    size = 'md',
     icon,
     emptyIcon,
     halfIcon,
@@ -171,9 +165,9 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
     onValueChange,
     onHoverChange,
     className,
-    access = "full",
+    access = 'full',
     accessReason,
-    "aria-label": ariaLabel = "Degerlendirme",
+    'aria-label': ariaLabel = 'Degerlendirme',
     ...rest
   },
   forwardedRef,
@@ -192,8 +186,8 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
   const px = SIZE_PX[size];
   const step = allowHalf ? 0.5 : 1;
 
-  const filledColor = "var(--rating-filled)";
-  const emptyColor = "var(--rating-empty))";
+  const filledColor = 'var(--rating-filled)';
+  const emptyColor = 'var(--rating-empty))';
 
   const isInteractive = !accessState.isReadonly && !accessState.isDisabled;
 
@@ -250,23 +244,23 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
     (e: React.KeyboardEvent) => {
       if (!isInteractive) return;
 
-      let next = currentValue;
+      let next: number;
       switch (e.key) {
-        case "ArrowRight":
-        case "ArrowUp":
+        case 'ArrowRight':
+        case 'ArrowUp':
           e.preventDefault();
           next = clamp(currentValue + step, 0, max);
           break;
-        case "ArrowLeft":
-        case "ArrowDown":
+        case 'ArrowLeft':
+        case 'ArrowDown':
           e.preventDefault();
           next = clamp(currentValue - step, 0, max);
           break;
-        case "Home":
+        case 'Home':
           e.preventDefault();
           next = 0;
           break;
-        case "End":
+        case 'End':
           e.preventDefault();
           next = max;
           break;
@@ -315,13 +309,13 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
         key={index}
         role="radio"
         aria-checked={checked}
-        aria-label={`${starNumber} ${starNumber === 1 ? "yildiz" : "yildiz"}`}
+        aria-label={`${starNumber} ${starNumber === 1 ? 'yildiz' : 'yildiz'}`}
         tabIndex={-1}
         data-access-state={accessState.state}
         className={cn(
-          "inline-flex cursor-pointer transition-transform duration-(--motion-duration-fast)",
-          !isInteractive && "cursor-default",
-          accessState.isDisabled && "opacity-50 cursor-not-allowed",
+          'inline-flex cursor-pointer transition-transform duration-(--motion-duration-fast)',
+          !isInteractive && 'cursor-default',
+          accessState.isDisabled && 'opacity-50 cursor-not-allowed',
         )}
         data-star-index={index}
         onMouseMove={(e) => {
@@ -341,9 +335,7 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
   };
 
   const resolvedLabel = labels?.[Math.ceil(displayValue)];
-  const formattedValue = valueFormatter
-    ? valueFormatter(displayValue)
-    : `${displayValue}`;
+  const formattedValue = valueFormatter ? valueFormatter(displayValue) : `${displayValue}`;
 
   return (
     <div
@@ -354,10 +346,7 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
       aria-readonly={accessState.isReadonly || undefined}
       title={accessReason}
       tabIndex={isInteractive ? 0 : undefined}
-      className={cn(
-        "inline-flex items-center gap-1 text-text-primary",
-        className,
-      )}
+      className={cn('inline-flex items-center gap-1 text-text-primary', className)}
       onMouseLeave={handleMouseLeave}
       onKeyDown={handleKeyDown}
       {...rest}
@@ -365,10 +354,7 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
       {Array.from({ length: max }, (_, i) => renderStar(i))}
 
       {showValue && (
-        <span
-          className="ms-2 text-sm tabular-nums text-text-secondary"
-          aria-live="polite"
-        >
+        <span className="ms-2 text-sm tabular-nums text-text-secondary" aria-live="polite">
           {formattedValue}
         </span>
       )}
@@ -386,6 +372,6 @@ export const Rating = React.forwardRef<HTMLDivElement, RatingProps>(function Rat
   );
 });
 
-Rating.displayName = "Rating";
+Rating.displayName = 'Rating';
 
 export default Rating;
