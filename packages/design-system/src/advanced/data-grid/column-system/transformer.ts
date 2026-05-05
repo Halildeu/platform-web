@@ -53,18 +53,36 @@ export function buildColDefs<TRow = unknown>(
 ): ColumnDef<TRow>[] {
   const vw = viewportWidth ?? (typeof window !== 'undefined' ? window.innerWidth : 1280);
 
-  return columns
-    .filter((meta) => {
-      /* Permission-based visibility */
-      if (meta.requiredPermission && permissions) {
-        if (!permissions.includes(meta.requiredPermission)) return false;
-      }
-      /* Responsive visibility */
-      if (meta.responsive?.hideBelow) {
-        const bp = BREAKPOINTS[meta.responsive.hideBelow] ?? 0;
-        if (vw < bp) return false;
-      }
-      return true;
+  /*
+   * Two-stage filter — Codex DataGrid hardening REVISE plan
+   * (2026-05-05).
+   *
+   * 1. Permission visibility ALWAYS wins. A permission-hidden column
+   *    cannot be revived by `essential`; security > layout invariant.
+   * 2. Inside the permission-visible set, `essential` columns bypass
+   *    `hideBelow`. If no column carries `essential`, the FIRST
+   *    permission-visible column is implicitly essential — protects
+   *    zero-config consumers from the "all columns hidden on mobile"
+   *    footgun without a runtime throw.
+   */
+  const permissionVisible = columns.filter((meta) => {
+    if (meta.requiredPermission && permissions) {
+      return permissions.includes(meta.requiredPermission);
+    }
+    return true;
+  });
+
+  const hasExplicitEssential = permissionVisible.some((meta) => meta.essential === true);
+
+  return permissionVisible
+    .filter((meta, index) => {
+      const isEssential = meta.essential === true || (!hasExplicitEssential && index === 0);
+      if (isEssential) return true;
+
+      const hideBelow = meta.responsive?.hideBelow;
+      if (!hideBelow) return true;
+
+      return vw >= (BREAKPOINTS[hideBelow] ?? 0);
     })
     .map((meta) => buildSingleColDef<TRow>(meta, t, locale));
 }
@@ -85,11 +103,15 @@ function buildSingleColDef<TRow>(
     width: meta.width,
     minWidth: meta.minWidth,
     flex: meta.flex,
-    sortable: meta.sortable ?? (meta.columnType !== 'actions'),
+    sortable: meta.sortable ?? meta.columnType !== 'actions',
   };
 
   /* Right-align numeric column types (AG Grid aligns both cell + header) */
-  if (meta.columnType === 'number' || meta.columnType === 'currency' || meta.columnType === 'percent') {
+  if (
+    meta.columnType === 'number' ||
+    meta.columnType === 'currency' ||
+    meta.columnType === 'percent'
+  ) {
     colDef.type = 'rightAligned';
   }
 
@@ -116,8 +138,15 @@ function buildSingleColDef<TRow>(
   if (renderer) colDef.cellRenderer = renderer;
 
   /* Export value formatter — rendered label for Excel/CSV */
-  const exportGetter = createExportValueGetter(meta as any, t);
-  if (exportGetter) colDef.valueFormatter = exportGetter as any;
+  // `createExportValueGetter` is typed against the union'd `ColumnMeta`
+  // family but TS narrows poorly through the local `meta` parameter;
+  // the call shape is sound, so route through `unknown` instead of
+  // `any` to satisfy `@typescript-eslint/no-explicit-any`.
+  const exportGetter = createExportValueGetter(
+    meta as unknown as Parameters<typeof createExportValueGetter>[0],
+    t,
+  );
+  if (exportGetter) colDef.valueFormatter = exportGetter as ColumnDef<TRow>['valueFormatter'];
 
   return colDef;
 }
@@ -157,12 +186,7 @@ function buildRenderer(
       return createBoldTextRenderer(meta.className);
 
     case 'badge':
-      return createBadgeRenderer(
-        meta.variantMap,
-        meta.defaultVariant,
-        meta.labelMap,
-        t,
-      );
+      return createBadgeRenderer(meta.variantMap, meta.defaultVariant, meta.labelMap, t);
 
     case 'status':
       return createStatusRenderer(meta, t);

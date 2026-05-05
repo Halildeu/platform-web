@@ -66,6 +66,19 @@ export interface BaseColumnMeta {
   /** Responsive: hide column below this breakpoint */
   responsive?: { hideBelow?: 'sm' | 'md' | 'lg' | 'xl' };
 
+  /**
+   * Mark this column as essential — it always survives the responsive
+   * `hideBelow` filter even on the smallest viewport. Use to guarantee
+   * "at least one column always visible" semantics for grids that tag
+   * every column with `hideBelow`. Permission visibility is unaffected
+   * (a permission-hidden essential column stays hidden).
+   *
+   * If no column carries `essential`, the FIRST permission-visible
+   * column is treated as implicitly essential — keeps zero-config
+   * consumers safe from the "all columns hidden on mobile" footgun.
+   */
+  essential?: boolean;
+
   /** Conditional formatting rules */
   conditionalRules?: ConditionalRule[];
 

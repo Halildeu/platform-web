@@ -48,7 +48,10 @@ describe('buildColDefs', () => {
   it('badge sütunu — set filter + cellRenderer', () => {
     const meta: ColumnMeta[] = [
       {
-        field: 'role', headerNameKey: 'col.role', columnType: 'badge', width: 140,
+        field: 'role',
+        headerNameKey: 'col.role',
+        columnType: 'badge',
+        width: 140,
         variantMap: { ADMIN: 'danger', USER: 'info' },
         defaultVariant: 'info',
         filterValues: ['ADMIN', 'USER'],
@@ -67,7 +70,10 @@ describe('buildColDefs', () => {
   it('status sütunu — statusMap keys → set filter values', () => {
     const meta: ColumnMeta[] = [
       {
-        field: 'status', headerNameKey: 'col.status', columnType: 'status', width: 140,
+        field: 'status',
+        headerNameKey: 'col.status',
+        columnType: 'status',
+        width: 140,
         statusMap: {
           ACTIVE: { variant: 'success', labelKey: 'shared.status.active' },
           INACTIVE: { variant: 'muted', labelKey: 'shared.status.inactive' },
@@ -95,7 +101,13 @@ describe('buildColDefs', () => {
 
   it('number sütunu — agNumberColumnFilter + rightAligned', () => {
     const meta: ColumnMeta[] = [
-      { field: 'amount', headerNameKey: 'col.amount', columnType: 'number', width: 120, suffix: 'dk' },
+      {
+        field: 'amount',
+        headerNameKey: 'col.amount',
+        columnType: 'number',
+        width: 120,
+        suffix: 'dk',
+      },
     ];
     const result = buildColDefs(meta, t);
     expect(result[0].filter).toBe('agNumberColumnFilter');
@@ -137,9 +149,7 @@ describe('buildColDefs', () => {
   });
 
   it('text sütunu — rightAligned OLMAZ', () => {
-    const meta: ColumnMeta[] = [
-      { field: 'name', headerNameKey: 'col.name', columnType: 'text' },
-    ];
+    const meta: ColumnMeta[] = [{ field: 'name', headerNameKey: 'col.name', columnType: 'text' }];
     const result = buildColDefs(meta, t);
     expect(result[0].type).toBeUndefined();
   });
@@ -164,7 +174,12 @@ describe('buildColDefs', () => {
 
   it('requiredPermission — sütun filtrelenir', () => {
     const meta: ColumnMeta[] = [
-      { field: 'salary', headerNameKey: 'Maaş', columnType: 'currency', requiredPermission: 'HR_ADMIN' },
+      {
+        field: 'salary',
+        headerNameKey: 'Maaş',
+        columnType: 'currency',
+        requiredPermission: 'HR_ADMIN',
+      },
       { field: 'name', headerNameKey: 'col.name', columnType: 'text' },
     ];
     const result = buildColDefs(meta, t, 'tr-TR', ['VIEW_USERS']);
@@ -174,7 +189,12 @@ describe('buildColDefs', () => {
 
   it('requiredPermission — permission varsa sütun dahil', () => {
     const meta: ColumnMeta[] = [
-      { field: 'salary', headerNameKey: 'Maaş', columnType: 'currency', requiredPermission: 'HR_ADMIN' },
+      {
+        field: 'salary',
+        headerNameKey: 'Maaş',
+        columnType: 'currency',
+        requiredPermission: 'HR_ADMIN',
+      },
     ];
     const result = buildColDefs(meta, t, 'tr-TR', ['HR_ADMIN']);
     expect(result).toHaveLength(1);
@@ -185,7 +205,12 @@ describe('buildColDefs', () => {
     const meta: ColumnMeta[] = [
       { field: 'name', headerNameKey: 'col.name', columnType: 'bold-text' },
       { field: 'email', headerNameKey: 'col.email', columnType: 'text' },
-      { field: 'role', headerNameKey: 'col.role', columnType: 'badge', variantMap: { A: 'danger' } },
+      {
+        field: 'role',
+        headerNameKey: 'col.role',
+        columnType: 'badge',
+        variantMap: { A: 'danger' },
+      },
       { field: 'date', headerNameKey: 'col.date', columnType: 'date' },
     ];
     const result = buildColDefs(meta, t);
@@ -198,10 +223,133 @@ describe('buildColDefs', () => {
   });
 
   it('plain string headerNameKey — direkt kullanılır (dynamic report)', () => {
-    const meta: ColumnMeta[] = [
-      { field: 'col1', headerNameKey: 'Sütun Adı', columnType: 'text' },
-    ];
+    const meta: ColumnMeta[] = [{ field: 'col1', headerNameKey: 'Sütun Adı', columnType: 'text' }];
     const result = buildColDefs(meta, t);
     expect(result[0].headerName).toBe('Sütun Adı');
+  });
+
+  /* ----------------------------------------------------------------- */
+  /*  Codex DataGrid hardening REVISE plan (2026-05-05)                */
+  /*  — essential marker + 2-stage filter contract.                    */
+  /* ----------------------------------------------------------------- */
+
+  describe('responsive hide + essential marker (PR-A)', () => {
+    const baseMeta: ColumnMeta[] = [
+      { field: 'name', headerNameKey: 'col.name', columnType: 'bold-text' },
+      {
+        field: 'role',
+        headerNameKey: 'col.role',
+        columnType: 'badge',
+        variantMap: { A: 'danger' },
+        responsive: { hideBelow: 'md' },
+      },
+      {
+        field: 'date',
+        headerNameKey: 'col.date',
+        columnType: 'date',
+        responsive: { hideBelow: 'lg' },
+      },
+    ];
+
+    it('mobile viewport (<sm) hides hideBelow columns but keeps the implicit-essential first column', () => {
+      const result = buildColDefs(baseMeta, t, 'tr-TR', undefined, 360);
+      expect(result.map((c) => c.field)).toEqual(['name']);
+    });
+
+    it('explicit essential column survives mobile viewport even with hideBelow', () => {
+      const meta: ColumnMeta[] = [
+        {
+          field: 'avatar',
+          headerNameKey: 'col.name',
+          columnType: 'text',
+          responsive: { hideBelow: 'lg' },
+        },
+        {
+          field: 'name',
+          headerNameKey: 'col.name',
+          columnType: 'bold-text',
+          essential: true,
+          responsive: { hideBelow: 'md' },
+        },
+        { field: 'role', headerNameKey: 'col.role', columnType: 'badge', variantMap: {} },
+      ];
+      const result = buildColDefs(meta, t, 'tr-TR', undefined, 360);
+      // Explicit essential 'name' kept; 'avatar' hidden; 'role' kept
+      // (no hideBelow). Implicit-first-column does NOT fire because
+      // an explicit essential exists.
+      expect(result.map((c) => c.field)).toEqual(['name', 'role']);
+    });
+
+    it('all columns marked hideBelow on smallest viewport — implicit-first-column saves us from zero rows', () => {
+      const meta: ColumnMeta[] = [
+        {
+          field: 'name',
+          headerNameKey: 'col.name',
+          columnType: 'text',
+          responsive: { hideBelow: 'sm' },
+        },
+        {
+          field: 'role',
+          headerNameKey: 'col.role',
+          columnType: 'badge',
+          variantMap: {},
+          responsive: { hideBelow: 'md' },
+        },
+        {
+          field: 'date',
+          headerNameKey: 'col.date',
+          columnType: 'date',
+          responsive: { hideBelow: 'lg' },
+        },
+      ];
+      const result = buildColDefs(meta, t, 'tr-TR', undefined, 320);
+      expect(result.map((c) => c.field)).toEqual(['name']);
+    });
+
+    it('permission-hidden column never becomes the implicit essential', () => {
+      const meta: ColumnMeta[] = [
+        {
+          field: 'sensitive',
+          headerNameKey: 'col.name',
+          columnType: 'text',
+          requiredPermission: 'ADMIN',
+          responsive: { hideBelow: 'sm' },
+        },
+        {
+          field: 'role',
+          headerNameKey: 'col.role',
+          columnType: 'badge',
+          variantMap: {},
+          responsive: { hideBelow: 'md' },
+        },
+      ];
+      const result = buildColDefs(meta, t, 'tr-TR', [], 320);
+      expect(result.map((c) => c.field)).toEqual(['role']);
+    });
+
+    it('permission rejection still wins over essential', () => {
+      const meta: ColumnMeta[] = [
+        {
+          field: 'name',
+          headerNameKey: 'col.name',
+          columnType: 'text',
+          essential: true,
+          requiredPermission: 'ADMIN',
+        },
+        { field: 'role', headerNameKey: 'col.role', columnType: 'badge', variantMap: {} },
+      ];
+      const result = buildColDefs(meta, t, 'tr-TR', [], 1280);
+      expect(result.map((c) => c.field)).toEqual(['role']);
+    });
+
+    it('desktop viewport (>=xl) shows everything regardless of essential or hideBelow', () => {
+      const result = buildColDefs(baseMeta, t, 'tr-TR', undefined, 1280);
+      expect(result.map((c) => c.field)).toEqual(['name', 'role', 'date']);
+    });
+
+    it('md viewport keeps hideBelow=md columns', () => {
+      const result = buildColDefs(baseMeta, t, 'tr-TR', undefined, 800);
+      expect(result.map((c) => c.field)).toEqual(['name', 'role']);
+    });
   });
 });

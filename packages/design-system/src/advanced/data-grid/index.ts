@@ -5,52 +5,56 @@
 /* ------------------------------------------------------------------ */
 
 // Ensure AG Grid modules are registered + license applied
-import "./setup";
+import './setup';
 
 // Design token mapping for AG Grid themes
-import "./grid-theme.css";
+import './grid-theme.css';
 
 // --- AgGridServer ---
-export { AgGridServer } from "./AgGridServer";
+export { AgGridServer } from './AgGridServer';
 export type {
   AgGridServerProps,
   AgGridServerMessages,
   FetchServerSideData,
   ServerSideDataRequest,
   ServerSideDataResult,
-} from "./AgGridServer";
+} from './AgGridServer';
 
 // --- GridShell (core wrapper) ---
-export { GridShell } from "./GridShell";
-export type { GridShellProps, GridShellApi, GridTheme, GridDensity } from "./GridShell";
+export { GridShell } from './GridShell';
+export type { GridShellProps, GridShellApi, GridTheme, GridDensity } from './GridShell';
 
 // --- GridToolbar ---
-export { GridToolbar } from "./GridToolbar";
-export type { GridToolbarProps, GridToolbarMessages } from "./GridToolbar";
+export { GridToolbar } from './GridToolbar';
+export type { GridToolbarProps, GridToolbarMessages } from './GridToolbar';
 
 // --- VariantIntegration ---
-export { VariantIntegration } from "./VariantIntegration";
-export type { VariantIntegrationProps, VariantIntegrationMessages, GridVariantState } from "./VariantIntegration";
+export { VariantIntegration } from './VariantIntegration';
+export type {
+  VariantIntegrationProps,
+  VariantIntegrationMessages,
+  GridVariantState,
+} from './VariantIntegration';
 
 // --- DatasourceModeAdapter ---
-export { useDatasourceModeAdapter } from "./DatasourceModeAdapter";
+export { useDatasourceModeAdapter } from './DatasourceModeAdapter';
 export type {
   DataSourceMode,
   CreateServerSideDatasource,
   DatasourceModeAdapterOptions,
   DatasourceModeAdapterResult,
-} from "./DatasourceModeAdapter";
+} from './DatasourceModeAdapter';
 
 // --- EntityGridTemplate (orchestrator) ---
-export { EntityGridTemplate } from "./EntityGridTemplate";
+export { EntityGridTemplate } from './EntityGridTemplate';
 export type {
   EntityGridTemplateProps,
   EntityGridTemplateMessages,
   GridExportConfig,
-} from "./EntityGridTemplate";
+} from './EntityGridTemplate';
 
 // --- TablePagination ---
-export { TablePagination, useAgGridTablePagination } from "./TablePagination";
+export { TablePagination, useAgGridTablePagination } from './TablePagination';
 export type {
   TablePaginationProps,
   TablePaginationLocaleText,
@@ -61,31 +65,38 @@ export type {
   UseAgGridTablePaginationResult,
   AgGridTablePaginationApi,
   AgGridTablePaginationSnapshot,
-} from "./TablePagination";
+} from './TablePagination';
 
 // --- ServerPaginationFooter ---
-export { ServerPaginationFooter } from "./ServerPaginationFooter";
-export type { ServerPaginationFooterProps } from "./ServerPaginationFooter";
+export { ServerPaginationFooter } from './ServerPaginationFooter';
+export type { ServerPaginationFooterProps } from './ServerPaginationFooter';
 
 // --- Pagination State ---
-export { usePaginationState } from "./usePaginationState";
+export { usePaginationState } from './usePaginationState';
 export type {
   UsePaginationStateOptions,
   PaginationStateController,
   PaginationPageRange,
-} from "./usePaginationState";
+} from './usePaginationState';
 
 // --- Chart Theme Bridge ---
-export { getChartThemeOverrides, getChartColorPalette } from "./chart-theme-bridge";
-export type { ChartThemeOverrides } from "./chart-theme-bridge";
+export { getChartThemeOverrides, getChartColorPalette } from './chart-theme-bridge';
+export type { ChartThemeOverrides } from './chart-theme-bridge';
 
 // --- Query Params ---
-export { buildEntityGridQueryParams } from "./buildEntityGridQueryParams";
+export { buildEntityGridQueryParams } from './buildEntityGridQueryParams';
 export type {
   EntityGridQueryParams,
   MapAdvancedFilter,
   BuildEntityGridQueryParamsOptions,
-} from "./buildEntityGridQueryParams";
+} from './buildEntityGridQueryParams';
+
+// --- Responsive viewport hooks (Codex DataGrid hardening, 2026-05-05) ---
+export { useViewportWidth } from './useViewportWidth';
+export type { UseViewportWidthOptions } from './useViewportWidth';
+
+export { useResponsiveColumnDefs } from './useResponsiveColumnDefs';
+export type { UseResponsiveColumnDefsOptions } from './useResponsiveColumnDefs';
 
 // --- Column System (declarative column metadata → AG Grid ColDef) ---
 export {
@@ -107,7 +118,7 @@ export {
   createLinkRenderer,
   createEnumRenderer,
   createExportValueGetter,
-} from "./column-system";
+} from './column-system';
 export type {
   ColumnMeta,
   TextColumnMeta,
@@ -131,4 +142,4 @@ export type {
   FilterConfig,
   DetailExtraField,
   ColumnDef as ColumnSystemColumnDef,
-} from "./column-system";
+} from './column-system';
