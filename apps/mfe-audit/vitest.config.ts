@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   test: {
+    name: 'mfe-audit',
     root: __dirname,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     environment: 'jsdom',

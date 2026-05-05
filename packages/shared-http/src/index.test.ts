@@ -61,7 +61,7 @@ describe('shared-http interceptors', () => {
     vi.unstubAllGlobals();
   });
 
-  it('triggers unauthorized handler on 401 without forbidden toast', async () => {
+  it('on 401 invokes handler, emits app:auth:unauthorized for shell, never app:toast or redirect', async () => {
     const { mod, locationReplace, dispatchEvent } = await loadModule();
     const unauthorizedHandler = vi.fn();
     mod.registerAuthTokenResolver(() => 'token-from-store');
@@ -73,10 +73,38 @@ describe('shared-http interceptors', () => {
     await expect(rejected?.(firstError)).rejects.toBe(firstError);
     await expect(rejected?.(secondError)).rejects.toBe(secondError);
 
+    // Custom handler is the application-supplied policy hook; called for every 401.
     expect(unauthorizedHandler).toHaveBeenCalledTimes(2);
     expect(unauthorizedHandler).toHaveBeenLastCalledWith(secondError);
+
+    // 401 path never redirects; redirect responsibility is the application's
+    // (auth provider, shell). Implementation in src/index.ts:319-341.
     expect(locationReplace).not.toHaveBeenCalled();
-    expect(dispatchEvent).not.toHaveBeenCalled();
+
+    // The 401 path emits a sanitized auth event for shell/auth-provider listeners.
+    // It must NOT emit a forbidden toast (`app:toast` reserved for 403). The
+    // previous assertion `expect(dispatchEvent).not.toHaveBeenCalled()` was
+    // stale — implementation always emits `app:auth:unauthorized` (intentional,
+    // see Codex thread 019df7a1 iter-2; consumers in mfe-access/audit override
+    // the handler but the event surface stays).
+    const dispatchedEvents = dispatchEvent.mock.calls.map(([event]) => event);
+    const authEvents = dispatchedEvents.filter((event) => event.type === 'app:auth:unauthorized');
+    const toastEvents = dispatchedEvents.filter((event) => event.type === 'app:toast');
+    expect(authEvents).toHaveLength(2);
+    expect(toastEvents).toHaveLength(0);
+
+    // Detail invariant — sensitive payload (token, body, headers) must not
+    // surface. Asserting Object.keys() instead of `not.toHaveProperty` so a
+    // future regression that adds an unsanitized field is caught explicitly.
+    for (const event of authEvents) {
+      expect(Object.keys(event.detail).sort()).toEqual(['method', 'status', 'timestamp', 'url']);
+      expect(event.detail).toEqual({
+        method: 'GET',
+        status: 401,
+        url: undefined,
+        timestamp: expect.any(Number),
+      });
+    }
   });
 
   it('shows forbidden toast without logout on 403', async () => {

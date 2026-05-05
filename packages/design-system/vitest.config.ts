@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   test: {
+    name: 'design-system',
     root: __dirname,
     include: [
       'src/**/*.{test,spec}.{ts,tsx,js,jsx}',

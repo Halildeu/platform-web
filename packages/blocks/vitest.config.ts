@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   root: __dirname,
   test: {
+    name: 'blocks',
     root: __dirname,
     globals: true,
     environment: 'jsdom',

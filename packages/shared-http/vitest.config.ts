@@ -1,20 +1,19 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   root: __dirname,
-  plugins: [react()],
   test: {
-    name: 'x-charts',
+    name: 'shared-http',
     root: __dirname,
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/__tests__/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: ['../../vitest.setup.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['**/node_modules/**', '**/dist/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.*', 'src/**/*.stories.*', 'src/**/index.ts'],
+      exclude: ['src/**/*.test.*', 'src/**/index.ts'],
     },
   },
 });
