@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-04T12:48:37.104Z",
+  "generatedAt": "2026-05-05T06:13:40.237Z",
   "totalConsumers": 42,
   "byBucket": {
     "production": 17,
@@ -151,6 +151,7 @@
         "CrossFilterEntry",
         "CrossFilterProvider",
         "PieChart",
+        "XKPICard",
         "buildDesignLabEChartsTheme",
         "useCrossFilter",
         "useEChartsRenderer"
@@ -168,8 +169,8 @@
       ],
       "symbols": [
         "XBarChart",
+        "XChartContainer",
         "XPieChart",
-        "XRadarChart",
         "XTreemapChart"
       ],
       "kinds": [

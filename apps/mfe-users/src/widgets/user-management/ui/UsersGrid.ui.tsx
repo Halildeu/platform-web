@@ -13,8 +13,8 @@ import type {
 import type { GridExportConfig } from 'mfe_reporting/grid';
 import { buildEntityGridQueryParams } from '@mfe/design-system';
 import {
-  buildColDefs,
   buildProcessCellCallback as _buildProcessCellCallback,
+  useResponsiveColumnDefs,
   type ColumnMeta,
 } from '@mfe/design-system/advanced/data-grid';
 // Ağır AG Grid bağımlılıklarını ilk ekranda yüklememek için lazy-load
@@ -189,6 +189,18 @@ const UsersGrid: React.FC<UsersGridProps> = ({
             ? 'es-ES'
             : 'tr-TR';
 
+  /*
+   * PR-B: viewport-aware column visibility. Tags below mirror the
+   * responsive priority discussed in `docs/datagrid-mobile-audit.md`
+   * §3.2:
+   *   - essential (always visible): fullName — primary identity
+   *   - md+:                       email, role, status (core triage)
+   *   - lg+:                       sessionTimeoutMinutes, lastLoginAt
+   *
+   * `useResponsiveColumnDefs` (PR #236) re-derives `metaDefs` when the
+   * viewport crosses one of the bucket boundaries (640 / 768 / 1024 /
+   * 1280) — drag-resize within a single bucket is free.
+   */
   const columnMeta = useMemo<ColumnMeta[]>(
     () => [
       {
@@ -196,12 +208,14 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         headerNameKey: 'users.grid.columns.fullName',
         columnType: 'bold-text',
         minWidth: 180,
+        essential: true,
       },
       {
         field: 'email',
         headerNameKey: 'users.grid.columns.email',
         columnType: 'text',
         minWidth: 220,
+        responsive: { hideBelow: 'md' },
       },
       {
         field: 'role',
@@ -212,6 +226,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         defaultVariant: 'info',
         labelMap: { ADMIN: 'users.filters.role.admin', USER: 'users.filters.role.user' },
         filterValues: ['ADMIN', 'USER'],
+        responsive: { hideBelow: 'md' },
       },
       {
         field: 'status',
@@ -224,6 +239,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
           INVITED: { variant: 'warning', labelKey: 'users.filters.status.invited' },
           SUSPENDED: { variant: 'danger', labelKey: 'users.filters.status.suspended' },
         },
+        responsive: { hideBelow: 'md' },
       },
       {
         field: 'sessionTimeoutMinutes',
@@ -231,6 +247,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         columnType: 'number',
         width: 160,
         suffix: 'dk',
+        responsive: { hideBelow: 'lg' },
       },
       {
         field: 'lastLoginAt',
@@ -238,6 +255,7 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         columnType: 'date',
         width: 180,
         format: 'datetime',
+        responsive: { hideBelow: 'lg' },
       },
     ],
     [],
@@ -285,12 +303,24 @@ const UsersGrid: React.FC<UsersGridProps> = ({
     [onSelectUser, t],
   );
 
+  /*
+   * PR-B: replaces the synchronous `buildColDefs(...)` call with the
+   * viewport-aware `useResponsiveColumnDefs` hook. The hook
+   * subscribes to `useViewportWidth({ breakpointsOnly: true })`
+   * internally so this memo refreshes automatically when the viewport
+   * crosses a breakpoint bucket. No manual ResizeObserver needed.
+   */
+  const metaDefs = useResponsiveColumnDefs<UserSummary>({
+    columns: columnMeta,
+    t,
+    locale: localeCode,
+  }) as ColDef<UserSummary>[];
+
   /* Merge column-system output with custom columns */
-  const columnDefs = useMemo<ColDef<UserSummary>[]>(() => {
-    const metaDefs = buildColDefs<UserSummary>(columnMeta, t, localeCode) as ColDef<UserSummary>[];
-    // Insert modulePermissions before actions (between lastLoginAt and actions)
-    return [...metaDefs, ...customColumnDefs];
-  }, [columnMeta, customColumnDefs, t, localeCode]);
+  const columnDefs = useMemo<ColDef<UserSummary>[]>(
+    () => [...metaDefs, ...customColumnDefs],
+    [metaDefs, customColumnDefs],
+  );
 
   const gridOptions = useMemo<GridOptions<UserSummary>>(
     () => ({
