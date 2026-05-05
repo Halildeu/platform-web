@@ -72,7 +72,7 @@ describe('Switch CSSOM canary', () => {
     expectToken(thumb as HTMLElement, 'backgroundColor', 'surface-default');
   });
 
-  it('track surface flips on theme switch (light → dark)', async () => {
+  it('thumb --surface-default flips on theme switch (light → dark)', async () => {
     const screen = await render(<Switch label="Sync" defaultChecked />);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const input = screen.getByRole('switch', { name: 'Sync' }).element() as HTMLElement;

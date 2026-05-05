@@ -28,7 +28,7 @@ describe('Input CSSOM canary', () => {
     document.documentElement.removeAttribute('data-mode');
   });
 
-  it('default-tone frame resolves --surface-default background and --text-primary text', async () => {
+  it('default-tone input resolves --text-primary text color', async () => {
     const screen = await render(<Input aria-label="Email" />);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const input = screen.getByRole('textbox', { name: 'Email' }).element() as HTMLElement;
@@ -39,7 +39,7 @@ describe('Input CSSOM canary', () => {
     expectToken(input, 'color', 'text-primary');
   });
 
-  it('invalid (error) variant resolves --state-danger-text border on the frame', async () => {
+  it('invalid (error) variant resolves border to --state-danger-text/90 (color-mix)', async () => {
     const screen = await render(
       <Input aria-label="Email" error="Required field" defaultValue="" />,
     );
@@ -55,19 +55,34 @@ describe('Input CSSOM canary', () => {
     }
     expect(frame).not.toBeNull();
 
-    // The border is set via Tailwind's `border-state-danger-text/90`
-    // utility, which resolves to `color-mix(...)` over the token. Token
-    // signal is the underlying `--state-danger-text` itself; the
-    // utility's opacity adjustment is observable but compares
-    // approximately, not byte-for-byte. So we assert against the raw
-    // computed border-color and require it to non-empty + reflect a
-    // danger-state token (red-ish hue), and as a sanity floor verify
-    // the same token is queryable from the document root.
-    const computed = window.getComputedStyle(frame as HTMLElement);
-    const borderColor = computed.borderTopColor || computed.borderColor;
-    expect(borderColor).not.toBe('');
-    expect(borderColor).not.toBe('rgba(0, 0, 0, 0)');
+    // Tailwind's `border-state-danger-text/90` utility expands to
+    // `color-mix(in oklab, var(--state-danger-text) 90%, transparent)`.
+    // Chromium normalizes this to a numeric oklch / rgba value that
+    // differs byte-for-byte from the raw token, but matches if we stamp
+    // the same expression on a reference element and read its computed
+    // value (Chromium's normalizer is deterministic for the same input).
+    // Codex thread 019df9f5 iter-1: substring/non-empty checks would
+    // pass even if the variant accidentally regressed to a different
+    // token — reference-element comparison locks the actual cascade.
+    const ref = document.createElement('div');
+    ref.style.borderTopStyle = 'solid';
+    ref.style.borderTopWidth = '1px';
+    ref.style.borderTopColor = 'color-mix(in oklab, var(--state-danger-text) 90%, transparent)';
+    document.body.appendChild(ref);
 
+    try {
+      const got = window
+        .getComputedStyle(frame as HTMLElement)
+        .borderTopColor.replace(/\s+/g, '')
+        .toLowerCase();
+      const want = window.getComputedStyle(ref).borderTopColor.replace(/\s+/g, '').toLowerCase();
+      expect(want).not.toBe('');
+      expect(got).toBe(want);
+    } finally {
+      ref.remove();
+    }
+
+    // Sanity floor: the underlying token resolves at root.
     const dangerToken = getResolvedToken('state-danger-text');
     expect(dangerToken).not.toBe('');
   });
