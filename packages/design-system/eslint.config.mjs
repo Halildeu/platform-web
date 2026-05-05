@@ -11,6 +11,7 @@ import { rules as semanticThemeRules } from '../../scripts/lint/eslint-plugin-se
 import { rules as cssVarFallbackRules } from '../../scripts/lint/eslint-plugin-css-var-fallback.mjs';
 import { rules as noAntImportRules } from '../../scripts/lint/eslint-plugin-no-ant-import.mjs';
 import { rules as authoringContractRules } from '../../scripts/lint/eslint-plugin-authoring-contract.mjs';
+import { rules as testEnvironmentRules } from '../../scripts/lint/eslint-plugin-test-environment.mjs';
 
 export default tseslint.config(
   {
@@ -128,6 +129,18 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'no-console': 'off',
+    },
+  },
+  // L1 boundary contract — see docs/architecture/frontend/adr-test-environment-strategy.md
+  // Severity is `warn` during PR-1 adoption. Quarterly review may flip to `error`.
+  {
+    files: ['src/**/*.test.{ts,tsx}'],
+    plugins: {
+      'test-environment': { rules: testEnvironmentRules },
+    },
+    rules: {
+      'test-environment/no-cssom-in-jsdom-tests': 'warn',
+      'test-environment/no-jsdom-stubs-in-cssom-tests': 'warn',
     },
   },
 );

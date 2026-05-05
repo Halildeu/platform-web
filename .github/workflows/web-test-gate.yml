@@ -1,0 +1,150 @@
+name: Web Test Gate
+
+# Foundation gate — see docs/architecture/frontend/adr-test-environment-strategy.md
+#
+# Required jobs (branch protection points to the aggregator below):
+#   - unit-required          — Vitest jsdom across the workspace
+#   - token-drift-required   — tokens:build --check + tokens:build:theme --check
+#   - cssom-canary-required  — Tailwind layer sentinel + ThemeProvider canary
+#
+# Advisory jobs (run, but do not block merge by default):
+#   - cssom-full-advisory    — full *.cssom.test.{ts,tsx} suite
+#
+# Aggregator:
+#   - web-test-gate-required — `needs:` against the required set; this is the
+#                              single check pinned in branch protection. When
+#                              repo variable STRICT_GATES=true, the aggregator
+#                              also fails on advisory job failure.
+#
+# This workflow does not yet cover *.visual.test (L4) or full *.browser.test
+# migration. Those are scoped to subsequent PRs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit-required:
+    name: Unit (jsdom)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Vitest workspace (jsdom)
+        run: pnpm run test:workspace
+
+  token-drift-required:
+    name: Token Drift (build --check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Token drift gate (build artifacts and theme CSS)
+        run: pnpm run tokens:drift
+
+  cssom-canary-required:
+    name: CSSOM Canary (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium (browser provider runtime)
+        run: pnpm exec playwright install --with-deps chromium
+      - name: CSSOM canary suite (Tailwind layer + ThemeProvider)
+        run: pnpm run test:cssom:canary
+
+  cssom-full-advisory:
+    name: CSSOM Full (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: CSSOM full suite
+        run: pnpm run test:cssom:full
+      - name: Upload Vitest report on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: cssom-full-report
+          path: |
+            packages/design-system/.vitest-output
+            packages/design-system/test-results
+
+  web-test-gate-required:
+    name: Web Test Gate (aggregator)
+    runs-on: ubuntu-latest
+    needs:
+      - unit-required
+      - token-drift-required
+      - cssom-canary-required
+      - cssom-full-advisory
+    # Always run so the aggregator can read advisory results when STRICT_GATES=true.
+    if: always()
+    steps:
+      - name: Verify required jobs succeeded
+        run: |
+          set -euo pipefail
+          unit_result="${{ needs.unit-required.result }}"
+          token_result="${{ needs.token-drift-required.result }}"
+          cssom_result="${{ needs.cssom-canary-required.result }}"
+          echo "unit-required: $unit_result"
+          echo "token-drift-required: $token_result"
+          echo "cssom-canary-required: $cssom_result"
+          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$cssom_result" != "success" ]]; then
+            echo "::error::A required job failed."
+            exit 1
+          fi
+      - name: Strict gates (promote advisory to required)
+        if: vars.STRICT_GATES == 'true'
+        run: |
+          set -euo pipefail
+          echo "STRICT_GATES=true — advisory jobs treated as required."
+          # cssom-full-advisory is the only advisory wired in PR-1; future
+          # advisories (visual-full, browser-full) will be checked here.
+          full_result="${{ needs.cssom-full-advisory.result || 'skipped' }}"
+          echo "cssom-full-advisory: $full_result"
+          if [[ "$full_result" != "success" && "$full_result" != "skipped" ]]; then
+            echo "::error::Advisory job cssom-full-advisory failed under STRICT_GATES=true."
+            exit 1
+          fi

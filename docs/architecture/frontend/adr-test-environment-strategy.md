@@ -1,0 +1,115 @@
+# ADR: Test Environment Strategy & CSSOM Boundary
+
+## Status
+
+**Accepted** — 2026-05-05
+
+## Decision
+
+Test files declare their target environment through naming. Every file maps to exactly one runner. CSSOM, computed style, theme switch, real cascade and WCAG contrast belong to a real browser environment; jsdom is reserved for DOM logic, ARIA semantics, hooks and prop contract. The boundary is enforced by lint, not by convention alone.
+
+| Suffix                     | Environment                        | What it tests                                                            | Default gate                           |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
+| `*.unit.test.{ts,tsx}`     | jsdom (Vitest)                     | DOM structure, ARIA, hooks, prop contract, event dispatch                | required                               |
+| `*.contract.test.tsx`      | jsdom (Vitest)                     | Public API surface, displayName, ref forwarding                          | required                               |
+| `*.cssom.test.{ts,tsx}`    | Chromium (Vitest browser provider) | Resolved CSS, token variables, theme switch, focus ring, container query | required (canary) + advisory (full)    |
+| `*.visual.test.ts`         | Playwright                         | Invariant matrices (theme/focus/density/RTL)                             | required (invariant) + advisory (full) |
+| `*.e2e.test.ts`            | Playwright + dev server            | User journeys against `apps/`                                            | nightly                                |
+| `*.test.{ts,tsx}` (legacy) | jsdom (Vitest)                     | Legacy unit, treated as `unit` until renamed                             | required                               |
+
+## Context
+
+Test infrastructure had drifted into an environment-confused state:
+
+- jsdom cannot parse Tailwind 4 `@layer`, container queries, `:has()`, CSS nesting, or `@property`. CSS variables resolve to empty strings. (Setup.ts pattern list confirms: `"Could not parse CSS"`, `"tailwind"`, `"content layer"` are suppressed.)
+- axe-core `color-contrast` is disabled in unit tests because resolved values are unavailable. (`packages/design-system/src/__tests__/a11y-utils.ts:20`)
+- Two real call sites (`a11y-guardian.test.ts`, `useAutoThemeAdapter.test.ts`) mock `window.getComputedStyle` to inject synthetic values.
+- Of 1031 unit-style tests, only three use `toHaveStyle`. CSSOM-driven assertions are effectively absent.
+- 99 `*.browser.test.tsx` files exist and target a real Chromium provider via `@vitest/browser-playwright`, but the CI workflow that runs them has never been created. The `npm run test:browser` script is not invoked by any workflow.
+- 194 `*.visual.test.ts` files exist; only the `x-charts` subset is enforced as a hard gate (`x-charts-visual-gate.yml`). The remainder is dormant.
+
+The result: token rename, theme switch, real cascade conflicts, container queries and WCAG contrast regressions are not caught by any automated gate before merge.
+
+## Solution
+
+### L1 — Environment Boundary Contract
+
+Each test file declares its environment via filename suffix. The mapping is canonical and enforced by ESLint:
+
+- A file ending in `*.unit.test.{ts,tsx}` may not import `getComputedStyle`, `window.getComputedStyle`, `toHaveStyle`, or any CSSOM-only matcher. It runs in jsdom.
+- A file ending in `*.cssom.test.{ts,tsx}` may not rely on jsdom-only stubs (e.g. canvas mocks, `Path2D` shims, `matchMedia` mocks). It runs in Chromium via the Vitest browser provider.
+- Visual snapshots live in `*.visual.test.ts` and target the Playwright runner; they are forbidden from importing component sources directly to discourage component-level snapshot drift (one snapshot per matrix page, not per component — see L4).
+- E2E specs live under `e2e/` (existing layout) and remain Playwright-only.
+
+Migration is gradual:
+
+1. Lint emits warnings for new violations only (touched-file enforcement; legacy `*.test.tsx` files keep their current behavior).
+2. Touched files in PRs are upgraded as opportunity arises.
+3. A scheduled audit (separate workstream) renames legacy `*.test.tsx` to `*.unit.test.tsx` per package, in PRs no larger than one package at a time.
+
+### L2 — Token Drift Gate (build-time)
+
+`tokens:build --check` and `tokens:build:theme --check` already exist (both scripts support `--check` mode and exit non-zero on drift). PR-1 wires them into CI as a required job. Output drift, semantic token presence in `generated-theme-inline.css`, and `theme.css` alias resolution are validated. Token rename is detected at build time, not at runtime.
+
+A second-wave PR adds the impacted-component map (which components consume which token); PR-1 covers only drift detection.
+
+### L3 — CSSOM Harness API
+
+A small, taste-driven matcher set lives at `packages/design-system/src/__tests__/cssom-harness.ts`:
+
+- `expectToken(el, property, tokenName)` — reads computed style, compares to the resolved CSS variable for `--{tokenName}`.
+- `withTheme(themeName, fn)` — toggles `data-theme` on `documentElement`, runs assertions, restores.
+- `expectFocusRing(el)` — asserts non-empty box-shadow / outline after `focus-visible`.
+
+Container query support is deferred to a follow-up: the API requires a host element with `container-type: inline-size` and explicit width transitions, which warrants a separate harness rather than a one-liner.
+
+The harness is gated by the Tailwind 4 layer build sentinel, which proves on every CI run that the Vitest browser provider's Vite plugin chain emits resolved CSS variables for the document root. Without this sentinel, Chromium would silently render token-less surfaces.
+
+### L4 — Visual Diff Economy
+
+Visual snapshots are limited to invariant matrix pages. Component-level snapshots are forbidden outside `x-charts` (which has its own gate established in K5). Matrix pages live under `packages/design-system/src/__visual__/invariants/` and consolidate primitives, form controls, overlays, and theme into a small set of pages (8–12 snapshots total). One token change produces one expected diff, not a per-component fan-out.
+
+PR-1 does not introduce visual matrices — it documents the boundary and forbids new component-level snapshots. The matrix pages are built in a follow-up PR.
+
+### L5 — CI Orchestration
+
+A single workflow `web-test-gate.yml` runs:
+
+- `unit-required` — Vitest jsdom across the workspace.
+- `token-drift-required` — `tokens:build --check` and `tokens:build:theme --check`.
+- `cssom-canary-required` — Vitest browser provider, canary suite (Tailwind 4 sentinel + ThemeProvider + theme switch).
+- `cssom-full-advisory` — Vitest browser provider, full `*.cssom.test` set (when populated).
+- `visual-invariant-required` — Playwright on invariant matrices (post-L4).
+- `visual-full-advisory` — Playwright on remaining visual specs.
+
+Each job uses a static name so branch protection rules can require the desired set. An aggregator job `web-test-gate-required` declares `needs:` against the required set; branch protection requires only the aggregator. `STRICT_GATES` lifts advisory checks into required by routing them through a small results script in the aggregator (advisory job results are read from the workflow context; failures fail the aggregator). The "single env-var toggle" framing is intentionally a strict-gates aggregator script, not a literal `needs:` mutation, because GitHub Actions does not allow runtime `needs:` injection.
+
+## Consequences
+
+### What this enables
+
+- Token rename, theme switch, real cascade, focus ring, and container query regressions become detectable before merge.
+- New tests author against a single, taste-driven harness. CSSOM assertions stop being copy-pasted mocks.
+- Snapshot maintenance cost stays constant in component count (matrix pages, not per-component).
+- Cutover toggle is a single CI variable change, not a workflow rewrite.
+
+### What this trades off
+
+- One extra CI lane (Chromium browser provider). Cost rises with `cssom-full` adoption; the canary lane stays fast.
+- Authors must learn the suffix convention. Lint rule emits warnings on touched files until adoption is broad enough to flip to errors.
+- Legacy `*.test.tsx` files are not renamed in PR-1. They remain on jsdom, and the CSSOM gap they leave is filled by new `*.cssom.test` files written against the harness, not by mass renames.
+- Container query coverage is deferred. PR-1 is scoped to make the gate work; the more ambitious matchers come after the sentinel proves the harness.
+
+### What this rejects
+
+- Switching the unit runner from jsdom to happy-dom. Tailwind 4 `:has()`, `@property`, container queries and real WCAG contrast require a real browser engine; happy-dom is a partial CSSOM polyfill that produces false confidence.
+- Component-level visual snapshots outside `x-charts`. The maintenance cost is linear in component count and produces low-signal diffs on token changes.
+- Extending AG Grid/data-grid wrappers into the CSSOM canary set. AG Grid Enterprise has its own browser test infrastructure; wrapping it adds flake (ResizeObserver, virtualization, license init) without proportional signal. A small Playwright smoke for theme/density/container surfaces is sufficient and lives in its own job.
+
+## References
+
+- Existing token build pipeline: `scripts/tokens/build-tokens.mjs`, `scripts/theme/generate-theme-css.mjs`, `scripts/tokens/validate-tokens.mjs`.
+- Existing visual gate (preserved): `.github/workflows/x-charts-visual-gate.yml`.
+- Existing browser config: `packages/design-system/vitest.browser.config.ts`.
+- Adversarial review thread: Codex thread `019df733-973c-7793-bb55-936c46d6c167`, iter-2 verdict `Small PARTIAL`.
+- Cross-AI peer review rule: `~/.claude/CLAUDE.md` — AI Reviewer ≠ AI Implementer.
