@@ -85,12 +85,7 @@ Visual snapshots are limited to invariant matrix pages. Component-level snapshot
 
 **Legacy non-x-charts visual specs** (`packages/design-system/src/__visual__/*.visual.ts` excluding `x-charts*.visual.ts`):
 
-PR-3 retains but does not gate them. They are **deprecated, non-authoritative, manual-only**, and not CI-owned. The 12 legacy spec files and their committed baselines (`__snapshots__/<spec-name>/<browser>/...`) remain in the tree to preserve history but:
-
-- Are not run by `web-test-gate.yml` `visual-invariant-required`
-- Have no advisory CI lane
-- Should not receive new snapshots or baseline updates
-- Will be archived/removed in a separate cleanup PR (not PR-3)
+**Removed in PR-4b** after PR-3 established the L4 invariant matrix. The 12 legacy spec files (`primitives`, `components`, `patterns`, `dark-mode`, `rtl`, `providers`, `interactions`, `internals`, `enterprise`, `performance`, `app-sidebar`, `components-extra`) and their 588 committed baselines were deleted. Two CI-gated lanes remain in `__visual__/`: `invariants/` (L4) and `x-charts*.visual.ts` (chart gate). `playwright.config.ts` `testMatch` was narrowed to `x-charts*.visual.ts`.
 
 **Forward-looking guard** (`scripts/ci/check-visual-invariant-boundary.mjs`):
 

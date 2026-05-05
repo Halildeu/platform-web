@@ -9,7 +9,11 @@ const monorepoRoot = path.resolve(__dirname, '../..');
 
 export default defineConfig({
   testDir: './src/__visual__',
-  testMatch: '**/*.visual.ts',
+  // PR-4b: legacy non-x-charts visual specs were removed (12 files +
+  // 588 PNG baselines). This config now serves the x-charts visual
+  // gate exclusively. L4 invariant matrix uses its own dedicated
+  // config: `playwright.invariants.config.ts`.
+  testMatch: 'x-charts*.visual.ts',
   snapshotDir: './src/__visual__/__snapshots__',
   snapshotPathTemplate: '{snapshotDir}/{testFilePath}/{projectName}/{arg}{ext}',
   outputDir: './src/__visual__/test-results',
