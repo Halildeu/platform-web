@@ -32,6 +32,15 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'run = normal gate; invariant-baseline = regenerate Linux invariant snapshots and upload as artifact (no auto-commit)'
+        required: false
+        default: 'run'
+        type: choice
+        options:
+          - run
+          - invariant-baseline
 
 permissions:
   contents: read
@@ -370,6 +379,83 @@ jobs:
             eslint-summary.json
             eslint-changed.json
 
+  visual-invariant-required:
+    name: Visual Invariant Matrix (Chromium, hard gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Skip on workflow_dispatch baseline mode — visual-invariant-baseline
+    # job below handles that path. Push/PR/normal-dispatch run the gate.
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Forward-looking visual boundary guard
+        run: node scripts/ci/check-visual-invariant-boundary.mjs --base=origin/${{ github.base_ref || 'main' }}
+      - name: Build invariant Storybook
+        run: pnpm exec storybook build -c .storybook-invariants -o storybook-static-invariants
+      - name: Run invariant matrix snapshots
+        env:
+          PW_STORYBOOK_INVARIANTS_STATIC_DIR: ${{ github.workspace }}/storybook-static-invariants
+        run: |
+          cd packages/design-system
+          npx playwright test --config playwright.invariants.config.ts
+      - name: Upload diff on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: visual-invariant-diff
+          path: |
+            packages/design-system/src/__visual__/test-results-invariants
+            packages/design-system/playwright-report
+
+  visual-invariant-baseline:
+    name: Visual Invariant Baseline (manual, --update-snapshots)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Manual baseline regeneration only. Maintainer downloads the
+    # uploaded artifact and commits the contents into
+    # packages/design-system/src/__visual__/__snapshots__/invariants/.
+    # No auto-commit (matches x-charts pattern in
+    # x-charts-visual-gate.yml).
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'invariant-baseline'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build invariant Storybook
+        run: pnpm exec storybook build -c .storybook-invariants -o storybook-static-invariants
+      - name: Generate Linux invariant baseline (--update-snapshots)
+        env:
+          PW_STORYBOOK_INVARIANTS_STATIC_DIR: ${{ github.workspace }}/storybook-static-invariants
+        run: |
+          cd packages/design-system
+          npx playwright test --config playwright.invariants.config.ts --update-snapshots
+      - name: Upload baseline artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: visual-invariant-linux-baseline
+          path: packages/design-system/src/__visual__/__snapshots__/invariants
+          retention-days: 14
+
   web-test-gate-required:
     name: Web Test Gate (aggregator)
     runs-on: ubuntu-latest
@@ -379,8 +465,10 @@ jobs:
       - cssom-canary-required
       - cssom-full-advisory
       - lint-warn-visibility-advisory
+      - visual-invariant-required
     # Always run so the aggregator can read advisory results when STRICT_GATES=true.
-    if: always()
+    # Skip on baseline-only manual runs (visual-invariant-required is skipped).
+    if: always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline')
     steps:
       - name: Verify required jobs succeeded
         run: |
@@ -388,10 +476,12 @@ jobs:
           unit_result="${{ needs.unit-required.result }}"
           token_result="${{ needs.token-drift-required.result }}"
           cssom_result="${{ needs.cssom-canary-required.result }}"
+          visual_result="${{ needs.visual-invariant-required.result }}"
           echo "unit-required: $unit_result"
           echo "token-drift-required: $token_result"
           echo "cssom-canary-required: $cssom_result"
-          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$cssom_result" != "success" ]]; then
+          echo "visual-invariant-required: $visual_result"
+          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" ]]; then
             echo "::error::A required job failed."
             exit 1
           fi
