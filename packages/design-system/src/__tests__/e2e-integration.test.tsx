@@ -2,10 +2,13 @@
 import React, { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { SearchFilterListing, type ActiveFilter } from '../components/search-filter-listing/SearchFilterListing';
+import {
+  SearchFilterListing,
+  type ActiveFilter,
+} from '../components/search-filter-listing/SearchFilterListing';
 import { FormField } from '../components/form-field/FormField';
 import { Modal } from '../primitives/modal/Modal';
 import { Dialog } from '../primitives/dialog/Dialog';
@@ -48,7 +51,9 @@ describe('SearchFilterListing flow', () => {
 
     const filteredItems = allItems.filter((item) => {
       const matchesSearch = item.toLowerCase().includes(search.toLowerCase());
-      const matchesFilter = categoryFilter ? item.toLowerCase().includes(categoryFilter.toLowerCase()) : true;
+      const matchesFilter = categoryFilter
+        ? item.toLowerCase().includes(categoryFilter.toLowerCase())
+        : true;
       return matchesSearch && matchesFilter;
     });
 
@@ -180,7 +185,11 @@ describe('SearchFilterListing flow', () => {
 /* ================================================================== */
 
 describe('Form submission flow', () => {
-  function FormHarness({ onSubmit }: { onSubmit: (data: Record<string, string | boolean>) => void }) {
+  function FormHarness({
+    onSubmit,
+  }: {
+    onSubmit: (data: Record<string, string | boolean>) => void;
+  }) {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [category, setCategory] = useState('');
@@ -214,11 +223,7 @@ describe('Form submission flow', () => {
     return (
       <form onSubmit={handleSubmit} data-testid="test-form">
         <FormField label="Name" error={errors.name} required>
-          <input
-            data-testid="name-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+          <input data-testid="name-input" value={name} onChange={(e) => setName(e.target.value)} />
         </FormField>
         <FormField label="Email" error={errors.email} required>
           <input
@@ -247,8 +252,12 @@ describe('Form submission flow', () => {
           />
           I agree
         </label>
-        <Button type="submit" data-testid="submit-btn">Submit</Button>
-        <Button type="button" variant="secondary" data-testid="reset-btn" onClick={handleReset}>Reset</Button>
+        <Button type="submit" data-testid="submit-btn">
+          Submit
+        </Button>
+        <Button type="button" variant="secondary" data-testid="reset-btn" onClick={handleReset}>
+          Reset
+        </Button>
         {submitted && <div data-testid="success-message">Form submitted successfully</div>}
       </form>
     );
@@ -344,14 +353,18 @@ describe('Modal/Dialog lifecycle', () => {
 
     return (
       <div>
-        <Button data-testid="modal-trigger" onClick={() => setOpen(true)}>Open Modal</Button>
+        <Button data-testid="modal-trigger" onClick={() => setOpen(true)}>
+          Open Modal
+        </Button>
         <Modal
           open={open}
           onClose={() => setOpen(false)}
           title="Edit Item"
           disablePortal
           footer={
-            <Button data-testid="modal-save" onClick={() => setOpen(false)}>Save</Button>
+            <Button data-testid="modal-save" onClick={() => setOpen(false)}>
+              Save
+            </Button>
           }
         >
           <input
@@ -421,21 +434,13 @@ describe('Modal/Dialog lifecycle', () => {
           <Button data-testid="outer-trigger" onClick={() => setOuterOpen(true)}>
             Open Outer
           </Button>
-          <Dialog
-            open={outerOpen}
-            onClose={() => setOuterOpen(false)}
-            title="Outer Dialog"
-          >
+          <Dialog open={outerOpen} onClose={() => setOuterOpen(false)} title="Outer Dialog">
             <div>
               <p>Outer content</p>
               <Button data-testid="inner-trigger" onClick={() => setInnerOpen(true)}>
                 Open Inner
               </Button>
-              <Dialog
-                open={innerOpen}
-                onClose={() => setInnerOpen(false)}
-                title="Confirmation"
-              >
+              <Dialog open={innerOpen} onClose={() => setInnerOpen(false)} title="Confirmation">
                 <p>Are you sure?</p>
                 <Button data-testid="confirm-btn" onClick={() => setInnerOpen(false)}>
                   Confirm
@@ -474,9 +479,21 @@ describe('Modal/Dialog lifecycle', () => {
 
 describe('Tabs + content flow', () => {
   const tabItems: TabItem[] = [
-    { key: 'overview', label: 'Overview', content: <div data-testid="tab-overview">Overview Content</div> },
-    { key: 'details', label: 'Details', content: <div data-testid="tab-details">Details Content</div> },
-    { key: 'settings', label: 'Settings', content: <div data-testid="tab-settings">Settings Content</div> },
+    {
+      key: 'overview',
+      label: 'Overview',
+      content: <div data-testid="tab-overview">Overview Content</div>,
+    },
+    {
+      key: 'details',
+      label: 'Details',
+      content: <div data-testid="tab-details">Details Content</div>,
+    },
+    {
+      key: 'settings',
+      label: 'Settings',
+      content: <div data-testid="tab-settings">Settings Content</div>,
+    },
   ];
 
   it('user clicks tabs, content changes, state preserved switching back', async () => {
@@ -491,7 +508,9 @@ describe('Tabs + content flow', () => {
           content: (
             <div>
               <span data-testid="count">{counter}</span>
-              <Button data-testid="increment" onClick={() => setCounter((c) => c + 1)}>+1</Button>
+              <Button data-testid="increment" onClick={() => setCounter((c) => c + 1)}>
+                +1
+              </Button>
             </div>
           ),
         },
@@ -575,9 +594,21 @@ describe('Tabs + content flow', () => {
 
 describe('Accordion multi-panel flow', () => {
   const accordionItems: AccordionItem[] = [
-    { value: 'panel-1', title: 'Panel 1', content: <div data-testid="panel-1-content">Content 1</div> },
-    { value: 'panel-2', title: 'Panel 2', content: <div data-testid="panel-2-content">Content 2</div> },
-    { value: 'panel-3', title: 'Panel 3', content: <div data-testid="panel-3-content">Content 3</div> },
+    {
+      value: 'panel-1',
+      title: 'Panel 1',
+      content: <div data-testid="panel-1-content">Content 1</div>,
+    },
+    {
+      value: 'panel-2',
+      title: 'Panel 2',
+      content: <div data-testid="panel-2-content">Content 2</div>,
+    },
+    {
+      value: 'panel-3',
+      title: 'Panel 3',
+      content: <div data-testid="panel-3-content">Content 3</div>,
+    },
   ];
 
   it('user opens panel, opens another, first stays open (non-exclusive / multiple mode)', async () => {
@@ -612,8 +643,12 @@ describe('Accordion multi-panel flow', () => {
         title: 'Interactive Panel',
         content: (
           <div>
-            <Button data-testid="panel-button" onClick={onClick}>Click Me</Button>
-            <a href="#test" data-testid="panel-link">Test Link</a>
+            <Button data-testid="panel-button" onClick={onClick}>
+              Click Me
+            </Button>
+            <a href="#test" data-testid="panel-link">
+              Test Link
+            </a>
           </div>
         ),
       },
@@ -644,7 +679,9 @@ describe('Drawer + form flow', () => {
 
     return (
       <div>
-        <Button data-testid="drawer-trigger" onClick={() => setOpen(true)}>Open Drawer</Button>
+        <Button data-testid="drawer-trigger" onClick={() => setOpen(true)}>
+          Open Drawer
+        </Button>
         <Drawer
           open={open}
           onClose={() => {
@@ -686,12 +723,33 @@ describe('Drawer + form flow', () => {
     await user.click(screen.getByTestId('drawer-trigger'));
     expect(screen.getByText('Edit Settings')).toBeInTheDocument();
 
-    // Fill form
-    await user.type(screen.getByTestId('drawer-input'), 'New Setting');
+    // Drawer's useFocusTrap auto-focuses the first focusable element via a
+    // 50ms setTimeout (see focus-trap.tsx). On a fast local machine, typing
+    // `New Setting` finishes before that timer fires; on a slow CI runner
+    // the timer fires mid-type, stealing focus from the input to the close
+    // button and dropping the trailing keystrokes — surfaced in PR #240/#241
+    // CI as `'New Settin'` / `'New Setti'`. Waiting for the close button to
+    // own focus settles the focus-trap lifecycle BEFORE typing begins, so
+    // userEvent doesn't race the timer. Codex thread 019df8a4 iter-3 K4
+    // root cause + F-path fix.
+    await waitFor(() => {
+      expect(screen.getByLabelText('Close')).toHaveFocus();
+    });
 
-    // Save
+    // Fill form (focus-trap is now settled; userEvent.type handles its own
+    // input focus). The waitFor(toHaveValue) gate stays as a defense-in-
+    // depth assertion that the controlled input's React state settled
+    // before the submit click runs.
+    const input = screen.getByTestId('drawer-input');
+    await user.type(input, 'New Setting');
+    await waitFor(() => expect(input).toHaveValue('New Setting'));
+
+    // Save — waitFor around the callback assertion so any future race
+    // surfaces at the typing layer rather than the submit callback.
     await user.click(screen.getByTestId('drawer-save'));
-    expect(onSave).toHaveBeenCalledWith('New Setting');
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith('New Setting');
+    });
 
     // Drawer closed
     expect(screen.queryByText('Edit Settings')).not.toBeInTheDocument();
@@ -734,11 +792,14 @@ describe('Toast notification flow', () => {
         <Button data-testid="toast-error" onClick={() => toast.error('Something failed')}>
           Error Toast
         </Button>
-        <Button data-testid="toast-multi" onClick={() => {
-          toast.info('First notification');
-          toast.warning('Second notification');
-          toast.success('Third notification');
-        }}>
+        <Button
+          data-testid="toast-multi"
+          onClick={() => {
+            toast.info('First notification');
+            toast.warning('Second notification');
+            toast.success('Third notification');
+          }}
+        >
           Multiple Toasts
         </Button>
       </div>
