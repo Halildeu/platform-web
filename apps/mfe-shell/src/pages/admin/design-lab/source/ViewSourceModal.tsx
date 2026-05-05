@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo } from "react";
-import { X, Copy, Check, Code2, Package, FileCode } from "lucide-react";
-import { Text } from "@mfe/design-system";
+import React, { useState, useCallback, useMemo } from 'react';
+import { X, Copy, Check, Code2, Package, FileCode } from 'lucide-react';
+import { Text } from '@mfe/design-system';
 
 /* ------------------------------------------------------------------ */
 /*  ViewSourceModal — Component source viewer with portable version     */
@@ -17,7 +17,7 @@ type ViewSourceModalProps = {
   importStatement?: string;
 };
 
-type SourceTab = "original" | "portable" | "imports";
+type SourceTab = 'original' | 'portable' | 'imports';
 
 /* ---- Mock source generation ---- */
 
@@ -158,14 +158,17 @@ export const ViewSourceModal: React.FC<ViewSourceModalProps> = ({
   componentName,
   _importStatement,
 }) => {
-  const [activeTab, setActiveTab] = useState<SourceTab>("original");
+  const [activeTab, setActiveTab] = useState<SourceTab>('original');
   const [copied, setCopied] = useState(false);
 
-  const sources = useMemo(() => ({
-    original: generateMockSource(componentName),
-    portable: generatePortableSource(componentName),
-    imports: generateImportMap(componentName),
-  }), [componentName]);
+  const sources = useMemo(
+    () => ({
+      original: generateMockSource(componentName),
+      portable: generatePortableSource(componentName),
+      imports: generateImportMap(componentName),
+    }),
+    [componentName],
+  );
 
   const currentSource = sources[activeTab];
 
@@ -174,7 +177,9 @@ export const ViewSourceModal: React.FC<ViewSourceModalProps> = ({
       await navigator.clipboard.writeText(currentSource);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
   }, [currentSource]);
 
   if (!isOpen) return null;
@@ -182,7 +187,8 @@ export const ViewSourceModal: React.FC<ViewSourceModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-surface-inverse/50" onClick={onClose} />
+      {/* PR-12: surface-inverse → surface-overlay (same token, registered Tailwind class). */}
+      <div className="absolute inset-0 bg-surface-overlay/50" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-2xl border border-border-subtle bg-surface-default shadow-2xl">
@@ -200,8 +206,12 @@ export const ViewSourceModal: React.FC<ViewSourceModalProps> = ({
               onClick={handleCopy}
               className="flex items-center gap-1 rounded-lg border border-border-subtle px-2.5 py-1.5 text-[11px] font-medium text-text-secondary hover:text-text-primary transition"
             >
-              {copied ? <Check className="h-3 w-3 text-state-success-text" /> : <Copy className="h-3 w-3" />}
-              {copied ? "Copied" : "Copy"}
+              {copied ? (
+                <Check className="h-3 w-3 text-state-success-text" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
+              {copied ? 'Copied' : 'Copy'}
             </button>
             <button
               type="button"
@@ -215,21 +225,21 @@ export const ViewSourceModal: React.FC<ViewSourceModalProps> = ({
 
         {/* Tabs */}
         <div className="flex border-b border-border-subtle px-5">
-          {([
-            { id: "original" as const, label: "Original", icon: <FileCode className="h-3 w-3" /> },
-            { id: "portable" as const, label: "Portable", icon: <Package className="h-3 w-3" /> },
-            { id: "imports" as const, label: "Import Map", icon: <Code2 className="h-3 w-3" /> },
-          ]).map((tab) => (
+          {[
+            { id: 'original' as const, label: 'Original', icon: <FileCode className="h-3 w-3" /> },
+            { id: 'portable' as const, label: 'Portable', icon: <Package className="h-3 w-3" /> },
+            { id: 'imports' as const, label: 'Import Map', icon: <Code2 className="h-3 w-3" /> },
+          ].map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={[
-                "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition border-b-2 -mb-px",
+                'flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition border-b-2 -mb-px',
                 activeTab === tab.id
-                  ? "border-action-primary text-action-primary"
-                  : "border-transparent text-text-secondary hover:text-text-primary",
-              ].join(" ")}
+                  ? 'border-action-primary text-action-primary'
+                  : 'border-transparent text-text-secondary hover:text-text-primary',
+              ].join(' ')}
             >
               {tab.icon} {tab.label}
             </button>

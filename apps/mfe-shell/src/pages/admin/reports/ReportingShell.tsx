@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
-import { X, Menu } from "lucide-react";
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { X, Menu } from 'lucide-react';
 
-const cx = (...classes: (string | false | null | undefined)[]) =>
-  classes.filter(Boolean).join(" ");
+const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
 
 /* ------------------------------------------------------------------ */
 /*  ReportingShell — Responsive layout grid for reporting pages        */
@@ -33,7 +32,7 @@ export function useReportingShell() {
   return useContext(ShellContext);
 }
 
-const STORAGE_KEY = "reporting-sidebar-collapsed";
+const STORAGE_KEY = 'reporting-sidebar-collapsed';
 
 /* ---- Slots ---- */
 
@@ -44,7 +43,8 @@ function Sidebar({ children }: { children: React.ReactNode }) {
     <>
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-surface-inverse/30 backdrop-blur-xs sm:hidden"
+          // PR-12: surface-inverse → surface-overlay (same token, registered Tailwind class).
+          className="fixed inset-0 z-40 bg-surface-overlay/30 backdrop-blur-xs sm:hidden"
           onClick={closeSidebar}
           aria-hidden
         />
@@ -54,19 +54,17 @@ function Sidebar({ children }: { children: React.ReactNode }) {
         data-testid="reporting-sidebar-container"
         data-collapsed={sidebarCollapsed}
         className={cx(
-          "shrink-0 self-start transition-[width] duration-200",
-          "fixed inset-y-0 left-0 z-50 w-[300px] bg-surface-default",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full",
-          "sm:sticky sm:top-4 sm:inset-auto sm:z-auto sm:translate-x-0 sm:bg-transparent",
+          'shrink-0 self-start transition-[width] duration-200',
+          'fixed inset-y-0 left-0 z-50 w-[300px] bg-surface-default',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          'sm:sticky sm:top-4 sm:inset-auto sm:z-auto sm:translate-x-0 sm:bg-transparent',
           sidebarCollapsed
-            ? "sm:w-[52px] sm:max-w-[52px]"
-            : "sm:w-[240px] lg:w-[280px] xl:w-[300px]",
+            ? 'sm:w-[52px] sm:max-w-[52px]'
+            : 'sm:w-[240px] lg:w-[280px] xl:w-[300px]',
         )}
       >
         <div className="flex items-center justify-between px-4 pt-4 sm:hidden">
-          <span className="text-sm font-semibold text-text-primary">
-            Raporlar
-          </span>
+          <span className="text-sm font-semibold text-text-primary">Raporlar</span>
           <button
             type="button"
             onClick={closeSidebar}
@@ -92,13 +90,9 @@ function MobileMenuButton() {
       type="button"
       onClick={toggleSidebar}
       className="inline-flex items-center justify-center rounded-xl border border-border-subtle bg-surface-default p-2 text-text-secondary transition hover:bg-surface-muted hover:text-text-primary sm:hidden"
-      aria-label={sidebarOpen ? "Menüyü kapat" : "Menüyü aç"}
+      aria-label={sidebarOpen ? 'Menüyü kapat' : 'Menüyü aç'}
     >
-      {sidebarOpen ? (
-        <X className="h-5 w-5" />
-      ) : (
-        <Menu className="h-5 w-5" />
-      )}
+      {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
     </button>
   );
 }
@@ -120,7 +114,7 @@ function ReportingShellRoot({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === "true";
+      return localStorage.getItem(STORAGE_KEY) === 'true';
     } catch {
       return false;
     }

@@ -1,6 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Search, X, Clock, Zap, GitFork, BarChart3, Moon, Sun, Palette, Image, History, Target, Activity, Blocks } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  Search,
+  X,
+  Clock,
+  Zap,
+  GitFork,
+  BarChart3,
+  Moon,
+  Sun,
+  Palette,
+  Image,
+  History,
+  Target,
+  Activity,
+  Blocks,
+} from 'lucide-react';
 
 /** Figma brand icon — removed from lucide-react >=1.x, inlined as SVG. */
 function Figma({ className }: { className?: string }) {
@@ -23,10 +38,10 @@ function Figma({ className }: { className?: string }) {
     </svg>
   );
 }
-import { Text } from "@mfe/design-system";
-import { useDesignLab } from "./DesignLabProvider";
-import { PRIMITIVE_NAMES, ADVANCED_NAMES, API_NAMES } from "./DesignLabSidebarRouter";
-import { semanticSearch, getSearchSuggestions } from "./search/SemanticSearch";
+import { Text } from '@mfe/design-system';
+import { useDesignLab } from './DesignLabProvider';
+import { PRIMITIVE_NAMES, ADVANCED_NAMES, API_NAMES } from './DesignLabSidebarRouter';
+import { semanticSearch, getSearchSuggestions } from './search/SemanticSearch';
 
 /* ------------------------------------------------------------------ */
 /*  DesignLabSearchModal — Cmd+K global search overlay                 */
@@ -38,34 +53,44 @@ import { semanticSearch, getSearchSuggestions } from "./search/SemanticSearch";
 
 type SearchResult = {
   name: string;
-  type: "component" | "primitive" | "recipe" | "pattern" | "ecosystem" | "token" | "advanced" | "api" | "command" | "recent";
+  type:
+    | 'component'
+    | 'primitive'
+    | 'recipe'
+    | 'pattern'
+    | 'ecosystem'
+    | 'token'
+    | 'advanced'
+    | 'api'
+    | 'command'
+    | 'recent';
   description?: string;
   href: string;
   icon?: React.ReactNode;
   action?: () => void;
 };
 
-const TYPE_BADGE_STYLES: Record<SearchResult["type"], string> = {
-  token: "bg-state-danger-bg text-state-danger-text",
-  primitive: "bg-state-success-bg text-state-success-text",
-  component: "bg-state-info-bg text-state-info-text",
-  pattern: "bg-state-warning-bg text-state-warning-text",
-  advanced: "bg-state-warning-bg text-state-warning-text",
-  api: "bg-state-info-bg text-state-info-text dark:bg-state-info-text/30 dark:text-state-info-text",
-  recipe: "bg-state-success-bg text-state-success-text",
-  ecosystem: "bg-action-primary/10 text-action-primary",
-  command: "bg-action-primary/10 text-action-primary",
-  recent: "bg-[var(--surface-muted)] text-[var(--text-secondary)]",
+const TYPE_BADGE_STYLES: Record<SearchResult['type'], string> = {
+  token: 'bg-state-danger-bg text-state-danger-text',
+  primitive: 'bg-state-success-bg text-state-success-text',
+  component: 'bg-state-info-bg text-state-info-text',
+  pattern: 'bg-state-warning-bg text-state-warning-text',
+  advanced: 'bg-state-warning-bg text-state-warning-text',
+  api: 'bg-state-info-bg text-state-info-text dark:bg-state-info-text/30 dark:text-state-info-text',
+  recipe: 'bg-state-success-bg text-state-success-text',
+  ecosystem: 'bg-action-primary/10 text-action-primary',
+  command: 'bg-action-primary/10 text-action-primary',
+  recent: 'bg-[var(--surface-muted)] text-[var(--text-secondary)]',
 };
 
 /* ---- Recent visits (localStorage) ---- */
 
-const RECENT_KEY = "designlab_recent_visits";
+const RECENT_KEY = 'designlab_recent_visits';
 const MAX_RECENT = 5;
 
 function getRecentVisits(): Array<{ name: string; href: string }> {
   try {
-    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
   } catch {
     return [];
   }
@@ -85,7 +110,7 @@ function useTrackVisits() {
   useEffect(() => {
     const path = location.pathname;
     // Only track detail pages
-    const segments = path.split("/").filter(Boolean);
+    const segments = path.split('/').filter(Boolean);
     if (segments.length >= 4) {
       const name = segments[segments.length - 1];
       addRecentVisit(name, path);
@@ -98,11 +123,11 @@ export function useSearchModal() {
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setOpen((prev) => !prev);
       }
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         setOpen(false);
       }
     }
@@ -110,24 +135,24 @@ export function useSearchModal() {
     function handleSidebarSearch() {
       setOpen(true);
     }
-    document.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("design-lab:open-search", handleSidebarSearch);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('design-lab:open-search', handleSidebarSearch);
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("design-lab:open-search", handleSidebarSearch);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('design-lab:open-search', handleSidebarSearch);
     };
   }, []);
 
   // Auto-open from ?search=open query param (when navigated from sidebar)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("search") === "open") {
+    if (params.get('search') === 'open') {
       setOpen(true);
       // Clean up URL
-      params.delete("search");
+      params.delete('search');
       const clean = params.toString();
-      const newUrl = window.location.pathname + (clean ? `?${clean}` : "");
-      window.history.replaceState(null, "", newUrl);
+      const newUrl = window.location.pathname + (clean ? `?${clean}` : '');
+      window.history.replaceState(null, '', newUrl);
     }
   }, []);
 
@@ -139,13 +164,10 @@ type DesignLabSearchModalProps = {
   onClose: () => void;
 };
 
-export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
-  open,
-  onClose,
-}) => {
+export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({ open, onClose }) => {
   const navigate = useNavigate();
   const { index, t } = useDesignLab();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -156,7 +178,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
   // Focus input on open
   useEffect(() => {
     if (open) {
-      setQuery("");
+      setQuery('');
       setActiveIndex(0);
       // Use rAF to ensure element is mounted
       requestAnimationFrame(() => {
@@ -169,104 +191,104 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
   const commands = useMemo<SearchResult[]>(
     () => [
       {
-        name: "Switch to Dark Theme",
-        type: "command" as const,
-        description: "Toggle dark appearance",
-        href: "",
+        name: 'Switch to Dark Theme',
+        type: 'command' as const,
+        description: 'Toggle dark appearance',
+        href: '',
         icon: <Moon className="h-3.5 w-3.5" />,
         action: () => {
-          document.documentElement.setAttribute("data-appearance", "dark");
-          document.documentElement.setAttribute("data-mode", "dark");
-          document.documentElement.setAttribute("data-theme", "serban-dark");
+          document.documentElement.setAttribute('data-appearance', 'dark');
+          document.documentElement.setAttribute('data-mode', 'dark');
+          document.documentElement.setAttribute('data-theme', 'serban-dark');
         },
       },
       {
-        name: "Switch to Light Theme",
-        type: "command" as const,
-        description: "Toggle light appearance",
-        href: "",
+        name: 'Switch to Light Theme',
+        type: 'command' as const,
+        description: 'Toggle light appearance',
+        href: '',
         icon: <Sun className="h-3.5 w-3.5" />,
         action: () => {
-          document.documentElement.setAttribute("data-appearance", "light");
-          document.documentElement.setAttribute("data-mode", "light");
-          document.documentElement.setAttribute("data-theme", "serban-light");
+          document.documentElement.setAttribute('data-appearance', 'light');
+          document.documentElement.setAttribute('data-mode', 'light');
+          document.documentElement.setAttribute('data-theme', 'serban-light');
         },
       },
       {
-        name: "Open Theme Builder",
-        type: "command" as const,
-        description: "Navigate to theme customization",
-        href: "/admin/design-lab/theme",
+        name: 'Open Theme Builder',
+        type: 'command' as const,
+        description: 'Navigate to theme customization',
+        href: '/admin/design-lab/theme',
         icon: <Palette className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Dependency Graph",
-        type: "command" as const,
-        description: "Visualize component relationships",
-        href: "/admin/design-lab/graph",
+        name: 'Open Dependency Graph',
+        type: 'command' as const,
+        description: 'Visualize component relationships',
+        href: '/admin/design-lab/graph',
         icon: <GitFork className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Usage Analytics",
-        type: "command" as const,
-        description: "Component adoption metrics",
-        href: "/admin/design-lab/analytics",
+        name: 'Open Usage Analytics',
+        type: 'command' as const,
+        description: 'Component adoption metrics',
+        href: '/admin/design-lab/analytics',
         icon: <BarChart3 className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Figma Sync",
-        type: "command" as const,
-        description: "Token synchronization status",
-        href: "/admin/design-lab/figma-sync",
+        name: 'Open Figma Sync',
+        type: 'command' as const,
+        description: 'Token synchronization status',
+        href: '/admin/design-lab/figma-sync',
         icon: <Figma className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Visual Regression",
-        type: "command" as const,
-        description: "Snapshot comparison dashboard",
-        href: "/admin/design-lab/visual-regression",
+        name: 'Open Visual Regression',
+        type: 'command' as const,
+        description: 'Snapshot comparison dashboard',
+        href: '/admin/design-lab/visual-regression',
         icon: <Image className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Migration Guide",
-        type: "command" as const,
-        description: "Version upgrade paths and breaking changes",
-        href: "/admin/design-lab/migration",
+        name: 'Open Migration Guide',
+        type: 'command' as const,
+        description: 'Version upgrade paths and breaking changes',
+        href: '/admin/design-lab/migration',
         icon: <History className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Theming Guide",
-        type: "command" as const,
-        description: "Theme customization documentation and sandbox",
-        href: "/admin/design-lab/theming",
+        name: 'Open Theming Guide',
+        type: 'command' as const,
+        description: 'Theme customization documentation and sandbox',
+        href: '/admin/design-lab/theming',
         icon: <Palette className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Parity Dashboard",
-        type: "command" as const,
-        description: "Feature parity matrix vs MUI, AntD, Storybook, Shadcn",
-        href: "/admin/design-lab/parity",
+        name: 'Open Parity Dashboard',
+        type: 'command' as const,
+        description: 'Feature parity matrix vs MUI, AntD, Storybook, Shadcn',
+        href: '/admin/design-lab/parity',
         icon: <Target className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Adoption Insights",
-        type: "command" as const,
-        description: "Component adoption heatmap, trends, and backlog",
-        href: "/admin/design-lab/insights",
+        name: 'Open Adoption Insights',
+        type: 'command' as const,
+        description: 'Component adoption heatmap, trends, and backlog',
+        href: '/admin/design-lab/insights',
         icon: <Activity className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Composition Builder",
-        type: "command" as const,
-        description: "Visual drag-and-drop component composition canvas",
-        href: "/admin/design-lab/compose",
+        name: 'Open Composition Builder',
+        type: 'command' as const,
+        description: 'Visual drag-and-drop component composition canvas',
+        href: '/admin/design-lab/compose',
         icon: <Blocks className="h-3.5 w-3.5" />,
       },
       {
-        name: "Open Interaction Playground",
-        type: "command" as const,
-        description: "Cross-component interaction scenarios with shared state",
-        href: "/admin/design-lab/interactions",
+        name: 'Open Interaction Playground',
+        type: 'command' as const,
+        description: 'Cross-component interaction scenarios with shared state',
+        href: '/admin/design-lab/interactions',
         icon: <Zap className="h-3.5 w-3.5" />,
       },
     ],
@@ -282,7 +304,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
       const recentVisits = getRecentVisits();
       const recentResults: SearchResult[] = recentVisits.map((v) => ({
         name: v.name,
-        type: "recent" as const,
+        type: 'recent' as const,
         description: v.href,
         href: v.href,
         icon: <Clock className="h-3.5 w-3.5" />,
@@ -291,7 +313,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
     }
 
     /* ">" prefix → filter commands only */
-    if (q.startsWith(">")) {
+    if (q.startsWith('>')) {
       const cmdQuery = q.slice(1).trim();
       if (!cmdQuery) return commands;
       return commands.filter(
@@ -305,13 +327,13 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
     const MAX = 20;
 
     // Token groups
-    const tokenGroups = ["colors", "typography", "spacing", "radius", "motion", "zindex"];
+    const tokenGroups = ['colors', 'typography', 'spacing', 'radius', 'motion', 'zindex'];
     for (const tg of tokenGroups) {
       if (out.length >= MAX) break;
-      if (tg.includes(q) || "token".includes(q) || "design".includes(q)) {
+      if (tg.includes(q) || 'token'.includes(q) || 'design'.includes(q)) {
         out.push({
           name: tg.charAt(0).toUpperCase() + tg.slice(1),
-          type: "token",
+          type: 'token',
           description: `Design token group`,
           href: `/admin/design-lab/design/${tg}`,
         });
@@ -331,7 +353,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
         const isApi = API_NAMES.has(item.name);
         out.push({
           name: item.name,
-          type: isPrimitive ? "primitive" : isApi ? "api" : isAdvanced ? "advanced" : "component",
+          type: isPrimitive ? 'primitive' : isApi ? 'api' : isAdvanced ? 'advanced' : 'component',
           description: item.description,
           href: isPrimitive
             ? `/admin/design-lab/primitives/${item.taxonomyGroupId}/${encodeURIComponent(item.name.replace(/\//g, '~'))}`
@@ -347,13 +369,10 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
     // Recipes
     for (const recipe of index.recipes?.currentFamilies ?? []) {
       if (out.length >= MAX) break;
-      if (
-        recipe.title.toLowerCase().includes(q) ||
-        recipe.recipeId.toLowerCase().includes(q)
-      ) {
+      if (recipe.title.toLowerCase().includes(q) || recipe.recipeId.toLowerCase().includes(q)) {
         out.push({
           name: recipe.title,
-          type: "recipe",
+          type: 'recipe',
           href: `/admin/design-lab/recipes/${recipe.recipeId}`,
         });
       }
@@ -362,13 +381,10 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
     // Patterns (was: Pages)
     for (const page of index.pages?.currentFamilies ?? []) {
       if (out.length >= MAX) break;
-      if (
-        page.title.toLowerCase().includes(q) ||
-        page.pageId.toLowerCase().includes(q)
-      ) {
+      if (page.title.toLowerCase().includes(q) || page.pageId.toLowerCase().includes(q)) {
         out.push({
           name: page.title,
-          type: "pattern",
+          type: 'pattern',
           href: `/admin/design-lab/patterns/${page.pageId}`,
         });
       }
@@ -377,13 +393,10 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
     // Ecosystem
     for (const ext of index.ecosystem?.currentFamilies ?? []) {
       if (out.length >= MAX) break;
-      if (
-        ext.title.toLowerCase().includes(q) ||
-        ext.extensionId.toLowerCase().includes(q)
-      ) {
+      if (ext.title.toLowerCase().includes(q) || ext.extensionId.toLowerCase().includes(q)) {
         out.push({
           name: ext.title,
-          type: "ecosystem",
+          type: 'ecosystem',
           href: `/admin/design-lab/ecosystem/${ext.extensionId}`,
         });
       }
@@ -404,7 +417,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
           const isApi = API_NAMES.has(item.name);
           out.push({
             name: item.name,
-            type: isPrimitive ? "primitive" : isApi ? "api" : isAdvanced ? "advanced" : "component",
+            type: isPrimitive ? 'primitive' : isApi ? 'api' : isAdvanced ? 'advanced' : 'component',
             description: sr.explanation ? `AI: ${sr.explanation}` : item.description,
             href: isPrimitive
               ? `/admin/design-lab/primitives/${item.taxonomyGroupId}/${encodeURIComponent(item.name.replace(/\//g, '~'))}`
@@ -432,7 +445,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
   useEffect(() => {
     if (!listRef.current) return;
     const active = listRef.current.querySelector("[data-active='true']");
-    active?.scrollIntoView({ block: "nearest" });
+    active?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex]);
 
   const handleSelect = useCallback(
@@ -453,21 +466,21 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       switch (e.key) {
-        case "ArrowDown":
+        case 'ArrowDown':
           e.preventDefault();
           setActiveIndex((i) => Math.min(i + 1, results.length - 1));
           break;
-        case "ArrowUp":
+        case 'ArrowUp':
           e.preventDefault();
           setActiveIndex((i) => Math.max(i - 1, 0));
           break;
-        case "Enter":
+        case 'Enter':
           e.preventDefault();
           if (results[activeIndex]) {
             handleSelect(results[activeIndex]);
           }
           break;
-        case "Escape":
+        case 'Escape':
           e.preventDefault();
           onClose();
           break;
@@ -482,7 +495,8 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-surface-inverse/40 backdrop-blur-xs"
+        // PR-12: surface-inverse → surface-overlay (same token, registered Tailwind class).
+        className="absolute inset-0 bg-surface-overlay/40 backdrop-blur-xs"
         onClick={onClose}
         aria-hidden
       />
@@ -492,7 +506,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
         className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-border-subtle bg-surface-default shadow-2xl"
         role="dialog"
         aria-modal="true"
-        aria-label={t("designlab.landing.search.placeholder")}
+        aria-label={t('designlab.landing.search.placeholder')}
       >
         {/* Search input */}
         <div className="flex items-center gap-3 border-b border-border-subtle px-4 py-3">
@@ -505,7 +519,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
               setActiveIndex(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={t("designlab.landing.search.placeholder")}
+            placeholder={t('designlab.landing.search.placeholder')}
             className="flex-1 bg-transparent text-base text-text-primary outline-hidden placeholder:text-text-secondary"
           />
           <div className="flex items-center gap-1.5">
@@ -527,30 +541,38 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
           {query && results.length === 0 && (
             <div className="px-4 py-6 text-center">
               <Text variant="secondary" className="text-sm">
-                {t("designlab.sidebar.empty.noResults")}
+                {t('designlab.sidebar.empty.noResults')}
               </Text>
               <div className="mt-3">
-                <Text variant="secondary" className="text-[10px] font-medium uppercase tracking-wider">
+                <Text
+                  variant="secondary"
+                  className="text-[10px] font-medium uppercase tracking-wider"
+                >
                   Try natural language
                 </Text>
                 <div className="mt-1.5 flex flex-wrap justify-center gap-1">
-                  {getSearchSuggestions().slice(0, 4).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => { setQuery(s); setActiveIndex(0); }}
-                      className="rounded-md bg-surface-muted px-2 py-1 text-[10px] text-text-secondary hover:text-text-primary transition"
-                    >
-                      {s}
-                    </button>
-                  ))}
+                  {getSearchSuggestions()
+                    .slice(0, 4)
+                    .map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setQuery(s);
+                          setActiveIndex(0);
+                        }}
+                        className="rounded-md bg-surface-muted px-2 py-1 text-[10px] text-text-secondary hover:text-text-primary transition"
+                      >
+                        {s}
+                      </button>
+                    ))}
                 </div>
               </div>
             </div>
           )}
 
           {/* Section headers for empty query */}
-          {!query && results.some((r) => r.type === "recent") && (
+          {!query && results.some((r) => r.type === 'recent') && (
             <div className="mb-1 mt-1 flex items-center gap-1.5 px-3 py-1">
               <Clock className="h-3 w-3 text-text-tertiary" />
               <Text className="text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
@@ -563,8 +585,8 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
             // Show "Commands" section header before first command
             const showCommandHeader =
               !query &&
-              result.type === "command" &&
-              (i === 0 || results[i - 1]?.type !== "command");
+              result.type === 'command' &&
+              (i === 0 || results[i - 1]?.type !== 'command');
 
             return (
               <React.Fragment key={`${result.type}-${result.name}`}>
@@ -585,11 +607,9 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
                   onClick={() => handleSelect(result)}
                   onMouseEnter={() => setActiveIndex(i)}
                   className={[
-                    "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition",
-                    i === activeIndex
-                      ? "bg-surface-muted"
-                      : "hover:bg-surface-muted/50",
-                  ].join(" ")}
+                    'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition',
+                    i === activeIndex ? 'bg-surface-muted' : 'hover:bg-surface-muted/50',
+                  ].join(' ')}
                 >
                   {result.icon ? (
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-canvas text-text-secondary">
@@ -598,9 +618,9 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
                   ) : (
                     <span
                       className={[
-                        "shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        'shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase',
                         TYPE_BADGE_STYLES[result.type],
-                      ].join(" ")}
+                      ].join(' ')}
                     >
                       {result.type}
                     </span>
@@ -610,10 +630,7 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
                       {result.name}
                     </Text>
                     {result.description && (
-                      <Text
-                        variant="secondary"
-                        className="mt-0.5 truncate text-xs"
-                      >
+                      <Text variant="secondary" className="mt-0.5 truncate text-xs">
                         {result.description}
                       </Text>
                     )}
@@ -630,13 +647,13 @@ export const DesignLabSearchModal: React.FC<DesignLabSearchModalProps> = ({
             <kbd className="rounded-xs border border-border-subtle bg-surface-canvas px-1 text-[10px]">
               ↑↓
             </kbd>
-            {t("designlab.search.hint.navigate")}
+            {t('designlab.search.hint.navigate')}
           </span>
           <span className="flex items-center gap-1 text-[11px] text-text-secondary">
             <kbd className="rounded-xs border border-border-subtle bg-surface-canvas px-1 text-[10px]">
               ↵
             </kbd>
-            {t("designlab.search.hint.select")}
+            {t('designlab.search.hint.select')}
           </span>
         </div>
       </div>

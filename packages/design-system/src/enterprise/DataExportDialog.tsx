@@ -1,6 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { cn } from '../utils/cn';
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../internal/access-controller';
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,7 +48,11 @@ export interface DataExportDialogProps extends AccessControlledProps {
   /** Called when the dialog should be closed */
   onClose: () => void;
   /** Called with the selected export options when the user confirms */
-  onExport: (options: { format: ExportFormat; scope: ExportScope; includeCharts: boolean }) => void | Promise<void>;
+  onExport: (options: {
+    format: ExportFormat;
+    scope: ExportScope;
+    includeCharts: boolean;
+  }) => void | Promise<void>;
   /** Record counts per scope, displayed alongside scope options */
   recordCounts?: RecordCounts;
   /** Available export format options to present */
@@ -69,7 +77,10 @@ const FORMAT_LABELS: Record<ExportFormat, { label: string; icon: string }> = {
   pdf: { label: 'PDF', icon: 'M7 2h10l4 4v16H3V2h4z' },
   excel: { label: 'Excel', icon: 'M3 3h18v18H3V3zm4 4v10h10V7H7z' },
   csv: { label: 'CSV', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z' },
-  png: { label: 'PNG', icon: 'M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z' },
+  png: {
+    label: 'PNG',
+    icon: 'M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z',
+  },
 };
 
 const DEFAULT_SCOPE_LABELS: Record<ExportScope, string> = {
@@ -147,7 +158,8 @@ function RadioOption({
 function Backdrop({ onClick }: { onClick: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-40 bg-surface-inverse/30 backdrop-blur-xs"
+      // PR-12: surface-inverse → surface-overlay (same token, registered class).
+      className="fixed inset-0 z-40 bg-surface-overlay/30 backdrop-blur-xs"
       onClick={onClick}
       aria-hidden="true"
     />
@@ -245,7 +257,15 @@ export function DataExportDialog({
             onClick={onClose}
             aria-label="Close"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -337,7 +357,15 @@ export function DataExportDialog({
             onClick={handleExport}
           >
             {exporting && (
-              <svg width="14" height="14" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                className="animate-spin"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
               </svg>
             )}
@@ -349,4 +377,4 @@ export function DataExportDialog({
   );
 }
 
-DataExportDialog.displayName = "DataExportDialog";
+DataExportDialog.displayName = 'DataExportDialog';

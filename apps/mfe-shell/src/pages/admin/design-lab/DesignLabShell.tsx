@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
-import { Menu, X } from "lucide-react";
+import React, { createContext, useContext, useState, useCallback } from 'react';
+import { Menu, X } from 'lucide-react';
 
 /** Join class names, filtering out falsy values */
-const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(" ");
+const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(' ');
 
 /* ------------------------------------------------------------------ */
 /*  DesignLabShell — Responsive layout grid                            */
@@ -41,7 +41,7 @@ export function useDesignLabShell() {
   return useContext(ShellContext);
 }
 
-const STORAGE_KEY = "design-lab-sidebar-collapsed";
+const STORAGE_KEY = 'design-lab-sidebar-collapsed';
 
 /* ---- Sub-components (slots) ---- */
 
@@ -53,7 +53,8 @@ function Sidebar({ children }: { children: React.ReactNode }) {
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-surface-inverse/30 backdrop-blur-xs sm:hidden"
+          // PR-12: surface-inverse → surface-overlay (same token, registered Tailwind class).
+          className="fixed inset-0 z-40 bg-surface-overlay/30 backdrop-blur-xs sm:hidden"
           onClick={closeSidebar}
           aria-hidden
         />
@@ -65,16 +66,16 @@ function Sidebar({ children }: { children: React.ReactNode }) {
         data-collapsed={sidebarCollapsed}
         className={cx(
           // Base
-          "shrink-0 self-start transition-[width] duration-200",
+          'shrink-0 self-start transition-[width] duration-200',
           // Mobile: slide-over drawer (hidden off-screen by default)
-          "fixed inset-y-0 left-0 z-50 w-[300px] bg-surface-default",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          'fixed inset-y-0 left-0 z-50 w-[300px] bg-surface-default',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           // Desktop: sticky in layout, stays in view on scroll
-          "sm:sticky sm:top-4 sm:inset-auto sm:z-auto sm:translate-x-0 sm:bg-transparent",
+          'sm:sticky sm:top-4 sm:inset-auto sm:z-auto sm:translate-x-0 sm:bg-transparent',
           // Desktop width
           sidebarCollapsed
-            ? "sm:w-[52px] sm:max-w-[52px]"
-            : "sm:w-[240px] lg:w-[280px] xl:w-[300px]",
+            ? 'sm:w-[52px] sm:max-w-[52px]'
+            : 'sm:w-[240px] lg:w-[280px] xl:w-[300px]',
         )}
       >
         {/* Mobile close button */}
@@ -105,13 +106,9 @@ function MobileMenuButton() {
       type="button"
       onClick={toggleSidebar}
       className="inline-flex items-center justify-center rounded-xl border border-border-subtle bg-surface-default p-2 text-text-secondary transition hover:bg-surface-muted hover:text-text-primary sm:hidden"
-      aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+      aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
     >
-      {sidebarOpen ? (
-        <X className="h-5 w-5" />
-      ) : (
-        <Menu className="h-5 w-5" />
-      )}
+      {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
     </button>
   );
 }
@@ -130,9 +127,7 @@ function Main({ children }: { children: React.ReactNode }) {
 function RightRail({ children }: { children: React.ReactNode }) {
   return (
     <div className="hidden xl:block xl:w-[260px] xl:shrink-0">
-      <div className="sticky top-4 max-h-[calc(100vh-32px)] overflow-y-auto">
-        {children}
-      </div>
+      <div className="sticky top-4 max-h-[calc(100vh-32px)] overflow-y-auto">{children}</div>
     </div>
   );
 }
@@ -143,7 +138,7 @@ function DesignLabShellRoot({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === "true";
+      return localStorage.getItem(STORAGE_KEY) === 'true';
     } catch {
       return false;
     }
@@ -160,18 +155,22 @@ function DesignLabShellRoot({ children }: { children: React.ReactNode }) {
   const toggleSidebarCollapse = useCallback(() => {
     setSidebarCollapsed((prev) => {
       const next = !prev;
-      try { localStorage.setItem(STORAGE_KEY, String(next)); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   }, []);
 
   return (
-    <ShellContext.Provider value={{ sidebarOpen, toggleSidebar, closeSidebar, sidebarCollapsed, toggleSidebarCollapse }}>
+    <ShellContext.Provider
+      value={{ sidebarOpen, toggleSidebar, closeSidebar, sidebarCollapsed, toggleSidebarCollapse }}
+    >
       <div className="min-h-screen bg-surface-canvas overflow-x-hidden">
         <div className="mx-auto max-w-[1880px] px-2 py-4 sm:px-3 lg:px-4">
-          <div className="flex gap-3 max-w-full">
-            {children}
-          </div>
+          <div className="flex gap-3 max-w-full">{children}</div>
         </div>
       </div>
     </ShellContext.Provider>
