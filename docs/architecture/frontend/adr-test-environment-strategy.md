@@ -103,7 +103,7 @@ A single workflow `web-test-gate.yml` runs:
 
 - `unit-required` — Vitest jsdom across the workspace.
 - `token-drift-required` — `tokens:build --check` and `tokens:build:theme --check`.
-- `cssom-canary-required` — Vitest browser provider, canary suite (Tailwind 4 sentinel + ThemeProvider + Button primitive).
+- `cssom-canary-required` — Vitest browser provider, **curated manifest** (Tailwind 4 sentinel + ThemeProvider + 4 primitives: Button, Input, Checkbox, Switch). Manifest is an explicit list in `package.json` `test:cssom:canary` rather than a glob, so the gate stays fast (≈1m20s) and additions are deliberate. PR-9 promoted Input/Checkbox/Switch to this list after PR-8 brought the cssom test count past the 5+ threshold; new primitive cssom tests should be added to the manifest as the foundation expands, balanced against the canary's runtime budget.
 - `cssom-full-advisory` — Vitest browser provider, full `*.cssom.test` set (when populated).
 - `lint-warn-visibility-advisory` — DS ESLint warning report (PR-2B-3): surfaces touched-file warning counts and rule top-10 in a sticky PR comment, fails only on ESLint infra errors, never on warning count.
 - `visual-invariant-required` — Playwright on `__visual__/invariants/` matrices (post-L4).

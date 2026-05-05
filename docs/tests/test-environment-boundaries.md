@@ -44,15 +44,15 @@
 
 CI workflow `web-test-gate.yml` wires each suffix to a static-named job:
 
-| Job                             | Suffix it runs                                                       | Status   |
-| ------------------------------- | -------------------------------------------------------------------- | -------- |
-| `unit-required`                 | `*.unit.test.{ts,tsx}` + legacy `*.test.tsx` + `*.contract.test.tsx` | required |
-| `token-drift-required`          | `tokens:build --check` + `tokens:build:theme --check`                | required |
-| `cssom-canary-required`         | curated canary subset of `*.cssom.test.{ts,tsx}`                     | required |
-| `cssom-full-advisory`           | full `*.cssom.test.{ts,tsx}`                                         | advisory |
-| `lint-warn-visibility-advisory` | DS ESLint warning report (severity 1 only)                           | advisory |
-| `visual-invariant-required`     | `*.visual.test.ts` under `__visual__/invariants/`                    | required |
-| `web-test-gate-required`        | aggregator (`needs:` against the required set + STRICT_GATES guard)  | required |
+| Job                             | Suffix it runs                                                                           | Status   |
+| ------------------------------- | ---------------------------------------------------------------------------------------- | -------- |
+| `unit-required`                 | `*.unit.test.{ts,tsx}` + legacy `*.test.tsx` + `*.contract.test.tsx`                     | required |
+| `token-drift-required`          | `tokens:build --check` + `tokens:build:theme --check`                                    | required |
+| `cssom-canary-required`         | curated manifest: Tailwind sentinel + ThemeProvider + Button + Input + Checkbox + Switch | required |
+| `cssom-full-advisory`           | full `*.cssom.test.{ts,tsx}`                                                             | advisory |
+| `lint-warn-visibility-advisory` | DS ESLint warning report (severity 1 only)                                               | advisory |
+| `visual-invariant-required`     | `*.visual.test.ts` under `__visual__/invariants/`                                        | required |
+| `web-test-gate-required`        | aggregator (`needs:` against the required set + STRICT_GATES guard)                      | required |
 
 `x-charts*.visual.ts` runs in its own workflow (`x-charts-visual-gate.yml`), not in `web-test-gate.yml`. Legacy non-x-charts `*.visual.ts` specs were removed in PR-4b; there is no `visual-full-advisory` lane.
 
