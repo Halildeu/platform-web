@@ -112,7 +112,7 @@
       "default": "./src/lib/auth/index.ts"
     },
     "./advanced/data-grid/TablePagination": {
-      "types": "./src/advanced/data-grid/TablePagination.d.ts",
+      "types": "./src/advanced/data-grid/TablePagination.tsx",
       "default": "./src/advanced/data-grid/TablePagination.tsx"
     }
   },
