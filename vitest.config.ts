@@ -44,8 +44,9 @@ export default defineConfig({
       // Script tests
       '**/scripts/lint/**',
       '**/scripts/tokens/**',
-      // Design-system filtered test types (heavy/browser/visual/depth)
+      // Design-system filtered test types (heavy/browser/visual/cssom/depth)
       '**/*.browser.test.{ts,tsx}',
+      '**/*.cssom.test.{ts,tsx}',
       '**/*.visual.test.{ts,tsx}',
       '**/*depth*.test.{ts,tsx}',
       '**/*-depth.test.{ts,tsx}',

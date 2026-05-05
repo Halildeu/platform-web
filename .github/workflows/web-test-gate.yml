@@ -87,7 +87,14 @@ jobs:
     name: CSSOM Full (advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: true
+    # NOTE: do NOT use job-level `continue-on-error: true` here.
+    # GitHub Actions masks the true failure result behind `needs.X.result`
+    # when the job is marked continue-on-error, which would defeat
+    # STRICT_GATES result-readback in the aggregator. Instead, the run
+    # step uses `continue-on-error: true` and writes a job output that
+    # the aggregator reads directly.
+    outputs:
+      cssom_full_outcome: ${{ steps.cssom_full_run.outcome }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -100,10 +107,12 @@ jobs:
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - name: CSSOM full suite
+      - name: CSSOM full suite (advisory — failure does not block merge)
+        id: cssom_full_run
+        continue-on-error: true
         run: pnpm run test:cssom:full
       - name: Upload Vitest report on failure
-        if: failure()
+        if: steps.cssom_full_run.outcome == 'failure'
         uses: actions/upload-artifact@v5
         with:
           name: cssom-full-report
@@ -140,11 +149,23 @@ jobs:
         run: |
           set -euo pipefail
           echo "STRICT_GATES=true — advisory jobs treated as required."
-          # cssom-full-advisory is the only advisory wired in PR-1; future
-          # advisories (visual-full, browser-full) will be checked here.
+          # Advisory jobs use step-level continue-on-error and expose the
+          # true outcome via job outputs; we read those outputs here so a
+          # genuine advisory failure can fail the aggregator without
+          # blocking merge under default (non-strict) operation.
+          # PR-1 only wires cssom-full-advisory; future advisories
+          # (visual-full, browser-full) will be added the same way.
+          full_outcome="${{ needs.cssom-full-advisory.outputs.cssom_full_outcome || 'skipped' }}"
           full_result="${{ needs.cssom-full-advisory.result || 'skipped' }}"
-          echo "cssom-full-advisory: $full_result"
-          if [[ "$full_result" != "success" && "$full_result" != "skipped" ]]; then
+          echo "cssom-full-advisory job result: $full_result"
+          echo "cssom-full-advisory step outcome: $full_outcome"
+          if [[ "$full_outcome" == "failure" ]]; then
             echo "::error::Advisory job cssom-full-advisory failed under STRICT_GATES=true."
+            exit 1
+          fi
+          # Defensive: if the job itself was cancelled or the output is
+          # missing in an unexpected way, fall back to the job result.
+          if [[ "$full_result" != "success" && "$full_result" != "skipped" && "$full_outcome" != "success" && "$full_outcome" != "skipped" ]]; then
+            echo "::error::Advisory job result $full_result is not acceptable under STRICT_GATES=true."
             exit 1
           fi

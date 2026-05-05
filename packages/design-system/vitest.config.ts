@@ -23,6 +23,7 @@ export default defineConfig({
       '**/dist/**',
       '**/.stryker-tmp/**',
       '**/*.browser.test.{ts,tsx}',
+      '**/*.cssom.test.{ts,tsx}',
       '**/*.visual.test.{ts,tsx}',
       '**/*depth*.test.{ts,tsx}',
       '**/*-depth.test.{ts,tsx}',
