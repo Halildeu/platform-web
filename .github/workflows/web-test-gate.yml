@@ -8,13 +8,20 @@ name: Web Test Gate
 #   - cssom-canary-required  — Tailwind layer sentinel + ThemeProvider canary
 #
 # Advisory jobs (run, but do not block merge by default):
-#   - cssom-full-advisory    — full *.cssom.test.{ts,tsx} suite
+#   - cssom-full-advisory          — full *.cssom.test.{ts,tsx} suite
+#   - lint-warn-visibility-advisory — DS ESLint warning report (PR-2B-3,
+#                                     Codex thread 019df8cc): surfaces
+#                                     warn-only rules (e.g. PR-1
+#                                     test-environment plugin) without
+#                                     blocking merge. Fails only on infra
+#                                     errors, not on warning count.
 #
 # Aggregator:
 #   - web-test-gate-required — `needs:` against the required set; this is the
 #                              single check pinned in branch protection. When
 #                              repo variable STRICT_GATES=true, the aggregator
-#                              also fails on advisory job failure.
+#                              also fails on advisory infra failure (NOT on
+#                              warning count — see lint advisory comment).
 #
 # This workflow does not yet cover *.visual.test (L4) or full *.browser.test
 # migration. Those are scoped to subsequent PRs.
@@ -25,6 +32,10 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   unit-required:
@@ -120,6 +131,241 @@ jobs:
             packages/design-system/.vitest-output
             packages/design-system/test-results
 
+  lint-warn-visibility-advisory:
+    name: DS Lint Warnings (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Same pattern as cssom-full-advisory: NO job-level continue-on-error.
+    # Only the lint run step uses continue-on-error so warning count never
+    # fails the job; infra issues (install, parse, comment script) do.
+    # Aggregator reads `lint_advisory_outcome` for STRICT_GATES infra check.
+    outputs:
+      lint_advisory_outcome: ${{ steps.lint_run.outcome }}
+      total_warnings: ${{ steps.summarize.outputs.total_warnings }}
+      test_env_warnings: ${{ steps.summarize.outputs.test_env_warnings }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Need full history for changed-file diff against base.
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run DS ESLint (JSON output, warnings tolerated)
+        id: lint_run
+        continue-on-error: true
+        working-directory: packages/design-system
+        run: |
+          # `--max-warnings 100000` keeps ESLint exit non-zero only on real
+          # parse/config errors, not on warning count. JSON output is parsed
+          # in the next step. Output written to ../../eslint-report.json so
+          # the artifact upload picks it up at repo root.
+          ../../node_modules/.bin/eslint \
+            --config eslint.config.mjs \
+            --format json \
+            --max-warnings 100000 \
+            src \
+            > ../../eslint-report.json || true
+
+      - name: Summarize warnings (filter severity 1, count test-env)
+        id: summarize
+        run: |
+          set -euo pipefail
+          if [[ ! -s eslint-report.json ]]; then
+            echo "::error::eslint-report.json missing or empty — lint run produced no output"
+            exit 1
+          fi
+          # severity 1 = warning, severity 2 = error.
+          # Total warnings, test-environment warnings, top rules, top files.
+          summary=$(node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('eslint-report.json', 'utf8'));
+            let total = 0;
+            let testEnv = 0;
+            let errors = 0;
+            const ruleCounts = {};
+            const fileCounts = {};
+            for (const file of data) {
+              for (const m of file.messages) {
+                if (m.severity === 1) {
+                  total++;
+                  const rule = m.ruleId || 'unknown';
+                  ruleCounts[rule] = (ruleCounts[rule] || 0) + 1;
+                  fileCounts[file.filePath] = (fileCounts[file.filePath] || 0) + 1;
+                  if (rule.startsWith('test-environment/')) testEnv++;
+                } else if (m.severity === 2) {
+                  errors++;
+                }
+              }
+            }
+            const result = {
+              total,
+              testEnv,
+              errors,
+              topRules: Object.entries(ruleCounts).sort((a, b) => b[1] - a[1]).slice(0, 10),
+              topFiles: Object.entries(fileCounts).sort((a, b) => b[1] - a[1]).slice(0, 10),
+            };
+            console.log(JSON.stringify(result));
+          ")
+          echo "$summary" > eslint-summary.json
+          total=$(node -e "console.log(JSON.parse(require('fs').readFileSync('eslint-summary.json', 'utf8')).total)")
+          test_env=$(node -e "console.log(JSON.parse(require('fs').readFileSync('eslint-summary.json', 'utf8')).testEnv)")
+          errors=$(node -e "console.log(JSON.parse(require('fs').readFileSync('eslint-summary.json', 'utf8')).errors)")
+          echo "total_warnings=$total" >> "$GITHUB_OUTPUT"
+          echo "test_env_warnings=$test_env" >> "$GITHUB_OUTPUT"
+          echo "ignored_errors=$errors" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "=== ESLint Warning Summary (DS) ==="
+          echo "Total warnings:   $total"
+          echo "Test-env warnings: $test_env"
+          echo "Ignored errors:   $errors (separate debt — not part of this advisory)"
+
+      - name: Compute changed-file warnings (PR only)
+        id: changed
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          # List DS source files changed by this PR.
+          mapfile -t changed < <(
+            git diff --name-only "$base" "$head" -- 'packages/design-system/src/**/*.ts' 'packages/design-system/src/**/*.tsx' \
+              | sed 's|^packages/design-system/||'
+          )
+          echo "Changed DS files: ${#changed[@]}"
+          if [[ ${#changed[@]} -eq 0 ]]; then
+            echo "changed_warnings=0" >> "$GITHUB_OUTPUT"
+            echo "[]" > eslint-changed.json
+          else
+            # Filter eslint-report.json to changed files only, count warnings.
+            printf '%s\n' "${changed[@]}" > changed-files.txt
+            count=$(node -e "
+              const fs = require('fs');
+              const data = JSON.parse(fs.readFileSync('eslint-report.json', 'utf8'));
+              const changedSet = new Set(fs.readFileSync('changed-files.txt', 'utf8').trim().split('\n').filter(Boolean));
+              let count = 0;
+              const dsRoot = process.cwd() + '/packages/design-system/';
+              const filtered = [];
+              for (const f of data) {
+                const rel = f.filePath.startsWith(dsRoot) ? f.filePath.slice(dsRoot.length) : f.filePath;
+                if (changedSet.has(rel)) {
+                  for (const m of f.messages) if (m.severity === 1) count++;
+                  filtered.push({ file: rel, warnings: f.messages.filter(m => m.severity === 1).length });
+                }
+              }
+              fs.writeFileSync('eslint-changed.json', JSON.stringify(filtered, null, 2));
+              console.log(count);
+            ")
+            echo "changed_warnings=$count" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write step summary
+        run: |
+          set -euo pipefail
+          total="${{ steps.summarize.outputs.total_warnings }}"
+          test_env="${{ steps.summarize.outputs.test_env_warnings }}"
+          errors="${{ steps.summarize.outputs.ignored_errors }}"
+          changed="${{ steps.changed.outputs.changed_warnings || '0' }}"
+          {
+            echo "## DS Lint Warnings — advisory"
+            echo ""
+            echo "Scope: \`@mfe/design-system/src\`"
+            echo ""
+            echo "| Metric | Count |"
+            echo "|---|---:|"
+            echo "| Total warnings | $total |"
+            echo "| Test-environment boundary warnings | $test_env |"
+            echo "| Changed-file warnings | $changed |"
+            echo "| Ignored errors (separate debt) | $errors |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: PR comment (sticky, marker-based)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = JSON.parse(fs.readFileSync('eslint-summary.json', 'utf8'));
+            let changedFiles = [];
+            try {
+              changedFiles = JSON.parse(fs.readFileSync('eslint-changed.json', 'utf8'));
+            } catch {}
+            const marker = '<!-- lint-warn-visibility-advisory -->';
+            const total = summary.total;
+            const testEnv = summary.testEnv;
+            const errors = summary.errors;
+            const changedCount = changedFiles.reduce((acc, f) => acc + f.warnings, 0);
+
+            const topRulesRows = summary.topRules
+              .map(([rule, count]) => `| \`${rule}\` | ${count} |`)
+              .join('\n');
+            const topRulesTable = topRulesRows
+              ? `| Rule | Count |\n|---|---:|\n${topRulesRows}`
+              : '_no warnings_';
+
+            const changedRows = changedFiles
+              .filter((f) => f.warnings > 0)
+              .slice(0, 10)
+              .map((f) => `| \`${f.file}\` | ${f.warnings} |`)
+              .join('\n');
+            const changedTable = changedRows
+              ? `| File | Warnings |\n|---|---:|\n${changedRows}`
+              : '_no DS source files changed in this PR, or no warnings on changed files_';
+
+            const body = [
+              marker,
+              '## DS Lint Warnings — advisory',
+              '',
+              'Scope: `@mfe/design-system/src`',
+              '',
+              `Total warnings: **${total}**`,
+              `Test-environment boundary warnings: **${testEnv}**`,
+              `Changed-file warnings: **${changedCount}**`,
+              `Ignored errors: **${errors}** — not evaluated by this advisory job (separate debt).`,
+              '',
+              '### Top Rules',
+              topRulesTable,
+              '',
+              '### Changed Files',
+              changedTable,
+              '',
+              `Full filtered warning report: artifact \`lint-warn-report\`.`,
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body,
+              });
+            }
+
+      - name: Upload filtered warning report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: lint-warn-report
+          path: |
+            eslint-report.json
+            eslint-summary.json
+            eslint-changed.json
+
   web-test-gate-required:
     name: Web Test Gate (aggregator)
     runs-on: ubuntu-latest
@@ -128,6 +374,7 @@ jobs:
       - token-drift-required
       - cssom-canary-required
       - cssom-full-advisory
+      - lint-warn-visibility-advisory
     # Always run so the aggregator can read advisory results when STRICT_GATES=true.
     if: always()
     steps:
@@ -182,5 +429,29 @@ jobs:
 
           if [[ "$full_outcome" != "success" && "$full_outcome" != "skipped" ]]; then
             echo "::error::Advisory step outcome '$full_outcome' is not acceptable under STRICT_GATES=true."
+            exit 1
+          fi
+
+          # PR-2B-3 (Codex thread 019df8cc): lint-warn-visibility-advisory
+          # is checked for INFRA failures only (install, parse, comment
+          # script). Warning count is intentionally NOT a STRICT_GATES
+          # blocker — current baseline ~800 warnings would lock every PR
+          # the moment STRICT_GATES flips on. A future LINT_WARNING_BASELINE
+          # / delta gate is the right tool for that, scoped to a separate
+          # PR after the baseline shrinks.
+          lint_outcome="${{ needs.lint-warn-visibility-advisory.outputs.lint_advisory_outcome || 'skipped' }}"
+          lint_result="${{ needs.lint-warn-visibility-advisory.result || 'skipped' }}"
+          echo "lint-warn-visibility-advisory job result: $lint_result"
+          echo "lint-warn-visibility-advisory step outcome: $lint_outcome"
+
+          if [[ "$lint_result" != "success" && "$lint_result" != "skipped" ]]; then
+            echo "::error::Lint advisory job result '$lint_result' is not acceptable under STRICT_GATES=true (install/setup failure?)."
+            exit 1
+          fi
+          # Note: lint_outcome of `failure` here means ESLint itself crashed
+          # (parse error, config issue) — NOT that warnings appeared. The
+          # `--max-warnings 100000` cap converts warning counts into exit 0.
+          if [[ "$lint_outcome" == "failure" ]]; then
+            echo "::error::ESLint infra failure in advisory job (parse/config — not warning count)."
             exit 1
           fi
