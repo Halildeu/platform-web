@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   Plus,
   Trash2,
@@ -14,12 +14,12 @@ import {
   FolderOpen,
   X,
   Move as _Move,
-} from "lucide-react";
-import { Text } from "@mfe/design-system";
-import { PlaygroundPreview } from "../playground/PlaygroundPreview";
-import { PreviewThemeWrapper } from "../playground/PreviewThemeWrapper";
-import { exportToReact, exportToClipboard } from "./composeExporter";
-import type { CanvasNode, LayoutConfig } from "./composeExporter";
+} from 'lucide-react';
+import { Text } from '@mfe/design-system';
+import { PlaygroundPreview } from '../playground/PlaygroundPreview';
+import { PreviewThemeWrapper } from '../playground/PreviewThemeWrapper';
+import { exportToReact, exportToClipboard } from './composeExporter';
+import type { CanvasNode, LayoutConfig } from './composeExporter';
 
 /* ------------------------------------------------------------------ */
 /*  ComposePage — Visual Composition Builder (full-page)               */
@@ -36,21 +36,21 @@ import type { CanvasNode, LayoutConfig } from "./composeExporter";
 /* ------------------------------------------------------------------ */
 
 const PALETTE_COMPONENTS = [
-  { name: "Button", defaults: { children: "Click me", variant: "primary" } },
-  { name: "Input", defaults: { placeholder: "Enter text..." } },
-  { name: "Select", defaults: { placeholder: "Choose..." } },
-  { name: "Checkbox", defaults: { children: "Check me" } },
-  { name: "Switch", defaults: {} },
-  { name: "Badge", defaults: { children: "Badge" } },
-  { name: "Alert", defaults: { children: "Alert message", variant: "info" } },
-  { name: "Avatar", defaults: {} },
-  { name: "Divider", defaults: {} },
-  { name: "Text", defaults: { children: "Sample text" } },
-  { name: "Tooltip", defaults: { children: "Hover me" } },
-  { name: "Skeleton", defaults: {} },
+  { name: 'Button', defaults: { children: 'Click me', variant: 'primary' } },
+  { name: 'Input', defaults: { placeholder: 'Enter text...' } },
+  { name: 'Select', defaults: { placeholder: 'Choose...' } },
+  { name: 'Checkbox', defaults: { children: 'Check me' } },
+  { name: 'Switch', defaults: {} },
+  { name: 'Badge', defaults: { children: 'Badge' } },
+  { name: 'Alert', defaults: { children: 'Alert message', variant: 'info' } },
+  { name: 'Avatar', defaults: {} },
+  { name: 'Divider', defaults: {} },
+  { name: 'Text', defaults: { children: 'Sample text' } },
+  { name: 'Tooltip', defaults: { children: 'Hover me' } },
+  { name: 'Skeleton', defaults: {} },
 ];
 
-const STORAGE_KEY = "designlab_compositions";
+const STORAGE_KEY = 'designlab_compositions';
 
 type SavedComposition = {
   id: string;
@@ -62,7 +62,7 @@ type SavedComposition = {
 
 function loadCompositions(): SavedComposition[] {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
   } catch {
     return [];
   }
@@ -75,10 +75,10 @@ function saveCompositions(list: SavedComposition[]) {
 export default function ComposePage() {
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [layout, setLayout] = useState<LayoutConfig>({ type: "flex", direction: "column", gap: 4 });
+  const [layout, setLayout] = useState<LayoutConfig>({ type: 'flex', direction: 'column', gap: 4 });
   const [showCode, setShowCode] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [paletteSearch, setPaletteSearch] = useState("");
+  const [paletteSearch, setPaletteSearch] = useState('');
   const [showLibrary, setShowLibrary] = useState(false);
   const [compositions, setCompositions] = useState<SavedComposition[]>(loadCompositions);
 
@@ -105,10 +105,13 @@ export default function ComposePage() {
     setSelectedId(id);
   }, []);
 
-  const removeNode = useCallback((id: string) => {
-    setNodes((prev) => prev.filter((n) => n.id !== id));
-    if (selectedId === id) setSelectedId(null);
-  }, [selectedId]);
+  const removeNode = useCallback(
+    (id: string) => {
+      setNodes((prev) => prev.filter((n) => n.id !== id));
+      if (selectedId === id) setSelectedId(null);
+    },
+    [selectedId],
+  );
 
   const updateNodeProp = useCallback((id: string, key: string, value: unknown) => {
     setNodes((prev) =>
@@ -116,11 +119,11 @@ export default function ComposePage() {
     );
   }, []);
 
-  const moveNode = useCallback((id: string, direction: "up" | "down") => {
+  const moveNode = useCallback((id: string, direction: 'up' | 'down') => {
     setNodes((prev) => {
       const idx = prev.findIndex((n) => n.id === id);
       if (idx === -1) return prev;
-      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
       if (targetIdx < 0 || targetIdx >= prev.length) return prev;
       const next = [...prev];
       [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
@@ -128,10 +131,7 @@ export default function ComposePage() {
     });
   }, []);
 
-  const exportedCode = useMemo(
-    () => exportToReact(nodes, layout),
-    [nodes, layout],
-  );
+  const exportedCode = useMemo(() => exportToReact(nodes, layout), [nodes, layout]);
 
   const handleCopy = useCallback(async () => {
     await exportToClipboard(exportedCode);
@@ -160,18 +160,23 @@ export default function ComposePage() {
     setSelectedId(null);
   }, []);
 
-  const handleDeleteComposition = useCallback((id: string) => {
-    const updated = compositions.filter((c) => c.id !== id);
-    setCompositions(updated);
-    saveCompositions(updated);
-  }, [compositions]);
+  const handleDeleteComposition = useCallback(
+    (id: string) => {
+      const updated = compositions.filter((c) => c.id !== id);
+      setCompositions(updated);
+      saveCompositions(updated);
+    },
+    [compositions],
+  );
 
   return (
     <div className="flex h-[calc(100vh-120px)] gap-4">
       {/* Left: Palette */}
       <div className="flex w-52 shrink-0 flex-col rounded-2xl border border-border-subtle bg-surface-default">
         <div className="border-b border-border-subtle px-3 py-2">
-          <Text as="div" className="text-xs font-semibold text-text-primary mb-2">Components</Text>
+          <Text as="div" className="text-xs font-semibold text-text-primary mb-2">
+            Components
+          </Text>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-text-tertiary" />
             <input
@@ -219,38 +224,42 @@ export default function ComposePage() {
       <div className="flex flex-1 flex-col gap-3">
         {/* Layout controls */}
         <div className="flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-default px-3 py-2">
-          <Text variant="secondary" className="text-[10px] font-medium">Layout:</Text>
+          <Text variant="secondary" className="text-[10px] font-medium">
+            Layout:
+          </Text>
           <button
             type="button"
-            onClick={() => setLayout({ ...layout, type: "flex", direction: "row" })}
-            className={`rounded-md p-1.5 transition ${layout.type === "flex" && layout.direction === "row" ? "bg-action-primary text-text-inverse" : "bg-surface-muted text-text-secondary"}`}
+            onClick={() => setLayout({ ...layout, type: 'flex', direction: 'row' })}
+            className={`rounded-md p-1.5 transition ${layout.type === 'flex' && layout.direction === 'row' ? 'bg-action-primary text-text-inverse' : 'bg-surface-muted text-text-secondary'}`}
           >
             <AlignHorizontalSpaceAround className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
-            onClick={() => setLayout({ ...layout, type: "flex", direction: "column" })}
-            className={`rounded-md p-1.5 transition ${layout.type === "flex" && layout.direction === "column" ? "bg-action-primary text-text-inverse" : "bg-surface-muted text-text-secondary"}`}
+            onClick={() => setLayout({ ...layout, type: 'flex', direction: 'column' })}
+            className={`rounded-md p-1.5 transition ${layout.type === 'flex' && layout.direction === 'column' ? 'bg-action-primary text-text-inverse' : 'bg-surface-muted text-text-secondary'}`}
           >
             <AlignVerticalSpaceAround className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
-            onClick={() => setLayout({ ...layout, type: "grid", columns: 2 })}
-            className={`rounded-md p-1.5 transition ${layout.type === "grid" ? "bg-action-primary text-text-inverse" : "bg-surface-muted text-text-secondary"}`}
+            onClick={() => setLayout({ ...layout, type: 'grid', columns: 2 })}
+            className={`rounded-md p-1.5 transition ${layout.type === 'grid' ? 'bg-action-primary text-text-inverse' : 'bg-surface-muted text-text-secondary'}`}
           >
             <Grid3X3 className="h-3.5 w-3.5" />
           </button>
 
-          {layout.type === "grid" && (
+          {layout.type === 'grid' && (
             <div className="flex items-center gap-1 ml-2">
-              <Text variant="secondary" className="text-[10px]">Cols:</Text>
+              <Text variant="secondary" className="text-[10px]">
+                Cols:
+              </Text>
               {[2, 3, 4].map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setLayout({ ...layout, columns: c })}
-                  className={`rounded-xs px-1.5 py-0.5 text-[10px] font-medium ${layout.columns === c ? "bg-action-primary text-text-inverse" : "bg-surface-muted text-text-secondary"}`}
+                  className={`rounded-xs px-1.5 py-0.5 text-[10px] font-medium ${layout.columns === c ? 'bg-action-primary text-text-inverse' : 'bg-surface-muted text-text-secondary'}`}
                 >
                   {c}
                 </button>
@@ -259,13 +268,15 @@ export default function ComposePage() {
           )}
 
           <div className="flex items-center gap-1 ml-2">
-            <Text variant="secondary" className="text-[10px]">Gap:</Text>
+            <Text variant="secondary" className="text-[10px]">
+              Gap:
+            </Text>
             {[2, 4, 6, 8].map((g) => (
               <button
                 key={g}
                 type="button"
                 onClick={() => setLayout({ ...layout, gap: g })}
-                className={`rounded-xs px-1.5 py-0.5 text-[10px] font-medium ${layout.gap === g ? "bg-action-primary text-text-inverse" : "bg-surface-muted text-text-secondary"}`}
+                className={`rounded-xs px-1.5 py-0.5 text-[10px] font-medium ${layout.gap === g ? 'bg-action-primary text-text-inverse' : 'bg-surface-muted text-text-secondary'}`}
               >
                 {g}
               </button>
@@ -276,7 +287,7 @@ export default function ComposePage() {
             <button
               type="button"
               onClick={() => setShowCode(!showCode)}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${showCode ? "bg-action-primary text-text-inverse" : "bg-surface-muted text-text-secondary"}`}
+              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition ${showCode ? 'bg-action-primary text-text-inverse' : 'bg-surface-muted text-text-secondary'}`}
             >
               <Code2 className="h-3 w-3" /> Code
             </button>
@@ -285,8 +296,12 @@ export default function ComposePage() {
               onClick={handleCopy}
               className="flex items-center gap-1 rounded-md bg-surface-muted px-2 py-1 text-[10px] font-medium text-text-secondary hover:text-text-primary transition"
             >
-              {copied ? <Check className="h-3 w-3 text-state-success-text" /> : <Copy className="h-3 w-3" />}
-              {copied ? "Copied" : "Export"}
+              {copied ? (
+                <Check className="h-3 w-3 text-state-success-text" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
+              {copied ? 'Copied' : 'Export'}
             </button>
           </div>
         </div>
@@ -311,11 +326,15 @@ export default function ComposePage() {
               ) : (
                 <div
                   className={
-                    layout.type === "grid"
+                    layout.type === 'grid'
                       ? `grid gap-${layout.gap ?? 4}`
-                      : `flex ${layout.direction === "column" ? "flex-col" : "flex-row"} gap-${layout.gap ?? 4}`
+                      : `flex ${layout.direction === 'column' ? 'flex-col' : 'flex-row'} gap-${layout.gap ?? 4}`
                   }
-                  style={layout.type === "grid" ? { gridTemplateColumns: `repeat(${layout.columns ?? 2}, 1fr)` } : undefined}
+                  style={
+                    layout.type === 'grid'
+                      ? { gridTemplateColumns: `repeat(${layout.columns ?? 2}, 1fr)` }
+                      : undefined
+                  }
                 >
                   {nodes.map((node) => (
                     <div
@@ -323,8 +342,8 @@ export default function ComposePage() {
                       onClick={() => setSelectedId(node.id)}
                       className={`relative cursor-pointer rounded-lg p-2 transition ${
                         selectedId === node.id
-                          ? "ring-2 ring-action-primary ring-offset-2"
-                          : "hover:ring-1 hover:ring-border-subtle"
+                          ? 'ring-2 ring-action-primary ring-offset-2'
+                          : 'hover:ring-1 hover:ring-border-subtle'
                       }`}
                     >
                       <PlaygroundPreview
@@ -348,7 +367,7 @@ export default function ComposePage() {
       <div className="w-56 shrink-0 rounded-2xl border border-border-subtle bg-surface-default overflow-hidden flex flex-col">
         <div className="border-b border-border-subtle px-3 py-2">
           <Text as="div" className="text-xs font-semibold text-text-primary">
-            {selectedNode ? `${selectedNode.componentName} Props` : "Properties"}
+            {selectedNode ? `${selectedNode.componentName} Props` : 'Properties'}
           </Text>
         </div>
 
@@ -358,14 +377,14 @@ export default function ComposePage() {
             <div className="flex items-center gap-1 mb-2">
               <button
                 type="button"
-                onClick={() => moveNode(selectedNode.id, "up")}
+                onClick={() => moveNode(selectedNode.id, 'up')}
                 className="rounded-xs p-1 text-text-tertiary hover:text-text-primary hover:bg-surface-muted transition text-[10px]"
               >
                 Move Up
               </button>
               <button
                 type="button"
-                onClick={() => moveNode(selectedNode.id, "down")}
+                onClick={() => moveNode(selectedNode.id, 'down')}
                 className="rounded-xs p-1 text-text-tertiary hover:text-text-primary hover:bg-surface-muted transition text-[10px]"
               >
                 Move Down
@@ -380,25 +399,45 @@ export default function ComposePage() {
             </div>
 
             {/* Editable props */}
-            <PropEditor label="children" value={selectedNode.props.children as string ?? ""} onChange={(v) => updateNodeProp(selectedNode.id, "children", v)} />
-            <PropEditor label="variant" value={selectedNode.props.variant as string ?? ""} onChange={(v) => updateNodeProp(selectedNode.id, "variant", v)} />
-            <PropEditor label="size" value={selectedNode.props.size as string ?? ""} onChange={(v) => updateNodeProp(selectedNode.id, "size", v)} />
-            <PropEditor label="placeholder" value={selectedNode.props.placeholder as string ?? ""} onChange={(v) => updateNodeProp(selectedNode.id, "placeholder", v)} />
+            <PropEditor
+              label="children"
+              value={(selectedNode.props.children as string) ?? ''}
+              onChange={(v) => updateNodeProp(selectedNode.id, 'children', v)}
+            />
+            <PropEditor
+              label="variant"
+              value={(selectedNode.props.variant as string) ?? ''}
+              onChange={(v) => updateNodeProp(selectedNode.id, 'variant', v)}
+            />
+            <PropEditor
+              label="size"
+              value={(selectedNode.props.size as string) ?? ''}
+              onChange={(v) => updateNodeProp(selectedNode.id, 'size', v)}
+            />
+            <PropEditor
+              label="placeholder"
+              value={(selectedNode.props.placeholder as string) ?? ''}
+              onChange={(v) => updateNodeProp(selectedNode.id, 'placeholder', v)}
+            />
             <div className="flex items-center gap-2">
-              <Text variant="secondary" className="text-[10px] w-16 shrink-0">disabled</Text>
+              <Text variant="secondary" className="text-[10px] w-16 shrink-0">
+                disabled
+              </Text>
               <input
                 type="checkbox"
                 checked={Boolean(selectedNode.props.disabled)}
-                onChange={(e) => updateNodeProp(selectedNode.id, "disabled", e.target.checked)}
+                onChange={(e) => updateNodeProp(selectedNode.id, 'disabled', e.target.checked)}
                 className="rounded-xs"
               />
             </div>
             <div className="flex items-center gap-2">
-              <Text variant="secondary" className="text-[10px] w-16 shrink-0">loading</Text>
+              <Text variant="secondary" className="text-[10px] w-16 shrink-0">
+                loading
+              </Text>
               <input
                 type="checkbox"
                 checked={Boolean(selectedNode.props.loading)}
-                onChange={(e) => updateNodeProp(selectedNode.id, "loading", e.target.checked)}
+                onChange={(e) => updateNodeProp(selectedNode.id, 'loading', e.target.checked)}
                 className="rounded-xs"
               />
             </div>
@@ -414,7 +453,10 @@ export default function ComposePage() {
         {/* Node list */}
         <div className="border-t border-border-subtle">
           <div className="px-3 py-1.5">
-            <Text variant="secondary" className="text-[10px] font-semibold uppercase tracking-wider">
+            <Text
+              variant="secondary"
+              className="text-[10px] font-semibold uppercase tracking-wider"
+            >
               Layers ({nodes.length})
             </Text>
           </div>
@@ -425,7 +467,9 @@ export default function ComposePage() {
                 type="button"
                 onClick={() => setSelectedId(node.id)}
                 className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[10px] transition ${
-                  selectedId === node.id ? "bg-action-primary/10 text-action-primary" : "text-text-secondary hover:bg-surface-muted"
+                  selectedId === node.id
+                    ? 'bg-action-primary/10 text-action-primary'
+                    : 'text-text-secondary hover:bg-surface-muted'
                 }`}
               >
                 <span className="font-mono">{i + 1}.</span>
@@ -439,24 +483,40 @@ export default function ComposePage() {
       {/* Library modal */}
       {showLibrary && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-surface-inverse/40" onClick={() => setShowLibrary(false)} />
+          {/* PR-12: surface-inverse → surface-overlay (same token, registered Tailwind class). */}
+          <div
+            className="absolute inset-0 bg-surface-overlay/40"
+            onClick={() => setShowLibrary(false)}
+          />
           <div className="relative w-full max-w-md rounded-2xl border border-border-subtle bg-surface-default shadow-2xl">
             <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-              <Text as="h2" className="text-sm font-semibold text-text-primary">Saved Compositions</Text>
-              <button type="button" onClick={() => setShowLibrary(false)} className="rounded-xs p-1 text-text-tertiary hover:text-text-primary">
+              <Text as="h2" className="text-sm font-semibold text-text-primary">
+                Saved Compositions
+              </Text>
+              <button
+                type="button"
+                onClick={() => setShowLibrary(false)}
+                className="rounded-xs p-1 text-text-tertiary hover:text-text-primary"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="flex flex-col max-h-80 overflow-y-auto p-4 gap-2">
               {compositions.length === 0 ? (
-                <Text variant="secondary" className="text-xs text-center py-8">No saved compositions yet</Text>
+                <Text variant="secondary" className="text-xs text-center py-8">
+                  No saved compositions yet
+                </Text>
               ) : (
                 compositions.map((comp) => (
-                  <div key={comp.id} className="flex items-center justify-between rounded-xl border border-border-subtle p-3">
+                  <div
+                    key={comp.id}
+                    className="flex items-center justify-between rounded-xl border border-border-subtle p-3"
+                  >
                     <div>
                       <Text className="text-xs font-medium text-text-primary">{comp.name}</Text>
                       <Text variant="secondary" className="text-[10px]">
-                        {comp.nodes.length} components &middot; {new Date(comp.savedAt).toLocaleDateString()}
+                        {comp.nodes.length} components &middot;{' '}
+                        {new Date(comp.savedAt).toLocaleDateString()}
                       </Text>
                     </div>
                     <div className="flex gap-1">
@@ -488,10 +548,20 @@ export default function ComposePage() {
 
 /* ---- Prop Editor row ---- */
 
-function PropEditor({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function PropEditor({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div className="flex items-center gap-2">
-      <Text variant="secondary" className="text-[10px] w-16 shrink-0">{label}</Text>
+      <Text variant="secondary" className="text-[10px] w-16 shrink-0">
+        {label}
+      </Text>
       <input
         type="text"
         value={value}

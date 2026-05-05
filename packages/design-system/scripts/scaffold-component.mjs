@@ -493,7 +493,7 @@ export function ${pascal}({
       {...stateAttrs({ component: "${kebab}", state: "open" })}
     >
       <div
-        className="absolute inset-0 bg-surface-inverse/40"
+        className="absolute inset-0 bg-surface-overlay/40"
         aria-hidden
         onClick={closeOnOverlayClick ? onClose : undefined}
       />
