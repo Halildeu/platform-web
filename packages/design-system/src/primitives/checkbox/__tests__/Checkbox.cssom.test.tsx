@@ -11,8 +11,7 @@ import {
 } from '../../../__tests__/cssom-harness';
 
 /**
- * Checkbox — third L4-foundation real-component CSSOM canary
- * (PR-8 wave 2).
+ * Checkbox — third L4-foundation real-component CSSOM canary.
  *
  * Verifies harness behavior on a primitive that uses a *visually
  * proxied* input pattern: the actual <input type="checkbox"> is
@@ -23,8 +22,14 @@ import {
  * matters because token rename here would silently drop the visual
  * affordance even though the input still works.
  *
- * Production behavior is NOT changed by this PR; the Checkbox source
- * and tokens are untouched.
+ * History:
+ * - PR-8 (Codex 019df9f5) — added the checked-state and theme-switch
+ *   tests. Dropped a focus-ring test because production had no
+ *   visible focus indicator on the proxy.
+ * - PR-10 (Codex 019dfa25) — fixed the production a11y gap (`peer`
+ *   on input + peer-focus-visible ring on proxy) and restored the
+ *   focus-ring test. The third assertion below now locks the
+ *   keyboard-focus visible cascade.
  */
 
 describe('Checkbox CSSOM canary', () => {

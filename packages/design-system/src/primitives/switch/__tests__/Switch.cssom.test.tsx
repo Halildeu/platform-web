@@ -11,8 +11,7 @@ import {
 } from '../../../__tests__/cssom-harness';
 
 /**
- * Switch — fourth L4-foundation real-component CSSOM canary
- * (PR-8 wave 3).
+ * Switch — fourth L4-foundation real-component CSSOM canary.
  *
  * Verifies the harness on a primitive that sets the token via inline
  * `style={{ backgroundColor: 'var(--action-primary)' }}` rather than
@@ -22,8 +21,14 @@ import {
  * `var()` reference (Switch). The thumb uses `bg-surface-default`
  * (utility class) so we cover both paths in the same primitive.
  *
- * Production behavior is NOT changed by this PR; the Switch source and
- * tokens are untouched.
+ * History:
+ * - PR-8 (Codex 019df9f5) — added the variant + theme-switch tests.
+ *   Dropped a focus-ring test because the label's `focus-visible:`
+ *   rule never fired (label not the focused element).
+ * - PR-10 (Codex 019dfa25) — fixed the production a11y gap
+ *   (`hasFocusVisibleRingClass` on label, using `:has(:focus-visible)`)
+ *   and restored the focus-ring test. The last assertion below now
+ *   locks the keyboard-focus visible cascade.
  */
 
 describe('Switch CSSOM canary', () => {
