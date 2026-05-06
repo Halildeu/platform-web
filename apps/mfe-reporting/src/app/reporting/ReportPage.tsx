@@ -215,7 +215,9 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         if (gridApi.getRowGroupColumns().length > 0) gridApi.setRowGroupColumns([]);
         if (gridApi.getPivotColumns().length > 0) gridApi.setPivotColumns([]);
         if (gridApi.getValueColumns().length > 0) gridApi.setValueColumns([]);
-        if (gridApi.isPivotMode()) gridApi.setPivotMode(false);
+        // AG Grid 34.x: setPivotMode is removed; setGridOption is the
+        // canonical way (matches VariantIntegration's own pattern).
+        if (gridApi.isPivotMode()) gridApi.setGridOption('pivotMode', false);
       } catch {
         // gridApi may be destroyed mid-cleanup; harmless
       }
