@@ -61,7 +61,60 @@ export function focusRingClass(strategy: FocusStrategy = 'ring'): string {
 }
 
 /**
+ * Token-keyed lookup for color-override focus ring variants.
+ *
+ * Tailwind 4's content scanner cannot detect class names built from
+ * template literals like `` `focus-visible:ring-[color-mix(...,${color},...)` ``
+ * because the scanner tokenizes source files as fragments, not strings —
+ * the resulting class is "potential" rather than concrete and never
+ * compiles to CSS. PR-15 fix (Codex P3 from PR-10 iter-1): pre-register
+ * each color override as literal class strings here, then look up by
+ * token name. Tailwind picks them up; the runtime emits the correct
+ * `color-mix()` cascade.
+ *
+ * To add a new color override, append a key here. The key is the token
+ * name (without `var()` wrapper) — the keys map directly onto the
+ * `var(--<key>)` form used in `color` argument matching.
+ *
+ * Currently registered:
+ * - `state-error-text` (Button danger variant, primitives/button/Button.tsx:180)
+ */
+const COLOR_OVERRIDE_RING_CLASSES: Record<string, Record<FocusStrategy, string>> = {
+  'state-error-text': {
+    ring: [
+      'focus-visible:outline-hidden',
+      'focus-visible:ring-2',
+      'focus-visible:ring-[color-mix(in_oklab,var(--state-error-text)_30%,transparent)]',
+      'focus-visible:ring-offset-2',
+    ].join(' '),
+
+    outline: [
+      'focus-visible:outline-hidden',
+      'focus-visible:ring-1',
+      'focus-visible:ring-[color-mix(in_oklab,var(--state-error-text)_50%,transparent)]',
+      'focus-visible:ring-offset-1',
+    ].join(' '),
+
+    inset: [
+      'focus-visible:outline-hidden',
+      'focus-visible:ring-2',
+      'focus-visible:ring-inset',
+      'focus-visible:ring-[color-mix(in_oklab,var(--state-error-text)_40%,transparent)]',
+    ].join(' '),
+
+    none: 'focus-visible:outline-hidden',
+  },
+};
+
+/**
  * Returns focus ring classes with a custom color override.
+ *
+ * The `color` argument MUST be of the form `var(--<token-name>)` and
+ * the token name MUST be registered in `COLOR_OVERRIDE_RING_CLASSES`
+ * above. Unregistered colors fall back to {@link focusRingClass} (the
+ * default `--focus-ring` token) with a dev-time warning, because
+ * dynamic class strings would not compile through the Tailwind
+ * content scanner — the ring would be invisible.
  *
  * @example
  * ```tsx
@@ -69,24 +122,33 @@ export function focusRingClass(strategy: FocusStrategy = 'ring'): string {
  *   Delete
  * </button>
  * ```
+ *
+ * To register a new color, add it to `COLOR_OVERRIDE_RING_CLASSES` in
+ * `focus-policy.ts`.
  */
 export function focusRingClassWithColor(strategy: FocusStrategy, color: string): string {
   if (strategy === 'none') return 'focus-visible:outline-hidden';
 
-  const ringWidth = strategy === 'outline' ? '1' : '2';
-  const offset = strategy === 'outline' ? '1' : strategy === 'inset' ? '' : '2';
-  const inset = strategy === 'inset' ? 'focus-visible:ring-inset' : '';
-  const opacity = strategy === 'outline' ? '50' : strategy === 'inset' ? '40' : '30';
+  // Extract the token name from `var(--<name>)` for lookup.
+  const match = color.match(/^var\(--([\w-]+)\)$/);
+  const tokenName = match ? match[1] : null;
 
-  return [
-    'focus-visible:outline-hidden',
-    `focus-visible:ring-${ringWidth}`,
-    inset,
-    `focus-visible:ring-[color-mix(in_oklab,${color}_${opacity}%,transparent)]`,
-    offset ? `focus-visible:ring-offset-${offset}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  if (tokenName && COLOR_OVERRIDE_RING_CLASSES[tokenName]) {
+    return COLOR_OVERRIDE_RING_CLASSES[tokenName][strategy];
+  }
+
+  // Unregistered color — log a dev-time warning and fall back to the
+  // default focus ring (uses `--focus-ring` token, classes already
+  // emitted by FOCUS_RING_CLASSES). Graceful degradation: the user
+  // still sees A focus ring, just not the requested color.
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
+    console.warn(
+      `[focusRingClassWithColor] color "${color}" is not registered in ` +
+        `COLOR_OVERRIDE_RING_CLASSES. Add it to focus-policy.ts to enable ` +
+        `Tailwind class emission. Falling back to default focus ring.`,
+    );
+  }
+  return FOCUS_RING_CLASSES[strategy];
 }
 
 /**
