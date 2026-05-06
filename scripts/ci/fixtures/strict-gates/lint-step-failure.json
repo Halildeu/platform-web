@@ -1,0 +1,15 @@
+{
+  "_description": "lint-warn-visibility-advisory step outcome=failure (ESLint plugin/parser crash that bypasses the `|| true` exit-code mask). The `lint_run` step somehow returns non-zero AND triggers the step's continue-on-error path, leaving outcome=failure but job result=success. STRICT_GATES catches this via the `lint_outcome == failure` check (web-test-gate.yml lint advisory check #2). Without this fixture, the 2nd lint check would not be exercised by `gate:dry-run:all` and a regression there could go unnoticed. Codex thread 019dfab3 iter-2 finding 1.",
+  "_expected_exit": 1,
+  "strict_gates": "true",
+  "required": {
+    "unit": { "result": "success" },
+    "token_drift": { "result": "success" },
+    "cssom_canary": { "result": "success" },
+    "visual_invariant": { "result": "success" }
+  },
+  "advisory": {
+    "cssom_full": { "result": "success", "outcome": "success" },
+    "lint": { "result": "success", "outcome": "failure" }
+  }
+}

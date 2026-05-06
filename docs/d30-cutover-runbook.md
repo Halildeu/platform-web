@@ -49,6 +49,13 @@
       point. Pre-prod state: branch protection currently OFF (verified
       via `gh api repos/<owner>/<repo>/branches/main/protection`); this
       step flips it on.
+- [ ] **Run dry-run suite** with `pnpm gate:dry-run:all` (PR-13).
+      The script asserts every fixture under
+      `scripts/ci/fixtures/strict-gates/` matches its declared
+      `_expected_exit`; mismatch means the aggregator's logic has
+      drifted from the YAML and the cutover plan needs review.
+      Operator reference:
+      [`docs/operations/strict-gates-cheat-sheet.md`](operations/strict-gates-cheat-sheet.md).
 - [ ] **Flip `STRICT_GATES=true` repo Actions variable** (Settings →
       Secrets and variables → Actions → Variables). Pre-prod default
       is unset (advisory). Once flipped, advisory job **infra**
@@ -59,14 +66,8 @@
       severity-2 diagnostics are counted as `ignored_errors` and
       tracked as separate debt). Warning **count** is intentionally
       NOT promoted by STRICT_GATES — that needs a baseline shrink
-      first. Aggregator branch logic simulated 7/7 scenarios green
-      in PR-6 (logs in commit message). PR-13 added a runnable
-      dry-run: `pnpm gate:dry-run <fixture>`. Pre-cutover, run
-      `pnpm gate:dry-run:smoke` and walk through the fixtures in
-      `scripts/ci/fixtures/strict-gates/` to confirm the
-      aggregator's behavior matches expectations. Full operator
-      reference:
-      [`docs/operations/strict-gates-cheat-sheet.md`](operations/strict-gates-cheat-sheet.md).
+      first. cssom-full has 3 strict-gates checks; lint has 2 (no
+      `outcome != success/skipped` rule on lint — see cheat-sheet).
 - [ ] Comms message draft (T-D7 send).
 
 ### §1.2 Credential / secret materials map

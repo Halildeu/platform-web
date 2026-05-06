@@ -125,7 +125,9 @@ the actual exit code matches.
 | `cssom-full-install-crash.json`    | Advisory job crashed pre-run (`result=failure outcome=skipped` — PR-1 boolean-AND edge case)     |    1 |
 | `cssom-full-cancelled.json`        | Advisory step `outcome=cancelled` — caught by cssom-full's third check                           |    1 |
 | `lint-advisory-infra-failure.json` | Lint summarize step crashed (`result=failure outcome=success`)                                   |    1 |
+| `lint-step-failure.json`           | ESLint plugin crash bypasses `\|\| true` (`result=success outcome=failure`)                      |    1 |
 | `lint-cancelled-passes.json`       | Lint `outcome=cancelled` — passes (lint has only 2 checks; no `outcome != success/skipped` rule) |    0 |
+| `required-job-failure.json`        | A required job (cssom-canary) failed — aggregator fails before strict-gates block runs           |    1 |
 | `strict-off-advisory-broken.json`  | Both advisory broken, STRICT_GATES off — default mode                                            |    0 |
 
 ## Pre-cutover verification (D30 runbook §1.1)
