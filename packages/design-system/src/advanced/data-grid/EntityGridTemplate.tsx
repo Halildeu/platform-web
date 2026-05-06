@@ -255,6 +255,26 @@ export interface EntityGridTemplateProps<
     gridApi: GridApi<RowData>;
   }) => IServerSideDatasource | null | undefined;
   onEffectiveModeChange?: (mode: "server" | "client") => void;
+  /**
+   * PR #272c (reporting hardening, 2026-05): forwarded to the embedded
+   * {@link VariantIntegration} so a saved variant carrying
+   * {@code rowGroup}, {@code rowGroupIndex}, {@code aggFunc},
+   * {@code pivot} state for columns the current capability envelope
+   * doesn't allow can be sanitized before {@code applyColumnState} runs.
+   * Caller (e.g. ReportPage) computes the allowlist from the report's
+   * metadata response and returns a filtered column-state array.
+   *
+   * <p>Signature mirrors AG Grid's {@code ColumnState[]} via
+   * {@code GridVariantState['columnState']}. Returning the input
+   * verbatim makes this prop a no-op (safe default).
+   */
+  sanitizeVariantColumnState?: (
+    state: import('@mfe/shared-types').GridVariantState['columnState'],
+  ) => import('@mfe/shared-types').GridVariantState['columnState'];
+  /** Companion sanitizer for {@code pivotMode}. Return the value to apply. */
+  sanitizeVariantPivotMode?: (
+    pivotMode: boolean | undefined,
+  ) => boolean | undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -315,6 +335,8 @@ export function EntityGridTemplate<
     onServerExport,
     access,
     accessReason,
+    sanitizeVariantColumnState,
+    sanitizeVariantPivotMode,
   } = props;
 
   const accessState = resolveAccessState(access);
@@ -540,6 +562,8 @@ export function EntityGridTemplate<
             canPromoteToGlobal={canPromoteVariantToGlobal}
             canDemoteToPersonal={canDemoteVariantToPersonal}
             canDeleteGlobal={canDeleteGlobalVariant}
+            sanitizeColumnState={sanitizeVariantColumnState}
+            sanitizePivotMode={sanitizeVariantPivotMode}
           />
         }
       />

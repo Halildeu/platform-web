@@ -155,6 +155,27 @@ export interface VariantIntegrationProps<RowData = unknown> extends AccessContro
   canDeleteGlobal?: boolean;
   /** Additional CSS class for custom styling */
   className?: string;
+  /**
+   * PR #272c (reporting hardening, 2026-05): optional sanitizer that
+   * runs over a saved variant's column state before {@code applyColumnState}
+   * is invoked. Caller can strip {@code rowGroup}, {@code rowGroupIndex},
+   * {@code aggFunc}, {@code pivot}, {@code pivotIndex} for columns the
+   * backend doesn't allow as group/value/pivot dimensions, so a stale
+   * variant restored under a more restrictive capability envelope can't
+   * push the grid into a state the backend will reject.
+   *
+   * <p>The sanitizer receives the raw saved column state and must return
+   * a (possibly mutated) array. Returning {@code state} verbatim makes
+   * this prop a no-op, which is the safe default.
+   */
+  sanitizeColumnState?: (state: GridVariantState['columnState']) => GridVariantState['columnState'];
+  /**
+   * PR #272c: paired sanitizer for the {@code pivotMode} flag. Returns
+   * the value that should actually be applied to the grid; useful when
+   * a saved variant carries {@code pivotMode=true} but the report's
+   * current capability envelope doesn't expose pivot.
+   */
+  sanitizePivotMode?: (pivotMode: boolean | undefined) => boolean | undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -179,10 +200,29 @@ function collectGridState<RowData>(api: GridApi<RowData>): GridVariantState {
   };
 }
 
-function applyVariantState<RowData>(api: GridApi<RowData>, state: GridVariantState): void {
+/**
+ * Optional PR #272c sanitizer hooks — run over the variant state
+ * immediately before AG Grid sees it, so columns the current
+ * capability envelope doesn't allow as group/value/pivot can't be
+ * smuggled in via a stale saved variant.
+ */
+type ApplyVariantSanitizers = {
+  sanitizeColumnState?: (state: GridVariantState['columnState']) => GridVariantState['columnState'];
+  sanitizePivotMode?: (pivotMode: boolean | undefined) => boolean | undefined;
+};
+
+function applyVariantState<RowData>(
+  api: GridApi<RowData>,
+  state: GridVariantState,
+  sanitizers: ApplyVariantSanitizers = {},
+): void {
   if (state.columnState && Array.isArray(state.columnState)) {
+    const sanitizedColumnState =
+      typeof sanitizers.sanitizeColumnState === 'function'
+        ? sanitizers.sanitizeColumnState(state.columnState)
+        : state.columnState;
     api.applyColumnState?.({
-      state: state.columnState as ColumnState[],
+      state: sanitizedColumnState as ColumnState[],
       applyOrder: true,
       defaultState: { hide: false },
     });
@@ -195,8 +235,12 @@ function applyVariantState<RowData>(api: GridApi<RowData>, state: GridVariantSta
     // Clear advanced filter if variant has none
     api.setAdvancedFilterModel?.(null as unknown as AdvancedFilterModel);
   }
-  if (typeof state.pivotMode === 'boolean') {
-    api.setGridOption?.('pivotMode', state.pivotMode);
+  const sanitizedPivotMode =
+    typeof sanitizers.sanitizePivotMode === 'function'
+      ? sanitizers.sanitizePivotMode(state.pivotMode)
+      : state.pivotMode;
+  if (typeof sanitizedPivotMode === 'boolean') {
+    api.setGridOption?.('pivotMode', sanitizedPivotMode);
   }
   if (typeof state.quickFilterText === 'string') {
     api.setGridOption?.('quickFilterText', state.quickFilterText);
@@ -273,6 +317,8 @@ export const VariantIntegration = <RowData = unknown,>({
   canDeleteGlobal = false,
   access,
   accessReason,
+  sanitizeColumnState,
+  sanitizePivotMode,
 }: VariantIntegrationProps<RowData>): React.ReactElement => {
   const accessState = resolveAccessState(access);
   if (accessState.isHidden) return (<></>) as unknown as React.ReactElement;
@@ -348,12 +394,12 @@ export const VariantIntegration = <RowData = unknown,>({
 
     const target = requested ?? selected ?? userDefault ?? globalDefault ?? firstCompatible;
     if (target) {
-      applyVariantState(gridApi, target.state);
+      applyVariantState(gridApi, target.state, { sanitizeColumnState, sanitizePivotMode });
       appliedRef.current = target.id;
       setInternalActiveId(target.id);
       onActiveVariantChange?.(target.id);
     }
-  }, [activeId, gridApi, variants, onActiveVariantChange]);
+  }, [activeId, gridApi, variants, onActiveVariantChange, sanitizeColumnState, sanitizePivotMode]);
 
   // ── Close manager on outside click ─────────────────────────────────
   const managerRef = useRef<HTMLDivElement>(null);
@@ -386,7 +432,7 @@ export const VariantIntegration = <RowData = unknown,>({
         ? (variants.find((item) => item.id === previousActiveId) ?? null)
         : null;
 
-      applyVariantState(gridApi, variant.state);
+      applyVariantState(gridApi, variant.state, { sanitizeColumnState, sanitizePivotMode });
       appliedRef.current = variantId;
       setInternalActiveId(variantId);
       onActiveVariantChange?.(variantId);
@@ -409,6 +455,8 @@ export const VariantIntegration = <RowData = unknown,>({
       m.variantPreferenceUpdateFailedLabel,
       onActiveVariantChange,
       variants,
+      sanitizeColumnState,
+      sanitizePivotMode,
     ],
   );
 

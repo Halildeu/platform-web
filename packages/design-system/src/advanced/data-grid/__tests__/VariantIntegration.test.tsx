@@ -480,6 +480,80 @@ describe('VariantIntegration', () => {
     });
   });
 
+  /*
+   * PR #272c (reporting hardening, 2026-05): sanitizeColumnState /
+   * sanitizePivotMode forwarded into applyVariantState. The sanitizers
+   * run BEFORE applyColumnState/setGridOption so a saved variant
+   * carrying state outside the current capability envelope can't push
+   * the grid into a state the backend will reject.
+   */
+  describe('PR-0.2 sanitizer hooks', () => {
+    it('sanitizeColumnState mutates the array passed to applyColumnState', async () => {
+      const gridApi = createMockGridApi();
+      const sanitizeColumnState = vi.fn((state: typeof MOCK_COLUMN_STATE) =>
+        // Strip every column whose colId is "role" — pretend "role" is
+        // not in the capability allowlist.
+        state.filter((c) => c.colId !== 'role'),
+      );
+      renderVariant({
+        gridApi,
+        activeVariantId: GLOBAL_VARIANT.id,
+        sanitizeColumnState,
+      });
+      await waitFor(() => {
+        expect(sanitizeColumnState).toHaveBeenCalled();
+      });
+      // applyColumnState received the SANITIZED array (no `role`).
+      await waitFor(() => {
+        const calls = (gridApi.applyColumnState as ReturnType<typeof vi.fn>).mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        const lastCall = calls[calls.length - 1]?.[0];
+        const ids = (lastCall?.state as Array<{ colId: string }>).map((c) => c.colId);
+        expect(ids).not.toContain('role');
+      });
+    });
+
+    it('sanitizePivotMode replaces the pivotMode value before setGridOption', async () => {
+      const gridApi = createMockGridApi();
+      // Saved variant claims pivotMode=true; sanitizer forces it false
+      // because the current capability envelope doesn't expose pivot.
+      const variantWithPivot = {
+        ...GLOBAL_VARIANT,
+        state: { ...GLOBAL_VARIANT.state, pivotMode: true },
+      };
+      mockFetch.mockResolvedValue([variantWithPivot]);
+      const sanitizePivotMode = vi.fn(() => false);
+      renderVariant({
+        gridApi,
+        activeVariantId: variantWithPivot.id,
+        sanitizePivotMode,
+      });
+      await waitFor(() => {
+        expect(sanitizePivotMode).toHaveBeenCalledWith(true);
+      });
+      await waitFor(() => {
+        const calls = (gridApi.setGridOption as ReturnType<typeof vi.fn>).mock.calls;
+        const pivotCall = calls.find((c) => c[0] === 'pivotMode');
+        expect(pivotCall).toBeDefined();
+        expect(pivotCall?.[1]).toBe(false);
+      });
+    });
+
+    it('omitting sanitizers preserves legacy behaviour (no-op)', async () => {
+      const gridApi = createMockGridApi();
+      renderVariant({ gridApi, activeVariantId: GLOBAL_VARIANT.id });
+      await waitFor(() => {
+        const calls = (gridApi.applyColumnState as ReturnType<typeof vi.fn>).mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        const lastCall = calls[calls.length - 1]?.[0];
+        // Without a sanitizer, the variant's full saved column state
+        // is forwarded verbatim — no fields stripped.
+        const ids = (lastCall?.state as Array<{ colId: string }>).map((c) => c.colId);
+        expect(ids).toEqual(MOCK_COLUMN_STATE.map((c) => c.colId));
+      });
+    });
+  });
+
   describe('Auto-Apply Priority', () => {
     it('applies user selected variant first (highest priority)', async () => {
       mockFetch.mockResolvedValue([GLOBAL_VARIANT, { ...PERSONAL_VARIANT, isUserSelected: true }]);
