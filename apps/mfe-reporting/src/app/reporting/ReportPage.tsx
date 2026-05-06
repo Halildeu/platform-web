@@ -442,23 +442,36 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
          * The previous design hid these behind a "Rapor Filtreleri" Drawer;
          * user feedback (2026-05-06) was that the rows belong in the filter
          * area itself, not behind an extra click.
+         *
+         * Some modules legitimately return null from renderFilters (e.g.
+         * context-health, hr-executive-summary, the ReportingApp fallback
+         * module). Render the panel only when the call yields actual
+         * content — Codex 019dfc41 iter-2 absorb. With the Drawer this was
+         * masked by the trigger button being hidden; inline, an empty
+         * bordered box would be a visible regression.
          */}
-        {module.renderFilters ? (
-          <div
-            className="mb-3 flex flex-col gap-2 rounded-2xl border border-border-subtle bg-surface-default px-4 py-3 shadow-xs"
-            role="group"
-            aria-label="Rapor filtreleri"
-            data-testid="report-filter-rows"
-          >
-            {module.renderFilters({
-              values: filters,
-              setFieldValue: (key, value) =>
-                setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
-              t,
-              requiredFields: module.requiredFilterFields,
-            })}
-          </div>
-        ) : null}
+        {(() => {
+          const filterRows = module.renderFilters?.({
+            values: filters,
+            setFieldValue: (key, value) =>
+              setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+            t,
+            requiredFields: module.requiredFilterFields,
+          });
+          if (filterRows == null || filterRows === false) {
+            return null;
+          }
+          return (
+            <div
+              className="mb-3 flex flex-col gap-2 rounded-2xl border border-border-subtle bg-surface-default px-4 py-3 shadow-xs"
+              role="group"
+              aria-label="Rapor filtreleri"
+              data-testid="report-filter-rows"
+            >
+              {filterRows}
+            </div>
+          );
+        })()}
 
         <EntityGridTemplate<TRow>
           key={reloadSignal}
