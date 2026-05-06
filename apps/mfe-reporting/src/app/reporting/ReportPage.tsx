@@ -113,36 +113,57 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   /*
    * Server-side grouping is not yet implemented on the backend. AG Grid sends
    * `rowGroupCols` / `groupKeys` / `valueCols` in the SSRM request, but
-   * `ReportController.getData` ignores them and returns flat rows. Showing the
-   * grouping panel in server mode lets users drag a column into it and produces
-   * a visibly broken grid (group column populated but rows not collapsed).
+   * `ReportController.getData` ignores them and returns flat rows. Any path
+   * that puts the grid into a row-grouped state — drag-to-panel, column
+   * header menu "Group by …", QuickGroupMenu in the toolbar — produces a
+   * visibly broken grid (group column populated but rows not collapsed).
    *
-   * This temporary guard hides the group panel for server-mode datasources so
-   * users don't hit the half-working feature. Client-mode datasources keep
-   * grouping enabled because AG Grid groups client-side without the backend.
+   * This temporary guard disables every grouping entrypoint for server-mode
+   * datasources so users don't hit the half-working feature. Client-mode
+   * datasources keep grouping because AG Grid handles it in-memory without
+   * the backend.
+   *
+   * Three places need to flip together (Codex 019dfe66 iter-2 absorb — just
+   * hiding the panel is not enough; the column menu and QuickGroupMenu reach
+   * the same broken state):
+   *
+   *   1. `rowGroupPanelShow: 'never'` (the drag-to panel)
+   *   2. `defaultColDef.enableRowGroup/enablePivot/enableValue: false` (column
+   *       header menu actions)
+   *   3. column-level `enableRowGroup: false` and any pre-set `rowGroup` /
+   *       `rowGroupIndex` cleared (QuickGroupMenu picks groupable columns
+   *       from `columnDefs`)
    *
    * The proper fix lands in PR-0.1+ (POST /data/query contract + capability
    * flag + GROUP BY in SqlBuilder). When the backend exposes the
-   * `serverSideGrouping` capability, this flag flips to read it from the
-   * runtime config and the panel returns. See
+   * `serverSideGrouping` capability, `serverSideGroupingEnabled` flips to
+   * read it, the panel returns, and groupable columns light up again. See
    * `docs/plans/2026-05-reporting-platform-hardening.md` PR-0 acceptance.
    */
-  const serverSideGroupingEnabled = false; // TODO PR-0.1: read from backend capability
+  const serverSideGroupingEnabled = false; // TODO PR-0.1: read from backend capability and re-enable panel + groupable column actions together
+  const rowGroupingEnabled = dataSourceMode !== 'server' || serverSideGroupingEnabled;
 
   /* ---- Grid options (matching UsersGrid standard) ---- */
   const gridOptions = React.useMemo<GridOptions<TRow>>(
     () => ({
       cellSelection: true,
       multiSortKey: 'ctrl' as const,
-      rowGroupPanelShow:
-        dataSourceMode === 'server' && !serverSideGroupingEnabled
-          ? ('never' as const)
-          : ('always' as const),
+      rowGroupPanelShow: rowGroupingEnabled ? ('always' as const) : ('never' as const),
+      // When server-side grouping is disabled, also keep the column header
+      // menu's grouping actions out — without this the user can still trigger
+      // the broken state via "Group by this column".
+      defaultColDef: rowGroupingEnabled
+        ? undefined
+        : {
+            enableRowGroup: false,
+            enablePivot: false,
+            enableValue: false,
+          },
       ...(dataSourceMode === 'server'
         ? { cacheBlockSize: SERVER_CACHE_BLOCK_SIZE, maxBlocksInCache: 1 }
         : {}),
     }),
-    [dataSourceMode],
+    [dataSourceMode, rowGroupingEnabled],
   );
 
   /*
@@ -244,6 +265,28 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         return colDef;
       }),
     [columns],
+  );
+
+  /*
+   * When server-side grouping is disabled, strip every column's
+   * `enableRowGroup` / `rowGroup` / `rowGroupIndex` so the toolbar's
+   * QuickGroupMenu (which lists groupable columns from `columnDefs`) and the
+   * column header menu can't put the grid into the broken state. See
+   * `gridOptions` block above for the full rationale.
+   */
+  const effectiveColDefs = React.useMemo<ColDef<TRow>[]>(
+    () =>
+      rowGroupingEnabled
+        ? colDefs
+        : colDefs.map((cd) => ({
+            ...cd,
+            enableRowGroup: false,
+            enablePivot: false,
+            enableValue: false,
+            rowGroup: false,
+            rowGroupIndex: null,
+          })),
+    [colDefs, rowGroupingEnabled],
   );
 
   /* ---- Server-side datasource ---- */
@@ -462,7 +505,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           gridId={module.id}
           gridSchemaVersion={1}
           initialVariantId={initialVariantId}
-          columnDefs={colDefs}
+          columnDefs={effectiveColDefs}
           gridOptions={gridOptions}
           dataSourceMode={dataSourceMode}
           createServerSideDatasource={
