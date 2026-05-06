@@ -96,6 +96,58 @@ export const fetchReportMetadata = async (reportKey: string): Promise<ReportMeta
   return data;
 };
 
+/**
+ * Workcube CompanyPicker dropdown source.
+ *
+ * <p>Backend: {@code GET /api/v1/reports/company-options} (Codex 019dfb15
+ * iter-1 + iter-2 absorbed). Returns {@code [{id, nickname, name}]}
+ * filtered by the caller's scope:
+ * <ul>
+ *   <li>Super-admin → full catalog (43 entries).</li>
+ *   <li>Scoped user → subset matching {@code allowedCompanyIds}.</li>
+ *   <li>Anonymous → 401 (rejected upstream).</li>
+ * </ul>
+ *
+ * <p>Behaviour by HTTP status:
+ * <ul>
+ *   <li><b>200</b> — return list as-is.</li>
+ *   <li><b>404</b> — feature flag {@code report.mssql.enabled=false} or
+ *       Workcube datasource missing. Caller falls back to the static
+ *       {@code Şirket #1..43} list silently.</li>
+ *   <li><b>503</b> — MSSQL temporarily unreachable
+ *       (ADR-0005 degraded mode). Caller may surface a notice but should
+ *       still allow the user to pick from the cached/fallback list.</li>
+ *   <li>Other errors — same as 404 (fall back).</li>
+ * </ul>
+ *
+ * <p>Returning {@code null} (instead of throwing) keeps the picker resilient:
+ * the component decides whether to fall back, and we don't break tree-shaking
+ * by introducing a new error class. The 503 response body is still meaningful
+ * (it contains {@code error: "mssql_unavailable"}) — when the caller wants
+ * that signal it can call the lower-level helper {@link fetchCompanyOptionsRaw}.
+ */
+export type CompanyOption = { id: number; nickname: string; name: string };
+
+export const fetchCompanyOptions = async (): Promise<CompanyOption[] | null> => {
+  const client = resolveHttpClient();
+  try {
+    const { data } = await client.get<CompanyOption[]>(`${REPORTS_BASE}/company-options`);
+    return Array.isArray(data) ? data : null;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      if (status === 404 || status === 503) {
+        // Expected degraded paths; let the caller fall back silently.
+        return null;
+      }
+    }
+    // Unexpected error — also fall back, log for diagnostics.
+    // eslint-disable-next-line no-console
+    console.warn('[fetchCompanyOptions] unexpected error, falling back:', error);
+    return null;
+  }
+};
+
 const buildSortParam = (request: GridRequest, defaultSort?: string, defaultDirection?: string) => {
   if (Array.isArray(request.sortModel) && request.sortModel.length > 0) {
     const entry = request.sortModel[0];
