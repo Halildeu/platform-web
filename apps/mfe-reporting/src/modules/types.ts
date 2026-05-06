@@ -7,9 +7,22 @@ export type TranslateFn = (key: string, params?: Record<string, unknown>) => str
 
 export interface FilterRenderContext<TFilters extends Record<string, unknown>> {
   values: TFilters;
-  submit: () => void;
+  submit?: () => void;
   setFieldValue: <K extends keyof TFilters>(key: K, value: TFilters[K]) => void;
   t: TranslateFn;
+  /**
+   * When set, the module should only render filter widgets whose key is in
+   * this allow-list. Used by ReportPage's filter drawer to render the
+   * "Zorunlu Filtreler" (required) section separately from the optional
+   * one. Modules that don't honour the hint are still correct — the same
+   * widgets just appear in both sections.
+   */
+  onlyFields?: ReadonlyArray<string>;
+  /**
+   * Mirror of `onlyFields` for the "Diğer Filtreler" (optional) section —
+   * the module should skip any field whose key is in this list.
+   */
+  excludeFields?: ReadonlyArray<string>;
 }
 
 export interface FilterInitContext {
@@ -45,6 +58,15 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
     filters: TFilters,
     format: 'csv' | 'json',
   ) => Promise<{ blob: Blob; filename: string }>;
+
+  /**
+   * Filter field keys that the user MUST set before the report can render
+   * useful results (e.g. muavin v3 needs `companyId` because the backend
+   * schema namespace is per-company). ReportPage groups these widgets
+   * under a "Zorunlu Filtreler" header in the filter drawer and shows a
+   * warning badge on the toolbar trigger.
+   */
+  requiredFilterFields?: ReadonlyArray<string>;
 
   /** Database tables this report reads from — enables schema lineage, related reports, FK lookup */
   sourceTables?: string[];
