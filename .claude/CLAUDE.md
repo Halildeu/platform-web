@@ -36,7 +36,7 @@ packages/
 - **Design system icons** — Always use `lucide-react`, never inline SVG
 - **Auth bypass (dev)** — `AUTH_MODE=permitAll VITE_ENABLE_FAKE_AUTH=true`
 - **Vite stdin** — Dev servers use `stdin=subprocess.PIPE` (not DEVNULL) to prevent auto-shutdown
-- **Tailwind 4 literal-class only** — Class names must appear as literal strings; template-literal-built classes are silently dropped by the content scanner. Pre-PR-15 caught the bug 3 times (PR-10 focus-ring helpers, PR-12 backdrop sweep, PR-15 color override). See `docs/operations/tailwind-literal-class-rule.md` for patterns + how to add dynamic-class functions safely. cssom canary enforces.
+- **Tailwind 4 — class-on-DOM-but-no-CSS-emitted bugs** — Two failure modes share the same symptom: (A) template-literal-built classes are silently dropped by the content scanner (PR-10 + PR-15); (B) literal classes referencing tokens not in the `@theme inline` registry are also dropped (PR-12 backdrop sweep). Use literal classes for (A); ensure every utility token is in `generated-theme-inline.css` for (B). Full patterns + how to add dynamic-class functions safely: `docs/operations/tailwind-literal-class-rule.md`. cssom canary catches both modes (`expectToken` reads computed style, regardless of which mode caused the missing emission).
 
 ## Dev Server
 

@@ -1,11 +1,21 @@
-# Tailwind 4 Content Scanner — Literal-Class-Only Rule
+# Tailwind 4 — "Class on DOM but no CSS emitted" Rule
 
 > Project rule (2026-05). Architectural rationale: ADR
 > [`adr-test-environment-strategy.md`](../architecture/frontend/adr-test-environment-strategy.md)
-> §L3 (CSSOM Harness — caught the bug class three times: PR-10,
-> PR-12, PR-15).
+> §L3 (CSSOM Harness — caught two related bug classes between PR-10
+> and PR-15).
 
-## The rule
+## Two failure modes, one symptom
+
+A Tailwind class can land on a DOM element but produce no CSS — `getComputedStyle()` returns the UA default. We've hit two distinct root causes for this symptom in 2 weeks:
+
+**Mode A: Scanner can't see template-literal class names.** Tailwind 4 walks source files looking for **literal strings** that match its class-name grammar. A template expression like `` `bg-${color}` `` produces fragments the scanner ignores. Even if `color = "action-primary"` at runtime, the rule never gets emitted unless `bg-action-primary` ALSO appears as a complete literal somewhere in the source tree.
+
+**Mode B: Class is literal but token isn't in the Tailwind theme registry.** Tailwind's `@theme inline` block declares which tokens map to which Tailwind utility names. If a literal class (e.g., `bg-surface-inverse/40`) references a token that isn't `--color-*` registered, Tailwind drops the rule even though the source has the literal. PR-12 hit this — `--surface-inverse` existed in `theme.css` but `--color-surface-inverse` was not in `generated-theme-inline.css`.
+
+Both modes silently fail at the CSS layer. cssom canary catches both because `expectToken` / `expectFocusRing` reads computed style.
+
+## Rule for Mode A: literal classes only
 
 **Tailwind class names that need to compile to CSS MUST appear as
 literal strings in source files.** Template-literal-built class
@@ -59,6 +69,47 @@ content scanning. The fix is to materialize every class name we want
 compiled as a complete literal string somewhere in the source tree
 the scanner walks.
 
+## Runtime composition vs runtime generation
+
+The rule applies to **how class strings are produced**, not to where
+they're combined. There are two patterns to distinguish:
+
+✅ **Runtime composition** (safe). Constituents are literal strings
+that the scanner already sees in source. `cn()` / `clsx()` / template
+literals that join precomputed literals at runtime are fine:
+
+```ts
+const VARIANT_CLASSES: Record<Variant, string> = {
+  primary: 'bg-action-primary text-text-inverse',
+  danger:  'bg-state-error-text text-text-inverse',
+};
+className={cn('px-3 py-2', VARIANT_CLASSES[variant], disabled && 'opacity-50')}
+```
+
+The scanner sees `bg-action-primary`, `bg-state-error-text`, `opacity-50`
+all as literals in the source tree. Whichever combination the runtime
+picks, the rules are already in the bundle.
+
+❌ **Runtime generation** (unsafe). The full class is built by string
+interpolation at runtime, with no copy of it as a literal in source:
+
+```ts
+className={cn(`bg-${color}`)}                 // ❌ "bg-${...}" → fragments
+className={`text-${variant === 'sm' ? 'sm' : 'base'}`}  // ❌ same
+```
+
+Even if `color === "action-primary"` at runtime, Tailwind never sees
+`bg-action-primary` as a complete token unless another file also
+contains it as a literal — and that's accidental fragility.
+
+**Slot/callback edge.** When a library accepts user-provided class
+strings (e.g., a `slotProps` consumer prop), the consumer's source
+must contain the constituent classes as literals, scanned by Tailwind
+in the same build. If consumers can pass arbitrary tokens that the
+library generates utilities from, you need either a registered lookup
+on the library side OR a Tailwind 4 `@source inline(...)` directive
+that pre-emits the class set.
+
 ## How to find the bug
 
 The bug is invisible at runtime:
@@ -68,10 +119,31 @@ The bug is invisible at runtime:
   `box-shadow: none`, `background-color: rgba(0,0,0,0)`)
 - jsdom can't see this — its CSS parser doesn't run Tailwind anyway
 
-The cssom canary IS the gate that catches it. If a token-bound class
-fails to emit, `expectToken` / `expectFocusRing` fails because the
-computed value doesn't match the expected token value. PR-10 + PR-12 +
-PR-15 all caught the bug this way.
+The cssom canary IS the gate that catches both Mode A and Mode B
+failures: `expectToken` / `expectFocusRing` fails because the
+computed value doesn't match the expected token value, regardless of
+which mode caused the missing emission. PR-10 + PR-15 (Mode A
+template-literal scanner) and PR-12 (Mode B unregistered theme
+token) all caught here.
+
+## Rule for Mode B: every Tailwind-utility token must be in the @theme registry
+
+When you reference a token in a Tailwind utility (`bg-X`, `text-X`,
+`border-X`, etc.), the token's `--color-X` (or analogous) entry MUST
+exist in `apps/mfe-shell/src/styles/generated-theme-inline.css`
+(the `@theme inline` block). The generator script
+`scripts/theme/generate-theme-css.mjs` produces this from the token
+source.
+
+If a token alias exists in `theme.css` but isn't promoted to
+`--color-*`, Tailwind drops the utility silently.
+
+PR-12's case: `theme.css` had `--surface-inverse: var(--surface-overlay-bg)`
+but `--color-surface-inverse` was NOT in the `@theme` block. Fix: swept
+`bg-surface-inverse` → `bg-surface-overlay` (registered) for every
+backdrop callsite. Alternative would be promoting
+`--color-surface-inverse` to the `@theme` — chose the rename because
+creating two equivalent class names invites drift.
 
 ## Approved patterns for "I need dynamic colors"
 
@@ -116,21 +188,36 @@ const variantStyles: Record<AlertVariant, string> = {
 };
 ```
 
-## When the scanner DOES see template literals
+## When the scanner DOES emit a class without seeing it directly
 
-Two cases where templates work:
+Two escape hatches:
 
-1. **The full class still exists as a literal somewhere else.** If
-   another file in the source tree has `bg-action-primary` as a
-   complete literal, the scanner emits the rule, and your template
-   `` `bg-${color}` `` (with `color = 'action-primary'`) renders
-   correctly because the rule is already in the bundle. This is
-   **accidental** — fragile to refactors. Don't rely on it.
+1. **The full class exists as a literal in another file the scanner
+   walks.** If `bg-action-primary` appears as a complete literal in
+   any scanned source, Tailwind emits the rule and your runtime
+   `` `bg-${color}` `` accidentally works when `color === 'action-primary'`.
+   This is **fragile** — the rule disappears the moment the literal
+   reference is removed, refactored, or moved to an unscanned file.
+   Don't rely on it.
 
-2. **You add the class to a `safelist`.** Tailwind config can list
-   class names that must always compile, even if no source file
-   references them. Useful for API-driven content. Not used in this
-   repo as of 2026-05.
+2. **`@source inline(...)` directive in your CSS** (Tailwind 4
+   native, NOT a JS config field). For API-driven content where the
+   class set isn't statically known, you can list classes inline:
+
+   ```css
+   @import 'tailwindcss';
+   @source inline('bg-action-primary', 'bg-state-error-text', 'bg-state-success-bg');
+   ```
+
+   The scanner treats each listed string as if it appeared in source.
+   Useful for chart color palettes, theme variants generated from
+   tokens, etc. The `apps/mfe-shell/src/index.css` and
+   `packages/design-system/src/__tests__/cssom-harness.css` files
+   already use `@source` for the design-system source tree; if you
+   need additional inline classes, add `@source inline(...)` here.
+
+   This repo does not use the legacy JS-config `safelist:` array —
+   Tailwind 4 has deprecated that surface in favor of `@source inline`.
 
 ## Caught bugs (case studies)
 
