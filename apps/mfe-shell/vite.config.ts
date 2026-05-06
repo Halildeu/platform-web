@@ -114,10 +114,6 @@ function buildRemotes() {
       'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
       'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
     ]),
-    endpointAdmin: readEnvBoolean([
-      'VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
-      'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
-    ]),
   };
 
   // All remotes must be declared so MF plugin can resolve their imports
@@ -153,10 +149,6 @@ function buildRemotes() {
     schemaExplorer: readEnvString(
       ['MFE_SCHEMA_EXPLORER_URL', 'VITE_MFE_SCHEMA_EXPLORER_URL'],
       'http://localhost:3008/remoteEntry.js',
-    ),
-    endpointAdmin: readEnvString(
-      ['MFE_ENDPOINT_ADMIN_URL', 'VITE_MFE_ENDPOINT_ADMIN_URL'],
-      'http://localhost:3009/remoteEntry.js',
     ),
   };
 
@@ -195,11 +187,6 @@ function buildRemotes() {
       type: 'module',
       name: 'mfe_schema_explorer',
       entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
-    },
-    mfe_endpoint_admin: {
-      type: 'module',
-      name: 'mfe_endpoint_admin',
-      entry: enabled.endpointAdmin ? remoteEntries.endpointAdmin : STUB,
     },
   };
 }
