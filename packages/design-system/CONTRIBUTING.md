@@ -68,8 +68,9 @@ export interface MyComponentProps extends React.HTMLAttributes<HTMLDivElement> {
 - **Never** hardcode colors: no `bg-white`, `text-slate-700`, or inline hex values
 - **Always** use CSS variable tokens with fallbacks:
 
+<!-- prettier-ignore -->
 ```tsx
-className = 'bg-[var(--surface-card,#fff)] text-[var(--text-primary,#1e293b)]';
+className="bg-[var(--surface-card,#fff)] text-[var(--text-primary,#1e293b)]"
 ```
 
 Required CSS variable tokens are documented in `STANDARDS.md` section 2.
@@ -94,7 +95,7 @@ className={cn('px-3', VARIANT_CLASSES[variant], disabled && 'opacity-50')}
 className={cn(`bg-${color}`)}  // Tailwind sees "bg-${...}" — fragment, not a class
 ```
 
-This rule has caught the same bug class 3 times in this repo (PR-10, PR-12, PR-15). Full pattern catalog + how to add new dynamic-class functions safely: [`docs/operations/tailwind-literal-class-rule.md`](../../docs/operations/tailwind-literal-class-rule.md). Enforcement layer: cssom canary tests.
+This rule and the related theme-registry rule together caught the same symptom — "class on DOM but no CSS emitted" — three times in this repo. PR-10 and PR-15 were template-literal scanner misses; PR-12 was a literal class whose token wasn't registered in the `@theme inline` block. Full pattern catalog + when to use literal lookups vs theme-registry promotion: [`docs/operations/tailwind-literal-class-rule.md`](../../docs/operations/tailwind-literal-class-rule.md). Enforcement layer: cssom canary tests.
 
 ## Required Component Conventions
 

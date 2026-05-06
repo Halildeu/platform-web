@@ -202,12 +202,26 @@ Two escape hatches:
 
 2. **`@source inline(...)` directive in your CSS** (Tailwind 4
    native, NOT a JS config field). For API-driven content where the
-   class set isn't statically known, you can list classes inline:
+   class set isn't statically known, list classes inline. The
+   directive takes a single quoted string, whitespace-separated:
 
    ```css
    @import 'tailwindcss';
-   @source inline('bg-action-primary', 'bg-state-error-text', 'bg-state-success-bg');
+   @source inline("bg-action-primary bg-state-error-text bg-state-success-bg");
    ```
+
+   Or one directive per class for readability:
+
+   ```css
+   @source inline("bg-action-primary");
+   @source inline("bg-state-error-text");
+   @source inline("bg-state-success-bg");
+   ```
+
+   ⚠️ Comma-separated multiple-argument form (`@source inline('a', 'b')`)
+   is NOT valid Tailwind 4 syntax — the parser silently produces no
+   CSS. Verified with `tailwindcss@4.2.4` (Codex thread `019dfb0f`
+   iter-2).
 
    The scanner treats each listed string as if it appeared in source.
    Useful for chart color palettes, theme variants generated from
