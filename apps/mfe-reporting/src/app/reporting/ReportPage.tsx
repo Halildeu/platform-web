@@ -500,62 +500,16 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             placement="right"
             size="md"
             title="Rapor Filtreleri"
-            description={
-              (module.requiredFilterFields ?? []).length > 0
-                ? 'Bazı filtreler zorunludur — verilerin doğru gösterilebilmesi için seçim yapın.'
-                : 'Bu rapor için kullanılabilir filtreler.'
-            }
           >
-            {(module.requiredFilterFields ?? []).length > 0 ? (
-              <section
-                aria-labelledby="report-filters-required-heading"
-                className="mb-6 rounded-2xl border border-danger-soft bg-danger-soft/40 p-4"
-              >
-                <header className="mb-3 flex items-center gap-2">
-                  <span
-                    className="rounded-full bg-danger px-2 py-0.5 text-[10px] font-semibold uppercase text-on-danger"
-                    aria-hidden="true"
-                  >
-                    Zorunlu
-                  </span>
-                  <h3
-                    id="report-filters-required-heading"
-                    className="text-sm font-semibold text-text-primary"
-                  >
-                    Zorunlu Filtreler
-                  </h3>
-                </header>
-                <div className="flex flex-col gap-3">
-                  {module.renderFilters({
-                    values: filters,
-                    setFieldValue: (key, value) =>
-                      setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
-                    t,
-                    onlyFields: module.requiredFilterFields,
-                  })}
-                </div>
-              </section>
-            ) : null}
-
-            <section aria-labelledby="report-filters-optional-heading">
-              <header className="mb-3">
-                <h3
-                  id="report-filters-optional-heading"
-                  className="text-sm font-semibold text-text-secondary"
-                >
-                  Diğer Filtreler
-                </h3>
-              </header>
-              <div className="flex flex-col gap-3">
-                {module.renderFilters({
-                  values: filters,
-                  setFieldValue: (key, value) =>
-                    setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
-                  t,
-                  excludeFields: module.requiredFilterFields,
-                })}
-              </div>
-            </section>
+            <div className="flex flex-col gap-3">
+              {module.renderFilters({
+                values: filters,
+                setFieldValue: (key, value) =>
+                  setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+                t,
+                requiredFields: module.requiredFilterFields,
+              })}
+            </div>
           </Drawer>
         ) : null}
       </PageLayout>

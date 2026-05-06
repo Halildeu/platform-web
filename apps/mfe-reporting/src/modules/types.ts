@@ -11,18 +11,12 @@ export interface FilterRenderContext<TFilters extends Record<string, unknown>> {
   setFieldValue: <K extends keyof TFilters>(key: K, value: TFilters[K]) => void;
   t: TranslateFn;
   /**
-   * When set, the module should only render filter widgets whose key is in
-   * this allow-list. Used by ReportPage's filter drawer to render the
-   * "Zorunlu Filtreler" (required) section separately from the optional
-   * one. Modules that don't honour the hint are still correct — the same
-   * widgets just appear in both sections.
+   * Field keys that should be rendered with a required marker (visual
+   * cue: `*` after the label, no other layout change). Modules use this
+   * to keep the form pattern uniform — same widget, same row, just an
+   * asterisk on the keys ReportPage flagged as required.
    */
-  onlyFields?: ReadonlyArray<string>;
-  /**
-   * Mirror of `onlyFields` for the "Diğer Filtreler" (optional) section —
-   * the module should skip any field whose key is in this list.
-   */
-  excludeFields?: ReadonlyArray<string>;
+  requiredFields?: ReadonlyArray<string>;
 }
 
 export interface FilterInitContext {

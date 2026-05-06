@@ -40,8 +40,9 @@ const writeSelected = (value: string): void => {
 };
 
 export interface CompanyPickerProps {
-  /** Optional caption shown above the select. */
-  label?: string;
+  /** Optional caption shown above the select. ReactNode so callers can append
+   *  a required-field marker (e.g. `<>Şirket <span>*</span></>`). */
+  label?: React.ReactNode;
   /** Compact mode (smaller width). */
   compact?: boolean;
 }
