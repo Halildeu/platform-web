@@ -18,9 +18,20 @@ import { requestsGrouping } from '../../../grid';
  * resolveHttpClient() helper returns it.
  */
 
-const mockGet = vi.fn();
-const mockPost = vi.fn();
-const stubClient = { get: mockGet, post: mockPost } as const;
+/*
+ * vi.hoisted lifts the mock instances above the vi.mock() factories
+ * so the factories can reference them without hitting Temporal Dead
+ * Zone when vitest hoists vi.mock() to the top of the file.
+ */
+const { mockGet, mockPost, stubClient } = vi.hoisted(() => {
+  const mockGet = vi.fn();
+  const mockPost = vi.fn();
+  return {
+    mockGet,
+    mockPost,
+    stubClient: { get: mockGet, post: mockPost },
+  };
+});
 
 vi.mock('../../../app/services/shell-services', () => ({
   getShellServices: () => ({
@@ -29,8 +40,17 @@ vi.mock('../../../app/services/shell-services', () => ({
   }),
 }));
 
+/*
+ * Mock the full @mfe/shared-http surface — other modules in this
+ * package (e.g. design-system grid-variants) import getGatewayBaseUrl
+ * and other helpers, so a partial mock that only provides `api`
+ * crashes the test runner when those helpers come up null.
+ */
 vi.mock('@mfe/shared-http', () => ({
   api: stubClient,
+  getGatewayBaseUrl: () => '',
+  buildAuthHeaders: () => ({}),
+  registerTokenResolver: () => undefined,
 }));
 
 // Import AFTER the mocks so resolveHttpClient picks up the stub.
