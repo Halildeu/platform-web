@@ -164,11 +164,18 @@ export interface VariantIntegrationProps<RowData = unknown> extends AccessContro
    * variant restored under a more restrictive capability envelope can't
    * push the grid into a state the backend will reject.
    *
-   * <p>The sanitizer receives the raw saved column state and must return
-   * a (possibly mutated) array. Returning {@code state} verbatim makes
-   * this prop a no-op, which is the safe default.
+   * <p>Contract:
+   * <ul>
+   *   <li><b>Pure function</b>: caller MUST treat the input as immutable.
+   *       The component passes a defensive shallow copy so in-place
+   *       mutation is safe locally, but mutating + returning the same
+   *       reference is fragile when other callers chain sanitizers.</li>
+   *   <li>Always returns the array to apply (never {@code undefined}).
+   *       Use {@code NonNullable<GridVariantState['columnState']>} so
+   *       callers don't need to handle the optional case.</li>
+   * </ul>
    */
-  sanitizeColumnState?: (state: GridVariantState['columnState']) => GridVariantState['columnState'];
+  sanitizeColumnState?: (state: VariantColumnState) => VariantColumnState;
   /**
    * PR #272c: paired sanitizer for the {@code pivotMode} flag. Returns
    * the value that should actually be applied to the grid; useful when
@@ -177,6 +184,14 @@ export interface VariantIntegrationProps<RowData = unknown> extends AccessContro
    */
   sanitizePivotMode?: (pivotMode: boolean | undefined) => boolean | undefined;
 }
+
+/**
+ * Non-null alias of {@link GridVariantState#columnState}. Used in the
+ * sanitizer callback signatures so callers don't have to handle the
+ * optional case (the component never invokes the sanitizer with
+ * {@code undefined}).
+ */
+export type VariantColumnState = NonNullable<GridVariantState['columnState']>;
 
 /* ------------------------------------------------------------------ */
 /*  State collection (v34 GridApi)                                     */
@@ -207,9 +222,24 @@ function collectGridState<RowData>(api: GridApi<RowData>): GridVariantState {
  * smuggled in via a stale saved variant.
  */
 type ApplyVariantSanitizers = {
-  sanitizeColumnState?: (state: GridVariantState['columnState']) => GridVariantState['columnState'];
+  sanitizeColumnState?: (state: VariantColumnState) => VariantColumnState;
   sanitizePivotMode?: (pivotMode: boolean | undefined) => boolean | undefined;
 };
+
+/**
+ * Defensive shallow copy of an AG Grid {@code ColumnState[]} array.
+ * Each entry is itself shallow-cloned so a sanitizer that mutates an
+ * entry in place can't poison the cached variant object. Plain object
+ * structure (no nested arrays per AG Grid v34 ColumnState shape) so
+ * shallow copy is sufficient.
+ */
+function cloneColumnState(state: VariantColumnState): VariantColumnState {
+  return state.map((entry) =>
+    entry && typeof entry === 'object' && !Array.isArray(entry)
+      ? { ...(entry as Record<string, unknown>) }
+      : entry,
+  ) as VariantColumnState;
+}
 
 function applyVariantState<RowData>(
   api: GridApi<RowData>,
@@ -217,10 +247,16 @@ function applyVariantState<RowData>(
   sanitizers: ApplyVariantSanitizers = {},
 ): void {
   if (state.columnState && Array.isArray(state.columnState)) {
+    /*
+     * Codex iter-1 absorb: pass a defensive shallow copy so a
+     * sanitizer that mutates entries in place can't poison the cached
+     * variant object inside the component's state.
+     */
+    const cloned = cloneColumnState(state.columnState as VariantColumnState);
     const sanitizedColumnState =
       typeof sanitizers.sanitizeColumnState === 'function'
-        ? sanitizers.sanitizeColumnState(state.columnState)
-        : state.columnState;
+        ? sanitizers.sanitizeColumnState(cloned)
+        : cloned;
     api.applyColumnState?.({
       state: sanitizedColumnState as ColumnState[],
       applyOrder: true,

@@ -25,7 +25,11 @@ import type {
 import { resolveAccessState, accessStyles, type AccessControlledProps } from '../../internal/access-controller';
 import { GridShell, type GridShellApi, type GridTheme, type GridDensity } from "./GridShell";
 import { GridToolbar, type GridToolbarMessages } from "./GridToolbar";
-import { VariantIntegration, type VariantIntegrationMessages } from "./VariantIntegration";
+import {
+  VariantIntegration,
+  type VariantIntegrationMessages,
+  type VariantColumnState,
+} from "./VariantIntegration";
 import { ServerPaginationFooter } from "./ServerPaginationFooter";
 import { useDatasourceModeAdapter, type DataSourceMode } from "./DatasourceModeAdapter";
 import { TablePagination, useAgGridTablePagination } from "./TablePagination";
@@ -264,13 +268,13 @@ export interface EntityGridTemplateProps<
    * Caller (e.g. ReportPage) computes the allowlist from the report's
    * metadata response and returns a filtered column-state array.
    *
-   * <p>Signature mirrors AG Grid's {@code ColumnState[]} via
-   * {@code GridVariantState['columnState']}. Returning the input
-   * verbatim makes this prop a no-op (safe default).
+   * <p>Signature uses the local {@link VariantColumnState} alias
+   * (non-null) so callers don't need to handle the optional case;
+   * the component never invokes the sanitizer with {@code undefined}.
+   * Sanitizer is a pure function — input is a defensive shallow copy
+   * (see {@code cloneColumnState} in VariantIntegration).
    */
-  sanitizeVariantColumnState?: (
-    state: import('@mfe/shared-types').GridVariantState['columnState'],
-  ) => import('@mfe/shared-types').GridVariantState['columnState'];
+  sanitizeVariantColumnState?: (state: VariantColumnState) => VariantColumnState;
   /** Companion sanitizer for {@code pivotMode}. Return the value to apply. */
   sanitizeVariantPivotMode?: (
     pivotMode: boolean | undefined,
