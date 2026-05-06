@@ -33,6 +33,15 @@ export interface FilterBuilderPanelProps {
   columnDefs: ColDef[];
   open: boolean;
   onClose: () => void;
+  /**
+   * Optional content rendered above the main filter builder body, inside the
+   * same drawer panel. Use this to surface global / report-level filters
+   * (e.g. a CompanyPicker that drives X-Company-Id) right next to the
+   * AG-Grid-style condition rows, instead of in a separate drawer or above
+   * the grid. The content is wrapped in its own divider so it visually
+   * reads as a locked top-row, separate from the user-editable rule tree.
+   */
+  prefixContent?: React.ReactNode;
 }
 
 export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
@@ -40,6 +49,7 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
   columnDefs,
   open,
   onClose,
+  prefixContent,
 }) => {
   const {
     root,
@@ -170,6 +180,17 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
 
         {/* Body */}
         <div className="flex-1 overflow-auto px-6 py-4">
+          {prefixContent != null && prefixContent !== false ? (
+            <div
+              className="mb-4 flex flex-col gap-2 border-b border-border-subtle pb-4"
+              data-testid="filter-builder-prefix"
+              role="group"
+              aria-label="Sabit filtreler"
+            >
+              {prefixContent}
+            </div>
+          ) : null}
+
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -231,7 +252,9 @@ export const FilterBuilderPanel: React.FC<FilterBuilderPanelProps> = ({
 export const FilterBuilderButton: React.FC<{
   gridApi: GridApi | null;
   columnDefs: ColDef[];
-}> = ({ gridApi, columnDefs }) => {
+  /** Forwarded to {@link FilterBuilderPanel}; see prop docs there. */
+  prefixContent?: React.ReactNode;
+}> = ({ gridApi, columnDefs, prefixContent }) => {
   const [open, setOpen] = useState(false);
   const [activeCount, setActiveCount] = useState(0);
 
@@ -277,6 +300,7 @@ export const FilterBuilderButton: React.FC<{
         columnDefs={columnDefs}
         open={open}
         onClose={() => setOpen(false)}
+        prefixContent={prefixContent}
       />
     </>
   );

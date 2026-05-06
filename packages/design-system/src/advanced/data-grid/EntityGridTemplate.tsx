@@ -206,6 +206,14 @@ export interface EntityGridTemplateProps<
   isFullscreen?: boolean;
   onRequestFullscreen?: () => void;
   toolbarExtras?: React.ReactNode;
+  /**
+   * Content surfaced at the top of the toolbar's "Filtre" drawer (the
+   * AG-Grid-style {@link FilterBuilderPanel}), above the rule tree. Use
+   * this to embed report-level locked filters — e.g. CompanyPicker —
+   * inside the same drawer the user already opens with the Filtre button,
+   * instead of in a separate Drawer or above the grid.
+   */
+  filterBuilderPrefix?: React.ReactNode;
   /** Content rendered at the bottom-left of the grid, aligned with pagination. */
   footerStartSlot?: React.ReactNode;
   exportConfig?: GridExportConfig<RowData>;
@@ -287,6 +295,7 @@ export function EntityGridTemplate<
     isFullscreen = false,
     onRequestFullscreen,
     toolbarExtras,
+    filterBuilderPrefix,
     footerStartSlot,
     exportConfig,
     quickFilterPlaceholder,
@@ -515,6 +524,7 @@ export function EntityGridTemplate<
             <FilterBuilderButton
               gridApi={gridApi}
               columnDefs={columnDefs}
+              prefixContent={filterBuilderPrefix}
             />
           )}
           {toolbarExtras}
