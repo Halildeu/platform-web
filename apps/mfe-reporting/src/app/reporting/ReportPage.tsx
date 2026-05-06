@@ -17,11 +17,13 @@ import type {
 } from 'ag-grid-community';
 import { useReportingI18n } from '../../i18n/useReportingI18n';
 import type { ReportModule } from '../../modules/types';
+import type { ReportCapabilities } from '../../modules/dynamic-report/types';
 import {
   buildColDefs,
   buildDetailRenderer,
   buildProcessCellCallback,
 } from '@mfe/design-system/advanced/data-grid';
+import type { VariantColumnState } from '@mfe/design-system/advanced/data-grid/VariantIntegration';
 import { useReportSchemaContext } from '../../hooks/useReportSchemaContext';
 import { enrichColumnsWithSchema } from '../../utils/enrichColumnsWithSchema';
 import { getShellServices } from '../services/shell-services';
@@ -117,36 +119,48 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   }, [initialFiltersFromSearch]);
 
   /*
-   * Server-side grouping is not yet implemented on the backend. AG Grid sends
-   * `rowGroupCols` / `groupKeys` / `valueCols` in the SSRM request, but
-   * `ReportController.getData` ignores them and returns flat rows. Any path
-   * that puts the grid into a row-grouped state — drag-to-panel, column
-   * header menu "Group by …", QuickGroupMenu in the toolbar — produces a
-   * visibly broken grid (group column populated but rows not collapsed).
+   * Server-side grouping flip — closes the loop opened by platform-web #271.
+   * Backend PR-0.1..0.3 (#78/#79/#81 on platform-backend) added the POST
+   * /api/v1/reports/{key}/query contract, multi-level GROUP BY +
+   * groupKeys expansion + leaf rows + type-aware coercion. Frontend
+   * #272b (#273) wired the SSRM data path; #272c (#274) added the
+   * variant sanitizer + context menu guard. This component now reads
+   * the backend capability flag and lights up the row-group panel +
+   * column header Group action + QuickGroupMenu for any report whose
+   * registry marks at least one column groupable=true.
    *
-   * This temporary guard disables every grouping entrypoint for server-mode
-   * datasources so users don't hit the half-working feature. Client-mode
-   * datasources keep grouping because AG Grid handles it in-memory without
-   * the backend.
-   *
-   * Three places need to flip together (Codex 019dfe66 iter-2 absorb — just
-   * hiding the panel is not enough; the column menu and QuickGroupMenu reach
-   * the same broken state):
-   *
-   *   1. `rowGroupPanelShow: 'never'` (the drag-to panel)
-   *   2. `defaultColDef.enableRowGroup/enablePivot/enableValue: false` (column
-   *       header menu actions)
-   *   3. column-level `enableRowGroup: false` and any pre-set `rowGroup` /
-   *       `rowGroupIndex` cleared (QuickGroupMenu picks groupable columns
-   *       from `columnDefs`)
-   *
-   * The proper fix lands in PR-0.1+ (POST /data/query contract + capability
-   * flag + GROUP BY in SqlBuilder). When the backend exposes the
-   * `serverSideGrouping` capability, `serverSideGroupingEnabled` flips to
-   * read it, the panel returns, and groupable columns light up again. See
-   * `docs/plans/2026-05-reporting-platform-hardening.md` PR-0 acceptance.
+   * Capability state is keyed by module identity so a route change
+   * (different report) clears the previous report's capability before
+   * any auto-apply effect can fire. Reports whose backend predates the
+   * capability envelope, or whose registry has no groupable columns,
+   * surface as undefined → all-false → stop-gap UX preserved.
    */
-  const serverSideGroupingEnabled = false; // TODO PR-0.1: read from backend capability and re-enable panel + groupable column actions together
+  const [reportCapabilities, setReportCapabilities] = React.useState<
+    ReportCapabilities | undefined
+  >(() => module.getCapabilities?.());
+  /*
+   * Reset capability state immediately when the module reference
+   * changes (route → different report) so a stale {@code capability=true}
+   * from the previous report can't leak into the new mount before the
+   * new ensureColumnMeta resolves. React 18 "derived state during
+   * render" pattern: setState during render is safe when guarded by a
+   * snapshot-id comparison; React schedules the re-render with the
+   * new value before any effect (incl. variant auto-apply) fires.
+   */
+  const [previousModuleId, setPreviousModuleId] = React.useState(module.id);
+  if (previousModuleId !== module.id) {
+    setPreviousModuleId(module.id);
+    setReportCapabilities(module.getCapabilities?.());
+  }
+  const serverSideGroupingEnabled = reportCapabilities?.serverSideGrouping === true;
+  const groupableFieldSet = React.useMemo(
+    () => new Set(reportCapabilities?.groupableFields ?? []),
+    [reportCapabilities],
+  );
+  const aggregatableFieldSet = React.useMemo(
+    () => new Set(reportCapabilities?.aggregatableFields ?? []),
+    [reportCapabilities],
+  );
   const rowGroupingEnabled = dataSourceMode !== 'server' || serverSideGroupingEnabled;
 
   /* ---- Grid options (matching UsersGrid standard) ---- */
@@ -261,11 +275,20 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       return;
     }
     let cancelled = false;
+    const refreshCapabilities = () => {
+      if (!cancelled && typeof module.getCapabilities === 'function') {
+        setReportCapabilities(module.getCapabilities());
+      }
+    };
     module
       .ensureColumnMeta()
       .then(() => {
         if (!cancelled) {
           setColumnMetaVersion((v) => v + 1);
+          // PR-0.2 (reporting hardening): refresh capabilities after the
+          // metadata fetch resolves; the same /metadata response carries
+          // both the column list and the capabilities envelope.
+          refreshCapabilities();
         }
       })
       .catch(() => {
@@ -275,6 +298,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         // spinner forever.
         if (!cancelled) {
           setColumnMetaVersion((v) => v + 1);
+          refreshCapabilities();
         }
       });
     return () => {
@@ -348,20 +372,110 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
    * column header menu can't put the grid into the broken state. See
    * `gridOptions` block above for the full rationale.
    */
-  const effectiveColDefs = React.useMemo<ColDef<TRow>[]>(
-    () =>
-      rowGroupingEnabled
-        ? colDefs
-        : colDefs.map((cd) => ({
-            ...cd,
-            enableRowGroup: false,
-            enablePivot: false,
-            enableValue: false,
-            rowGroup: false,
-            rowGroupIndex: null,
-          })),
-    [colDefs, rowGroupingEnabled],
+  const effectiveColDefs = React.useMemo<ColDef<TRow>[]>(() => {
+    if (!rowGroupingEnabled) {
+      // Stop-gap from #271 — server-mode + capability=false blocks
+      // every grouping affordance.
+      return colDefs.map((cd) => ({
+        ...cd,
+        enableRowGroup: false,
+        enablePivot: false,
+        enableValue: false,
+        rowGroup: false,
+        rowGroupIndex: null,
+      }));
+    }
+    if (dataSourceMode !== 'server') {
+      // Client-mode datasources let AG Grid group in-memory regardless
+      // of backend capability — no per-column gating needed.
+      return colDefs;
+    }
+    /*
+     * Server-mode with capability=true: per-column gating against the
+     * backend allowlist. Only columns with groupable=true expose
+     * enableRowGroup; only aggregatable=true expose enableValue. Pivot
+     * stays off until PR-0.4 (backend pivot path) ships, even when
+     * capability lights up — keeps the UI honest about what the
+     * backend will accept on POST /query.
+     */
+    return colDefs.map((cd) => {
+      const field = (cd as { field?: string }).field;
+      const isGroupable = field !== undefined && groupableFieldSet.has(field);
+      const isAggregatable = field !== undefined && aggregatableFieldSet.has(field);
+      return {
+        ...cd,
+        enableRowGroup: isGroupable,
+        enableValue: isAggregatable,
+        enablePivot: false,
+      };
+    });
+  }, [colDefs, rowGroupingEnabled, dataSourceMode, groupableFieldSet, aggregatableFieldSet]);
+
+  /*
+   * PR-0.2 sanitizer for saved variant column state. Server-mode only —
+   * client-mode datasources let AG Grid handle grouping in-memory so
+   * mutating the saved variant would silently break user expectations
+   * (Codex iter-1 absorb).
+   *
+   * On server-mode: strip rowGroup / rowGroupIndex on every entry
+   * whose colId isn't in groupableFieldSet, aggFunc on entries not in
+   * aggregatableFieldSet, and pivot / pivotIndex always (PR-0.4 will
+   * graduate pivot once the backend pivot path ships).
+   *
+   * Type signature mirrors the design-system VariantColumnState
+   * contract directly so strict-mode function variance stays safe.
+   */
+  const sanitizeVariantColumnState = React.useCallback(
+    (state: VariantColumnState): VariantColumnState => {
+      if (!Array.isArray(state)) return state;
+      if (dataSourceMode !== 'server') return state;
+      const groupableSet = groupableFieldSet;
+      const aggregatableSet = aggregatableFieldSet;
+      return state.map((entry) => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const next = { ...(entry as Record<string, unknown>) };
+        const colId = String(next.colId ?? '');
+        if (!groupableSet.has(colId)) {
+          delete next.rowGroup;
+          delete next.rowGroupIndex;
+        }
+        if (!aggregatableSet.has(colId)) {
+          delete next.aggFunc;
+        }
+        // Pivot stays disabled platform-wide until PR-0.4 ships the
+        // backend pivot path; an in-flight saved variant carrying
+        // pivot=true would just produce a 400 GROUPING_NOT_SUPPORTED
+        // on the next /query call.
+        delete next.pivot;
+        delete next.pivotIndex;
+        return next as VariantColumnState[number];
+      });
+    },
+    [dataSourceMode, groupableFieldSet, aggregatableFieldSet],
   );
+
+  /*
+   * Companion sanitizer for pivotMode. Server-mode forces false until
+   * PR-0.4 ships pivot; client-mode passes through the saved value so
+   * in-memory pivot stays usable for the legacy client-side reports.
+   */
+  const sanitizeVariantPivotMode = React.useCallback(
+    (pivotMode: boolean | undefined) => (dataSourceMode === 'server' ? false : pivotMode),
+    [dataSourceMode],
+  );
+
+  /*
+   * Capability "envelope signature" — change forces the embedded
+   * VariantIntegration to re-mount via the {@code key} prop chain. Any
+   * envelope swap re-runs the auto-apply effect against the fresh
+   * sanitizer; without this, appliedRef.current would block re-apply
+   * when capabilities arrive late or transition between reports.
+   */
+  const capabilityKey = React.useMemo(() => {
+    const groupable = (reportCapabilities?.groupableFields ?? []).join(',');
+    const aggregatable = (reportCapabilities?.aggregatableFields ?? []).join(',');
+    return `${reportCapabilities?.serverSideGrouping ? '1' : '0'}|${groupable}|${aggregatable}`;
+  }, [reportCapabilities]);
 
   /* ---- Server-side datasource ---- */
   const createServerSideDatasource = React.useCallback(
@@ -600,7 +714,17 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         {module.renderDashboard ? module.renderDashboard(t, filters) : null}
 
         <EntityGridTemplate<TRow>
-          key={reloadSignal}
+          /*
+           * PR-0.2 hardening: include module.id + capabilityKey in the
+           * React key so both a route change to a different report and
+           * a late capability arrival force a full re-mount of the
+           * EntityGridTemplate + embedded VariantIntegration. Without
+           * module.id, two reports with the same capability signature
+           * would share the appliedRef.current guard and the second
+           * mount could keep stale variant state from the first
+           * (Codex iter-1 absorb).
+           */
+          key={`${module.id}-${reloadSignal}-${capabilityKey}`}
           gridId={module.id}
           gridSchemaVersion={1}
           initialVariantId={initialVariantId}
@@ -609,6 +733,8 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           gridOptions={gridOptions}
           onGridReady={handleGridReady}
           dataSourceMode={dataSourceMode}
+          sanitizeVariantColumnState={sanitizeVariantColumnState}
+          sanitizeVariantPivotMode={sanitizeVariantPivotMode}
           createServerSideDatasource={
             dataSourceMode === 'server' ? () => createServerSideDatasource() : undefined
           }

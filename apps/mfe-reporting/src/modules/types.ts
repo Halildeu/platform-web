@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { SharedReportId } from '@platform/capabilities';
 import type { ColumnDef, GridRequest, GridResponse } from '../grid';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
+import type { ReportCapabilities } from './dynamic-report/types';
 
 export type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 
@@ -45,6 +46,16 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
    * this — the sync getter is then trusted as ready immediately.
    */
   ensureColumnMeta?: () => Promise<ColumnMeta[]>;
+  /**
+   * PR-0.1+ capabilities envelope returned alongside metadata.
+   * ReportPage reads {@code serverSideGrouping} to decide whether to
+   * expose the row-group panel + drag-to-group + value-aggregation
+   * pickers. The field lists tell the grid which columns participate
+   * so per-column actions can stay gated. Modules whose data source
+   * predates the capability envelope may return {@code undefined};
+   * ReportPage treats that as all-false.
+   */
+  getCapabilities?: () => ReportCapabilities | undefined;
   fetchRows: (filters: TFilters, request: GridRequest) => Promise<GridResponse<TRow>>;
   renderDashboard?: (t: TranslateFn, filters?: TFilters) => ReactNode;
   renderDetail?: (row: TRow | null, t: TranslateFn) => ReactNode;
