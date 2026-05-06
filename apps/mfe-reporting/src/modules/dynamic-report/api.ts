@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { api, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
 import type { GridRequest, GridResponse } from '../../grid';
+import { requestsGrouping } from '../../grid';
 import type {
   DynamicReportFilters,
   DynamicReportRow,
@@ -190,6 +191,127 @@ const buildAdvancedFilter = (
   return merged;
 };
 
+/**
+ * AG Grid SSRM-compatible request body for the backend
+ * {@code POST /api/v1/reports/{key}/query} endpoint shipped in
+ * platform-backend PR-0.1..0.3 (#78/#79/#81). Mirrors AG Grid's
+ * {@code IServerSideGetRowsRequest} so we can forward the structured
+ * payload verbatim.
+ *
+ * <p>The 400 envelope is {@link ReportQueryErrorDto} on the backend —
+ * {@code { code, message }}. Error codes that fail-close at the SQL
+ * builder boundary:
+ * <ul>
+ *   <li>{@code GROUPING_NOT_SUPPORTED} — capability false / pivot
+ *       requested.</li>
+ *   <li>{@code INVALID_AGGREGATION_REQUEST} — non-aggregatable field
+ *       or unknown aggFunc.</li>
+ *   <li>{@code INVALID_GROUP_KEY} — type-coercion failure (e.g. "abc"
+ *       on a number column).</li>
+ *   <li>{@code ANCESTOR_FILTER_COLLISION} — user filter collides with
+ *       expansion ancestor on the same field.</li>
+ *   <li>{@code INVALID_ROW_WINDOW} / {@code NON_ALIGNED_ROW_WINDOW} —
+ *       malformed pagination window.</li>
+ * </ul>
+ */
+type ReportQueryRequestBody = {
+  startRow?: number;
+  endRow?: number;
+  rowGroupCols?: GridRequest['rowGroupCols'];
+  valueCols?: GridRequest['valueCols'];
+  pivotCols?: GridRequest['pivotCols'];
+  pivotMode?: boolean;
+  groupKeys?: string[];
+  filterModel?: GridRequest['filterModel'];
+  sortModel?: GridRequest['sortModel'];
+};
+
+/**
+ * Structured error mirror of the backend {@code ReportQueryErrorDto}
+ * ({@code { code, message }}). Subclassing {@link Error} (instead of
+ * embedding the code in the {@code message} string) lets the
+ * follow-up PRs (#272c sanitizer, #272a UX flip) branch on the
+ * canonical {@code code} field without parsing strings.
+ *
+ * <p>Codes shipped by platform-backend PR-0.1..0.3:
+ * {@code GROUPING_NOT_SUPPORTED}, {@code INVALID_AGGREGATION_REQUEST},
+ * {@code INVALID_GROUP_KEY}, {@code ANCESTOR_FILTER_COLLISION},
+ * {@code INVALID_ROW_WINDOW}, {@code NON_ALIGNED_ROW_WINDOW}.
+ */
+export class ReportQueryError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly status: number = 400,
+  ) {
+    super(message);
+    this.name = 'ReportQueryError';
+  }
+}
+
+const fetchReportDataGrouped = async (
+  reportKey: string,
+  request: GridRequest,
+): Promise<GridResponse<DynamicReportRow>> => {
+  const blockSize = Math.max(1, request.pageSize ?? 50);
+  const computedStart = ((request.page ?? 1) - 1) * blockSize;
+  // Resolve startRow first so endRow falls off the same base when the
+  // caller only set one half of the SSRM cache window. Keeps the
+  // backend NON_ALIGNED_ROW_WINDOW guard deterministic for hand-crafted
+  // test/mock payloads (Codex iter-1 absorb on PR #273).
+  const resolvedStart = request.startRow ?? computedStart;
+  const body: ReportQueryRequestBody = {
+    startRow: resolvedStart,
+    endRow: request.endRow ?? resolvedStart + blockSize,
+    rowGroupCols: request.rowGroupCols ?? [],
+    valueCols: request.valueCols ?? [],
+    pivotCols: request.pivotCols ?? [],
+    pivotMode: request.pivotMode ?? false,
+    groupKeys: request.groupKeys ?? [],
+    filterModel: request.filterModel ?? {},
+    sortModel: request.sortModel ?? [],
+  };
+
+  try {
+    const client = resolveHttpClient();
+    const { data } = await client.post<PagedResultDto>(
+      `${REPORTS_BASE}/${reportKey}/query`,
+      body,
+      { headers: buildCompanyHeaders() },
+    );
+    const items = Array.isArray(data?.items) ? data.items : [];
+    return {
+      rows: items,
+      total: typeof data?.total === 'number' ? data.total : items.length,
+    };
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      const response = error as AxiosError<ErrorResponse & { code?: string; message?: string }>;
+      const status = response.response?.status;
+      const traceId = response.response?.data?.meta?.traceId;
+      if (traceId && process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.warn(`[mfe-reporting/${reportKey}/query] traceId`, traceId);
+      }
+      if (status === 401 || status === 403) {
+        throw new Error('Rapor verileri için yetki bulunmuyor');
+      }
+      if (status === 400) {
+        // Surface the structured error so the caller can branch on
+        // .code without parsing strings (#272c will inspect this to
+        // revert offending grouping state, #272a will branch on
+        // GROUPING_NOT_SUPPORTED to keep capability scoped).
+        const data = response.response?.data;
+        const code = data?.code ?? 'BAD_REQUEST';
+        const detail = data?.message ?? 'Sorgu yapısı reddedildi';
+        throw new ReportQueryError(code, `[${code}] ${detail}`, 400);
+      }
+      throw new Error(`Rapor verileri alınamadı (HTTP ${status ?? '??'})`);
+    }
+    throw new Error('Rapor verileri alınamadı');
+  }
+};
+
 export const fetchReportData = async (
   reportKey: string,
   filters: DynamicReportFilters,
@@ -197,6 +319,15 @@ export const fetchReportData = async (
   defaultSort?: string,
   defaultDirection?: string,
 ): Promise<GridResponse<DynamicReportRow>> => {
+  // PR-0.2 hardening: when the request expresses any grouping intent,
+  // forward it via POST /query so the backend's grouped path handles
+  // GROUP BY / aggregations / ancestor expansion. Flat requests stay on
+  // the legacy GET /data path so non-grouping callers (dashboards,
+  // exports) keep working unchanged.
+  if (requestsGrouping(request)) {
+    return fetchReportDataGrouped(reportKey, request);
+  }
+
   const params = new URLSearchParams();
   params.set('page', String(request.page ?? 1));
   params.set('pageSize', String(request.pageSize ?? 50));

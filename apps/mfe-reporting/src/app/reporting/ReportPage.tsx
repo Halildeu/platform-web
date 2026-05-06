@@ -382,6 +382,24 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             })
             .filter(Boolean) as { colId: string; sort: 'asc' | 'desc' }[];
 
+          /*
+           * PR-0.2 hardening (reporting platform plan, 2026-05): forward
+           * AG Grid SSRM grouping fields verbatim instead of stringifying
+           * them into URL params. The module's fetchRows decides whether
+           * to send POST /query (when requestsGrouping is true) or fall
+           * back to the legacy GET /data path (flat). buildEntityGridQueryParams
+           * still produces the legacy URL-encoded mirror for the GET path
+           * but now we keep the structured form alongside it.
+           */
+          const ssrmRequest = params.request as {
+            rowGroupCols?: GridRequest['rowGroupCols'];
+            valueCols?: GridRequest['valueCols'];
+            pivotCols?: GridRequest['pivotCols'];
+            pivotMode?: boolean;
+            groupKeys?: string[];
+            startRow?: number;
+            endRow?: number;
+          };
           const req: GridRequest = {
             page: baseParams.page,
             pageSize: baseParams.pageSize,
@@ -394,6 +412,13 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             filterModel: params.request.filterModel ?? undefined,
             quickFilter: baseParams.search,
             advancedFilter: baseParams.advancedFilter,
+            startRow: ssrmRequest.startRow,
+            endRow: ssrmRequest.endRow,
+            rowGroupCols: ssrmRequest.rowGroupCols,
+            valueCols: ssrmRequest.valueCols,
+            pivotCols: ssrmRequest.pivotCols,
+            pivotMode: ssrmRequest.pivotMode,
+            groupKeys: ssrmRequest.groupKeys,
           };
           const res: GridResponse<TRow> = await module.fetchRows(filters, req);
           params.success({ rowData: res.rows, rowCount: res.total });

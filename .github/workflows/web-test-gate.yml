@@ -76,6 +76,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Vitest workspace (jsdom)
         run: pnpm run test:workspace
+      - name: Vitest mfe-reporting dynamic-report (PR-0.2 reporting hardening)
+        # Root vitest.config.ts intentionally excludes apps/mfe-reporting
+        # from the workspace project list (chart fixture isolation), so
+        # tests added under that package wouldn't otherwise run in the
+        # required gate. PR #273 (SSRM POST /query data path) added
+        # fetchReportData routing tests; expose them to CI so the
+        # structured-error contract stays locked.
+        #
+        # Path-scoped to src/modules/dynamic-report — the package also
+        # carries pre-existing `node:test`-based tests under
+        # src/lib/grid-variants/__tests__ which are NOT compatible with
+        # vitest and were never run in the workspace gate (root `test`
+        # script omits mfe-reporting entirely). Migrating those files
+        # to vitest is a separate cleanup PR; for now we keep this CI
+        # step narrowly scoped so the PR-0.2 contract stays locked
+        # without dragging unrelated tech debt into this gate.
+        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report
 
   token-drift-required:
     name: Token Drift (build --check)
