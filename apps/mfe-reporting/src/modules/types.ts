@@ -7,9 +7,16 @@ export type TranslateFn = (key: string, params?: Record<string, unknown>) => str
 
 export interface FilterRenderContext<TFilters extends Record<string, unknown>> {
   values: TFilters;
-  submit: () => void;
+  submit?: () => void;
   setFieldValue: <K extends keyof TFilters>(key: K, value: TFilters[K]) => void;
   t: TranslateFn;
+  /**
+   * Field keys that should be rendered with a required marker (visual
+   * cue: `*` after the label, no other layout change). Modules use this
+   * to keep the form pattern uniform — same widget, same row, just an
+   * asterisk on the keys ReportPage flagged as required.
+   */
+  requiredFields?: ReadonlyArray<string>;
 }
 
 export interface FilterInitContext {
@@ -45,6 +52,15 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
     filters: TFilters,
     format: 'csv' | 'json',
   ) => Promise<{ blob: Blob; filename: string }>;
+
+  /**
+   * Filter field keys that the user MUST set before the report can render
+   * useful results (e.g. muavin v3 needs `companyId` because the backend
+   * schema namespace is per-company). ReportPage groups these widgets
+   * under a "Zorunlu Filtreler" header in the filter drawer and shows a
+   * warning badge on the toolbar trigger.
+   */
+  requiredFilterFields?: ReadonlyArray<string>;
 
   /** Database tables this report reads from — enables schema lineage, related reports, FK lookup */
   sourceTables?: string[];

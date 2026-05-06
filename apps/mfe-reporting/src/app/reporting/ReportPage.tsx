@@ -5,6 +5,8 @@ import {
   PageLayout,
   createPageLayoutBreadcrumbItems,
   createPageLayoutPreset,
+  Button,
+  Drawer,
 } from '@mfe/design-system';
 import { EntityGridTemplate, buildEntityGridQueryParams } from '../../grid';
 import type { GridRequest, GridResponse, ColumnDef } from '../../grid';
@@ -90,6 +92,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   const [, setExporting] = React.useState(false);
   const [dataSourceMode, setDataSourceMode] = React.useState<'server' | 'client'>('server');
   const [clientRows, setClientRows] = React.useState<TRow[]>([]);
+  const [filterDrawerOpen, setFilterDrawerOpen] = React.useState(false);
   const initialFilterSyncRef = React.useRef(true);
   const permissions = React.useMemo(
     () => readCurrentPermissions(),
@@ -450,14 +453,24 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           total={dataSourceMode === 'client' ? clientRows.length : undefined}
           footerStartSlot={modeSelector}
           toolbarExtras={
-            module.renderFilters
-              ? module.renderFilters({
-                  values: filters,
-                  setFieldValue: (key, value) =>
-                    setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
-                  t,
-                })
-              : undefined
+            module.renderFilters ? (
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="report-filter-drawer-trigger"
+                onClick={() => setFilterDrawerOpen(true)}
+              >
+                <span aria-hidden="true">⚙</span> Rapor Filtreleri
+                {(module.requiredFilterFields ?? []).length > 0 ? (
+                  <span
+                    className="ml-2 rounded-full bg-danger-soft px-2 py-0.5 text-[10px] font-semibold uppercase text-danger"
+                    aria-label="zorunlu"
+                  >
+                    !
+                  </span>
+                ) : null}
+              </Button>
+            ) : undefined
           }
           detailDrawer={
             module.getColumnMeta
@@ -479,6 +492,26 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           exportConfig={exportConfig}
           onServerExport={exportEnabled ? handleServerExport : undefined}
         />
+
+        {module.renderFilters ? (
+          <Drawer
+            open={filterDrawerOpen}
+            onClose={() => setFilterDrawerOpen(false)}
+            placement="right"
+            size="md"
+            title="Rapor Filtreleri"
+          >
+            <div className="flex flex-col gap-3">
+              {module.renderFilters({
+                values: filters,
+                setFieldValue: (key, value) =>
+                  setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+                t,
+                requiredFields: module.requiredFilterFields,
+              })}
+            </div>
+          </Drawer>
+        ) : null}
       </PageLayout>
     </div>
   );

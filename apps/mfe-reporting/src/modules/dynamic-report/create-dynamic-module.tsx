@@ -114,26 +114,53 @@ export const createDynamicReportModule = (
     createInitialFilters: (context) => ({
       search: context?.searchParams?.get('search')?.trim() ?? '',
     }),
-    renderFilters: ({ values, setFieldValue, t }) => (
-      <>
-        {/* CompanyPicker: backend single-tenant raporlar (örn. muavin v3) için
-            X-Company-Id header'ını seçilen şirkete bağlar. Storage key
-            'reporting:currentCompanyId' shellServices.getCurrentCompanyId() ile
-            dynamic-report/api.ts içindeki resolveCompanyId tarafından okunur.
-            V1: hardcoded 1-43; V2 dynamic list (/api/v1/users/me/companies). */}
-        <CompanyPicker label={t('reports.filters.company.label') || 'Şirket'} />
-        <label className="flex flex-col gap-1 text-xs font-medium text-text-secondary min-w-[200px]">
-          <span>{t('reports.filters.search.placeholder') || 'Ara'}</span>
-          <input
-            data-testid="report-filter-search"
-            className="w-full rounded-md border border-border-subtle bg-surface-default px-3 py-2 text-sm text-text-primary placeholder:text-text-subtle focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-1"
-            value={values.search ?? ''}
-            placeholder={t('shared.grid.searchPlaceholder') || 'Arama...'}
-            onChange={(event) => setFieldValue('search', event.target.value)}
-          />
-        </label>
-      </>
-    ),
+    renderFilters: ({ values, setFieldValue, requiredFields }) => {
+      const isRequired = (key: string) => (requiredFields ?? []).includes(key);
+      return (
+        <>
+          {/* CompanyPicker: AG Grid filter-row mantığında üç segment
+              ([Şirket | Eşittir | <değer>]). Sütun ve operator kilit, sadece
+              değer dropdown editable. Storage key 'reporting:currentCompanyId'
+              shellServices.getCurrentCompanyId() ile dynamic-report/api.ts
+              içindeki resolveCompanyId tarafından okunur.
+              V1: hardcoded 1-43; V2 dynamic list (/api/v1/companies →
+              OUR_COMPANY). */}
+          <CompanyPicker required={isRequired('companyId')} />
+          <div
+            className="flex items-center gap-2"
+            role="group"
+            aria-label="Genel arama filtresi"
+          >
+            <span
+              className="rounded-md border border-border-subtle bg-surface-muted px-3 py-2 text-sm text-text-secondary cursor-not-allowed select-none"
+              aria-readonly="true"
+            >
+              Ara
+            </span>
+            <span
+              className="rounded-md border border-border-subtle bg-surface-muted px-3 py-2 text-sm text-text-secondary cursor-not-allowed select-none"
+              aria-readonly="true"
+            >
+              İçerir
+            </span>
+            <input
+              data-testid="report-filter-search"
+              className="rounded-md border border-border-subtle bg-surface-default px-3 py-2 text-sm text-text-primary placeholder:text-text-subtle focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-1 min-w-[240px]"
+              value={values.search ?? ''}
+              placeholder="Arama..."
+              onChange={(event) => setFieldValue('search', event.target.value)}
+              aria-required={isRequired('search') ? 'true' : undefined}
+            />
+            {isRequired('search') ? (
+              <span className="ml-1 text-danger" aria-label="zorunlu">
+                *
+              </span>
+            ) : null}
+          </div>
+        </>
+      );
+    },
+    requiredFilterFields: ['companyId'],
     getColumnMeta: () => cachedColumnMeta ?? [],
     /*
      * a11y-pr1 follow-up: expose the async loader so ReportPage can
