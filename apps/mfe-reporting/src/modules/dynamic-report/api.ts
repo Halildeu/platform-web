@@ -122,9 +122,10 @@ export const fetchReportMetadata = async (reportKey: string): Promise<ReportMeta
  *
  * <p>Returning {@code null} (instead of throwing) keeps the picker resilient:
  * the component decides whether to fall back, and we don't break tree-shaking
- * by introducing a new error class. The 503 response body is still meaningful
- * (it contains {@code error: "mssql_unavailable"}) — when the caller wants
- * that signal it can call the lower-level helper {@link fetchCompanyOptionsRaw}.
+ * by introducing a new error class. If a caller ever needs the 503 body
+ * (which contains {@code error: "mssql_unavailable"}), wrap this helper or
+ * call {@code client.get} directly — keeping a separate "raw" variant is
+ * deferred until there's a real second consumer.
  */
 export type CompanyOption = { id: number; nickname: string; name: string };
 
