@@ -23,7 +23,8 @@ import { expectToken, withTheme, getResolvedToken } from '../../../__tests__/css
  *
  * Border uses `/20` opacity modifier → `color-mix(in oklab, ... 20%, transparent)`
  * cascade; we use the reference-element pattern (PR-8 Codex iter-2)
- * for byte-for-byte border-color equality on at least one variant.
+ * for byte-for-byte border-color equality on every variant
+ * (parametric `it.each` over 4 variants — PR-14 Codex iter-1).
  */
 
 describe('Alert CSSOM canary', () => {
