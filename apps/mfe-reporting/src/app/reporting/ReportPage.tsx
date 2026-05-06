@@ -449,6 +449,16 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           rowData={dataSourceMode === 'client' ? clientRows : undefined}
           total={dataSourceMode === 'client' ? clientRows.length : undefined}
           footerStartSlot={modeSelector}
+          toolbarExtras={
+            module.renderFilters
+              ? module.renderFilters({
+                  values: filters,
+                  setFieldValue: (key, value) =>
+                    setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+                  t,
+                })
+              : undefined
+          }
           detailDrawer={
             module.getColumnMeta
               ? (row) =>
