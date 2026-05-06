@@ -24,6 +24,29 @@ export type ReportColumnMeta = {
   suffix?: string;
   /** Number: prefix (e.g., '₺') */
   prefix?: string;
+  /**
+   * PR-0.2/0.3 (reporting hardening, 2026-05): per-column grouping
+   * opt-ins. Optional + default false so absence keeps the
+   * stop-gap UX shipped in platform-web #271 working as-is.
+   */
+  groupable?: boolean;
+  aggregatable?: boolean;
+  defaultAggFunc?: 'sum' | 'avg' | 'min' | 'max' | 'count';
+};
+
+/**
+ * PR-0.1+ capabilities envelope returned alongside metadata. Frontend
+ * uses {@code serverSideGrouping} to decide whether to expose the
+ * row-group panel + drag-to-group + value-aggregation pickers.
+ *
+ * <p>Older backends that don't return the field are treated as
+ * all-false so a rolling deploy where the gateway points to a stale
+ * report-service can't accidentally light up grouping UX.
+ */
+export type ReportCapabilities = {
+  serverSideGrouping: boolean;
+  groupableFields?: string[];
+  aggregatableFields?: string[];
 };
 
 export type ReportListItem = {
@@ -43,6 +66,12 @@ export type ReportMetadata = {
   columns: ReportColumnMeta[];
   defaultSort: string;
   defaultSortDirection: string;
+  /**
+   * PR-0.1+ capabilities envelope. Optional so older backends that
+   * predate the field still parse cleanly; ReportPage treats absence
+   * as all-false.
+   */
+  capabilities?: ReportCapabilities;
 };
 
 export type ReportCategory = {

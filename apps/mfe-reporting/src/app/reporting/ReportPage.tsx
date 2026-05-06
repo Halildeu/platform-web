@@ -17,6 +17,7 @@ import type {
 } from 'ag-grid-community';
 import { useReportingI18n } from '../../i18n/useReportingI18n';
 import type { ReportModule } from '../../modules/types';
+import type { ReportCapabilities } from '../../modules/dynamic-report/types';
 import {
   buildColDefs,
   buildDetailRenderer,
@@ -117,36 +118,34 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   }, [initialFiltersFromSearch]);
 
   /*
-   * Server-side grouping is not yet implemented on the backend. AG Grid sends
-   * `rowGroupCols` / `groupKeys` / `valueCols` in the SSRM request, but
-   * `ReportController.getData` ignores them and returns flat rows. Any path
-   * that puts the grid into a row-grouped state — drag-to-panel, column
-   * header menu "Group by …", QuickGroupMenu in the toolbar — produces a
-   * visibly broken grid (group column populated but rows not collapsed).
+   * Server-side grouping flip — closes the loop opened by platform-web #271.
+   * Backend PR-0.1..0.3 added POST /api/v1/reports/{key}/query, multi-level
+   * GROUP BY + groupKeys expansion + leaf rows + type-aware coercion. The
+   * first opt-in PR flipped capabilities.serverSideGrouping=true on
+   * fin-muhasebe-detay; reading the flag here lets the row-group panel,
+   * column header Group action and QuickGroupMenu return for that report
+   * (and any future report whose registry entry marks at least one
+   * column groupable=true).
    *
-   * This temporary guard disables every grouping entrypoint for server-mode
-   * datasources so users don't hit the half-working feature. Client-mode
-   * datasources keep grouping because AG Grid handles it in-memory without
-   * the backend.
-   *
-   * Three places need to flip together (Codex 019dfe66 iter-2 absorb — just
-   * hiding the panel is not enough; the column menu and QuickGroupMenu reach
-   * the same broken state):
-   *
-   *   1. `rowGroupPanelShow: 'never'` (the drag-to panel)
-   *   2. `defaultColDef.enableRowGroup/enablePivot/enableValue: false` (column
-   *       header menu actions)
-   *   3. column-level `enableRowGroup: false` and any pre-set `rowGroup` /
-   *       `rowGroupIndex` cleared (QuickGroupMenu picks groupable columns
-   *       from `columnDefs`)
-   *
-   * The proper fix lands in PR-0.1+ (POST /data/query contract + capability
-   * flag + GROUP BY in SqlBuilder). When the backend exposes the
-   * `serverSideGrouping` capability, `serverSideGroupingEnabled` flips to
-   * read it, the panel returns, and groupable columns light up again. See
-   * `docs/plans/2026-05-reporting-platform-hardening.md` PR-0 acceptance.
+   * Capability state is initialised lazily and refreshed alongside the
+   * column metadata fetch (see the useEffect that calls ensureColumnMeta
+   * lower down — it bumps columnMetaVersion which forces the re-read here).
+   * Reports whose module predates the capability envelope return
+   * {@code undefined}; we map that to all-false so the stop-gap from #271
+   * stays intact.
    */
-  const serverSideGroupingEnabled = false; // TODO PR-0.1: read from backend capability and re-enable panel + groupable column actions together
+  const [reportCapabilities, setReportCapabilities] = React.useState<
+    ReportCapabilities | undefined
+  >(() => module.getCapabilities?.());
+  const serverSideGroupingEnabled = reportCapabilities?.serverSideGrouping === true;
+  const groupableFieldSet = React.useMemo(
+    () => new Set(reportCapabilities?.groupableFields ?? []),
+    [reportCapabilities],
+  );
+  const aggregatableFieldSet = React.useMemo(
+    () => new Set(reportCapabilities?.aggregatableFields ?? []),
+    [reportCapabilities],
+  );
   const rowGroupingEnabled = dataSourceMode !== 'server' || serverSideGroupingEnabled;
 
   /* ---- Grid options (matching UsersGrid standard) ---- */
@@ -261,11 +260,17 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       return;
     }
     let cancelled = false;
+    const refreshCapabilities = () => {
+      if (typeof module.getCapabilities === 'function') {
+        setReportCapabilities(module.getCapabilities());
+      }
+    };
     module
       .ensureColumnMeta()
       .then(() => {
         if (!cancelled) {
           setColumnMetaVersion((v) => v + 1);
+          refreshCapabilities();
         }
       })
       .catch(() => {
@@ -275,6 +280,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         // spinner forever.
         if (!cancelled) {
           setColumnMetaVersion((v) => v + 1);
+          refreshCapabilities();
         }
       });
     return () => {
@@ -348,20 +354,45 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
    * column header menu can't put the grid into the broken state. See
    * `gridOptions` block above for the full rationale.
    */
-  const effectiveColDefs = React.useMemo<ColDef<TRow>[]>(
-    () =>
-      rowGroupingEnabled
-        ? colDefs
-        : colDefs.map((cd) => ({
-            ...cd,
-            enableRowGroup: false,
-            enablePivot: false,
-            enableValue: false,
-            rowGroup: false,
-            rowGroupIndex: null,
-          })),
-    [colDefs, rowGroupingEnabled],
-  );
+  const effectiveColDefs = React.useMemo<ColDef<TRow>[]>(() => {
+    if (!rowGroupingEnabled) {
+      return colDefs.map((cd) => ({
+        ...cd,
+        enableRowGroup: false,
+        enablePivot: false,
+        enableValue: false,
+        rowGroup: false,
+        rowGroupIndex: null,
+      }));
+    }
+    if (dataSourceMode !== 'server') {
+      // Client-mode datasources let AG Grid group in-memory regardless
+      // of backend capability — no per-column gating needed.
+      return colDefs;
+    }
+    /*
+     * Capability-aware per-column gating. The backend opt-in declares
+     * which columns are valid drag-targets for the row-group panel
+     * (groupable=true) and which are valid value-aggregations
+     * (aggregatable=true). Stripping enableRowGroup / enableValue on
+     * the rest keeps QuickGroupMenu and the column header menu honest:
+     * users only see "Group by" / "Aggregate" actions on columns the
+     * backend will actually accept on POST /query.
+     */
+    return colDefs.map((cd) => {
+      const field = (cd as { field?: string }).field;
+      const isGroupable = field !== undefined && groupableFieldSet.has(field);
+      const isAggregatable = field !== undefined && aggregatableFieldSet.has(field);
+      return {
+        ...cd,
+        enableRowGroup: isGroupable,
+        enableValue: isAggregatable,
+        // Pivot stays off until PR-0.4 ships the backend pivot path —
+        // even when capability=true, every report's pivot stays gated.
+        enablePivot: false,
+      };
+    });
+  }, [colDefs, rowGroupingEnabled, dataSourceMode, groupableFieldSet, aggregatableFieldSet]);
 
   /* ---- Server-side datasource ---- */
   const createServerSideDatasource = React.useCallback(

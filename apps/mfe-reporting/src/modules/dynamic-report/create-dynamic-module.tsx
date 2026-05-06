@@ -7,6 +7,7 @@ import type {
   DynamicReportRow,
   ReportListItem,
   ReportColumnMeta,
+  ReportCapabilities,
 } from './types';
 import { fetchReportData, fetchReportMetadata, exportReportData } from './api';
 import { CompanyPicker } from '../../components/CompanyPicker';
@@ -77,8 +78,18 @@ export const createDynamicReportModule = (
 ): ReportModule<DynamicReportFilters, DynamicReportRow> => {
   const moduleId = `reports.dynamic.${report.key}`;
 
-  /* Column metadata cache — fetched once, then reused */
+  /*
+   * Column metadata + capabilities cache — fetched once, then reused.
+   * Both pieces come from the same /metadata response so we cache
+   * them together to avoid a second round-trip.
+   *
+   * `cachedCapabilities = undefined` means the metadata fetch hasn't
+   * resolved yet; older backends without the capabilities field
+   * surface as `undefined` after resolution and ReportPage maps that
+   * to all-false (matching the platform-web #271 stop-gap).
+   */
   let cachedColumnMeta: ColumnMeta[] | null = null;
+  let cachedCapabilities: ReportCapabilities | undefined;
   let metaPromise: Promise<ColumnMeta[]> | null = null;
 
   const ensureColumnMeta = async (): Promise<ColumnMeta[]> => {
@@ -87,11 +98,13 @@ export const createDynamicReportModule = (
       metaPromise = fetchReportMetadata(report.key)
         .then((meta) => {
           cachedColumnMeta = meta.columns.map(mapBackendColumnMeta);
+          cachedCapabilities = meta.capabilities;
           return cachedColumnMeta;
         })
         .catch((err) => {
           console.warn(`[dynamic-report] metadata fetch failed for ${report.key}:`, err);
           cachedColumnMeta = [];
+          cachedCapabilities = undefined;
           return cachedColumnMeta;
         });
     }
@@ -171,6 +184,14 @@ export const createDynamicReportModule = (
      * column definitions to project them onto.
      */
     ensureColumnMeta,
+    /*
+     * PR-0.1+ capabilities reader. ReportPage flips serverSideGroupingEnabled
+     * based on the `serverSideGrouping` flag returned alongside the column
+     * metadata. Returns undefined until the metadata fetch resolves; older
+     * backends that don't ship the field surface as undefined permanently
+     * and ReportPage maps that to all-false (matching the stop-gap UX).
+     */
+    getCapabilities: () => cachedCapabilities,
     getColumns: () => [],
     fetchRows: (filters, request) => fetchReportData(report.key, filters, request),
     exportRows: (filters, format) => exportReportData(report.key, filters, format),
