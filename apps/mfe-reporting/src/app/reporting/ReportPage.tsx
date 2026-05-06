@@ -8,7 +8,13 @@ import {
 } from '@mfe/design-system';
 import { EntityGridTemplate, buildEntityGridQueryParams } from '../../grid';
 import type { GridRequest, GridResponse, ColumnDef } from '../../grid';
-import type { ColDef, GridOptions, IServerSideGetRowsParams } from 'ag-grid-community';
+import type {
+  ColDef,
+  GridApi,
+  GridOptions,
+  GridReadyEvent,
+  IServerSideGetRowsParams,
+} from 'ag-grid-community';
 import { useReportingI18n } from '../../i18n/useReportingI18n';
 import type { ReportModule } from '../../modules/types';
 import {
@@ -110,18 +116,129 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
     setReloadSignal((value) => value + 1);
   }, [initialFiltersFromSearch]);
 
+  /*
+   * Server-side grouping is not yet implemented on the backend. AG Grid sends
+   * `rowGroupCols` / `groupKeys` / `valueCols` in the SSRM request, but
+   * `ReportController.getData` ignores them and returns flat rows. Any path
+   * that puts the grid into a row-grouped state — drag-to-panel, column
+   * header menu "Group by …", QuickGroupMenu in the toolbar — produces a
+   * visibly broken grid (group column populated but rows not collapsed).
+   *
+   * This temporary guard disables every grouping entrypoint for server-mode
+   * datasources so users don't hit the half-working feature. Client-mode
+   * datasources keep grouping because AG Grid handles it in-memory without
+   * the backend.
+   *
+   * Three places need to flip together (Codex 019dfe66 iter-2 absorb — just
+   * hiding the panel is not enough; the column menu and QuickGroupMenu reach
+   * the same broken state):
+   *
+   *   1. `rowGroupPanelShow: 'never'` (the drag-to panel)
+   *   2. `defaultColDef.enableRowGroup/enablePivot/enableValue: false` (column
+   *       header menu actions)
+   *   3. column-level `enableRowGroup: false` and any pre-set `rowGroup` /
+   *       `rowGroupIndex` cleared (QuickGroupMenu picks groupable columns
+   *       from `columnDefs`)
+   *
+   * The proper fix lands in PR-0.1+ (POST /data/query contract + capability
+   * flag + GROUP BY in SqlBuilder). When the backend exposes the
+   * `serverSideGrouping` capability, `serverSideGroupingEnabled` flips to
+   * read it, the panel returns, and groupable columns light up again. See
+   * `docs/plans/2026-05-reporting-platform-hardening.md` PR-0 acceptance.
+   */
+  const serverSideGroupingEnabled = false; // TODO PR-0.1: read from backend capability and re-enable panel + groupable column actions together
+  const rowGroupingEnabled = dataSourceMode !== 'server' || serverSideGroupingEnabled;
+
   /* ---- Grid options (matching UsersGrid standard) ---- */
   const gridOptions = React.useMemo<GridOptions<TRow>>(
     () => ({
       cellSelection: true,
       multiSortKey: 'ctrl' as const,
-      rowGroupPanelShow: 'always' as const,
+      rowGroupPanelShow: rowGroupingEnabled ? ('always' as const) : ('never' as const),
       ...(dataSourceMode === 'server'
         ? { cacheBlockSize: SERVER_CACHE_BLOCK_SIZE, maxBlocksInCache: 1 }
         : {}),
     }),
-    [dataSourceMode],
+    [dataSourceMode, rowGroupingEnabled],
   );
+
+  /*
+   * Codex 019dfe66 iter-3: do NOT put `defaultColDef` inside `gridOptions`.
+   * `GridShell` merges the `defaultColDef` prop with its own `DEFAULT_COL_DEF`
+   * (sortable / filter / floatingFilter / resizable etc.); embedding it in
+   * `gridOptions` and letting AG Grid spread `gridOptions` last would clobber
+   * those defaults. The right shape is a separate prop on
+   * `EntityGridTemplate` so `GridShell` can do the merge.
+   */
+  const groupingDefaultColDef = React.useMemo<ColDef<TRow> | undefined>(
+    () =>
+      rowGroupingEnabled
+        ? undefined
+        : {
+            enableRowGroup: false,
+            enablePivot: false,
+            enableValue: false,
+          },
+    [rowGroupingEnabled],
+  );
+
+  /*
+   * Codex 019dfe66 iter-4 absorb. AG Grid `enableRowGroup: false` is a UI
+   * capability guard — it stops drag/menu/QuickGroupMenu paths but does NOT
+   * sanitize programmatic `applyColumnState` calls. `VariantIntegration`
+   * applies a saved variant's `columnState` directly, so a previously saved
+   * variant carrying `rowGroup: true` / `pivotMode: true` could still push
+   * the grid into the broken grouping state even though every UI entrypoint
+   * is closed.
+   *
+   * Defensive event listener: when grouping is disabled, any time AG Grid
+   * detects a row-group / pivot / pivot-mode change, immediately clear it.
+   * No-op when grouping is enabled (or when AG Grid is already in the empty
+   * state, so no infinite loop).
+   *
+   * PR-0.1+ should replace this with a proper variant state sanitizer in
+   * the design-system `VariantIntegration` component (Codex's preferred
+   * approach), but that change is bigger and orthogonal to closing the
+   * user-facing P0.
+   */
+  const [gridApi, setGridApi] = React.useState<GridApi<TRow> | null>(null);
+  const handleGridReady = React.useCallback((event: GridReadyEvent<TRow>) => {
+    setGridApi(event.api);
+  }, []);
+
+  React.useEffect(() => {
+    if (!gridApi || rowGroupingEnabled) {
+      return;
+    }
+    const clearGrouping = () => {
+      try {
+        if (gridApi.getRowGroupColumns().length > 0) gridApi.setRowGroupColumns([]);
+        if (gridApi.getPivotColumns().length > 0) gridApi.setPivotColumns([]);
+        if (gridApi.getValueColumns().length > 0) gridApi.setValueColumns([]);
+        // AG Grid 34.x: setPivotMode is removed; setGridOption is the
+        // canonical way (matches VariantIntegration's own pattern).
+        if (gridApi.isPivotMode()) gridApi.setGridOption('pivotMode', false);
+      } catch {
+        // gridApi may be destroyed mid-cleanup; harmless
+      }
+    };
+    // Initial clear in case a saved variant was applied before this effect ran.
+    clearGrouping();
+    gridApi.addEventListener('columnRowGroupChanged', clearGrouping);
+    gridApi.addEventListener('columnPivotChanged', clearGrouping);
+    gridApi.addEventListener('columnPivotModeChanged', clearGrouping);
+    gridApi.addEventListener('columnValueChanged', clearGrouping);
+    return () => {
+      try {
+        gridApi.removeEventListener('columnRowGroupChanged', clearGrouping);
+        gridApi.removeEventListener('columnPivotChanged', clearGrouping);
+        gridApi.removeEventListener('columnPivotModeChanged', clearGrouping);
+        gridApi.removeEventListener('columnValueChanged', clearGrouping);
+      } catch {
+        /* */
+      }
+    };
+  }, [gridApi, rowGroupingEnabled]);
 
   /*
    * a11y-pr1 follow-up: column metadata for dynamic reports is
@@ -222,6 +339,28 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         return colDef;
       }),
     [columns],
+  );
+
+  /*
+   * When server-side grouping is disabled, strip every column's
+   * `enableRowGroup` / `rowGroup` / `rowGroupIndex` so the toolbar's
+   * QuickGroupMenu (which lists groupable columns from `columnDefs`) and the
+   * column header menu can't put the grid into the broken state. See
+   * `gridOptions` block above for the full rationale.
+   */
+  const effectiveColDefs = React.useMemo<ColDef<TRow>[]>(
+    () =>
+      rowGroupingEnabled
+        ? colDefs
+        : colDefs.map((cd) => ({
+            ...cd,
+            enableRowGroup: false,
+            enablePivot: false,
+            enableValue: false,
+            rowGroup: false,
+            rowGroupIndex: null,
+          })),
+    [colDefs, rowGroupingEnabled],
   );
 
   /* ---- Server-side datasource ---- */
@@ -440,8 +579,10 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           gridId={module.id}
           gridSchemaVersion={1}
           initialVariantId={initialVariantId}
-          columnDefs={colDefs}
+          columnDefs={effectiveColDefs}
+          defaultColDef={groupingDefaultColDef}
           gridOptions={gridOptions}
+          onGridReady={handleGridReady}
           dataSourceMode={dataSourceMode}
           createServerSideDatasource={
             dataSourceMode === 'server' ? () => createServerSideDatasource() : undefined
