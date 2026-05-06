@@ -111,15 +111,10 @@ describe('Button CSSOM canary', () => {
     // falls back to the default --focus-ring on unregistered tokens
     // (graceful degradation), so a plain `expectFocusRing` would pass
     // even if state-error-text were dropped from
-    // COLOR_OVERRIDE_RING_CLASSES — the test would lie.
-    //
-    // Reference-element pattern (PR-8 Codex iter-2): stamp the expected
-    // `color-mix(in oklab, var(--state-error-text) 30%, transparent)`
-    // on a ref element via box-shadow (the same property Tailwind's
-    // ring utility paints to in Chromium). Read both computed values
-    // and require byte-for-byte match. If danger regresses to default
-    // ring (--focus-ring) or a different token, the reference value
-    // differs and the test fails.
+    // COLOR_OVERRIDE_RING_CLASSES — the test would lie. Two-tier
+    // assertion below: (1) visible ring exists at all (sanity floor
+    // — pre-PR-15 scanner-bug guard), (2) className contains the
+    // literal danger color-mix utility (token contract).
     const screen = await render(<Button variant="danger">Delete</Button>);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const button = screen.getByRole('button', { name: 'Delete' }).element() as HTMLElement;
