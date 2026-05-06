@@ -25,19 +25,10 @@ const readEnvBoolean = (keys: string[], fallback = false): boolean => {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 };
 
-export const isSuggestionsRemoteEnabled = (): boolean =>
-  readEnvBoolean(['VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE', 'SHELL_ENABLE_SUGGESTIONS_REMOTE'], true);
+export const isSuggestionsRemoteEnabled = (): boolean => (
+  readEnvBoolean(['VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE', 'SHELL_ENABLE_SUGGESTIONS_REMOTE'], true)
+);
 
-export const isEthicRemoteEnabled = (): boolean =>
-  readEnvBoolean(['VITE_SHELL_ENABLE_ETHIC_REMOTE', 'SHELL_ENABLE_ETHIC_REMOTE'], true);
-
-/**
- * Endpoint admin remote — default OFF. The MFE skeleton ships behind
- * a flag until backend `e9cb8dd0` deploy and the OpenFGA seed for
- * `module:endpoint-admin` are confirmed in the target environment.
- */
-export const isEndpointAdminRemoteEnabled = (): boolean =>
-  readEnvBoolean(
-    ['VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE', 'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE'],
-    false,
-  );
+export const isEthicRemoteEnabled = (): boolean => (
+  readEnvBoolean(['VITE_SHELL_ENABLE_ETHIC_REMOTE', 'SHELL_ENABLE_ETHIC_REMOTE'], true)
+);
