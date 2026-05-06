@@ -8,7 +8,13 @@ import {
 } from '@mfe/design-system';
 import { EntityGridTemplate, buildEntityGridQueryParams } from '../../grid';
 import type { GridRequest, GridResponse, ColumnDef } from '../../grid';
-import type { ColDef, GridOptions, IServerSideGetRowsParams } from 'ag-grid-community';
+import type {
+  ColDef,
+  GridApi,
+  GridOptions,
+  GridReadyEvent,
+  IServerSideGetRowsParams,
+} from 'ag-grid-community';
 import { useReportingI18n } from '../../i18n/useReportingI18n';
 import type { ReportModule } from '../../modules/types';
 import {
@@ -175,6 +181,62 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           },
     [rowGroupingEnabled],
   );
+
+  /*
+   * Codex 019dfe66 iter-4 absorb. AG Grid `enableRowGroup: false` is a UI
+   * capability guard — it stops drag/menu/QuickGroupMenu paths but does NOT
+   * sanitize programmatic `applyColumnState` calls. `VariantIntegration`
+   * applies a saved variant's `columnState` directly, so a previously saved
+   * variant carrying `rowGroup: true` / `pivotMode: true` could still push
+   * the grid into the broken grouping state even though every UI entrypoint
+   * is closed.
+   *
+   * Defensive event listener: when grouping is disabled, any time AG Grid
+   * detects a row-group / pivot / pivot-mode change, immediately clear it.
+   * No-op when grouping is enabled (or when AG Grid is already in the empty
+   * state, so no infinite loop).
+   *
+   * PR-0.1+ should replace this with a proper variant state sanitizer in
+   * the design-system `VariantIntegration` component (Codex's preferred
+   * approach), but that change is bigger and orthogonal to closing the
+   * user-facing P0.
+   */
+  const [gridApi, setGridApi] = React.useState<GridApi<TRow> | null>(null);
+  const handleGridReady = React.useCallback((event: GridReadyEvent<TRow>) => {
+    setGridApi(event.api);
+  }, []);
+
+  React.useEffect(() => {
+    if (!gridApi || rowGroupingEnabled) {
+      return;
+    }
+    const clearGrouping = () => {
+      try {
+        if (gridApi.getRowGroupColumns().length > 0) gridApi.setRowGroupColumns([]);
+        if (gridApi.getPivotColumns().length > 0) gridApi.setPivotColumns([]);
+        if (gridApi.getValueColumns().length > 0) gridApi.setValueColumns([]);
+        if (gridApi.isPivotMode()) gridApi.setPivotMode(false);
+      } catch {
+        // gridApi may be destroyed mid-cleanup; harmless
+      }
+    };
+    // Initial clear in case a saved variant was applied before this effect ran.
+    clearGrouping();
+    gridApi.addEventListener('columnRowGroupChanged', clearGrouping);
+    gridApi.addEventListener('columnPivotChanged', clearGrouping);
+    gridApi.addEventListener('columnPivotModeChanged', clearGrouping);
+    gridApi.addEventListener('columnValueChanged', clearGrouping);
+    return () => {
+      try {
+        gridApi.removeEventListener('columnRowGroupChanged', clearGrouping);
+        gridApi.removeEventListener('columnPivotChanged', clearGrouping);
+        gridApi.removeEventListener('columnPivotModeChanged', clearGrouping);
+        gridApi.removeEventListener('columnValueChanged', clearGrouping);
+      } catch {
+        /* */
+      }
+    };
+  }, [gridApi, rowGroupingEnabled]);
 
   /*
    * a11y-pr1 follow-up: column metadata for dynamic reports is
@@ -518,6 +580,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           columnDefs={effectiveColDefs}
           defaultColDef={groupingDefaultColDef}
           gridOptions={gridOptions}
+          onGridReady={handleGridReady}
           dataSourceMode={dataSourceMode}
           createServerSideDatasource={
             dataSourceMode === 'server' ? () => createServerSideDatasource() : undefined
