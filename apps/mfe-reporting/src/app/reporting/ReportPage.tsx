@@ -5,6 +5,8 @@ import {
   PageLayout,
   createPageLayoutBreadcrumbItems,
   createPageLayoutPreset,
+  Button,
+  Drawer,
 } from '@mfe/design-system';
 import { EntityGridTemplate, buildEntityGridQueryParams } from '../../grid';
 import type { GridRequest, GridResponse, ColumnDef } from '../../grid';
@@ -90,6 +92,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   const [, setExporting] = React.useState(false);
   const [dataSourceMode, setDataSourceMode] = React.useState<'server' | 'client'>('server');
   const [clientRows, setClientRows] = React.useState<TRow[]>([]);
+  const [filterDrawerOpen, setFilterDrawerOpen] = React.useState(false);
   const initialFilterSyncRef = React.useRef(true);
   const permissions = React.useMemo(
     () => readCurrentPermissions(),
@@ -435,44 +438,6 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       >
         {module.renderDashboard ? module.renderDashboard(t, filters) : null}
 
-        {/*
-         * Report-level filters (CompanyPicker etc.) render inline above the
-         * grid as filter rows — same visual mantra as AG Grid's Advanced
-         * Filter Builder ([Column locked][Operator locked][Value editable]).
-         * The previous design hid these behind a "Rapor Filtreleri" Drawer;
-         * user feedback (2026-05-06) was that the rows belong in the filter
-         * area itself, not behind an extra click.
-         *
-         * Some modules legitimately return null from renderFilters (e.g.
-         * context-health, hr-executive-summary, the ReportingApp fallback
-         * module). Render the panel only when the call yields actual
-         * content — Codex 019dfc41 iter-2 absorb. With the Drawer this was
-         * masked by the trigger button being hidden; inline, an empty
-         * bordered box would be a visible regression.
-         */}
-        {(() => {
-          const filterRows = module.renderFilters?.({
-            values: filters,
-            setFieldValue: (key, value) =>
-              setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
-            t,
-            requiredFields: module.requiredFilterFields,
-          });
-          if (filterRows == null || filterRows === false) {
-            return null;
-          }
-          return (
-            <div
-              className="mb-3 flex flex-col gap-2 rounded-2xl border border-border-subtle bg-surface-default px-4 py-3 shadow-xs"
-              role="group"
-              aria-label="Rapor filtreleri"
-              data-testid="report-filter-rows"
-            >
-              {filterRows}
-            </div>
-          );
-        })()}
-
         <EntityGridTemplate<TRow>
           key={reloadSignal}
           gridId={module.id}
@@ -487,6 +452,40 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           rowData={dataSourceMode === 'client' ? clientRows : undefined}
           total={dataSourceMode === 'client' ? clientRows.length : undefined}
           footerStartSlot={modeSelector}
+          toolbarExtras={(() => {
+            const filterRows = module.renderFilters?.({
+              values: filters,
+              setFieldValue: (key, value) =>
+                setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+              t,
+              requiredFields: module.requiredFilterFields,
+            });
+            // Modules that legitimately return null/false from renderFilters
+            // (context-health, hr-executive-summary, the ReportingApp dashboard
+            // fallback) shouldn't surface a Rapor Filtreleri trigger at all —
+            // there's nothing to put in the drawer.
+            if (filterRows == null || filterRows === false) {
+              return undefined;
+            }
+            return (
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="report-filter-drawer-trigger"
+                onClick={() => setFilterDrawerOpen(true)}
+              >
+                <span aria-hidden="true">⚙</span> Rapor Filtreleri
+                {(module.requiredFilterFields ?? []).length > 0 ? (
+                  <span
+                    className="ml-2 rounded-full bg-danger-soft px-2 py-0.5 text-[10px] font-semibold uppercase text-danger"
+                    aria-label="zorunlu"
+                  >
+                    !
+                  </span>
+                ) : null}
+              </Button>
+            );
+          })()}
           detailDrawer={
             module.getColumnMeta
               ? (row) =>
@@ -507,6 +506,34 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           exportConfig={exportConfig}
           onServerExport={exportEnabled ? handleServerExport : undefined}
         />
+
+        {(() => {
+          // Same suppression rule as toolbarExtras above — keeps trigger
+          // and panel in sync (no orphan empty drawer for filterless modules).
+          const filterRows = module.renderFilters?.({
+            values: filters,
+            setFieldValue: (key, value) =>
+              setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+            t,
+            requiredFields: module.requiredFilterFields,
+          });
+          if (filterRows == null || filterRows === false) {
+            return null;
+          }
+          return (
+            <Drawer
+              open={filterDrawerOpen}
+              onClose={() => setFilterDrawerOpen(false)}
+              placement="right"
+              size="md"
+              title="Rapor Filtreleri"
+            >
+              <div className="flex flex-col gap-3" data-testid="report-filter-drawer-body">
+                {filterRows}
+              </div>
+            </Drawer>
+          );
+        })()}
       </PageLayout>
     </div>
   );
