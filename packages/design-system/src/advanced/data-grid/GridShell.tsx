@@ -416,6 +416,27 @@ function GridShellInner<RowData = unknown>(
                 });
               }
             };
+            /*
+             * PR #272c (reporting hardening, 2026-05): respect the
+             * column-level enableValue capability gate. AG Grid's
+             * `enableValue: false` blocks drag/menu/QuickGroupMenu
+             * paths, but the custom "Sütun Hesaplama" submenu used to
+             * call applyColumnState directly — bypassing the guard and
+             * letting the user pick an aggregation that the backend
+             * would then reject with 400 INVALID_AGGREGATION_REQUEST.
+             *
+             * Reading the colDef and disabling the entire submenu when
+             * the column declares enableValue=false keeps the UI
+             * honest: only columns the registry marked aggregatable=true
+             * (PR-0.2 backend opt-in) expose the submenu.
+             *
+             * The first/last entries are also dropped because the
+             * backend's ALLOWED_AGG_FUNCS allowlist (sum/avg/min/max/
+             * count) doesn't include them — exposing them would
+             * produce another reliable 400 path.
+             */
+            const colDef = params.column?.getColDef?.();
+            const aggregationDisabled = !params.column || colDef?.enableValue === false;
             const defaults = params.defaultItems ?? [];
             return [
               ...defaults,
@@ -460,15 +481,16 @@ function GridShellInner<RowData = unknown>(
               {
                 name: 'Sütun Hesaplama',
                 icon: '<span style="font-size:12px">∑</span>',
-                disabled: !params.column,
+                disabled: aggregationDisabled,
                 subMenu: [
                   { name: 'Toplam (Sum)', action: () => setAggFunc(params, 'sum') },
                   { name: 'Ortalama (Avg)', action: () => setAggFunc(params, 'avg') },
                   { name: 'Sayı (Count)', action: () => setAggFunc(params, 'count') },
                   { name: 'Min', action: () => setAggFunc(params, 'min') },
                   { name: 'Max', action: () => setAggFunc(params, 'max') },
-                  { name: 'İlk (First)', action: () => setAggFunc(params, 'first') },
-                  { name: 'Son (Last)', action: () => setAggFunc(params, 'last') },
+                  // PR #272c absorb: first/last omitted — backend
+                  // ALLOWED_AGG_FUNCS doesn't include them and a user
+                  // pick would always 400 INVALID_AGGREGATION_REQUEST.
                   'separator',
                   { name: 'Hesaplamayı kaldır', action: () => setAggFunc(params, null) },
                 ],

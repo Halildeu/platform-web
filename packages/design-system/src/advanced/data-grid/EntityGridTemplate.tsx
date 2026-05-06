@@ -25,7 +25,11 @@ import type {
 import { resolveAccessState, accessStyles, type AccessControlledProps } from '../../internal/access-controller';
 import { GridShell, type GridShellApi, type GridTheme, type GridDensity } from "./GridShell";
 import { GridToolbar, type GridToolbarMessages } from "./GridToolbar";
-import { VariantIntegration, type VariantIntegrationMessages } from "./VariantIntegration";
+import {
+  VariantIntegration,
+  type VariantIntegrationMessages,
+  type VariantColumnState,
+} from "./VariantIntegration";
 import { ServerPaginationFooter } from "./ServerPaginationFooter";
 import { useDatasourceModeAdapter, type DataSourceMode } from "./DatasourceModeAdapter";
 import { TablePagination, useAgGridTablePagination } from "./TablePagination";
@@ -255,6 +259,26 @@ export interface EntityGridTemplateProps<
     gridApi: GridApi<RowData>;
   }) => IServerSideDatasource | null | undefined;
   onEffectiveModeChange?: (mode: "server" | "client") => void;
+  /**
+   * PR #272c (reporting hardening, 2026-05): forwarded to the embedded
+   * {@link VariantIntegration} so a saved variant carrying
+   * {@code rowGroup}, {@code rowGroupIndex}, {@code aggFunc},
+   * {@code pivot} state for columns the current capability envelope
+   * doesn't allow can be sanitized before {@code applyColumnState} runs.
+   * Caller (e.g. ReportPage) computes the allowlist from the report's
+   * metadata response and returns a filtered column-state array.
+   *
+   * <p>Signature uses the local {@link VariantColumnState} alias
+   * (non-null) so callers don't need to handle the optional case;
+   * the component never invokes the sanitizer with {@code undefined}.
+   * Sanitizer is a pure function — input is a defensive shallow copy
+   * (see {@code cloneColumnState} in VariantIntegration).
+   */
+  sanitizeVariantColumnState?: (state: VariantColumnState) => VariantColumnState;
+  /** Companion sanitizer for {@code pivotMode}. Return the value to apply. */
+  sanitizeVariantPivotMode?: (
+    pivotMode: boolean | undefined,
+  ) => boolean | undefined;
 }
 
 /* ------------------------------------------------------------------ */
@@ -315,6 +339,8 @@ export function EntityGridTemplate<
     onServerExport,
     access,
     accessReason,
+    sanitizeVariantColumnState,
+    sanitizeVariantPivotMode,
   } = props;
 
   const accessState = resolveAccessState(access);
@@ -540,6 +566,8 @@ export function EntityGridTemplate<
             canPromoteToGlobal={canPromoteVariantToGlobal}
             canDemoteToPersonal={canDemoteVariantToPersonal}
             canDeleteGlobal={canDeleteGlobalVariant}
+            sanitizeColumnState={sanitizeVariantColumnState}
+            sanitizePivotMode={sanitizeVariantPivotMode}
           />
         }
       />

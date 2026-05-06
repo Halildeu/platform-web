@@ -480,6 +480,196 @@ describe('VariantIntegration', () => {
     });
   });
 
+  /*
+   * PR #272c (reporting hardening, 2026-05): sanitizeColumnState /
+   * sanitizePivotMode forwarded into applyVariantState. The sanitizers
+   * run BEFORE applyColumnState/setGridOption so a saved variant
+   * carrying state outside the current capability envelope can't push
+   * the grid into a state the backend will reject.
+   */
+  describe('PR-0.2 sanitizer hooks', () => {
+    it('sanitizeColumnState mutates the array passed to applyColumnState', async () => {
+      const gridApi = createMockGridApi();
+      const sanitizeColumnState = vi.fn((state: typeof MOCK_COLUMN_STATE) =>
+        // Strip every column whose colId is "role" — pretend "role" is
+        // not in the capability allowlist.
+        state.filter((c) => c.colId !== 'role'),
+      );
+      renderVariant({
+        gridApi,
+        activeVariantId: GLOBAL_VARIANT.id,
+        sanitizeColumnState,
+      });
+      await waitFor(() => {
+        expect(sanitizeColumnState).toHaveBeenCalled();
+      });
+      // applyColumnState received the SANITIZED array (no `role`).
+      await waitFor(() => {
+        const calls = (gridApi.applyColumnState as ReturnType<typeof vi.fn>).mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        const lastCall = calls[calls.length - 1]?.[0];
+        const ids = (lastCall?.state as Array<{ colId: string }>).map((c) => c.colId);
+        expect(ids).not.toContain('role');
+      });
+    });
+
+    it('sanitizePivotMode replaces the pivotMode value before setGridOption', async () => {
+      const gridApi = createMockGridApi();
+      // Saved variant claims pivotMode=true; sanitizer forces it false
+      // because the current capability envelope doesn't expose pivot.
+      const variantWithPivot = {
+        ...GLOBAL_VARIANT,
+        state: { ...GLOBAL_VARIANT.state, pivotMode: true },
+      };
+      mockFetch.mockResolvedValue([variantWithPivot]);
+      const sanitizePivotMode = vi.fn(() => false);
+      renderVariant({
+        gridApi,
+        activeVariantId: variantWithPivot.id,
+        sanitizePivotMode,
+      });
+      await waitFor(() => {
+        expect(sanitizePivotMode).toHaveBeenCalledWith(true);
+      });
+      await waitFor(() => {
+        const calls = (gridApi.setGridOption as ReturnType<typeof vi.fn>).mock.calls;
+        const pivotCall = calls.find((c) => c[0] === 'pivotMode');
+        expect(pivotCall).toBeDefined();
+        expect(pivotCall?.[1]).toBe(false);
+      });
+    });
+
+    it('omitting sanitizers preserves legacy behaviour (no-op)', async () => {
+      const gridApi = createMockGridApi();
+      renderVariant({ gridApi, activeVariantId: GLOBAL_VARIANT.id });
+      await waitFor(() => {
+        const calls = (gridApi.applyColumnState as ReturnType<typeof vi.fn>).mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        const lastCall = calls[calls.length - 1]?.[0];
+        // Without a sanitizer, the variant's full saved column state
+        // is forwarded verbatim — no fields stripped.
+        const ids = (lastCall?.state as Array<{ colId: string }>).map((c) => c.colId);
+        expect(ids).toEqual(MOCK_COLUMN_STATE.map((c) => c.colId));
+      });
+    });
+
+    it('property-level sanitizer strips disallowed fields without dropping columns', async () => {
+      // Codex iter-1 absorb: realistic capability scenario where the
+      // saved variant carries `rowGroup`/`aggFunc`/`pivot` for columns
+      // that exist in the current grid but the capability envelope
+      // doesn't allow as group/value/pivot. Sanitizer keeps every
+      // colId but strips the disallowed properties.
+      const richState = [
+        { colId: 'name', width: 200, hide: false, sort: null, sortIndex: null },
+        {
+          colId: 'salary',
+          width: 150,
+          hide: false,
+          sort: null,
+          sortIndex: null,
+          aggFunc: 'first', // backend-rejected
+        },
+        {
+          colId: 'department',
+          width: 150,
+          hide: false,
+          sort: null,
+          sortIndex: null,
+          rowGroup: true, // not in groupableFields
+          rowGroupIndex: 0,
+        },
+        {
+          colId: 'pivot_col',
+          width: 120,
+          hide: false,
+          sort: null,
+          sortIndex: null,
+          pivot: true, // not yet supported
+          pivotIndex: 0,
+        },
+      ];
+      mockFetch.mockResolvedValue([
+        { ...GLOBAL_VARIANT, state: { ...GLOBAL_VARIANT.state, columnState: richState } },
+      ]);
+      const sanitizeColumnState = vi.fn((state: typeof richState) =>
+        state.map((entry) => {
+          const { rowGroup, rowGroupIndex, aggFunc, pivot, pivotIndex, ...keep } = entry as Record<
+            string,
+            unknown
+          >;
+          // Suppress unused warning — exhaustive destructure is the point.
+          void rowGroup;
+          void rowGroupIndex;
+          void aggFunc;
+          void pivot;
+          void pivotIndex;
+          return keep as (typeof state)[number];
+        }),
+      );
+      const gridApi = createMockGridApi();
+      renderVariant({
+        gridApi,
+        activeVariantId: GLOBAL_VARIANT.id,
+        sanitizeColumnState,
+      });
+      await waitFor(() => {
+        const calls = (gridApi.applyColumnState as ReturnType<typeof vi.fn>).mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        const applied = calls[calls.length - 1]?.[0]?.state as Array<Record<string, unknown>>;
+        expect(applied.map((c) => c.colId as string)).toEqual([
+          'name',
+          'salary',
+          'department',
+          'pivot_col',
+        ]);
+        // Disallowed properties stripped on the columns that carried them.
+        const salary = applied.find((c) => c.colId === 'salary');
+        expect(salary?.aggFunc).toBeUndefined();
+        const dept = applied.find((c) => c.colId === 'department');
+        expect(dept?.rowGroup).toBeUndefined();
+        expect(dept?.rowGroupIndex).toBeUndefined();
+        const piv = applied.find((c) => c.colId === 'pivot_col');
+        expect(piv?.pivot).toBeUndefined();
+        expect(piv?.pivotIndex).toBeUndefined();
+      });
+    });
+
+    it('sanitizer receives a defensive copy — caller mutation cannot poison cached variant', async () => {
+      // Codex iter-1 absorb: even when the sanitizer in-place mutates
+      // its input, the saved variant inside the component's variants
+      // list (from mockFetch) must remain pristine for future
+      // re-applications.
+      const variantState = {
+        ...GLOBAL_VARIANT.state,
+        columnState: [
+          { colId: 'name', width: 200, hide: false, sort: null, sortIndex: null },
+        ],
+      };
+      const variantSnapshot = JSON.stringify(variantState);
+      mockFetch.mockResolvedValue([{ ...GLOBAL_VARIANT, state: variantState }]);
+
+      const sanitizeColumnState = vi.fn((state: Array<Record<string, unknown>>) => {
+        // Mutate the entry in place — this MUST NOT affect the cached
+        // variant.state because the component clones first.
+        if (state.length > 0) {
+          (state[0] as Record<string, unknown>).widthHack = 999;
+        }
+        return state as never;
+      });
+      renderVariant({
+        gridApi: createMockGridApi(),
+        activeVariantId: GLOBAL_VARIANT.id,
+        sanitizeColumnState,
+      });
+      await waitFor(() => {
+        expect(sanitizeColumnState).toHaveBeenCalled();
+      });
+      // The variantState reference passed to mockFetch must NOT carry
+      // the in-place mutation; defensive copy isolates it.
+      expect(JSON.stringify(variantState)).toBe(variantSnapshot);
+    });
+  });
+
   describe('Auto-Apply Priority', () => {
     it('applies user selected variant first (highest priority)', async () => {
       mockFetch.mockResolvedValue([GLOBAL_VARIANT, { ...PERSONAL_VARIANT, isUserSelected: true }]);
