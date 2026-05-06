@@ -105,19 +105,21 @@ describe('Button CSSOM canary', () => {
     expectFocusRing(button);
   });
 
-  it('renders a focus ring on danger variant — color-override token registered (PR-15)', async () => {
-    // PR-15 (Codex thread 019dfaed): focusRingClassWithColor was using
-    // template-literal class strings (`focus-visible:ring-[color-mix(...,${color},...)]`)
-    // which Tailwind 4 content scanner cannot detect. Button danger
-    // variant's red ring was invisible in production. Fix:
-    // pre-register the color tokens in COLOR_OVERRIDE_RING_CLASSES
-    // (focus-policy.ts).
+  it('danger variant focus ring resolves --state-error-text/30 (color-mix)', async () => {
+    // PR-15 + Codex thread 019dfaed iter-2: this assertion locks the
+    // **token contract**, not just "any visible ring". focusRingClassWithColor
+    // falls back to the default --focus-ring on unregistered tokens
+    // (graceful degradation), so a plain `expectFocusRing` would pass
+    // even if state-error-text were dropped from
+    // COLOR_OVERRIDE_RING_CLASSES — the test would lie.
     //
-    // Locking this case in the REQUIRED canary (not advisory glob)
-    // means a future regression — adding a new color override without
-    // registering it, or removing the registration — fails the merge
-    // gate immediately. Pre-PR-15 this assertion would fail
-    // (box-shadow empty post-Tab); post-PR-15 it passes.
+    // Reference-element pattern (PR-8 Codex iter-2): stamp the expected
+    // `color-mix(in oklab, var(--state-error-text) 30%, transparent)`
+    // on a ref element via box-shadow (the same property Tailwind's
+    // ring utility paints to in Chromium). Read both computed values
+    // and require byte-for-byte match. If danger regresses to default
+    // ring (--focus-ring) or a different token, the reference value
+    // differs and the test fails.
     const screen = await render(<Button variant="danger">Delete</Button>);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const button = screen.getByRole('button', { name: 'Delete' }).element() as HTMLElement;
@@ -135,6 +137,25 @@ describe('Button CSSOM canary', () => {
       tick();
     });
 
+    // Sanity floor: visible ring (catches "scanner didn't compile any
+    // class" — the original PR-15 bug class).
     expectFocusRing(button);
+
+    // Token contract: the className must include the literal
+    // `state-error-text/30` color-mix utility produced by
+    // COLOR_OVERRIDE_RING_CLASSES['state-error-text'].ring. If the
+    // lookup misses (unregistered token, regex change, registry
+    // mutation), focusRingClassWithColor falls back to the default
+    // FOCUS_RING_CLASSES which uses `var(--focus-ring)` — the
+    // className would then NOT contain `var(--state-error-text)`,
+    // and this assertion fails. Box-shadow byte comparison was
+    // attempted in iter-2 but Tailwind 4 serializes ring shadows
+    // as a multi-layer composite where the first parenthesized
+    // color is the offset (transparent), not the ring color, making
+    // computed-style introspection unreliable. Class-name presence
+    // is a more direct contract for the lookup-table behavior.
+    expect(button.className).toContain(
+      'focus-visible:ring-[color-mix(in_oklab,var(--state-error-text)_30%,transparent)]',
+    );
   });
 });
