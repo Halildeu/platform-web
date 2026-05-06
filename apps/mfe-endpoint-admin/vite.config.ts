@@ -126,9 +126,17 @@ export default defineConfig(({ mode }) => {
               remotes: {
                 mfe_shell: { type: 'module', name: 'mfe_shell', entry: shellRemoteEntry },
               },
+              // Codex iter-1 PARTIAL absorb (must-fix #3): `./shell-services`
+              // expose'u kaldırıldı — dosya yoktu, shell tarafında consumer
+              // wiring (`shell-services-wiring.ts`) da eklenmemişti, MF
+              // build'i runtime'da pattern eksik d.ts ile fail ediyordu.
+              // Endpoint-admin auth/token bridge'ini doğrudan
+              // `@mfe/shared-http` resolver üzerinden alıyor (mfe-users'ın
+              // `configureShellServices` injection'ına ihtiyaç yok). Future
+              // iter'de gerek olursa users pattern'i tam (file + shell
+              // wiring + d.ts) eklenir.
               exposes: {
                 './EndpointAdminApp': './src/app/EndpointAdminApp.ui.tsx',
-                './shell-services': './src/app/services/shell-services.ts',
               },
               shared: {
                 ...sharedCore,

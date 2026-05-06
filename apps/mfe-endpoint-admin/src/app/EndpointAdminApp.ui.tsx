@@ -1,5 +1,5 @@
-import React from 'react';
-import { Provider as ReduxProvider, ReactReduxContext } from 'react-redux';
+import React, { useMemo } from 'react';
+import { Provider as ReduxProvider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
@@ -7,11 +7,20 @@ import EndpointAdminRouter from './router/EndpointAdminRouter';
 import { endpointAdminApi } from './services/endpointAdminApi';
 
 /**
- * Standalone Redux store (used when the MFE runs without the shell).
- * When the shell mounts us under its own `<Provider>`, we detect the
- * existing context and reuse it via `ReactReduxContext.Consumer`.
+ * Codex iter-1 PARTIAL absorb (must-fix #1): MFE always owns its own
+ * RTK store + middleware. Daha önceki `ReactReduxContext.Consumer`
+ * dual-mount yaklaşımı yanıltıcıydı — shell store'u
+ * (`apps/mfe-shell/src/app/store/store.ts`) `endpointAdminApi.reducer`
+ * veya middleware barındırmıyor, dolayısıyla shell altında
+ * `useGetAgentStatusQuery()` reducer state ve middleware bulamazdı.
+ *
+ * İzole local store + nested `<ReduxProvider>` model'i Redux'ın
+ * desteklediği pattern: `useSelector`/`useDispatch` en yakın
+ * Provider'a bağlanır. Shell'in `auth` state'i kullanılmıyor (auth
+ * token shared-http resolver üzerinden bridge'leniyor — bkz.
+ * `endpointAdminApi.ts` prepareHeaders).
  */
-const createStandaloneStore = () =>
+const createEndpointAdminStore = () =>
   configureStore({
     reducer: {
       [endpointAdminApi.reducerPath]: endpointAdminApi.reducer,
@@ -53,31 +62,16 @@ const queryClient = new QueryClient({
 });
 
 export const EndpointAdminApp: React.FC = () => {
+  // useMemo so HMR + StrictMode double-mount don't recreate the store
+  // (which would reset RTK Query cache between mounts).
+  const store = useMemo(() => createEndpointAdminStore(), []);
   return (
     <EndpointAdminAppErrorBoundary>
-      <ReactReduxContext.Consumer>
-        {(ctx) => {
-          if (ctx) {
-            // Shell-mounted: reuse host store; the host's middleware
-            // chain must include `endpointAdminApi.middleware`. This is
-            // wired by the shell's MF service-injection step.
-            return (
-              <QueryClientProvider client={queryClient}>
-                <EndpointAdminRouter />
-              </QueryClientProvider>
-            );
-          }
-          // Standalone dev (port 3009): own store + provider.
-          const store = createStandaloneStore();
-          return (
-            <ReduxProvider store={store}>
-              <QueryClientProvider client={queryClient}>
-                <EndpointAdminRouter />
-              </QueryClientProvider>
-            </ReduxProvider>
-          );
-        }}
-      </ReactReduxContext.Consumer>
+      <ReduxProvider store={store}>
+        <QueryClientProvider client={queryClient}>
+          <EndpointAdminRouter />
+        </QueryClientProvider>
+      </ReduxProvider>
     </EndpointAdminAppErrorBoundary>
   );
 };

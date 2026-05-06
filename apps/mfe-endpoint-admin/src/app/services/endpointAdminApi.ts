@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
+import { resolveAuthToken } from '@mfe/shared-http';
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
 
 /**
@@ -35,8 +36,13 @@ function resolveBaseUrl(): string {
 const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = fetchBaseQuery({
   baseUrl: resolveBaseUrl(),
   prepareHeaders: (headers) => {
-    if (typeof window === 'undefined') return headers;
-    const token = (window as Window & { __endpointAdminToken__?: string }).__endpointAdminToken__;
+    // Codex iter-1 PARTIAL absorb: önceki `window.__endpointAdminToken__`
+    // sahte bridge idi — repo içinde hiçbir yer set etmiyordu, shell-mounted
+    // kullanıcıda bile 401 üretirdi. Gerçek yol shared-http resolver:
+    // shell `registerAuthTokenResolver(() => store.getState().auth.token)`
+    // ile bağlıyor (apps/mfe-shell/src/app/config/http-config.ts), her
+    // tüketici `resolveAuthToken()` ile çekiyor (mfe-users pattern).
+    const token = resolveAuthToken();
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }
