@@ -110,12 +110,34 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
     setReloadSignal((value) => value + 1);
   }, [initialFiltersFromSearch]);
 
+  /*
+   * Server-side grouping is not yet implemented on the backend. AG Grid sends
+   * `rowGroupCols` / `groupKeys` / `valueCols` in the SSRM request, but
+   * `ReportController.getData` ignores them and returns flat rows. Showing the
+   * grouping panel in server mode lets users drag a column into it and produces
+   * a visibly broken grid (group column populated but rows not collapsed).
+   *
+   * This temporary guard hides the group panel for server-mode datasources so
+   * users don't hit the half-working feature. Client-mode datasources keep
+   * grouping enabled because AG Grid groups client-side without the backend.
+   *
+   * The proper fix lands in PR-0.1+ (POST /data/query contract + capability
+   * flag + GROUP BY in SqlBuilder). When the backend exposes the
+   * `serverSideGrouping` capability, this flag flips to read it from the
+   * runtime config and the panel returns. See
+   * `docs/plans/2026-05-reporting-platform-hardening.md` PR-0 acceptance.
+   */
+  const serverSideGroupingEnabled = false; // TODO PR-0.1: read from backend capability
+
   /* ---- Grid options (matching UsersGrid standard) ---- */
   const gridOptions = React.useMemo<GridOptions<TRow>>(
     () => ({
       cellSelection: true,
       multiSortKey: 'ctrl' as const,
-      rowGroupPanelShow: 'always' as const,
+      rowGroupPanelShow:
+        dataSourceMode === 'server' && !serverSideGroupingEnabled
+          ? ('never' as const)
+          : ('always' as const),
       ...(dataSourceMode === 'server'
         ? { cacheBlockSize: SERVER_CACHE_BLOCK_SIZE, maxBlocksInCache: 1 }
         : {}),
