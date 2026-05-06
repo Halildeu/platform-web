@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { fetchCompanyOptions, type CompanyOption } from '../modules/dynamic-report/api';
 
 /* ------------------------------------------------------------------ */
 /*  CompanyPicker — Active company selector (X-Company-Id header)     */
@@ -9,15 +10,23 @@ import React, { useEffect, useState } from 'react';
 /*  and triggers a page reload so dynamic-report/api.ts picks up the  */
 /*  new value on its next fetch.                                       */
 /*                                                                     */
-/*  V1 (MVP): hardcoded 1–43 (live MSSQL evidence: workcube_mikrolink */
-/*  has 43 company-only schemas).                                      */
-/*  V2 (followup): dynamic list from `/api/v1/users/me/companies`     */
-/*  once that endpoint stabilises (currently 500).                    */
+/*  V2 (current): real firm names from backend                        */
+/*    GET /api/v1/reports/company-options → [{id, nickname, name}]    */
+/*    Codex 019dfb15 plan-time + iter-2 absorbed.                     */
+/*                                                                     */
+/*  V1 fallback (still here): hardcoded 1–43 used when the endpoint   */
+/*  404s (feature flag off) or the network call fails. Live MSSQL     */
+/*  evidence: workcube_mikrolink has 43 company-only schemas.         */
 /* ------------------------------------------------------------------ */
 
 const STORAGE_KEY = 'reporting:currentCompanyId';
 
-const COMPANY_IDS: number[] = Array.from({ length: 43 }, (_, i) => i + 1);
+/** Hardcoded fallback used when the API is unavailable (feature flag off, 503, etc.). */
+const FALLBACK_OPTIONS: CompanyOption[] = Array.from({ length: 43 }, (_, i) => ({
+  id: i + 1,
+  nickname: '',
+  name: `Şirket #${i + 1}`,
+}));
 
 const readSelected = (): string => {
   if (typeof window === 'undefined' || !window.localStorage) return '';
@@ -39,6 +48,20 @@ const writeSelected = (value: string): void => {
   }
 };
 
+/**
+ * Render label for a company option.
+ * Prefers the legal {@code name}; falls back to the nickname or the id.
+ * Nickname is shown as a discreet prefix when both are present.
+ */
+const renderLabel = (opt: CompanyOption): string => {
+  const name = (opt.name ?? '').trim();
+  const nickname = (opt.nickname ?? '').trim();
+  if (name && nickname) return `${nickname} — ${name}`;
+  if (name) return name;
+  if (nickname) return nickname;
+  return `Şirket #${opt.id}`;
+};
+
 export interface CompanyPickerProps {
   /** Required-field marker. When true a small red asterisk renders at the end
    *  of the row, matching the rest of the report drawer. */
@@ -49,7 +72,10 @@ export interface CompanyPickerProps {
 
 export const CompanyPicker: React.FC<CompanyPickerProps> = ({ required, compact }) => {
   const [selected, setSelected] = useState<string>(readSelected);
+  const [options, setOptions] = useState<CompanyOption[]>(FALLBACK_OPTIONS);
+  const [loaded, setLoaded] = useState<boolean>(false);
 
+  // Listen for cross-tab / cross-component changes to the selected id.
   useEffect(() => {
     const handler = () => setSelected(readSelected());
     window.addEventListener('reporting:company-changed', handler);
@@ -60,12 +86,29 @@ export const CompanyPicker: React.FC<CompanyPickerProps> = ({ required, compact 
     };
   }, []);
 
+  // Fetch real firm names once on mount; fall back to the static list on
+  // any failure (404 = feature flag off, 503 = MSSQL down, network = offline).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const fetched = await fetchCompanyOptions();
+      if (cancelled) return;
+      if (fetched && fetched.length > 0) {
+        setOptions(fetched);
+      }
+      setLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const onChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const next = event.target.value;
     setSelected(next);
     writeSelected(next);
     // Force the dynamic-report module to refetch with the new header.
-    // V2: switch to event-bus + AG Grid api.refreshServerSide().
+    // V2 idea: switch to event-bus + AG Grid api.refreshServerSide().
     if (next) {
       // Brief delay so localStorage write commits before navigation.
       window.setTimeout(() => window.location.reload(), 80);
@@ -81,6 +124,10 @@ export const CompanyPicker: React.FC<CompanyPickerProps> = ({ required, compact 
   const segmentLocked =
     `${segmentBase} bg-surface-muted text-text-secondary cursor-not-allowed select-none`;
   const valueWidth = compact ? 'min-w-[180px]' : 'min-w-[240px]';
+
+  // Placeholder option text changes once we have real data so users can tell
+  // whether the firm names came from the backend or the static fallback.
+  const placeholder = loaded ? '— Şirket seçin —' : '— Yükleniyor —';
 
   return (
     <div
@@ -102,10 +149,10 @@ export const CompanyPicker: React.FC<CompanyPickerProps> = ({ required, compact 
         onChange={onChange}
         aria-required={required ? 'true' : undefined}
       >
-        <option value="">— Şirket seçin —</option>
-        {COMPANY_IDS.map((id) => (
-          <option key={id} value={String(id)}>
-            Şirket #{id}
+        <option value="">{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt.id} value={String(opt.id)}>
+            {renderLabel(opt)}
           </option>
         ))}
       </select>
