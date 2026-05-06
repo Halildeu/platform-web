@@ -23,6 +23,7 @@ import {
   buildDetailRenderer,
   buildProcessCellCallback,
 } from '@mfe/design-system/advanced/data-grid';
+import type { VariantColumnState } from '@mfe/design-system/advanced/data-grid/VariantIntegration';
 import { useReportSchemaContext } from '../../hooks/useReportSchemaContext';
 import { enrichColumnsWithSchema } from '../../utils/enrichColumnsWithSchema';
 import { getShellServices } from '../services/shell-services';
@@ -411,26 +412,28 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   }, [colDefs, rowGroupingEnabled, dataSourceMode, groupableFieldSet, aggregatableFieldSet]);
 
   /*
-   * PR-0.2 sanitizer for saved variant column state. Strips rowGroup /
-   * rowGroupIndex / aggFunc / pivot / pivotIndex on every entry whose
-   * colId isn't in the corresponding capability allowlist. Pivot stays
-   * disabled across the board until PR-0.4. Plumbed through
-   * EntityGridTemplate → VariantIntegration → applyVariantState.
+   * PR-0.2 sanitizer for saved variant column state. Server-mode only —
+   * client-mode datasources let AG Grid handle grouping in-memory so
+   * mutating the saved variant would silently break user expectations
+   * (Codex iter-1 absorb).
    *
-   * The function signature returns the same shape the design-system
-   * passes in (NonNullable<GridVariantState['columnState']>); we treat
-   * the entries as Record<string, unknown> internally because the
-   * stripped fields don't exist on every concrete ColumnState entry
-   * type but the spread + delete pattern is structurally valid.
+   * On server-mode: strip rowGroup / rowGroupIndex on every entry
+   * whose colId isn't in groupableFieldSet, aggFunc on entries not in
+   * aggregatableFieldSet, and pivot / pivotIndex always (PR-0.4 will
+   * graduate pivot once the backend pivot path ships).
+   *
+   * Type signature mirrors the design-system VariantColumnState
+   * contract directly so strict-mode function variance stays safe.
    */
   const sanitizeVariantColumnState = React.useCallback(
-    <T extends ReadonlyArray<Record<string, unknown>>>(state: T): T => {
+    (state: VariantColumnState): VariantColumnState => {
       if (!Array.isArray(state)) return state;
+      if (dataSourceMode !== 'server') return state;
       const groupableSet = groupableFieldSet;
       const aggregatableSet = aggregatableFieldSet;
       return state.map((entry) => {
         if (!entry || typeof entry !== 'object') return entry;
-        const next = { ...entry } as Record<string, unknown>;
+        const next = { ...(entry as Record<string, unknown>) };
         const colId = String(next.colId ?? '');
         if (!groupableSet.has(colId)) {
           delete next.rowGroup;
@@ -439,22 +442,26 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         if (!aggregatableSet.has(colId)) {
           delete next.aggFunc;
         }
-        // Pivot stays disabled platform-wide until PR-0.4.
+        // Pivot stays disabled platform-wide until PR-0.4 ships the
+        // backend pivot path; an in-flight saved variant carrying
+        // pivot=true would just produce a 400 GROUPING_NOT_SUPPORTED
+        // on the next /query call.
         delete next.pivot;
         delete next.pivotIndex;
-        return next;
-      }) as unknown as T;
+        return next as VariantColumnState[number];
+      });
     },
-    [groupableFieldSet, aggregatableFieldSet],
+    [dataSourceMode, groupableFieldSet, aggregatableFieldSet],
   );
 
   /*
-   * Companion sanitizer for pivotMode — until PR-0.4 ships pivot, the
-   * grid should never enter pivotMode regardless of saved variant.
+   * Companion sanitizer for pivotMode. Server-mode forces false until
+   * PR-0.4 ships pivot; client-mode passes through the saved value so
+   * in-memory pivot stays usable for the legacy client-side reports.
    */
   const sanitizeVariantPivotMode = React.useCallback(
-    (_pivotMode: boolean | undefined) => false,
-    [],
+    (pivotMode: boolean | undefined) => (dataSourceMode === 'server' ? false : pivotMode),
+    [dataSourceMode],
   );
 
   /*
@@ -708,14 +715,16 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
 
         <EntityGridTemplate<TRow>
           /*
-           * PR-0.2 hardening: include capabilityKey in the React key so
-           * a capability envelope change (different report or late
-           * arrival) forces a full re-mount of the EntityGridTemplate
-           * + embedded VariantIntegration. Without this, the
-           * appliedRef.current guard inside VariantIntegration would
-           * block re-apply against the new sanitizer set.
+           * PR-0.2 hardening: include module.id + capabilityKey in the
+           * React key so both a route change to a different report and
+           * a late capability arrival force a full re-mount of the
+           * EntityGridTemplate + embedded VariantIntegration. Without
+           * module.id, two reports with the same capability signature
+           * would share the appliedRef.current guard and the second
+           * mount could keep stale variant state from the first
+           * (Codex iter-1 absorb).
            */
-          key={`${reloadSignal}-${capabilityKey}`}
+          key={`${module.id}-${reloadSignal}-${capabilityKey}`}
           gridId={module.id}
           gridSchemaVersion={1}
           initialVariantId={initialVariantId}
