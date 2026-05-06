@@ -23,12 +23,12 @@ src/[primitives|components]/component-name/
 
 **Naming conventions:**
 
-| Artifact            | Convention | Example                                  |
-| ------------------- | ---------- | ---------------------------------------- |
-| Component file      | PascalCase | `FloatButton.tsx`                        |
-| Barrel export       | `index.ts` | `src/components/float-button/index.ts`   |
+| Artifact            | Convention   | Example                                  |
+| ------------------- | ------------ | ---------------------------------------- |
+| Component file      | PascalCase   | `FloatButton.tsx`                        |
+| Barrel export       | `index.ts`   | `src/components/float-button/index.ts`   |
 | Tests directory     | `__tests__/` | `src/components/float-button/__tests__/` |
-| Component directory | kebab-case | `src/components/float-button/`           |
+| Component directory | kebab-case   | `src/components/float-button/`           |
 
 ## Creating a New Component
 
@@ -52,10 +52,9 @@ import {
   focusRingClass,
   guardAria,
   type AccessLevel,
-} from "../../internal/interaction-core";
+} from '../../internal/interaction-core';
 
-export interface MyComponentProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface MyComponentProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Access level -- controls disabled/readonly state via access-controller */
   access?: AccessLevel;
   /** Tooltip/title text explaining access restriction */
@@ -69,11 +68,34 @@ export interface MyComponentProps
 - **Never** hardcode colors: no `bg-white`, `text-slate-700`, or inline hex values
 - **Always** use CSS variable tokens with fallbacks:
 
+<!-- prettier-ignore -->
 ```tsx
 className="bg-[var(--surface-card,#fff)] text-[var(--text-primary,#1e293b)]"
 ```
 
 Required CSS variable tokens are documented in `STANDARDS.md` section 2.
+
+### Tailwind 4 — literal-class-only rule
+
+**Tailwind class names that need to compile to CSS MUST appear as literal strings in source files.** Template-literal-built class names are silently dropped by the Tailwind 4 content scanner — the class lands on the DOM but no CSS rule is emitted.
+
+✅ **Runtime composition is fine** (constituents are literals):
+
+```ts
+const VARIANT_CLASSES: Record<Variant, string> = {
+  primary: 'bg-action-primary text-text-inverse',
+  danger:  'bg-state-error-text text-text-inverse',
+};
+className={cn('px-3', VARIANT_CLASSES[variant], disabled && 'opacity-50')}
+```
+
+❌ **Runtime generation is NOT fine** (utility built dynamically):
+
+```ts
+className={cn(`bg-${color}`)}  // Tailwind sees "bg-${...}" — fragment, not a class
+```
+
+This rule and the related theme-registry rule together caught the same symptom — "class on DOM but no CSS emitted" — three times in this repo. PR-10 and PR-15 were template-literal scanner misses; PR-12 was a literal class whose token wasn't registered in the `@theme inline` block. Full pattern catalog + when to use literal lookups vs theme-registry promotion: [`docs/operations/tailwind-literal-class-rule.md`](../../docs/operations/tailwind-literal-class-rule.md). Enforcement layer: cssom canary tests.
 
 ## Required Component Conventions
 
@@ -100,29 +122,35 @@ Every component **must** have a test file in `__tests__/` with the following:
 
 ```tsx
 // @vitest-environment jsdom
-import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { MyComponent } from "../MyComponent";
-import { expectNoA11yViolations } from "../../../__tests__/a11y-utils";
+import React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MyComponent } from '../MyComponent';
+import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
 
 afterEach(() => {
   cleanup();
 });
 
-describe("MyComponent -- render", () => {
-  it("renders without crashing", () => { /* ... */ });
+describe('MyComponent -- render', () => {
+  it('renders without crashing', () => {
+    /* ... */
+  });
 });
 
-describe("MyComponent -- access control", () => {
-  it('access="hidden" applies invisible class', () => { /* ... */ });
-  it('access="disabled" disables interaction', () => { /* ... */ });
+describe('MyComponent -- access control', () => {
+  it('access="hidden" applies invisible class', () => {
+    /* ... */
+  });
+  it('access="disabled" disables interaction', () => {
+    /* ... */
+  });
 });
 
-describe("MyComponent -- a11y", () => {
-  it("has no axe violations", async () => {
+describe('MyComponent -- a11y', () => {
+  it('has no axe violations', async () => {
     const { container } = render(<MyComponent />);
     await expectNoA11yViolations(container);
   });
@@ -146,13 +174,13 @@ describe("MyComponent -- a11y", () => {
 
 ## Component Maturity Levels
 
-| Level | Name       | Requirements                                                    |
-| ----- | ---------- | --------------------------------------------------------------- |
-| L0    | Exists     | Basic render, smoke test                                        |
-| L1    | Props      | Props complete, basic tests, barrel export                      |
+| Level | Name       | Requirements                                                     |
+| ----- | ---------- | ---------------------------------------------------------------- |
+| L0    | Exists     | Basic render, smoke test                                         |
+| L1    | Props      | Props complete, basic tests, barrel export                       |
 | L2    | Hardened   | a11y (axe), keyboard nav, state attrs, userEvent, access control |
-| L3    | Production | forwardRef, "use client", density, slots, localeText            |
-| L4    | Complete   | Full docs, visual regression, perf baseline, stories            |
+| L3    | Production | forwardRef, "use client", density, slots, localeText             |
+| L4    | Complete   | Full docs, visual regression, perf baseline, stories             |
 
 ## Deprecation Policy
 

@@ -31,6 +31,11 @@
 - ❌ Component-level visual snapshots — those go in `*.visual.test.ts` invariant matrices.
 - ✅ `expectToken`, `withTheme`, `expectFocusRing` from `cssom-harness`.
 
+### In production source (Tailwind class names)
+
+- ❌ Template-literal-built class names (e.g. `` `bg-${color}` ``, `` `ring-${width}` ``). Tailwind 4 content scanner cannot detect these and silently drops the rule. cssom canary catches the resulting "class on DOM but CSS not emitted" bug.
+- ✅ Literal class strings — pre-register every dynamic choice in a `Record<Key, string>` lookup table. See [`docs/operations/tailwind-literal-class-rule.md`](../operations/tailwind-literal-class-rule.md) for full patterns.
+
 ### In `*.visual.test.ts`
 
 - ❌ Per-component snapshots outside `x-charts`. One snapshot per matrix page.

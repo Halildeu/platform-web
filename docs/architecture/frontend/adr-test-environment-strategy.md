@@ -65,6 +65,8 @@ Container query support is deferred to a follow-up: the API requires a host elem
 
 The harness is gated by the Tailwind 4 layer build sentinel, which proves on every CI run that the Vitest browser provider's Vite plugin chain emits resolved CSS variables for the document root. Without this sentinel, Chromium would silently render token-less surfaces.
 
+**Project rule — Tailwind 4 "class on DOM but CSS not emitted" prevention.** Two distinct failure modes share the same symptom: (A) the content scanner can't see template-literal-built class names so the utility never compiles (PR-10 peer-focus-visible helpers, PR-15 color-override lookup); (B) a literal class references a token that isn't in the `@theme inline` registry, so Tailwind drops the rule despite the literal being scanner-visible (PR-12 backdrop sweep — `bg-surface-inverse` was unregistered while `bg-surface-overlay` was). The cssom canary catches both because `expectToken` / `expectFocusRing` / `className.toContain` read computed style and class strings, both of which fail when CSS isn't emitted. Full pattern catalog + when to use literal lookup tables vs theme-registry promotion: [`docs/operations/tailwind-literal-class-rule.md`](../../operations/tailwind-literal-class-rule.md).
+
 ### L4 — Visual Diff Economy
 
 Visual snapshots are limited to invariant matrix pages. Component-level snapshots are forbidden outside `x-charts` (which has its own gate established in K5). Matrix pages live under `packages/design-system/src/__visual__/invariants/` and consolidate primitives, form controls, overlays, and theme into a small set of pages (9 snapshots in PR-3, target 8–12 total). One token change produces one expected diff, not a per-component fan-out.
