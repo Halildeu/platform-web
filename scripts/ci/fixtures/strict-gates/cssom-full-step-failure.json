@@ -1,0 +1,15 @@
+{
+  "_description": "cssom-full-advisory step fails (a *.cssom.test.tsx broke). Job result is 'success' (continue-on-error makes the job complete) but step outcome is 'failure'. Under STRICT_GATES=true the aggregator promotes this to a required failure.",
+  "_expected_exit": 1,
+  "strict_gates": "true",
+  "required": {
+    "unit": { "result": "success" },
+    "token_drift": { "result": "success" },
+    "cssom_canary": { "result": "success" },
+    "visual_invariant": { "result": "success" }
+  },
+  "advisory": {
+    "cssom_full": { "result": "success", "outcome": "failure" },
+    "lint": { "result": "success", "outcome": "success" }
+  }
+}

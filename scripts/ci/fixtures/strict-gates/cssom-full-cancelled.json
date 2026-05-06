@@ -1,0 +1,15 @@
+{
+  "_description": "cssom-full-advisory step outcome=cancelled (workflow cancelled mid-run, e.g. PR closed during the cssom test step). The cssom-full block has the third 'outcome not in {success, skipped}' check that catches this. Demonstrates the asymmetry vs lint advisory (which has only 2 checks and would pass on cancelled outcome).",
+  "_expected_exit": 1,
+  "strict_gates": "true",
+  "required": {
+    "unit": { "result": "success" },
+    "token_drift": { "result": "success" },
+    "cssom_canary": { "result": "success" },
+    "visual_invariant": { "result": "success" }
+  },
+  "advisory": {
+    "cssom_full": { "result": "success", "outcome": "cancelled" },
+    "lint": { "result": "success", "outcome": "success" }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "_description": "A required job (cssom-canary) failed. Aggregator fails regardless of STRICT_GATES — the `Verify required jobs succeeded` step (web-test-gate.yml lines 487-499) checks every required job for `result === 'success'` first, before the strict-gates block runs. This fixture exercises that hard required-jobs gate.",
+  "_expected_exit": 1,
+  "strict_gates": "false",
+  "required": {
+    "unit": { "result": "success" },
+    "token_drift": { "result": "success" },
+    "cssom_canary": { "result": "failure" },
+    "visual_invariant": { "result": "success" }
+  },
+  "advisory": {
+    "cssom_full": { "result": "success", "outcome": "success" },
+    "lint": { "result": "success", "outcome": "success" }
+  }
+}

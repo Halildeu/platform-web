@@ -1,0 +1,15 @@
+{
+  "_description": "cssom-full-advisory job result is 'failure' (install crash, runner OOM, etc.) and step outcome is 'skipped' (the cssom-run step never executed). The boolean-AND edge case PR-1 fixed: result=failure + outcome=skipped should still trip STRICT_GATES.",
+  "_expected_exit": 1,
+  "strict_gates": "true",
+  "required": {
+    "unit": { "result": "success" },
+    "token_drift": { "result": "success" },
+    "cssom_canary": { "result": "success" },
+    "visual_invariant": { "result": "success" }
+  },
+  "advisory": {
+    "cssom_full": { "result": "failure", "outcome": "skipped" },
+    "lint": { "result": "success", "outcome": "success" }
+  }
+}
