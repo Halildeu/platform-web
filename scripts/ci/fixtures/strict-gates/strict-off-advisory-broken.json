@@ -1,5 +1,6 @@
 {
   "_description": "STRICT_GATES=false (default). Both advisory jobs broken. Aggregator passes — advisory failures only block when strict mode is on. This is the pre-cutover default.",
+  "_expected_exit": 0,
   "strict_gates": "false",
   "required": {
     "unit": { "result": "success" },

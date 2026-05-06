@@ -204,6 +204,7 @@
     "tokens:drift": "node ./scripts/tokens/build-tokens.mjs --check && node ./scripts/theme/generate-theme-css.mjs --check",
     "gate:dry-run": "node ./scripts/ci/strict-gates-dry-run.mjs",
     "gate:dry-run:smoke": "node ./scripts/ci/strict-gates-dry-run.mjs scripts/ci/fixtures/strict-gates/all-green.json",
+    "gate:dry-run:all": "node ./scripts/ci/strict-gates-dry-run-all.mjs",
     "dev:inspect": "vite --inspect",
     "build:analyze": "vite build --mode analyze",
     "format": "prettier --write .",

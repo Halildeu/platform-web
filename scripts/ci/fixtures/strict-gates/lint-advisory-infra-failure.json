@@ -1,5 +1,6 @@
 {
-  "_description": "lint-warn-visibility-advisory infra failure (eslint-report.json missing/empty/invalid, or summarize/comment script crashed). Step outcome=failure. Note: warning *count* is intentionally NOT a STRICT_GATES blocker — only infra failures (parse error, missing report, etc.) are.",
+  "_description": "lint-warn-visibility-advisory summarize/comment script crash. The lint_run step itself succeeded (continue-on-error + `|| true` mask any ESLint exit code), so step outcome stays `success`. The summarize step that runs AFTER lint_run has no continue-on-error, so when it crashes (missing/empty/invalid eslint-report.json, summarize Node script error) the JOB result becomes `failure`. STRICT_GATES catches this via the `lint_result != success/skipped` check. Codex thread 019dfa66 iter-1 finding 3: realistic shape is result=failure + outcome=success, not result=success + outcome=failure.",
+  "_expected_exit": 1,
   "strict_gates": "true",
   "required": {
     "unit": { "result": "success" },
@@ -9,6 +10,6 @@
   },
   "advisory": {
     "cssom_full": { "result": "success", "outcome": "success" },
-    "lint": { "result": "success", "outcome": "failure" }
+    "lint": { "result": "failure", "outcome": "success" }
   }
 }

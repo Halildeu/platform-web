@@ -1,5 +1,6 @@
 {
   "_description": "All required + advisory jobs pass. Aggregator passes regardless of STRICT_GATES.",
+  "_expected_exit": 0,
   "strict_gates": "true",
   "required": {
     "unit": { "result": "success" },

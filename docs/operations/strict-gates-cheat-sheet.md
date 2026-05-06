@@ -21,37 +21,64 @@ The aggregator is the **only** check pinned in branch protection (post-cutover p
 
 ## Blocker classes (under `STRICT_GATES=true`)
 
-For each advisory job, the aggregator runs three independent checks
-that are NOT combined with boolean AND (PR-1 lessons — install-crash
-edge case `result=failure + outcome=skipped` slipped through the
-combined check):
+The aggregator's two advisory blocks have **different check counts**
+(intentional — see web-test-gate.yml lines 521-563):
+
+### `cssom-full-advisory` (3 independent checks)
+
+PR-1 lessons — install-crash edge case `result=failure + outcome=skipped`
+slipped through the previous combined check, so each is independent:
 
 1. **Job result not in `{success, skipped}`** — install / setup
    crash, runner OOM, network drop, etc. (The job ran but its
-   environment died before the lint/test step.)
-2. **Step outcome `== failure`** — the actual measurement step ran
-   and reported a failure under `continue-on-error`.
+   environment died before the cssom test step.)
+2. **Step outcome `== failure`** — the cssom test step ran and
+   reported a failure under `continue-on-error`.
 3. **Step outcome not in `{success, skipped}`** — `cancelled` and
    any future Actions outcome value that is neither success nor
    skipped.
 
-For `lint-warn-visibility-advisory` specifically:
+### `lint-warn-visibility-advisory` (2 checks only)
 
-- The lint step runs ESLint with `|| true`, so ESLint's exit code
-  never bubbles up. Severity-2 ESLint diagnostics are counted as
-  `ignored_errors` and labelled separate debt — **NOT a STRICT_GATES
-  blocker** (current baseline ~800 warnings would lock every PR).
-- What STRICT_GATES catches for the lint advisory: install crash,
-  missing/empty/invalid `eslint-report.json`, summarize/comment
-  script crash.
+The lint advisory has just **two** strict-gates checks (intentional —
+the lint step's `|| true` exit-code mask makes the third check
+either redundant or wrong-direction):
+
+1. **Job result not in `{success, skipped}`** — install crash,
+   missing/empty/invalid `eslint-report.json`, OR summarize/comment
+   script crash (the summarize step has no continue-on-error).
+2. **Step outcome `== failure`** — ESLint infra failure (parse
+   error, plugin crash). NOT warning count.
+
+What `STRICT_GATES` catches for the lint advisory:
+
+- Install crash → `result=failure outcome=skipped` (caught by check #1)
+- Summarize crash → `result=failure outcome=success` (caught by check #1)
+- ESLint plugin/parser crash that bypasses `|| true` → `result=success outcome=failure` (caught by check #2)
+
+What it intentionally does NOT catch:
+
+- `outcome=cancelled` on lint — passes (no third check). Compare to
+  cssom-full where `outcome=cancelled` would fail.
+- ESLint warning **count** — the lint step runs with
+  `--max-warnings 100000` and `|| true`, so warning count never
+  surfaces as a non-zero exit. Severity-2 diagnostics are counted as
+  `ignored_errors` and labelled separate debt. Current baseline ~800
+  warnings would lock every PR if promoted; that needs a baseline
+  shrink first.
 
 ## Local dry-run
 
 Simulate the aggregator's logic without a CI cycle:
 
 ```bash
-# Smoke (all-green fixture)
+# Smoke — runs all-green fixture, must exit 0
 pnpm gate:dry-run:smoke
+
+# All — runs every fixture, asserts each matches its declared
+# `_expected_exit`. This is the strongest local check; failures
+# here mean the script's logic drifted from YAML parity.
+pnpm gate:dry-run:all
 
 # Custom fixture
 pnpm gate:dry-run scripts/ci/fixtures/strict-gates/cssom-full-step-failure.json
@@ -61,7 +88,7 @@ Exit codes:
 
 - `0` — aggregator would pass
 - `1` — aggregator would fail (one or more conditions tripped)
-- `2` — invalid input (missing fixture, bad JSON, missing required fields)
+- `2` — invalid input (missing fixture, bad JSON, bad `strict_gates` type, missing required fields)
 
 ### Fixture schema
 
@@ -87,15 +114,19 @@ exposed via the advisory job's outputs block).
 
 ### Bundled fixtures
 
-Located in `scripts/ci/fixtures/strict-gates/`:
+Located in `scripts/ci/fixtures/strict-gates/`. Each fixture
+declares an `_expected_exit` field; `gate:dry-run:all` asserts
+the actual exit code matches.
 
-| Fixture                            | What it simulates                                            | Expected exit |
-| ---------------------------------- | ------------------------------------------------------------ | ------------: |
-| `all-green.json`                   | Everything passes, STRICT_GATES on                           |             0 |
-| `cssom-full-step-failure.json`     | A `*.cssom.test.tsx` failed; advisory step outcome `failure` |             1 |
-| `cssom-full-install-crash.json`    | Advisory job crashed before its run step (install/setup)     |             1 |
-| `lint-advisory-infra-failure.json` | Lint advisory's summarize/comment script crashed             |             1 |
-| `strict-off-advisory-broken.json`  | Both advisory broken, STRICT_GATES off — default mode        |             0 |
+| Fixture                            | What it simulates                                                                                | Exit |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ | ---: |
+| `all-green.json`                   | Everything passes, STRICT_GATES on                                                               |    0 |
+| `cssom-full-step-failure.json`     | A `*.cssom.test.tsx` failed; advisory step `outcome=failure`                                     |    1 |
+| `cssom-full-install-crash.json`    | Advisory job crashed pre-run (`result=failure outcome=skipped` — PR-1 boolean-AND edge case)     |    1 |
+| `cssom-full-cancelled.json`        | Advisory step `outcome=cancelled` — caught by cssom-full's third check                           |    1 |
+| `lint-advisory-infra-failure.json` | Lint summarize step crashed (`result=failure outcome=success`)                                   |    1 |
+| `lint-cancelled-passes.json`       | Lint `outcome=cancelled` — passes (lint has only 2 checks; no `outcome != success/skipped` rule) |    0 |
+| `strict-off-advisory-broken.json`  | Both advisory broken, STRICT_GATES off — default mode                                            |    0 |
 
 ## Pre-cutover verification (D30 runbook §1.1)
 
@@ -103,11 +134,11 @@ Before flipping `STRICT_GATES=true` at cutover, run the dry-run
 suite locally:
 
 ```bash
-for fixture in scripts/ci/fixtures/strict-gates/*.json; do
-  echo "=== $(basename "$fixture") ==="
-  pnpm gate:dry-run "$fixture" || echo "(expected fail)"
-done
+pnpm gate:dry-run:all   # asserts every fixture matches its _expected_exit
 ```
+
+If any fixture mismatches, the script's logic has drifted from the
+YAML aggregator and the cutover plan needs review.
 
 Then trigger a real CI run with one of the fail-class fixtures by:
 

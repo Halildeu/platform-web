@@ -79,6 +79,19 @@ function loadFixture(path) {
       process.exit(2);
     }
   }
+
+  // strict_gates MUST be a string ('true' | 'false') — mirrors GitHub
+  // Actions repo-variable behavior where vars.STRICT_GATES is read as
+  // a string and compared with `== 'true'`. Boolean true would silently
+  // be treated as strict-off (string mismatch) and produce a wrong PASS.
+  // Codex thread 019dfa66 iter-1 finding 2.
+  if (parsed.strict_gates !== 'true' && parsed.strict_gates !== 'false') {
+    console.error(
+      `error: fixture 'strict_gates' must be the string "true" or "false" (got ${JSON.stringify(parsed.strict_gates)} of type ${typeof parsed.strict_gates})`,
+    );
+    process.exit(2);
+  }
+
   for (const job of ['unit', 'token_drift', 'cssom_canary', 'visual_invariant']) {
     if (!parsed.required[job] || typeof parsed.required[job].result !== 'string') {
       console.error(`error: fixture missing required.${job}.result`);
@@ -89,6 +102,17 @@ function loadFixture(path) {
     if (!parsed.advisory[job] || typeof parsed.advisory[job].result !== 'string'
         || typeof parsed.advisory[job].outcome !== 'string') {
       console.error(`error: fixture missing advisory.${job}.{result,outcome}`);
+      process.exit(2);
+    }
+  }
+
+  // _expected_exit is optional metadata used by gate:dry-run:all to
+  // self-verify each fixture. If present, must be 0 / 1 / 2.
+  if ('_expected_exit' in parsed) {
+    if (![0, 1, 2].includes(parsed._expected_exit)) {
+      console.error(
+        `error: fixture '_expected_exit' must be 0, 1, or 2 (got ${JSON.stringify(parsed._expected_exit)})`,
+      );
       process.exit(2);
     }
   }
@@ -107,11 +131,12 @@ function evaluateRequired(required) {
   return failures;
 }
 
-function evaluateStrictAdvisory(advisory, label, jobKey) {
-  // Mirrors web-test-gate.yml:521-563 — for each advisory, three independent
-  // checks. result not in {success, skipped} → fail. outcome === failure → fail.
-  // outcome not in {success, skipped} → fail.
-  const job = advisory[jobKey];
+function evaluateCssomFullAdvisory(advisory) {
+  // Mirrors web-test-gate.yml:521-540 — cssom-full has THREE independent
+  // checks: result not in {success, skipped} → fail. outcome === failure
+  // → fail. outcome not in {success, skipped} → fail (cancelled etc).
+  const job = advisory.cssom_full;
+  const label = 'cssom-full-advisory';
   const failures = [];
   const acceptableResult = ['success', 'skipped'];
   const acceptableOutcome = ['success', 'skipped'];
@@ -137,14 +162,41 @@ function evaluateStrictAdvisory(advisory, label, jobKey) {
   return failures;
 }
 
+function evaluateLintAdvisory(advisory) {
+  // Mirrors web-test-gate.yml:549-563 — lint advisory has TWO checks
+  // only. The YAML intentionally does NOT have the third
+  // `outcome not in {success, skipped}` check that cssom-full has.
+  // Codex thread 019dfa66 iter-1 finding 1: previous unified
+  // implementation over-failed on `lint outcome=cancelled` (etc).
+  // Keeping parity with the YAML is the contract here.
+  const job = advisory.lint;
+  const label = 'lint-warn-visibility-advisory';
+  const failures = [];
+  const acceptableResult = ['success', 'skipped'];
+
+  if (!acceptableResult.includes(job.result)) {
+    failures.push({
+      job: label,
+      reason: `job result='${job.result}' (must be 'success' or 'skipped' under STRICT_GATES — install/setup failure or summarize step crash)`,
+    });
+  }
+  if (job.outcome === 'failure') {
+    failures.push({
+      job: label,
+      reason: `step outcome='failure' under STRICT_GATES (ESLint infra failure — parse/config crash, NOT warning count)`,
+    });
+  }
+  return failures;
+}
+
 function evaluate(fixture) {
   const requiredFailures = evaluateRequired(fixture.required);
 
   let advisoryFailures = [];
   if (fixture.strict_gates === 'true') {
     advisoryFailures = [
-      ...evaluateStrictAdvisory(fixture.advisory, 'cssom-full-advisory', 'cssom_full'),
-      ...evaluateStrictAdvisory(fixture.advisory, 'lint-warn-visibility-advisory', 'lint'),
+      ...evaluateCssomFullAdvisory(fixture.advisory),
+      ...evaluateLintAdvisory(fixture.advisory),
     ];
   }
 
@@ -169,11 +221,26 @@ function printReport(fixturePath, fixture, result) {
   console.log('');
   console.log('Advisory jobs:');
   for (const [name, job] of Object.entries(fixture.advisory)) {
-    const wouldFail = fixture.strict_gates === 'true' && (
-      !['success', 'skipped'].includes(job.result)
-      || job.outcome === 'failure'
-      || !['success', 'skipped'].includes(job.outcome)
-    );
+    // Per-advisory failure check — must mirror the asymmetry in
+    // evaluateCssomFullAdvisory (3 conditions) vs evaluateLintAdvisory
+    // (2 conditions) so the printed status matches what evaluate()
+    // actually counts as a failure.
+    let wouldFail = false;
+    if (fixture.strict_gates === 'true') {
+      const acceptableResult = ['success', 'skipped'];
+      const acceptableOutcome = ['success', 'skipped'];
+      if (name === 'cssom_full') {
+        wouldFail =
+          !acceptableResult.includes(job.result)
+          || job.outcome === 'failure'
+          || !acceptableOutcome.includes(job.outcome);
+      } else if (name === 'lint') {
+        // lint: only 2 conditions checked. cancelled outcome passes.
+        wouldFail =
+          !acceptableResult.includes(job.result)
+          || job.outcome === 'failure';
+      }
+    }
     const status = fixture.strict_gates === 'true'
       ? (wouldFail ? 'FAIL (strict)' : 'pass (strict)')
       : 'advisory only';
