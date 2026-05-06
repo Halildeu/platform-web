@@ -104,4 +104,37 @@ describe('Button CSSOM canary', () => {
 
     expectFocusRing(button);
   });
+
+  it('renders a focus ring on danger variant — color-override token registered (PR-15)', async () => {
+    // PR-15 (Codex thread 019dfaed): focusRingClassWithColor was using
+    // template-literal class strings (`focus-visible:ring-[color-mix(...,${color},...)]`)
+    // which Tailwind 4 content scanner cannot detect. Button danger
+    // variant's red ring was invisible in production. Fix:
+    // pre-register the color tokens in COLOR_OVERRIDE_RING_CLASSES
+    // (focus-policy.ts).
+    //
+    // Locking this case in the REQUIRED canary (not advisory glob)
+    // means a future regression — adding a new color override without
+    // registering it, or removing the registration — fails the merge
+    // gate immediately. Pre-PR-15 this assertion would fail
+    // (box-shadow empty post-Tab); post-PR-15 it passes.
+    const screen = await render(<Button variant="danger">Delete</Button>);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const button = screen.getByRole('button', { name: 'Delete' }).element() as HTMLElement;
+
+    await userEvent.keyboard('{Tab}');
+
+    await new Promise<void>((resolve, reject) => {
+      const start = Date.now();
+      const tick = () => {
+        if (button.matches(':focus-visible')) return resolve();
+        if (Date.now() - start > 2000)
+          return reject(new Error('Button danger never received :focus-visible after Tab'));
+        setTimeout(tick, 16);
+      };
+      tick();
+    });
+
+    expectFocusRing(button);
+  });
 });
