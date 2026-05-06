@@ -149,21 +149,31 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       cellSelection: true,
       multiSortKey: 'ctrl' as const,
       rowGroupPanelShow: rowGroupingEnabled ? ('always' as const) : ('never' as const),
-      // When server-side grouping is disabled, also keep the column header
-      // menu's grouping actions out — without this the user can still trigger
-      // the broken state via "Group by this column".
-      defaultColDef: rowGroupingEnabled
+      ...(dataSourceMode === 'server'
+        ? { cacheBlockSize: SERVER_CACHE_BLOCK_SIZE, maxBlocksInCache: 1 }
+        : {}),
+    }),
+    [dataSourceMode, rowGroupingEnabled],
+  );
+
+  /*
+   * Codex 019dfe66 iter-3: do NOT put `defaultColDef` inside `gridOptions`.
+   * `GridShell` merges the `defaultColDef` prop with its own `DEFAULT_COL_DEF`
+   * (sortable / filter / floatingFilter / resizable etc.); embedding it in
+   * `gridOptions` and letting AG Grid spread `gridOptions` last would clobber
+   * those defaults. The right shape is a separate prop on
+   * `EntityGridTemplate` so `GridShell` can do the merge.
+   */
+  const groupingDefaultColDef = React.useMemo<ColDef<TRow> | undefined>(
+    () =>
+      rowGroupingEnabled
         ? undefined
         : {
             enableRowGroup: false,
             enablePivot: false,
             enableValue: false,
           },
-      ...(dataSourceMode === 'server'
-        ? { cacheBlockSize: SERVER_CACHE_BLOCK_SIZE, maxBlocksInCache: 1 }
-        : {}),
-    }),
-    [dataSourceMode, rowGroupingEnabled],
+    [rowGroupingEnabled],
   );
 
   /*
@@ -506,6 +516,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           gridSchemaVersion={1}
           initialVariantId={initialVariantId}
           columnDefs={effectiveColDefs}
+          defaultColDef={groupingDefaultColDef}
           gridOptions={gridOptions}
           dataSourceMode={dataSourceMode}
           createServerSideDatasource={
