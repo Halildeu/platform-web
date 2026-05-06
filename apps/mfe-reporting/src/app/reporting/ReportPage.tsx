@@ -435,6 +435,17 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       >
         {module.renderDashboard ? module.renderDashboard(t, filters) : null}
 
+        {module.renderFilters ? (
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            {module.renderFilters({
+              values: filters,
+              setFieldValue: (key, value) =>
+                setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+              t,
+            })}
+          </div>
+        ) : null}
+
         <EntityGridTemplate<TRow>
           key={reloadSignal}
           gridId={module.id}
