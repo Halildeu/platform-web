@@ -24,6 +24,8 @@ type ErrorResponse = {
 };
 
 const REPORTS_BASE = '/v1/reports';
+const COMPANY_ID_STORAGE_KEY = 'reporting:currentCompanyId';
+const COMPANY_HEADER = 'X-Company-Id';
 
 const resolveHttpClient = (): ApiInstance => {
   try {
@@ -31,6 +33,47 @@ const resolveHttpClient = (): ApiInstance => {
   } catch {
     return api;
   }
+};
+
+/**
+ * Resolves the active company id for report API calls.
+ *
+ * Source priority:
+ *   1. shellServices.getCurrentCompanyId() if exposed by the host shell
+ *   2. localStorage[COMPANY_ID_STORAGE_KEY] (persisted by WorkspaceSwitcher)
+ *   3. undefined → header is omitted; backend will reject for super-admin /
+ *      multi-company users with 400 MissingCompanyHeaderException
+ *
+ * Backend contract (YearlySchemaResolver): {@code X-Company-Id} is the
+ * authoritative selector for the active company schema. Single-company users
+ * are auto-selected server-side, so the header is optional in that case.
+ */
+const resolveCompanyId = (): string | undefined => {
+  try {
+    const services = getShellServices();
+    const fromShell = (
+      services as { getCurrentCompanyId?: () => string | number | null | undefined }
+    ).getCurrentCompanyId?.();
+    if (fromShell !== undefined && fromShell !== null && String(fromShell).trim() !== '') {
+      return String(fromShell);
+    }
+  } catch {
+    // shell-services not registered yet (e.g. unit tests); fall through to storage
+  }
+
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = window.localStorage.getItem(COMPANY_ID_STORAGE_KEY);
+    if (stored && stored.trim() !== '') {
+      return stored;
+    }
+  }
+
+  return undefined;
+};
+
+const buildCompanyHeaders = (): Record<string, string> => {
+  const companyId = resolveCompanyId();
+  return companyId ? { [COMPANY_HEADER]: companyId } : {};
 };
 
 export const fetchReportList = async (): Promise<ReportListItem[]> => {
@@ -47,7 +90,9 @@ export const fetchReportCategories = async (): Promise<ReportCategory[]> => {
 
 export const fetchReportMetadata = async (reportKey: string): Promise<ReportMetadata> => {
   const client = resolveHttpClient();
-  const { data } = await client.get<ReportMetadata>(`${REPORTS_BASE}/${reportKey}/metadata`);
+  const { data } = await client.get<ReportMetadata>(`${REPORTS_BASE}/${reportKey}/metadata`, {
+    headers: buildCompanyHeaders(),
+  });
   return data;
 };
 
@@ -55,13 +100,41 @@ const buildSortParam = (request: GridRequest, defaultSort?: string, defaultDirec
   if (Array.isArray(request.sortModel) && request.sortModel.length > 0) {
     const entry = request.sortModel[0];
     if (entry?.colId && entry.sort) {
-      return `${entry.colId},${entry.sort}`;
+      return JSON.stringify([{ colId: entry.colId, sort: entry.sort }]);
     }
   }
   if (defaultSort) {
-    return `${defaultSort},${defaultDirection ?? 'desc'}`;
+    return JSON.stringify([{ colId: defaultSort, sort: defaultDirection ?? 'desc' }]);
   }
   return '';
+};
+
+/**
+ * Merge AG Grid column filterModel + sidebar search into a single advancedFilter
+ * payload that the backend ReportController + FilterTranslator understand.
+ *
+ * Shape (mirrors hr-compensation-report/api.ts):
+ *   {
+ *     account_name: { filterType: 'text', type: 'contains', filter: 'serban' },
+ *     paper_no:     { filterType: 'text', type: 'contains', filter: '20260505' },
+ *     ...
+ *   }
+ *
+ * Backend FilterTranslator whitelists each key against the report's
+ * filterableColumns set, so unknown columns are silently skipped (no SQL
+ * injection risk).
+ *
+ * Sidebar "search" is a free-text quickFilter; we do not know which column it
+ * targets, so we leave the legacy `search` query param in place and let the
+ * backend handle it (currently a no-op for muavin until a defaultSearchColumn
+ * is wired in metadata — V2 follow-up).
+ */
+const buildAdvancedFilter = (
+  filters: DynamicReportFilters,
+  gridFilterModel?: Record<string, unknown> | null,
+): Record<string, unknown> => {
+  const merged: Record<string, unknown> = { ...(gridFilterModel ?? {}) };
+  return merged;
 };
 
 export const fetchReportData = async (
@@ -86,14 +159,31 @@ export const fetchReportData = async (
     params.set('sort', sort);
   }
 
+  // Merge AG Grid column-level filterModel + sidebar filters into one
+  // advancedFilter payload. If the caller already provided an explicit
+  // advancedFilter (e.g. dashboard drill-through), prefer that.
+  //
+  // GridRequest.advancedFilter is typed as `string` and DashboardPage hands us
+  // an already-JSON-stringified payload. Pass-through if it's a string; only
+  // stringify when a caller mistakenly hands us a raw object (defensive).
   if (request.advancedFilter) {
-    params.set('advancedFilter', JSON.stringify(request.advancedFilter));
+    const advFilterStr =
+      typeof request.advancedFilter === 'string'
+        ? request.advancedFilter
+        : JSON.stringify(request.advancedFilter);
+    params.set('advancedFilter', advFilterStr);
+  } else {
+    const advFilter = buildAdvancedFilter(filters, request.filterModel);
+    if (Object.keys(advFilter).length > 0) {
+      params.set('advancedFilter', JSON.stringify(advFilter));
+    }
   }
 
   try {
     const client = resolveHttpClient();
     const { data } = await client.get<PagedResultDto>(
       `${REPORTS_BASE}/${reportKey}/data?${params.toString()}`,
+      { headers: buildCompanyHeaders() },
     );
     const items = Array.isArray(data?.items) ? data.items : [];
     return {
@@ -132,7 +222,7 @@ export const exportReportData = async (
 
   const { data } = await client.get<Blob>(
     `${REPORTS_BASE}/${reportKey}/export?${params.toString()}`,
-    { responseType: 'blob' },
+    { responseType: 'blob', headers: buildCompanyHeaders() },
   );
   const extension = format === 'csv' ? 'csv' : 'xlsx';
   return { blob: data, filename: `${reportKey}.${extension}` };
