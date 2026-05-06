@@ -76,6 +76,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Vitest workspace (jsdom)
         run: pnpm run test:workspace
+      - name: Vitest mfe-reporting (PR-0.2 reporting hardening — outside workspace project list)
+        # Root vitest.config.ts intentionally excludes apps/mfe-reporting
+        # from the workspace project list (chart fixture isolation), so
+        # tests added under that package wouldn't otherwise run in the
+        # required gate. PR #273 (SSRM POST /query data path) added
+        # fetchReportData routing tests under that package; expose them
+        # to CI explicitly so the structured-error contract stays
+        # locked. Drop this step once mfe-reporting is folded back into
+        # test:workspace.
+        run: pnpm --filter mfe-reporting exec vitest run
 
   token-drift-required:
     name: Token Drift (build --check)

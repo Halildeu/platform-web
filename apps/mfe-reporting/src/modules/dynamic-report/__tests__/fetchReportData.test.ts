@@ -34,7 +34,7 @@ vi.mock('@mfe/shared-http', () => ({
 }));
 
 // Import AFTER the mocks so resolveHttpClient picks up the stub.
-import { fetchReportData } from '../api';
+import { fetchReportData, ReportQueryError } from '../api';
 
 describe('requestsGrouping', () => {
   it('returns false on a flat request', () => {
@@ -155,7 +155,7 @@ describe('fetchReportData routing (PR-0.2 SSRM data path)', () => {
     expect((body.rowGroupCols as unknown[]).length).toBe(2);
   });
 
-  it('400 GROUPING_NOT_SUPPORTED surfaces the structured code', async () => {
+  it('400 GROUPING_NOT_SUPPORTED surfaces a ReportQueryError with .code', async () => {
     mockPost.mockRejectedValueOnce({
       isAxiosError: true,
       response: {
@@ -171,12 +171,20 @@ describe('fetchReportData routing (PR-0.2 SSRM data path)', () => {
       pageSize: 50,
       rowGroupCols: [{ id: 'x', field: 'x', displayName: 'X' } as any],
     };
-    await expect(fetchReportData('any', { search: '' }, req)).rejects.toThrow(
-      /GROUPING_NOT_SUPPORTED/,
-    );
+
+    let thrown: unknown;
+    try {
+      await fetchReportData('any', { search: '' }, req);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ReportQueryError);
+    expect((thrown as ReportQueryError).code).toBe('GROUPING_NOT_SUPPORTED');
+    expect((thrown as ReportQueryError).status).toBe(400);
+    expect((thrown as ReportQueryError).message).toMatch(/GROUPING_NOT_SUPPORTED/);
   });
 
-  it('400 INVALID_AGGREGATION_REQUEST surfaces the structured code', async () => {
+  it('400 INVALID_AGGREGATION_REQUEST surfaces a ReportQueryError with .code', async () => {
     mockPost.mockRejectedValueOnce({
       isAxiosError: true,
       response: {
@@ -195,9 +203,38 @@ describe('fetchReportData routing (PR-0.2 SSRM data path)', () => {
         { id: 'sensitive_col', field: 'sensitive_col', displayName: 'X', aggFunc: 'sum' } as any,
       ],
     };
-    await expect(fetchReportData('any', { search: '' }, req)).rejects.toThrow(
-      /INVALID_AGGREGATION_REQUEST/,
-    );
+
+    let thrown: unknown;
+    try {
+      await fetchReportData('any', { search: '' }, req);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ReportQueryError);
+    expect((thrown as ReportQueryError).code).toBe('INVALID_AGGREGATION_REQUEST');
+  });
+
+  it('endRow falls off resolved startRow when caller only set startRow', async () => {
+    // Codex iter-1 absorb edge case: a hand-crafted SSRM mock with
+    // startRow set but endRow undefined must not derive endRow from a
+    // different base (would shift the cache window and trigger
+    // NON_ALIGNED_ROW_WINDOW on the backend).
+    mockPost.mockResolvedValueOnce({
+      data: { items: [], total: 0, page: 1, pageSize: 50 },
+    });
+    const req: GridRequest = {
+      page: 2, // → computedStart=50
+      pageSize: 50,
+      startRow: 100, // explicit override
+      // endRow intentionally omitted
+      rowGroupCols: [{ id: 'x', field: 'x', displayName: 'X' } as any],
+    };
+    await fetchReportData('any', { search: '' }, req);
+    const [, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body.startRow).toBe(100);
+    // resolvedStart=100 → endRow=100+50=150, NOT 50+50=100 (which
+    // would have been the buggy pre-absorb behaviour).
+    expect(body.endRow).toBe(150);
   });
 
   it('401 from /query becomes the standard authorization message', async () => {
