@@ -104,4 +104,53 @@ describe('Button CSSOM canary', () => {
 
     expectFocusRing(button);
   });
+
+  it('danger variant focus ring resolves --state-error-text/30 (color-mix)', async () => {
+    // PR-15 + Codex thread 019dfaed iter-2: this assertion locks the
+    // **token contract**, not just "any visible ring". focusRingClassWithColor
+    // falls back to the default --focus-ring on unregistered tokens
+    // (graceful degradation), so a plain `expectFocusRing` would pass
+    // even if state-error-text were dropped from
+    // COLOR_OVERRIDE_RING_CLASSES — the test would lie. Two-tier
+    // assertion below: (1) visible ring exists at all (sanity floor
+    // — pre-PR-15 scanner-bug guard), (2) className contains the
+    // literal danger color-mix utility (token contract).
+    const screen = await render(<Button variant="danger">Delete</Button>);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const button = screen.getByRole('button', { name: 'Delete' }).element() as HTMLElement;
+
+    await userEvent.keyboard('{Tab}');
+
+    await new Promise<void>((resolve, reject) => {
+      const start = Date.now();
+      const tick = () => {
+        if (button.matches(':focus-visible')) return resolve();
+        if (Date.now() - start > 2000)
+          return reject(new Error('Button danger never received :focus-visible after Tab'));
+        setTimeout(tick, 16);
+      };
+      tick();
+    });
+
+    // Sanity floor: visible ring (catches "scanner didn't compile any
+    // class" — the original PR-15 bug class).
+    expectFocusRing(button);
+
+    // Token contract: the className must include the literal
+    // `state-error-text/30` color-mix utility produced by
+    // COLOR_OVERRIDE_RING_CLASSES['state-error-text'].ring. If the
+    // lookup misses (unregistered token, regex change, registry
+    // mutation), focusRingClassWithColor falls back to the default
+    // FOCUS_RING_CLASSES which uses `var(--focus-ring)` — the
+    // className would then NOT contain `var(--state-error-text)`,
+    // and this assertion fails. Box-shadow byte comparison was
+    // attempted in iter-2 but Tailwind 4 serializes ring shadows
+    // as a multi-layer composite where the first parenthesized
+    // color is the offset (transparent), not the ring color, making
+    // computed-style introspection unreliable. Class-name presence
+    // is a more direct contract for the lookup-table behavior.
+    expect(button.className).toContain(
+      'focus-visible:ring-[color-mix(in_oklab,var(--state-error-text)_30%,transparent)]',
+    );
+  });
 });
