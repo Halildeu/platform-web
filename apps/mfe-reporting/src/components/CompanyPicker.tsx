@@ -40,14 +40,14 @@ const writeSelected = (value: string): void => {
 };
 
 export interface CompanyPickerProps {
-  /** Optional caption shown above the select. ReactNode so callers can append
-   *  a required-field marker (e.g. `<>Şirket <span>*</span></>`). */
-  label?: React.ReactNode;
-  /** Compact mode (smaller width). */
+  /** Required-field marker. When true a small red asterisk renders at the end
+   *  of the row, matching the rest of the report drawer. */
+  required?: boolean;
+  /** Compact mode (smaller width on the value select). */
   compact?: boolean;
 }
 
-export const CompanyPicker: React.FC<CompanyPickerProps> = ({ label, compact }) => {
+export const CompanyPicker: React.FC<CompanyPickerProps> = ({ required, compact }) => {
   const [selected, setSelected] = useState<string>(readSelected);
 
   useEffect(() => {
@@ -72,16 +72,35 @@ export const CompanyPicker: React.FC<CompanyPickerProps> = ({ label, compact }) 
     }
   };
 
-  const widthClass = compact ? 'min-w-[140px]' : 'min-w-[200px]';
+  // Three-segment row mirrors AG Grid's Advanced Filter Builder pattern:
+  // [Column (locked)] [Operator (locked)] [Value (editable)]. Visual mantra
+  // stays identical to the user's existing filter UI; only the value cell
+  // is interactive — column and operator are pre-selected and read-only.
+  const segmentBase =
+    'rounded-md border border-border-subtle px-3 py-2 text-sm text-text-primary';
+  const segmentLocked =
+    `${segmentBase} bg-surface-muted text-text-secondary cursor-not-allowed select-none`;
+  const valueWidth = compact ? 'min-w-[180px]' : 'min-w-[240px]';
 
   return (
-    <label className={`flex flex-col gap-1 text-xs font-medium text-text-secondary ${widthClass}`}>
-      <span>{label || 'Şirket'}</span>
+    <div
+      className="flex items-center gap-2"
+      role="group"
+      aria-label="Şirket filtresi"
+      data-testid="reporting-company-picker-row"
+    >
+      <span className={segmentLocked} aria-readonly="true">
+        Şirket
+      </span>
+      <span className={segmentLocked} aria-readonly="true">
+        Eşittir
+      </span>
       <select
         data-testid="reporting-company-picker"
-        className="w-full rounded-md border border-border-subtle bg-surface-default px-3 py-2 text-sm text-text-primary focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-1"
+        className={`${segmentBase} ${valueWidth} bg-surface-default focus:outline-hidden focus:ring-2 focus:ring-selection-outline focus:ring-offset-1`}
         value={selected}
         onChange={onChange}
+        aria-required={required ? 'true' : undefined}
       >
         <option value="">— Şirket seçin —</option>
         {COMPANY_IDS.map((id) => (
@@ -90,7 +109,12 @@ export const CompanyPicker: React.FC<CompanyPickerProps> = ({ label, compact }) 
           </option>
         ))}
       </select>
-    </label>
+      {required ? (
+        <span className="ml-1 text-danger" aria-label="zorunlu" title="Zorunlu">
+          *
+        </span>
+      ) : null}
+    </div>
   );
 };
 
