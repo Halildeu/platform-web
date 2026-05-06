@@ -91,40 +91,56 @@ describe('Alert CSSOM canary', () => {
     expectToken(alert, 'color', 'state-danger-text');
   });
 
-  it('info variant border resolves --state-info-text/20 (color-mix)', async () => {
-    // The border uses `border-state-info-text/20` — Tailwind opacity
-    // modifier compiles to `color-mix(in oklab, var(--state-info-text)
-    // 20%, transparent)`. Use the reference-element pattern (PR-8
-    // Codex iter-2) for byte-for-byte equality. If the variant
-    // accidentally drops to a different token, the reference value
-    // differs and the test fails.
-    const screen = await render(
-      <Alert variant="info" title="Border check">
-        Body
-      </Alert>,
-    );
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    const alert = findAlert(screen.container as HTMLElement);
+  // Border color-mix coverage for ALL 4 variants. Codex thread
+  // 019dfae2 iter-1 finding 1: info-only assertion proves the
+  // Tailwind opacity mechanism but doesn't catch wrong token mapping
+  // per variant (e.g., `success` border accidentally pointing to
+  // `state-info-text/20` would still pass an info-only test).
+  // Parametric assertion across all 4 closes that gap.
+  const VARIANT_BORDER_TOKENS = [
+    { variant: 'info' as const, token: 'state-info-text' },
+    { variant: 'success' as const, token: 'state-success-text' },
+    { variant: 'warning' as const, token: 'state-warning-text' },
+    { variant: 'error' as const, token: 'state-danger-text' },
+  ];
 
-    const ref = document.createElement('div');
-    ref.style.borderTopStyle = 'solid';
-    ref.style.borderTopWidth = '1px';
-    ref.style.borderTopColor = 'color-mix(in oklab, var(--state-info-text) 20%, transparent)';
-    document.body.appendChild(ref);
+  it.each(VARIANT_BORDER_TOKENS)(
+    '$variant variant border resolves --$token/20 (color-mix)',
+    async ({ variant, token }) => {
+      // Reference-element pattern (PR-8 Codex iter-2): stamp the
+      // expected color-mix expression on a sibling element, read
+      // its computed borderTopColor, require byte-for-byte match
+      // with the alert's. If the variant accidentally drops to a
+      // different token, the reference resolves to a different
+      // value and the test fails.
+      const screen = await render(
+        <Alert variant={variant} title="Border check">
+          Body
+        </Alert>,
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      const alert = findAlert(screen.container as HTMLElement);
 
-    try {
-      const got = window.getComputedStyle(alert).borderTopColor.replace(/\s+/g, '').toLowerCase();
-      const want = window.getComputedStyle(ref).borderTopColor.replace(/\s+/g, '').toLowerCase();
-      expect(want).not.toBe('');
-      expect(got).toBe(want);
-    } finally {
-      ref.remove();
-    }
+      const ref = document.createElement('div');
+      ref.style.borderTopStyle = 'solid';
+      ref.style.borderTopWidth = '1px';
+      ref.style.borderTopColor = `color-mix(in oklab, var(--${token}) 20%, transparent)`;
+      document.body.appendChild(ref);
 
-    // Sanity floor: --state-info-text resolves at root.
-    const infoToken = getResolvedToken('state-info-text');
-    expect(infoToken).not.toBe('');
-  });
+      try {
+        const got = window.getComputedStyle(alert).borderTopColor.replace(/\s+/g, '').toLowerCase();
+        const want = window.getComputedStyle(ref).borderTopColor.replace(/\s+/g, '').toLowerCase();
+        expect(want).not.toBe('');
+        expect(got).toBe(want);
+      } finally {
+        ref.remove();
+      }
+
+      // Sanity floor: the underlying token resolves at root.
+      const tokenValue = getResolvedToken(token);
+      expect(tokenValue).not.toBe('');
+    },
+  );
 
   it('success variant --state-success-bg flips on theme switch (light → dark)', async () => {
     const screen = await render(

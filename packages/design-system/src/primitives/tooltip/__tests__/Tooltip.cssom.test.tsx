@@ -8,22 +8,22 @@ import { expectToken, withTheme, getResolvedToken } from '../../../__tests__/css
 /**
  * Tooltip — ninth L4-foundation real-component CSSOM canary.
  *
- * Tooltip uses an inverted-color cascade — the popup itself sits on
- * `bg-text-primary` (yes, the *text* token is reused as a surface)
- * with `text-text-inverse` for legibility against that dark surface.
- * This is a deliberate design choice and unique to Tooltip in the
- * primitive set, so locking it at the canary layer matters: any
- * future "let's give Tooltip its own surface token" refactor will
- * surface here as a deliberate token swap, not a silent regression.
+ * Tooltip uses a text-token-backed popup surface — the popup sits
+ * on `bg-text-primary` (the text token doubles as a surface) with
+ * `text-text-inverse` for the foreground. This is a deliberate
+ * design choice and unique to Tooltip in the primitive set, so
+ * locking it at the canary layer matters: any future "let's give
+ * Tooltip its own surface token" refactor will surface here as a
+ * deliberate token swap, not a silent regression.
  *
  * Plus: the popup only renders when `visible` (mouse hover or focus
  * triggers it). Tests use real `userEvent.hover` to flip the state
  * machine through the same `setTimeout` path production uses.
  *
- * History:
- * - Production tooltip uses `bg-text-primary text-text-inverse`
- *   (Tooltip.tsx:131). Same dark surface in light mode + same
- *   light surface in dark mode (the text-* tokens are themed).
+ * Production source: `Tooltip.tsx` applies
+ * `bg-text-primary text-text-inverse` to the popup. Both tokens
+ * have light/dark mode values, so the cascade flips on theme switch
+ * (asserted in the third test).
  */
 
 describe('Tooltip CSSOM canary', () => {
@@ -56,7 +56,7 @@ describe('Tooltip CSSOM canary', () => {
 
   it('visible popup resolves --text-primary background + --text-inverse text', async () => {
     const screen = await render(
-      <Tooltip content="Hello tooltip" delay={0}>
+      <Tooltip content="Hello tooltip" openDelay={0}>
         <button>Hover me</button>
       </Tooltip>,
     );
@@ -73,7 +73,7 @@ describe('Tooltip CSSOM canary', () => {
 
   it('popup data-state=open while visible', async () => {
     const screen = await render(
-      <Tooltip content="State check" delay={0}>
+      <Tooltip content="State check" openDelay={0}>
         <button>Trigger</button>
       </Tooltip>,
     );
@@ -89,7 +89,7 @@ describe('Tooltip CSSOM canary', () => {
 
   it('popup --text-primary surface flips on theme switch (light → dark)', async () => {
     const screen = await render(
-      <Tooltip content="Theme flip" delay={0}>
+      <Tooltip content="Theme flip" openDelay={0}>
         <button>Trigger</button>
       </Tooltip>,
     );
