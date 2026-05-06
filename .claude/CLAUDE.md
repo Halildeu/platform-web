@@ -1,6 +1,7 @@
 # CLAUDE.md — Frontend Monorepo (dev/web)
 
 ## Stack
+
 - React 18.2, TypeScript 5.x, Vite 8.0.1
 - Tailwind CSS 4.x (via @tailwindcss/vite plugin)
 - AG Grid Enterprise 34.3.1 + AG Charts Enterprise 12.3.1
@@ -11,6 +12,7 @@
 - Lucide React for icons
 
 ## Monorepo Structure
+
 ```
 apps/
   mfe-shell/       — Host app (port 3000)
@@ -28,13 +30,16 @@ packages/
 ```
 
 ## Critical Rules
+
 - **AG Grid v34.3.1** — See `.claude/rules/ag-grid.md` for API reference
 - **No require()** — Vite uses ESM. Use `import` always. `require()` silently fails.
 - **Design system icons** — Always use `lucide-react`, never inline SVG
 - **Auth bypass (dev)** — `AUTH_MODE=permitAll VITE_ENABLE_FAKE_AUTH=true`
 - **Vite stdin** — Dev servers use `stdin=subprocess.PIPE` (not DEVNULL) to prevent auto-shutdown
+- **Tailwind 4 literal-class only** — Class names must appear as literal strings; template-literal-built classes are silently dropped by the content scanner. Pre-PR-15 caught the bug 3 times (PR-10 focus-ring helpers, PR-12 backdrop sweep, PR-15 color override). See `docs/operations/tailwind-literal-class-rule.md` for patterns + how to add dynamic-class functions safely. cssom canary enforces.
 
 ## Dev Server
+
 ```bash
 # Start all (backend guard skip)
 WEB_RUNTIME_REQUIRE_BACKEND_GUARD=0 npm start
@@ -47,6 +52,7 @@ python3 scripts/health/monitor-dev-servers.sh --daemon
 ```
 
 ## Backend (Java Spring Boot)
+
 ```
 ~/Documents/dev/backend/
   user-service     — port 8089
@@ -58,5 +64,6 @@ python3 scripts/health/monitor-dev-servers.sh --daemon
 ```
 
 ## Language
+
 - User speaks Turkish, respond in Turkish for conversation
 - Code, variable names, comments: English
