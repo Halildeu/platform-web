@@ -13,6 +13,15 @@ export const MODULE_KEYS = {
   WAREHOUSE: 'WAREHOUSE',
   PURCHASE: 'PURCHASE',
   THEME: 'THEME',
+  /**
+   * ENDPOINT_ADMIN — uppercase enum key consumed via
+   * `usePermissions().hasModule()` (backend-mapped from
+   * `/v1/authz/me`). Distinct from the OpenFGA tuple object id, which
+   * is kebab-case `module:endpoint-admin` (see `EndpointAdminAuthz.MODULE`
+   * on the backend). Auth-service is responsible for keeping the two
+   * in sync per Faz 22.1.1b.
+   */
+  ENDPOINT_ADMIN: 'ENDPOINT_ADMIN',
 } as const;
 
 export type ModuleKey = keyof typeof MODULE_KEYS;

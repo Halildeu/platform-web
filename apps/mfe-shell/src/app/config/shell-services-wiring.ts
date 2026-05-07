@@ -18,6 +18,7 @@ import { broadcastAuthState } from '../auth/auth-sync';
 import { isPermitAllMode } from '../auth/auth-config';
 import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
+import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
 
 /* ---- Notification dispatcher ---- */
 
@@ -109,7 +110,12 @@ export const wireRemoteShellServices = () => {
       getUser: () => store.getState().auth.user ?? null,
     },
   };
-  const remotes = [
+  const remotes: Array<{
+    name: string;
+    loader: () => Promise<{
+      configureShellServices: (services: typeof sharedServices) => void;
+    }>;
+  }> = [
     { name: 'mfe_access', loader: () => import('mfe_access/shell-services') },
     { name: 'mfe_audit', loader: () => import('mfe_audit/shell-services') },
     { name: 'mfe_users', loader: () => import('mfe_users/shell-services') },
@@ -118,6 +124,16 @@ export const wireRemoteShellServices = () => {
       loader: () => import('mfe_reporting/shell-services'),
     },
   ];
+  // FE-001 reapply (post-#284): runtime conditional gate companion to
+  // the build-time omit pattern in vite.config + lazy-routes. Default
+  // OFF means no eager loader runs against the disabled remote, so MF
+  // runtime never tries to resolve init/get on a disabled URI.
+  if (isEndpointAdminRemoteEnabled()) {
+    remotes.push({
+      name: 'mfe_endpoint_admin',
+      loader: () => import('mfe_endpoint_admin/shell-services'),
+    });
+  }
   remotes.forEach(({ name, loader }) => {
     loader()
       .then((module) => module.configureShellServices(sharedServices))

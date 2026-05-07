@@ -49,6 +49,10 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
     'SHELL_SKIP_REMOTE_SERVICES',
     'SHELL_ENABLE_SUGGESTIONS_REMOTE',
     'SHELL_ENABLE_ETHIC_REMOTE',
+    // FE-001 reapply: contract parity with VITE_ prefix so that build-time
+    // gating in vite.config buildRemotes() and runtime gating in
+    // shell-navigation read the same flag.
+    'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
@@ -96,7 +100,26 @@ function normalizeBasePath(value: string): string {
   return withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`;
 }
 
-function buildRemotes() {
+/**
+ * Single source of truth for the endpoint-admin build-time gate.
+ * `defineConfig` closure passes the result into BOTH:
+ *   - `buildRemotes(endpointAdminEnabled)` — manifest entry inclusion
+ *   - `define.__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__` — compile-time
+ *     boolean replaced inline so `lazy-routes.ts` dead-code-eliminates
+ *     the static `import("mfe_endpoint_admin/EndpointAdminApp")`.
+ *
+ * Codex PR #287 iter-1: IIFE/process.env pattern in lazy-routes was
+ * not provably tree-shaken by Rollup. Direct `define` constant is the
+ * canonical Vite/esbuild-friendly approach.
+ */
+function readEndpointAdminBuildFlag(): boolean {
+  return readEnvBoolean(
+    ['VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE', 'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE'],
+    false,
+  );
+}
+
+function buildRemotes(endpointAdminEnabled: boolean) {
   const enabled = {
     suggestions: readEnvBoolean([
       'VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE',
@@ -114,6 +137,7 @@ function buildRemotes() {
       'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
       'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
     ]),
+    endpointAdmin: endpointAdminEnabled,
   };
 
   // All remotes must be declared so MF plugin can resolve their imports
@@ -149,6 +173,10 @@ function buildRemotes() {
     schemaExplorer: readEnvString(
       ['MFE_SCHEMA_EXPLORER_URL', 'VITE_MFE_SCHEMA_EXPLORER_URL'],
       'http://localhost:3008/remoteEntry.js',
+    ),
+    endpointAdmin: readEnvString(
+      ['MFE_ENDPOINT_ADMIN_URL', 'VITE_MFE_ENDPOINT_ADMIN_URL'],
+      'http://localhost:3009/remoteEntry.js',
     ),
   };
 
@@ -188,6 +216,22 @@ function buildRemotes() {
       name: 'mfe_schema_explorer',
       entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
     },
+    // FE-001 reapply build-time omit (post-#284): when the flag is
+    // OFF, the manifest entry is omitted entirely. STUB pattern was
+    // tried in PR #258/#280 and crashed live MF runtime with
+    // #RUNTIME-002 because the data URI does not satisfy init()/get().
+    // The lazy-routes.ts companion check tree-shakes the static
+    // import in the same build, so neither side references the
+    // remote when disabled.
+    ...(enabled.endpointAdmin
+      ? {
+          mfe_endpoint_admin: {
+            type: 'module' as const,
+            name: 'mfe_endpoint_admin',
+            entry: remoteEntries.endpointAdmin,
+          },
+        }
+      : {}),
   };
 }
 
@@ -246,6 +290,9 @@ export default defineConfig(({ mode }) => {
   const appBasePath = normalizeBasePath(
     readEnvString(['APP_BASE_PATH', 'VITE_APP_BASE_PATH'], '/'),
   );
+  // Single source of truth — passed into both buildRemotes() and
+  // define for compile-time consumption in lazy-routes.ts.
+  const endpointAdminBuildEnabled = readEndpointAdminBuildFlag();
 
   return {
     base: appBasePath,
@@ -271,7 +318,7 @@ export default defineConfig(({ mode }) => {
         name: 'mfe_shell',
         filename: 'remoteEntry.js',
         dts: false,
-        remotes: buildRemotes(),
+        remotes: buildRemotes(endpointAdminBuildEnabled),
         exposes: {
           './logic': './src/exposed-logic.ts',
           './services': './src/app/services/shell-services.ts',
@@ -325,6 +372,11 @@ export default defineConfig(({ mode }) => {
     /* Env injection — replaces DefinePlugin + InjectRuntimeEnv */
     define: {
       'process.env': JSON.stringify(runtimeEnv),
+      // Compile-time boolean for lazy-routes.ts. Direct define is the
+      // canonical pattern Rollup/esbuild dead-code-eliminate; the
+      // previous IIFE-over-process.env approach was not reliably
+      // tree-shaken (Codex PR #287 iter-1 must-fix #1).
+      __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: JSON.stringify(endpointAdminBuildEnabled),
     },
 
     server: {

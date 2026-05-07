@@ -2,6 +2,7 @@
 /*  Lazy remote module definitions                                     */
 /* ------------------------------------------------------------------ */
 
+import React from 'react';
 import { createLazyRemoteModule } from '../createLazyRemoteModule';
 
 export const SuggestionsApp = createLazyRemoteModule(
@@ -26,3 +27,32 @@ export const SchemaExplorerModule = createLazyRemoteModule(
   'SchemaExplorer',
   () => import('mfe_schema_explorer/SchemaExplorerApp'),
 );
+
+/* ------------------------------------------------------------------ */
+/*  Endpoint admin — build-time conditional                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build-time boolean injected via `vite.config define`. Direct define
+ * is the canonical Vite/esbuild/Rollup pattern that yields reliable
+ * dead-code elimination — the IIFE-over-`process.env` approach used
+ * earlier was not provably tree-shaken (Codex PR #287 iter-1
+ * must-fix #1).
+ *
+ * Companion gate: `vite.config buildRemotes(endpointAdminEnabled)`
+ * omits the manifest entry when this value is `false`, so neither
+ * side references the disabled remote in the compiled bundle and MF
+ * runtime never tries to resolve `init()`/`get()` against a STUB.
+ *
+ * Pattern reason: PR #258/#280 deploy hit MF Runtime #RUNTIME-002
+ * because the previous data-URI STUB did not satisfy the federation
+ * runtime's container contract. Build-time omit avoids the contract.
+ */
+declare const __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: boolean;
+
+const EndpointAdminNoop: React.FC = () => null;
+EndpointAdminNoop.displayName = 'EndpointAdminNoop';
+
+export const EndpointAdminModule: React.ComponentType = __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__
+  ? createLazyRemoteModule('EndpointAdmin', () => import('mfe_endpoint_admin/EndpointAdminApp'))
+  : EndpointAdminNoop;
