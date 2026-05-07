@@ -10,10 +10,13 @@
  * The `customColumnDefs` viewport gating (policies hideBelow:768,
  * lastModifiedAt hideBelow:1024, roleActions always) lives inside
  * the component and is wired through `useViewportWidth` —
- * rendered-grid testing for that path lives in the existing
- * RolesGrid integration suite. This file only fences the
- * declarative-meta tier so future column additions can't silently
- * regress the mobile layout.
+ * rendered-grid testing for that path is intentionally out of
+ * scope for this PR; the design-system already exercises the
+ * underlying viewport contract via its own hook tests. This file
+ * only fences the declarative-meta tier so future column
+ * additions can't silently regress the mobile layout. Codex
+ * iter-1 nit (thread 019e0329) prompted the wording correction —
+ * there is no pre-existing RolesGrid integration suite.
  */
 import { describe, expect, it } from 'vitest';
 import { ROLES_COLUMN_META } from './RolesGrid.ui';
