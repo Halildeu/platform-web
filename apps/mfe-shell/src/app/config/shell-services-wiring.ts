@@ -35,6 +35,71 @@ export const emitShellTelemetry = (event: ShellTelemetryEvent) => {
   telemetryClient.emit(event);
 };
 
+/* ------------------------------------------------------------------ */
+/*  MFE Auth Transport Contract — auth.ready() Promise bridge          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Phase 2 PR-Auth-1 (Codex iter-22/23/24 absorb, thread 019e0119):
+ * epoch-aware {@code auth.ready()} Promise bridge for MFE remotes.
+ *
+ * <p>Behavior:
+ * <ul>
+ *   <li>If current phase is {@code transportReady}: resolves immediately.</li>
+ *   <li>If current phase is {@code failed}: rejects with auth error.</li>
+ *   <li>Otherwise: subscribes to store updates and resolves on the first
+ *       transition to {@code transportReady} (or rejects on {@code failed}).</li>
+ * </ul>
+ *
+ * <p>Each call snapshots {@code authEpoch} at subscribe time. If the epoch
+ * changes (logout, re-login, bumpAuthEpoch) before the Promise settles,
+ * subscriber is unhooked and the Promise resolves to a typed
+ * {@code unauthenticated} marker so the caller can react (e.g. redirect to
+ * login) instead of waiting forever.
+ */
+type AuthReadyResult =
+  | { ok: true }
+  | { ok: false; reason: 'unauthenticated' | 'failed'; error?: string };
+
+const createAuthReadyPromise = (): Promise<AuthReadyResult> => {
+  const stateNow = store.getState().auth;
+  if (stateNow.phase === 'transportReady') {
+    return Promise.resolve({ ok: true });
+  }
+  if (stateNow.phase === 'failed') {
+    return Promise.resolve({
+      ok: false,
+      reason: 'failed',
+      error: stateNow.authError?.message,
+    });
+  }
+  if (stateNow.phase === 'unauthenticated') {
+    return Promise.resolve({ ok: false, reason: 'unauthenticated' });
+  }
+  const initialEpoch = stateNow.authEpoch;
+  return new Promise<AuthReadyResult>((resolve) => {
+    const unsubscribe = store.subscribe(() => {
+      const s = store.getState().auth;
+      if (s.authEpoch !== initialEpoch) {
+        // Epoch changed (logout/re-login) — current waiter is stale.
+        unsubscribe();
+        resolve({ ok: false, reason: 'unauthenticated' });
+        return;
+      }
+      if (s.phase === 'transportReady') {
+        unsubscribe();
+        resolve({ ok: true });
+      } else if (s.phase === 'failed') {
+        unsubscribe();
+        resolve({ ok: false, reason: 'failed', error: s.authError?.message });
+      } else if (s.phase === 'unauthenticated') {
+        unsubscribe();
+        resolve({ ok: false, reason: 'unauthenticated' });
+      }
+    });
+  });
+};
+
 /* ---- Configure shell services ---- */
 
 configureShellServices({
@@ -84,6 +149,14 @@ configureShellServices({
   notify: pushShellNotification,
   telemetry: emitShellTelemetry,
   isFeatureEnabled: () => false,
+  // Phase 2 PR-Auth-1 (Codex iter-26 §1 absorb, thread 019e0119):
+  // wire MFE Auth Transport Contract callbacks into the canonical
+  // shell-services contract so {@code getShellServices().auth.ready()}
+  // works for remotes pulling via {@code mfe_shell/services}.
+  authReady: () => createAuthReadyPromise(),
+  isTransportReady: () => store.getState().auth.phase === 'transportReady',
+  getAuthPhase: () => store.getState().auth.phase,
+  getAuthEpoch: () => store.getState().auth.authEpoch,
 });
 
 /* ---- Wire remote module shell-services ---- */
@@ -108,6 +181,20 @@ export const wireRemoteShellServices = () => {
     auth: {
       getToken: () => store.getState().auth.token ?? null,
       getUser: () => store.getState().auth.user ?? null,
+      /**
+       * Phase 2 PR-Auth-1 (Codex iter-24 §Auth-1 absorb, thread 019e0119):
+       * epoch-aware {@code ready()} Promise bridge. MFEs MUST call
+       * {@code await hostServices.auth.ready()} before issuing protected
+       * HTTP requests; the Promise resolves when phase reaches
+       * {@code transportReady}, rejects when phase is {@code failed}, and
+       * resolves to a typed unauthenticated marker when phase is
+       * {@code unauthenticated}. Invalidated by {@link bumpAuthEpoch} /
+       * {@link logout} so logout/re-login cycles produce a fresh signal.
+       */
+      ready: () => createAuthReadyPromise(),
+      isTransportReady: () => store.getState().auth.phase === 'transportReady',
+      getPhase: () => store.getState().auth.phase,
+      getEpoch: () => store.getState().auth.authEpoch,
     },
   };
   const remotes: Array<{

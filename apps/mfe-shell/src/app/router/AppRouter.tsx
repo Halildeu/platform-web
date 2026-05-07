@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAppSelector } from '../store/store.hooks';
 import { isPermitAllMode } from '../auth/auth-config';
 import { ProtectedRoute } from '../guards/ProtectedRoute';
+import { selectAuthPhase } from '../../features/auth/model/auth.slice';
 import {
   isEndpointAdminRemoteEnabled,
   isEthicRemoteEnabled,
@@ -67,6 +68,18 @@ export const AppRouter: React.FC = () => {
   const { t } = useShellCommonI18n();
   const authState = useAppSelector((state) => state.auth);
   const { token, initialized } = authState;
+  // Phase 2 PR-Auth-1 (Codex iter-22/24 §Auth-1 absorb, thread 019e0119):
+  // FSM phase used to suppress login flicker during transitional bootstrap
+  // states (initializing/keycloakReady/cookieReady/authzReady). Login UI
+  // only renders on terminal `unauthenticated` phase. `failed` phase
+  // surfaces a degraded UI (technical bootstrap error), NOT a login button.
+  const authPhase = useAppSelector(selectAuthPhase);
+  const isAuthBootstrapping =
+    authPhase === 'initializing' ||
+    authPhase === 'keycloakReady' ||
+    authPhase === 'cookieReady' ||
+    authPhase === 'authzReady';
+  const isAuthFailed = authPhase === 'failed';
   const permitAllMode = isPermitAllMode();
   const suggestionsEnabled = isSuggestionsRemoteEnabled();
   const ethicEnabled = isEthicRemoteEnabled();
@@ -265,7 +278,22 @@ export const AppRouter: React.FC = () => {
         <Route
           path="/"
           element={
-            !initialized && !permitAllMode ? (
+            // Phase 2 PR-Auth-1 absorb (Codex iter-22/24): suppress login
+            // flicker during transitional auth phases. ValidatingMessage
+            // shown until phase reaches a terminal state (transportReady /
+            // unauthenticated / failed). Without this, the brief
+            // initializing→keycloakReady→cookieReady transition flashes the
+            // login button on cold reload.
+            //
+            // `failed` phase surfaces a degraded technical-error UI rather
+            // than the login button — distinct from `unauthenticated`.
+            isAuthFailed && !permitAllMode ? (
+              <div className="px-6 py-10 text-sm font-medium text-danger">
+                {t('auth.session.failed', {
+                  defaultValue: 'Auth bootstrap failed. Please reload or contact support.',
+                })}
+              </div>
+            ) : (!initialized || isAuthBootstrapping) && !permitAllMode ? (
               <div className="px-6 py-10 text-sm font-medium text-text-secondary">
                 {t('auth.session.validating')}
               </div>

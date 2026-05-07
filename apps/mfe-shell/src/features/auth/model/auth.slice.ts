@@ -56,6 +56,49 @@ const normalizeAuthToken = (token: string | null | undefined): string | null => 
   return normalized;
 };
 
+/**
+ * MFE Auth Transport Contract — Codex iter-22/23 absorb (thread 019e0119).
+ *
+ * <p>The auth bootstrap is a finite-state machine, not a single boolean.
+ * Protected app tree rendering and protected MFE network requests must
+ * be physically blocked until {@code transportReady} is reached.
+ *
+ * <p>Phase semantics:
+ * <ul>
+ *   <li>{@code initializing} — bootstrap not yet started; pre-Keycloak.</li>
+ *   <li>{@code keycloakReady} — Keycloak SDK init resolved; token may
+ *       or may not exist.</li>
+ *   <li>{@code cookieReady} — {@code POST /api/auth/cookie} resolved
+ *       (httpOnly cookie set; gateway will translate to Authorization
+ *       header on subsequent calls).</li>
+ *   <li>{@code authzReady} — {@code GET /api/v1/authz/me} resolved;
+ *       permissions/superAdmin available.</li>
+ *   <li>{@code transportReady} — protected HTTP transport contract is
+ *       fulfilled; MFEs may render and fetch protected endpoints.</li>
+ *   <li>{@code refreshing} — token expiry refresh in flight (transient).</li>
+ *   <li>{@code unauthenticated} — no Keycloak session; user must log in.
+ *       Distinct from {@code failed}: this is the expected state on
+ *       cold load before any login.</li>
+ *   <li>{@code failed} — bootstrap raised a technical error (Keycloak
+ *       unreachable, cookie write 5xx, etc.). UI should show a degraded
+ *       state, not a login button.</li>
+ * </ul>
+ */
+export type AuthPhase =
+  | 'initializing'
+  | 'keycloakReady'
+  | 'cookieReady'
+  | 'authzReady'
+  | 'transportReady'
+  | 'refreshing'
+  | 'unauthenticated'
+  | 'failed';
+
+export interface AuthError {
+  message: string;
+  cause?: string;
+}
+
 // State'imizin yapısını tanımlayan arayüz
 interface AuthState {
   user: UserProfile | null;
@@ -65,7 +108,27 @@ interface AuthState {
   registrationStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   lastRegisteredEmail: string | null;
   expiresAt: number | null;
+  /**
+   * @deprecated Use {@link selectAuthPhase} / {@link selectIsTransportReady}.
+   * Derived from {@code phase} for backward compatibility; kept as a boolean
+   * for legacy consumers (ProtectedRoute, AppRouter) until they migrate.
+   */
   initialized: boolean;
+  /** MFE Auth Transport Contract FSM phase (Codex iter-22 absorb). */
+  phase: AuthPhase;
+  /**
+   * Optional auth error context. Populated on {@code failed} phase
+   * transitions; cleared when phase progresses out of {@code failed}.
+   */
+  authError: AuthError | null;
+  /**
+   * Auth bootstrap epoch — increments on logout/re-login so consumers
+   * (e.g. {@code hostServices.auth.ready()}) can invalidate cached
+   * Promises and rebuild a fresh ready signal. Codex iter-23 absorb.
+   */
+  authEpoch: number;
+  /** ms timestamp of the most recent {@code transportReady} entry. */
+  transportReadyAt: number | null;
   /** Cached /v1/authz/me response — shared with PermissionProvider to avoid double fetch. */
   authzSnapshot: Record<string, unknown> | null;
 }
@@ -151,7 +214,40 @@ const initialState: AuthState = {
   lastRegisteredEmail: null,
   expiresAt: initialPersisted.expiresAt,
   initialized: false,
+  phase: 'initializing',
+  authError: null,
+  authEpoch: 0,
+  transportReadyAt: null,
   authzSnapshot: null,
+};
+
+/**
+ * Phases at which {@link AuthState.initialized} is considered {@code true}.
+ * Codex iter-23 absorb: legacy {@code initialized} boolean derives from
+ * this set so existing consumers (ProtectedRoute, AppRouter) keep working
+ * without a forced migration in this PR.
+ */
+const PHASES_TREATED_AS_INITIALIZED: ReadonlySet<AuthPhase> = new Set<AuthPhase>([
+  'transportReady',
+  'unauthenticated',
+  'failed',
+]);
+
+/**
+ * Apply {@code phase} change + derived {@code initialized} mirror. Codex
+ * iter-23 absorb: keeping the mirror in sync inside the reducer is safer
+ * than a selector that legacy non-React consumers might bypass.
+ */
+const applyPhase = (state: AuthState, phase: AuthPhase): void => {
+  state.phase = phase;
+  state.initialized = PHASES_TREATED_AS_INITIALIZED.has(phase);
+  if (phase === 'transportReady') {
+    state.transportReadyAt = Date.now();
+    state.authError = null;
+  } else if (phase !== 'failed') {
+    // Failed phase preserves authError; other transitions clear it.
+    state.authError = null;
+  }
 };
 
 // Login olmak için asenkron thunk
@@ -241,6 +337,10 @@ const authSlice = createSlice({
       state.lastRegisteredEmail = null;
       state.expiresAt = null;
       state.authzSnapshot = null;
+      // Codex iter-23 absorb: bump epoch so any cached
+      // {@code hostServices.auth.ready()} Promises are invalidated.
+      state.authEpoch = state.authEpoch + 1;
+      applyPhase(state, 'unauthenticated');
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.removeItem('token');
@@ -339,7 +439,37 @@ const authSlice = createSlice({
       }
     },
     setAuthInitialized: (state, action: PayloadAction<boolean>) => {
+      // Codex iter-23 absorb: legacy boolean kept; mirrors phase. Setting
+      // {@code true} only nudges initialized; phase remains the source of
+      // truth. New consumers should use {@link setAuthPhase}.
       state.initialized = action.payload;
+    },
+    /**
+     * Phase transition action. Codex iter-22 §Auth-1 absorb (thread
+     * 019e0119): MFE Auth Transport Contract FSM advances strictly through
+     * this action. The {@link applyPhase} helper keeps the legacy
+     * {@code initialized} boolean in sync.
+     */
+    setAuthPhase: (state, action: PayloadAction<AuthPhase>) => {
+      applyPhase(state, action.payload);
+    },
+    /**
+     * Set {@code phase=failed} with structured error context. Distinct
+     * from {@code unauthenticated}: failed indicates a technical bootstrap
+     * problem (Keycloak unreachable, cookie write 5xx) that should NOT
+     * surface a login button — it should show a degraded-state UI.
+     */
+    setAuthFailed: (state, action: PayloadAction<AuthError>) => {
+      state.authError = action.payload;
+      applyPhase(state, 'failed');
+    },
+    /**
+     * Bump auth epoch (force {@link hostServices.auth.ready()} Promise
+     * cache invalidation). Used by callers that need to reset the auth
+     * pipeline without full logout (e.g. token refresh failure).
+     */
+    bumpAuthEpoch: (state) => {
+      state.authEpoch = state.authEpoch + 1;
     },
   },
   // Asenkron thunk'ların durumlarını yöneten bölüm
@@ -463,6 +593,26 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, resetRegistrationStatus, setKeycloakSession, setAuthInitialized } =
-  authSlice.actions;
+export const {
+  logout,
+  resetRegistrationStatus,
+  setKeycloakSession,
+  setAuthInitialized,
+  setAuthPhase,
+  setAuthFailed,
+  bumpAuthEpoch,
+} = authSlice.actions;
+
+/**
+ * Auth FSM selectors. Codex iter-22 §Auth-1 absorb — protected MFE render
+ * and protected HTTP request paths must consult these selectors instead
+ * of the legacy {@code initialized} boolean.
+ */
+export const selectAuthPhase = (state: { auth: AuthState }): AuthPhase => state.auth.phase;
+export const selectIsTransportReady = (state: { auth: AuthState }): boolean =>
+  state.auth.phase === 'transportReady';
+export const selectAuthError = (state: { auth: AuthState }): AuthError | null =>
+  state.auth.authError;
+export const selectAuthEpoch = (state: { auth: AuthState }): number => state.auth.authEpoch;
+
 export default authSlice.reducer;

@@ -111,8 +111,16 @@ export const createDynamicReportModule = (
     return metaPromise;
   };
 
-  /* Eagerly start fetching metadata */
-  void ensureColumnMeta();
+  /*
+   * Phase 2 PR-Auth-1 (Codex iter-22 §Reporting absorb, thread 019e0119):
+   * eager metadata prefetch removed. Module factory must be side-effect-free
+   * to avoid the pre-cookie 401 storm + recreation fan-out (574 metadata
+   * requests observed at testai.acik.com cold load).
+   *
+   * Metadata is now fetched lazily on first render via {@link ensureColumnMeta}
+   * inside the route component. PR-Reporting-2 will migrate this to a
+   * shared single-flight cache + bounded concurrency + auth-ready gate.
+   */
 
   return {
     id: moduleId,
@@ -139,11 +147,7 @@ export const createDynamicReportModule = (
               V1: hardcoded 1-43; V2 dynamic list (/api/v1/companies →
               OUR_COMPANY). */}
           <CompanyPicker required={isRequired('companyId')} />
-          <div
-            className="flex items-center gap-2"
-            role="group"
-            aria-label="Genel arama filtresi"
-          >
+          <div className="flex items-center gap-2" role="group" aria-label="Genel arama filtresi">
             <span
               className="rounded-md border border-border-subtle bg-surface-muted px-3 py-2 text-sm text-text-secondary cursor-not-allowed select-none"
               aria-readonly="true"
