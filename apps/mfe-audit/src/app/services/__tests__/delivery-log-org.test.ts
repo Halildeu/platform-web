@@ -57,6 +57,14 @@ describe('resolveDeliveryLogOrgId', () => {
     expect(resolveDeliveryLogOrgId({ allowed_orgs: ['', 'tenant-y'] })).toBe('tenant-y');
   });
 
+  it('trims whitespace around values before returning them', () => {
+    // Codex post-impl P3: a shell-user shaped as { org_id: ' tenant-a ' }
+    // would otherwise send a leading-space header value and earn a
+    // misleading 403.
+    expect(resolveDeliveryLogOrgId({ org_id: '  tenant-a  ' })).toBe('tenant-a');
+    expect(resolveDeliveryLogOrgId({ allowed_orgs: [' tenant-z\n'] })).toBe('tenant-z');
+  });
+
   it('falls back to default when no whitelist field matches', () => {
     expect(resolveDeliveryLogOrgId({ unrelated: 'value' })).toBe(DEFAULT_ORG_FALLBACK);
     expect(resolveDeliveryLogOrgId({ allowed_orgs: [] })).toBe(DEFAULT_ORG_FALLBACK);

@@ -86,32 +86,48 @@ export const DeliveryLogsTab: React.FC = () => {
   }, []);
 
   const trimmedIntentId = intentId.trim();
+  const trimmedChannel = channelFilter.trim();
+  const trimmedProvider = providerFilter.trim();
+
+  // Codex thread `019e0289` post-impl P1: <input type="datetime-local"> emits
+  // values like `2026-05-07T12:00` (local clock, no offset). Backend
+  // OffsetDateTime params reject that. Normalise to ISO-8601 UTC; an empty
+  // input stays empty and is omitted from the request.
+  const isoFrom = toIsoOrUndefined(fromFilter);
+  const isoTo = toIsoOrUndefined(toFilter);
+
   const enabled =
     Boolean(orgId) && (mode === 'admin' || (mode === 'intent' && trimmedIntentId.length > 0));
 
+  // Codex post-impl P2: mode-specific cache key. Admin filters must NOT
+  // bleed into the intent-mode key, otherwise stale form state would
+  // produce different cache entries for the same (orgId, intentId, page,
+  // size) tuple.
   const queryKey = useMemo(
-    () => [
-      'delivery-logs',
-      mode,
-      orgId,
-      mode === 'intent' ? trimmedIntentId : null,
-      statusFilter,
-      channelFilter.trim(),
-      providerFilter.trim(),
-      fromFilter,
-      toFilter,
-      page,
-      size,
-    ],
+    () =>
+      mode === 'intent'
+        ? (['delivery-logs', 'intent', orgId, trimmedIntentId, page, size] as const)
+        : ([
+            'delivery-logs',
+            'admin',
+            orgId,
+            statusFilter,
+            trimmedChannel,
+            trimmedProvider,
+            isoFrom ?? '',
+            isoTo ?? '',
+            page,
+            size,
+          ] as const),
     [
       mode,
       orgId,
       trimmedIntentId,
       statusFilter,
-      channelFilter,
-      providerFilter,
-      fromFilter,
-      toFilter,
+      trimmedChannel,
+      trimmedProvider,
+      isoFrom,
+      isoTo,
       page,
       size,
     ],
@@ -136,10 +152,10 @@ export const DeliveryLogsTab: React.FC = () => {
       return fetchAdminDeliveries({
         orgId,
         status: statusFilter || undefined,
-        channel: channelFilter || undefined,
-        provider: providerFilter || undefined,
-        from: fromFilter || undefined,
-        to: toFilter || undefined,
+        channel: trimmedChannel || undefined,
+        provider: trimmedProvider || undefined,
+        from: isoFrom,
+        to: isoTo,
         page,
         size,
         signal,
@@ -474,6 +490,28 @@ const ErrorBanner: React.FC<ErrorBannerProps> = ({ error }) => (
     {translate(error)}
   </div>
 );
+
+/**
+ * Normalise a `<input type="datetime-local">` value to ISO-8601 UTC.
+ *
+ * <p>Codex thread `019e0289` post-impl P1 absorb: the browser emits
+ * values without a timezone offset (e.g. `2026-05-07T12:00`); the
+ * backend's `OffsetDateTime` binding rejects that. We treat the value
+ * as local time, convert to UTC ISO, and pass `Z`-suffixed strings to
+ * the backend. Empty / unparseable inputs return `undefined` so the
+ * caller skips the parameter entirely.
+ */
+export function toIsoOrUndefined(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  // If the operator typed an already-ISO string (e.g. via clipboard),
+  // honour it as long as the runtime can parse it; otherwise treat the
+  // value as local-time (datetime-local idiom).
+  const ms = Date.parse(trimmed);
+  if (!Number.isFinite(ms)) return undefined;
+  return new Date(ms).toISOString();
+}
 
 function translate(error: DeliveryLogApiError): string {
   if (error.status === 401) {

@@ -31,17 +31,21 @@ export function resolveDeliveryLogOrgId(user: unknown): string | null {
 
   for (const field of WHITELIST_FIELDS) {
     const value = user[field];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
     }
   }
 
   for (const field of ALLOWED_ORGS_FIELDS) {
     const value = user[field];
     if (Array.isArray(value)) {
-      const stringEntries = value.filter(
-        (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
-      );
+      const stringEntries = value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
       if (stringEntries.length === 1) {
         return stringEntries[0]!;
       }
