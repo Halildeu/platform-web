@@ -64,12 +64,17 @@ const KPICard: React.FC<{
       ? {
           direction: trend > 0 ? 'up' : trend < 0 ? 'down' : 'flat',
           value: `${trend > 0 ? '+' : ''}${trend}%`,
-          // For headcount/age/tenure the natural reading is "up = good";
-          // when an HR analyst inverts that semantic (e.g. "turnover up =
-          // bad") they should pass `trend` as negative so the down-arrow
-          // signals improvement. The previous inline impl used the same
-          // up=green / down=red mapping, so this preserves behavior.
-          positive: trend >= 0,
+          // Codex iter-1 (thread 019e0330) — `positive: trend >= 0`
+          // promoted `trend === 0` (flat) to success-green; the
+          // x-charts KPICard reads `trend.positive` first when
+          // picking the chip color, so `0%` appeared green even
+          // though `direction === 'flat'`. Legacy parity wants flat
+          // muted, so we leave `positive` undefined when flat and
+          // let the component fall through to `direction === 'up'`
+          // (false here), which then routes flat to the
+          // `text-secondary` branch. Up=green / down=red parity
+          // with the previous inline implementation is preserved.
+          positive: trend > 0 ? true : trend < 0 ? false : undefined,
         }
       : undefined;
 
