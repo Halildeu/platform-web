@@ -20,6 +20,21 @@ import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
 import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
 
+/**
+ * Build-time constant injected by Vite's `define` config (see
+ * `vite.config.ts:379`). Mirrors `lazy-routes.ts:51` so the dynamic
+ * `import('mfe_endpoint_admin/shell-services')` below can be
+ * dead-code eliminated when the remote is disabled at build time.
+ *
+ * 2026-05-08 fix: previously only `lazy-routes.ts` had this guard.
+ * `shell-services-wiring.ts` relied on a runtime function call,
+ * which Rolldown's static analyser could not see through — so the
+ * import specifier survived dead-code elimination and the build
+ * failed with "Rolldown failed to resolve import" when the
+ * manifest entry was omitted.
+ */
+declare const __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: boolean;
+
 /* ---- Notification dispatcher ---- */
 
 export const pushShellNotification = (entry: ShellNotificationEntry) => {
@@ -211,11 +226,25 @@ export const wireRemoteShellServices = () => {
       loader: () => import('mfe_reporting/shell-services'),
     },
   ];
-  // FE-001 reapply (post-#284): runtime conditional gate companion to
-  // the build-time omit pattern in vite.config + lazy-routes. Default
-  // OFF means no eager loader runs against the disabled remote, so MF
-  // runtime never tries to resolve init/get on a disabled URI.
-  if (isEndpointAdminRemoteEnabled()) {
+  // FE-001 (post-#284) + Module Federation build-time tree-shake fix
+  // (2026-05-08): the runtime `isEndpointAdminRemoteEnabled()` guard
+  // alone is NOT enough — Rolldown's static analysis still tries to
+  // resolve `import('mfe_endpoint_admin/shell-services')` at build
+  // time, and when `vite.config.buildRemotes()` omits the manifest
+  // entry (default OFF), the import resolution fails:
+  //   error: [vite]: Rolldown failed to resolve import
+  //          "mfe_endpoint_admin/shell-services" from
+  //          "shell-services-wiring.ts"
+  // Fix: gate the dynamic `import()` behind the same compile-time
+  // `__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__` constant that
+  // `lazy-routes.ts` already uses. The constant is replaced inline
+  // by Vite's `define`, so when the build flag is OFF the entire
+  // branch (including the static import specifier) is dead-code
+  // eliminated and Rolldown never sees the unresolvable specifier.
+  // Runtime `isEndpointAdminRemoteEnabled()` stays as the second
+  // gate so a build-time-enabled bundle can still hide the remote
+  // at runtime via env flag (legacy contract preserved).
+  if (__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__ && isEndpointAdminRemoteEnabled()) {
     remotes.push({
       name: 'mfe_endpoint_admin',
       loader: () => import('mfe_endpoint_admin/shell-services'),
