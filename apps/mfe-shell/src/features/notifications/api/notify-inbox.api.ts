@@ -134,6 +134,33 @@ export const notifyInboxApi = createApi({
         { type: 'UnreadCount' as const, id: 'BADGE' },
       ],
     }),
+
+    /**
+     * POST /api/v1/notify/inbox/me/mark-all-read — Faz 23.5 PR4
+     * integration of the backend bulk endpoint (PR #97).
+     *
+     * <p>Replaces the v1 UI's per-row mark-read loop. The backend
+     * captures a server-side cutoff timestamp and only flips rows whose
+     * {@code createdAt <= cutoff}, so notifications arriving between
+     * the request landing and the UPDATE are not collateral-marked-as-
+     * read — UX-correct for "mark everything I've seen as read".
+     *
+     * <p>Returns the number of rows affected and the applied cutoff
+     * for audit / UX feedback ("13 bildirim okundu işaretlendi").
+     * The LIST tag invalidation triggers a refetch so the drawer
+     * shows the post-bulk state.
+     */
+    markAllAsRead: build.mutation<{ updatedCount: number; cutoff: string }, InboxRequestIdentity>({
+      query: ({ orgId, subscriberId }) => ({
+        url: '/me/mark-all-read',
+        method: 'POST',
+        headers: identityHeaders({ orgId, subscriberId }),
+      }),
+      invalidatesTags: () => [
+        { type: 'Inbox' as const, id: 'LIST' },
+        { type: 'UnreadCount' as const, id: 'BADGE' },
+      ],
+    }),
   }),
 });
 
@@ -155,4 +182,5 @@ export const {
   useGetUnreadCountQuery,
   useMarkReadMutation,
   useArchiveMutation,
+  useMarkAllAsReadMutation,
 } = notifyInboxApi;
