@@ -103,10 +103,13 @@ vi.mock('../store/store.hooks', () => ({
   },
 }));
 
+const markAllAsReadMutationMock = vi.fn();
+
 vi.mock('../../features/notifications/api/notify-inbox.api', () => ({
   useListInboxQuery: () => inboxQueryMock,
   useMarkReadMutation: () => [markReadMutationMock, { isLoading: false }],
   useArchiveMutation: () => [archiveMutationMock, { isLoading: false }],
+  useMarkAllAsReadMutation: () => [markAllAsReadMutationMock, { isLoading: false }],
 }));
 
 // Faz 23.4 PR-E.5 PR4: live SSE hook is a no-op in jsdom unit tests
@@ -148,6 +151,7 @@ describe('NotificationCenter', () => {
     inboxQueryMock = { data: undefined, isLoading: false, isError: false };
     markReadMutationMock.mockReset();
     archiveMutationMock.mockReset();
+    markAllAsReadMutationMock.mockReset();
   });
 
   it('okunmamis sayiyi bell butonunda gosterir', () => {
@@ -356,6 +360,74 @@ describe('NotificationCenter', () => {
 
       const inboxTab = screen.getByRole('tab', { name: /Bildirimlerim/ });
       expect(inboxTab).toBeDisabled();
+    });
+
+    /**
+     * Faz 23.5 PR4 absorb — bulk mark-all-read integration.
+     * Replaces the prior N+1 markRead loop with a single mutation
+     * call. Test verifies: clicking "Tümünü okundu say" on the inbox
+     * tab dispatches markAllAsReadMutation exactly once with the
+     * resolved identity, and does NOT call the per-row markRead.
+     */
+    it('dispatches markAllAsReadMutation once when bulk mark-all-read is clicked on inbox tab', () => {
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      inboxQueryMock = {
+        data: {
+          items: [
+            {
+              id: 11,
+              intentId: null,
+              subject: 'Row A',
+              bodyText: null,
+              bodyHtml: null,
+              locale: null,
+              topicKey: 'k',
+              severity: 'info',
+              state: 'UNREAD',
+              readAt: null,
+              archivedAt: null,
+              createdAt: '2026-05-07T08:00:00Z',
+              expiresAt: null,
+            },
+            {
+              id: 12,
+              intentId: null,
+              subject: 'Row B',
+              bodyText: null,
+              bodyHtml: null,
+              locale: null,
+              topicKey: 'k',
+              severity: 'info',
+              state: 'UNREAD',
+              readAt: null,
+              archivedAt: null,
+              createdAt: '2026-05-07T08:01:00Z',
+              expiresAt: null,
+            },
+          ],
+          page: 0,
+          size: 20,
+          totalElements: 2,
+          totalPages: 1,
+          unreadCount: 2,
+        },
+        isLoading: false,
+        isError: false,
+      };
+      stateMock.isOpen = true;
+
+      render(<NotificationCenter />);
+      fireEvent.click(screen.getByRole('tab', { name: /Bildirimlerim/ }));
+      const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Tümünü okundu say' }));
+
+      // Single bulk call, with the resolved identity. No per-row loop.
+      expect(markAllAsReadMutationMock).toHaveBeenCalledTimes(1);
+      expect(markAllAsReadMutationMock).toHaveBeenCalledWith({
+        orgId: 'default',
+        subscriberId: '1204',
+      });
+      expect(markReadMutationMock).not.toHaveBeenCalled();
     });
   });
 });

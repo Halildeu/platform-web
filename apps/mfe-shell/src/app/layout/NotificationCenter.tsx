@@ -10,6 +10,7 @@ import {
 import {
   useArchiveMutation,
   useListInboxQuery,
+  useMarkAllAsReadMutation,
   useMarkReadMutation,
 } from '../../features/notifications/api/notify-inbox.api';
 import { useInboxUnreadSse } from '../../features/notifications/api/useInboxUnreadSse';
@@ -93,6 +94,9 @@ const NotificationCenter: React.FC = () => {
   });
   const [markReadMutation] = useMarkReadMutation();
   const [archiveMutation] = useArchiveMutation();
+  // Faz 23.5 PR4: bulk mark-all-read mutation. One server round trip
+  // instead of the previous N+1 per-row markRead loop.
+  const [markAllAsReadMutation] = useMarkAllAsReadMutation();
 
   // Faz 23.4 PR-E.5 PR4: subscribe to the live SSE unread-count stream so
   // the badge updates the moment a notification is read/archived from
@@ -193,18 +197,20 @@ const NotificationCenter: React.FC = () => {
 
   const handleMarkAllRead = useCallback(() => {
     if (activeTab === 'inbox') {
-      // Best-effort: mark each currently-displayed unread row as READ.
-      // The backend doesn't yet expose a bulk endpoint (Faz 23.5 wishlist).
-      if (!identity || !inboxQuery.data) return;
-      for (const row of inboxQuery.data.items) {
-        if (row.state === 'UNREAD') {
-          void markReadMutation({ ...identity, id: row.id });
-        }
-      }
+      // Faz 23.5 PR4: single bulk mutation replaces the prior N+1
+      // per-row mark-read loop. Backend
+      // (POST /api/v1/notify/inbox/me/mark-all-read) captures a server-
+      // side cutoff timestamp and only flips rows that existed before
+      // the request — UX-correct for "mark everything I've seen as
+      // read", while a notification arriving mid-bulk is preserved.
+      // The LIST + UnreadCount tag invalidations refresh the drawer
+      // row collection and the bell badge in one cycle.
+      if (!identity) return;
+      void markAllAsReadMutation(identity);
       return;
     }
     localActions.markAllRead();
-  }, [activeTab, identity, inboxQuery.data, localActions, markReadMutation]);
+  }, [activeTab, identity, localActions, markAllAsReadMutation]);
 
   const handleClear = useCallback(() => {
     if (activeTab === 'inbox') {
