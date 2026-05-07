@@ -18,9 +18,9 @@
  * This static guard scans every `.ts` / `.tsx` file under
  * `packages/x-charts/src` (excluding test fixtures) and asserts
  * the simple-token form `var(--<token>))` never appears. The
- * regex deliberately rejects the no-comma form to avoid flagging
+ * regex deliberately excludes the comma-fallback form so the
  * legitimate two-arg `var(--token, fallback)` syntax used inside
- * `MobileTooltip.tsx`.
+ * `MobileTooltip.tsx` is not flagged.
  *
  * If you legitimately need a literal closing with `))` (e.g. a
  * nested `var()` call), add the file to `ALLOW_LIST` below with
