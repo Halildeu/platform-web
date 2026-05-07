@@ -11,7 +11,7 @@ import {
 } from '../../features/auth/model/auth.slice';
 import { subscribeAuthState, withSuppressedAuthBroadcast } from '../auth/auth-sync';
 import { createDevAuthSession, mapKeycloakProfile } from '../config/auth-helpers';
-import { api } from '@mfe/shared-http';
+import { api, type SharedHttpRequestConfig } from '@mfe/shared-http';
 import { registerGridVariantsTokenResolver } from '@mfe/design-system';
 import { bootstrapAuthController, type BootstrapInitOptions } from './auth-bootstrap-controller';
 
@@ -68,14 +68,25 @@ async function fetchAppPermissions(token: string): Promise<AuthzMeResult> {
  * resolved).
  */
 async function setTokenCookie(token: string): Promise<void> {
-  await api.post('/auth/cookie', null, {
+  // PR-HTTP-3 (Codex iter-1 P0 absorb, thread 019e046c): bypass the
+  // shell's auth-ready gate. This call is what DRIVES the FSM toward
+  // {@code transportReady}; it cannot wait for transportReady itself
+  // without a self-deadlock. Authorization header is set explicitly here.
+  const config: SharedHttpRequestConfig = {
     headers: { Authorization: `Bearer ${token}` },
-  });
+    __skipAuthReadyGate: true,
+  };
+  await api.post('/auth/cookie', null, config);
 }
 
 async function clearTokenCookie(): Promise<void> {
   try {
-    await api.delete('/auth/cookie');
+    // PR-HTTP-3: same rationale as setTokenCookie — clearing the cookie
+    // is part of the auth FSM transition (logout); cannot gate on
+    // transportReady. Use __skipAuthReadyGate so the request flies even
+    // when the FSM is not transportReady (e.g. mid-logout).
+    const config: SharedHttpRequestConfig = { __skipAuthReadyGate: true };
+    await api.delete('/auth/cookie', config);
   } catch {
     // Silently ignore
   }

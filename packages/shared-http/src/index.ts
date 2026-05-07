@@ -45,7 +45,7 @@ export class AuthNotReadyError extends Error {
   }
 }
 type EnvRecord = Record<string, string | undefined>;
-type SharedHttpRequestConfig = AxiosRequestConfig & {
+export type SharedHttpRequestConfig = AxiosRequestConfig & {
   __suppressGlobalForbiddenToast?: boolean;
   __suppressGlobalProfileMissingToast?: boolean;
   /**
@@ -60,9 +60,47 @@ type SharedHttpRequestConfig = AxiosRequestConfig & {
    * service) reject stale/wrong-aud tokens and the request fails with 401 even
    * though the endpoint is declared public. Sending the request anonymously
    * sidesteps the filter.
+   *
+   * <p>PR-HTTP-3: setting {@code __skipAuth: true} ALSO bypasses the
+   * auth-ready gate added in this PR — if the caller declares the endpoint
+   * does not need our auth orchestration, neither header injection nor the
+   * gate apply.
    */
   __skipAuth?: boolean;
+  /**
+   * Phase 2 PR-HTTP-3 (Codex iter-1 P0/P1 absorb, thread 019e046c):
+   * opt-out of the auth-ready gate ONLY (Authorization header injection
+   * still applies normally). For requests that DRIVE the auth FSM
+   * itself — they cannot wait for transportReady because their
+   * completion is what produces transportReady:
+   * <ul>
+   *   <li>{@code POST /auth/cookie} (AuthBootstrapper setTokenCookie)</li>
+   *   <li>{@code DELETE /auth/cookie} (AuthBootstrapper clearTokenCookie)</li>
+   *   <li>{@code POST /v1/auth/sessions} (loginUser thunk)</li>
+   *   <li>{@code GET /v1/authz/me} immediately post-login (loginUser)</li>
+   *   <li>{@code GET /users/by-email/...} immediately post-login</li>
+   *   <li>{@code POST /users/public/register} (registerUser thunk)</li>
+   * </ul>
+   * Without this opt-out, the request awaits transportReady which can
+   * only happen after the request itself resolves — classic deadlock
+   * caught by Codex iter-1 P0.
+   */
+  __skipAuthReadyGate?: boolean;
 };
+
+/**
+ * Type guard for {@link AuthNotReadyError} across module boundaries.
+ *
+ * <p>Phase 2 PR-HTTP-3 (Codex iter-1 §3 absorb): under Module Federation
+ * with no-share semantics, a remote MFE's {@code AuthNotReadyError}
+ * class may be a different prototype than the shell's instance, so a
+ * naive {@code instanceof} fails even when the error is conceptually
+ * the same. Use this name-based guard instead.
+ */
+export const isAuthNotReadyError = (err: unknown): err is AuthNotReadyError =>
+  err != null &&
+  typeof err === 'object' &&
+  (err as { name?: unknown }).name === 'AuthNotReadyError';
 
 const getEnvValue = (key: string): string | undefined => {
   if (typeof process !== 'undefined' && typeof process.env?.[key] === 'string') {
@@ -342,24 +380,30 @@ const isPermitAllMode = () => authMode === 'permitAll';
 
 const installInterceptors = (client: AxiosInstance) => {
   client.interceptors.request.use(async (config) => {
-    trackPendingRequest(config);
-    const skipAuth = (config as SharedHttpRequestConfig).__skipAuth === true;
+    const sharedConfig = config as SharedHttpRequestConfig;
+    const skipAuth = sharedConfig.__skipAuth === true;
+    const skipGate = sharedConfig.__skipAuthReadyGate === true || skipAuth;
 
-    // Phase 2 PR-HTTP-3: await the shell's auth-ready bridge before
-    // letting a protected request fly. Opted-out paths
-    // ({@code __skipAuth: true}) and {@code permitAll} mode bypass the
-    // gate; the resolver is also a no-op when no shell is registered
-    // (legacy / standalone tests).
-    if (!skipAuth && !isPermitAllMode() && authReadyResolver) {
+    // Phase 2 PR-HTTP-3 (Codex iter-1 P0/P2 absorb): the auth-ready
+    // gate runs BEFORE trackPendingRequest so a gate-rejected request
+    // does not leak a pending controller. Tracking is delayed until
+    // the gate clears (or is bypassed); this matches the historic
+    // contract where trackPendingRequest only existed for in-flight
+    // request abort, which only makes sense once the request is
+    // actually about to fly.
+    if (!skipGate && !isPermitAllMode() && authReadyResolver) {
       const result = await authReadyResolver();
       if (!result.ok) {
         // Throwing inside a request interceptor short-circuits the
-        // request — axios rejects the caller's promise with this error.
-        // We use a typed error class so callers can branch without
-        // string-matching the message.
+        // request — axios rejects the caller's promise with this
+        // error. We use a typed error class plus a name-based guard
+        // ({@link isAuthNotReadyError}) so callers can branch across
+        // module-federation boundaries.
         throw new AuthNotReadyError(result.reason ?? 'unknown', result.error);
       }
     }
+
+    trackPendingRequest(config);
 
     const headers = ensureHeaders(config);
     const token = tokenResolver();

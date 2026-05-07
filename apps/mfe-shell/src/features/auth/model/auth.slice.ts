@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { isAxiosError } from 'axios';
-import { api } from '@mfe/shared-http';
+import { api, type SharedHttpRequestConfig } from '@mfe/shared-http';
 import { UserProfile } from '@mfe/shared-types'; // Paylaşılan UserProfile tipini import ediyoruz
 
 type UniversalGlobal = typeof globalThis & { Buffer?: typeof Buffer };
@@ -255,16 +255,24 @@ export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async (loginData: { email: string; password: string }, { rejectWithValue }) => {
     try {
-      const response = await api.post('/v1/auth/sessions', loginData);
+      // PR-HTTP-3 (Codex iter-1 P1 absorb): the login flow runs BEFORE
+      // the auth FSM reaches transportReady. Without __skipAuthReadyGate
+      // the request would either fail-close (unauthenticated) or wait
+      // forever for transportReady, which is exactly the deadlock this
+      // PR is meant to avoid.
+      const loginCfg: SharedHttpRequestConfig = { __skipAuthReadyGate: true };
+      const response = await api.post('/v1/auth/sessions', loginData, loginCfg);
       const data = response.data as LoginResponseV1;
       let authzSnapshot: AuthzSnapshotV1 | null = null;
 
       try {
-        const authzResponse = await api.get('/v1/authz/me', {
-          headers: {
-            Authorization: `Bearer ${data.token}`,
-          },
-        });
+        const authzCfg: SharedHttpRequestConfig = {
+          headers: { Authorization: `Bearer ${data.token}` },
+          // Same rationale as /v1/auth/sessions above — fired immediately
+          // post-login, before the FSM has caught up to transportReady.
+          __skipAuthReadyGate: true,
+        };
+        const authzResponse = await api.get('/v1/authz/me', authzCfg);
         authzSnapshot = authzResponse.data as AuthzSnapshotV1;
       } catch (authzError) {
         console.warn('Authorization snapshot alınamadı:', authzError);
@@ -280,13 +288,15 @@ export const loginUser = createAsyncThunk(
       let profile: RemoteProfile | null = null;
       if (data?.email) {
         try {
+          const profileCfg: SharedHttpRequestConfig = {
+            headers: { Authorization: `Bearer ${data.token}` },
+            // PR-HTTP-3: post-login profile fetch runs before the FSM
+            // sees the new token; gate must be bypassed.
+            __skipAuthReadyGate: true,
+          };
           const profileResponse = await api.get(
             `/users/by-email/${encodeURIComponent(data.email)}`,
-            {
-              headers: {
-                Authorization: `Bearer ${data.token}`,
-              },
-            },
+            profileCfg,
           );
           profile = profileResponse.data as RemoteProfile;
         } catch (profileError) {
@@ -310,7 +320,11 @@ export const registerUser = createAsyncThunk(
   'auth/registerUser',
   async (userData: Record<string, string>, { rejectWithValue }) => {
     try {
-      const response = await api.post('/users/public/register', userData);
+      // PR-HTTP-3: registration is a public endpoint; user is by
+      // definition unauthenticated. Bypass the auth-ready gate so the
+      // request flies during the {@code unauthenticated} phase.
+      const registerCfg: SharedHttpRequestConfig = { __skipAuthReadyGate: true };
+      const response = await api.post('/users/public/register', userData, registerCfg);
       return response.data;
     } catch (error: unknown) {
       if (isAxiosError(error)) {

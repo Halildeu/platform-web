@@ -295,4 +295,81 @@ describe('shared-http auth-ready gate (PR-HTTP-3)', () => {
     expect(resolver).not.toHaveBeenCalled();
     expect(config?.headers).toBeDefined();
   });
+
+  it('Codex iter-1 P0: __skipAuthReadyGate bypasses the gate (bootstrap deadlock fix)', async () => {
+    // Regression test for Codex iter-1 P0: AuthBootstrapper's
+    // setTokenCookie call is what advances the FSM toward
+    // transportReady. If the gate applies to that call, transportReady
+    // can never happen — the call waits for the FSM, the FSM waits for
+    // the call. __skipAuthReadyGate breaks the cycle.
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    const resolver = vi.fn(
+      () =>
+        // Never-resolving promise — without the bypass, the request would
+        // hang indefinitely.
+        new Promise<{ ok: true }>(() => undefined),
+    );
+    mod.registerAuthReadyResolver(resolver);
+
+    const config = await handler?.({
+      headers: { Authorization: 'Bearer pre-login-token' },
+      __skipAuthReadyGate: true,
+    });
+
+    // Resolver was NEVER called — gate was skipped at the contract level.
+    expect(resolver).not.toHaveBeenCalled();
+    // Manually-set Authorization header is preserved (the interceptor
+    // only adds when no header is present).
+    expect(config?.headers?.Authorization).toBe('Bearer pre-login-token');
+  });
+
+  it('Codex iter-1 P2: gate-rejected request does NOT leak a pending controller', async () => {
+    // Regression test for Codex iter-1 P2: trackPendingRequest used to
+    // run BEFORE the gate, so an AuthNotReadyError throw would leave
+    // the controller in the pendingControllers Set forever. The fix
+    // moves trackPendingRequest AFTER the gate so a rejected request
+    // never enters the tracking set.
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    mod.registerAuthReadyResolver(() => Promise.resolve({ ok: false, reason: 'unauthenticated' }));
+
+    await expect(handler?.({ headers: {} })).rejects.toMatchObject({
+      name: 'AuthNotReadyError',
+    });
+
+    // Indirect check: a subsequent successful request should be the
+    // FIRST tracked entry. We cannot read pendingControllers directly
+    // (private state) but we can verify the next call doesn't error
+    // and proceeds normally — if the rejected call had leaked a
+    // controller with the same config reference, AbortController would
+    // misbehave on this call. (Static contract test.)
+    mod.registerAuthReadyResolver(() => Promise.resolve({ ok: true }));
+    const okConfig = await handler?.({ headers: {} });
+    expect(okConfig).toBeDefined();
+  });
+
+  it('Codex iter-1 §3: isAuthNotReadyError name-based guard works across module boundaries', async () => {
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    mod.registerAuthReadyResolver(() =>
+      Promise.resolve({ ok: false, reason: 'unauthenticated', error: 'no cookie' }),
+    );
+
+    let caught: unknown;
+    try {
+      await handler?.({ headers: {} });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(mod.isAuthNotReadyError(caught)).toBe(true);
+    // Simulated cross-module: even an object with only `name` (no
+    // prototype identity) should pass the guard.
+    expect(mod.isAuthNotReadyError({ name: 'AuthNotReadyError', message: 'x' })).toBe(true);
+    expect(mod.isAuthNotReadyError(new Error('different'))).toBe(false);
+    expect(mod.isAuthNotReadyError(null)).toBe(false);
+    expect(mod.isAuthNotReadyError(undefined)).toBe(false);
+    expect(mod.isAuthNotReadyError('string')).toBe(false);
+  });
 });
