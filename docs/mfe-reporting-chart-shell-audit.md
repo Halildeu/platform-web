@@ -198,6 +198,24 @@ Migration risk is therefore **visual-regression-bound** — adding
 this dashboard's two largest screens to the visual fixture before
 migrating would be a sensible safety net.
 
+#### Status — Deferred (2026-05-07, Codex thread 019e0342)
+
+PR #224 already moved the chart shell body to `XChartContainer`
+and recovered the high-value mobile primitives (header padding,
+title truncate, actions slot wrap, ChartLegend gap). The remaining
+outer-grid migration to `<ChartDashboard>` is visual-regression
+bound and should not proceed until the HR demographic dashboard
+has desktop + mobile visual fixtures (step 1 in §4).
+
+API parity check still owed before any implementation: today's
+`packages/x-charts/src/ChartDashboard.tsx` exposes `columns`, `gap`,
+`className`, and `<ChartDashboard.Item span/rowSpan>` only. It does
+NOT provide a `cols={N}` prop, an `xl` breakpoint, a built-in
+`DashboardSection` equivalent, or section dividers. Any plan that
+treats the migration as a 1:1 wrapper rename will silently lose
+the existing `DashboardSection` semantics; budget a small
+ChartDashboard API delta as a precondition.
+
 ---
 
 ## §3 What is NOT broken
