@@ -6,6 +6,8 @@ import {
   BarChart as XBarChart,
   TreemapChart as XTreemapChart,
   ChartContainer as XChartContainer,
+  KPICard as XKPICard,
+  type KPICardTrend,
 } from '@mfe/x-charts';
 
 // ---------------------------------------------------------------------------
@@ -25,54 +27,68 @@ const SERIES_COLORS = [
 ];
 
 // ---------------------------------------------------------------------------
-// KPI Card
+// KPI Card \u2014 thin shim around `@mfe/x-charts/KPICard`
+//
+// Faz 21.10 wave 2 mobile-first padding (`p-3 sm:p-5`), the wave 7
+// truncate + accessible click states, the dark-mode-aware Text
+// component, and the auto-generated `aria-label` "{title}: {value},
+// trend {direction} {value}" all live in the x-charts component. The
+// previous standalone div with hard-coded inline `style` (lines 30-75
+// before this PR) bypassed every one of them.
+//
+// We wrap the x-charts KPICard in a `flex-1 min-w-[140px]` outer div
+// so the dashboard's outer flex strip layout (lines ~1132 below) keeps
+// the same six-card distribution. Call sites stay unchanged: the
+// shim still accepts `{ label, value, trend?: number, trendLabel? }`
+// and translates them into the x-charts `KPICardProps` shape.
+//
+// Trend mapping: a numeric `trend` (-N..+N) becomes a structured
+// `KPICardTrend` ({ direction, value: "+N%", positive }) so the
+// x-charts rendering picks the same arrow + color semantics as the
+// previous inline implementation.
+//
+// `trendLabel` ("gecen aya gore" by default) used to sit inline
+// next to the trend chip; x-charts has no equivalent slot for it,
+// so it now flows through `subtitle` (rendered below the value).
+// Net UX delta is minimal \u2014 the label still appears for trended
+// KPIs, just on a separate line.
 // ---------------------------------------------------------------------------
 const KPICard: React.FC<{
   label: string;
   value: string | number;
   trend?: number;
   trendLabel?: string;
-}> = ({ label, value, trend, trendLabel = 'gecen aya gore' }) => (
-  <div
-    style={{
-      padding: '16px 20px',
-      borderRadius: 8,
-      border: '1px solid var(--border-subtle)',
-      background: 'var(--surface-default)',
-      flex: 1,
-      minWidth: 140,
-    }}
-  >
-    <div
-      style={{
-        fontSize: 11,
-        color: 'var(--text-secondary)',
-        marginBottom: 4,
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-      }}
-    >
-      {label}
+}> = ({ label, value, trend, trendLabel = 'gecen aya gore' }) => {
+  const trendObj: KPICardTrend | undefined =
+    trend !== undefined
+      ? {
+          direction: trend > 0 ? 'up' : trend < 0 ? 'down' : 'flat',
+          value: `${trend > 0 ? '+' : ''}${trend}%`,
+          // Codex iter-1 (thread 019e0330) — `positive: trend >= 0`
+          // promoted `trend === 0` (flat) to success-green; the
+          // x-charts KPICard reads `trend.positive` first when
+          // picking the chip color, so `0%` appeared green even
+          // though `direction === 'flat'`. Legacy parity wants flat
+          // muted, so we leave `positive` undefined when flat and
+          // let the component fall through to `direction === 'up'`
+          // (false here), which then routes flat to the
+          // `text-secondary` branch. Up=green / down=red parity
+          // with the previous inline implementation is preserved.
+          positive: trend > 0 ? true : trend < 0 ? false : undefined,
+        }
+      : undefined;
+
+  return (
+    <div className="flex-1 min-w-[140px]">
+      <XKPICard
+        title={label}
+        value={value}
+        subtitle={trend !== undefined ? trendLabel : undefined}
+        trend={trendObj}
+      />
     </div>
-    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</div>
-    {trend !== undefined && (
-      <div
-        style={{
-          fontSize: 12,
-          color:
-            trend > 0
-              ? 'var(--state-success-text)'
-              : trend < 0
-                ? 'var(--state-error-text)'
-                : 'var(--text-secondary)',
-          marginTop: 4,
-        }}
-      >
-        {trend > 0 ? '\u2191' : trend < 0 ? '\u2193' : '\u2192'} {Math.abs(trend)}% {trendLabel}
-      </div>
-    )}
-  </div>
-);
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Chart Card wrapper — thin shim around `@mfe/x-charts/ChartContainer`

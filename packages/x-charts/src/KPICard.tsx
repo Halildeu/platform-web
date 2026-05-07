@@ -46,12 +46,19 @@ export const KPICard = React.forwardRef<HTMLDivElement, KPICardProps>(function K
 ) {
   const isPositive = trend ? (trend.positive ?? trend.direction === 'up') : false;
 
+  // PR #294 (Codex iter-1) — fixed three stray `))` close-parens in
+  // the var() calls below that produced invalid CSS color values.
+  // The chip simply rendered with no foreground color before this
+  // PR; tests substring-matched on the var name and missed the
+  // malformed paren so this regression slipped through PR #223 +
+  // PR #224. PR #294 KPICard test now exact-matches the color
+  // string to fence the bug.
   const trendColor = trend
     ? isPositive
-      ? 'var(--state-success-text))'
+      ? 'var(--state-success-text)'
       : trend.direction === 'flat'
-        ? 'var(--text-secondary))'
-        : 'var(--state-error-text))'
+        ? 'var(--text-secondary)'
+        : 'var(--state-error-text)'
     : undefined;
 
   return (
