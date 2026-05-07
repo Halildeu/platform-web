@@ -287,10 +287,26 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
     bootstrap();
 
     keycloak.onTokenExpired = async () => {
+      // Phase 2 PR-Auth-1 (Codex iter-24 §Auth-1 absorb, thread 019e0119):
+      // refresh path uses the same await sequence as bootstrap. Without
+      // this, mid-session token refresh repeats the pre-cookie 401 race
+      // for any concurrent in-flight protected requests.
+      dispatch(setAuthPhase('refreshing'));
       try {
         const refreshed = await keycloak.updateToken(60);
         if (refreshed && keycloak.token) {
-          void setTokenCookie(keycloak.token);
+          // await cookie write before advancing — same fix as bootstrap
+          try {
+            await setTokenCookie(keycloak.token);
+          } catch (refreshCookieErr) {
+            console.warn('[AuthBootstrapper] refresh cookie write failed:', refreshCookieErr);
+            void clearTokenCookie();
+            // Roll back to authzReady (still authenticated; protected
+            // transport may degrade for next request batch). PR-Refresh-4
+            // will add single-flight retry queue.
+            dispatch(setAuthPhase('authzReady'));
+            return;
+          }
           const profile = mapKeycloakProfile(keycloak.token);
           const authzResult = await fetchAppPermissions(keycloak.token);
           const mergedProfile = profile
@@ -315,12 +331,21 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
               authzSnapshot: authzResult.rawResponse,
             }),
           );
+          // Refresh cycle complete; transport ready again.
+          dispatch(setAuthPhase('transportReady'));
+        } else {
+          // Refresh returned false (token still valid); roll back phase.
+          dispatch(setAuthPhase('transportReady'));
         }
       } catch (refreshError) {
         // Token refresh failed — log but don't logout.
         // Keycloak SSO session may still be valid for re-auth.
         console.warn('[AuthBootstrapper] Token refresh failed:', refreshError);
         void clearTokenCookie();
+        // Roll back to authzReady (no transportReady) — caller may
+        // re-attempt or trigger logout based on their flow. PR-Refresh-4
+        // will replace this with proper single-flight retry queue.
+        dispatch(setAuthPhase('authzReady'));
       }
     };
 
