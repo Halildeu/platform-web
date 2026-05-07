@@ -25,7 +25,10 @@ export const decodeJwtPayload = (token: string): Record<string, unknown> | null 
       return null;
     }
     const normalized = segments[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + (4 - (normalized.length % 4 || 4)) % 4, '=');
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4 || 4)) % 4),
+      '=',
+    );
     let decoded: string | null = null;
     const globalScope = getUniversalGlobal();
     if (globalScope && typeof globalScope.atob === 'function') {
@@ -85,9 +88,38 @@ type LoginResponseV1 = {
 };
 
 type AuthzSnapshotV1 = {
-  userId?: string;
+  userId?: string | number | null;
+  /**
+   * Canonical numeric subscriber id (Faz 23.5 hardening — Codex thread
+   * `019e0316` iter-3). Backend permission-service emits {@code Long}
+   * when the resolved user has a numeric DB id; UUID/sub fallback paths
+   * leave it {@code null}. Selector / reducer coerce to a non-empty
+   * string (or drop the field entirely) before persisting it.
+   */
+  subscriberId?: string | number | null;
   permissions?: string[];
   superAdmin?: boolean;
+};
+
+/**
+ * Coerce a heterogeneous identity claim (string / number / null) into the
+ * canonical string shape the rest of the FE expects. Returns
+ * {@code undefined} for blanks, NaN, and unrecognised types so callers
+ * can skip the field with {@code ?? fallback}.
+ *
+ * <p>Codex thread `019e0316` iter-2 absorb: a single helper used by both
+ * the selector and the auth reducer so the trim / number-finite contract
+ * is centralised.
+ */
+const coerceIdentityValue = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
 };
 
 // Persist helpers (yalın, localStorage yoksa gracefully düşer)
@@ -174,7 +206,7 @@ export const loginUser = createAsyncThunk(
       }
       return rejectWithValue('Bir ağ hatası oluştu. Backend sunucunuzun çalıştığından emin olun.');
     }
-  }
+  },
 );
 
 // Yeni kullanıcı kaydı için asenkron thunk
@@ -191,7 +223,7 @@ export const registerUser = createAsyncThunk(
       }
       return rejectWithValue('Bir ağ hatası oluştu. Backend sunucunuzun çalıştığından emin olun.');
     }
-  }
+  },
 );
 
 // Auth slice'ını oluşturuyoruz
@@ -234,6 +266,30 @@ const authSlice = createSlice({
       state.token = incomingToken;
       state.expiresAt = expiresAt ?? null;
       if (incomingToken) {
+        // Faz 23.5 hardening (Codex thread `019e0316` iter-3 + Delta-8):
+        // resolve canonical subscriberId in priority
+        // (snapshot > profile > previous-state-when-same-user). The
+        // sameProfile guard prevents leaking a previous session's id
+        // when a brand-new profile lands without a snapshot.
+        const previousUser = state.user;
+        const snapshotSubscriberId = coerceIdentityValue(
+          (authzSnapshot as Record<string, unknown> | null | undefined)?.['subscriberId'],
+        );
+        const profileSubscriberId = coerceIdentityValue(
+          (profile as Record<string, unknown> | null | undefined)?.['subscriberId'],
+        );
+        const sameProfile =
+          !profile ||
+          (profile.id !== undefined && profile.id === previousUser?.id) ||
+          (profile.email !== undefined && profile.email === previousUser?.email);
+        const nextSubscriberId =
+          snapshotSubscriberId ??
+          profileSubscriberId ??
+          (sameProfile ? previousUser?.subscriberId : undefined);
+
+        // Faz 23.5 hardening Delta-8: explicitly write subscriberId so the
+        // previous state's value is not silently carried through the
+        // `...state.user` spread when the new identity has no canonical id.
         const persistedUser = profile
           ? {
               ...(state.user ?? {
@@ -246,9 +302,12 @@ const authSlice = createSlice({
               role: profile.role ?? state.user?.role ?? 'USER',
               permissions: Array.isArray(profile.permissions)
                 ? profile.permissions
-                : state.user?.permissions ?? [],
+                : (state.user?.permissions ?? []),
+              subscriberId: nextSubscriberId,
             }
-          : state.user;
+          : state.user
+            ? { ...state.user, subscriberId: nextSubscriberId }
+            : state.user;
         state.user = persistedUser ?? null;
         state.status = 'succeeded';
         if (typeof window !== 'undefined') {
@@ -295,46 +354,81 @@ const authSlice = createSlice({
         state.status = 'succeeded';
         state.token = action.payload.token;
         const profile = action.payload.profile ?? null;
-        const tokenClaims = typeof action.payload.token === 'string' ? decodeJwtPayload(action.payload.token) : null;
-        const tokenClaimsRecord = tokenClaims && typeof tokenClaims === 'object' ? tokenClaims as Record<string, unknown> : null;
-        const tokenUserId = tokenClaimsRecord && typeof tokenClaimsRecord['userId'] !== 'undefined' ? tokenClaimsRecord['userId'] : undefined;
-        const tokenSessionTimeout = tokenClaimsRecord && typeof tokenClaimsRecord['sessionTimeoutMinutes'] === 'number'
-          ? tokenClaimsRecord['sessionTimeoutMinutes'] as number
-          : undefined;
-        const permissionsFromToken = tokenClaimsRecord && Array.isArray(tokenClaimsRecord['permissions'])
-          ? tokenClaimsRecord['permissions'] as unknown[]
-          : [];
-        const roleFromToken = tokenClaimsRecord && typeof tokenClaimsRecord['role'] === 'string'
-          ? String(tokenClaimsRecord['role'])
-          : undefined;
+        const tokenClaims =
+          typeof action.payload.token === 'string' ? decodeJwtPayload(action.payload.token) : null;
+        const tokenClaimsRecord =
+          tokenClaims && typeof tokenClaims === 'object'
+            ? (tokenClaims as Record<string, unknown>)
+            : null;
+        const tokenUserId =
+          tokenClaimsRecord && typeof tokenClaimsRecord['userId'] !== 'undefined'
+            ? tokenClaimsRecord['userId']
+            : undefined;
+        const tokenSessionTimeout =
+          tokenClaimsRecord && typeof tokenClaimsRecord['sessionTimeoutMinutes'] === 'number'
+            ? (tokenClaimsRecord['sessionTimeoutMinutes'] as number)
+            : undefined;
+        const permissionsFromToken =
+          tokenClaimsRecord && Array.isArray(tokenClaimsRecord['permissions'])
+            ? (tokenClaimsRecord['permissions'] as unknown[])
+            : [];
+        const roleFromToken =
+          tokenClaimsRecord && typeof tokenClaimsRecord['role'] === 'string'
+            ? String(tokenClaimsRecord['role'])
+            : undefined;
         const authzUserId = action.payload.authzSnapshot?.userId;
         const authzPermissions = Array.isArray(action.payload.authzSnapshot?.permissions)
           ? action.payload.authzSnapshot?.permissions
           : [];
-        const inferredUserId = profile?.id
-          ?? (typeof authzUserId === 'number' || typeof authzUserId === 'string' ? authzUserId : undefined)
-          ?? (typeof tokenUserId === 'number' || typeof tokenUserId === 'string' ? tokenUserId : undefined)
-          ?? (action.payload as Record<string, unknown>).userId
-          ?? (action.payload as Record<string, unknown>).id;
-        const profileFullName = profile?.fullName
-          ?? profile?.name
-          ?? [profile?.firstName, profile?.lastName].filter((part: string | undefined) => part && part.trim().length > 0).join(' ').trim();
-        const displayName = profileFullName && profileFullName.length > 0
-          ? profileFullName
-          : action.payload.email?.split('@')[0] ?? undefined;
+        const inferredUserId =
+          profile?.id ??
+          (typeof authzUserId === 'number' || typeof authzUserId === 'string'
+            ? authzUserId
+            : undefined) ??
+          (typeof tokenUserId === 'number' || typeof tokenUserId === 'string'
+            ? tokenUserId
+            : undefined) ??
+          (action.payload as Record<string, unknown>).userId ??
+          (action.payload as Record<string, unknown>).id;
+        const profileFullName =
+          profile?.fullName ??
+          profile?.name ??
+          [profile?.firstName, profile?.lastName]
+            .filter((part: string | undefined) => part && part.trim().length > 0)
+            .join(' ')
+            .trim();
+        const displayName =
+          profileFullName && profileFullName.length > 0
+            ? profileFullName
+            : (action.payload.email?.split('@')[0] ?? undefined);
         const lastLoginAt = profile?.lastLoginAt ?? profile?.lastLogin ?? undefined;
-        const sessionTimeoutMinutes = profile?.sessionTimeoutMinutes
-          ?? tokenSessionTimeout
-          ?? action.payload.sessionTimeoutMinutes
-          ?? undefined;
-        const normalizedPermissions = Array.isArray(authzPermissions) && authzPermissions.length > 0
-          ? authzPermissions
-          : Array.isArray(action.payload.permissions)
-            ? action.payload.permissions
-            : permissionsFromToken;
+        const sessionTimeoutMinutes =
+          profile?.sessionTimeoutMinutes ??
+          tokenSessionTimeout ??
+          action.payload.sessionTimeoutMinutes ??
+          undefined;
+        const normalizedPermissions =
+          Array.isArray(authzPermissions) && authzPermissions.length > 0
+            ? authzPermissions
+            : Array.isArray(action.payload.permissions)
+              ? action.payload.permissions
+              : permissionsFromToken;
+
+        // Faz 23.5 hardening (Codex thread `019e0316` iter-3): canonical
+        // subscriberId from /api/v1/authz/me. Keeps undefined when the
+        // backend left it null (UUID-only fallback).
+        const normalizedSubscriberId = coerceIdentityValue(
+          (action.payload.authzSnapshot as Record<string, unknown> | null | undefined)?.[
+            'subscriberId'
+          ],
+        );
 
         const normalizedUser: UserProfile = {
-          id: inferredUserId !== undefined && inferredUserId !== null ? String(inferredUserId) : undefined,
+          id:
+            inferredUserId !== undefined && inferredUserId !== null
+              ? String(inferredUserId)
+              : undefined,
+          ...(normalizedSubscriberId !== undefined ? { subscriberId: normalizedSubscriberId } : {}),
           email: action.payload.email,
           role: action.payload.role ?? roleFromToken ?? 'USER',
           permissions: normalizedPermissions.map((permission) => String(permission)),
@@ -344,7 +438,8 @@ const authSlice = createSlice({
           sessionTimeoutMinutes,
         };
         state.user = normalizedUser;
-        state.expiresAt = typeof action.payload.expiresAt === 'number' ? action.payload.expiresAt : null;
+        state.expiresAt =
+          typeof action.payload.expiresAt === 'number' ? action.payload.expiresAt : null;
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
@@ -368,5 +463,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, resetRegistrationStatus, setKeycloakSession, setAuthInitialized } = authSlice.actions;
+export const { logout, resetRegistrationStatus, setKeycloakSession, setAuthInitialized } =
+  authSlice.actions;
 export default authSlice.reducer;
