@@ -93,6 +93,33 @@ describe('EndpointAuditPage', () => {
     });
   });
 
+  it('does NOT forward a partial deviceId to the backend (UUID validation)', async () => {
+    const seenUrls: string[] = [];
+    globalThis.fetch = vi.fn(async (input) => {
+      seenUrls.push(typeof input === 'string' ? input : (input as Request).url);
+      return new Response('[]', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    renderPage();
+    const input = await screen.findByTestId('endpoint-admin-audit-filter-device');
+    // Partial input — kullanıcı UUID yazıyor; backend `@RequestParam UUID`
+    // parse ettiği için tam UUID girilene kadar query'ye gitmemeli.
+    fireEvent.change(input, { target: { value: 'b1c2d3e4-1111' } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('endpoint-admin-audit-filter-device-hint')).toBeInTheDocument();
+    });
+
+    // Tüm fetch çağrılarında deviceId query'si yok.
+    expect(seenUrls.length).toBeGreaterThan(0);
+    seenUrls.forEach((u) => {
+      expect(u).not.toContain('deviceId=');
+    });
+  });
+
   it('shows the forbidden state on 403', async () => {
     globalThis.fetch = vi.fn(
       async () =>

@@ -21,13 +21,28 @@ const formatTimestamp = (value: string | null): string => {
   return d.toLocaleString();
 };
 
+/**
+ * Codex iter-1 must-fix #2: backend `AdminEndpointAuditController`
+ * receives `deviceId` as `@RequestParam UUID`. Sending partial input
+ * (`b`, `b1c2`, …) triggers Spring's UUID parse error → 400 noise.
+ * Only forward fully-formed UUIDs; invalid strings keep the filter
+ * client-side until they validate.
+ */
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const isValidUuid = (value: string): boolean => UUID_RE.test(value.trim());
+
 export const EndpointAuditPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
   const [deviceFilter, setDeviceFilter] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('');
 
+  const trimmedDevice = deviceFilter.trim();
+  const deviceFilterValid = trimmedDevice === '' || isValidUuid(trimmedDevice);
+  const deviceFilterSubmitted =
+    trimmedDevice !== '' && deviceFilterValid ? trimmedDevice : undefined;
+
   const { data, isLoading, isError, error, isFetching } = useListEndpointAuditEventsQuery({
-    deviceId: deviceFilter.trim() || undefined,
+    deviceId: deviceFilterSubmitted,
     eventType: eventTypeFilter.trim() || undefined,
     limit: 50,
   });
@@ -115,11 +130,15 @@ export const EndpointAuditPage: React.FC = () => {
   };
 
   return (
-    <section style={{ padding: 24 }}>
+    <section style={{ padding: 24 }} aria-busy={isLoading || isFetching}>
       <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
         {t('endpointAdmin.audit.heading')}
       </h2>
-      <p style={{ marginTop: 4, color: 'var(--text-secondary)', fontSize: 13 }}>
+      <p
+        role="status"
+        aria-live="polite"
+        style={{ marginTop: 4, color: 'var(--text-secondary)', fontSize: 13 }}
+      >
         {t('endpointAdmin.audit.subtitle')}
         {isFetching && !isLoading ? ` · ${t('endpointAdmin.audit.refreshing')}` : null}
       </p>
@@ -143,16 +162,29 @@ export const EndpointAuditPage: React.FC = () => {
             onChange={(e) => setDeviceFilter(e.target.value)}
             placeholder="uuid"
             data-testid="endpoint-admin-audit-filter-device"
+            aria-invalid={!deviceFilterValid}
+            aria-describedby={deviceFilterValid ? undefined : 'device-filter-hint'}
             style={{
               marginTop: 4,
               padding: '6px 10px',
-              border: '1px solid var(--border-subtle)',
+              border: `1px solid ${
+                deviceFilterValid ? 'var(--border-subtle)' : 'var(--danger-color)'
+              }`,
               borderRadius: 4,
               minWidth: 280,
               fontFamily: 'monospace',
               fontSize: 12,
             }}
           />
+          {deviceFilterValid ? null : (
+            <span
+              id="device-filter-hint"
+              data-testid="endpoint-admin-audit-filter-device-hint"
+              style={{ marginTop: 4, color: 'var(--danger-color)', fontSize: 11 }}
+            >
+              {t('endpointAdmin.audit.filter.deviceIdInvalid')}
+            </span>
+          )}
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', fontSize: 12 }}>
           <span style={{ color: 'var(--text-secondary)' }}>

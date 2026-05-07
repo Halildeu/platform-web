@@ -145,7 +145,9 @@ export const EndpointDevicesPage: React.FC = () => {
                     </span>
                   ) : null}
                 </td>
-                <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{row.agentVersion}</td>
+                <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>
+                  {row.agentVersion ?? '—'}
+                </td>
                 <td style={{ padding: '8px 12px' }}>
                   <span
                     data-testid={`device-status-${row.status}`}

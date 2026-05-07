@@ -44,6 +44,8 @@ const DICT_TR = {
   'endpointAdmin.audit.forbidden': 'Denetim olaylarını görüntüleme yetkiniz yok.',
   'endpointAdmin.audit.empty': 'Bu filtreyle eşleşen denetim olayı yok.',
   'endpointAdmin.audit.filter.deviceId': 'Cihaz ID (UUID)',
+  'endpointAdmin.audit.filter.deviceIdInvalid':
+    'Geçerli bir UUID girin (örn. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx). Filtre tam UUID girene kadar uygulanmaz.',
   'endpointAdmin.audit.filter.eventType': 'Olay türü',
   'endpointAdmin.audit.col.occurredAt': 'Zaman',
   'endpointAdmin.audit.col.eventType': 'Olay',
@@ -90,6 +92,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.audit.forbidden': 'You do not have permission to view audit events.',
   'endpointAdmin.audit.empty': 'No audit events match this filter.',
   'endpointAdmin.audit.filter.deviceId': 'Device ID (UUID)',
+  'endpointAdmin.audit.filter.deviceIdInvalid':
+    'Enter a valid UUID (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx). The filter applies once a complete UUID is entered.',
   'endpointAdmin.audit.filter.eventType': 'Event type',
   'endpointAdmin.audit.col.occurredAt': 'Time',
   'endpointAdmin.audit.col.eventType': 'Event',
