@@ -33,28 +33,26 @@ export const SchemaExplorerModule = createLazyRemoteModule(
 /* ------------------------------------------------------------------ */
 
 /**
- * Build-time evaluation. Vite's define plugin inlines
- * `process.env.VITE_*` references at compile time; when the flag is
- * unset/false, this constant becomes the literal `false` and the
- * conditional below tree-shakes the `import("mfe_endpoint_admin/...")`
- * dead branch out of the bundle. The vite.config buildRemotes()
- * companion check omits the federation manifest entry for the same
- * remote so MF runtime never tries to resolve a STUB.
+ * Build-time boolean injected via `vite.config define`. Direct define
+ * is the canonical Vite/esbuild/Rollup pattern that yields reliable
+ * dead-code elimination — the IIFE-over-`process.env` approach used
+ * earlier was not provably tree-shaken (Codex PR #287 iter-1
+ * must-fix #1).
  *
- * Pattern reason: PR #280 deploy hit MF Runtime #RUNTIME-002 because
- * the previous data-URI STUB did not satisfy the federation runtime's
- * init()/get() contract. Build-time omit avoids the contract entirely.
+ * Companion gate: `vite.config buildRemotes(endpointAdminEnabled)`
+ * omits the manifest entry when this value is `false`, so neither
+ * side references the disabled remote in the compiled bundle and MF
+ * runtime never tries to resolve `init()`/`get()` against a STUB.
+ *
+ * Pattern reason: PR #258/#280 deploy hit MF Runtime #RUNTIME-002
+ * because the previous data-URI STUB did not satisfy the federation
+ * runtime's container contract. Build-time omit avoids the contract.
  */
-const ENDPOINT_ADMIN_REMOTE_ENABLED = (() => {
-  const flag = process.env.VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE;
-  if (typeof flag !== 'string') return false;
-  const normalized = flag.trim().toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
-})();
+declare const __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: boolean;
 
 const EndpointAdminNoop: React.FC = () => null;
 EndpointAdminNoop.displayName = 'EndpointAdminNoop';
 
-export const EndpointAdminModule: React.ComponentType = ENDPOINT_ADMIN_REMOTE_ENABLED
+export const EndpointAdminModule: React.ComponentType = __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__
   ? createLazyRemoteModule('EndpointAdmin', () => import('mfe_endpoint_admin/EndpointAdminApp'))
   : EndpointAdminNoop;
