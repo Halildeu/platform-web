@@ -2,72 +2,14 @@ import React from 'react';
 import type { SharedReportId } from '@platform/capabilities';
 import type { ReportModule } from '../types';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
-import type {
-  DynamicReportFilters,
-  DynamicReportRow,
-  ReportListItem,
-  ReportColumnMeta,
-  ReportCapabilities,
-} from './types';
-import { fetchReportData, fetchReportMetadata, exportReportData } from './api';
+import type { DynamicReportFilters, DynamicReportRow, ReportListItem } from './types';
+import { fetchReportData, exportReportData } from './api';
 import { CompanyPicker } from '../../components/CompanyPicker';
-
-/* ------------------------------------------------------------------ */
-/*  Backend ReportColumnMeta → Universal ColumnMeta mapper             */
-/* ------------------------------------------------------------------ */
-
-function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
-  const base = {
-    field: col.field,
-    headerNameKey: col.headerName, // backend sends pre-translated string
-    width: col.width,
-  };
-
-  switch (col.type) {
-    case 'number':
-      return {
-        ...base,
-        columnType: 'number' as const,
-        decimals: col.decimals,
-        suffix: col.suffix,
-        prefix: col.prefix,
-      };
-    case 'date':
-      return { ...base, columnType: 'date' as const };
-    case 'badge':
-      return {
-        ...base,
-        columnType: 'badge' as const,
-        variantMap: (col.variantMap ?? {}) as Record<string, unknown>,
-        labelMap: col.labelMap,
-      };
-    case 'status':
-      return {
-        ...base,
-        columnType: 'status' as const,
-        statusMap: (col.statusMap ?? {}) as Record<string, unknown>,
-      };
-    case 'currency':
-      return {
-        ...base,
-        columnType: 'currency' as const,
-        currencyCode: col.currencyCode,
-        decimals: col.decimals,
-      };
-    case 'boolean':
-      return { ...base, columnType: 'boolean' as const };
-    case 'percent':
-      return { ...base, columnType: 'percent' as const, decimals: col.decimals };
-    case 'enum':
-      return {
-        ...base,
-        columnType: 'enum' as const,
-        labelMap: col.labelMap ?? {},
-      };
-    default:
-      return { ...base, columnType: 'text' as const };
-  }
-}
+import {
+  fetchMeta as fetchMetaFromCache,
+  getCachedCapabilities,
+  getCachedColumns,
+} from './metadata-cache';
 
 /* ------------------------------------------------------------------ */
 /*  Dynamic report module factory                                      */
@@ -79,48 +21,29 @@ export const createDynamicReportModule = (
   const moduleId = `reports.dynamic.${report.key}`;
 
   /*
-   * Column metadata + capabilities cache — fetched once, then reused.
-   * Both pieces come from the same /metadata response so we cache
-   * them together to avoid a second round-trip.
+   * Phase 2 PR-Reporting-2 (MFE Auth Transport Contract follow-up to
+   * PR-Auth-1, #302): metadata cache moved to a module-scoped helper
+   * (./metadata-cache.ts). The previous per-factory cache duplicated
+   * work whenever multiple factory instances were created for the same
+   * report.key (e.g. when a dashboard widget and a route both reference
+   * the same report). The shared cache also adds:
    *
-   * `cachedCapabilities` stays {@code undefined} until the metadata
-   * fetch resolves; older backends without the capabilities field
-   * surface as {@code undefined} permanently and ReportPage maps
-   * that to all-false (matching the platform-web #271 stop-gap).
+   *   - auth.ready() gate so no /metadata request leaves the MFE before
+   *     the shell auth FSM reaches transportReady (closes the residual
+   *     401 race that PR-Auth-1's eager-prefetch removal didn't cover);
+   *   - in-flight promise share for concurrent callers on the same key;
+   *   - bounded concurrency (default 4) so a 12-widget dashboard does
+   *     not fan out 12 simultaneous /metadata calls;
+   *   - epoch-aware invalidation (logout / re-login drop the cache);
+   *   - failure NOT cached — next call retries (was: cached [] forever).
+   *
+   * The factory therefore becomes a thin adapter; the real intelligence
+   * lives in metadata-cache.ts and is unit-tested independently.
    */
-  let cachedColumnMeta: ColumnMeta[] | null = null;
-  let cachedCapabilities: ReportCapabilities | undefined;
-  let metaPromise: Promise<ColumnMeta[]> | null = null;
-
   const ensureColumnMeta = async (): Promise<ColumnMeta[]> => {
-    if (cachedColumnMeta) return cachedColumnMeta;
-    if (!metaPromise) {
-      metaPromise = fetchReportMetadata(report.key)
-        .then((meta) => {
-          cachedColumnMeta = meta.columns.map(mapBackendColumnMeta);
-          cachedCapabilities = meta.capabilities;
-          return cachedColumnMeta;
-        })
-        .catch((err) => {
-          console.warn(`[dynamic-report] metadata fetch failed for ${report.key}:`, err);
-          cachedColumnMeta = [];
-          cachedCapabilities = undefined;
-          return cachedColumnMeta;
-        });
-    }
-    return metaPromise;
+    const cached = await fetchMetaFromCache(report.key);
+    return cached.columns;
   };
-
-  /*
-   * Phase 2 PR-Auth-1 (Codex iter-22 §Reporting absorb, thread 019e0119):
-   * eager metadata prefetch removed. Module factory must be side-effect-free
-   * to avoid the pre-cookie 401 storm + recreation fan-out (574 metadata
-   * requests observed at testai.acik.com cold load).
-   *
-   * Metadata is now fetched lazily on first render via {@link ensureColumnMeta}
-   * inside the route component. PR-Reporting-2 will migrate this to a
-   * shared single-flight cache + bounded concurrency + auth-ready gate.
-   */
 
   return {
     id: moduleId,
@@ -178,7 +101,7 @@ export const createDynamicReportModule = (
       );
     },
     requiredFilterFields: ['companyId'],
-    getColumnMeta: () => cachedColumnMeta ?? [],
+    getColumnMeta: () => getCachedColumns(report.key),
     /*
      * a11y-pr1 follow-up: expose the async loader so ReportPage can
      * await metadata before computing colDefs. Without this, the eager
@@ -195,7 +118,7 @@ export const createDynamicReportModule = (
      * resolves; older backends that don't ship the field surface as
      * undefined permanently and ReportPage maps that to all-false.
      */
-    getCapabilities: () => cachedCapabilities,
+    getCapabilities: () => getCachedCapabilities(report.key),
     getColumns: () => [],
     fetchRows: (filters, request) => fetchReportData(report.key, filters, request),
     exportRows: (filters, format) => exportReportData(report.key, filters, format),
