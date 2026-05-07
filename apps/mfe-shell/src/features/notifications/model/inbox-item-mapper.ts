@@ -43,9 +43,21 @@ export const extractInboxRowId = (surfaceId: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+/**
+ * Severity → priority mapping (Codex iter-5 RED absorb).
+ *
+ * NotificationSurfaceItem.priority only accepts {@code "normal" | "high"} —
+ * the design-system panel grouping/filter logic treats {@code "high"} as
+ * the special "pinned to top" bucket and everything else as ordinary.
+ *
+ * info/warning collapse to {@code "normal"} (visual distinction is carried
+ * by the {@code type} axis: info / warning / error). Only critical
+ * promotes to {@code "high"} so it floats to the top alongside being
+ * marked {@code pinned}.
+ */
 const PRIORITY_BY_SEVERITY = {
-  info: 'low',
-  warning: 'medium',
+  info: 'normal',
+  warning: 'normal',
   critical: 'high',
 } as const;
 

@@ -33,14 +33,17 @@ describe('inboxItemToSurfaceItem', () => {
     expect(surface.createdAt).toBe(Date.parse('2026-05-07T08:00:00Z'));
   });
 
-  it('maps severity → type + priority + pinned', () => {
+  it('maps severity → type + priority + pinned (priority contract: normal | high)', () => {
+    // NotificationSurfaceItem.priority only accepts "normal" | "high".
+    // Visual distinction is carried by `type`; only critical promotes
+    // to "high" so it floats with `pinned: true`.
     expect(inboxItemToSurfaceItem(baseRow).type).toBe('info');
-    expect(inboxItemToSurfaceItem(baseRow).priority).toBe('low');
+    expect(inboxItemToSurfaceItem(baseRow).priority).toBe('normal');
     expect(inboxItemToSurfaceItem(baseRow).pinned).toBe(false);
 
     const warn = inboxItemToSurfaceItem({ ...baseRow, severity: 'warning' });
     expect(warn.type).toBe('warning');
-    expect(warn.priority).toBe('medium');
+    expect(warn.priority).toBe('normal');
     expect(warn.pinned).toBe(false);
 
     const crit = inboxItemToSurfaceItem({ ...baseRow, severity: 'critical' });
