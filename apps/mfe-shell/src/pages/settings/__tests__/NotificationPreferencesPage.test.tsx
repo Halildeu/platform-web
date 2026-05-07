@@ -599,6 +599,49 @@ describe('NotificationPreferencesPage', () => {
     await vi.waitFor(() => {
       expect(screen.getByTestId('pref-mute-channel-error')).toBeInTheDocument();
     });
-    expect(screen.getByText(/yetkiniz yok/)).toBeInTheDocument();
+    // Codex thread `019e03d1` REVISE iter-2 absorb: assert the
+    // channel-mute domain language, not the restore-defaults one
+    // (the previous /yetkiniz yok/ regex would match either).
+    expect(
+      screen.getByText(/Bu organizasyon \/ abone için kanal susturma yetkiniz yok/),
+    ).toBeInTheDocument();
+    // Negative assertion guarding against regression: the
+    // restore-defaults copy must NOT leak into the mute-channel
+    // banner.
+    expect(screen.queryByText(/tercih sıfırlama/)).not.toBeInTheDocument();
+  });
+
+  // Codex thread `019e03d1` REVISE iter-2 absorb: 400 unknown-channel
+  // is a real user-correctable error path (the dispatcher's allow-list
+  // can change), so the page must surface it with channel-mute domain
+  // copy instead of falling through to the generic fallback.
+  it('renders 400 unknown-channel copy when backend rejects the channel', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+    muteChannelMutationMock.mockRejectedValue({
+      status: 400,
+      data: {
+        error: 'validation',
+        message: 'channel must be one of email, sms, slack, webhook, in-app',
+      },
+    });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.change(screen.getByTestId('pref-mute-channel-select'), {
+      target: { value: 'email' },
+    });
+    fireEvent.click(screen.getByTestId('pref-mute-channel-confirm'));
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-mute-channel-error')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Seçilen kanal tanınmıyor\. Kanal listesini yenileyip tekrar deneyin/),
+    ).toBeInTheDocument();
+    // Negative assertion: the generic "Kanal susturulamadı" fallback
+    // copy must NOT appear when status === 400 — that would mean we
+    // forgot to special-case the error and fell through to the
+    // catch-all.
+    expect(screen.queryByText(/^Kanal susturulamadı/)).not.toBeInTheDocument();
   });
 });

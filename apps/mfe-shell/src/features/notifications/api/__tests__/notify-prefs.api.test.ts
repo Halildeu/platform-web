@@ -334,10 +334,19 @@ describe('notifyPrefsApi.muteChannel (Faz 23.6 PR-C2)', () => {
     await sub;
     expect(listFetchCount).toBe(1);
 
+    // Codex thread `019e03d1` REVISE iter-2 absorb: do NOT call
+    // `sub.refetch()` manually — that would only prove the helper
+    // works, not that `invalidatesTags: LIST` triggers an automatic
+    // refetch on the active subscription. Wait for RTK Query's own
+    // refetch tick instead, then assert the count went up.
     await store.dispatch(
       notifyPrefsApi.endpoints.muteChannel.initiate({ ...IDENTITY, channel: 'email' }),
     );
-    await sub.refetch();
+    // RTK Query refires the list query because the LIST tag was
+    // invalidated by the mutation. Microtask + macrotask boundary so
+    // the dispatched re-subscribe lands.
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
     expect(listFetchCount).toBeGreaterThanOrEqual(2);
     sub.unsubscribe();
   });

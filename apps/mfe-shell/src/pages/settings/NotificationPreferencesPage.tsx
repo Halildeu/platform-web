@@ -104,7 +104,7 @@ const NotificationPreferencesPage: React.FC = () => {
       } catch (err) {
         setMuteChannelFeedback({
           kind: 'error',
-          message: extractRestoreError(err),
+          message: extractMuteChannelError(err),
         });
       } finally {
         setMuteChannelArmed(null);
@@ -673,6 +673,33 @@ const extractRestoreError = (err: unknown): string => {
     }
   }
   return 'Tercihler sıfırlanamadı. Lütfen tekrar deneyin.';
+};
+
+/**
+ * Faz 23.6 PR-C2 — Codex thread `019e03d1` REVISE iter-2 absorb:
+ * mute-channel error mapping must speak the channel-mute domain
+ * language, not the restore-defaults one. 400 (unknown channel) is
+ * a real user-correctable error here (the dispatcher's allow-list
+ * may have changed), so it gets its own copy instead of falling
+ * through to the generic fallback.
+ */
+const extractMuteChannelError = (err: unknown): string => {
+  if (err && typeof err === 'object' && 'status' in err) {
+    const status = (err as { status?: number }).status;
+    if (status === 400) {
+      return 'Seçilen kanal tanınmıyor. Kanal listesini yenileyip tekrar deneyin.';
+    }
+    if (status === 503) {
+      return 'Bildirim tercihi özelliği bu ortamda kapalı.';
+    }
+    if (status === 403) {
+      return 'Bu organizasyon / abone için kanal susturma yetkiniz yok.';
+    }
+    if (status === 401) {
+      return 'Oturum doğrulanamadı. Yeniden giriş yapın.';
+    }
+  }
+  return 'Kanal susturulamadı. Lütfen tekrar deneyin.';
 };
 
 export default NotificationPreferencesPage;
