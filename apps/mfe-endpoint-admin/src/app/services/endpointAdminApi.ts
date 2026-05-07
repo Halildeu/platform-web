@@ -2,6 +2,11 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
 import { resolveAuthToken } from '@mfe/shared-http';
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
+import type { EndpointDevice } from '../../entities/endpoint-device/types';
+import type {
+  EndpointAuditEvent,
+  ListAuditEventsArgs,
+} from '../../entities/endpoint-audit-event/types';
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -53,13 +58,69 @@ const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError
 export const endpointAdminApi = createApi({
   reducerPath: 'endpointAdminApi',
   baseQuery: rawBaseQuery,
-  tagTypes: ['AgentStatus'] as const,
+  tagTypes: ['AgentStatus', 'EndpointDevice', 'EndpointAuditEvent'] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
       query: () => ({ url: '/endpoint-agents/status', method: 'GET' }),
       providesTags: ['AgentStatus'],
     }),
+    /**
+     * Backend: `AdminEndpointDeviceController.listDevices` —
+     *   GET /api/v1/admin/endpoint-devices
+     *   class-level @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *   401 (no JWT) / 403 (FGA tuple yok) / 200 + EndpointDeviceDto[]
+     */
+    listEndpointDevices: builder.query<EndpointDevice[], void>({
+      query: () => ({ url: '/admin/endpoint-devices', method: 'GET' }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'EndpointDevice' as const, id })),
+              { type: 'EndpointDevice' as const, id: 'LIST' },
+            ]
+          : [{ type: 'EndpointDevice' as const, id: 'LIST' }],
+    }),
+    /**
+     * Backend: `AdminEndpointDeviceController.getDevice` —
+     *   GET /api/v1/admin/endpoint-devices/{deviceId}
+     */
+    getEndpointDevice: builder.query<EndpointDevice, string>({
+      query: (deviceId) => ({
+        url: `/admin/endpoint-devices/${encodeURIComponent(deviceId)}`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, deviceId) => [
+        { type: 'EndpointDevice' as const, id: deviceId },
+      ],
+    }),
+    /**
+     * Backend: `AdminEndpointAuditController.listAuditEvents` —
+     *   GET /api/v1/admin/endpoint-audit-events?deviceId=&commandId=&eventType=&limit=50
+     *   class-level @RequireModule(VIEWER='can_view')
+     */
+    listEndpointAuditEvents: builder.query<EndpointAuditEvent[], ListAuditEventsArgs | void>({
+      query: (args) => {
+        const params: Record<string, string> = {};
+        if (args?.deviceId) params.deviceId = args.deviceId;
+        if (args?.commandId) params.commandId = args.commandId;
+        if (args?.eventType) params.eventType = args.eventType;
+        if (typeof args?.limit === 'number') params.limit = String(args.limit);
+        return { url: '/admin/endpoint-audit-events', method: 'GET', params };
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'EndpointAuditEvent' as const, id })),
+              { type: 'EndpointAuditEvent' as const, id: 'LIST' },
+            ]
+          : [{ type: 'EndpointAuditEvent' as const, id: 'LIST' }],
+    }),
   }),
 });
 
-export const { useGetAgentStatusQuery } = endpointAdminApi;
+export const {
+  useGetAgentStatusQuery,
+  useListEndpointDevicesQuery,
+  useGetEndpointDeviceQuery,
+  useListEndpointAuditEventsQuery,
+} = endpointAdminApi;
