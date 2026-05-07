@@ -96,18 +96,24 @@ const NotificationCenter: React.FC = () => {
 
   // Faz 23.4 PR-E.5 PR4: subscribe to the live SSE unread-count stream so
   // the badge updates the moment a notification is read/archived from
-  // another tab or device. The hook is a no-op while identity is null.
-  // Cache patches happen inside the hook; nothing else to wire here —
-  // useListInboxQuery refetches automatically when the Inbox/LIST tag is
-  // invalidated by the SSE handler.
-  useInboxUnreadSse(identity);
+  // another tab or device. The hook patches both getUnreadCount and
+  // listInbox caches directly (no refetch round trip for the count) AND
+  // invalidates Inbox/LIST so the drawer's row collection re-fetches.
+  // Returns the latest pushed count so the bell can prefer it over the
+  // (potentially stale) listInbox cache before the refetch resolves.
+  const sseStatus = useInboxUnreadSse(identity);
 
   const inboxItems = useMemo<NotificationSurfaceItem[]>(() => {
     if (!inboxQuery.data) return [];
     return inboxQuery.data.items.map(inboxItemToSurfaceItem);
   }, [inboxQuery.data]);
 
-  const inboxUnreadCount = inboxQuery.data?.unreadCount ?? 0;
+  // Prefer the live SSE-pushed count when available; fall back to the
+  // listInbox cache. The cache is also patched by the SSE hook, but the
+  // SSE-pushed value is the authoritative immediate-render source — the
+  // cache write may not have propagated to this component's selector
+  // yet on the same React tick.
+  const inboxUnreadCount = sseStatus.lastUnreadCount ?? inboxQuery.data?.unreadCount ?? 0;
   const totalUnreadCount = localState.unreadCount + inboxUnreadCount;
 
   const drawerTitle = useMemo(() => {

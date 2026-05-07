@@ -203,4 +203,45 @@ describe('useInboxUnreadSse', () => {
     unmount();
     expect(es.closed).toBe(true);
   });
+
+  /**
+   * Codex iter-7 absorb — stale-reconnect race regression test.
+   *
+   * Without effect-local cancelled flag, an error on alice's connection
+   * arms a reconnect timer; before the timer fires we flip to bob; the
+   * shared ref is reset by bob's effect; alice's timer fires and
+   * connects to alice — silently leaking traffic across users.
+   * Effect-local closure (let cancelled = false) plugs that race.
+   */
+  it('does not resurrect a stale connection after identity flip', () => {
+    const { Wrapper } = buildWrapper();
+    const { rerender } = renderHook<unknown, { orgId: string; subscriberId: string } | null>(
+      (id) => useInboxUnreadSse(id),
+      {
+        wrapper: Wrapper,
+        initialProps: { orgId: 'default', subscriberId: 'alice' },
+      },
+    );
+    const aliceEs = stubInstances[0];
+    expect(aliceEs.url).toContain('subscriberId=alice');
+
+    // Schedule alice's reconnect via an error event.
+    act(() => aliceEs.fire('error'));
+    expect(aliceEs.closed).toBe(true);
+
+    // Flip identity to bob *before* the reconnect timer fires.
+    rerender({ orgId: 'default', subscriberId: 'bob' });
+    const bobEs = stubInstances[stubInstances.length - 1];
+    expect(bobEs.url).toContain('subscriberId=bob');
+    const sourcesBeforeTimer = stubInstances.length;
+
+    // Advance past alice's 1s reconnect window. No new alice ES should
+    // be created — the captured cancelled flag for the alice effect run
+    // is true, so the timer callback bails before connect().
+    act(() => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(stubInstances.length).toBe(sourcesBeforeTimer);
+    expect(bobEs.closed).toBe(false);
+  });
 });

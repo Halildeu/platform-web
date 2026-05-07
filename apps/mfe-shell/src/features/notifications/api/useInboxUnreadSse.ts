@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { notifyInboxApi } from './notify-inbox.api';
 import type { InboxRequestIdentity } from './notify-inbox.types';
@@ -91,29 +91,26 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
     retryCount: 0,
   });
 
-  // Refs so the connect callback can be referenced inside its own
-  // setTimeout closure without re-running the effect.
-  const sourceRef = useRef<EventSource | null>(null);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const backoffRef = useRef<number>(INITIAL_BACKOFF_MS);
-  const retryCountRef = useRef<number>(0);
-  const cancelledRef = useRef<boolean>(false);
-
   useEffect(() => {
     if (!identity) {
-      // Identity unresolved or signed out → tear down any existing
-      // connection and stay idle until identity becomes truthy again.
-      teardown();
+      // Identity unresolved or signed out → no connection; remain idle.
       setStatus({ connected: false, lastUnreadCount: null, retryCount: 0 });
       return;
     }
 
-    cancelledRef.current = false;
-    backoffRef.current = INITIAL_BACKOFF_MS;
-    retryCountRef.current = 0;
+    // Codex iter-7 race fix: every effect run gets a private `cancelled`
+    // flag (closure-scoped) and a private bag of resources. Stale handlers
+    // / timers from a prior identity check the *captured* `cancelled`,
+    // not a shared ref — so a late reconnect never resurrects an
+    // already-torn-down connection for the previous subscriber.
+    let cancelled = false;
+    let currentSource: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let backoff = INITIAL_BACKOFF_MS;
+    let retryCount = 0;
 
     const connect = () => {
-      if (cancelledRef.current) return;
+      if (cancelled) return;
 
       const url = buildStreamUrl(identity);
       let es: EventSource;
@@ -125,23 +122,34 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
         // useGetUnreadCountQuery.
         return;
       }
-      sourceRef.current = es;
+      currentSource = es;
 
       es.addEventListener('open', () => {
-        backoffRef.current = INITIAL_BACKOFF_MS;
-        retryCountRef.current = 0;
+        if (cancelled) return;
+        backoff = INITIAL_BACKOFF_MS;
+        retryCount = 0;
         setStatus((prev) => ({ ...prev, connected: true, retryCount: 0 }));
       });
 
       es.addEventListener('unread-count', (event: MessageEvent) => {
+        if (cancelled) return;
         const parsed = parseUnreadEvent(event.data);
         if (parsed === null) return;
-        // Patch the getUnreadCount cache so the bell re-renders
-        // immediately, and invalidate the Inbox LIST tag so the next
-        // drawer open re-fetches the row collection.
+        // Patch BOTH affected caches so consumers reading either hook
+        // see the live count without waiting on a refetch:
+        //   1. getUnreadCount(identity) — direct match for callers using
+        //      useGetUnreadCountQuery.
+        //   2. listInbox(identity) — only the unreadCount field is
+        //      patched; items remain stale until the LIST tag refetch
+        //      below resolves with the post-mutation row set.
         dispatch(
           notifyInboxApi.util.upsertQueryData('getUnreadCount', identity, {
             unreadCount: parsed,
+          }),
+        );
+        dispatch(
+          notifyInboxApi.util.updateQueryData('listInbox', identity, (draft) => {
+            if (draft) draft.unreadCount = parsed;
           }),
         );
         dispatch(notifyInboxApi.util.invalidateTags([{ type: 'Inbox', id: 'LIST' }]));
@@ -149,43 +157,46 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
       });
 
       es.addEventListener('error', () => {
-        // EventSource dispatches 'error' both on transient blips and on
-        // hard close. Treat both as a reconnect signal — the server is
-        // designed to be reconnected to.
-        retryCountRef.current += 1;
-        setStatus((prev) => ({ ...prev, connected: false, retryCount: retryCountRef.current }));
+        if (cancelled) return;
+        retryCount += 1;
+        setStatus((prev) => ({ ...prev, connected: false, retryCount }));
         es.close();
-        sourceRef.current = null;
+        if (currentSource === es) currentSource = null;
         scheduleReconnect();
       });
     };
 
     const scheduleReconnect = () => {
-      if (cancelledRef.current) return;
-      const delay = Math.min(backoffRef.current, MAX_BACKOFF_MS);
-      backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF_MS);
-      retryTimerRef.current = setTimeout(connect, delay);
+      if (cancelled) return;
+      const delay = Math.min(backoff, MAX_BACKOFF_MS);
+      backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+      retryTimer = setTimeout(() => {
+        // Re-check cancelled inside the timer callback — by the time the
+        // timer fires the effect may have been torn down for an identity
+        // change. Without this guard the old subscriber id would
+        // reconnect and race with the new effect's connection.
+        if (cancelled) return;
+        connect();
+      }, delay);
     };
 
     connect();
-    return () => teardown();
 
-    function teardown() {
-      cancelledRef.current = true;
-      if (retryTimerRef.current !== null) {
-        clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = null;
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
       }
-      if (sourceRef.current !== null) {
-        sourceRef.current.close();
-        sourceRef.current = null;
+      if (currentSource !== null) {
+        currentSource.close();
+        currentSource = null;
       }
-    }
+    };
     // Effect intentionally re-runs only when the identity *values* change
     // — listing `identity` itself would force a reconnect on every render
-    // when the parent rebuilds the object reference, which is a much
-    // worse UX than the trade-off of a stable orgId/subscriberId pair.
-    // dispatch is from react-redux and is already stable across renders.
+    // when the parent rebuilds the object reference. dispatch is from
+    // react-redux and is stable across renders.
   }, [identity?.orgId, identity?.subscriberId, dispatch]);
 
   return status;
