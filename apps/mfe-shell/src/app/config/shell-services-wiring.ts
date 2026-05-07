@@ -149,6 +149,14 @@ configureShellServices({
   notify: pushShellNotification,
   telemetry: emitShellTelemetry,
   isFeatureEnabled: () => false,
+  // Phase 2 PR-Auth-1 (Codex iter-26 §1 absorb, thread 019e0119):
+  // wire MFE Auth Transport Contract callbacks into the canonical
+  // shell-services contract so {@code getShellServices().auth.ready()}
+  // works for remotes pulling via {@code mfe_shell/services}.
+  authReady: () => createAuthReadyPromise(),
+  isTransportReady: () => store.getState().auth.phase === 'transportReady',
+  getAuthPhase: () => store.getState().auth.phase,
+  getAuthEpoch: () => store.getState().auth.authEpoch,
 });
 
 /* ---- Wire remote module shell-services ---- */
