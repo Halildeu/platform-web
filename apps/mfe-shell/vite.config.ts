@@ -49,6 +49,10 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
     'SHELL_SKIP_REMOTE_SERVICES',
     'SHELL_ENABLE_SUGGESTIONS_REMOTE',
     'SHELL_ENABLE_ETHIC_REMOTE',
+    // FE-001 reapply: contract parity with VITE_ prefix so that build-time
+    // gating in vite.config buildRemotes() and runtime gating in
+    // shell-navigation read the same flag.
+    'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
@@ -114,6 +118,16 @@ function buildRemotes() {
       'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
       'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
     ]),
+    // FE-001 reapply (post-#284): build-time omit pattern. Default
+    // OFF means the manifest entry is not emitted at all (no STUB) so
+    // MF runtime never tries to resolve init()/get() against the
+    // disabled-remote URI. Companion gate: lazy-routes.ts also
+    // tree-shakes the static `import("mfe_endpoint_admin/...")` when
+    // this flag is unset.
+    endpointAdmin: readEnvBoolean(
+      ['VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE', 'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE'],
+      false,
+    ),
   };
 
   // All remotes must be declared so MF plugin can resolve their imports
@@ -149,6 +163,10 @@ function buildRemotes() {
     schemaExplorer: readEnvString(
       ['MFE_SCHEMA_EXPLORER_URL', 'VITE_MFE_SCHEMA_EXPLORER_URL'],
       'http://localhost:3008/remoteEntry.js',
+    ),
+    endpointAdmin: readEnvString(
+      ['MFE_ENDPOINT_ADMIN_URL', 'VITE_MFE_ENDPOINT_ADMIN_URL'],
+      'http://localhost:3009/remoteEntry.js',
     ),
   };
 
@@ -188,6 +206,22 @@ function buildRemotes() {
       name: 'mfe_schema_explorer',
       entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
     },
+    // FE-001 reapply build-time omit (post-#284): when the flag is
+    // OFF, the manifest entry is omitted entirely. STUB pattern was
+    // tried in PR #258/#280 and crashed live MF runtime with
+    // #RUNTIME-002 because the data URI does not satisfy init()/get().
+    // The lazy-routes.ts companion check tree-shakes the static
+    // import in the same build, so neither side references the
+    // remote when disabled.
+    ...(enabled.endpointAdmin
+      ? {
+          mfe_endpoint_admin: {
+            type: 'module' as const,
+            name: 'mfe_endpoint_admin',
+            entry: remoteEntries.endpointAdmin,
+          },
+        }
+      : {}),
   };
 }
 
