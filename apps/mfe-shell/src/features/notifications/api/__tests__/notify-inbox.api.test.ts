@@ -32,16 +32,18 @@ interface RequestRecord {
 
 const buildRow = (overrides: Partial<InboxItemDto>): InboxItemDto => ({
   id: 0,
-  orgId: 'default',
-  subscriberId: 'sub-1',
   intentId: null,
+  subject: 'Test subject',
+  bodyText: 'Test body',
+  bodyHtml: null,
+  locale: 'tr-TR',
   topicKey: 'test.topic',
   severity: 'info',
-  createdAt: new Date('2026-05-07T08:00:00Z').toISOString(),
-  updatedAt: new Date('2026-05-07T08:00:00Z').toISOString(),
   state: 'UNREAD',
-  preview: null,
-  meta: null,
+  readAt: null,
+  archivedAt: null,
+  createdAt: new Date('2026-05-07T08:00:00Z').toISOString(),
+  expiresAt: null,
   ...overrides,
 });
 
@@ -259,8 +261,8 @@ function makeDefaultHandler(opts: { excludeIds?: number[] } = {}) {
         items: sorted,
         totalElements: sorted.length,
         totalPages: 1,
-        pageNumber: 0,
-        pageSize: 20,
+        page: 0,
+        size: 20,
         unreadCount: sorted.filter((r) => r.state === 'UNREAD').length,
       };
       return jsonResponse(body);
@@ -284,8 +286,8 @@ function makeMarkReadHandler(opts: { readId: number; postReadUnread: number }) {
         ],
         totalElements: 2,
         totalPages: 1,
-        pageNumber: 0,
-        pageSize: 20,
+        page: 0,
+        size: 20,
         unreadCount: opts.postReadUnread,
       } satisfies InboxListResponseDto);
     }
