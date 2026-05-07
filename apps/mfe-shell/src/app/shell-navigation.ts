@@ -28,19 +28,5 @@ const readEnvBoolean = (keys: string[], fallback = false): boolean => {
 export const isSuggestionsRemoteEnabled = (): boolean =>
   readEnvBoolean(['VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE', 'SHELL_ENABLE_SUGGESTIONS_REMOTE'], true);
 
-/**
- * Endpoint admin remote — default OFF. PR #258 reapply (post-#261):
- * this flag drives BOTH the build-time MF entry (vite.config buildRemotes)
- * AND the runtime shell-services loader list, so flag-OFF means the
- * remote is never registered nor eagerly loaded. This avoids the
- * white-screen reproduced on testai (sha-1911749) where the lazy
- * remote import resolved to an unreachable port 3009 + STUB.
- */
-export const isEndpointAdminRemoteEnabled = (): boolean =>
-  readEnvBoolean(
-    ['VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE', 'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE'],
-    false,
-  );
-
 export const isEthicRemoteEnabled = (): boolean =>
   readEnvBoolean(['VITE_SHELL_ENABLE_ETHIC_REMOTE', 'SHELL_ENABLE_ETHIC_REMOTE'], true);
