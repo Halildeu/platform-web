@@ -52,6 +52,42 @@ vi.mock('../theme/theme-context.provider', () => ({
   }),
 }));
 
+// Faz 23.4 PR-E.5 v1 UI: NotificationCenter now reads the notify identity
+// selector and dispatches inbox API hooks. The existing tests cover
+// local-toast behavior only; we mock the new dependencies so identity is
+// null + inbox query is empty — falling back to the system-tab path that
+// these tests already exercise.
+const inboxQueryMock = {
+  data: undefined,
+  isLoading: false,
+  isError: false,
+};
+const markReadMutationMock = vi.fn();
+const archiveMutationMock = vi.fn();
+
+vi.mock('../store/store.hooks', () => ({
+  useAppSelector: () => null,
+}));
+
+vi.mock('../../features/notifications/api/notify-inbox.api', () => ({
+  useListInboxQuery: () => inboxQueryMock,
+  useMarkReadMutation: () => [markReadMutationMock, { isLoading: false }],
+  useArchiveMutation: () => [archiveMutationMock, { isLoading: false }],
+}));
+
+vi.mock('../../features/notifications/model/identity.selectors', () => ({
+  selectNotifyIdentity: () => null,
+}));
+
+vi.mock('../../features/notifications/model/inbox-item-mapper', () => ({
+  inboxItemToSurfaceItem: (row: unknown) => row,
+  extractInboxRowId: (id: string) => {
+    if (typeof id !== 'string' || !id.startsWith('inbox-')) return null;
+    const parsed = Number.parseInt(id.slice('inbox-'.length), 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  },
+}));
+
 describe('NotificationCenter', () => {
   afterEach(() => {
     cleanup();
@@ -152,7 +188,9 @@ describe('NotificationCenter', () => {
     render(<NotificationCenter />);
 
     const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Sync tamamlandi bildirimini sec' }));
+    fireEvent.click(
+      within(dialog).getByRole('checkbox', { name: 'Sync tamamlandi bildirimini sec' }),
+    );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Secimi okundu say' }));
 
     expect(actionsMock.markSelectedRead).toHaveBeenCalledWith(['notif-1']);
