@@ -58,10 +58,8 @@ describe('DetailSummary — accessibility', () => {
         <DetailSummary title="Acme Corporation" entity={minimalEntity} />
       </PageWrapper>,
     );
-    // Skip heading-order — see file header. DetailSummary today
-    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
-    // realign EntitySummaryBlock + Descriptions levels. Every other
-    // axe rule still applies.
+    // Skip heading-order — see file header (tracked h2 gap only).
+    // Every other axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -84,10 +82,8 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // Skip heading-order — see file header. DetailSummary today
-    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
-    // realign EntitySummaryBlock + Descriptions levels. Every other
-    // axe rule still applies.
+    // Skip heading-order — see file header (tracked h2 gap only).
+    // Every other axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -105,10 +101,8 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // Skip heading-order — see file header. DetailSummary today
-    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
-    // realign EntitySummaryBlock + Descriptions levels. Every other
-    // axe rule still applies.
+    // Skip heading-order — see file header (tracked h2 gap only).
+    // Every other axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -123,10 +117,8 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // Skip heading-order — see file header. DetailSummary today
-    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
-    // realign EntitySummaryBlock + Descriptions levels. Every other
-    // axe rule still applies.
+    // Skip heading-order — see file header (tracked h2 gap only).
+    // Every other axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -141,10 +133,8 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // Skip heading-order — see file header. DetailSummary today
-    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
-    // realign EntitySummaryBlock + Descriptions levels. Every other
-    // axe rule still applies.
+    // Skip heading-order — see file header (tracked h2 gap only).
+    // Every other axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 });
