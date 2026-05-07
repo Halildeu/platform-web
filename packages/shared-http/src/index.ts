@@ -502,11 +502,18 @@ const installInterceptors = (client: AxiosInstance) => {
         //   - the request did not opt out via __skipRefreshOn401;
         //   - the request did not opt out from auth entirely
         //     (__skipAuth = "no auth header" → no point refreshing).
+        // Codex iter-1 P1 absorb (thread 019e048d): also exclude
+        // {@code __skipAuthReadyGate} requests. Bootstrap, login, and
+        // register flows mark their requests with this flag (PR-HTTP-3
+        // contract); they DRIVE the auth FSM, so a 401 from them must
+        // NOT trigger refresh — the refresh handler itself uses these
+        // same self-driving endpoints, which would deadlock.
         const eligibleForRefresh =
           refreshHandler !== null &&
           !requestConfig.__isRefreshAttempt &&
           !requestConfig.__skipRefreshOn401 &&
-          !requestConfig.__skipAuth;
+          !requestConfig.__skipAuth &&
+          !requestConfig.__skipAuthReadyGate;
 
         if (eligibleForRefresh) {
           // Single-flight: every 401 within the same refresh window
@@ -514,19 +521,24 @@ const installInterceptors = (client: AxiosInstance) => {
           // refresh; subsequent callers race onto the in-flight
           // result and retry once it settles.
           if (refreshInFlight === null) {
-            refreshInFlight = (refreshHandler as RefreshHandler)().finally(() => {
+            // Codex iter-1 P2 absorb: wrap the handler invocation so a
+            // SYNCHRONOUS throw (handler that throws before returning a
+            // Promise) is also caught and converted to ok=false. The
+            // outer try/await only catches Promise rejections.
+            refreshInFlight = (async () => {
+              try {
+                return await (refreshHandler as RefreshHandler)();
+              } catch (handlerErr) {
+                if (process.env.NODE_ENV !== 'production') {
+                  console.warn('[shared-http] refresh handler threw:', handlerErr);
+                }
+                return { ok: false, reason: 'handler-threw' } as RefreshResult;
+              }
+            })().finally(() => {
               refreshInFlight = null;
             });
           }
-          let refreshResult: RefreshResult;
-          try {
-            refreshResult = await refreshInFlight;
-          } catch (refreshErr) {
-            if (process.env.NODE_ENV !== 'production') {
-              console.warn('[shared-http] refresh handler threw:', refreshErr);
-            }
-            refreshResult = { ok: false, reason: 'handler-threw' };
-          }
+          const refreshResult: RefreshResult = await refreshInFlight;
           if (refreshResult.ok) {
             // Retry the original request once. Mark with
             // __isRefreshAttempt so a follow-up 401 does NOT trigger
@@ -536,10 +548,23 @@ const installInterceptors = (client: AxiosInstance) => {
             const retryConfig = error.config as SharedHttpRequestConfig | undefined;
             if (retryConfig) {
               retryConfig.__isRefreshAttempt = true;
-              // Drop any stale Authorization header so the request
-              // interceptor re-injects from the updated tokenResolver.
-              if (retryConfig.headers) {
-                delete (retryConfig.headers as Record<string, unknown>).Authorization;
+              // Codex iter-1 P2 absorb: case-insensitive Authorization
+              // header strip. axios uses uppercase but downstream code
+              // (or merged config from external callers) may set the
+              // lowercase variant; both forms must be cleared so the
+              // request interceptor's re-inject from tokenResolver
+              // doesn't compete with a stale header.
+              if (retryConfig.headers && typeof retryConfig.headers === 'object') {
+                const headers = retryConfig.headers as Record<string, unknown> & {
+                  delete?: (key: string) => void;
+                };
+                if (typeof headers.delete === 'function') {
+                  headers.delete('Authorization');
+                  headers.delete('authorization');
+                } else {
+                  delete headers.Authorization;
+                  delete headers.authorization;
+                }
               }
               return client.request(retryConfig);
             }

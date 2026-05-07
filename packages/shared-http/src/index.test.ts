@@ -580,4 +580,87 @@ describe('shared-http single-flight refresh-on-401 (PR-Refresh-4)', () => {
       .filter((e) => e.type === 'app:auth:unauthorized');
     expect(authEvents).toHaveLength(1);
   });
+
+  it('Codex iter-1 P1: __skipAuthReadyGate excludes from refresh (bootstrap calls)', async () => {
+    // Regression test for Codex iter-1 P1: bootstrap, login, register
+    // calls all carry __skipAuthReadyGate (PR-HTTP-3 contract). They
+    // DRIVE the FSM, so a 401 from them must NOT trigger refresh —
+    // the refresh handler itself uses these same self-driving
+    // endpoints, which would loop/deadlock.
+    const { mod, dispatchEvent } = await loadModule();
+    const refreshSpy = vi.fn(() => Promise.resolve({ ok: true as const }));
+    mod.registerRefreshHandler(refreshSpy);
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: { url: '/auth/cookie', method: 'post', headers: {}, __skipAuthReadyGate: true },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+    expect(refreshSpy).not.toHaveBeenCalled();
+    // Falls through to legacy 401 path normally (event still dispatched).
+    const authEvents = dispatchEvent.mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'app:auth:unauthorized');
+    expect(authEvents).toHaveLength(1);
+  });
+
+  it('Codex iter-1 P2: handler that throws synchronously is caught (not propagated)', async () => {
+    // Regression test for Codex iter-1 P2: a sync-throw refresh handler
+    // (rare but valid for a public API) must not bubble its error to
+    // the caller. The interceptor catches it and falls through to the
+    // legacy 401 path with the original error.
+    const { mod, dispatchEvent } = await loadModule();
+    const refreshSpy = vi.fn(() => {
+      throw new Error('sync handler crash');
+    });
+    mod.registerRefreshHandler(refreshSpy as unknown as () => Promise<{ ok: true }>);
+
+    const rejected = getResponseInterceptor(mod.api);
+    const originalError = {
+      response: { status: 401 },
+      config: { url: '/x', method: 'get', headers: {} },
+    } as AxiosError;
+
+    // The original 401 error propagates (NOT the handler's sync error).
+    await expect(rejected?.(originalError)).rejects.toBe(originalError);
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    // Legacy 401 path runs because refresh fell through to ok:false.
+    const authEvents = dispatchEvent.mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'app:auth:unauthorized');
+    expect(authEvents).toHaveLength(1);
+  });
+
+  it('Codex iter-1 P2: case-insensitive Authorization header strip on retry', async () => {
+    const { mod } = await loadModule();
+    const requestSpy = vi.spyOn(mod.api, 'request').mockResolvedValue({
+      data: 'retried',
+      status: 200,
+    } as never);
+    mod.registerRefreshHandler(() => Promise.resolve({ ok: true }));
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: {
+        url: '/x',
+        method: 'get',
+        // Lowercase form — older calls / merged config may set this.
+        headers: { authorization: 'Bearer stale-lowercase', 'X-Trace-Id': 'preserved' },
+      },
+    } as AxiosError;
+
+    await rejected?.(error);
+    expect(requestSpy).toHaveBeenCalledTimes(1);
+    const retryConfig = requestSpy.mock.calls[0][0] as Record<string, unknown>;
+    const headers = retryConfig.headers as Record<string, unknown>;
+    expect(headers.authorization).toBeUndefined();
+    expect(headers.Authorization).toBeUndefined();
+    // Other headers preserved.
+    expect(headers['X-Trace-Id']).toBe('preserved');
+
+    requestSpy.mockRestore();
+  });
 });
