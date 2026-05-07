@@ -26,15 +26,3 @@ export const SchemaExplorerModule = createLazyRemoteModule(
   'SchemaExplorer',
   () => import('mfe_schema_explorer/SchemaExplorerApp'),
 );
-
-// PR #258 reapply (post-#261): export is unconditional so the static
-// `import("mfe_endpoint_admin/EndpointAdminApp")` is visible to the MF
-// plugin (which produces a STUB binding when the flag is OFF — see
-// vite.config buildRemotes). The component is only rendered when the
-// AppRouter conditionally mounts the route under
-// `isEndpointAdminRemoteEnabled()`; render-time STUB resolution is
-// caught by createLazyRemoteModule's error fallback.
-export const EndpointAdminModule = createLazyRemoteModule(
-  'EndpointAdmin',
-  () => import('mfe_endpoint_admin/EndpointAdminApp'),
-);

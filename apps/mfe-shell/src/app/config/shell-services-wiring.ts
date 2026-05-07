@@ -18,7 +18,6 @@ import { broadcastAuthState } from '../auth/auth-sync';
 import { isPermitAllMode } from '../auth/auth-config';
 import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
-import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
 
 /* ---- Notification dispatcher ---- */
 
@@ -110,12 +109,7 @@ export const wireRemoteShellServices = () => {
       getUser: () => store.getState().auth.user ?? null,
     },
   };
-  const remotes: Array<{
-    name: string;
-    loader: () => Promise<{
-      configureShellServices: (services: typeof sharedServices) => void;
-    }>;
-  }> = [
+  const remotes = [
     { name: 'mfe_access', loader: () => import('mfe_access/shell-services') },
     { name: 'mfe_audit', loader: () => import('mfe_audit/shell-services') },
     { name: 'mfe_users', loader: () => import('mfe_users/shell-services') },
@@ -124,19 +118,6 @@ export const wireRemoteShellServices = () => {
       loader: () => import('mfe_reporting/shell-services'),
     },
   ];
-  // PR #258 reapply (post-#261): endpoint-admin loader is added ONLY
-  // when the remote flag is ON. The previous attempt added the loader
-  // unconditionally; on testai (sha-1911749) the cluster lacks port
-  // 3009, the STUB resolution path crashed during eager call, and the
-  // SPA white-screened on boot. Build-time STUB still exists in
-  // vite.config so static lazy imports compile, but the eager wire is
-  // strictly opt-in.
-  if (isEndpointAdminRemoteEnabled()) {
-    remotes.push({
-      name: 'mfe_endpoint_admin',
-      loader: () => import('mfe_endpoint_admin/shell-services'),
-    });
-  }
   remotes.forEach(({ name, loader }) => {
     loader()
       .then((module) => module.configureShellServices(sharedServices))
