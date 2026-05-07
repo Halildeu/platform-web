@@ -1,17 +1,23 @@
 // @vitest-environment jsdom
 /**
- * a11y-pr4 — DetailSummary accessibility coverage.
+ * a11y-pr4 — DetailSummary accessibility coverage (partial).
  *
  * PR #225 (a11y-pr3) intentionally deferred DetailSummary because its
  * `entity` prop cascades through `EntitySummaryBlock` → `Descriptions`
  * with several required fields, and a stub fixture risked rendering
- * an entire detail page just for a smoke test.
+ * an entire detail page just for a smoke test. This file ships the
+ * minimum-real fixture (2 description items, 2 KPI summary items, 1
+ * detail row) and asserts five state variants pass axe.
  *
- * This file ships the minimum-real fixture wrapped in a synthetic
- * page (`<main><h1>...</h1>`) so the heading-order rule sees a valid
- * h1 → h2 → h3 cascade. DetailSummary's PageHeader emits an h2 and
- * EntitySummaryBlock emits an h3; without the synthetic h1 we'd
- * trigger a `heading-order` violation in isolation.
+ * Heading-order rule disabled per fixture (acknowledged gap):
+ * DetailSummary today renders `PageHeader` (h1) → `EntitySummaryBlock`
+ * (h3) → `Descriptions` heading (h4) — the h2 level is skipped.
+ * Searching the repo (design-lab showcase, library docs) confirms no
+ * consumer wraps the block with an h2; this is a real semantic gap,
+ * not a test artifact. The proper fix is a follow-up component PR
+ * that reduces `EntitySummaryBlock`'s title to h2 and the descriptions
+ * heading to h3 (or makes both contextual). Until then this fixture
+ * unblocks axe coverage on every other rule.
  *
  * Color contrast + region rules remain relaxed in
  * `expectNoA11yViolations` (jsdom doesn't resolve CSS variables).
@@ -50,11 +56,10 @@ describe('DetailSummary — accessibility', () => {
         <DetailSummary title="Acme Corporation" entity={minimalEntity} />
       </PageWrapper>,
     );
-    // PageHeader emits h1, EntitySummaryBlock emits h3, and there is
-    // no h2 in between when DetailSummary is the only block on the
-    // page. Real consuming surfaces wrap the page with section
-    // headings (h2) above the entity, so the cascade is valid in
-    // production. Skip `heading-order` for this isolated fixture.
+    // Skip heading-order — see file header. DetailSummary today
+    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
+    // realign EntitySummaryBlock + Descriptions levels. Every other
+    // axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -77,11 +82,10 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // PageHeader emits h1, EntitySummaryBlock emits h3, and there is
-    // no h2 in between when DetailSummary is the only block on the
-    // page. Real consuming surfaces wrap the page with section
-    // headings (h2) above the entity, so the cascade is valid in
-    // production. Skip `heading-order` for this isolated fixture.
+    // Skip heading-order — see file header. DetailSummary today
+    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
+    // realign EntitySummaryBlock + Descriptions levels. Every other
+    // axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -99,11 +103,10 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // PageHeader emits h1, EntitySummaryBlock emits h3, and there is
-    // no h2 in between when DetailSummary is the only block on the
-    // page. Real consuming surfaces wrap the page with section
-    // headings (h2) above the entity, so the cascade is valid in
-    // production. Skip `heading-order` for this isolated fixture.
+    // Skip heading-order — see file header. DetailSummary today
+    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
+    // realign EntitySummaryBlock + Descriptions levels. Every other
+    // axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -118,11 +121,10 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // PageHeader emits h1, EntitySummaryBlock emits h3, and there is
-    // no h2 in between when DetailSummary is the only block on the
-    // page. Real consuming surfaces wrap the page with section
-    // headings (h2) above the entity, so the cascade is valid in
-    // production. Skip `heading-order` for this isolated fixture.
+    // Skip heading-order — see file header. DetailSummary today
+    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
+    // realign EntitySummaryBlock + Descriptions levels. Every other
+    // axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 
@@ -137,11 +139,10 @@ describe('DetailSummary — accessibility', () => {
         />
       </PageWrapper>,
     );
-    // PageHeader emits h1, EntitySummaryBlock emits h3, and there is
-    // no h2 in between when DetailSummary is the only block on the
-    // page. Real consuming surfaces wrap the page with section
-    // headings (h2) above the entity, so the cascade is valid in
-    // production. Skip `heading-order` for this isolated fixture.
+    // Skip heading-order — see file header. DetailSummary today
+    // emits h1 → h3 → h4 (h2 missing); follow-up component PR will
+    // realign EntitySummaryBlock + Descriptions levels. Every other
+    // axe rule still applies.
     await expectNoA11yViolations(container, { disableRules: ['heading-order'] });
   });
 });
