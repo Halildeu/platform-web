@@ -244,9 +244,11 @@ export const AppRouter: React.FC = () => {
           redirects to defaultShellPath instead of mounting the lazy
           remote (which would try to import from a STUB entry that
           lacks an MF container contract — see PR #258 / #261). When
-          ON (flag explicitly set), the route is wrapped with
-          ProtectedRoute (claim wired in a follow-up PR after the
-          OpenFGA grant is verified end-to-end).
+          ON (flag explicitly set), the route renders the skeleton
+          remote directly. ProtectedRoute claim wiring
+          (`requiredModule="ENDPOINT_ADMIN"`) is intentionally
+          deferred to a follow-up PR after the OpenFGA grant is
+          verified end-to-end — that wrapper is what bloated PR #258.
         */}
         <Route
           path="/endpoint-admin/*"

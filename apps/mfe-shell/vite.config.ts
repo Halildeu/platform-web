@@ -49,6 +49,15 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
     'SHELL_SKIP_REMOTE_SERVICES',
     'SHELL_ENABLE_SUGGESTIONS_REMOTE',
     'SHELL_ENABLE_ETHIC_REMOTE',
+    // FE-000 safe skeleton flag — runtime path
+    // (`isEndpointAdminRemoteEnabled()` in shell-navigation.ts) reads
+    // both `VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE` and the bare
+    // `SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE`. The VITE-prefixed form is
+    // injected automatically by `key.startsWith('VITE_')` below; this
+    // explicit allowlist entry makes the bare form visible to the
+    // browser bundle so Docker ENV-only deployments stay consistent
+    // between build-time remote registration and runtime route gating.
+    'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
