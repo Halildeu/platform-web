@@ -81,7 +81,13 @@ describe('StatWidget', () => {
     // The change badge uses inline style with success color
     const changeSpan = container.querySelector('span[style]');
     expect(changeSpan).toBeTruthy();
-    expect(changeSpan!.getAttribute('style')).toContain('var(--state-success-text)');
+    const style = changeSpan!.getAttribute('style') ?? '';
+    expect(style).toContain('var(--state-success-text)');
+    // PR #295 sweep regression guard — see KPICard.test.tsx for the
+    // bug class explanation (`var(--…)` → `var(--…))` stray paren
+    // makes the color invalid; substring match alone passes against
+    // the broken string because the correct value is its prefix).
+    expect(style).not.toContain('var(--state-success-text))');
   });
 
   it('shows negative change with error color', () => {
@@ -93,7 +99,9 @@ describe('StatWidget', () => {
 
     const changeSpan = container.querySelector('span[style]');
     expect(changeSpan).toBeTruthy();
-    expect(changeSpan!.getAttribute('style')).toContain('var(--state-error-text)');
+    const style = changeSpan!.getAttribute('style') ?? '';
+    expect(style).toContain('var(--state-error-text)');
+    expect(style).not.toContain('var(--state-error-text))');
   });
 
   it('does not show change when previousValue is not provided', () => {
