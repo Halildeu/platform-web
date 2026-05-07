@@ -34,11 +34,11 @@ importers:
         specifier: ^10.50.0
         version: 10.50.0(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       '@tanstack/react-query-devtools':
         specifier: ^5.99.0
-        version: 5.99.0(@tanstack/react-query@5.99.0(react@18.2.0))(react@18.2.0)
+        version: 5.99.0(@tanstack/react-query@5.100.9(react@18.2.0))(react@18.2.0)
       axios:
         specifier: '>=1.15.0'
         version: 1.15.2
@@ -242,8 +242,8 @@ importers:
         specifier: '*'
         version: link:../../packages/shared-types
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -274,7 +274,7 @@ importers:
         version: link:../../packages/i18n-dicts
       '@tanstack/react-query-devtools':
         specifier: ^5.99.0
-        version: 5.99.0(@tanstack/react-query@5.99.0(react@18.2.0))(react@18.2.0)
+        version: 5.99.0(@tanstack/react-query@5.100.9(react@18.2.0))(react@18.2.0)
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1
@@ -309,8 +309,8 @@ importers:
         specifier: '*'
         version: link:../../packages/shared-types
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -382,8 +382,8 @@ importers:
         specifier: ^2.8.2
         version: 2.11.2(react-redux@9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1))(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       react:
         specifier: ~18.2.0
         version: 18.2.0
@@ -519,8 +519,8 @@ importers:
         specifier: file:../../packages/platform-capabilities
         version: link:../../packages/platform-capabilities
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -583,8 +583,8 @@ importers:
         specifier: '*'
         version: link:../../packages/shared-types
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       axios:
         specifier: '>=1.15.0'
         version: 1.15.2
@@ -674,11 +674,11 @@ importers:
         specifier: ^10.50.0
         version: 10.50.0(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       '@tanstack/react-query-devtools':
         specifier: ^5.99.0
-        version: 5.99.0(@tanstack/react-query@5.99.0(react@18.2.0))(react@18.2.0)
+        version: 5.99.0(@tanstack/react-query@5.100.9(react@18.2.0))(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -811,8 +811,8 @@ importers:
         specifier: ^2.8.2
         version: 2.11.2(react-redux@9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1))(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -928,8 +928,8 @@ importers:
         specifier: workspace:*
         version: link:../x-charts
       '@tanstack/react-query':
-        specifier: ^5.99.0
-        version: 5.99.0(react@18.2.0)
+        specifier: ^5.100.9
+        version: 5.100.9(react@18.2.0)
       ag-charts-community:
         specifier: 12.3.1
         version: 12.3.1
@@ -3396,8 +3396,8 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@tanstack/query-core@5.99.0':
-    resolution: {integrity: sha512-3Jv3WQG0BCcH7G+7lf/bP8QyBfJOXeY+T08Rin3GZ1bshvwlbPt7NrDHMEzGdKIOmOzvIQmxjk28YEQX60k7pQ==}
+  '@tanstack/query-core@5.100.9':
+    resolution: {integrity: sha512-SJSFw1S8+kQ0+knv/XGfrbocWoAlT7vDKsSImtLx3ZPQmEcR46hkDjLSvynSy25N8Ms4tIEini1FuBd5k7IscQ==}
 
   '@tanstack/query-devtools@5.99.0':
     resolution: {integrity: sha512-m4ufXaJ8FjWXw7xDtyzE/6fkZAyQFg9WrbMrUpt8ZecRJx58jiFOZ2lxZMphZdIpAnIeto/S8stbwLKLusyckQ==}
@@ -3408,8 +3408,8 @@ packages:
       '@tanstack/react-query': ^5.99.0
       react: ^18 || ^19
 
-  '@tanstack/react-query@5.99.0':
-    resolution: {integrity: sha512-OY2bCqPemT1LlqJ8Y2CUau4KELnIhhG9Ol3ZndPbdnB095pRbPo1cHuXTndg8iIwtoHTgwZjyaDnQ0xD0mYwAw==}
+  '@tanstack/react-query@5.100.9':
+    resolution: {integrity: sha512-Oa44XkaI3kCNN6ME0KByU3xT3SEUNOMfZpHxL6+wFoTm+OeUFYHKdeYVe0aOXlRDm/f15sgLwEt2HDorIdW8+A==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -11425,19 +11425,19 @@ snapshots:
       tailwindcss: 4.2.4
       vite: 8.0.10(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.3)
 
-  '@tanstack/query-core@5.99.0': {}
+  '@tanstack/query-core@5.100.9': {}
 
   '@tanstack/query-devtools@5.99.0': {}
 
-  '@tanstack/react-query-devtools@5.99.0(@tanstack/react-query@5.99.0(react@18.2.0))(react@18.2.0)':
+  '@tanstack/react-query-devtools@5.99.0(@tanstack/react-query@5.100.9(react@18.2.0))(react@18.2.0)':
     dependencies:
       '@tanstack/query-devtools': 5.99.0
-      '@tanstack/react-query': 5.99.0(react@18.2.0)
+      '@tanstack/react-query': 5.100.9(react@18.2.0)
       react: 18.2.0
 
-  '@tanstack/react-query@5.99.0(react@18.2.0)':
+  '@tanstack/react-query@5.100.9(react@18.2.0)':
     dependencies:
-      '@tanstack/query-core': 5.99.0
+      '@tanstack/query-core': 5.100.9
       react: 18.2.0
 
   '@tanstack/react-virtual@3.13.23(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
