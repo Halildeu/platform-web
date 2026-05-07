@@ -49,6 +49,12 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
     'SHELL_SKIP_REMOTE_SERVICES',
     'SHELL_ENABLE_SUGGESTIONS_REMOTE',
     'SHELL_ENABLE_ETHIC_REMOTE',
+    // PR #280 reapply: contract parity with VITE_ prefix. Without
+    // this, build-time MF entry could see `SHELL_ENABLE_*=1` but
+    // runtime gate (shell-navigation, AppRouter, shell-services-wiring
+    // eager loader) would observe false → flag drift, manifest says
+    // real entry while AppRouter redirects.
+    'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
