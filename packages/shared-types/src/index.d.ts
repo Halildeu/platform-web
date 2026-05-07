@@ -19,6 +19,14 @@ export interface CounterState {
 }
 export interface UserProfile {
   id?: string;
+  /**
+   * Canonical numeric subscriber id (Faz 23.5 hardening — Codex thread
+   * `019e0316` iter-3 absorb). Sourced from
+   * {@code /api/v1/authz/me.subscriberId}; coerced to string for header
+   * serialisation. Undefined while the snapshot is unresolved or when the
+   * backend returned the UUID fallback.
+   */
+  subscriberId?: string;
   email: string;
   role: string;
   permissions: string[];

@@ -1,35 +1,33 @@
 import type { RootState } from '../../../app/store/store';
 
 /**
- * Notification identity selectors (Faz 23.4 PR-E.5).
+ * Notification identity selectors (Faz 23.4 PR-E.5; Faz 23.5 hardening).
  *
- * Resolves the {@code (orgId, subscriberId)} pair the inbox API client
- * needs to send on every request. The pair drives both REST headers and
- * the SSE query params; centralizing the resolution here keeps the
- * convention auditable and lets future canonical-claim migration (Codex
- * iter-3 long-term target C) flip in one place.
+ * Resolves the {@code (orgId, subscriberId)} pair the inbox / preferences
+ * APIs expect on every request. The pair drives both REST headers and SSE
+ * query params; centralising the resolution here keeps the convention
+ * auditable and lets the canonical-claim cutover flip in one place.
  *
  * <h3>SubscriberId resolution priority</h3>
  *
- * Codex iter-4 RED absorb: the original implementation read
- * {@code state.auth.user.id} which under the Keycloak SSO bootstrap is
- * the JWT {@code sub} claim (a UUID). Notification producers
- * (variant-service / report-service) populate
- * {@code recipient.subscriberId} with the platform's canonical DB user
- * id (numeric, exposed via the JWT custom {@code userId} claim and the
- * {@code /api/v1/authz/me} response). If the UI sent the JWT sub, the
- * backend {@link com.serban.notify.api.SubscriberIdentityGuard} would
- * still 200 (sub is in its trusted claim set), but the inbox query would
- * find no matching rows (subscriber_id column stores the canonical id,
- * not the UUID).
+ * <p>Codex thread `019e0316` iter-3 absorb — canonical-first ordering so
+ * the upcoming `subscriberId` JWT claim takes effect automatically once
+ * the Keycloak mapper rolls out. Until then, legacy fallbacks keep today's
+ * tokens working.
  *
- * Resolution priority (first non-empty wins):
  * <ol>
- *   <li>{@code state.auth.authzSnapshot.userId} — canonical id from
- *       /api/v1/authz/me; matches what producers store.</li>
- *   <li>{@code state.auth.user.id} (string only) — JWT sub fallback;
- *       used until /api/v1/authz/me has resolved or in profiles where
- *       the snapshot is unavailable.</li>
+ *   <li>{@code state.auth.authzSnapshot.subscriberId} — canonical numeric
+ *       id from {@code /api/v1/authz/me} (Faz 23.5 backend PR #107).
+ *       Backend Long; we coerce to string here.</li>
+ *   <li>{@code state.auth.user.subscriberId} — persisted alias copied
+ *       through {@code setKeycloakSession} so token refreshes don't lose
+ *       the canonical id when the snapshot reload hasn't completed yet.</li>
+ *   <li>{@code state.auth.authzSnapshot.userId} — legacy permission-service
+ *       claim (numeric DB id). Stays as a fallback during the rollout
+ *       window.</li>
+ *   <li>{@code state.auth.user.id} — JWT `sub` UUID. Last-resort fallback;
+ *       gated behind {@code initialized === true} so we don't fire inbox
+ *       calls with a stale persisted UUID before the snapshot reload.</li>
  * </ol>
  *
  * <h3>OrgId</h3>
@@ -51,12 +49,23 @@ export const DEFAULT_ORG_ID = 'default' as const;
 export const selectNotifyIdentity = (
   state: RootState,
 ): { orgId: string; subscriberId: string } | null => {
-  // Prefer authzSnapshot.userId (canonical DB id) — this is what
-  // notification producers reference. Fall back to user.id only when the
-  // snapshot has not arrived yet.
+  const authzSubscriberId = readAuthzSubscriberId(state);
+  const profileSubscriberId = readProfileSubscriberId(state);
   const authzUserId = readAuthzUserId(state);
   const profileId = readProfileId(state);
-  const subscriberId = authzUserId ?? profileId;
+
+  // Codex iter-3 absorb: only the legacy `user.id` UUID fallback should
+  // wait on bootstrap. Canonical sources resolve immediately.
+  const onlyLegacyUuidFallback =
+    authzSubscriberId === undefined &&
+    profileSubscriberId === undefined &&
+    authzUserId === undefined &&
+    profileId !== undefined;
+  if (onlyLegacyUuidFallback && state.auth.initialized !== true) {
+    return null;
+  }
+
+  const subscriberId = authzSubscriberId ?? profileSubscriberId ?? authzUserId ?? profileId;
   if (!subscriberId) {
     return null;
   }
@@ -69,27 +78,37 @@ export const selectNotifyIdentityReady = (state: RootState): boolean =>
 
 // ─── Private extractors ─────────────────────────────────────────────────
 
-const readAuthzUserId = (state: RootState): string | null => {
-  const snapshot = state.auth.authzSnapshot as Record<string, unknown> | null | undefined;
-  if (!snapshot || typeof snapshot !== 'object') {
-    return null;
-  }
-  const value = snapshot.userId;
-  if (typeof value === 'string' && value.length > 0) {
-    return value;
+/**
+ * Coerce a heterogeneous identity claim (string / number / null) to the
+ * canonical string shape. Mirrors the helper in {@code auth.slice} so the
+ * trim / number-finite contract is uniform across reducer + selector
+ * (Codex thread `019e0316` iter-2 absorb).
+ */
+const coerceIdentityValue = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
-    // Numeric id from the legacy authz response — coerce to string so
-    // downstream header serialization is uniform.
     return String(value);
   }
-  return null;
+  return undefined;
 };
 
-const readProfileId = (state: RootState): string | null => {
-  const profileId = state.auth.user?.id;
-  if (typeof profileId === 'string' && profileId.length > 0) {
-    return profileId;
-  }
-  return null;
+const readAuthzSubscriberId = (state: RootState): string | undefined => {
+  const snapshot = state.auth.authzSnapshot as Record<string, unknown> | null | undefined;
+  return coerceIdentityValue(snapshot?.['subscriberId']);
+};
+
+const readProfileSubscriberId = (state: RootState): string | undefined => {
+  return coerceIdentityValue(state.auth.user?.subscriberId);
+};
+
+const readAuthzUserId = (state: RootState): string | undefined => {
+  const snapshot = state.auth.authzSnapshot as Record<string, unknown> | null | undefined;
+  return coerceIdentityValue(snapshot?.['userId']);
+};
+
+const readProfileId = (state: RootState): string | undefined => {
+  return coerceIdentityValue(state.auth.user?.id);
 };

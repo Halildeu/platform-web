@@ -17,6 +17,22 @@ export interface CounterState {
 // Gelecekte paylaşmak isteyebileceğimiz başka bir tip örneği
 export interface UserProfile {
   id?: string;
+  /**
+   * Canonical numeric subscriber id (Faz 23.5 hardening — Codex thread
+   * `019e0316` iter-3 absorb).
+   *
+   * <p>Sourced from {@code /api/v1/authz/me.subscriberId}; the FE
+   * coerces the backend {@code Long} to a string for uniform header
+   * serialisation. Stays {@code undefined} when the {@code authzSnapshot}
+   * lookup has not yet resolved or when the resolved user has only a
+   * UUID identity (e.g. JWT-only fallback path on the backend).
+   *
+   * <p>Notification clients should prefer this field over {@code id}
+   * when present; the legacy {@code id} (Keycloak {@code sub} UUID)
+   * remains as a transitional fallback until the canonical
+   * {@code subscriberId} JWT claim is rolled out.
+   */
+  subscriberId?: string;
   email: string;
   role: string;
   permissions: string[];
