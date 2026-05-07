@@ -24,6 +24,7 @@ let listQueryMock = {
 const upsertMutationMock = vi.fn();
 const deleteMutationMock = vi.fn();
 const restoreDefaultsMutationMock = vi.fn();
+const muteChannelMutationMock = vi.fn();
 
 vi.mock('../../../app/store/store.hooks', () => ({
   useAppSelector: () => identityMock,
@@ -53,6 +54,12 @@ vi.mock('../../../features/notifications/api/notify-prefs.api', () => ({
     }),
     { isLoading: false },
   ],
+  useMuteChannelMutation: () => [
+    (args: unknown) => ({
+      unwrap: async () => muteChannelMutationMock(args),
+    }),
+    { isLoading: false },
+  ],
 }));
 
 beforeEach(() => {
@@ -61,6 +68,7 @@ beforeEach(() => {
   upsertMutationMock.mockReset();
   deleteMutationMock.mockReset();
   restoreDefaultsMutationMock.mockReset();
+  muteChannelMutationMock.mockReset();
 });
 
 afterEach(() => {
@@ -494,5 +502,146 @@ describe('NotificationPreferencesPage', () => {
       expect(screen.getByTestId('pref-restore-defaults-error')).toBeInTheDocument();
     });
     expect(screen.getByText(/bu ortamda kapalı/)).toBeInTheDocument();
+  });
+
+  // ── Faz 23.6 PR-C2 — Channel-mute action ─────────────────────────────
+
+  it('arms mute-channel confirm when a channel is picked from the select', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+
+    render(<NotificationPreferencesPage />);
+    const select = screen.getByTestId('pref-mute-channel-select') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'email' } });
+
+    expect(screen.getByTestId('pref-mute-channel-confirm-row')).toBeInTheDocument();
+    expect(muteChannelMutationMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels mute-channel without firing the mutation', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.change(screen.getByTestId('pref-mute-channel-select'), {
+      target: { value: 'email' },
+    });
+    fireEvent.click(screen.getByTestId('pref-mute-channel-cancel'));
+
+    expect(screen.queryByTestId('pref-mute-channel-confirm-row')).not.toBeInTheDocument();
+    expect(muteChannelMutationMock).not.toHaveBeenCalled();
+  });
+
+  it('confirms mute-channel and shows success banner with both counts', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+    muteChannelMutationMock.mockResolvedValue({
+      channel: 'email',
+      muted: true,
+      deletedOverrideCount: 3,
+      shadowDenyCount: 2,
+    });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.change(screen.getByTestId('pref-mute-channel-select'), {
+      target: { value: 'email' },
+    });
+    fireEvent.click(screen.getByTestId('pref-mute-channel-confirm'));
+
+    await vi.waitFor(() => {
+      expect(muteChannelMutationMock).toHaveBeenCalledTimes(1);
+    });
+    const arg = muteChannelMutationMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg.orgId).toBe('default');
+    expect(arg.subscriberId).toBe('sub-1');
+    expect(arg.channel).toBe('email');
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-mute-channel-success')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/3 mevcut kural silindi/)).toBeInTheDocument();
+    expect(screen.getByText(/2 konu için bu kanal ayrıca kapatıldı/)).toBeInTheDocument();
+  });
+
+  it('shows the no-rules-touched message when both counts are zero', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+    muteChannelMutationMock.mockResolvedValue({
+      channel: 'sms',
+      muted: true,
+      deletedOverrideCount: 0,
+      shadowDenyCount: 0,
+    });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.change(screen.getByTestId('pref-mute-channel-select'), {
+      target: { value: 'sms' },
+    });
+    fireEvent.click(screen.getByTestId('pref-mute-channel-confirm'));
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-mute-channel-success')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Hiç başka kural yoktu/)).toBeInTheDocument();
+  });
+
+  it('renders error banner with status-aware copy when mute-channel fails 403', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+    muteChannelMutationMock.mockRejectedValue({ status: 403 });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.change(screen.getByTestId('pref-mute-channel-select'), {
+      target: { value: 'email' },
+    });
+    fireEvent.click(screen.getByTestId('pref-mute-channel-confirm'));
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-mute-channel-error')).toBeInTheDocument();
+    });
+    // Codex thread `019e03d1` REVISE iter-2 absorb: assert the
+    // channel-mute domain language, not the restore-defaults one
+    // (the previous /yetkiniz yok/ regex would match either).
+    expect(
+      screen.getByText(/Bu organizasyon \/ abone için kanal susturma yetkiniz yok/),
+    ).toBeInTheDocument();
+    // Negative assertion guarding against regression: the
+    // restore-defaults copy must NOT leak into the mute-channel
+    // banner.
+    expect(screen.queryByText(/tercih sıfırlama/)).not.toBeInTheDocument();
+  });
+
+  // Codex thread `019e03d1` REVISE iter-2 absorb: 400 unknown-channel
+  // is a real user-correctable error path (the dispatcher's allow-list
+  // can change), so the page must surface it with channel-mute domain
+  // copy instead of falling through to the generic fallback.
+  it('renders 400 unknown-channel copy when backend rejects the channel', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+    muteChannelMutationMock.mockRejectedValue({
+      status: 400,
+      data: {
+        error: 'validation',
+        message: 'channel must be one of email, sms, slack, webhook, in-app',
+      },
+    });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.change(screen.getByTestId('pref-mute-channel-select'), {
+      target: { value: 'email' },
+    });
+    fireEvent.click(screen.getByTestId('pref-mute-channel-confirm'));
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-mute-channel-error')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Seçilen kanal tanınmıyor\. Kanal listesini yenileyip tekrar deneyin/),
+    ).toBeInTheDocument();
+    // Negative assertion: the generic "Kanal susturulamadı" fallback
+    // copy must NOT appear when status === 400 — that would mean we
+    // forgot to special-case the error and fell through to the
+    // catch-all.
+    expect(screen.queryByText(/^Kanal susturulamadı/)).not.toBeInTheDocument();
   });
 });

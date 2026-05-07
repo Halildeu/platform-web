@@ -240,15 +240,113 @@ describe('notifyPrefsApi.restoreDefaults (Faz 23.6 PR-C1)', () => {
     };
 
     const store = buildStore();
-    // Subscribe to keep the cache entry alive across the mutation.
     const sub = store.dispatch(notifyPrefsApi.endpoints.listPreferences.initiate(IDENTITY));
     await sub;
     expect(listFetchCount).toBe(1);
 
     await store.dispatch(notifyPrefsApi.endpoints.restoreDefaults.initiate(IDENTITY));
-    // RTK Query refires the list query because the LIST tag was
-    // invalidated by the mutation.
     await sub.refetch();
+    expect(listFetchCount).toBeGreaterThanOrEqual(2);
+    sub.unsubscribe();
+  });
+});
+
+describe('notifyPrefsApi.muteChannel (Faz 23.6 PR-C2)', () => {
+  it('POSTs /me/mute-channel with channel body, identity headers, and credentials include', async () => {
+    fetchHandler = async () =>
+      jsonResponse({ channel: 'email', muted: true, deletedOverrideCount: 3, shadowDenyCount: 2 });
+    const store = buildStore();
+    const result = await store.dispatch(
+      notifyPrefsApi.endpoints.muteChannel.initiate({ ...IDENTITY, channel: 'email' }),
+    );
+    expect('data' in result).toBe(true);
+    expect((result as { data?: { deletedOverrideCount: number } }).data?.deletedOverrideCount).toBe(
+      3,
+    );
+    expect((result as { data?: { shadowDenyCount: number } }).data?.shadowDenyCount).toBe(2);
+
+    const postReq = recorded.find((r) => r.method === 'POST');
+    expect(postReq?.url).toMatch(/\/api\/v1\/notify\/preferences\/me\/mute-channel$/);
+    expect(postReq?.headers['x-org-id']).toBe('default');
+    expect(postReq?.headers['x-subscriber-id']).toBe('sub-1');
+    expect(postReq?.credentials).toBe('include');
+    expect(postReq?.body).toBeTruthy();
+    expect(JSON.parse(postReq?.body ?? '{}')).toEqual({ channel: 'email' });
+  });
+
+  it('forwards 400 (unknown channel) as a typed error', async () => {
+    fetchHandler = async () =>
+      jsonResponse(
+        {
+          error: 'validation',
+          message: 'channel must be one of email, sms, slack, webhook, in-app',
+        },
+        400,
+      );
+    const store = buildStore();
+    const result = await store.dispatch(
+      notifyPrefsApi.endpoints.muteChannel.initiate({ ...IDENTITY, channel: 'smoke-signal' }),
+    );
+    expect('error' in result && (result.error as { status: number }).status).toBe(400);
+  });
+
+  it('forwards 403 (org / subscriber boundary)', async () => {
+    fetchHandler = async () => new Response(null, { status: 403 });
+    const store = buildStore();
+    const result = await store.dispatch(
+      notifyPrefsApi.endpoints.muteChannel.initiate({ ...IDENTITY, channel: 'email' }),
+    );
+    expect('error' in result && (result.error as { status: number }).status).toBe(403);
+  });
+
+  it('refetches the list after a successful mute-channel (LIST tag)', async () => {
+    let listFetchCount = 0;
+    fetchHandler = async (input, init) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input instanceof Request
+              ? input.url
+              : String(input);
+      const method =
+        input instanceof Request
+          ? input.method.toUpperCase()
+          : (init?.method ?? 'GET').toUpperCase();
+      if (method === 'GET' && /\/preferences\/me$/.test(url)) {
+        listFetchCount += 1;
+        return jsonResponse([buildPref({ id: 1 })]);
+      }
+      if (method === 'POST' && /\/preferences\/me\/mute-channel$/.test(url)) {
+        return jsonResponse({
+          channel: 'email',
+          muted: true,
+          deletedOverrideCount: 0,
+          shadowDenyCount: 0,
+        });
+      }
+      return jsonResponse({ error: 'unhandled' }, 500);
+    };
+
+    const store = buildStore();
+    const sub = store.dispatch(notifyPrefsApi.endpoints.listPreferences.initiate(IDENTITY));
+    await sub;
+    expect(listFetchCount).toBe(1);
+
+    // Codex thread `019e03d1` REVISE iter-2 absorb: do NOT call
+    // `sub.refetch()` manually — that would only prove the helper
+    // works, not that `invalidatesTags: LIST` triggers an automatic
+    // refetch on the active subscription. Wait for RTK Query's own
+    // refetch tick instead, then assert the count went up.
+    await store.dispatch(
+      notifyPrefsApi.endpoints.muteChannel.initiate({ ...IDENTITY, channel: 'email' }),
+    );
+    // RTK Query refires the list query because the LIST tag was
+    // invalidated by the mutation. Microtask + macrotask boundary so
+    // the dispatched re-subscribe lands.
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
     expect(listFetchCount).toBeGreaterThanOrEqual(2);
     sub.unsubscribe();
   });
