@@ -81,7 +81,7 @@ export const inboxItemToSurfaceItem = (row: InboxItemDto): NotificationSurfaceIt
     message,
     description,
     type: TYPE_BY_SEVERITY[severity] ?? 'info',
-    priority: PRIORITY_BY_SEVERITY[severity] ?? 'low',
+    priority: PRIORITY_BY_SEVERITY[severity] ?? 'normal',
     pinned: severity === 'critical',
     createdAt: parseTimestamp(row.createdAt),
     read: row.state === 'READ',
