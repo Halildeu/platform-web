@@ -52,6 +52,74 @@ vi.mock('../theme/theme-context.provider', () => ({
   }),
 }));
 
+// Faz 23.4 PR-E.5 v1 UI: NotificationCenter now reads the notify identity
+// selector and dispatches inbox API hooks. The mocks below use mutable
+// module-level state so individual tests can flip identity / inbox-query
+// data without reloading the module (vi.mock factories close over these
+// variables, which are read at hook-call time, not at mock-define time).
+type InboxRowFixture = {
+  id: number;
+  intentId: string | null;
+  subject: string | null;
+  bodyText: string | null;
+  bodyHtml: string | null;
+  locale: string | null;
+  topicKey: string;
+  severity: 'info' | 'warning' | 'critical';
+  state: 'UNREAD' | 'READ' | 'ARCHIVED';
+  readAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+};
+
+let identityMock: { orgId: string; subscriberId: string } | null = null;
+let inboxQueryMock: {
+  data:
+    | {
+        items: InboxRowFixture[];
+        page: number;
+        size: number;
+        totalElements: number;
+        totalPages: number;
+        unreadCount: number;
+      }
+    | undefined;
+  isLoading: boolean;
+  isError: boolean;
+} = { data: undefined, isLoading: false, isError: false };
+const markReadMutationMock = vi.fn();
+const archiveMutationMock = vi.fn();
+
+vi.mock('../store/store.hooks', () => ({
+  useAppSelector: (selector: unknown) => {
+    // Most callers pass selectNotifyIdentity; we treat any selector arg
+    // as a no-op and just return the current identity fixture so the
+    // component sees the same value its selector mock would produce.
+    if (typeof selector === 'function') {
+      return identityMock;
+    }
+    return identityMock;
+  },
+}));
+
+vi.mock('../../features/notifications/api/notify-inbox.api', () => ({
+  useListInboxQuery: () => inboxQueryMock,
+  useMarkReadMutation: () => [markReadMutationMock, { isLoading: false }],
+  useArchiveMutation: () => [archiveMutationMock, { isLoading: false }],
+}));
+
+vi.mock('../../features/notifications/model/identity.selectors', () => ({
+  selectNotifyIdentity: () => identityMock,
+}));
+
+vi.mock('../../features/notifications/model/inbox-item-mapper', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../features/notifications/model/inbox-item-mapper')
+  >('../../features/notifications/model/inbox-item-mapper');
+  return actual;
+});
+
 describe('NotificationCenter', () => {
   afterEach(() => {
     cleanup();
@@ -68,6 +136,11 @@ describe('NotificationCenter', () => {
     stateMock.items = [];
     stateMock.unreadCount = 0;
     stateMock.isOpen = false;
+    // Faz 23.4 PR-E.5: reset inbox-tab fixtures.
+    identityMock = null;
+    inboxQueryMock = { data: undefined, isLoading: false, isError: false };
+    markReadMutationMock.mockReset();
+    archiveMutationMock.mockReset();
   });
 
   it('okunmamis sayiyi bell butonunda gosterir', () => {
@@ -152,9 +225,130 @@ describe('NotificationCenter', () => {
     render(<NotificationCenter />);
 
     const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Sync tamamlandi bildirimini sec' }));
+    fireEvent.click(
+      within(dialog).getByRole('checkbox', { name: 'Sync tamamlandi bildirimini sec' }),
+    );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Secimi okundu say' }));
 
     expect(actionsMock.markSelectedRead).toHaveBeenCalledWith(['notif-1']);
+  });
+
+  /**
+   * Faz 23.4 PR-E.5 v1 UI inbox tab integration tests.
+   *
+   * The default mocks above lock identity to null + inbox query empty,
+   * which exercises the system-tab path. These tests override the mocks
+   * via vi.doMock + dynamic import so the inbox-tab path is also covered:
+   * - Tab switcher renders both tabs and the inbox row appears under it.
+   * - Removing an inbox row dispatches archiveMutation with the prefix-
+   *   stripped numeric id and the resolved identity.
+   * Codex iter-5 RED absorb requested at minimum these assertions before
+   * deferring deeper E2E coverage to PR5.
+   */
+  describe('inbox tab', () => {
+    it('renders inbox-tab items when identity resolved', () => {
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      inboxQueryMock = {
+        data: {
+          items: [
+            {
+              id: 42,
+              intentId: 'intent-1',
+              subject: 'Inbox row',
+              bodyText: null,
+              bodyHtml: null,
+              locale: 'tr-TR',
+              topicKey: 'inbox.test',
+              severity: 'info',
+              state: 'UNREAD',
+              readAt: null,
+              archivedAt: null,
+              createdAt: '2026-05-07T08:00:00Z',
+              expiresAt: null,
+            },
+          ],
+          page: 0,
+          size: 20,
+          totalElements: 1,
+          totalPages: 1,
+          unreadCount: 1,
+        },
+        isLoading: false,
+        isError: false,
+      };
+      stateMock.isOpen = true;
+
+      render(<NotificationCenter />);
+
+      // Bell badge sums local (0) + inbox (1) = 1 unread.
+      expect(
+        screen.getByRole('button', { name: /Bildirimler \(1 okunmamış\)/ }),
+      ).toBeInTheDocument();
+      // Tab switcher renders both tabs.
+      expect(screen.getByRole('tab', { name: /Sistem/ })).toBeInTheDocument();
+      const inboxTab = screen.getByRole('tab', { name: /Bildirimlerim/ });
+      expect(inboxTab).toBeInTheDocument();
+      expect(inboxTab).not.toBeDisabled();
+
+      // After clicking the inbox tab, the inbox row's subject should be
+      // visible in the drawer.
+      fireEvent.click(inboxTab);
+      const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
+      expect(within(dialog).getByText('Inbox row')).toBeInTheDocument();
+    });
+
+    it('dispatches archiveMutation when the inbox row is removed', () => {
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      inboxQueryMock = {
+        data: {
+          items: [
+            {
+              id: 42,
+              intentId: null,
+              subject: 'Archive me',
+              bodyText: null,
+              bodyHtml: null,
+              locale: null,
+              topicKey: 'inbox.archive',
+              severity: 'info',
+              state: 'UNREAD',
+              readAt: null,
+              archivedAt: null,
+              createdAt: '2026-05-07T08:00:00Z',
+              expiresAt: null,
+            },
+          ],
+          page: 0,
+          size: 20,
+          totalElements: 1,
+          totalPages: 1,
+          unreadCount: 1,
+        },
+        isLoading: false,
+        isError: false,
+      };
+      stateMock.isOpen = true;
+
+      render(<NotificationCenter />);
+      fireEvent.click(screen.getByRole('tab', { name: /Bildirimlerim/ }));
+      const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
+      // Inbox tab uses "Arşivle" as remove label (see component).
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Arşivle' }));
+
+      expect(archiveMutationMock).toHaveBeenCalledWith({
+        orgId: 'default',
+        subscriberId: '1204',
+        id: 42,
+      });
+    });
+
+    it('disables the inbox tab while identity is unresolved', () => {
+      // Default mocks (identity null) — verifies the disabled state.
+      stateMock.isOpen = true;
+      render(<NotificationCenter />);
+
+      const inboxTab = screen.getByRole('tab', { name: /Bildirimlerim/ });
+      expect(inboxTab).toBeDisabled();
+    });
   });
 });
