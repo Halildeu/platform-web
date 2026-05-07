@@ -7,6 +7,43 @@ type AuthMode = 'keycloak' | 'permitAll';
 type TokenResolver = () => string | null;
 type TraceIdResolver = () => string | null;
 type UnauthorizedHandler = (error: AxiosError) => void;
+
+/**
+ * Phase 2 PR-HTTP-3 (MFE Auth Transport Contract follow-up to PR-Auth-1
+ * #302 + PR-Reporting-2 #304): typed result of the shell's auth-ready
+ * bridge. The shared HTTP client awaits this resolver before issuing any
+ * request that hasn't opted out via {@code __skipAuth}, so no protected
+ * endpoint is ever called before the auth FSM reaches transportReady.
+ *
+ * <p>Mirrors the {@code AuthReadyResult} union exposed via
+ * {@code mfe_shell/services} and {@code apps/mfe-shell/src/app/services/
+ * shell-services.ts}. We re-declare it here (instead of importing) to
+ * keep {@code @mfe/shared-http} a leaf package with no MFE-side
+ * dependencies — the shell wires the resolver via
+ * {@link registerAuthReadyResolver}.
+ */
+export type SharedHttpAuthReadyResult =
+  | { ok: true }
+  | { ok: false; reason?: string; error?: string };
+
+type AuthReadyResolver = () => Promise<SharedHttpAuthReadyResult>;
+
+/**
+ * Thrown by the request interceptor when the auth-ready resolver returns
+ * {@code !ok}. Distinct from a {@code 401} because the request never
+ * left the browser — there is no server response. Callers can branch
+ * on this name to skip retry / refresh logic that only makes sense
+ * for an actually-issued request.
+ */
+export class AuthNotReadyError extends Error {
+  constructor(
+    public readonly reason: string,
+    public readonly detail?: string,
+  ) {
+    super(`auth-not-ready: ${reason}${detail ? ` (${detail})` : ''}`);
+    this.name = 'AuthNotReadyError';
+  }
+}
 type EnvRecord = Record<string, string | undefined>;
 type SharedHttpRequestConfig = AxiosRequestConfig & {
   __suppressGlobalForbiddenToast?: boolean;
@@ -69,6 +106,9 @@ const defaultTraceResolver: TraceIdResolver = () => null;
 let tokenResolver: TokenResolver = defaultTokenResolver;
 let traceResolver: TraceIdResolver = defaultTraceResolver;
 let unauthorizedHandler: UnauthorizedHandler | null = null;
+// Phase 2 PR-HTTP-3: shell-supplied auth-ready bridge. Default null means
+// no gate (legacy behaviour preserved for tests / package isolation).
+let authReadyResolver: AuthReadyResolver | null = null;
 let authMode: AuthMode = resolveAuthMode();
 let authRedirectInProgress = false;
 const PROFILE_MISSING_CODE = 'PROFILE_MISSING';
@@ -218,6 +258,29 @@ export const registerUnauthorizedHandler = (handler?: UnauthorizedHandler): void
   unauthorizedHandler = handler ?? null;
 };
 
+/**
+ * Phase 2 PR-HTTP-3: register the shell's auth-ready bridge so the
+ * shared HTTP client awaits {@code transportReady} before issuing any
+ * protected request. Pass {@code undefined} to remove the gate (the
+ * default behaviour with no resolver is to let the request proceed —
+ * this preserves legacy callers that don't run inside a shell).
+ *
+ * <p>The shell wires this in {@code shell-services-wiring.ts} alongside
+ * {@link registerAuthTokenResolver} so the same auth FSM that powers
+ * {@code getShellServices().auth.ready()} also gates direct
+ * {@code api.get/post/...} calls. MFEs that consume
+ * {@code getShellServices().http} get the gate transparently — they
+ * don't need to call {@code auth.ready()} themselves.
+ *
+ * <p>Opt-out: a request config can set
+ * {@code __skipAuth: true} (existing flag) to bypass the gate, e.g.
+ * for public endpoints like {@code /v1/theme-registry} that must work
+ * before authentication completes.
+ */
+export const registerAuthReadyResolver = (resolver?: AuthReadyResolver): void => {
+  authReadyResolver = resolver ?? null;
+};
+
 export const configureSharedHttp = (config?: { authMode?: AuthMode }): void => {
   if (config?.authMode) {
     authMode = config.authMode;
@@ -278,11 +341,28 @@ const abortPendingRequests = () => {
 const isPermitAllMode = () => authMode === 'permitAll';
 
 const installInterceptors = (client: AxiosInstance) => {
-  client.interceptors.request.use((config) => {
+  client.interceptors.request.use(async (config) => {
     trackPendingRequest(config);
+    const skipAuth = (config as SharedHttpRequestConfig).__skipAuth === true;
+
+    // Phase 2 PR-HTTP-3: await the shell's auth-ready bridge before
+    // letting a protected request fly. Opted-out paths
+    // ({@code __skipAuth: true}) and {@code permitAll} mode bypass the
+    // gate; the resolver is also a no-op when no shell is registered
+    // (legacy / standalone tests).
+    if (!skipAuth && !isPermitAllMode() && authReadyResolver) {
+      const result = await authReadyResolver();
+      if (!result.ok) {
+        // Throwing inside a request interceptor short-circuits the
+        // request — axios rejects the caller's promise with this error.
+        // We use a typed error class so callers can branch without
+        // string-matching the message.
+        throw new AuthNotReadyError(result.reason ?? 'unknown', result.error);
+      }
+    }
+
     const headers = ensureHeaders(config);
     const token = tokenResolver();
-    const skipAuth = (config as SharedHttpRequestConfig).__skipAuth === true;
     if (process.env.NODE_ENV !== 'production') {
       try {
         const base = config.baseURL ?? resolveGatewayBaseUrl();

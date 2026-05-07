@@ -182,3 +182,117 @@ describe('shared-http interceptors', () => {
     expect(unauthorizedHandler).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * Phase 2 PR-HTTP-3 (MFE Auth Transport Contract): the request
+ * interceptor awaits the shell-supplied auth-ready resolver before
+ * issuing any protected request. The resolver is registered via
+ * {@code registerAuthReadyResolver()} and its return value gates the
+ * fetch:
+ *   - {@code { ok: true }}: request proceeds normally
+ *   - {@code { ok: false, ... }}: request is rejected with a typed
+ *     {@link AuthNotReadyError} BEFORE the network call
+ *
+ * The {@code __skipAuth: true} config flag and {@code permitAll} mode
+ * bypass the gate (matching the existing Authorization-header policy).
+ *
+ * No resolver registered is the legacy default — the request flies
+ * without waiting (preserves stand-alone test/SDK usage).
+ */
+describe('shared-http auth-ready gate (PR-HTTP-3)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('awaits authReadyResolver before issuing the request when registered', async () => {
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+
+    let resolveReady!: (value: { ok: true }) => void;
+    const readyPromise = new Promise<{ ok: true }>((resolve) => {
+      resolveReady = resolve;
+    });
+    const resolver = vi.fn(() => readyPromise);
+    mod.registerAuthReadyResolver(resolver);
+
+    let interceptorResolved = false;
+    const interceptorPromise = handler?.({ headers: {} }).then((cfg: any) => {
+      interceptorResolved = true;
+      return cfg;
+    });
+
+    // Microtask flush — the await on resolver should pause the interceptor
+    // before completion.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolver).toHaveBeenCalledTimes(1);
+    expect(interceptorResolved).toBe(false);
+
+    // Once the resolver resolves, the interceptor finishes.
+    resolveReady({ ok: true });
+    const config = await interceptorPromise;
+    expect(interceptorResolved).toBe(true);
+    expect(config?.headers).toBeDefined();
+  });
+
+  it('rejects with AuthNotReadyError when resolver returns !ok', async () => {
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    mod.registerAuthReadyResolver(() =>
+      Promise.resolve({ ok: false, reason: 'unauthenticated', error: 'no cookie' }),
+    );
+
+    await expect(handler?.({ headers: {} })).rejects.toMatchObject({
+      name: 'AuthNotReadyError',
+      reason: 'unauthenticated',
+      detail: 'no cookie',
+    });
+  });
+
+  it('skips the gate when __skipAuth is set on the request config', async () => {
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    const resolver = vi.fn(() => Promise.resolve({ ok: false, reason: 'unauthenticated' }));
+    mod.registerAuthReadyResolver(resolver);
+
+    // __skipAuth opts out — the resolver must NOT be called for this
+    // request, and the request proceeds (no Authorization header is added,
+    // matching the existing __skipAuth contract for public endpoints).
+    const config = await handler?.({ headers: {}, __skipAuth: true });
+    expect(resolver).not.toHaveBeenCalled();
+    expect(config?.headers?.Authorization).toBeUndefined();
+  });
+
+  it('skips the gate in permitAll mode', async () => {
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    const resolver = vi.fn(() => Promise.resolve({ ok: false, reason: 'unauthenticated' }));
+    mod.registerAuthReadyResolver(resolver);
+    mod.configureSharedHttp({ authMode: 'permitAll' });
+
+    const config = await handler?.({ headers: {} });
+    expect(resolver).not.toHaveBeenCalled();
+    expect(config?.headers?.Authorization).toBeUndefined();
+  });
+
+  it('legacy: no resolver registered → request proceeds without gate', async () => {
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    // Note: registerAuthReadyResolver is NOT called.
+    const config = await handler?.({ headers: {} });
+    expect(config?.headers).toBeDefined();
+  });
+
+  it('passing undefined to registerAuthReadyResolver clears the resolver', async () => {
+    const { mod } = await loadModule();
+    const handler = getRequestInterceptor(mod.api);
+    const resolver = vi.fn(() => Promise.resolve({ ok: false, reason: 'unauthenticated' }));
+    mod.registerAuthReadyResolver(resolver);
+
+    // Clear the resolver — gate should no longer apply.
+    mod.registerAuthReadyResolver(undefined);
+    const config = await handler?.({ headers: {} });
+    expect(resolver).not.toHaveBeenCalled();
+    expect(config?.headers).toBeDefined();
+  });
+});

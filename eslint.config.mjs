@@ -164,4 +164,56 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
+  /* ----------------------------------------------------------------- */
+  /*  Phase 2 PR-HTTP-3 — remote MFEs MUST consume the shell-injected   */
+  /*  http client via getShellServices().http instead of importing the  */
+  /*  raw api directly. The shell wires auth.ready() awareness on top   */
+  /*  of the axios instance via registerAuthReadyResolver(); pulling    */
+  /*  api directly bypasses that gate and re-introduces the pre-cookie  */
+  /*  401-storm surface that PR-Auth-1 and PR-Reporting-2 closed.       */
+  /*                                                                    */
+  /*  Scope: apps/mfe-{access,audit,users,reporting,endpoint_admin}     */
+  /*  except their `app/services/shell-services.ts` adapter (which is   */
+  /*  the legitimate place to receive the shell's http instance and     */
+  /*  its only allowed @mfe/shared-http import surface). The shell      */
+  /*  itself (apps/mfe-shell/**) is NOT subject to the rule because it  */
+  /*  owns the registration call.                                       */
+  /* ----------------------------------------------------------------- */
+  {
+    files: [
+      'apps/mfe-access/**/*.{ts,tsx}',
+      'apps/mfe-audit/**/*.{ts,tsx}',
+      'apps/mfe-users/**/*.{ts,tsx}',
+      'apps/mfe-reporting/**/*.{ts,tsx}',
+      'apps/mfe-endpoint_admin/**/*.{ts,tsx}',
+      'apps/mfe-endpoint-admin/**/*.{ts,tsx}',
+    ],
+    ignores: [
+      'apps/*/src/app/services/shell-services.{ts,tsx}',
+      '**/__tests__/**',
+      '**/*.{spec,test}.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'warn',
+        {
+          paths: [
+            {
+              name: '@mfe/shared-http',
+              importNames: ['api', 'ApiInstance'],
+              message:
+                'Remote MFEs MUST consume the shell-injected http client via getShellServices().http (defined in src/app/services/shell-services.ts). Importing `api` directly bypasses the shell\'s auth.ready() gate registered via registerAuthReadyResolver() (PR-HTTP-3), which can re-introduce the pre-cookie 401-storm surface.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['axios'],
+              message:
+                'Remote MFEs MUST NOT import axios directly. Use getShellServices().http (which returns the shell-owned, auth-ready-gated axios instance) for protected calls.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
