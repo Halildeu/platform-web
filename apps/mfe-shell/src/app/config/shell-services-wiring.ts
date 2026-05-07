@@ -22,7 +22,7 @@ import telemetryClient from '../telemetry/telemetry-client';
 import { broadcastAuthState } from '../auth/auth-sync';
 import { isPermitAllMode } from '../auth/auth-config';
 import { mapKeycloakProfile } from '../config/auth-helpers';
-import { setKeycloakSession } from '../../features/auth/model/auth.slice';
+import { setAuthPhase, setKeycloakSession } from '../../features/auth/model/auth.slice';
 import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
 import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
@@ -304,6 +304,18 @@ registerRefreshHandler(async (): Promise<RefreshResult> => {
         authzSnapshot,
       }),
     );
+
+    // Codex iter-2 P1 absorb (thread 019e048d): re-open the auth-ready
+    // gate. setKeycloakSession updates token/user only; phase changes
+    // are owned by setAuthPhase. If a 401 fires while the FSM is in
+    // {@code refreshing} or {@code authzReady} (e.g. proactive
+    // onTokenExpired ran first and stalled mid-closure), the retried
+    // request would hang on auth.ready() forever — even though the
+    // refresh logically succeeded. Mirror the proactive refresh's last
+    // step (AuthBootstrapper.onTokenExpired) and dispatch
+    // {@code transportReady} so {@code createAuthReadyPromise()}
+    // resolves with {@code ok: true} for the retry's interceptor wait.
+    store.dispatch(setAuthPhase('transportReady'));
 
     return { ok: true, token: newToken };
   } catch (err) {
