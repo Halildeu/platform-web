@@ -28,14 +28,40 @@ import type { AuditEvent } from '../types/audit-event';
 const event: AuditEvent = {
   id: 'evt-1',
   timestamp: '2026-04-30T10:00:00Z',
+  userEmail: 'tester@example.com',
+  service: 'auth-service',
+  level: 'INFO',
   action: 'TEST_ACTION',
-  actor: { id: 'u-1', email: 'tester@example.com' },
-  target: { type: 'role', id: '42' },
-  status: 'success',
-  ip: '127.0.0.1',
-  userAgent: 'jsdom',
+  details: 'Real-DS render guard',
+  correlationId: 'corr-evt-1',
   metadata: {},
-} as AuditEvent;
+};
+
+describe('AuditDetailDrawer — real-DS contract guard (PR #292 iter-1)', () => {
+  // Pairs with the unit-test mock refactor in `AuditDetailDrawer.test.tsx`.
+  // The mock uses the real `DetailDrawerProps` shape (sections + subtitle)
+  // — this real-DS test renders `@mfe/design-system` `DetailDrawer`
+  // unmocked so we catch the next time someone attempts to revive a
+  // `tabs={...}` or `extra={...}` prop that the design-system has never
+  // accepted.
+  it('renders the summary/raw section content via the real DetailDrawer', async () => {
+    render(<AuditDetailDrawer event={event} open onClose={vi.fn()} />);
+    await new Promise((r) => setTimeout(r, 80));
+
+    const dialog = screen.getByRole('dialog');
+    // Header: title plus subtitle (action — replaces the broken
+    // `extra` prop). `subtitle` is rendered inside the panel header.
+    expect(dialog.textContent).toContain('Audit Event');
+    expect(dialog.textContent).toContain('TEST_ACTION');
+
+    // Body: summary section content rendered (was empty in the
+    // pre-refactor world because `tabs` was silently dropped).
+    expect(screen.getByTestId('audit-detail-summary')).toBeTruthy();
+    expect(screen.getByTestId('audit-detail-raw')).toBeTruthy();
+    expect(dialog.textContent).toContain('tester@example.com');
+    expect(dialog.textContent).toContain('auth-service');
+  });
+});
 
 describe('AuditDetailDrawer — focus trap regression (iter-46)', () => {
   it('drawer captures focus on open via the DS useFocusTrap hook', async () => {

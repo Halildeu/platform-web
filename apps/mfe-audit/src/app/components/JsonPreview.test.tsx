@@ -7,7 +7,9 @@ import JsonPreview from './JsonPreview';
 // Minimal mock for @testing-library/react's peer dep on react-dom
 vi.mock('@mfe/design-system', () => ({}));
 
-afterEach(() => { cleanup(); });
+afterEach(() => {
+  cleanup();
+});
 
 describe('JsonPreview', () => {
   it('renders a JSON object as pretty-printed string', () => {
@@ -70,5 +72,21 @@ describe('JsonPreview', () => {
     render(<JsonPreview data="test" />);
     const pre = screen.getByRole('region');
     expect(pre.className).toContain('json-preview');
+  });
+
+  it('applies overflow-safe utility classes for mobile viewport', () => {
+    // Mobile fix (PR #237 propagation): long JSON content (URLs,
+    // base64, IDs) used to push the audit detail drawer past the
+    // viewport on small screens. The four utility classes cooperate:
+    //   - max-w-full          → bound the box by its parent
+    //   - overflow-x-auto     → scroll long unbroken lines
+    //   - whitespace-pre-wrap → wrap normal multi-line JSON
+    //   - break-all           → last-resort wrap inside long tokens
+    render(<JsonPreview data={{ url: 'https://example.com/very/long/path' }} />);
+    const pre = screen.getByRole('region');
+    expect(pre.className).toContain('max-w-full');
+    expect(pre.className).toContain('overflow-x-auto');
+    expect(pre.className).toContain('whitespace-pre-wrap');
+    expect(pre.className).toContain('break-all');
   });
 });
