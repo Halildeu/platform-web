@@ -79,6 +79,8 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 const isQuietHoursDay = (value: unknown): value is QuietHoursDay =>
   typeof value === 'string' && DAY_VALUES.has(value as QuietHoursDay);
 
+const CANONICAL_KEYS: ReadonlySet<string> = new Set(['start', 'end', 'timezone', 'days']);
+
 const isCanonical = (
   raw: Record<string, unknown>,
 ): raw is Record<string, unknown> & QuietHoursV1 => {
@@ -90,7 +92,15 @@ const isCanonical = (
   if (typeof end !== 'string' || !TIME_RE.test(end)) return false;
   if (typeof timezone !== 'string' || timezone.trim().length === 0) return false;
   if (!Array.isArray(days) || days.length === 0) return false;
-  return days.every(isQuietHoursDay);
+  if (!days.every(isQuietHoursDay)) return false;
+  // Codex thread `019e034e` post-impl P2 absorb: any extra key (e.g. a
+  // future {exceptions:[]} field) means we cannot safely re-serialise.
+  // Classify those payloads as custom so the raw shape round-trips
+  // verbatim instead of silently losing the unknown fields on save.
+  for (const key of Object.keys(raw)) {
+    if (!CANONICAL_KEYS.has(key)) return false;
+  }
+  return true;
 };
 
 export const parseQuietHours = (raw: unknown): QuietHoursParseResult => {
@@ -123,10 +133,15 @@ const orderDays = (days: QuietHoursDay[]): QuietHoursDay[] => {
  */
 export const serializeQuietHours = (model: QuietHoursV1 | null): Record<string, unknown> | null => {
   if (!model) return null;
+  // Codex thread `019e034e` post-impl P3 absorb: trim + fallback the
+  // timezone before persisting; an empty string would round-trip as
+  // "Özel sessiz saatler" on the next load (canonical contract requires
+  // a non-blank IANA identifier).
+  const trimmedTz = model.timezone.trim();
   return {
     start: model.start,
     end: model.end,
-    timezone: model.timezone,
+    timezone: trimmedTz.length > 0 ? trimmedTz : defaultQuietHoursTimezone(),
     days: orderDays(model.days),
   };
 };

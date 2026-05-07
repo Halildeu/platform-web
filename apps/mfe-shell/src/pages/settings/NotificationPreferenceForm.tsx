@@ -205,6 +205,13 @@ export const NotificationPreferenceForm: React.FC<NotificationPreferenceFormProp
             onChange={(e) => setTopicKey(e.target.value)}
             placeholder="örn. report.export.ready"
             data-testid="pref-form-topic"
+            // Codex thread `019e034e` post-impl P1 absorb: backend
+            // PUT /me upserts by (topicKey, channel) composite key,
+            // not by id. Letting the operator change the tuple in
+            // edit mode would create a duplicate row. Tuple changes
+            // require delete + create.
+            readOnly={mode === 'edit'}
+            disabled={mode === 'edit'}
             style={textInputStyle}
           />
         </label>
@@ -217,9 +224,20 @@ export const NotificationPreferenceForm: React.FC<NotificationPreferenceFormProp
             onChange={(e) => setChannel(e.target.value)}
             placeholder="örn. email"
             data-testid="pref-form-channel"
+            readOnly={mode === 'edit'}
+            disabled={mode === 'edit'}
             style={textInputStyle}
           />
         </label>
+        {mode === 'edit' && (
+          <p
+            style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '-0.5rem' }}
+            data-testid="pref-form-tuple-locked-note"
+          >
+            Konu ve kanal değiştirilemez; bunlar bu kuralın anahtarıdır. Değiştirmek için kuralı
+            silip yeniden oluşturun.
+          </p>
+        )}
 
         <label
           style={{ ...fieldLabelStyle, flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}

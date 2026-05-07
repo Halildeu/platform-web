@@ -254,6 +254,65 @@ describe('formatQuietHours', () => {
     expect(formatQuietHours({ rules: [{ from: 22 }] })).toBe('Özel sessiz saatler');
     expect(formatQuietHours({ start: '22:00' })).toBe('Özel sessiz saatler');
   });
+
+  it('rejects canonical-looking payloads with extra keys (P2 absorb)', () => {
+    // Codex post-impl P2: a future shape `{...canonical, exceptions:[...]}`
+    // would otherwise be treated as canonical and `exceptions` would be
+    // dropped on the next save. The parser now flags any unknown key as
+    // custom so the payload round-trips verbatim.
+    const result = parseQuietHours({
+      start: '22:00',
+      end: '07:00',
+      timezone: 'UTC',
+      days: ['MON'],
+      exceptions: [{ date: '2026-12-31' }],
+    });
+    expect(result.kind).toBe('custom');
+    expect(
+      formatQuietHours({
+        start: '22:00',
+        end: '07:00',
+        timezone: 'UTC',
+        days: ['MON'],
+        exceptions: [{ date: '2026-12-31' }],
+      }),
+    ).toBe('Özel sessiz saatler');
+  });
+});
+
+describe('serializeQuietHours timezone fallback (P3 absorb)', () => {
+  it('falls back to default timezone when the model timezone is blank', () => {
+    const wire = serializeQuietHours({
+      start: '22:00',
+      end: '07:00',
+      timezone: '   ',
+      days: ['MON'],
+    });
+    expect(wire?.timezone).not.toBe('   ');
+    expect(typeof wire?.timezone).toBe('string');
+    expect((wire?.timezone as string).length).toBeGreaterThan(0);
+  });
+
+  it('falls back to default timezone when the model timezone is empty', () => {
+    const wire = serializeQuietHours({
+      start: '22:00',
+      end: '07:00',
+      timezone: '',
+      days: ['MON'],
+    });
+    expect(typeof wire?.timezone).toBe('string');
+    expect((wire?.timezone as string).length).toBeGreaterThan(0);
+  });
+
+  it('preserves a non-blank timezone verbatim (after trim)', () => {
+    const wire = serializeQuietHours({
+      start: '22:00',
+      end: '07:00',
+      timezone: '  Europe/Istanbul  ',
+      days: ['MON'],
+    });
+    expect(wire?.timezone).toBe('Europe/Istanbul');
+  });
 });
 
 describe('defaultQuietHoursTimezone', () => {

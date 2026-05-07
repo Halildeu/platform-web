@@ -187,6 +187,46 @@ describe('NotificationPreferenceForm — frequency limit', () => {
   });
 });
 
+describe('NotificationPreferenceForm — edit mode tuple lock (P1 absorb)', () => {
+  it('disables and locks topicKey/channel inputs to prevent backend tuple drift', () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <NotificationPreferenceForm
+        {...baseProps}
+        mode="edit"
+        initialValue={{
+          id: 1,
+          topicKey: 'auth.password-reset',
+          channel: 'email',
+          enabled: true,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        }}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const topic = screen.getByTestId('pref-form-topic') as HTMLInputElement;
+    const channel = screen.getByTestId('pref-form-channel') as HTMLInputElement;
+    expect(topic).toBeDisabled();
+    expect(topic).toHaveAttribute('readonly');
+    expect(channel).toBeDisabled();
+    expect(channel).toHaveAttribute('readonly');
+    expect(screen.getByTestId('pref-form-tuple-locked-note')).toBeInTheDocument();
+  });
+
+  it('does NOT disable topicKey/channel in create mode', () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<NotificationPreferenceForm {...baseProps} onSubmit={onSubmit} />);
+    expect(screen.getByTestId('pref-form-topic')).not.toBeDisabled();
+    expect(screen.getByTestId('pref-form-channel')).not.toBeDisabled();
+    expect(screen.queryByTestId('pref-form-tuple-locked-note')).not.toBeInTheDocument();
+  });
+});
+
 describe('NotificationPreferenceForm — edit mode preserves rich fields', () => {
   it('hydrates from initialValue and round-trips quiet hours / frequency / bypass', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
