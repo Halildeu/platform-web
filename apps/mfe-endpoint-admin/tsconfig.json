@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "es2015",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "mfe_shell/i18n": ["../mfe-shell/src/app/i18n/index.ts"],
+      "mfe_shell/*": ["../mfe-shell/src/*"],
+      "@mfe/design-system": ["../../packages/design-system/src"],
+      "@mfe/design-system/*": ["../../packages/design-system/src/*"]
+    },
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["src"]
+}

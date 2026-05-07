@@ -2,24 +2,23 @@
 /*  Shell services wiring — connects Redux store, telemetry, etc.      */
 /* ------------------------------------------------------------------ */
 
-import { api } from "@mfe/shared-http";
-import { store } from "../store/store";
+import { api } from '@mfe/shared-http';
+import { store } from '../store/store';
 import {
   configureShellServices,
   type ShellNotificationEntry,
   type ShellTelemetryEvent,
-} from "../services/shell-services";
+} from '../services/shell-services';
 import {
   pushNotification,
   toggleOpen,
-} from "../../features/notifications/model/notifications.slice";
-import telemetryClient from "../telemetry/telemetry-client";
-import {
-  broadcastAuthState,
-} from "../auth/auth-sync";
-import { isPermitAllMode } from "../auth/auth-config";
-import { queryClient } from "./query-config";
-import { readEnvBoolean } from "./env";
+} from '../../features/notifications/model/notifications.slice';
+import telemetryClient from '../telemetry/telemetry-client';
+import { broadcastAuthState } from '../auth/auth-sync';
+import { isPermitAllMode } from '../auth/auth-config';
+import { queryClient } from './query-config';
+import { readEnvBoolean } from './env';
+import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
 
 /* ---- Notification dispatcher ---- */
 
@@ -90,17 +89,15 @@ configureShellServices({
 /* ---- Wire remote module shell-services ---- */
 
 export const wireRemoteShellServices = () => {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return;
   }
   if (
-    readEnvBoolean("VITE_SHELL_SKIP_REMOTE_SERVICES") ||
-    readEnvBoolean("SHELL_SKIP_REMOTE_SERVICES")
+    readEnvBoolean('VITE_SHELL_SKIP_REMOTE_SERVICES') ||
+    readEnvBoolean('SHELL_SKIP_REMOTE_SERVICES')
   ) {
-    if (process.env.NODE_ENV !== "production") {
-      console.debug(
-        "[shell] remote shell-services yuklemesi environment ile kapatildi",
-      );
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[shell] remote shell-services yuklemesi environment ile kapatildi');
     }
     return;
   }
@@ -113,24 +110,38 @@ export const wireRemoteShellServices = () => {
       getUser: () => store.getState().auth.user ?? null,
     },
   };
-  const remotes = [
-    { name: "mfe_access", loader: () => import("mfe_access/shell-services") },
-    { name: "mfe_audit", loader: () => import("mfe_audit/shell-services") },
-    { name: "mfe_users", loader: () => import("mfe_users/shell-services") },
+  const remotes: Array<{
+    name: string;
+    loader: () => Promise<{
+      configureShellServices: (services: unknown) => void;
+    }>;
+  }> = [
+    { name: 'mfe_access', loader: () => import('mfe_access/shell-services') },
+    { name: 'mfe_audit', loader: () => import('mfe_audit/shell-services') },
+    { name: 'mfe_users', loader: () => import('mfe_users/shell-services') },
     {
-      name: "mfe_reporting",
-      loader: () => import("mfe_reporting/shell-services"),
+      name: 'mfe_reporting',
+      loader: () => import('mfe_reporting/shell-services'),
     },
   ];
+  // PR #258 lesson: only add endpoint-admin to the wiring chain when
+  // explicitly enabled. When the flag is OFF, vite.config.ts registers
+  // the remote with a STUB entry that does NOT satisfy the MF runtime
+  // container contract. Calling `import('mfe_endpoint_admin/...')` would
+  // force the MF runtime to evaluate the STUB and throw synchronously,
+  // which white-screened the SPA on testai (PR #261 revert).
+  if (isEndpointAdminRemoteEnabled()) {
+    remotes.push({
+      name: 'mfe_endpoint_admin',
+      loader: () => import('mfe_endpoint_admin/shell-services'),
+    });
+  }
   remotes.forEach(({ name, loader }) => {
     loader()
       .then((module) => module.configureShellServices(sharedServices))
       .catch((error) => {
-        if (process.env.NODE_ENV !== "production") {
-          console.debug(
-            `[shell] ${name} shell-services konfigurasyonu atlandı`,
-            error,
-          );
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug(`[shell] ${name} shell-services konfigurasyonu atlandı`, error);
         }
       });
   });

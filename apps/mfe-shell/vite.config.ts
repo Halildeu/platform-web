@@ -114,6 +114,18 @@ function buildRemotes() {
       'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
       'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
     ]),
+    // FE-000 safe skeleton — DEFAULT OFF until backend image
+    // `e9cb8dd0` is deployed to testai/prod and the OpenFGA seed
+    // for `module:endpoint-admin` is confirmed. PR #258 white-screen
+    // root cause: STUB entry was forced to load via shell-services
+    // wiring; PR #261 revert. New pattern: STUB entry remains so MF
+    // can resolve the module specifier at build time, but neither
+    // the wiring chain nor the route ever import from it while the
+    // flag is OFF.
+    endpointAdmin: readEnvBoolean(
+      ['VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE', 'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE'],
+      false,
+    ),
   };
 
   // All remotes must be declared so MF plugin can resolve their imports
@@ -149,6 +161,10 @@ function buildRemotes() {
     schemaExplorer: readEnvString(
       ['MFE_SCHEMA_EXPLORER_URL', 'VITE_MFE_SCHEMA_EXPLORER_URL'],
       'http://localhost:3008/remoteEntry.js',
+    ),
+    endpointAdmin: readEnvString(
+      ['MFE_ENDPOINT_ADMIN_URL', 'VITE_MFE_ENDPOINT_ADMIN_URL'],
+      'http://localhost:3009/remoteEntry.js',
     ),
   };
 
@@ -187,6 +203,11 @@ function buildRemotes() {
       type: 'module',
       name: 'mfe_schema_explorer',
       entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
+    },
+    mfe_endpoint_admin: {
+      type: 'module',
+      name: 'mfe_endpoint_admin',
+      entry: enabled.endpointAdmin ? remoteEntries.endpointAdmin : STUB,
     },
   };
 }
@@ -426,6 +447,7 @@ export default defineConfig(({ mode }) => {
         'mfe_audit',
         'mfe_users',
         'mfe_reporting',
+        'mfe_endpoint_admin',
       ],
     },
 

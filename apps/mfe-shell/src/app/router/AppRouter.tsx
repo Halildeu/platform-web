@@ -3,7 +3,11 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAppSelector } from '../store/store.hooks';
 import { isPermitAllMode } from '../auth/auth-config';
 import { ProtectedRoute } from '../guards/ProtectedRoute';
-import { isEthicRemoteEnabled, isSuggestionsRemoteEnabled } from '../shell-navigation';
+import {
+  isEthicRemoteEnabled,
+  isSuggestionsRemoteEnabled,
+  isEndpointAdminRemoteEnabled,
+} from '../shell-navigation';
 import { useShellCommonI18n } from '../i18n';
 import {
   SuggestionsApp,
@@ -12,6 +16,7 @@ import {
   AuditModule,
   UsersModule,
   SchemaExplorerModule,
+  EndpointAdminModule,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
 const ReportBuilderWizard = React.lazy(() =>
@@ -61,6 +66,7 @@ export const AppRouter: React.FC = () => {
   const permitAllMode = isPermitAllMode();
   const suggestionsEnabled = isSuggestionsRemoteEnabled();
   const ethicEnabled = isEthicRemoteEnabled();
+  const endpointAdminEnabled = isEndpointAdminRemoteEnabled();
 
   const defaultShellPath = '/home';
 
@@ -229,6 +235,27 @@ export const AppRouter: React.FC = () => {
             <ProtectedRoute requiredModule="THEME">
               <ServiceControlPage />
             </ProtectedRoute>
+          }
+        />
+        {/*
+          Endpoint admin — FE-000 safe skeleton. Default OFF until
+          backend `e9cb8dd0` deploys to testai/prod and OpenFGA seed
+          for `module:endpoint-admin` lands. When OFF, the route
+          redirects to defaultShellPath instead of mounting the lazy
+          remote (which would try to import from a STUB entry that
+          lacks an MF container contract — see PR #258 / #261). When
+          ON (flag explicitly set), the route is wrapped with
+          ProtectedRoute (claim wired in a follow-up PR after the
+          OpenFGA grant is verified end-to-end).
+        */}
+        <Route
+          path="/endpoint-admin/*"
+          element={
+            endpointAdminEnabled ? (
+              <EndpointAdminModule />
+            ) : (
+              <Navigate to={defaultShellPath} replace />
+            )
           }
         />
         <Route path="/home" element={<HomePage />} />

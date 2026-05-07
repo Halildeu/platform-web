@@ -13,6 +13,7 @@
     "apps/mfe-ethic",
     "apps/mfe-access",
     "apps/mfe-audit",
+    "apps/mfe-endpoint-admin",
     "apps/mfe-users",
     "packages/auth",
     "packages/shared-http",

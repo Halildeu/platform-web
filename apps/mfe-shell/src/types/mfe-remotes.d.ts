@@ -26,3 +26,7 @@ declare module 'mfe_users/shell-services' {
 declare module 'mfe_reporting/shell-services' {
   export function configureShellServices(services: Partial<RemoteShellServices>): void;
 }
+
+declare module 'mfe_endpoint_admin/shell-services' {
+  export function configureShellServices(services: Partial<RemoteShellServices>): void;
+}

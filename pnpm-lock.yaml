@@ -361,6 +361,58 @@ importers:
         specifier: '*'
         version: 4.1.5(@types/node@25.6.0)(@vitest/browser-playwright@4.1.5)(@vitest/coverage-v8@4.1.5)(jsdom@29.1.1)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
 
+  apps/mfe-endpoint-admin:
+    dependencies:
+      '@mfe/design-system':
+        specifier: '*'
+        version: link:../../packages/design-system
+      '@mfe/i18n-dicts':
+        specifier: '*'
+        version: link:../../packages/i18n-dicts
+      '@mfe/shared-http':
+        specifier: '*'
+        version: link:../../packages/shared-http
+      '@mfe/shared-types':
+        specifier: '*'
+        version: link:../../packages/shared-types
+      react:
+        specifier: ~18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ~18.2.0
+        version: 18.2.0(react@18.2.0)
+      react-router:
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      react-router-dom:
+        specifier: ^7.14.2
+        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+    devDependencies:
+      '@testing-library/jest-dom':
+        specifier: ^6.6.3
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.3.0
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
+      '@types/react':
+        specifier: ^18.2.0
+        version: 18.3.28
+      '@types/react-dom':
+        specifier: ^18.2.0
+        version: 18.3.7(@types/react@18.3.28)
+      eslint:
+        specifier: 9.39.1
+        version: 9.39.1(jiti@2.6.1)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: '*'
+        version: 4.1.5(@types/node@25.6.0)(@vitest/browser-playwright@4.1.5)(@vitest/coverage-v8@4.1.5)(jsdom@29.1.1)(vite@8.0.10(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+
   apps/mfe-ethic:
     dependencies:
       '@mfe/design-system':
@@ -4284,9 +4336,9 @@ packages:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
     engines: {node: '>=6.0'}
 
-  chromedriver@148.0.1:
-    resolution: {integrity: sha512-dlRbJqLAb7luLHNQ8pze7Qv9rVHHn+BwcOLbwa11PYfDgrISRZNtMTXm/kX0byZUsHF6mMQpAUPJ9T7oy87o9Q==}
-    engines: {node: '>=20'}
+  chromedriver@148.0.2:
+    resolution: {integrity: sha512-9N9J6XxkB7dub7dcYzJomNfTbaEQA5qILpdha5cxUxgDC2hwE3u8yV/7tkJacSSfPGCHKHp05NYmAitQ4Y7tSw==}
+    engines: {node: '>=22'}
     hasBin: true
 
   chromium-bidi@14.0.0:
@@ -9108,7 +9160,7 @@ snapshots:
     dependencies:
       '@axe-core/webdriverjs': 4.11.3(selenium-webdriver@4.41.0)
       axe-core: 4.11.4
-      chromedriver: 148.0.1
+      chromedriver: 148.0.2
       colors: 1.4.0
       commander: 9.5.0
       dotenv: 17.4.2
@@ -12396,7 +12448,7 @@ snapshots:
 
   chrome-trace-event@1.0.4: {}
 
-  chromedriver@148.0.1:
+  chromedriver@148.0.2:
     dependencies:
       '@testim/chrome-version': 1.1.4
       axios: 1.15.2
