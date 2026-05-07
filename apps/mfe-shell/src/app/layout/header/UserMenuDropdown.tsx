@@ -15,7 +15,9 @@ import { useShellCommonI18n } from '../../i18n';
 /*  UserMenuDropdown — Avatar trigger + rich dropdown menu             */
 /* ------------------------------------------------------------------ */
 
-function getInitials(user: { fullName?: string; displayName?: string; name?: string; email?: string } | null): string {
+function getInitials(
+  user: { fullName?: string; displayName?: string; name?: string; email?: string } | null,
+): string {
   const name = user?.fullName?.trim() || user?.displayName?.trim() || user?.name?.trim();
   if (name) {
     return name
@@ -28,7 +30,10 @@ function getInitials(user: { fullName?: string; displayName?: string; name?: str
   return (user?.email?.[0] ?? 'U').toUpperCase();
 }
 
-function getDisplayName(user: { fullName?: string; displayName?: string; name?: string; email?: string } | null, fallback: string): string {
+function getDisplayName(
+  user: { fullName?: string; displayName?: string; name?: string; email?: string } | null,
+  fallback: string,
+): string {
   if (user?.fullName?.trim()) return user.fullName;
   if (user?.displayName?.trim()) return user.displayName;
   if (user?.name?.trim()) return user.name;
@@ -53,7 +58,12 @@ export const UserMenuDropdown: React.FC = () => {
     if (!user?.lastLoginAt) return t('shell.header.neverLoggedIn');
     try {
       const date = new Date(user.lastLoginAt);
-      const localeMap: Record<string, string> = { tr: 'tr-TR', en: 'en-US', de: 'de-DE', es: 'es-ES' };
+      const localeMap: Record<string, string> = {
+        tr: 'tr-TR',
+        en: 'en-US',
+        de: 'de-DE',
+        es: 'es-ES',
+      };
       return date.toLocaleString(localeMap[locale] ?? undefined);
     } catch {
       return user.lastLoginAt;
@@ -63,9 +73,9 @@ export const UserMenuDropdown: React.FC = () => {
   const handleLogout = useCallback(() => {
     dispatch(logout());
     if (typeof window !== 'undefined') {
-      keycloak
-        .logout({ redirectUri: buildAppRedirectUri('/login'), federated: true })
-        .catch(() => { /* keycloak unavailable */ });
+      keycloak.logout({ redirectUri: buildAppRedirectUri('/login'), federated: true }).catch(() => {
+        /* keycloak unavailable */
+      });
     }
   }, [dispatch]);
 
@@ -80,12 +90,8 @@ export const UserMenuDropdown: React.FC = () => {
           <Avatar initials={initials} size="md" />
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-text-primary">{displayName}</div>
-            {user?.email && (
-              <div className="truncate text-xs text-text-subtle">{user.email}</div>
-            )}
-            {user?.role && (
-              <div className="mt-0.5 text-[11px] text-text-subtle">{user.role}</div>
-            )}
+            {user?.email && <div className="truncate text-xs text-text-subtle">{user.email}</div>}
+            {user?.role && <div className="mt-0.5 text-[11px] text-text-subtle">{user.role}</div>}
           </div>
         </div>
       ),
@@ -127,13 +133,25 @@ export const UserMenuDropdown: React.FC = () => {
       });
     }
 
+    // Faz 23.5 PR3 — subscriber-facing notification preferences. Visible
+    // to every authenticated user (no module gate); each user manages
+    // their own preference rows scoped via SubscriberIdentityGuard.
+    entries.push({
+      key: 'notification-preferences',
+      label: 'Bildirim Tercihleri',
+      icon: <Settings className="h-4 w-4" />,
+      onClick: () => navigate('/settings/notifications'),
+    });
+
     // Profile (coming soon)
     entries.push({
       key: 'profile',
       label: (
         <span className="flex items-center gap-2">
           {t('shell.header.profileSoon')}
-          <Badge variant="muted" size="sm">Yakında</Badge>
+          <Badge variant="muted" size="sm">
+            Yakında
+          </Badge>
         </span>
       ),
       icon: <User className="h-4 w-4" />,
@@ -152,7 +170,17 @@ export const UserMenuDropdown: React.FC = () => {
     });
 
     return entries;
-  }, [initials, displayName, user, formattedLastLogin, canAudit, canThemeAdmin, t, navigate, handleLogout]);
+  }, [
+    initials,
+    displayName,
+    user,
+    formattedLastLogin,
+    canAudit,
+    canThemeAdmin,
+    t,
+    navigate,
+    handleLogout,
+  ]);
 
   return (
     <Dropdown items={items} placement="bottom-end" minWidth={260}>
