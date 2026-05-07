@@ -204,14 +204,18 @@ function buildRemotes() {
       name: 'mfe_schema_explorer',
       entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
     },
-    // PR #258 reapply (post-#261): we keep the STUB-when-disabled
-    // pattern so the MF plugin can still resolve the
-    // `mfe_endpoint_admin/EndpointAdminApp` static import in
-    // lazy-routes.ts. createLazyRemoteModule already classifies the
-    // STUB resolution as a render-time fallback. The crash root cause
-    // was the EAGER loader in shell-services-wiring — that path is
-    // gated separately at runtime (see shell-services-wiring.ts +
-    // isEndpointAdminRemoteEnabled flag).
+    // PR #258 reapply (post-#261): STUB-when-disabled pattern matches
+    // every other remote so the MF plugin can resolve the static
+    // `mfe_endpoint_admin/EndpointAdminApp` import in lazy-routes.ts
+    // at build time. STUB resolves successfully (no rejection) but
+    // returns `{ default: {} }`; createLazyRemoteModule's guard now
+    // detects an invalid component export and routes to the
+    // classified "remote unavailable" fallback (see
+    // createLazyRemoteModule.tsx isValidRemoteComponent + tests).
+    // The boot-time crash root cause was the EAGER loader in
+    // shell-services-wiring — that path is gated separately at
+    // runtime via isEndpointAdminRemoteEnabled (see
+    // shell-services-wiring.ts).
     mfe_endpoint_admin: {
       type: 'module',
       name: 'mfe_endpoint_admin',
