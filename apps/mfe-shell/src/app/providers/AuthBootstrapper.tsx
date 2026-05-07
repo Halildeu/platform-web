@@ -26,11 +26,28 @@ interface AuthzMeResult {
   rawResponse: Record<string, unknown> | null;
 }
 
-async function fetchAppPermissions(token: string): Promise<AuthzMeResult> {
+/**
+ * Exported for PR-HTTP-3 regression tests so the production helper's
+ * use of {@code __skipAuthReadyGate: true} can be verified directly
+ * (the React component wraps these as bootstrap deps; the test mocks
+ * them, so without a separate export the bypass-flag assertion would
+ * have nothing to check).
+ */
+export async function fetchAppPermissions(token: string): Promise<AuthzMeResult> {
   try {
-    const res = await api.get('/v1/authz/me', {
+    // PR-HTTP-3 (Codex iter-2 P0 absorb, thread 019e046c): bypass the
+    // shell's auth-ready gate. fetchAppPermissions runs in the
+    // bootstrap chain BETWEEN {@code cookieReady} and {@code transportReady}
+    // (see auth-bootstrap-controller.ts:130). Without the bypass, the
+    // gate would await transportReady — which only fires AFTER this
+    // very call resolves, producing the same self-deadlock as
+    // setTokenCookie. The refresh path uses the same helper, so
+    // this single bypass also fixes the refresh deadlock.
+    const cfg: SharedHttpRequestConfig = {
       headers: { Authorization: `Bearer ${token}` },
-    });
+      __skipAuthReadyGate: true,
+    };
+    const res = await api.get('/v1/authz/me', cfg);
     const data = res.data as Record<string, unknown> & {
       permissions?: string[];
       allowedModules?: string[];
@@ -67,7 +84,8 @@ async function fetchAppPermissions(token: string): Promise<AuthzMeResult> {
  * testai.acik.com (574 metadata requests, all 401, before cookie POST
  * resolved).
  */
-async function setTokenCookie(token: string): Promise<void> {
+/** Exported for PR-HTTP-3 regression tests (see {@link fetchAppPermissions}). */
+export async function setTokenCookie(token: string): Promise<void> {
   // PR-HTTP-3 (Codex iter-1 P0 absorb, thread 019e046c): bypass the
   // shell's auth-ready gate. This call is what DRIVES the FSM toward
   // {@code transportReady}; it cannot wait for transportReady itself
@@ -79,7 +97,8 @@ async function setTokenCookie(token: string): Promise<void> {
   await api.post('/auth/cookie', null, config);
 }
 
-async function clearTokenCookie(): Promise<void> {
+/** Exported for PR-HTTP-3 regression tests (see {@link fetchAppPermissions}). */
+export async function clearTokenCookie(): Promise<void> {
   try {
     // PR-HTTP-3: same rationale as setTokenCookie — clearing the cookie
     // is part of the auth FSM transition (logout); cannot gate on
