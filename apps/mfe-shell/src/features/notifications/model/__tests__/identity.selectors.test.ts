@@ -198,3 +198,104 @@ describe('selectNotifyIdentity — canonical-first priority', () => {
     });
   });
 });
+
+describe('selectNotifyIdentity — Faz 23.6 PR-3 JWT subscriberId claim flow', () => {
+  // Codex thread `019e03f4` PARTIAL iter-1: post-PR-2 the Keycloak
+  // mapper emits `subscriberId` as a JWT claim;
+  // mapKeycloakProfile() copies it into UserProfile.subscriberId via
+  // setKeycloakSession. From the selector's point of view this looks
+  // like state.auth.user.subscriberId (the same persisted-alias slot
+  // that Faz 23.5 introduced) — but the SOURCE is now the JWT claim
+  // itself, not the /authz/me snapshot. These tests assert the
+  // selector still resolves correctly when the JWT-driven alias is
+  // the only canonical source available.
+
+  it('selects user.subscriberId (sourced from JWT claim) when the snapshot has not loaded yet', () => {
+    // Steady-state PR-3 scenario: token is fresh post-login, JWT
+    // subscriberId claim is in user.subscriberId via mapKeycloakProfile,
+    // but /api/v1/authz/me snapshot reload is still in flight.
+    const state = buildState({
+      user: {
+        id: 'kc-uuid-after-login',
+        subscriberId: '1204',
+        email: 'alice@corp.example',
+        role: 'USER',
+        permissions: [],
+      },
+      authzSnapshot: null,
+      initialized: true,
+    });
+    expect(selectNotifyIdentity(state)).toEqual({
+      orgId: DEFAULT_ORG_ID,
+      subscriberId: '1204',
+    });
+  });
+
+  it('returns the JWT-sourced subscriberId even when the user.id (sub UUID) is also present', () => {
+    // The selector must not prefer the legacy `sub` UUID when the
+    // canonical JWT claim is in place — otherwise PR-4 strict cutover
+    // would 403 every browser session.
+    const state = buildState({
+      user: {
+        id: 'kc-uuid-sub',
+        subscriberId: '1204',
+        email: 'alice@corp.example',
+        role: 'USER',
+        permissions: [],
+      },
+      authzSnapshot: null,
+      initialized: true,
+    });
+    const resolved = selectNotifyIdentity(state);
+    expect(resolved?.subscriberId).toBe('1204');
+    expect(resolved?.subscriberId).not.toBe('kc-uuid-sub');
+  });
+
+  it('falls back to authzSnapshot.userId (legacy claim) when the JWT had no subscriberId yet (pre-PR-2 token)', () => {
+    // Backward-compat: a token issued BEFORE the PR-2 mapper rolled
+    // out has no subscriberId claim. The /authz/me snapshot still
+    // surfaces the legacy `userId` claim and the selector keeps
+    // working through the rollout window. This is the critical
+    // backward-compat case: PR-3 must not break existing sessions.
+    const state = buildState({
+      user: {
+        id: 'pre-pr2-uuid',
+        // No subscriberId on the user — pre-PR-2 mapKeycloakProfile
+        // didn't populate it.
+        email: 'alice@corp.example',
+        role: 'USER',
+        permissions: [],
+      },
+      authzSnapshot: {
+        userId: 'legacy-1204',
+      } as unknown as RootState['auth']['authzSnapshot'],
+      initialized: true,
+    });
+    expect(selectNotifyIdentity(state)).toEqual({
+      orgId: DEFAULT_ORG_ID,
+      subscriberId: 'legacy-1204',
+    });
+  });
+
+  it('falls back to user.id (sub UUID) only when no canonical/legacy claim exists at all', () => {
+    // Worst-case: no subscriberId claim, no /authz/me userId, only
+    // the JWT `sub` UUID. The legacy fallback keeps the session
+    // functional through the rollout. PR-4 strict cutover will
+    // reject this case (the env flip drops `sub` from the accepted
+    // claim list), but PR-3 must keep it working.
+    const state = buildState({
+      user: {
+        id: 'orphan-uuid',
+        email: 'alice@corp.example',
+        role: 'USER',
+        permissions: [],
+      },
+      authzSnapshot: null,
+      initialized: true,
+    });
+    expect(selectNotifyIdentity(state)).toEqual({
+      orgId: DEFAULT_ORG_ID,
+      subscriberId: 'orphan-uuid',
+    });
+  });
+});
