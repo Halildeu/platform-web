@@ -209,12 +209,12 @@ has desktop + mobile visual fixtures (step 1 in §4).
 
 API parity check still owed before any implementation: today's
 `packages/x-charts/src/ChartDashboard.tsx` exposes `columns`, `gap`,
-`className`, and `<ChartDashboard.Item span/rowSpan>` only. It does
-NOT provide a `cols={N}` prop, an `xl` breakpoint, a built-in
-`DashboardSection` equivalent, or section dividers. Any plan that
-treats the migration as a 1:1 wrapper rename will silently lose
-the existing `DashboardSection` semantics; budget a small
-ChartDashboard API delta as a precondition.
+`className`, and `<ChartDashboard.Item span/rowSpan/className>`
+only. It does NOT provide a `cols={N}` prop, an `xl` breakpoint,
+a built-in `DashboardSection` equivalent, or section dividers. Any
+plan that treats the migration as a 1:1 wrapper rename will
+silently lose the existing `DashboardSection` semantics; budget a
+small ChartDashboard API delta as a precondition.
 
 ---
 
@@ -244,9 +244,10 @@ The audit's only target is the two local wrappers in §1.
 2. **CompensationDashboard KPICard migration** (small PR, §2.1
    sketch). Easy win that recovers wave 2 KPICard mobile primitives
    for the comp dashboard.
-3. **DemographicDashboard ChartCard → ChartDashboard.Item migration**
-   (medium PR, §2.2 sketch). Bigger payoff, larger blast radius;
-   visual fixture from step 1 is the regression net.
+3. **DemographicDashboard ChartCard → ChartDashboard follow-up**
+   (deferred; see §2.2). Bigger payoff, larger blast radius;
+   requires step 1 visual fixtures plus a small `ChartDashboard`
+   API delta that preserves `DashboardSection` semantics.
 4. **Optional: x-charts KPICard `benchmark` slot extension.** Only
    if the migration in step 2 needs lossless benchmark rendering and
    the team agrees the slot belongs in the public KPICard API.
