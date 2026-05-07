@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-05T08:32:51.008Z",
+  "generatedAt": "2026-05-07T16:15:49.752Z",
   "totalConsumers": 42,
   "byBucket": {
     "production": 17,
@@ -168,8 +168,10 @@
         "@mfe/x-charts"
       ],
       "symbols": [
+        "KPICardTrend",
         "XBarChart",
         "XChartContainer",
+        "XKPICard",
         "XPieChart",
         "XTreemapChart"
       ],
