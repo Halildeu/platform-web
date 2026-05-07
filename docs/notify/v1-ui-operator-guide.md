@@ -136,35 +136,76 @@ To verify the SSE connection in the browser:
 
 ### 4. Mark-read / archive smoke
 
-Click an inbox row's primary action (deep-link). The row should
-disappear from the active list (mark-read flips state to READ; the
-row remains in the cache but unread count drops by 1). Click the
-"Arşivle" button on a row → row disappears (state → ARCHIVED).
+The active list (`/me`) shows rows in state `UNREAD` or `READ`; only
+`ARCHIVED` is filtered out. So:
+
+- **Mark-read** (primary action / deep-link click): the row state flips
+  `UNREAD → READ` server-side. The row **stays in the list** (now styled
+  as read). The bell badge drops by 1 because `unreadCount` decremented.
+- **Archive** ("Arşivle" button): the row state flips to `ARCHIVED`. The
+  row **disappears** from the active list on the next render (RTK Query
+  invalidates the `Inbox / LIST` tag and refetches). If the archived row
+  was unread, the badge also drops by 1.
 
 ---
 
 ## Out of scope (deferred)
 
-| Item                                                     | Defer to                | Rationale                                                                                                                                                                                                                                                      |
-| -------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **DLR admin view** (delivery attempt table by intent_id) | Faz 23.5 PR1            | Backend gap — `GET /api/v1/notify/intents/{id}/deliveries` and `GET /api/v1/admin/notify/deliveries` endpoints don't exist yet. v1 UI focuses on the subscriber-facing inbox; operator/audit DLR surface lives in mfe-audit and needs the new endpoints first. |
-| **Bulk mark-all-read** server endpoint                   | Faz 23.5 wishlist       | v1 UI loops mark-read per visible row. Acceptable for typical drawer sizes (≤ 50 rows); heavy-volume users get N+1 requests.                                                                                                                                   |
-| **Canonical `subscriberId` JWT claim**                   | Faz 23.5 / 24 hardening | Backend guard accepts any of `subscriberId                                                                                                                                                                                                                     | userId | sub`today (trusted claim set). Long-term Keycloak emits a single canonical`subscriberId` claim; producers + consumers pin to it. Selector tightens at that point. |
-| **Multi-tenancy** (`orgId` from JWT claim)               | Faz 24                  | Single-tenant for now (`"default"`). When the tenant claim lands, `selectNotifyIdentity` extends to read it, and `SubscriberIdentityGuard` extends to validate it.                                                                                             |
+Bullet list (instead of a Markdown table) because the items contain
+pipe characters in JWT claim names and TypeScript union types that
+break table rendering on GitHub.
+
+- **DLR admin view** (delivery attempt table by intent_id) — defer to
+  **Faz 23.5 PR1**. Backend gap: `GET /api/v1/notify/intents/{id}/deliveries`
+  and `GET /api/v1/admin/notify/deliveries` endpoints don't exist yet.
+  v1 UI focuses on the subscriber-facing inbox; operator/audit DLR
+  surface lives in mfe-audit and needs the new endpoints first.
+
+- **Bulk mark-all-read** server endpoint — defer to **Faz 23.5
+  wishlist**. v1 UI loops mark-read per visible row. Acceptable for
+  typical drawer sizes (≤ 50 rows); heavy-volume users get N+1
+  requests.
+
+- **Canonical `subscriberId` JWT claim** — defer to **Faz 23.5 / 24
+  hardening**. Backend guard accepts any of three trusted JWT claim
+  names today, in priority order: `subscriberId`, `userId`, `sub`.
+  Long-term Keycloak emits a single canonical `subscriberId` claim;
+  producers and consumers pin to it; the selector tightens at that
+  point.
+
+- **Multi-tenancy** (`orgId` from JWT claim) — defer to **Faz 24**.
+  Single-tenant for now (`"default"`). When the tenant claim lands,
+  `selectNotifyIdentity` extends to read it, and
+  `SubscriberIdentityGuard` extends to validate it.
 
 ---
 
 ## Cross-AI peer review trail (HARD RULE)
 
 Every PR in the v1 UI plan went through Code Claude → Reviewer Codex
-peer review. Findings caught and absorbed:
+peer review (thread `019e01ba`). Findings caught and absorbed (bullet
+list because the trusted-claim-set names contain pipe characters that
+break Markdown tables):
 
-| PR                                     | Codex thread         | Iters             | Notable findings absorbed                                                                                                                                                |
-| -------------------------------------- | -------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------- |
-| Backend #94 SubscriberIdentityGuard    | `019e01ba` iter-1..3 | 3                 | Trusted claim set (subscriberId                                                                                                                                          | userId           | sub priority) — producer convention undefined; original sub-only design would have broken legitimate access |
-| FE #276 identity bootstrap + RTK Query | `019e01ba` iter-4    | 1 RED             | Wire types didn't match Spring DTOs (`subject/bodyText/locale/page/size`, NOT made-up `pageNumber/pageSize`); selector picked JWT sub UUID instead of canonical `userId` |
-| FE #277 NotificationCenter 2-tab       | `019e01ba` iter-5..6 | 1 RED + 1 cleanup | design-system NotificationDrawer was stripping `headerAccessory` so tab switcher would never render; mapper priority `low/medium/high` violated `"normal"                | "high"` contract |
-| FE #278 SSE hook                       | `019e01ba` iter-7..8 | 1 REVISE          | Stale reconnect race (shared cancelledRef) and SSE-pushed count not actually wired into the badge                                                                        |
+- **Backend #94 SubscriberIdentityGuard** — iter-1..3. Trusted claim
+  set (priority order: `subscriberId`, `userId`, `sub`) — producer
+  convention was undefined; the original sub-only design would have
+  broken legitimate access.
+
+- **FE #276 identity bootstrap + RTK Query** — iter-4 (RED). Wire
+  types didn't match Spring DTOs: real fields are
+  `subject/bodyText/locale/page/size`, not made-up
+  `pageNumber/pageSize`. Selector picked JWT `sub` UUID instead of
+  the canonical `userId` claim.
+
+- **FE #277 NotificationCenter 2-tab** — iter-5..6 (RED + cleanup).
+  design-system `NotificationDrawer` was stripping `headerAccessory`
+  so the tab switcher would never render. Mapper priority
+  `low/medium/high` violated the `"normal"` / `"high"` contract.
+
+- **FE #278 SSE hook** — iter-7..8 (REVISE). Stale reconnect race
+  (shared `cancelledRef`) and SSE-pushed count not actually wired
+  into the badge.
 
 The full thread is preserved in
 `/Users/halilkocoglu/.claude/projects/-Users-halilkocoglu-Documents-platform-web/memory/`
