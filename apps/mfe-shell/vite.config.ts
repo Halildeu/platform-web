@@ -49,12 +49,6 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
     'SHELL_SKIP_REMOTE_SERVICES',
     'SHELL_ENABLE_SUGGESTIONS_REMOTE',
     'SHELL_ENABLE_ETHIC_REMOTE',
-    // PR #280 reapply: contract parity with VITE_ prefix. Without
-    // this, build-time MF entry could see `SHELL_ENABLE_*=1` but
-    // runtime gate (shell-navigation, AppRouter, shell-services-wiring
-    // eager loader) would observe false → flag drift, manifest says
-    // real entry while AppRouter redirects.
-    'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
@@ -120,12 +114,6 @@ function buildRemotes() {
       'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
       'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
     ]),
-    // Default OFF — never STUB; flag-OFF means the remote is omitted
-    // from the federation manifest entirely (build-time gating).
-    endpointAdmin: readEnvBoolean(
-      ['VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE', 'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE'],
-      false,
-    ),
   };
 
   // All remotes must be declared so MF plugin can resolve their imports
@@ -161,10 +149,6 @@ function buildRemotes() {
     schemaExplorer: readEnvString(
       ['MFE_SCHEMA_EXPLORER_URL', 'VITE_MFE_SCHEMA_EXPLORER_URL'],
       'http://localhost:3008/remoteEntry.js',
-    ),
-    endpointAdmin: readEnvString(
-      ['MFE_ENDPOINT_ADMIN_URL', 'VITE_MFE_ENDPOINT_ADMIN_URL'],
-      'http://localhost:3009/remoteEntry.js',
     ),
   };
 
@@ -203,23 +187,6 @@ function buildRemotes() {
       type: 'module',
       name: 'mfe_schema_explorer',
       entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
-    },
-    // PR #258 reapply (post-#261): STUB-when-disabled pattern matches
-    // every other remote so the MF plugin can resolve the static
-    // `mfe_endpoint_admin/EndpointAdminApp` import in lazy-routes.ts
-    // at build time. STUB resolves successfully (no rejection) but
-    // returns `{ default: {} }`; createLazyRemoteModule's guard now
-    // detects an invalid component export and routes to the
-    // classified "remote unavailable" fallback (see
-    // createLazyRemoteModule.tsx isValidRemoteComponent + tests).
-    // The boot-time crash root cause was the EAGER loader in
-    // shell-services-wiring — that path is gated separately at
-    // runtime via isEndpointAdminRemoteEnabled (see
-    // shell-services-wiring.ts).
-    mfe_endpoint_admin: {
-      type: 'module',
-      name: 'mfe_endpoint_admin',
-      entry: enabled.endpointAdmin ? remoteEntries.endpointAdmin : STUB,
     },
   };
 }
