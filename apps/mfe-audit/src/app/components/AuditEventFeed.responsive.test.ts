@@ -4,8 +4,8 @@
  *
  * Asserts the declarative `auditColumnMeta` configuration matches the
  * column priority spelled out in the file header:
- *   - mobile (<sm):  timestamp + userEmail (essential)
- *   - tablet (md+):  + service + action
+ *   - mobile (<sm):  timestamp + userEmail + action (essential)
+ *   - tablet (md+):  + service
  *   - desktop (lg+): + level + correlationId
  *
  * The actual viewport observation lives inside
@@ -20,14 +20,17 @@ import { auditColumnMeta } from './AuditEventFeed';
 const byField = Object.fromEntries(auditColumnMeta.map((meta) => [meta.field, meta]));
 
 describe('AuditEventFeed — responsive column tagging', () => {
-  it('marks timestamp and userEmail as essential (visible on mobile)', () => {
+  it('marks timestamp, userEmail, and action as essential (visible on mobile)', () => {
     expect(byField.timestamp?.essential).toBe(true);
     expect(byField.userEmail?.essential).toBe(true);
+    // `action` was promoted to essential after Codex review on PR
+    // #292 (thread 019e0317) — without it the mobile feed loses
+    // the "what happened" column that audit triage hangs on.
+    expect(byField.action?.essential).toBe(true);
   });
 
-  it('hides service and action below md (tablet+)', () => {
+  it('hides service below md (tablet+)', () => {
     expect(byField.service?.responsive?.hideBelow).toBe('md');
-    expect(byField.action?.responsive?.hideBelow).toBe('md');
   });
 
   it('hides level and correlationId below lg (desktop+)', () => {

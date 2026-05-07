@@ -33,9 +33,16 @@ const AUDIT_EXPORT_PERMISSION = 'AUDIT-EXPORT';
 /*
  * Viewport-aware column visibility (PR #237 propagation pattern).
  *
- * Mobile (<sm, 0–639):     timestamp + userEmail (essential — who did
- *                          what, when — minimum useful triage).
- * Tablet (md, 768–1023):   + service + action (operation context).
+ * Mobile (<sm, 0–639):     timestamp + userEmail + action (essential
+ *                          — who did what, when — minimum useful
+ *                          triage). Codex iter-1 review (thread
+ *                          019e0317) flagged that omitting `action`
+ *                          strips the "what happened" signal that
+ *                          audit feeds exist for; promoting it to
+ *                          essential keeps the mobile view triage-
+ *                          actionable while service/level/correlationId
+ *                          stay on larger viewports.
+ * Tablet (md, 768–1023):   + service (operation source).
  * Desktop (lg+, 1024+):    + level + correlationId (debug/forensics).
  *
  * `headerNameKey` carries the human-readable label directly because
@@ -62,17 +69,17 @@ export const auditColumnMeta: ColumnMeta[] = [
     essential: true,
   },
   {
-    field: 'service',
-    headerNameKey: 'Service',
-    columnType: 'text',
-    flex: 1,
-    responsive: { hideBelow: 'md' },
-  },
-  {
     field: 'action',
     headerNameKey: 'Action',
     columnType: 'text',
     flex: 1.2,
+    essential: true,
+  },
+  {
+    field: 'service',
+    headerNameKey: 'Service',
+    columnType: 'text',
+    flex: 1,
     responsive: { hideBelow: 'md' },
   },
   {
