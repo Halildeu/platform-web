@@ -109,6 +109,32 @@ export const notifyPrefsApi = createApi({
       }),
       invalidatesTags: () => [{ type: 'Preference' as const, id: 'LIST' }],
     }),
+
+    /**
+     * POST /me/mute-channel — atomic channel-wide mute (Faz 23.6
+     * PR-A2 / PR-C2 — backend PR #116). Writes a channel-wildcard
+     * deny rule, deletes same-channel exact overrides, and shadows
+     * topic-wide allow rules with channel-specific exact denies so
+     * the dispatch resolver actually mutes the channel.
+     *
+     * <p>The response carries both counts: {@code deletedOverrideCount}
+     * (existing same-channel exacts removed) and
+     * {@code shadowDenyCount} (topic-wide allow rules shadowed).
+     * Together they let the UI tell the operator exactly what
+     * happened.
+     */
+    muteChannel: build.mutation<
+      { channel: string; muted: boolean; deletedOverrideCount: number; shadowDenyCount: number },
+      PreferenceRequestIdentity & { channel: string }
+    >({
+      query: ({ orgId, subscriberId, channel }) => ({
+        url: '/me/mute-channel',
+        method: 'POST',
+        headers: identityHeaders({ orgId, subscriberId }),
+        body: { channel },
+      }),
+      invalidatesTags: () => [{ type: 'Preference' as const, id: 'LIST' }],
+    }),
   }),
 });
 
@@ -127,4 +153,5 @@ export const {
   useUpsertPreferenceMutation,
   useDeletePreferenceMutation,
   useRestoreDefaultsMutation,
+  useMuteChannelMutation,
 } = notifyPrefsApi;

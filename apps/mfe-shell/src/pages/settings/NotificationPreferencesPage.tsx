@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/store/store.hooks';
 import {
   useDeletePreferenceMutation,
   useListPreferencesQuery,
+  useMuteChannelMutation,
   useRestoreDefaultsMutation,
   useUpsertPreferenceMutation,
 } from '../../features/notifications/api/notify-prefs.api';
@@ -49,6 +50,7 @@ const NotificationPreferencesPage: React.FC = () => {
   const [upsert, upsertStatus] = useUpsertPreferenceMutation();
   const [deletePref, deleteStatus] = useDeletePreferenceMutation();
   const [restoreDefaults, restoreStatus] = useRestoreDefaultsMutation();
+  const [muteChannel, muteChannelStatus] = useMuteChannelMutation();
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorTarget, setEditorTarget] = useState<PreferenceDto | null>(null);
@@ -59,6 +61,16 @@ const NotificationPreferencesPage: React.FC = () => {
   const [restoreConfirmArmed, setRestoreConfirmArmed] = useState(false);
   const [restoreFeedback, setRestoreFeedback] = useState<
     { kind: 'success'; deletedCount: number } | { kind: 'error'; message: string } | null
+  >(null);
+  // Faz 23.6 PR-C2: channel-mute action — pick a channel, two-stage
+  // confirm (because it both deletes existing rules and writes new
+  // ones), surface deletedOverrideCount + shadowDenyCount so the
+  // operator knows exactly what changed.
+  const [muteChannelArmed, setMuteChannelArmed] = useState<string | null>(null);
+  const [muteChannelFeedback, setMuteChannelFeedback] = useState<
+    | { kind: 'success'; channel: string; deletedOverrideCount: number; shadowDenyCount: number }
+    | { kind: 'error'; message: string }
+    | null
   >(null);
 
   const handleRestoreDefaults = useCallback(async () => {
@@ -76,6 +88,30 @@ const NotificationPreferencesPage: React.FC = () => {
       setRestoreConfirmArmed(false);
     }
   }, [identity, restoreDefaults]);
+
+  const handleMuteChannel = useCallback(
+    async (channel: string) => {
+      if (!identity) return;
+      setMuteChannelFeedback(null);
+      try {
+        const result = await muteChannel({ ...identity, channel }).unwrap();
+        setMuteChannelFeedback({
+          kind: 'success',
+          channel: result.channel,
+          deletedOverrideCount: result.deletedOverrideCount ?? 0,
+          shadowDenyCount: result.shadowDenyCount ?? 0,
+        });
+      } catch (err) {
+        setMuteChannelFeedback({
+          kind: 'error',
+          message: extractRestoreError(err),
+        });
+      } finally {
+        setMuteChannelArmed(null);
+      }
+    },
+    [identity, muteChannel],
+  );
 
   const openCreateDrawer = useCallback(() => {
     setEditorTarget(null);
@@ -135,9 +171,11 @@ const NotificationPreferencesPage: React.FC = () => {
         kural varsayılan olarak izinlidir.
       </p>
 
-      {/* Faz 23.6 PR-C1: bulk action bar — restore-defaults destructive
-          two-stage confirm. Mute-all-channel (PR-C2) lands separately. */}
-      <div className="mt-3 flex items-center gap-3">
+      {/* Faz 23.6 PR-C1 + PR-C2: bulk action bar — restore-defaults
+          (destructive two-stage confirm) and per-channel mute (also
+          two-stage; backend writes a wildcard deny + shadows topic-wide
+          allows so the channel actually mutes). */}
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         {!restoreConfirmArmed ? (
           <button
             type="button"
@@ -176,7 +214,99 @@ const NotificationPreferencesPage: React.FC = () => {
             </button>
           </span>
         )}
+
+        {/* Mute channel action — pick channel + 2-stage confirm */}
+        <span className="inline-flex items-center gap-2 text-xs">
+          {muteChannelArmed === null ? (
+            <>
+              <label htmlFor="pref-mute-channel-select" className="text-zinc-600">
+                Tüm bir kanalı sustur:
+              </label>
+              <select
+                id="pref-mute-channel-select"
+                data-testid="pref-mute-channel-select"
+                onChange={(e) => {
+                  const channel = e.target.value;
+                  if (channel) setMuteChannelArmed(channel);
+                  e.target.value = '';
+                }}
+                disabled={muteChannelStatus.isLoading || listQuery.isLoading}
+                className="rounded border border-zinc-200 px-1.5 py-0.5 text-xs"
+              >
+                <option value="">Kanal seçin…</option>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+                <option value="slack">Slack</option>
+                <option value="webhook">Webhook</option>
+                <option value="in-app">Uygulama içi</option>
+              </select>
+            </>
+          ) : (
+            <span data-testid="pref-mute-channel-confirm-row">
+              <span className="text-zinc-700">
+                <strong>{muteChannelArmed}</strong> kanalı için tüm bildirimler susturulacak. Mevcut
+                kurallar yeniden yazılacak. Emin misiniz?
+              </span>{' '}
+              <button
+                type="button"
+                onClick={() => void handleMuteChannel(muteChannelArmed)}
+                disabled={muteChannelStatus.isLoading}
+                data-testid="pref-mute-channel-confirm"
+                className="text-rose-700 underline disabled:opacity-50"
+              >
+                {muteChannelStatus.isLoading ? 'Susturuluyor…' : 'Onayla'}
+              </button>{' '}
+              <button
+                type="button"
+                onClick={() => setMuteChannelArmed(null)}
+                disabled={muteChannelStatus.isLoading}
+                data-testid="pref-mute-channel-cancel"
+                className="text-zinc-500 hover:underline disabled:opacity-50"
+              >
+                Vazgeç
+              </button>
+            </span>
+          )}
+        </span>
       </div>
+
+      {muteChannelFeedback?.kind === 'success' && (
+        <div
+          role="status"
+          data-testid="pref-mute-channel-success"
+          className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+        >
+          <strong>{muteChannelFeedback.channel}</strong> kanalı susturuldu.{' '}
+          {muteChannelFeedback.deletedOverrideCount > 0 ||
+          muteChannelFeedback.shadowDenyCount > 0 ? (
+            <>
+              {muteChannelFeedback.deletedOverrideCount > 0 && (
+                <>
+                  {muteChannelFeedback.deletedOverrideCount} mevcut kural silindi
+                  {muteChannelFeedback.shadowDenyCount > 0 ? '; ' : '. '}
+                </>
+              )}
+              {muteChannelFeedback.shadowDenyCount > 0 && (
+                <>
+                  {muteChannelFeedback.shadowDenyCount} konu için bu kanal ayrıca kapatıldı (diğer
+                  kanallar etkilenmedi).
+                </>
+              )}
+            </>
+          ) : (
+            'Hiç başka kural yoktu; sadece varsayılan deny eklendi.'
+          )}
+        </div>
+      )}
+      {muteChannelFeedback?.kind === 'error' && (
+        <div
+          role="alert"
+          data-testid="pref-mute-channel-error"
+          className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        >
+          {muteChannelFeedback.message}
+        </div>
+      )}
 
       {restoreFeedback?.kind === 'success' && (
         <div
