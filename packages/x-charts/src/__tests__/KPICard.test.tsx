@@ -50,7 +50,15 @@ describe('KPICard', () => {
     // The trend span uses inline style with success color
     const trendSpan = container.querySelector('span[style]');
     expect(trendSpan).toBeTruthy();
-    expect(trendSpan!.getAttribute('style')).toContain('var(--state-success-text)');
+    const style = trendSpan!.getAttribute('style') ?? '';
+    expect(style).toContain('var(--state-success-text)');
+    // PR #294 (Codex iter-1) regression guard — the previous
+    // implementation emitted `var(--state-success-text))` with a stray
+    // closing paren that produced an invalid CSS color. Substring
+    // match alone (above) PASSES against the broken string because
+    // `var(--state-success-text)` is a prefix of `var(--state-success-text))`.
+    // Asserting the absence of the double-paren keeps the bug out.
+    expect(style).not.toContain('var(--state-success-text))');
   });
 
   it('applies negative color for negative trend (direction=down)', () => {
@@ -60,7 +68,26 @@ describe('KPICard', () => {
 
     const trendSpan = container.querySelector('span[style]');
     expect(trendSpan).toBeTruthy();
-    expect(trendSpan!.getAttribute('style')).toContain('var(--state-error-text)');
+    const style = trendSpan!.getAttribute('style') ?? '';
+    expect(style).toContain('var(--state-error-text)');
+    expect(style).not.toContain('var(--state-error-text))');
+  });
+
+  it('applies muted color for flat trend (direction=flat)', () => {
+    // Codex iter-1 (thread 019e0330) — flat-trend regression guard.
+    // Previously untested; the consumer in DemographicDashboard
+    // passes `direction: 'flat'` for `trend === 0` and the chip
+    // must render with `--text-secondary`, not the success/error
+    // colors.
+    const { container } = render(
+      <KPICard title="Headcount" value="1,234" trend={{ direction: 'flat', value: '0%' }} />,
+    );
+
+    const trendSpan = container.querySelector('span[style]');
+    expect(trendSpan).toBeTruthy();
+    const style = trendSpan!.getAttribute('style') ?? '';
+    expect(style).toContain('var(--text-secondary)');
+    expect(style).not.toContain('var(--text-secondary))');
   });
 
   it('allows overriding positive via trend.positive', () => {
@@ -74,7 +101,9 @@ describe('KPICard', () => {
 
     // down direction but positive=true should use success color
     const trendSpan = container.querySelector('span[style]');
-    expect(trendSpan!.getAttribute('style')).toContain('var(--state-success-text)');
+    const style = trendSpan!.getAttribute('style') ?? '';
+    expect(style).toContain('var(--state-success-text)');
+    expect(style).not.toContain('var(--state-success-text))');
   });
 
   it('renders icon slot', () => {
