@@ -153,25 +153,42 @@ To verify the request shape:
 
 ---
 
+## Faz 23.6 PR-B1 — richer editor (shipped)
+
+The page now ships a `FormDrawer`-based detailed editor alongside the
+inline quick-add form. Operators reach it via "Detaylı kural ekle"
+under the inline form, or per-row "Düzenle". The drawer covers:
+
+- **Quiet hours** — canonical shape `{ start: "HH:mm", end: "HH:mm",
+timezone, days: ["MON".."SUN"] }`. `start === end` is rejected (use
+  the rule's `Etkin: kapalı` for 24h mute). Non-canonical (legacy or
+  hand-edited) payloads are preserved verbatim while editing unrelated
+  fields — the row summary surfaces them as "Özel sessiz saatler".
+- **Daily frequency limit** — number input with a "Limit yok" checkbox.
+  Both `null` (legacy rows) and `0` collapse to "Limit yok" in the UI;
+  saving "Limit yok" sends `frequencyLimitPerDay: 0` so the backend's
+  "0 disables" contract becomes canonical.
+- **`bypassForCritical`** — under "Gelişmiş ayarlar"; defaults to ON.
+  Turning it off makes the rule apply to severity=critical messages
+  too; the row summary highlights `OFF` with an amber badge.
+
+The new "Kısıtlar" table column shows compact badges (clock icon for
+quiet hours, gauge for the daily limit, bell-off for bypass turned
+off) so operators can scan rules without opening each one.
+
+Quick "Açık / Kapalı" toggle preserves `quietHours`,
+`frequencyLimitPerDay`, and `bypassForCritical` so a one-click mute
+does not silently reset the rule's restrictions.
+
 ## Out of scope (deferred)
 
-Bullet list (table parsers struggle with the union/wildcard syntax):
-
-- **Quiet hours editor UI** — the backend supports a JSON quiet-hours
-  field, but the v1 UI exposes only enabled/disabled. Defer to **Faz
-  23.6** (richer preference editor).
-
-- **Frequency limit UI** — same shape: backend supports
-  `frequencyLimitPerDay`, UI doesn't expose it yet.
-
-- **`bypassForCritical` toggle UI** — defaults to `true` on insert;
-  user cannot opt out via UI today. Defer to **Faz 23.6**.
-
 - **Bulk preference operations** (mute all email, restore defaults) —
-  defer to **Faz 23.6**.
+  needs a backend bulk contract (Faz 23.6 **PR-A**); the FE bulk
+  buttons land in **PR-C** once the contract is canonical.
 
-- **DLR admin view** (delivery attempt table by intent_id) — backend
-  endpoints not yet built. Defer to **Faz 23.5 PR6**.
+- **DLR admin view** (delivery attempt table by intent_id) —
+  shipped in [Faz 23.5 PR6](./v1-dlr-admin-operator-guide.md) (PR #104
+  - PR #291).
 
 ---
 
