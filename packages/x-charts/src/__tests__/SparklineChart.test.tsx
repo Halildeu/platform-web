@@ -27,6 +27,12 @@ describe('SparklineChart', () => {
     expect(polyline).toBeTruthy();
     expect(polyline!.getAttribute('fill')).toBe('none');
     expect(polyline!.getAttribute('stroke')).toBeTruthy();
+    // PR #295 sweep regression guard — the default stroke color uses
+    // `var(--action-primary)`. Pre-PR the literal had a stray `))`
+    // closing paren that produced an invalid CSS color; svg
+    // attributes accept arbitrary strings so renderers don't error,
+    // they just paint with the browser's default fallback color.
+    expect(polyline!.getAttribute('stroke')).toBe('var(--action-primary)');
   });
 
   it('renders bars (rect elements) for bar type', () => {

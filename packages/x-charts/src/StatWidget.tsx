@@ -104,10 +104,10 @@ export const StatWidget = React.forwardRef<HTMLDivElement, StatWidgetProps>(func
     change == null
       ? undefined
       : change > 0
-        ? 'var(--state-success-text))'
+        ? 'var(--state-success-text)'
         : change < 0
-          ? 'var(--state-error-text))'
-          : 'var(--text-secondary))';
+          ? 'var(--state-error-text)'
+          : 'var(--text-secondary)';
 
   return (
     <div
@@ -170,10 +170,10 @@ export const StatWidget = React.forwardRef<HTMLDivElement, StatWidgetProps>(func
             height={24}
             color={
               change != null && change >= 0
-                ? 'var(--state-success-text))'
+                ? 'var(--state-success-text)'
                 : change != null && change < 0
-                  ? 'var(--state-error-text))'
-                  : 'var(--action-primary))'
+                  ? 'var(--state-error-text)'
+                  : 'var(--action-primary)'
             }
             className="w-full"
           />

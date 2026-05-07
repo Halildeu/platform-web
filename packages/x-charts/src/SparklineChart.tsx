@@ -107,7 +107,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
       type = 'line',
       width = 120,
       height = 32,
-      color = 'var(--action-primary))',
+      color = 'var(--action-primary)',
       showLastPoint = false,
       showMinMax = false,
       animate = true,
@@ -304,7 +304,7 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
               cy={lastPt.y}
               r="2.5"
               fill={color}
-              stroke="var(--surface-default))"
+              stroke="var(--surface-default)"
               strokeWidth="1"
             />
           )}
@@ -315,8 +315,8 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
               cx={minPt.x}
               cy={minPt.y}
               r="2"
-              fill="var(--state-error-text))"
-              stroke="var(--surface-default))"
+              fill="var(--state-error-text)"
+              stroke="var(--surface-default)"
               strokeWidth="0.5"
             />
           )}
@@ -325,8 +325,8 @@ export const SparklineChart = React.forwardRef<HTMLDivElement, SparklineChartPro
               cx={maxPt.x}
               cy={maxPt.y}
               r="2"
-              fill="var(--state-success-text))"
-              stroke="var(--surface-default))"
+              fill="var(--state-success-text)"
+              stroke="var(--surface-default)"
               strokeWidth="0.5"
             />
           )}
