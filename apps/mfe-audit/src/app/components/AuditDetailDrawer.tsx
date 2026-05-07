@@ -12,7 +12,12 @@ export type AuditDetailDrawerProps = {
 
 type TabKey = 'summary' | 'diff' | 'raw';
 
-export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ event, open, onClose, onTabChange }) => {
+export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({
+  event,
+  open,
+  onClose,
+  onTabChange,
+}) => {
   const diffPayload = useMemo(() => {
     if (!event) {
       return null;
@@ -42,7 +47,9 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ event, ope
                 <dl className="grid gap-3">
                   <div>
                     <dt className="text-xs uppercase text-text-subtle">Timestamp</dt>
-                    <dd className="font-medium text-text-primary">{new Date(event.timestamp).toLocaleString()}</dd>
+                    <dd className="font-medium text-text-primary">
+                      {new Date(event.timestamp).toLocaleString()}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs uppercase text-text-subtle">User</dt>
@@ -122,7 +129,13 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ event, ope
 
   if (!event) {
     return (
-      <DetailDrawer open={open} onClose={onClose} title="Audit Event" width={420}>
+      // `width={420}` was previously passed but DetailDrawer doesn't
+      // accept a numeric width prop — it was silently dropped by the
+      // type system and the default `size="lg"` (max-w-2xl, ~672px)
+      // applied. Removing the prop keeps the same visual width on
+      // desktop while letting `w-full` (DetailDrawer panel base
+      // class) collapse to viewport width on mobile.
+      <DetailDrawer open={open} onClose={onClose} title="Audit Event">
         <p className="text-sm text-text-subtle">Henüz bir kayıt seçilmedi.</p>
       </DetailDrawer>
     );
@@ -132,7 +145,6 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ event, ope
     <DetailDrawer
       open={open}
       onClose={onClose}
-      width={420}
       title="Audit Event"
       tabs={tabs}
       extra={<span className="text-sm text-text-subtle">{event.action}</span>}

@@ -8,11 +8,8 @@ import {
 } from '@mfe/design-system';
 // Side-effect: ensures all AG Grid modules are registered (including InfiniteRowModelModule)
 import '@mfe/design-system/advanced/data-grid/setup';
-import {
-  ColDef,
-  GridReadyEvent,
-  GridOptions
-} from 'ag-grid-community';
+import { useResponsiveColumnDefs, type ColumnMeta } from '@mfe/design-system/advanced/data-grid';
+import { ColDef, GridReadyEvent, GridOptions } from 'ag-grid-community';
 import './audit-event-feed.css';
 import { AuditEvent } from '../types/audit-event';
 import {
@@ -33,14 +30,70 @@ const AUDIT_EXPORT_PERMISSION = 'AUDIT-EXPORT';
 
 // Module registration delegated to @mfe/design-system/advanced/data-grid/setup (single owner)
 
-const columnDefs: ColDef<AuditEvent>[] = [
-  { headerName: 'Timestamp', field: 'timestamp', flex: 1.4, valueFormatter: (params) => new Date(params.value).toLocaleString() },
-  { headerName: 'User', field: 'userEmail', flex: 1 },
-  { headerName: 'Service', field: 'service', flex: 1 },
-  { headerName: 'Action', field: 'action', flex: 1.2 },
-  { headerName: 'Level', field: 'level', width: 110 },
-  { headerName: 'Correlation ID', field: 'correlationId', flex: 1 }
+/*
+ * Viewport-aware column visibility (PR #237 propagation pattern).
+ *
+ * Mobile (<sm, 0–639):     timestamp + userEmail (essential — who did
+ *                          what, when — minimum useful triage).
+ * Tablet (md, 768–1023):   + service + action (operation context).
+ * Desktop (lg+, 1024+):    + level + correlationId (debug/forensics).
+ *
+ * `headerNameKey` carries the human-readable label directly because
+ * mfe-audit has no i18n dictionary yet — the identity translator
+ * `(key) => key` below passes it through to AG Grid's `headerName`.
+ *
+ * Exported for test introspection only — production rendering still
+ * goes through `useResponsiveColumnDefs` inside the component.
+ */
+export const auditColumnMeta: ColumnMeta[] = [
+  {
+    field: 'timestamp',
+    headerNameKey: 'Timestamp',
+    columnType: 'date',
+    format: 'datetime',
+    flex: 1.4,
+    essential: true,
+  },
+  {
+    field: 'userEmail',
+    headerNameKey: 'User',
+    columnType: 'text',
+    flex: 1,
+    essential: true,
+  },
+  {
+    field: 'service',
+    headerNameKey: 'Service',
+    columnType: 'text',
+    flex: 1,
+    responsive: { hideBelow: 'md' },
+  },
+  {
+    field: 'action',
+    headerNameKey: 'Action',
+    columnType: 'text',
+    flex: 1.2,
+    responsive: { hideBelow: 'md' },
+  },
+  {
+    field: 'level',
+    headerNameKey: 'Level',
+    columnType: 'text',
+    width: 110,
+    responsive: { hideBelow: 'lg' },
+  },
+  {
+    field: 'correlationId',
+    headerNameKey: 'Correlation ID',
+    columnType: 'text',
+    flex: 1,
+    responsive: { hideBelow: 'lg' },
+  },
 ];
+
+// Identity translator — mfe-audit has no i18n dictionary, so column
+// `headerNameKey` values double as the rendered labels.
+const auditHeaderTranslator = (key: string): string => key;
 
 export const AuditEventFeed: React.FC = () => {
   const locationSearch = useWindowSearch();
@@ -92,14 +145,17 @@ export const AuditEventFeed: React.FC = () => {
   }, []);
 
   const canExportAudit = useMemo(() => {
-    const shellUser = shellServices?.auth.getUser() as { permissions?: unknown; role?: unknown } | null;
+    const shellUser = shellServices?.auth.getUser() as {
+      permissions?: unknown;
+      role?: unknown;
+    } | null;
     const permissions = Array.isArray(shellUser?.permissions) ? shellUser.permissions : [];
-    return permissions.some((permission) =>
-      String(permission ?? '')
-        .trim()
-        .toUpperCase()
-        .replace(/_/g, '-')
-        === AUDIT_EXPORT_PERMISSION,
+    return permissions.some(
+      (permission) =>
+        String(permission ?? '')
+          .trim()
+          .toUpperCase()
+          .replace(/_/g, '-') === AUDIT_EXPORT_PERMISSION,
     );
   }, [shellServices]);
 
@@ -116,14 +172,14 @@ export const AuditEventFeed: React.FC = () => {
         }
       }
     },
-    [shellServices]
+    [shellServices],
   );
 
   useEffect(() => {
     if (shellServices && initialAuditIdRef.current && !deeplinkNotifiedRef.current) {
       deeplinkNotifiedRef.current = true;
       emitTelemetry('fe.audit.deeplink_requested', {
-        auditId: initialAuditIdRef.current
+        auditId: initialAuditIdRef.current,
       });
     }
   }, [shellServices, emitTelemetry]);
@@ -137,7 +193,8 @@ export const AuditEventFeed: React.FC = () => {
       try {
         const resolvedPageSize = pageSizeRef.current;
         const page = Math.floor(startRow / resolvedPageSize);
-        const sort = sortModel && sortModel[0] ? `${sortModel[0].colId},${sortModel[0].sort}` : undefined;
+        const sort =
+          sortModel && sortModel[0] ? `${sortModel[0].colId},${sortModel[0].sort}` : undefined;
         const requestedAuditId = initialAuditIdRef.current ?? undefined;
         setCurrentSort(sort);
         const response = await fetchAuditEvents({
@@ -145,7 +202,10 @@ export const AuditEventFeed: React.FC = () => {
           pageSize: resolvedPageSize,
           auditId: requestedAuditId,
           sort,
-          filters: filters.userEmail || filters.service || filters.level || filters.action ? filters : undefined,
+          filters:
+            filters.userEmail || filters.service || filters.level || filters.action
+              ? filters
+              : undefined,
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
@@ -161,7 +221,7 @@ export const AuditEventFeed: React.FC = () => {
           total: response.total,
           sort,
           filters,
-          fallback: response.fallback === true
+          fallback: response.fallback === true,
         });
         if (initialAuditIdRef.current && !deeplinkResolvedRef.current) {
           const matched = response.events.some((event) => event.id === initialAuditIdRef.current);
@@ -169,7 +229,7 @@ export const AuditEventFeed: React.FC = () => {
             deeplinkResolvedRef.current = true;
             emitTelemetry('fe.audit.deeplink_resolved', {
               auditId: initialAuditIdRef.current,
-              page
+              page,
             });
           }
         }
@@ -179,22 +239,28 @@ export const AuditEventFeed: React.FC = () => {
         failCallback();
         emitTelemetry('fe.audit.grid_fetch_failed', {
           filters,
-          sort: currentSort
+          sort: currentSort,
         });
       }
     },
-    [currentSort, emitTelemetry, filters, pageSizeRef]
+    [currentSort, emitTelemetry, filters, pageSizeRef],
   );
 
-  const datasource = useMemo<IDatasource>(() => ({
-    getRows: (params) => {
-      requestAuditRows(params);
-    }
-  }), [requestAuditRows]);
+  const datasource = useMemo<IDatasource>(
+    () => ({
+      getRows: (params) => {
+        requestAuditRows(params);
+      },
+    }),
+    [requestAuditRows],
+  );
 
-  const onGridReady = useCallback((event: GridReadyEvent<AuditEvent>) => {
-    registerGridApi(event.api as AgGridTablePaginationApi<AuditEvent>);
-  }, [registerGridApi]);
+  const onGridReady = useCallback(
+    (event: GridReadyEvent<AuditEvent>) => {
+      registerGridApi(event.api as AgGridTablePaginationApi<AuditEvent>);
+    },
+    [registerGridApi],
+  );
 
   const refreshData = useCallback(() => {
     const api = gridApiRef.current;
@@ -222,78 +288,107 @@ export const AuditEventFeed: React.FC = () => {
     refreshData();
   }, [gridApiRef, locationSearch, refreshData]);
 
-  const handleLiveEvent = useCallback((event: AuditEvent) => {
-    setHighlightId(event.id);
-    refreshData();
-    emitTelemetry('fe.audit.live_event_received', {
-      auditId: event.id,
-      level: event.level,
-      service: event.service
-    });
-  }, [refreshData, emitTelemetry]);
+  const handleLiveEvent = useCallback(
+    (event: AuditEvent) => {
+      setHighlightId(event.id);
+      refreshData();
+      emitTelemetry('fe.audit.live_event_received', {
+        auditId: event.id,
+        level: event.level,
+        service: event.service,
+      });
+    },
+    [refreshData, emitTelemetry],
+  );
 
-  const liveHandlers = useMemo(() => ({
-    onEvent: handleLiveEvent,
-    onFallbackTick: () => {
+  const liveHandlers = useMemo(
+    () => ({
+      onEvent: handleLiveEvent,
+      onFallbackTick: () => {
         emitTelemetry('fe.audit.live_fallback_poll', {
-          filters
+          filters,
         });
         refreshData();
-      }
-  }), [handleLiveEvent, refreshData, emitTelemetry, filters]);
+      },
+    }),
+    [handleLiveEvent, refreshData, emitTelemetry, filters],
+  );
 
   useAuditLiveStream(isLive, liveHandlers);
 
-  const onFilterSubmit = useCallback((e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    setFilters({
-      userEmail: (formData.get('userEmail') as string) ?? '',
-      service: (formData.get('service') as string) ?? '',
-      level: (formData.get('level') as string) ?? '',
-      action: (formData.get('action') as string) ?? '',
-    });
-    const api = gridApiRef.current;
-    if (api && (api.getDisplayedRowCount?.() ?? 0) > 0) {
-      api.ensureIndexVisible(0, 'top');
-      api.paginationGoToFirstPage?.();
-    }
-    refreshData();
-  }, [refreshData]);
-
-  const rowClassRules = useMemo(() => ({
-    'audit-row-highlight': (params: { data?: AuditEvent }) => !!highlightId && params.data?.id === highlightId
-  }), [highlightId]);
-
-  const gridOptions = useMemo<GridOptions<AuditEvent>>(() => ({
-    columnDefs,
-    defaultColDef: { resizable: true, sortable: true, filter: false },
-    rowModelType: 'infinite',
-    maxBlocksInCache: 3,
-    cacheBlockSize: pageSize,
-    pagination: true,
-    paginationPageSize: pageSize,
-    suppressPaginationPanel: true,
-    animateRows: true,
-    rowSelection: {
-      mode: 'singleRow',
-      enableClickSelection: true,
-      checkboxes: false,
-    },
-    getRowId: ({ data }) => data?.id ?? '',
-    onRowClicked: (event) => {
-      setSelected(event.data ?? null);
-      setHighlightId(event.data?.id ?? null);
-      if (event.data) {
-        emitTelemetry('fe.audit.drawer_open', {
-          auditId: event.data.id,
-          level: event.data.level,
-          service: event.data.service
-        });
+  const onFilterSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      setFilters({
+        userEmail: (formData.get('userEmail') as string) ?? '',
+        service: (formData.get('service') as string) ?? '',
+        level: (formData.get('level') as string) ?? '',
+        action: (formData.get('action') as string) ?? '',
+      });
+      const api = gridApiRef.current;
+      if (api && (api.getDisplayedRowCount?.() ?? 0) > 0) {
+        api.ensureIndexVisible(0, 'top');
+        api.paginationGoToFirstPage?.();
       }
+      refreshData();
     },
-    rowClassRules
-  }), [emitTelemetry, pageSize, rowClassRules]);
+    [refreshData],
+  );
+
+  const rowClassRules = useMemo(
+    () => ({
+      'audit-row-highlight': (params: { data?: AuditEvent }) =>
+        !!highlightId && params.data?.id === highlightId,
+    }),
+    [highlightId],
+  );
+
+  // Viewport-aware column derivation — `useResponsiveColumnDefs`
+  // (PR #236) re-derives only when the viewport crosses a breakpoint
+  // bucket (640 / 768 / 1024 / 1280), so drag-resize within a single
+  // bucket is free.
+  const responsiveColumnDefs = useResponsiveColumnDefs<AuditEvent>({
+    columns: auditColumnMeta,
+    t: auditHeaderTranslator,
+  }) as ColDef<AuditEvent>[];
+
+  // `columnDefs` is passed as a separate prop to <AgGridReact /> below
+  // (not folded into `gridOptions`) so viewport-bucket transitions
+  // propagate to AG Grid via React's diff cycle. AG Grid treats a
+  // `gridOptions` change as initial-config-only, but `columnDefs`
+  // prop is reactive.
+  const gridOptions = useMemo<GridOptions<AuditEvent>>(
+    () => ({
+      defaultColDef: { resizable: true, sortable: true, filter: false },
+      rowModelType: 'infinite',
+      maxBlocksInCache: 3,
+      cacheBlockSize: pageSize,
+      pagination: true,
+      paginationPageSize: pageSize,
+      suppressPaginationPanel: true,
+      animateRows: true,
+      rowSelection: {
+        mode: 'singleRow',
+        enableClickSelection: true,
+        checkboxes: false,
+      },
+      getRowId: ({ data }) => data?.id ?? '',
+      onRowClicked: (event) => {
+        setSelected(event.data ?? null);
+        setHighlightId(event.data?.id ?? null);
+        if (event.data) {
+          emitTelemetry('fe.audit.drawer_open', {
+            auditId: event.data.id,
+            level: event.data.level,
+            service: event.data.service,
+          });
+        }
+      },
+      rowClassRules,
+    }),
+    [emitTelemetry, pageSize, rowClassRules],
+  );
 
   useEffect(() => {
     if (gridApi) {
@@ -329,70 +424,79 @@ export const AuditEventFeed: React.FC = () => {
     [paginationSnapshot.page, paginationSnapshot.totalPages],
   );
 
-  const handleExport = useCallback(async (format: 'csv' | 'json') => {
-    setExportingFormat(format);
-    setExportError(null);
-    emitTelemetry('fe.audit.export', {
-      format,
-      filters,
-      sort: currentSort
-    });
-    try {
-      const activeFilters = Object.fromEntries(
-        Object.entries(filters).filter(([, value]) => Boolean(value)),
-      );
-      const createdJob = await createAuditExportJob({
-        format,
-        sort: currentSort,
-        filters: activeFilters,
-      });
-      emitTelemetry('fe.audit.export_job_created', {
-        format,
-        jobId: createdJob.id,
-        status: createdJob.status,
-      });
-      const resolvedJob = createdJob.status === 'PROCESSING'
-        ? await waitForAuditExportJob(createdJob.id)
-        : createdJob;
-      if (resolvedJob.status !== 'COMPLETED') {
-        throw new Error(resolvedJob.errorMessage || `Audit export job ended with status ${resolvedJob.status}`);
-      }
-      const { blob, filename } = await downloadAuditExportJob(resolvedJob.id);
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
-      emitTelemetry('fe.audit.export_completed', {
-        format,
-        jobId: resolvedJob.id,
-        eventCount: resolvedJob.eventCount,
-      });
-    } catch (error: unknown) {
-      console.error('Audit export failed', error);
-      setExportError(error instanceof Error ? error.message : 'Audit export failed');
-      emitTelemetry('fe.audit.export_failed', {
+  const handleExport = useCallback(
+    async (format: 'csv' | 'json') => {
+      setExportingFormat(format);
+      setExportError(null);
+      emitTelemetry('fe.audit.export', {
         format,
         filters,
         sort: currentSort,
       });
-    } finally {
-      setExportingFormat(null);
-    }
-  }, [emitTelemetry, filters, currentSort]);
+      try {
+        const activeFilters = Object.fromEntries(
+          Object.entries(filters).filter(([, value]) => Boolean(value)),
+        );
+        const createdJob = await createAuditExportJob({
+          format,
+          sort: currentSort,
+          filters: activeFilters,
+        });
+        emitTelemetry('fe.audit.export_job_created', {
+          format,
+          jobId: createdJob.id,
+          status: createdJob.status,
+        });
+        const resolvedJob =
+          createdJob.status === 'PROCESSING'
+            ? await waitForAuditExportJob(createdJob.id)
+            : createdJob;
+        if (resolvedJob.status !== 'COMPLETED') {
+          throw new Error(
+            resolvedJob.errorMessage || `Audit export job ended with status ${resolvedJob.status}`,
+          );
+        }
+        const { blob, filename } = await downloadAuditExportJob(resolvedJob.id);
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+        emitTelemetry('fe.audit.export_completed', {
+          format,
+          jobId: resolvedJob.id,
+          eventCount: resolvedJob.eventCount,
+        });
+      } catch (error: unknown) {
+        console.error('Audit export failed', error);
+        setExportError(error instanceof Error ? error.message : 'Audit export failed');
+        emitTelemetry('fe.audit.export_failed', {
+          format,
+          filters,
+          sort: currentSort,
+        });
+      } finally {
+        setExportingFormat(null);
+      }
+    },
+    [emitTelemetry, filters, currentSort],
+  );
 
-  const handleDrawerTabChange = useCallback((tab: string, event?: AuditEvent | null) => {
-    if (!event) {
-      return;
-    }
-    emitTelemetry('fe.audit.drawer_tab', {
-      tab,
-      auditId: event.id
-    });
-  }, [emitTelemetry]);
+  const handleDrawerTabChange = useCallback(
+    (tab: string, event?: AuditEvent | null) => {
+      if (!event) {
+        return;
+      }
+      emitTelemetry('fe.audit.drawer_tab', {
+        tab,
+        auditId: event.id,
+      });
+    },
+    [emitTelemetry],
+  );
 
   return (
     <div>
@@ -430,17 +534,27 @@ export const AuditEventFeed: React.FC = () => {
             </select>
           </label>
           <div>
-            <button data-testid="audit-filter-apply" type="submit">Apply Filters</button>
+            <button data-testid="audit-filter-apply" type="submit">
+              Apply Filters
+            </button>
           </div>
         </form>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
           <button type="button" className="secondary" onClick={refreshData}>
             Refresh
           </button>
-          <button type="button" onClick={() => handleExport('csv')} disabled={exportingFormat !== null || !canExportAudit}>
+          <button
+            type="button"
+            onClick={() => handleExport('csv')}
+            disabled={exportingFormat !== null || !canExportAudit}
+          >
             {exportingFormat === 'csv' ? 'Exporting CSV...' : 'Export CSV'}
           </button>
-          <button type="button" onClick={() => handleExport('json')} disabled={exportingFormat !== null || !canExportAudit}>
+          <button
+            type="button"
+            onClick={() => handleExport('json')}
+            disabled={exportingFormat !== null || !canExportAudit}
+          >
             {exportingFormat === 'json' ? 'Exporting JSON...' : 'Export JSON'}
           </button>
           <label className="audit-live-indicator">
@@ -450,7 +564,7 @@ export const AuditEventFeed: React.FC = () => {
               onChange={(e) => {
                 userManagedLiveRef.current = true;
                 emitTelemetry('fe.audit.live_toggle', {
-                  enabled: e.target.checked
+                  enabled: e.target.checked,
                 });
                 setIsLive(e.target.checked);
               }}
@@ -475,6 +589,7 @@ export const AuditEventFeed: React.FC = () => {
         <div className="ag-theme-quartz audit-grid">
           <AgGridReact<AuditEvent>
             ref={gridRef}
+            columnDefs={responsiveColumnDefs}
             gridOptions={gridOptions}
             onGridReady={onGridReady}
             onPaginationChanged={() => refreshPaginationSnapshot()}
