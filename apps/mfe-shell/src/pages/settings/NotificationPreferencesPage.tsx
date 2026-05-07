@@ -4,6 +4,7 @@ import { useAppSelector } from '../../app/store/store.hooks';
 import {
   useDeletePreferenceMutation,
   useListPreferencesQuery,
+  useRestoreDefaultsMutation,
   useUpsertPreferenceMutation,
 } from '../../features/notifications/api/notify-prefs.api';
 import type {
@@ -47,9 +48,34 @@ const NotificationPreferencesPage: React.FC = () => {
   const listQuery = useListPreferencesQuery(queryArg, { skip: !isReady });
   const [upsert, upsertStatus] = useUpsertPreferenceMutation();
   const [deletePref, deleteStatus] = useDeletePreferenceMutation();
+  const [restoreDefaults, restoreStatus] = useRestoreDefaultsMutation();
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorTarget, setEditorTarget] = useState<PreferenceDto | null>(null);
+  // Faz 23.6 PR-C1: two-stage confirm for destructive restore-defaults
+  // (Codex thread `019e0387` decision). The operator must click twice to
+  // hard-delete every row; deletedCount feeds a one-shot toast/banner so
+  // the action is observable without clicking into the audit surface.
+  const [restoreConfirmArmed, setRestoreConfirmArmed] = useState(false);
+  const [restoreFeedback, setRestoreFeedback] = useState<
+    { kind: 'success'; deletedCount: number } | { kind: 'error'; message: string } | null
+  >(null);
+
+  const handleRestoreDefaults = useCallback(async () => {
+    if (!identity) return;
+    setRestoreFeedback(null);
+    try {
+      const result = await restoreDefaults(identity).unwrap();
+      setRestoreFeedback({ kind: 'success', deletedCount: result.deletedCount ?? 0 });
+    } catch (err) {
+      setRestoreFeedback({
+        kind: 'error',
+        message: extractRestoreError(err),
+      });
+    } finally {
+      setRestoreConfirmArmed(false);
+    }
+  }, [identity, restoreDefaults]);
 
   const openCreateDrawer = useCallback(() => {
     setEditorTarget(null);
@@ -108,6 +134,70 @@ const NotificationPreferencesPage: React.FC = () => {
         Hangi konularda hangi kanallardan bildirim almak istediğinizi buradan yönetebilirsiniz. Boş
         kural varsayılan olarak izinlidir.
       </p>
+
+      {/* Faz 23.6 PR-C1: bulk action bar — restore-defaults destructive
+          two-stage confirm. Mute-all-channel (PR-C2) lands separately. */}
+      <div className="mt-3 flex items-center gap-3">
+        {!restoreConfirmArmed ? (
+          <button
+            type="button"
+            onClick={() => setRestoreConfirmArmed(true)}
+            disabled={
+              listQuery.isLoading || restoreStatus.isLoading || (listQuery.data?.length ?? 0) === 0
+            }
+            data-testid="pref-restore-defaults-arm"
+            className="text-xs text-rose-700 hover:underline disabled:opacity-50"
+          >
+            Tüm kuralları sıfırla (varsayılana dön)
+          </button>
+        ) : (
+          <span
+            className="inline-flex items-center gap-2 text-xs"
+            data-testid="pref-restore-defaults-confirm-row"
+          >
+            <span className="text-zinc-700">Tüm tercih kuralları silinecek. Emin misiniz?</span>
+            <button
+              type="button"
+              onClick={() => void handleRestoreDefaults()}
+              disabled={restoreStatus.isLoading}
+              data-testid="pref-restore-defaults-confirm"
+              className="text-rose-700 underline disabled:opacity-50"
+            >
+              {restoreStatus.isLoading ? 'Siliniyor…' : 'Onayla'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRestoreConfirmArmed(false)}
+              disabled={restoreStatus.isLoading}
+              data-testid="pref-restore-defaults-cancel"
+              className="text-zinc-500 hover:underline disabled:opacity-50"
+            >
+              Vazgeç
+            </button>
+          </span>
+        )}
+      </div>
+
+      {restoreFeedback?.kind === 'success' && (
+        <div
+          role="status"
+          data-testid="pref-restore-defaults-success"
+          className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+        >
+          {restoreFeedback.deletedCount > 0
+            ? `${restoreFeedback.deletedCount} kural silindi. Varsayılan davranışa döndünüz.`
+            : 'Silinecek kural yoktu. Zaten varsayılan davranıştaydınız.'}
+        </div>
+      )}
+      {restoreFeedback?.kind === 'error' && (
+        <div
+          role="alert"
+          data-testid="pref-restore-defaults-error"
+          className="mt-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+        >
+          {restoreFeedback.message}
+        </div>
+      )}
 
       {/* Inline new-row form (lightweight) */}
       <QuickAddPreferenceForm
@@ -437,6 +527,22 @@ const extractErrorMessage = (err: unknown): string => {
     }
   }
   return 'Kural kaydedilemedi.';
+};
+
+const extractRestoreError = (err: unknown): string => {
+  if (err && typeof err === 'object' && 'status' in err) {
+    const status = (err as { status?: number }).status;
+    if (status === 503) {
+      return 'Bildirim tercihi özelliği bu ortamda kapalı.';
+    }
+    if (status === 403) {
+      return 'Bu organizasyon için tercih sıfırlama yetkiniz yok.';
+    }
+    if (status === 401) {
+      return 'Oturum doğrulanamadı. Yeniden giriş yapın.';
+    }
+  }
+  return 'Tercihler sıfırlanamadı. Lütfen tekrar deneyin.';
 };
 
 export default NotificationPreferencesPage;
