@@ -12,6 +12,7 @@ import {
   useListInboxQuery,
   useMarkReadMutation,
 } from '../../features/notifications/api/notify-inbox.api';
+import { useInboxUnreadSse } from '../../features/notifications/api/useInboxUnreadSse';
 import { selectNotifyIdentity } from '../../features/notifications/model/identity.selectors';
 import {
   extractInboxRowId,
@@ -92,6 +93,14 @@ const NotificationCenter: React.FC = () => {
   });
   const [markReadMutation] = useMarkReadMutation();
   const [archiveMutation] = useArchiveMutation();
+
+  // Faz 23.4 PR-E.5 PR4: subscribe to the live SSE unread-count stream so
+  // the badge updates the moment a notification is read/archived from
+  // another tab or device. The hook is a no-op while identity is null.
+  // Cache patches happen inside the hook; nothing else to wire here —
+  // useListInboxQuery refetches automatically when the Inbox/LIST tag is
+  // invalidated by the SSE handler.
+  useInboxUnreadSse(identity);
 
   const inboxItems = useMemo<NotificationSurfaceItem[]>(() => {
     if (!inboxQuery.data) return [];
