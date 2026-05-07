@@ -18,6 +18,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Phase 2 PR-Auth-1 (Codex iter-25 §3 absorb, thread 019e0119):
+ * MFE Auth Transport Contract — typed result mirror for shell.auth.ready().
+ */
+export type AuthReadyResult =
+  | { ok: true }
+  | { ok: false; reason: 'unauthenticated' | 'failed'; error?: string };
+
+export type RemoteShellAuthPhase =
+  | 'initializing'
+  | 'keycloakReady'
+  | 'cookieReady'
+  | 'authzReady'
+  | 'transportReady'
+  | 'refreshing'
+  | 'unauthenticated'
+  | 'failed';
+
 export type RemoteShellServices = {
   notify: { push: (entry: ShellNotificationEntry) => void };
   telemetry: { emit: (event: ShellTelemetryEvent) => void };
@@ -25,6 +43,16 @@ export type RemoteShellServices = {
   auth: {
     getToken: () => string | null;
     getUser: () => unknown;
+    /**
+     * Phase 2 PR-Auth-1: epoch-aware Promise bridge. MFEs MUST await
+     * before issuing protected requests to avoid pre-cookie 401 storms.
+     * Fallback service returns {ok:false, reason:'unauthenticated'}
+     * fail-closed (no protected request leaves the MFE pre-wiring).
+     */
+    ready: () => Promise<AuthReadyResult>;
+    isTransportReady: () => boolean;
+    getPhase: () => RemoteShellAuthPhase;
+    getEpoch: () => number;
   };
 };
 
@@ -47,6 +75,18 @@ const createNoopServices = (): RemoteShellServices => ({
   auth: {
     getToken: () => null,
     getUser: () => null,
+    // Phase 2 PR-Auth-1 (Codex iter-25 §3 absorb): fallback fail-closed.
+    // Pre-wiring protected requests get an immediate unauthenticated
+    // marker rather than waiting forever or attempting a no-token fetch.
+    ready: () =>
+      Promise.resolve<AuthReadyResult>({
+        ok: false,
+        reason: 'unauthenticated',
+        error: 'Shell services not yet configured (fallback)',
+      }),
+    isTransportReady: () => false,
+    getPhase: () => 'initializing' as const,
+    getEpoch: () => 0,
   },
 });
 
@@ -71,7 +111,9 @@ export const getShellServices = (): RemoteShellServices => {
     // shell-services wiring is async, and dashboard components may
     // render before wiring completes. Throwing causes token-less
     // requests (401) on dashboard endpoints.
-    console.warn('[mfe-reporting] Shell servisleri henüz konfigüre edilmedi; fallback kullanılacak.');
+    console.warn(
+      '[mfe-reporting] Shell servisleri henüz konfigüre edilmedi; fallback kullanılacak.',
+    );
     return fallbackServices;
   }
   return currentServices;
