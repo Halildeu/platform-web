@@ -1,3 +1,4 @@
+import { BellOff, BellRing, Clock, Gauge } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store/store.hooks';
 import {
@@ -5,37 +6,38 @@ import {
   useListPreferencesQuery,
   useUpsertPreferenceMutation,
 } from '../../features/notifications/api/notify-prefs.api';
-import type { PreferenceDto } from '../../features/notifications/api/notify-prefs.types';
+import type {
+  PreferenceDto,
+  PreferenceUpsertBody,
+} from '../../features/notifications/api/notify-prefs.types';
 import { selectNotifyIdentity } from '../../features/notifications/model/identity.selectors';
+import { formatQuietHours } from '../../features/notifications/model/quiet-hours';
+import NotificationPreferenceForm from './NotificationPreferenceForm';
 
 /**
- * Subscriber notification preferences page (Faz 23.5 PR3).
+ * Subscriber notification preferences page (Faz 23.5 PR3 + Faz 23.6 PR-B1).
  *
- * <p>Lets the signed-in user inspect and edit which notification topics
- * and channels they receive. Backend contract: see
- * {@code notification-orchestrator} {@code PreferenceController}
- * (Faz 23.5 PR2). Identity flows from the existing notify selector
- * ({@code selectNotifyIdentity}) → RTK Query headers; the same auth
- * cookie that drives the inbox surface drives the prefs surface.
- *
- * <h3>UX scope (v1 minimal)</h3>
- *
+ * <p>Faz 23.6 PR-B1 (Codex thread `019e034e` iter-2 absorb):
  * <ul>
- *   <li>Lists existing rows in a single table.</li>
- *   <li>Per-row "Etkin" toggle that PUT-upserts back to the same
- *       composite key — instant feedback because the cache LIST tag is
- *       invalidated.</li>
- *   <li>Per-row delete button (revert to default-allow for that
- *       (topic, channel) tuple).</li>
- *   <li>Inline form to add a new rule: topicKey + channel +
- *       enabled. Quiet hours / frequency limit / bypass-for-critical
- *       are deferred to a richer editor in Faz 23.6+.</li>
+ *   <li>Inline form stays as the lightweight "quick add" path —
+ *       topic / channel / enabled — with the existing two-stage delete
+ *       flow.</li>
+ *   <li>The new "Detaylı kural ekle" button and per-row "Düzenle" action
+ *       open a {@code FormDrawer}-based rich editor where operators set
+ *       quiet hours, daily frequency limits, and the
+ *       {@code bypassForCritical} override.</li>
+ *   <li>The existing per-row "Açık / Kapalı" toggle preserves
+ *       {@code quietHours} / {@code frequencyLimitPerDay} /
+ *       {@code bypassForCritical} so a quick mute does not silently drop
+ *       configured restrictions.</li>
+ *   <li>The new "Kısıtlar" table column surfaces a compact summary
+ *       (quiet-hours window, daily limit, bypass-off badge) so operators
+ *       can scan rules at a glance.</li>
  * </ul>
  *
- * <p>Disabled-state and 503 ("preferences feature off") handling are
- * surfaced as plain inline messages — not as toasts — so a screen
- * reader can find them without rerouting through the global toast
- * channel.
+ * <p>Bulk operations ("Tümünü email'de sustur", "Varsayılana dön") are
+ * intentionally <b>NOT</b> shipped here — they require a backend bulk
+ * contract that lives in PR-A.
  */
 const NotificationPreferencesPage: React.FC = () => {
   const identity = useAppSelector(selectNotifyIdentity);
@@ -45,6 +47,33 @@ const NotificationPreferencesPage: React.FC = () => {
   const listQuery = useListPreferencesQuery(queryArg, { skip: !isReady });
   const [upsert, upsertStatus] = useUpsertPreferenceMutation();
   const [deletePref, deleteStatus] = useDeletePreferenceMutation();
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorTarget, setEditorTarget] = useState<PreferenceDto | null>(null);
+
+  const openCreateDrawer = useCallback(() => {
+    setEditorTarget(null);
+    setEditorOpen(true);
+  }, []);
+
+  const openEditDrawer = useCallback((row: PreferenceDto) => {
+    setEditorTarget(row);
+    setEditorOpen(true);
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setEditorOpen(false);
+    setEditorTarget(null);
+  }, []);
+
+  const handleDrawerSubmit = useCallback(
+    async (body: PreferenceUpsertBody) => {
+      if (!identity) throw new Error('identity unresolved');
+      await upsert({ ...identity, ...body }).unwrap();
+      closeDrawer();
+    },
+    [identity, upsert, closeDrawer],
+  );
 
   if (!isReady) {
     return (
@@ -56,8 +85,6 @@ const NotificationPreferencesPage: React.FC = () => {
   }
 
   if (listQuery.isError) {
-    // 503 (preferences feature disabled) is the most common
-    // not-network error for this surface; surface a clear message.
     const status = (listQuery.error as { status?: number }).status;
     return (
       <section className="p-6 max-w-4xl mx-auto">
@@ -82,11 +109,12 @@ const NotificationPreferencesPage: React.FC = () => {
         kural varsayılan olarak izinlidir.
       </p>
 
-      {/* Inline new-row form */}
-      <NewPreferenceForm
+      {/* Inline new-row form (lightweight) */}
+      <QuickAddPreferenceForm
         identity={identity}
         onSubmit={(body) => upsert({ ...identity, ...body }).unwrap()}
         submitting={upsertStatus.isLoading}
+        onOpenDetailedDrawer={openCreateDrawer}
       />
 
       {/* Existing rows */}
@@ -94,6 +122,9 @@ const NotificationPreferencesPage: React.FC = () => {
         rows={listQuery.data ?? []}
         loading={listQuery.isLoading}
         onToggle={async (row) =>
+          // Faz 23.6 absorb — quick toggle preserves rich fields so the
+          // backend round-trips quietHours / frequencyLimitPerDay /
+          // bypassForCritical instead of silently resetting them.
           upsert({
             ...identity,
             topicKey: row.topicKey,
@@ -105,23 +136,34 @@ const NotificationPreferencesPage: React.FC = () => {
           }).unwrap()
         }
         onDelete={(id) => deletePref({ ...identity, id }).unwrap()}
+        onEdit={openEditDrawer}
         deleting={deleteStatus.isLoading}
+      />
+
+      <NotificationPreferenceForm
+        open={editorOpen}
+        mode={editorTarget ? 'edit' : 'create'}
+        initialValue={editorTarget ?? undefined}
+        submitting={upsertStatus.isLoading}
+        onCancel={closeDrawer}
+        onSubmit={handleDrawerSubmit}
       />
     </section>
   );
 };
 
-interface NewPreferenceFormProps {
+interface QuickAddPreferenceFormProps {
   identity: { orgId: string; subscriberId: string };
-  onSubmit: (body: {
-    topicKey: string | null;
-    channel: string | null;
-    enabled: boolean;
-  }) => Promise<unknown>;
+  onSubmit: (body: PreferenceUpsertBody) => Promise<unknown>;
   submitting: boolean;
+  onOpenDetailedDrawer: () => void;
 }
 
-const NewPreferenceForm: React.FC<NewPreferenceFormProps> = ({ onSubmit, submitting }) => {
+const QuickAddPreferenceForm: React.FC<QuickAddPreferenceFormProps> = ({
+  onSubmit,
+  submitting,
+  onOpenDetailedDrawer,
+}) => {
   const [topicKey, setTopicKey] = useState('');
   const [channel, setChannel] = useState('');
   const [enabled, setEnabled] = useState(true);
@@ -180,6 +222,14 @@ const NewPreferenceForm: React.FC<NewPreferenceFormProps> = ({ onSubmit, submitt
       >
         {submitting ? 'Kaydediliyor…' : 'Kuralı kaydet'}
       </button>
+      <button
+        type="button"
+        onClick={onOpenDetailedDrawer}
+        className="col-span-12 text-xs text-blue-700 hover:underline text-left"
+        data-testid="pref-quick-open-detailed"
+      >
+        Detaylı kural ekle (sessiz saat, günlük limit, kritik bypass) →
+      </button>
       {error && (
         <p role="alert" className="col-span-12 text-xs text-rose-600">
           {error}
@@ -194,6 +244,7 @@ interface PreferenceTableProps {
   loading: boolean;
   onToggle: (row: PreferenceDto) => Promise<unknown>;
   onDelete: (id: number) => Promise<unknown>;
+  onEdit: (row: PreferenceDto) => void;
   deleting: boolean;
 }
 
@@ -202,13 +253,9 @@ const PreferenceTable: React.FC<PreferenceTableProps> = ({
   loading,
   onToggle,
   onDelete,
+  onEdit,
   deleting,
 }) => {
-  // Codex iter P2 absorb: two-stage delete confirm — first click on
-  // "Sil" arms the row; a second click on "Onayla" performs the
-  // delete. Prevents accidental removal of mute rules (which would
-  // re-enable notifications). The pending state is local to the table
-  // so navigating away resets it.
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const sorted = useMemo(
     () =>
@@ -236,6 +283,7 @@ const PreferenceTable: React.FC<PreferenceTableProps> = ({
           <th className="py-2">Konu</th>
           <th className="py-2">Kanal</th>
           <th className="py-2">Etkin</th>
+          <th className="py-2">Kısıtlar</th>
           <th className="py-2">Güncelleme</th>
           <th className="py-2 text-right">İşlem</th>
         </tr>
@@ -264,6 +312,9 @@ const PreferenceTable: React.FC<PreferenceTableProps> = ({
               >
                 {row.enabled ? 'Açık' : 'Kapalı'}
               </button>
+            </td>
+            <td className="py-2 text-xs">
+              <ConstraintsCell row={row} />
             </td>
             <td className="py-2 text-zinc-500 text-xs">{formatTimestamp(row.updatedAt)}</td>
             <td className="py-2 text-right">
@@ -295,20 +346,79 @@ const PreferenceTable: React.FC<PreferenceTableProps> = ({
                   </button>
                 </span>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setPendingDeleteId(row.id)}
-                  aria-label={`${row.id} numaralı kuralı sil`}
-                  className="text-xs text-rose-700 hover:underline"
-                >
-                  Sil
-                </button>
+                <span className="inline-flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => onEdit(row)}
+                    aria-label={`${row.id} numaralı kuralı düzenle`}
+                    data-testid={`pref-row-edit-${row.id}`}
+                    className="text-blue-700 hover:underline"
+                  >
+                    Düzenle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteId(row.id)}
+                    aria-label={`${row.id} numaralı kuralı sil`}
+                    className="text-rose-700 hover:underline"
+                  >
+                    Sil
+                  </button>
+                </span>
               )}
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+  );
+};
+
+const ConstraintsCell: React.FC<{ row: PreferenceDto }> = ({ row }) => {
+  const summary = formatQuietHours(row.quietHours);
+  const hasQuietHours = summary !== '—';
+  const hasFrequency =
+    row.frequencyLimitPerDay !== null &&
+    row.frequencyLimitPerDay !== undefined &&
+    row.frequencyLimitPerDay > 0;
+  const bypassOff = row.bypassForCritical === false;
+  if (!hasQuietHours && !hasFrequency && !bypassOff) {
+    return <span className="text-zinc-400">—</span>;
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {hasQuietHours && (
+        <span className="inline-flex items-center gap-1" data-testid="pref-row-badge-quiet">
+          <Clock size={12} aria-hidden="true" />
+          {summary}
+        </span>
+      )}
+      {hasFrequency && (
+        <span className="inline-flex items-center gap-1" data-testid="pref-row-badge-freq">
+          <Gauge size={12} aria-hidden="true" />
+          Günde {row.frequencyLimitPerDay}'e kadar
+        </span>
+      )}
+      {bypassOff && (
+        <span
+          className="inline-flex items-center gap-1 text-amber-700"
+          data-testid="pref-row-badge-bypass-off"
+          aria-label="Kritik bypass kapalı"
+        >
+          <BellOff size={12} aria-hidden="true" />
+          Kritik bypass kapalı
+        </span>
+      )}
+      {!bypassOff && hasQuietHours && (
+        <span
+          className="inline-flex items-center gap-1 text-zinc-400"
+          aria-label="Kritik bypass açık"
+          title="Kritik bildirimler bu kuralın kısıtlarını bypass eder."
+        >
+          <BellRing size={12} aria-hidden="true" />
+        </span>
+      )}
+    </span>
   );
 };
 

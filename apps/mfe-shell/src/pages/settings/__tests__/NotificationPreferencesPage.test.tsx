@@ -88,8 +88,14 @@ describe('NotificationPreferencesPage', () => {
     expect(screen.getByText(/Bildirim tercihi özelliği bu ortamda kapalı/)).toBeInTheDocument();
   });
 
-  it('renders rows + dispatches upsert on toggle', async () => {
+  it('renders rows + dispatches upsert on toggle and preserves rich fields (Faz 23.6)', async () => {
     identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    const rowQuietHours = {
+      start: '22:00',
+      end: '07:00',
+      timezone: 'Europe/Istanbul',
+      days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+    };
     listQueryMock = {
       data: [
         {
@@ -97,9 +103,9 @@ describe('NotificationPreferencesPage', () => {
           topicKey: 'report.export.ready',
           channel: 'email',
           enabled: true,
-          quietHours: null,
-          frequencyLimitPerDay: null,
-          bypassForCritical: true,
+          quietHours: rowQuietHours,
+          frequencyLimitPerDay: 5,
+          bypassForCritical: false,
           createdAt: '2026-05-07T08:00:00Z',
           updatedAt: '2026-05-07T08:00:00Z',
         },
@@ -120,7 +126,7 @@ describe('NotificationPreferencesPage', () => {
     });
     fireEvent.click(toggle);
 
-    // Mutation called with the inverted enabled flag + identity.
+    // Mutation called with the inverted enabled flag + identity + rich fields.
     await vi.waitFor(() => {
       expect(upsertMutationMock).toHaveBeenCalledTimes(1);
     });
@@ -128,6 +134,73 @@ describe('NotificationPreferencesPage', () => {
     expect(arg.enabled).toBe(false);
     expect(arg.orgId).toBe('default');
     expect(arg.subscriberId).toBe('sub-1');
+    // Faz 23.6 PR-B1: quick toggle MUST preserve rich fields so they
+    // do not silently reset.
+    expect(arg.quietHours).toEqual(rowQuietHours);
+    expect(arg.frequencyLimitPerDay).toBe(5);
+    expect(arg.bypassForCritical).toBe(false);
+  });
+
+  it('renders constraints summary badges based on row data (Faz 23.6)', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 1,
+          topicKey: 'report.export.ready',
+          channel: 'email',
+          enabled: true,
+          quietHours: {
+            start: '22:00',
+            end: '07:00',
+            timezone: 'Europe/Istanbul',
+            days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+          },
+          frequencyLimitPerDay: 5,
+          bypassForCritical: false,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+
+    render(<NotificationPreferencesPage />);
+
+    expect(screen.getByTestId('pref-row-badge-quiet')).toBeInTheDocument();
+    expect(screen.getByTestId('pref-row-badge-freq')).toBeInTheDocument();
+    expect(screen.getByTestId('pref-row-badge-bypass-off')).toBeInTheDocument();
+  });
+
+  it('opens the rich editor when "Düzenle" is clicked', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 42,
+          topicKey: 'system.maintenance',
+          channel: 'email',
+          enabled: true,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+
+    render(<NotificationPreferencesPage />);
+
+    fireEvent.click(screen.getByTestId('pref-row-edit-42'));
+    // The form drawer mounts and the topic input is hydrated with the
+    // row's existing value.
+    expect(screen.getByTestId('pref-form-topic')).toHaveValue('system.maintenance');
   });
 
   it('arms then confirms delete via two-stage flow', async () => {
