@@ -176,6 +176,84 @@ describe('notifyPrefsApi.deletePreference', () => {
   });
 });
 
+describe('notifyPrefsApi.restoreDefaults (Faz 23.6 PR-C1)', () => {
+  it('DELETEs /me with identity headers, no body, and invalidates LIST', async () => {
+    fetchHandler = async () => jsonResponse({ deletedCount: 3 });
+    const store = buildStore();
+    const result = await store.dispatch(
+      notifyPrefsApi.endpoints.restoreDefaults.initiate(IDENTITY),
+    );
+    expect('data' in result).toBe(true);
+    expect((result as { data?: { deletedCount: number } }).data?.deletedCount).toBe(3);
+
+    const delReq = recorded.find((r) => r.method === 'DELETE');
+    expect(delReq?.url).toMatch(/\/api\/v1\/notify\/preferences\/me$/);
+    expect(delReq?.url).not.toMatch(/\/me\/\d+$/);
+    expect(delReq?.headers['x-org-id']).toBe('default');
+    expect(delReq?.headers['x-subscriber-id']).toBe('sub-1');
+    expect(delReq?.credentials).toBe('include');
+    expect(delReq?.body).toBeFalsy();
+  });
+
+  it('forwards 503 (preferences disabled) as a typed error', async () => {
+    fetchHandler = async () =>
+      jsonResponse({ error: 'preferences_disabled', message: 'feature off' }, 503);
+    const store = buildStore();
+    const result = await store.dispatch(
+      notifyPrefsApi.endpoints.restoreDefaults.initiate(IDENTITY),
+    );
+    expect('error' in result && (result.error as { status: number }).status).toBe(503);
+  });
+
+  it('forwards 403 (org / subscriber boundary mismatch)', async () => {
+    fetchHandler = async () => new Response(null, { status: 403 });
+    const store = buildStore();
+    const result = await store.dispatch(
+      notifyPrefsApi.endpoints.restoreDefaults.initiate(IDENTITY),
+    );
+    expect('error' in result && (result.error as { status: number }).status).toBe(403);
+  });
+
+  it('refetches the list after a successful restore (LIST tag invalidation)', async () => {
+    let listFetchCount = 0;
+    fetchHandler = async (input, init) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input instanceof Request
+              ? input.url
+              : String(input);
+      const method =
+        input instanceof Request
+          ? input.method.toUpperCase()
+          : (init?.method ?? 'GET').toUpperCase();
+      if (method === 'GET' && /\/preferences\/me$/.test(url)) {
+        listFetchCount += 1;
+        return jsonResponse([buildPref({ id: 1 })]);
+      }
+      if (method === 'DELETE' && /\/preferences\/me$/.test(url)) {
+        return jsonResponse({ deletedCount: 5 });
+      }
+      return jsonResponse({ error: 'unhandled' }, 500);
+    };
+
+    const store = buildStore();
+    // Subscribe to keep the cache entry alive across the mutation.
+    const sub = store.dispatch(notifyPrefsApi.endpoints.listPreferences.initiate(IDENTITY));
+    await sub;
+    expect(listFetchCount).toBe(1);
+
+    await store.dispatch(notifyPrefsApi.endpoints.restoreDefaults.initiate(IDENTITY));
+    // RTK Query refires the list query because the LIST tag was
+    // invalidated by the mutation.
+    await sub.refetch();
+    expect(listFetchCount).toBeGreaterThanOrEqual(2);
+    sub.unsubscribe();
+  });
+});
+
 // ─── Test helpers ────────────────────────────────────────────────────────
 
 function headersToRecord(input: HeadersInit | undefined): Record<string, string> {

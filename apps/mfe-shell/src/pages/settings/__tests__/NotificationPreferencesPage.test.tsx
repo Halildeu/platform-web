@@ -23,6 +23,7 @@ let listQueryMock = {
 };
 const upsertMutationMock = vi.fn();
 const deleteMutationMock = vi.fn();
+const restoreDefaultsMutationMock = vi.fn();
 
 vi.mock('../../../app/store/store.hooks', () => ({
   useAppSelector: () => identityMock,
@@ -46,6 +47,12 @@ vi.mock('../../../features/notifications/api/notify-prefs.api', () => ({
     }),
     { isLoading: false },
   ],
+  useRestoreDefaultsMutation: () => [
+    (args: unknown) => ({
+      unwrap: async () => restoreDefaultsMutationMock(args),
+    }),
+    { isLoading: false },
+  ],
 }));
 
 beforeEach(() => {
@@ -53,6 +60,7 @@ beforeEach(() => {
   listQueryMock = { data: undefined, isLoading: false, isError: false, error: undefined };
   upsertMutationMock.mockReset();
   deleteMutationMock.mockReset();
+  restoreDefaultsMutationMock.mockReset();
 });
 
 afterEach(() => {
@@ -315,5 +323,176 @@ describe('NotificationPreferencesPage', () => {
     expect(arg.topicKey).toBeNull();
     expect(arg.channel).toBeNull();
     expect(arg.enabled).toBe(false);
+  });
+
+  // ── Faz 23.6 PR-C1 — Restore defaults destructive bulk action ─────────
+
+  it('disables the restore-defaults button when there are no rows', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+
+    render(<NotificationPreferencesPage />);
+    const arm = screen.getByTestId('pref-restore-defaults-arm') as HTMLButtonElement;
+    expect(arm).toBeDisabled();
+  });
+
+  it('enables the button when rows exist; arms two-stage confirm on first click', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 1,
+          topicKey: 'auth.password-reset',
+          channel: 'email',
+          enabled: false,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-arm'));
+
+    expect(screen.getByTestId('pref-restore-defaults-confirm-row')).toBeInTheDocument();
+    expect(restoreDefaultsMutationMock).not.toHaveBeenCalled();
+  });
+
+  it('cancels the confirm without calling the mutation', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 1,
+          topicKey: 'auth.password-reset',
+          channel: 'email',
+          enabled: false,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-arm'));
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-cancel'));
+
+    expect(screen.queryByTestId('pref-restore-defaults-confirm-row')).not.toBeInTheDocument();
+    expect(restoreDefaultsMutationMock).not.toHaveBeenCalled();
+  });
+
+  it('confirms + calls mutation + shows success banner with deletedCount', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 1,
+          topicKey: 'auth.password-reset',
+          channel: 'email',
+          enabled: false,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+    restoreDefaultsMutationMock.mockResolvedValue({ deletedCount: 5 });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-arm'));
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-confirm'));
+
+    await vi.waitFor(() => {
+      expect(restoreDefaultsMutationMock).toHaveBeenCalledTimes(1);
+    });
+    const arg = restoreDefaultsMutationMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg.orgId).toBe('default');
+    expect(arg.subscriberId).toBe('sub-1');
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-restore-defaults-success')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/5 kural silindi/)).toBeInTheDocument();
+  });
+
+  it('shows the no-rules-deleted message when deletedCount is zero', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 1,
+          topicKey: 'foo',
+          channel: 'bar',
+          enabled: true,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+    restoreDefaultsMutationMock.mockResolvedValue({ deletedCount: 0 });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-arm'));
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-confirm'));
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-restore-defaults-success')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Silinecek kural yoktu/)).toBeInTheDocument();
+  });
+
+  it('renders inline error banner with status-aware Türkçe copy on 503', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 1,
+          topicKey: 'foo',
+          channel: 'bar',
+          enabled: true,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+    restoreDefaultsMutationMock.mockRejectedValue({ status: 503 });
+
+    render(<NotificationPreferencesPage />);
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-arm'));
+    fireEvent.click(screen.getByTestId('pref-restore-defaults-confirm'));
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('pref-restore-defaults-error')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/bu ortamda kapalı/)).toBeInTheDocument();
   });
 });

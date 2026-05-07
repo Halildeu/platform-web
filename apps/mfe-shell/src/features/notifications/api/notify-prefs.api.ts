@@ -91,6 +91,24 @@ export const notifyPrefsApi = createApi({
       }),
       invalidatesTags: () => [{ type: 'Preference' as const, id: 'LIST' }],
     }),
+
+    /**
+     * DELETE /me — restore-defaults: hard-delete every preference row
+     * owned by the caller in a single backend transaction (Faz 23.6
+     * PR-A1 / PR-C1 — backend PR #115). Idempotent; returns
+     * {@code deletedCount} for UX feedback (toast / banner).
+     *
+     * <p>The list tag invalidation refetches and the table empties
+     * back to its "no rules — default-allow" baseline.
+     */
+    restoreDefaults: build.mutation<{ deletedCount: number }, PreferenceRequestIdentity>({
+      query: ({ orgId, subscriberId }) => ({
+        url: '/me',
+        method: 'DELETE',
+        headers: identityHeaders({ orgId, subscriberId }),
+      }),
+      invalidatesTags: () => [{ type: 'Preference' as const, id: 'LIST' }],
+    }),
   }),
 });
 
@@ -104,5 +122,9 @@ function identityHeaders({
   };
 }
 
-export const { useListPreferencesQuery, useUpsertPreferenceMutation, useDeletePreferenceMutation } =
-  notifyPrefsApi;
+export const {
+  useListPreferencesQuery,
+  useUpsertPreferenceMutation,
+  useDeletePreferenceMutation,
+  useRestoreDefaultsMutation,
+} = notifyPrefsApi;
