@@ -109,6 +109,13 @@ vi.mock('../../features/notifications/api/notify-inbox.api', () => ({
   useArchiveMutation: () => [archiveMutationMock, { isLoading: false }],
 }));
 
+// Faz 23.4 PR-E.5 PR4: live SSE hook is a no-op in jsdom unit tests
+// (EventSource semantics covered by useInboxUnreadSse.test.ts). Returning
+// a stable stub keeps NotificationCenter render deterministic.
+vi.mock('../../features/notifications/api/useInboxUnreadSse', () => ({
+  useInboxUnreadSse: () => ({ connected: false, lastUnreadCount: null, retryCount: 0 }),
+}));
+
 vi.mock('../../features/notifications/model/identity.selectors', () => ({
   selectNotifyIdentity: () => identityMock,
 }));
