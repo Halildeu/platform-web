@@ -2,7 +2,12 @@
 /*  Shell services wiring — connects Redux store, telemetry, etc.      */
 /* ------------------------------------------------------------------ */
 
-import { api, registerAuthReadyResolver } from '@mfe/shared-http';
+import {
+  api,
+  registerAuthReadyResolver,
+  registerRefreshHandler,
+  type RefreshResult,
+} from '@mfe/shared-http';
 import { store } from '../store/store';
 import {
   configureShellServices,
@@ -187,6 +192,45 @@ configureShellServices({
 // consume {@code getShellServices().http} (enforced by the ESLint rule
 // added in this PR).
 registerAuthReadyResolver(() => createAuthReadyPromise());
+
+// Phase 2 PR-Refresh-4: wire the single-flight refresh-token handler.
+// When a protected request returns 401, the response interceptor
+// awaits this handler once (subsequent 401s within the same window
+// share the in-flight Promise), then retries the original request
+// once. Implementation reads the Keycloak instance attached to
+// {@code window.__keycloak} (matches the existing AuthBootstrapper
+// pattern); the Keycloak token-refreshed event already updates the
+// Redux store + broadcasts to other tabs via auth-sync, so this
+// handler only needs to trigger the network refresh.
+registerRefreshHandler(async (): Promise<RefreshResult> => {
+  if (typeof window === 'undefined') {
+    return { ok: false, reason: 'no-window' };
+  }
+  const kc = (window as Record<string, unknown>).__keycloak as
+    | { updateToken?: (minValiditySec: number) => Promise<boolean>; token?: string }
+    | undefined;
+  if (!kc?.updateToken) {
+    return { ok: false, reason: 'no-keycloak' };
+  }
+  try {
+    // Force a refresh (-1 means always refresh regardless of remaining
+    // validity). Keycloak's onAuthRefreshSuccess hook in
+    // AuthBootstrapper will dispatch the new token into the store and
+    // broadcast it via auth-sync; we only need to await the refresh
+    // network call here so the response interceptor can retry the
+    // original request with the fresh token.
+    const refreshed = await kc.updateToken(-1);
+    if (!refreshed) {
+      return { ok: false, reason: 'token-still-valid' };
+    }
+    return { ok: true, token: kc.token ?? undefined };
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[shell] keycloak.updateToken failed during 401 retry:', err);
+    }
+    return { ok: false, reason: 'updateToken-failed' };
+  }
+});
 
 /* ---- Wire remote module shell-services ---- */
 

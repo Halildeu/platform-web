@@ -11,11 +11,17 @@ export type SharedHttpAuthReadyResult =
   | { ok: false; reason?: string; error?: string };
 type AuthReadyResolver = () => Promise<SharedHttpAuthReadyResult>;
 
+// PR-Refresh-4: refresh-token contract.
+export type RefreshResult = { ok: true; token?: string } | { ok: false; reason: string };
+type RefreshHandler = () => Promise<RefreshResult>;
+
 export type SharedHttpRequestConfig = AxiosRequestConfig & {
   __suppressGlobalForbiddenToast?: boolean;
   __suppressGlobalProfileMissingToast?: boolean;
   __skipAuth?: boolean;
   __skipAuthReadyGate?: boolean;
+  __isRefreshAttempt?: boolean;
+  __skipRefreshOn401?: boolean;
 };
 
 export declare class AuthNotReadyError extends Error {
@@ -29,6 +35,7 @@ export declare const registerAuthTokenResolver: (resolver?: TokenResolver) => vo
 export declare const registerTraceIdResolver: (resolver?: TraceIdResolver) => void;
 export declare const registerUnauthorizedHandler: (handler?: UnauthorizedHandler) => void;
 export declare const registerAuthReadyResolver: (resolver?: AuthReadyResolver) => void;
+export declare const registerRefreshHandler: (handler?: RefreshHandler) => void;
 export declare const configureSharedHttp: (config?: { authMode?: AuthMode }) => void;
 declare const api: AxiosInstance;
 export declare const resolveAuthToken: () => string | null;

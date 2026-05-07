@@ -373,3 +373,211 @@ describe('shared-http auth-ready gate (PR-HTTP-3)', () => {
     expect(mod.isAuthNotReadyError('string')).toBe(false);
   });
 });
+
+/*
+ * Phase 2 PR-Refresh-4 (MFE Auth Transport Contract): the response
+ * interceptor single-flights a refresh-token call on 401 and retries
+ * the original request once. The shell registers the refresh handler
+ * via {@code registerRefreshHandler()}.
+ *
+ * Coverage:
+ *   1. 401 + refresh ok → original request retried once
+ *   2. 401 + refresh fails → legacy 401 path (event + reject)
+ *   3. concurrent 401s share ONE refresh call (single-flight)
+ *   4. retry that itself 401s does NOT trigger a second refresh
+ *      (__isRefreshAttempt flag prevents loop)
+ *   5. __skipRefreshOn401 opt-out
+ *   6. __skipAuth implicitly opts out
+ *   7. permitAll mode bypasses (no refresh path)
+ *   8. no handler registered → legacy 401 path
+ */
+describe('shared-http single-flight refresh-on-401 (PR-Refresh-4)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('401 + refresh ok → retries the original request once', async () => {
+    const { mod } = await loadModule();
+    // Build a real client.request stub so the retry path can be observed.
+    const requestSpy = vi.spyOn(mod.api, 'request').mockResolvedValue({
+      data: 'retry-success',
+      status: 200,
+    } as never);
+
+    mod.registerRefreshHandler(() => Promise.resolve({ ok: true, token: 'fresh-token' }));
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: { url: '/v1/users/me', method: 'get', headers: { Authorization: 'Bearer stale' } },
+    } as AxiosError;
+
+    const result = await rejected?.(error);
+    // The retry result is what bubbles up from the response interceptor.
+    expect(result).toMatchObject({ data: 'retry-success', status: 200 });
+
+    // Retry was issued exactly once with __isRefreshAttempt set, and the
+    // stale Authorization header was stripped (request interceptor
+    // re-injects from updated tokenResolver).
+    expect(requestSpy).toHaveBeenCalledTimes(1);
+    const retryConfig = requestSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(retryConfig.__isRefreshAttempt).toBe(true);
+    expect((retryConfig.headers as Record<string, unknown>)?.Authorization).toBeUndefined();
+
+    requestSpy.mockRestore();
+  });
+
+  it('401 + refresh fails → falls back to legacy 401 path (event + reject)', async () => {
+    const { mod, dispatchEvent } = await loadModule();
+    const unauthorizedHandler = vi.fn();
+    mod.registerUnauthorizedHandler(unauthorizedHandler);
+    mod.registerRefreshHandler(() =>
+      Promise.resolve({ ok: false, reason: 'refresh-token-expired' }),
+    );
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: { url: '/v1/users/me', method: 'get', headers: {} },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+    // Legacy 401 contract preserved: handler called, event dispatched.
+    expect(unauthorizedHandler).toHaveBeenCalledTimes(1);
+    const authEvents = dispatchEvent.mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'app:auth:unauthorized');
+    expect(authEvents).toHaveLength(1);
+  });
+
+  it('concurrent 401s share ONE refresh call (single-flight)', async () => {
+    const { mod } = await loadModule();
+    const requestSpy = vi.spyOn(mod.api, 'request').mockResolvedValue({
+      data: 'retried',
+      status: 200,
+    } as never);
+
+    let resolveRefresh!: (value: { ok: true; token?: string }) => void;
+    const refreshSpy = vi.fn(
+      () =>
+        new Promise<{ ok: true; token?: string }>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    mod.registerRefreshHandler(refreshSpy);
+
+    const rejected = getResponseInterceptor(mod.api);
+    const makeError = (url: string) =>
+      ({
+        response: { status: 401 },
+        config: { url, method: 'get', headers: {} },
+      }) as AxiosError;
+
+    const a = rejected?.(makeError('/a'));
+    const b = rejected?.(makeError('/b'));
+    const c = rejected?.(makeError('/c'));
+
+    // Microtask flush — only one refresh call should have started.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+
+    // Resolve the single refresh; all three retries fan out.
+    resolveRefresh({ ok: true });
+    await Promise.all([a, b, c]);
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(requestSpy).toHaveBeenCalledTimes(3);
+
+    requestSpy.mockRestore();
+  });
+
+  it('__isRefreshAttempt prevents a second refresh (no infinite loop)', async () => {
+    const { mod, dispatchEvent } = await loadModule();
+    const refreshSpy = vi.fn(() => Promise.resolve({ ok: true as const }));
+    mod.registerRefreshHandler(refreshSpy);
+
+    const rejected = getResponseInterceptor(mod.api);
+    // The retry that came back from the first refresh attempt also fails
+    // 401 → must NOT trigger a second refresh.
+    const error = {
+      response: { status: 401 },
+      config: {
+        url: '/v1/users/me',
+        method: 'get',
+        headers: {},
+        __isRefreshAttempt: true,
+      },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+    expect(refreshSpy).not.toHaveBeenCalled();
+    // Falls through to the legacy 401 path.
+    const authEvents = dispatchEvent.mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'app:auth:unauthorized');
+    expect(authEvents).toHaveLength(1);
+  });
+
+  it('__skipRefreshOn401 opts the request out of the refresh pipeline', async () => {
+    const { mod } = await loadModule();
+    const refreshSpy = vi.fn(() => Promise.resolve({ ok: true as const }));
+    mod.registerRefreshHandler(refreshSpy);
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: { url: '/x', method: 'get', headers: {}, __skipRefreshOn401: true },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('__skipAuth implicitly opts out of refresh', async () => {
+    const { mod } = await loadModule();
+    const refreshSpy = vi.fn(() => Promise.resolve({ ok: true as const }));
+    mod.registerRefreshHandler(refreshSpy);
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: { url: '/public', method: 'get', headers: {}, __skipAuth: true },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('permitAll mode bypasses the refresh pipeline entirely', async () => {
+    const { mod } = await loadModule();
+    const refreshSpy = vi.fn(() => Promise.resolve({ ok: true as const }));
+    mod.registerRefreshHandler(refreshSpy);
+    mod.configureSharedHttp({ authMode: 'permitAll' });
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = { response: { status: 401 }, config: { headers: {} } } as AxiosError;
+    await expect(rejected?.(error)).rejects.toBe(error);
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
+
+  it('no handler registered → legacy 401 path (event + reject)', async () => {
+    const { mod, dispatchEvent } = await loadModule();
+    // Note: registerRefreshHandler is NOT called.
+    const unauthorizedHandler = vi.fn();
+    mod.registerUnauthorizedHandler(unauthorizedHandler);
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: { url: '/x', method: 'get', headers: {} },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+    expect(unauthorizedHandler).toHaveBeenCalledTimes(1);
+    const authEvents = dispatchEvent.mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'app:auth:unauthorized');
+    expect(authEvents).toHaveLength(1);
+  });
+});
