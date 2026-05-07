@@ -18,12 +18,20 @@ export interface EndpointDevice {
   id: string;
   tenantId: string;
   hostname: string;
-  displayName: string;
+  /**
+   * Codex iter-1 must-fix #1: backend `EndpointDevice` entity columns
+   * `display_name`, `os_version`, `agent_version`,
+   * `machine_fingerprint`, `domain_name` are nullable. The DTO mapper
+   * passes them through directly, so the wire payload may contain
+   * `null`. Mirror that nullability here so consumers always handle
+   * the missing-value path.
+   */
+  displayName: string | null;
   osType: OsType;
-  osVersion: string;
-  agentVersion: string;
-  machineFingerprint: string;
-  domainName: string;
+  osVersion: string | null;
+  agentVersion: string | null;
+  machineFingerprint: string | null;
+  domainName: string | null;
   status: DeviceStatus;
   /** ISO-8601 timestamp from `Instant`. */
   lastSeenAt: string | null;
