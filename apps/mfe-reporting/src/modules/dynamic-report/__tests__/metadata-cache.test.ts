@@ -134,8 +134,7 @@ describe('metadata-cache', () => {
 
   it('clears cache when auth epoch advances (logout / re-login)', async () => {
     mockFetchReportMetadata.mockResolvedValueOnce(sampleMeta).mockResolvedValueOnce({
-      columns: [{ field: 'x', headerName: 'X', type: 'text' as const }],
-      capabilities: undefined,
+      columns: [{ field: 'x', headerName: 'X', type: 'text' as const, ...baseCol }],
     });
 
     const first = await fetchMeta('rebadge');
@@ -147,6 +146,107 @@ describe('metadata-cache', () => {
     const second = await fetchMeta('rebadge');
     expect(second.columns).toHaveLength(1);
     expect(mockFetchReportMetadata).toHaveBeenCalledTimes(2);
+  });
+
+  it('epoch advance MID-FLIGHT does not poison the new principal cache (Codex 019e0450 §1)', async () => {
+    // Old principal's fetch is in flight; new principal's epoch starts.
+    let resolveOld!: (value: typeof sampleMeta) => void;
+    mockFetchReportMetadata.mockImplementationOnce(
+      () =>
+        new Promise<typeof sampleMeta>((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+
+    const oldFetch = fetchMeta('cross-epoch-report');
+
+    // Allow the inflight to register and the auth gate to pass.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Epoch advances mid-flight (logout / re-login).
+    currentEpoch.value = 2;
+
+    // Now resolve the OLD fetch. Without the identity/epoch fence this
+    // would write the old principal's columns into the new principal's
+    // cache.
+    resolveOld({
+      columns: [
+        { field: 'old', headerName: 'OLD', type: 'text' as const, ...baseCol },
+        { field: 'old2', headerName: 'OLD2', type: 'text' as const, ...baseCol },
+      ],
+      capabilities: { serverSideGrouping: false } as { serverSideGrouping: boolean },
+    } as unknown as typeof sampleMeta);
+    await oldFetch;
+
+    // New principal MUST NOT see the old principal's data via sync read.
+    expect(getCachedColumns('cross-epoch-report')).toEqual([]);
+    expect(getCachedCapabilities('cross-epoch-report')).toBeUndefined();
+  });
+
+  it('sync readers see no stale cache after epoch advance (Codex 019e0450 §2)', async () => {
+    mockFetchReportMetadata.mockResolvedValueOnce(sampleMeta);
+
+    await fetchMeta('hr-cikis');
+    expect(getCachedColumns('hr-cikis')).toHaveLength(2);
+
+    // Logout: epoch advances. Sync readers must NOT serve the old data.
+    currentEpoch.value = 2;
+    expect(getCachedColumns('hr-cikis')).toEqual([]);
+    expect(getCachedCapabilities('hr-cikis')).toBeUndefined();
+  });
+
+  it('does not delete inflight entry registered by a NEW epoch when an OLD fetch finishes', async () => {
+    let resolveOld!: (value: typeof sampleMeta) => void;
+    let resolveNew!: (value: typeof sampleMeta) => void;
+    mockFetchReportMetadata
+      .mockImplementationOnce(
+        () =>
+          new Promise<typeof sampleMeta>((resolve) => {
+            resolveOld = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<typeof sampleMeta>((resolve) => {
+            resolveNew = resolve;
+          }),
+      );
+
+    const oldFetch = fetchMeta('drift-key');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    currentEpoch.value = 2;
+    const newFetch = fetchMeta('drift-key');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Both fetches should now be issued (one per epoch).
+    expect(mockFetchReportMetadata).toHaveBeenCalledTimes(2);
+
+    // The OLD fetch finishes first. It must NOT delete the NEW inflight.
+    resolveOld({
+      columns: [{ field: 'a', headerName: 'A', type: 'text' as const, ...baseCol }],
+    } as unknown as typeof sampleMeta);
+    await oldFetch;
+
+    // NEW finishes — its result should be cached for the new epoch.
+    resolveNew({
+      columns: [
+        { field: 'n1', headerName: 'N1', type: 'text' as const, ...baseCol },
+        { field: 'n2', headerName: 'N2', type: 'text' as const, ...baseCol },
+        { field: 'n3', headerName: 'N3', type: 'text' as const, ...baseCol },
+      ],
+      capabilities: { serverSideGrouping: true },
+    });
+    const newResult = await newFetch;
+
+    expect(newResult.columns).toHaveLength(3);
+    expect(getCachedColumns('drift-key')).toHaveLength(3);
   });
 
   it('respects bounded concurrency', async () => {

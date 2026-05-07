@@ -219,17 +219,42 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
   const inflight = state.inflight.get(reportKey);
   if (inflight) return inflight;
 
+  // Codex iter-1 absorb (thread 019e0450 §1): capture the auth epoch
+  // synchronously at request start. The fetch's success-cache write +
+  // inflight-delete are then guarded against this captured value so an
+  // epoch advance mid-flight (logout / re-login) cannot:
+  //   - poison the new principal's cache with the old principal's columns,
+  //   - delete a NEW principal's inflight entry that races into the same key.
+  let capturedEpoch: number;
+  try {
+    capturedEpoch = getShellServices().auth.getEpoch();
+  } catch {
+    // shell-services not yet wired — fail-closed (same as auth.ready below).
+    capturedEpoch = state.lastSeenEpoch;
+  }
+
   // CRITICAL: build the in-flight promise SYNCHRONOUSLY and register it in
   // the inflight Map BEFORE the first `await`. Otherwise concurrent callers
   // all pass the inflight check before any of them stores the promise, and
   // we end up with N parallel fetches for the same key.
+  //
+  // Indirection through a ref object keeps the closure's identity check
+  // (`isStillCurrent`) referring to the assigned promise without TS's
+  // "used before being assigned" diagnostic for self-referencing
+  // declarations. The ref is populated synchronously below; the closure
+  // never reads it before its first await.
+  const promiseRef: { current: Promise<CachedMeta> | null } = { current: null };
   const promise: Promise<CachedMeta> = (async (): Promise<CachedMeta> => {
+    const isStillCurrent = (): boolean =>
+      state.lastSeenEpoch === capturedEpoch && state.inflight.get(reportKey) === promiseRef.current;
+
     // Auth-ready gate: do NOT issue the HTTP request before the auth FSM
     // reaches transportReady. PR-Auth-1 (#302) flagged this as the root
     // cause of the 574 cold-reload 401 storm; this gate enforces it for
     // every metadata fetch from the reporting MFE. On non-ok we drop the
-    // inflight entry (without caching the empty result) so the next call
-    // retries once the auth FSM advances.
+    // inflight entry (only if still ours; otherwise leave it for the
+    // current epoch's owner) and DO NOT cache the empty result — the next
+    // call retries once the auth FSM advances.
     let authResult: { ok: boolean };
     try {
       authResult = await getShellServices().auth.ready();
@@ -237,7 +262,7 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
       if (process.env.NODE_ENV !== 'production') {
         console.warn(`[mfe-reporting/metadata-cache] auth.ready() threw for ${reportKey}:`, err);
       }
-      state.inflight.delete(reportKey);
+      if (isStillCurrent()) state.inflight.delete(reportKey);
       return emptyMeta();
     }
 
@@ -247,18 +272,35 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
           `[mfe-reporting/metadata-cache] auth not ready for ${reportKey}; skipping fetch`,
         );
       }
-      state.inflight.delete(reportKey);
+      if (isStillCurrent()) state.inflight.delete(reportKey);
       return emptyMeta();
     }
 
     await acquireSlot();
+
+    // Re-check after the semaphore wait: if the epoch advanced while we
+    // were queued, abandon the request — neither cache the result nor
+    // touch a possibly-replaced inflight entry. The HTTP fetch is still
+    // issued for the queued caller (we already returned the promise) but
+    // its result is dropped on the floor for the new principal.
+    if (state.lastSeenEpoch !== capturedEpoch) {
+      releaseSlot();
+      return emptyMeta();
+    }
+
     try {
       const meta = await fetchReportMetadata(reportKey);
       const result: CachedMeta = {
         columns: meta.columns.map(mapBackendColumnMeta),
         capabilities: meta.capabilities,
       };
-      state.success.set(reportKey, result);
+      // Identity + epoch fence: only commit to the cache if WE are still
+      // the registered inflight promise AND the epoch hasn't advanced.
+      // Either condition failing means this fetch's result is stale and
+      // must not poison the cache for the current principal.
+      if (isStillCurrent()) {
+        state.success.set(reportKey, result);
+      }
       return result;
     } catch (err) {
       if (process.env.NODE_ENV !== 'production') {
@@ -267,11 +309,18 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
       // Do NOT cache the failure — let the next caller retry.
       return emptyMeta();
     } finally {
-      state.inflight.delete(reportKey);
+      // Identity guard: ONLY drop the inflight entry if it still points
+      // to us. After an epoch advance a new caller may have already
+      // registered a fresh promise under the same key — that promise
+      // belongs to the new epoch and MUST NOT be removed by us.
+      if (state.inflight.get(reportKey) === promiseRef.current) {
+        state.inflight.delete(reportKey);
+      }
       releaseSlot();
     }
   })();
 
+  promiseRef.current = promise;
   state.inflight.set(reportKey, promise);
   return promise;
 }
@@ -280,16 +329,28 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
  * Synchronous read of cached columns. Returns {@code []} when no
  * successful fetch has resolved yet for the key. Mirrors the legacy
  * {@code getColumnMeta()} contract on {@link ReportModule}.
+ *
+ * <p>Codex iter-1 absorb (thread 019e0450 §2): the sync readers also
+ * call {@link ensureFreshEpoch} so a render that happens to fire after
+ * a logout (but before the next async {@code fetchMeta()}) does NOT
+ * surface the previous principal's columns. ReportPage uses this
+ * getter in its render path (initial state, columns memo, export
+ * callback, detail drawer); without the epoch check the previous
+ * principal's metadata could leak into the new principal's render.
  */
 export function getCachedColumns(reportKey: string): ColumnMeta[] {
+  ensureFreshEpoch();
   return state.success.get(reportKey)?.columns ?? [];
 }
 
 /**
  * Synchronous read of cached capabilities. Returns {@code undefined}
  * when no successful fetch has resolved yet for the key.
+ *
+ * <p>Codex iter-1 absorb (thread 019e0450 §2): see {@link getCachedColumns}.
  */
 export function getCachedCapabilities(reportKey: string): ReportCapabilities | undefined {
+  ensureFreshEpoch();
   return state.success.get(reportKey)?.capabilities;
 }
 
