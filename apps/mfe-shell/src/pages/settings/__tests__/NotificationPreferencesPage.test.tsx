@@ -130,7 +130,7 @@ describe('NotificationPreferencesPage', () => {
     expect(arg.subscriberId).toBe('sub-1');
   });
 
-  it('dispatches delete when the row delete button is clicked', async () => {
+  it('arms then confirms delete via two-stage flow', async () => {
     identityMock = { orgId: 'default', subscriberId: 'sub-1' };
     listQueryMock = {
       data: [
@@ -153,7 +153,16 @@ describe('NotificationPreferencesPage', () => {
     deleteMutationMock.mockResolvedValue(undefined);
 
     render(<NotificationPreferencesPage />);
+
+    // First click arms the confirm; mutation NOT yet dispatched.
     fireEvent.click(screen.getByRole('button', { name: /7 numaralı kuralı sil/ }));
+    expect(deleteMutationMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Emin misiniz?')).toBeInTheDocument();
+
+    // Second click on "Onayla" actually deletes.
+    fireEvent.click(
+      screen.getByRole('button', { name: /7 numaralı kuralı silme işlemini onayla/ }),
+    );
 
     await vi.waitFor(() => {
       expect(deleteMutationMock).toHaveBeenCalledWith({
@@ -162,6 +171,38 @@ describe('NotificationPreferencesPage', () => {
         id: 7,
       });
     });
+  });
+
+  it('cancels delete when "Vazgeç" is clicked', async () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    listQueryMock = {
+      data: [
+        {
+          id: 8,
+          topicKey: 'foo',
+          channel: 'bar',
+          enabled: true,
+          quietHours: null,
+          frequencyLimitPerDay: null,
+          bypassForCritical: true,
+          createdAt: '2026-05-07T08:00:00Z',
+          updatedAt: '2026-05-07T08:00:00Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      error: undefined,
+    };
+
+    render(<NotificationPreferencesPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /8 numaralı kuralı sil/ }));
+    expect(screen.getByText('Emin misiniz?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /silmekten vazgeç/ }));
+
+    expect(screen.queryByText('Emin misiniz?')).not.toBeInTheDocument();
+    expect(deleteMutationMock).not.toHaveBeenCalled();
   });
 
   it('dispatches upsert from the inline new-row form', async () => {

@@ -204,6 +204,12 @@ const PreferenceTable: React.FC<PreferenceTableProps> = ({
   onDelete,
   deleting,
 }) => {
+  // Codex iter P2 absorb: two-stage delete confirm — first click on
+  // "Sil" arms the row; a second click on "Onayla" performs the
+  // delete. Prevents accidental removal of mute rules (which would
+  // re-enable notifications). The pending state is local to the table
+  // so navigating away resets it.
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const sorted = useMemo(
     () =>
       [...rows].sort((a, b) =>
@@ -261,15 +267,43 @@ const PreferenceTable: React.FC<PreferenceTableProps> = ({
             </td>
             <td className="py-2 text-zinc-500 text-xs">{formatTimestamp(row.updatedAt)}</td>
             <td className="py-2 text-right">
-              <button
-                type="button"
-                onClick={() => void onDelete(row.id)}
-                disabled={deleting}
-                aria-label={`${row.id} numaralı kuralı sil`}
-                className="text-xs text-rose-700 hover:underline disabled:opacity-50"
-              >
-                Sil
-              </button>
+              {pendingDeleteId === row.id ? (
+                <span className="inline-flex items-center gap-2 text-xs">
+                  <span className="text-zinc-600">Emin misiniz?</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await onDelete(row.id);
+                      } finally {
+                        setPendingDeleteId(null);
+                      }
+                    }}
+                    disabled={deleting}
+                    aria-label={`${row.id} numaralı kuralı silme işlemini onayla`}
+                    className="text-rose-700 underline disabled:opacity-50"
+                  >
+                    Onayla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteId(null)}
+                    aria-label="silmekten vazgeç"
+                    className="text-zinc-500 hover:underline"
+                  >
+                    Vazgeç
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPendingDeleteId(row.id)}
+                  aria-label={`${row.id} numaralı kuralı sil`}
+                  className="text-xs text-rose-700 hover:underline"
+                >
+                  Sil
+                </button>
+              )}
             </td>
           </tr>
         ))}

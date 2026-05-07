@@ -49,6 +49,10 @@ const XSuiteDashboardPage = React.lazy(() => import('../../pages/admin/XSuiteDas
 const ServiceControlPage = React.lazy(
   () => import('../../pages/admin/service-control/ServiceControlPage'),
 );
+// Faz 23.5 PR3: subscriber-facing notification preferences page.
+const NotificationPreferencesPage = React.lazy(
+  () => import('../../pages/settings/NotificationPreferencesPage'),
+);
 
 /* ------------------------------------------------------------------ */
 /*  AppRouter — All application routes                                 */
@@ -251,6 +255,10 @@ export const AppRouter: React.FC = () => {
         />
         <Route path="/home" element={<HomePage />} />
         <Route path="/runtime/theme-matrix" element={<ThemeMatrixPage />} />
+        {/* Faz 23.5 PR3: subscriber-facing preference editor. Auth gate
+            handled in-page via selectNotifyIdentity (returns null →
+            "Önce oturum açın" message). */}
+        <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
