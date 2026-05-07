@@ -2,7 +2,7 @@
 /*  Shell services wiring — connects Redux store, telemetry, etc.      */
 /* ------------------------------------------------------------------ */
 
-import { api } from '@mfe/shared-http';
+import { api, registerAuthReadyResolver } from '@mfe/shared-http';
 import { store } from '../store/store';
 import {
   configureShellServices,
@@ -173,6 +173,20 @@ configureShellServices({
   getAuthPhase: () => store.getState().auth.phase,
   getAuthEpoch: () => store.getState().auth.authEpoch,
 });
+
+// Phase 2 PR-HTTP-3: wire the same auth-ready bridge into
+// {@code @mfe/shared-http}'s request interceptor. Direct {@code api.get/...}
+// calls (legacy callers, internal shell features) now also wait for
+// {@code transportReady} before firing — closing the residual 401-storm
+// surface that PR-Auth-1's eager-prefetch removal and PR-Reporting-2's
+// metadata cache only partially covered (those PRs gated their own
+// fetch helpers; this hook gates the underlying axios client).
+//
+// Remote MFEs that import {@code api} directly via {@code @mfe/shared-http}
+// inherit the gate transparently, but the canonical pattern is still to
+// consume {@code getShellServices().http} (enforced by the ESLint rule
+// added in this PR).
+registerAuthReadyResolver(() => createAuthReadyPromise());
 
 /* ---- Wire remote module shell-services ---- */
 
