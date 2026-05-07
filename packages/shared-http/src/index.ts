@@ -44,6 +44,17 @@ export class AuthNotReadyError extends Error {
     this.name = 'AuthNotReadyError';
   }
 }
+
+/**
+ * Phase 2 PR-Refresh-4: typed result from the shell's refresh-token
+ * handler. {@code ok: true} carries the new token (optional — handler
+ * may have already pushed it to the store/cookie); {@code ok: false}
+ * carries the reason so the response interceptor can propagate the
+ * 401 with diagnostic context.
+ */
+export type RefreshResult = { ok: true; token?: string } | { ok: false; reason: string };
+
+type RefreshHandler = () => Promise<RefreshResult>;
 type EnvRecord = Record<string, string | undefined>;
 export type SharedHttpRequestConfig = AxiosRequestConfig & {
   __suppressGlobalForbiddenToast?: boolean;
@@ -86,6 +97,20 @@ export type SharedHttpRequestConfig = AxiosRequestConfig & {
    * caught by Codex iter-1 P0.
    */
   __skipAuthReadyGate?: boolean;
+  /**
+   * Phase 2 PR-Refresh-4: internal flag set by the response interceptor
+   * after a refresh-and-retry attempt. Prevents an infinite refresh
+   * loop if the retried request itself returns 401.
+   */
+  __isRefreshAttempt?: boolean;
+  /**
+   * Phase 2 PR-Refresh-4: opt-out of the single-flight 401 refresh-retry
+   * pipeline. The shell's refresh handler ({@code keycloak.updateToken})
+   * itself MUST set this to avoid recursive refresh attempts. Public
+   * endpoints with manual auth ({@code __skipAuth: true}) implicitly
+   * bypass refresh too — they didn't carry our auth in the first place.
+   */
+  __skipRefreshOn401?: boolean;
 };
 
 /**
@@ -147,6 +172,14 @@ let unauthorizedHandler: UnauthorizedHandler | null = null;
 // Phase 2 PR-HTTP-3: shell-supplied auth-ready bridge. Default null means
 // no gate (legacy behaviour preserved for tests / package isolation).
 let authReadyResolver: AuthReadyResolver | null = null;
+
+// Phase 2 PR-Refresh-4: shell-supplied refresh-token handler. Default
+// null means the response interceptor falls back to the legacy 401
+// path (dispatch event, reject). When wired, the interceptor will
+// single-flight a refresh on 401 and retry the original request once.
+let refreshHandler: RefreshHandler | null = null;
+let refreshInFlight: Promise<RefreshResult> | null = null;
+
 let authMode: AuthMode = resolveAuthMode();
 let authRedirectInProgress = false;
 const PROFILE_MISSING_CODE = 'PROFILE_MISSING';
@@ -319,6 +352,27 @@ export const registerAuthReadyResolver = (resolver?: AuthReadyResolver): void =>
   authReadyResolver = resolver ?? null;
 };
 
+/**
+ * Phase 2 PR-Refresh-4: register the shell's refresh-token handler.
+ * When a protected request returns 401, the response interceptor will:
+ * <ol>
+ *   <li>Single-flight: if a refresh is already in flight, every other
+ *       401-failing request awaits the same Promise (one network
+ *       refresh per token expiry, no thundering herd).</li>
+ *   <li>On {@code ok: true}, retry the original request once with the
+ *       new token (the {@code __isRefreshAttempt} flag prevents a
+ *       second refresh if the retry also 401s).</li>
+ *   <li>On {@code ok: false}, propagate the original 401 (existing
+ *       {@code app:auth:unauthorized} event is dispatched as before).</li>
+ * </ol>
+ *
+ * <p>Pass {@code undefined} to remove the handler — falls back to the
+ * legacy 401 path.
+ */
+export const registerRefreshHandler = (handler?: RefreshHandler): void => {
+  refreshHandler = handler ?? null;
+};
+
 export const configureSharedHttp = (config?: { authMode?: AuthMode }): void => {
   if (config?.authMode) {
     authMode = config.authMode;
@@ -436,11 +490,89 @@ const installInterceptors = (client: AxiosInstance) => {
       releasePendingRequest(response.config);
       return response;
     },
-    (error: AxiosError) => {
+    async (error: AxiosError) => {
       releasePendingRequest(error.config);
       const requestConfig = (error.config ?? {}) as SharedHttpRequestConfig;
       const status = error?.response?.status;
       if (status === 401 && !isPermitAllMode()) {
+        // Phase 2 PR-Refresh-4: single-flight refresh + retry pipeline.
+        // Conditions for an attempt:
+        //   - a refresh handler is registered (shell-wired);
+        //   - this is NOT itself a refresh attempt (no infinite loop);
+        //   - the request did not opt out via __skipRefreshOn401;
+        //   - the request did not opt out from auth entirely
+        //     (__skipAuth = "no auth header" → no point refreshing).
+        // Codex iter-1 P1 absorb (thread 019e048d): also exclude
+        // {@code __skipAuthReadyGate} requests. Bootstrap, login, and
+        // register flows mark their requests with this flag (PR-HTTP-3
+        // contract); they DRIVE the auth FSM, so a 401 from them must
+        // NOT trigger refresh — the refresh handler itself uses these
+        // same self-driving endpoints, which would deadlock.
+        const eligibleForRefresh =
+          refreshHandler !== null &&
+          !requestConfig.__isRefreshAttempt &&
+          !requestConfig.__skipRefreshOn401 &&
+          !requestConfig.__skipAuth &&
+          !requestConfig.__skipAuthReadyGate;
+
+        if (eligibleForRefresh) {
+          // Single-flight: every 401 within the same refresh window
+          // awaits the same Promise. The first caller starts the
+          // refresh; subsequent callers race onto the in-flight
+          // result and retry once it settles.
+          if (refreshInFlight === null) {
+            // Codex iter-1 P2 absorb: wrap the handler invocation so a
+            // SYNCHRONOUS throw (handler that throws before returning a
+            // Promise) is also caught and converted to ok=false. The
+            // outer try/await only catches Promise rejections.
+            refreshInFlight = (async () => {
+              try {
+                return await (refreshHandler as RefreshHandler)();
+              } catch (handlerErr) {
+                if (process.env.NODE_ENV !== 'production') {
+                  console.warn('[shared-http] refresh handler threw:', handlerErr);
+                }
+                return { ok: false, reason: 'handler-threw' } as RefreshResult;
+              }
+            })().finally(() => {
+              refreshInFlight = null;
+            });
+          }
+          const refreshResult: RefreshResult = await refreshInFlight;
+          if (refreshResult.ok) {
+            // Retry the original request once. Mark with
+            // __isRefreshAttempt so a follow-up 401 does NOT trigger
+            // another refresh (prevents loop). Authorization header
+            // is re-injected by the request interceptor against the
+            // (now-updated) tokenResolver.
+            const retryConfig = error.config as SharedHttpRequestConfig | undefined;
+            if (retryConfig) {
+              retryConfig.__isRefreshAttempt = true;
+              // Codex iter-1 P2 absorb: case-insensitive Authorization
+              // header strip. axios uses uppercase but downstream code
+              // (or merged config from external callers) may set the
+              // lowercase variant; both forms must be cleared so the
+              // request interceptor's re-inject from tokenResolver
+              // doesn't compete with a stale header.
+              if (retryConfig.headers && typeof retryConfig.headers === 'object') {
+                const headers = retryConfig.headers as Record<string, unknown> & {
+                  delete?: (key: string) => void;
+                };
+                if (typeof headers.delete === 'function') {
+                  headers.delete('Authorization');
+                  headers.delete('authorization');
+                } else {
+                  delete headers.Authorization;
+                  delete headers.authorization;
+                }
+              }
+              return client.request(retryConfig);
+            }
+          }
+          // Refresh failed — fall through to the legacy 401 path so
+          // the existing event/handler are dispatched.
+        }
+
         handleUnauthorized('http-401');
         unauthorizedHandler?.(error);
         // Codex 019dd818 iter-7 (B-prime PR-2a): global event dispatch for
