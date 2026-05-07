@@ -1,6 +1,10 @@
 import React from 'react';
 import type { ColDef, GridReadyEvent, GridApi } from 'ag-grid-community';
-import { buildColDefs, type ColumnMeta } from '@mfe/design-system/advanced/data-grid';
+import {
+  useResponsiveColumnDefs,
+  useViewportWidth,
+  type ColumnMeta,
+} from '@mfe/design-system/advanced/data-grid';
 import { Badge, Button } from '@mfe/design-system';
 import type {
   AccessRole,
@@ -25,6 +29,42 @@ interface RolesGridProps {
 
 const GRID_ID = 'mfe-access/roles-v2';
 const GRID_SCHEMA_VERSION = 1;
+
+/*
+ * PR #237 propagation — RolesGrid mobile column visibility.
+ *
+ *   - essential (always): name (role identity is the minimum
+ *                         actionable column on any viewport)
+ *   - md+ (>=768):        memberCount (role-size signal,
+ *                         secondary triage)
+ *
+ * `policies` (Module summary), `lastModifiedAt`, and the inline
+ * roleActions menu live in `customColumnDefs` inside the component
+ * because they depend on `t`, `formatDate`, `onCloneRole`,
+ * `onDeleteRole` runtime props; their viewport gating is applied in
+ * the same render so the toolbar + filter builder + variant
+ * integration share a single column source per render.
+ *
+ * Module-level so the responsive test suite can introspect tags
+ * without rendering the full grid (parallel to `auditColumnMeta`
+ * landed in mfe-audit PR #292).
+ */
+export const ROLES_COLUMN_META: ColumnMeta[] = [
+  {
+    field: 'name',
+    headerNameKey: 'access.grid.columns.name',
+    columnType: 'bold-text',
+    minWidth: 200,
+    essential: true,
+  },
+  {
+    field: 'memberCount',
+    headerNameKey: 'access.grid.columns.memberCount',
+    columnType: 'number',
+    width: 130,
+    responsive: { hideBelow: 'md' },
+  },
+];
 
 const LEVEL_BADGE_VARIANT: Record<string, 'error' | 'warning' | 'info' | 'muted'> = {
   MANAGE: 'error',
@@ -53,32 +93,36 @@ const RolesGrid: React.FC<RolesGridProps> = ({
 }) => {
   const gridApiRef = React.useRef<GridApi<AccessRole> | null>(null);
 
-  const columnMeta = React.useMemo<ColumnMeta[]>(
-    () => [
-      {
-        field: 'name',
-        headerNameKey: 'access.grid.columns.name',
-        columnType: 'bold-text',
-        minWidth: 200,
-      },
-      {
-        field: 'memberCount',
-        headerNameKey: 'access.grid.columns.memberCount',
-        columnType: 'number',
-        width: 130,
-      },
-    ],
-    [],
-  );
+  const columnMeta = ROLES_COLUMN_META;
 
-  const customColumnDefs = React.useMemo<ColDef<AccessRole>[]>(
-    () => [
+  /*
+   * PR #237 propagation — viewport buckets for `customColumnDefs`.
+   *
+   * `useResponsiveColumnDefs` only consults `ColumnMeta.responsive`
+   * for declarative columns; bespoke columns (cellRenderer-driven
+   * badge stack, action menu) need to read the same viewport
+   * bucket directly. We flag each entry below with a `_hideBelow`
+   * pixel threshold matching the Tailwind sm/md/lg/xl scale, then
+   * filter inside the same memo so a single React render covers
+   * both column tiers atomically.
+   *
+   *   - policies (badges):     hideBelow md (>=768)
+   *   - lastModifiedAt:        hideBelow lg (>=1024)
+   *   - roleActions:           always (essential — pinned right,
+   *                            users need clone/delete on mobile too)
+   */
+  const viewportWidth = useViewportWidth({ breakpointsOnly: true });
+
+  const customColumnDefs = React.useMemo<ColDef<AccessRole>[]>(() => {
+    type CustomColDef = ColDef<AccessRole> & { _hideBelow?: number };
+    const all: CustomColDef[] = [
       {
         headerName: t('access.grid.columns.moduleSummary'),
         field: 'policies',
         minWidth: 280,
         filter: false,
         sortable: false,
+        _hideBelow: 768, // md
         cellRenderer: ({ data }: { data: AccessRole }) => {
           if (!data?.policies?.length) {
             return (
@@ -105,6 +149,7 @@ const RolesGrid: React.FC<RolesGridProps> = ({
         headerName: t('access.grid.columns.lastModified'),
         field: 'lastModifiedAt',
         width: 200,
+        _hideBelow: 1024, // lg
         valueGetter: ({ data }) => {
           if (!data) return '';
           const ts = formatDate(new Date(data.lastModifiedAt), {
@@ -130,15 +175,31 @@ const RolesGrid: React.FC<RolesGridProps> = ({
           return <RowActions role={data} onClone={onCloneRole} onDelete={onDeleteRole} t={t} />;
         },
       },
-    ],
-    [formatDate, onCloneRole, onDeleteRole, t],
-  );
+    ];
+
+    return all
+      .filter((c) => c._hideBelow === undefined || viewportWidth >= c._hideBelow)
+      .map(({ _hideBelow: _drop, ...rest }) => rest);
+  }, [formatDate, onCloneRole, onDeleteRole, t, viewportWidth]);
 
   const localeCode = 'tr-TR';
-  const columnDefs = React.useMemo<ColDef<AccessRole>[]>(() => {
-    const metaDefs = buildColDefs<AccessRole>(columnMeta, t, localeCode) as ColDef<AccessRole>[];
-    return [...metaDefs, ...customColumnDefs];
-  }, [columnMeta, customColumnDefs, t]);
+
+  /*
+   * PR #237 propagation — viewport-aware metaDefs. The hook
+   * subscribes to `useViewportWidth({ breakpointsOnly: true })`
+   * internally; when the viewport crosses a bucket boundary the
+   * memo refreshes and AG Grid receives the new column set.
+   */
+  const metaDefs = useResponsiveColumnDefs<AccessRole>({
+    columns: columnMeta,
+    t,
+    locale: localeCode,
+  }) as ColDef<AccessRole>[];
+
+  const columnDefs = React.useMemo<ColDef<AccessRole>[]>(
+    () => [...metaDefs, ...customColumnDefs],
+    [metaDefs, customColumnDefs],
+  );
 
   const gridOptions = React.useMemo(
     () => ({

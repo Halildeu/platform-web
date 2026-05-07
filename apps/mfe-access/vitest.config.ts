@@ -21,6 +21,16 @@ export default defineConfig({
         find: '@mfe/auth',
         replacement: path.resolve(__dirname, '../../packages/auth/src/index.ts'),
       },
+      // Subpath alias for the responsive datagrid hooks (PR #236) —
+      // without this, `@mfe/design-system/advanced/data-grid` resolves
+      // through package.json `exports` which point at `dist/` (not
+      // built during tests). Must be ordered BEFORE the root
+      // `@mfe/design-system` alias for the same prefix-shadowing
+      // reason as the `@mfe/auth/ui` alias above.
+      {
+        find: '@mfe/design-system/advanced/data-grid',
+        replacement: path.resolve(__dirname, '../../packages/design-system/src/advanced/data-grid'),
+      },
       {
         find: '@mfe/design-system',
         replacement: path.resolve(__dirname, '../../packages/design-system/src'),
