@@ -11,12 +11,14 @@
  *
  * Heading-order rule disabled per fixture (acknowledged gap):
  * DetailSummary today renders `PageHeader` (h1) → `EntitySummaryBlock`
- * (h3) → `Descriptions` heading (h4) — the h2 level is skipped.
+ * (h3); the inline `Descriptions` panel emits its own h3 too, and
+ * `InlineJsonViewer`'s title (when `jsonValue` is provided) is h4.
+ * The h2 level is skipped between the page title and the entity
+ * block — that is the real cascade gap, not a test artifact.
  * Searching the repo (design-lab showcase, library docs) confirms no
- * consumer wraps the block with an h2; this is a real semantic gap,
- * not a test artifact. The proper fix is a follow-up component PR
- * that reduces `EntitySummaryBlock`'s title to h2 and the descriptions
- * heading to h3 (or makes both contextual). Until then this fixture
+ * consumer wraps the block with an h2 either. The proper fix is a
+ * follow-up component PR that lowers `EntitySummaryBlock`'s title to
+ * h2 (or makes the level contextual). Until then this fixture
  * unblocks axe coverage on every other rule.
  *
  * Color contrast + region rules remain relaxed in
