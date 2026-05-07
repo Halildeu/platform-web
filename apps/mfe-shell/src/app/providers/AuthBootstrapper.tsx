@@ -1,19 +1,18 @@
-import React, { useEffect, useRef } from "react";
-import { useAppDispatch, useAppSelector } from "../store/store.hooks";
-import keycloak from "../auth/keycloakClient";
-import { authConfig, isKeycloakMode } from "../auth/auth-config";
+import React, { useEffect, useRef } from 'react';
+import { useAppDispatch, useAppSelector } from '../store/store.hooks';
+import keycloak from '../auth/keycloakClient';
+import { authConfig, isKeycloakMode } from '../auth/auth-config';
 import {
   logout,
   setKeycloakSession,
   setAuthInitialized,
-} from "../../features/auth/model/auth.slice";
-import {
-  subscribeAuthState,
-  withSuppressedAuthBroadcast,
-} from "../auth/auth-sync";
-import { createDevAuthSession, mapKeycloakProfile } from "../config/auth-helpers";
-import { api } from "@mfe/shared-http";
-import { registerGridVariantsTokenResolver } from "@mfe/design-system";
+  setAuthPhase,
+  setAuthFailed,
+} from '../../features/auth/model/auth.slice';
+import { subscribeAuthState, withSuppressedAuthBroadcast } from '../auth/auth-sync';
+import { createDevAuthSession, mapKeycloakProfile } from '../config/auth-helpers';
+import { api } from '@mfe/shared-http';
+import { registerGridVariantsTokenResolver } from '@mfe/design-system';
 
 /* ------------------------------------------------------------------ */
 /*  Fetch real application permissions from permission-service          */
@@ -28,7 +27,7 @@ interface AuthzMeResult {
 
 async function fetchAppPermissions(token: string): Promise<AuthzMeResult> {
   try {
-    const res = await api.get("/v1/authz/me", {
+    const res = await api.get('/v1/authz/me', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = res.data as Record<string, unknown> & {
@@ -47,28 +46,35 @@ async function fetchAppPermissions(token: string): Promise<AuthzMeResult> {
       rawResponse: data,
     };
   } catch (err: unknown) {
-    console.warn("AuthBootstrapper: /v1/authz/me failed, falling back to JWT roles", err);
+    console.warn('AuthBootstrapper: /v1/authz/me failed, falling back to JWT roles', err);
     return { permissions: [], superAdmin: false, rawResponse: null };
   }
 }
 
 /**
  * Store token in httpOnly cookie via gateway endpoint.
- * Falls back silently if endpoint unavailable (dev mode).
+ *
+ * <p>Phase 2 PR-Auth-1 (Codex iter-22 §Auth-1 absorb, thread 019e0119):
+ * promise must be awaited by the caller (no fire-and-forget). Returns a
+ * boolean indicating success so the bootstrapper can advance the auth
+ * FSM accordingly. Network/server errors throw so the caller may
+ * dispatch {@code setAuthFailed} with structured context.
+ *
+ * <p>Dev mode (no gateway): caller must catch and decide policy. The
+ * helper itself does NOT swallow errors anymore — silent failure was
+ * the root cause of the pre-cookie metadata 401 storm observed at
+ * testai.acik.com (574 metadata requests, all 401, before cookie POST
+ * resolved).
  */
 async function setTokenCookie(token: string): Promise<void> {
-  try {
-    await api.post("/auth/cookie", null, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch {
-    // Cookie endpoint may not be available in dev; silently ignore
-  }
+  await api.post('/auth/cookie', null, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 async function clearTokenCookie(): Promise<void> {
   try {
-    await api.delete("/auth/cookie");
+    await api.delete('/auth/cookie');
   } catch {
     // Silently ignore
   }
@@ -78,9 +84,7 @@ async function clearTokenCookie(): Promise<void> {
 /*  AuthBootstrapper — Keycloak initialization & token management      */
 /* ------------------------------------------------------------------ */
 
-export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
   const token = useAppSelector((state) => state.auth.token);
   const tokenRef = useRef<string | null>(null);
@@ -142,86 +146,139 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({
     }
     let mounted = true;
 
+    /**
+     * Phase 2 PR-Auth-1 (Codex iter-22/23 §Auth-1 absorb, thread 019e0119):
+     * MFE Auth Transport Contract bootstrap. Strict await sequence:
+     *
+     * <pre>
+     * initializing
+     *   → keycloakReady   (after keycloak.init resolves)
+     *   → cookieReady     (after POST /api/auth/cookie resolves; only if kcToken)
+     *   → authzReady      (after GET /v1/authz/me resolves)
+     *   → transportReady  (final gate; protected MFE render + fetch enabled)
+     * </pre>
+     *
+     * Failure paths:
+     * - Keycloak.init throws → setAuthFailed (technical error; degraded UI)
+     * - keycloak returns no token → setAuthPhase('unauthenticated') (login UI OK)
+     * - cookie write throws → setAuthFailed (gateway/network problem)
+     * - authz/me throws → tolerated; advance to transportReady with empty
+     *   permissions (PermissionProvider handles fallback). This preserves
+     *   the previous behavior where /authz/me failure didn't block login.
+     */
     const bootstrap = async () => {
       try {
         const isLoginRoute =
-          typeof window !== "undefined" &&
-          window.location?.pathname?.startsWith("/login");
-        // Detect auth code in URL (from Keycloak redirect after login)
+          typeof window !== 'undefined' && window.location?.pathname?.startsWith('/login');
         const urlHasAuthCode =
-          typeof window !== "undefined" &&
-          (window.location?.hash?.includes("code=") ||
-           window.location?.search?.includes("code="));
+          typeof window !== 'undefined' &&
+          (window.location?.hash?.includes('code=') || window.location?.search?.includes('code='));
         const initOptions: {
-          pkceMethod: "S256";
+          pkceMethod: 'S256';
           checkLoginIframe: false;
-          onLoad?: "check-sso";
+          onLoad?: 'check-sso';
           silentCheckSsoRedirectUri?: string;
         } = {
-          pkceMethod: "S256",
+          pkceMethod: 'S256',
           checkLoginIframe: false,
         };
-        // If URL has auth code, always use check-sso so keycloak.init()
-        // processes the code and exchanges it for a token via PKCE.
-        // Without onLoad, keycloak-js ignores the code in the URL.
         if (urlHasAuthCode) {
-          initOptions.onLoad = "check-sso";
+          initOptions.onLoad = 'check-sso';
         } else if (!isLoginRoute && authConfig.keycloak.enableSilentCheckSso) {
-          initOptions.onLoad = "check-sso";
-          initOptions.silentCheckSsoRedirectUri =
-            authConfig.keycloak.silentCheckSsoRedirectUri;
+          initOptions.onLoad = 'check-sso';
+          initOptions.silentCheckSsoRedirectUri = authConfig.keycloak.silentCheckSsoRedirectUri;
         }
         console.info('[AuthBootstrapper] init starting', {
-          isLoginRoute, urlHasAuthCode, onLoad: initOptions.onLoad,
+          isLoginRoute,
+          urlHasAuthCode,
+          onLoad: initOptions.onLoad,
           kcUrl: authConfig.keycloak.url,
         });
         await keycloak.init(initOptions);
-        console.info('[AuthBootstrapper] init done', {
-          authenticated: keycloak.authenticated, hasToken: !!keycloak.token,
-        });
         if (!mounted) return;
+        console.info('[AuthBootstrapper] init done', {
+          authenticated: keycloak.authenticated,
+          hasToken: !!keycloak.token,
+        });
+        dispatch(setAuthPhase('keycloakReady'));
+
         const kcToken = keycloak.token ?? null;
-        if (kcToken) {
-          // Store token in httpOnly cookie for secure session management
-          void setTokenCookie(kcToken);
-          const profile = mapKeycloakProfile(kcToken);
-          // Fetch real application permissions from authorization proxy
-          const authzResult = await fetchAppPermissions(kcToken);
-          const mergedProfile = profile
-            ? {
-                ...profile,
-                permissions: authzResult.permissions.length > 0
-                  ? authzResult.permissions
-                  : profile.permissions,
-                role: authzResult.superAdmin
-                  ? "ADMIN"
-                  : authzResult.permissions.length > 0
-                    ? (authzResult.permissions.find((p) => p === "ADMIN") ?? profile.role)
-                    : profile.role,
-              }
-            : undefined;
-          dispatch(
-            setKeycloakSession({
-              token: kcToken,
-              profile: mergedProfile,
-              expiresAt: keycloak.tokenParsed?.exp
-                ? keycloak.tokenParsed.exp * 1000
-                : null,
-              authzSnapshot: authzResult.rawResponse,
-            }),
-          );
-        } else {
+        if (!kcToken) {
+          // No Keycloak session — user not logged in. UNAUTHENTICATED is
+          // the correct state (login UI may render); not a failure.
           if (!tokenRef.current) {
             dispatch(setKeycloakSession({ token: null }));
           }
+          dispatch(setAuthPhase('unauthenticated'));
+          return;
         }
+
+        // Step 1: cookie write — MUST resolve before transport is ready.
+        // Codex iter-22: silent fire-and-forget caused 574 pre-cookie 401
+        // metadata storms at testai.acik.com.
+        try {
+          await setTokenCookie(kcToken);
+          if (!mounted) return;
+          dispatch(setAuthPhase('cookieReady'));
+        } catch (cookieErr) {
+          console.error('[AuthBootstrapper] cookie write failed:', cookieErr);
+          if (mounted) {
+            dispatch(
+              setAuthFailed({
+                message: 'Auth cookie write failed; protected requests cannot proceed.',
+                cause: cookieErr instanceof Error ? cookieErr.message : String(cookieErr),
+              }),
+            );
+          }
+          return;
+        }
+
+        // Step 2: authz/me — fetch permissions snapshot.
+        const profile = mapKeycloakProfile(kcToken);
+        const authzResult = await fetchAppPermissions(kcToken);
+        if (!mounted) return;
+        dispatch(setAuthPhase('authzReady'));
+
+        const mergedProfile = profile
+          ? {
+              ...profile,
+              permissions:
+                authzResult.permissions.length > 0 ? authzResult.permissions : profile.permissions,
+              role: authzResult.superAdmin
+                ? 'ADMIN'
+                : authzResult.permissions.length > 0
+                  ? (authzResult.permissions.find((p) => p === 'ADMIN') ?? profile.role)
+                  : profile.role,
+            }
+          : undefined;
+        dispatch(
+          setKeycloakSession({
+            token: kcToken,
+            profile: mergedProfile,
+            expiresAt: keycloak.tokenParsed?.exp ? keycloak.tokenParsed.exp * 1000 : null,
+            authzSnapshot: authzResult.rawResponse,
+          }),
+        );
+
+        // Step 3: transport-ready — protected MFE render + fetch enabled.
+        dispatch(setAuthPhase('transportReady'));
       } catch (err: unknown) {
         console.error('[AuthBootstrapper] keycloak.init() failed:', err);
         if (mounted && !tokenRef.current) {
           dispatch(setKeycloakSession({ token: null }));
+          dispatch(
+            setAuthFailed({
+              message: 'Keycloak bootstrap failed.',
+              cause: err instanceof Error ? err.message : String(err),
+            }),
+          );
         }
       } finally {
         if (mounted) {
+          // Backward-compat: legacy {@code initialized} boolean is now
+          // derived from {@link AuthPhase}; calling setAuthInitialized
+          // after bootstrap completes keeps existing consumers (those
+          // that haven't migrated to selectIsTransportReady) working.
           dispatch(setAuthInitialized(true));
         }
       }
@@ -239,13 +296,14 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({
           const mergedProfile = profile
             ? {
                 ...profile,
-                permissions: authzResult.permissions.length > 0
-                  ? authzResult.permissions
-                  : profile.permissions,
+                permissions:
+                  authzResult.permissions.length > 0
+                    ? authzResult.permissions
+                    : profile.permissions,
                 role: authzResult.superAdmin
-                  ? "ADMIN"
+                  ? 'ADMIN'
                   : authzResult.permissions.length > 0
-                    ? (authzResult.permissions.find((p) => p === "ADMIN") ?? profile.role)
+                    ? (authzResult.permissions.find((p) => p === 'ADMIN') ?? profile.role)
                     : profile.role,
               }
             : undefined;
@@ -253,9 +311,7 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({
             setKeycloakSession({
               token: keycloak.token,
               profile: mergedProfile,
-              expiresAt: keycloak.tokenParsed?.exp
-                ? keycloak.tokenParsed.exp * 1000
-                : null,
+              expiresAt: keycloak.tokenParsed?.exp ? keycloak.tokenParsed.exp * 1000 : null,
               authzSnapshot: authzResult.rawResponse,
             }),
           );

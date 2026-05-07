@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAppSelector } from '../store/store.hooks';
 import { isPermitAllMode } from '../auth/auth-config';
 import { ProtectedRoute } from '../guards/ProtectedRoute';
+import { selectAuthPhase } from '../../features/auth/model/auth.slice';
 import {
   isEndpointAdminRemoteEnabled,
   isEthicRemoteEnabled,
@@ -67,6 +68,16 @@ export const AppRouter: React.FC = () => {
   const { t } = useShellCommonI18n();
   const authState = useAppSelector((state) => state.auth);
   const { token, initialized } = authState;
+  // Phase 2 PR-Auth-1 (Codex iter-22 §Auth-1 absorb, thread 019e0119):
+  // FSM phase used to suppress login flicker during transitional bootstrap
+  // states (initializing/keycloakReady/cookieReady/authzReady). Login UI
+  // only renders on terminal `unauthenticated` phase.
+  const authPhase = useAppSelector(selectAuthPhase);
+  const isAuthBootstrapping =
+    authPhase === 'initializing' ||
+    authPhase === 'keycloakReady' ||
+    authPhase === 'cookieReady' ||
+    authPhase === 'authzReady';
   const permitAllMode = isPermitAllMode();
   const suggestionsEnabled = isSuggestionsRemoteEnabled();
   const ethicEnabled = isEthicRemoteEnabled();
@@ -265,7 +276,13 @@ export const AppRouter: React.FC = () => {
         <Route
           path="/"
           element={
-            !initialized && !permitAllMode ? (
+            // Phase 2 PR-Auth-1 absorb: suppress login flicker during
+            // transitional auth phases. ValidatingMessage shown until phase
+            // reaches a terminal state (transportReady / unauthenticated /
+            // failed). Without this, the brief
+            // initializing→keycloakReady→cookieReady transition flashes the
+            // login button on cold reload.
+            (!initialized || isAuthBootstrapping) && !permitAllMode ? (
               <div className="px-6 py-10 text-sm font-medium text-text-secondary">
                 {t('auth.session.validating')}
               </div>

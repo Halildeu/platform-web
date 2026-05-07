@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAppSelector } from '../store/store.hooks';
 import { usePermissions } from '@mfe/auth';
 import { isPermitAllMode } from '../auth/auth-config';
+import { selectAuthPhase } from '../../features/auth/model/auth.slice';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -20,13 +21,26 @@ export const ProtectedRoute = ({
   fallbackPath = '/unauthorized',
 }: ProtectedRouteProps) => {
   const { token, initialized } = useAppSelector((state) => state.auth);
+  // Phase 2 PR-Auth-1 absorb (Codex iter-22, thread 019e0119): consult
+  // FSM phase to detect transitional bootstrap states. Without this guard,
+  // ProtectedRoute's `!initialized` check returns true the moment the
+  // legacy boolean flips, but cookie/authz may still be in flight —
+  // causing the protected MFE to mount and fan out 401 metadata fetches.
+  const authPhase = useAppSelector(selectAuthPhase);
+  const isAuthBootstrapping =
+    authPhase === 'initializing' ||
+    authPhase === 'keycloakReady' ||
+    authPhase === 'cookieReady' ||
+    authPhase === 'authzReady' ||
+    authPhase === 'refreshing';
   const permissions = usePermissions();
   const { hasModule, isSuperAdmin, initialized: permissionsInitialized } = permissions;
   const location = useLocation();
   const permitAllMode = isPermitAllMode();
 
-  // Wait for both auth AND permissions to be ready
-  if (!initialized || (!permitAllMode && token && !permissionsInitialized)) {
+  // Wait for both auth FSM AND permissions to be ready. transportReady is
+  // the gate after which protected MFEs may fetch.
+  if (!initialized || isAuthBootstrapping || (!permitAllMode && token && !permissionsInitialized)) {
     return null;
   }
 
@@ -50,7 +64,7 @@ export const ProtectedRoute = ({
     canAccess = isSuperAdmin() || hasModule(requiredModule);
   } else if (requiredPermissions) {
     // Legacy string-based check — map to module check for backward compat
-    canAccess = isSuperAdmin() || requiredPermissions.every(p => hasModule(p));
+    canAccess = isSuperAdmin() || requiredPermissions.every((p) => hasModule(p));
   } else {
     canAccess = true;
   }
