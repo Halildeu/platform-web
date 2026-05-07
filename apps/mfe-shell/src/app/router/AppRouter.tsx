@@ -3,7 +3,11 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAppSelector } from '../store/store.hooks';
 import { isPermitAllMode } from '../auth/auth-config';
 import { ProtectedRoute } from '../guards/ProtectedRoute';
-import { isEthicRemoteEnabled, isSuggestionsRemoteEnabled } from '../shell-navigation';
+import {
+  isEndpointAdminRemoteEnabled,
+  isEthicRemoteEnabled,
+  isSuggestionsRemoteEnabled,
+} from '../shell-navigation';
 import { useShellCommonI18n } from '../i18n';
 import {
   SuggestionsApp,
@@ -12,6 +16,7 @@ import {
   AuditModule,
   UsersModule,
   SchemaExplorerModule,
+  EndpointAdminModule,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
 const ReportBuilderWizard = React.lazy(() =>
@@ -61,6 +66,7 @@ export const AppRouter: React.FC = () => {
   const permitAllMode = isPermitAllMode();
   const suggestionsEnabled = isSuggestionsRemoteEnabled();
   const ethicEnabled = isEthicRemoteEnabled();
+  const endpointAdminEnabled = isEndpointAdminRemoteEnabled();
 
   const defaultShellPath = '/home';
 
@@ -97,6 +103,18 @@ export const AppRouter: React.FC = () => {
             <ProtectedRoute requiredModule="ACCESS">
               <AccessModule />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/endpoint-admin/*"
+          element={
+            endpointAdminEnabled ? (
+              <ProtectedRoute requiredModule="ENDPOINT_ADMIN">
+                <EndpointAdminModule />
+              </ProtectedRoute>
+            ) : (
+              <Navigate to={defaultShellPath} replace />
+            )
           }
         />
         <Route

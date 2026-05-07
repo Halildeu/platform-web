@@ -114,6 +114,12 @@ function buildRemotes() {
       'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
       'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
     ]),
+    // Default OFF — never STUB; flag-OFF means the remote is omitted
+    // from the federation manifest entirely (build-time gating).
+    endpointAdmin: readEnvBoolean(
+      ['VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE', 'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE'],
+      false,
+    ),
   };
 
   // All remotes must be declared so MF plugin can resolve their imports
@@ -149,6 +155,10 @@ function buildRemotes() {
     schemaExplorer: readEnvString(
       ['MFE_SCHEMA_EXPLORER_URL', 'VITE_MFE_SCHEMA_EXPLORER_URL'],
       'http://localhost:3008/remoteEntry.js',
+    ),
+    endpointAdmin: readEnvString(
+      ['MFE_ENDPOINT_ADMIN_URL', 'VITE_MFE_ENDPOINT_ADMIN_URL'],
+      'http://localhost:3009/remoteEntry.js',
     ),
   };
 
@@ -187,6 +197,19 @@ function buildRemotes() {
       type: 'module',
       name: 'mfe_schema_explorer',
       entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
+    },
+    // PR #258 reapply (post-#261): we keep the STUB-when-disabled
+    // pattern so the MF plugin can still resolve the
+    // `mfe_endpoint_admin/EndpointAdminApp` static import in
+    // lazy-routes.ts. createLazyRemoteModule already classifies the
+    // STUB resolution as a render-time fallback. The crash root cause
+    // was the EAGER loader in shell-services-wiring — that path is
+    // gated separately at runtime (see shell-services-wiring.ts +
+    // isEndpointAdminRemoteEnabled flag).
+    mfe_endpoint_admin: {
+      type: 'module',
+      name: 'mfe_endpoint_admin',
+      entry: enabled.endpointAdmin ? remoteEntries.endpointAdmin : STUB,
     },
   };
 }
