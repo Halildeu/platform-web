@@ -26,8 +26,21 @@ export type DrawerTargetEventLike = {
    * consumers can mark action columns explicitly.
    */
   colDef?: {
-    editable?: boolean | ((...args: unknown[]) => boolean);
-    checkboxSelection?: boolean;
+    // `editable` is widened to `boolean | Function` to stay compatible
+    // with AG Grid v34's `EditableCallback<TData, TValue, TContext>`
+    // which carries fully-typed parameters that don't fit a generic
+    // `(...args: unknown[]) => boolean`. The guard only checks the
+    // truthiness of `editable`, so the precise call signature is
+    // irrelevant — accepting any callable here keeps the structural
+    // overlap with all AG Grid event variants without weakening the
+    // runtime check.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    editable?: boolean | ((...args: any[]) => boolean);
+    // Same callable-or-boolean widening as `editable`: AG Grid v34
+    // ships `CheckboxSelectionCallback<TData, TValue, TContext>` so
+    // a literal `boolean` constraint rejects the typed event variants.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    checkboxSelection?: boolean | ((...args: any[]) => boolean);
     type?: string | string[];
     suppressDrawerOpenOnDoubleClick?: boolean;
   } | null;

@@ -62,7 +62,8 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
       title={accessReason}
       data-access-state={accessState.state}
     >
-      <XBarChart data={data ?? []} {...(rest as XBarChartProps)} />
+      {/* Spread first; explicit `data` last (see AreaChart for context). */}
+      <XBarChart {...(rest as XBarChartProps)} data={data ?? []} />
     </div>
   );
 });

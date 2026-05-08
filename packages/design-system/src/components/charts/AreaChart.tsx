@@ -45,7 +45,16 @@ export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(functi
       title={accessReason}
       data-access-state={accessState.state}
     >
-      <XAreaChart series={series ?? []} labels={labels ?? []} {...(rest as XAreaChartProps)} />
+      {/*
+        `rest` is `Omit<XAreaChartProps, 'series' | 'labels' | 'theme' | 'decal' | 'density' | 'accent'> & AccessControlledProps`
+        after the destructure above strips the AccessControlled bits;
+        casting back to the full `XAreaChartProps` re-introduced
+        `series` and `labels` into the spread, producing the
+        TS2783 duplicate warnings. Spread first, then explicitly set
+        `series` / `labels` last so React picks up the explicit
+        defaults regardless of what the cast suggests.
+      */}
+      <XAreaChart {...(rest as XAreaChartProps)} series={series ?? []} labels={labels ?? []} />
     </div>
   );
 });

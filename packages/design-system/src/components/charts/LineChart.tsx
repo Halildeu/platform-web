@@ -49,7 +49,8 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
       title={accessReason}
       data-access-state={accessState.state}
     >
-      <XLineChart series={series ?? []} labels={labels ?? []} {...(rest as XLineChartProps)} />
+      {/* Spread first; explicit `series`/`labels` last (see AreaChart for context). */}
+      <XLineChart {...(rest as XLineChartProps)} series={series ?? []} labels={labels ?? []} />
     </div>
   );
 });
