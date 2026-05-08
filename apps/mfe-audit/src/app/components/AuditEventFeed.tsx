@@ -192,7 +192,11 @@ export const AuditEventFeed: React.FC = () => {
   }, [shellServices, emitTelemetry]);
 
   const requestAuditRows = useCallback(
-    async ({ startRow, successCallback, failCallback, sortModel }: IGetRowsParams<AuditEvent>) => {
+    // AG Grid v34 dropped the row-data generic from `IGetRowsParams`;
+    // the `successCallback` it surfaces takes `any[]` and the row
+    // shape is enforced via `getRowId` + the data we feed in. Keeping
+    // the param signature non-generic matches the v34 type.
+    async ({ startRow, successCallback, failCallback, sortModel }: IGetRowsParams) => {
       // Cancel any in-flight request before starting a new one
       activeRequestRef.current?.abort();
       const controller = new AbortController();
@@ -264,7 +268,13 @@ export const AuditEventFeed: React.FC = () => {
 
   const onGridReady = useCallback(
     (event: GridReadyEvent<AuditEvent>) => {
-      registerGridApi(event.api as AgGridTablePaginationApi<AuditEvent>);
+      // AG Grid v34 tightened `GridApi` typing; the structural overlap
+      // with `AgGridTablePaginationApi` is real (every method we list
+      // does live on `GridApi`) but TS can't see through the
+      // `Record<string, unknown>` intersection. The `unknown`
+      // round-trip cast acknowledges that and keeps the call site
+      // honest — AG Grid still hands us the same instance at runtime.
+      registerGridApi(event.api as unknown as AgGridTablePaginationApi<AuditEvent>);
     },
     [registerGridApi],
   );
@@ -272,7 +282,7 @@ export const AuditEventFeed: React.FC = () => {
   const refreshData = useCallback(() => {
     const api = gridApiRef.current;
     if (api) {
-      api.refreshInfiniteCache();
+      api.refreshInfiniteCache?.();
     }
   }, []);
 
@@ -289,7 +299,7 @@ export const AuditEventFeed: React.FC = () => {
     deeplinkResolvedRef.current = false;
     const api = gridApiRef.current;
     if (api && (api.getDisplayedRowCount?.() ?? 0) > 0) {
-      api.ensureIndexVisible(0, 'top');
+      api.ensureIndexVisible?.(0, 'top');
       api.paginationGoToFirstPage?.();
     }
     refreshData();
@@ -335,7 +345,7 @@ export const AuditEventFeed: React.FC = () => {
       });
       const api = gridApiRef.current;
       if (api && (api.getDisplayedRowCount?.() ?? 0) > 0) {
-        api.ensureIndexVisible(0, 'top');
+        api.ensureIndexVisible?.(0, 'top');
         api.paginationGoToFirstPage?.();
       }
       refreshData();
@@ -400,7 +410,7 @@ export const AuditEventFeed: React.FC = () => {
   useEffect(() => {
     if (gridApi) {
       gridApi.setGridOption?.('cacheBlockSize', pageSize);
-      gridApi.setGridOption('datasource', datasource);
+      gridApi.setGridOption?.('datasource', datasource);
       refreshPaginationSnapshot(gridApi);
     }
   }, [datasource, gridApi, pageSize, refreshPaginationSnapshot]);
@@ -410,15 +420,20 @@ export const AuditEventFeed: React.FC = () => {
       return;
     }
     let matched = false;
-    gridApi.forEachNode((node) => {
-      if (node.data?.id === highlightId) {
+    // `forEachNode`'s callback receives the structural node shape
+    // declared in `AgGridTablePaginationApi` (loose `data?: unknown`).
+    // Cast to AuditEvent at the access point so we don't poison the
+    // shared design-system type with audit-specific knowledge.
+    gridApi.forEachNode?.((node) => {
+      const auditData = node.data as AuditEvent | undefined;
+      if (auditData?.id === highlightId) {
         matched = true;
         node.setSelected(true);
-        gridApi.ensureNodeVisible(node, 'middle');
+        gridApi.ensureNodeVisible?.(node, 'middle');
       }
     });
     if (!matched && (gridApi.getDisplayedRowCount?.() ?? 0) > 0) {
-      gridApi.ensureIndexVisible(0, 'top');
+      gridApi.ensureIndexVisible?.(0, 'top');
     }
   }, [highlightId, gridApi, emitTelemetry]);
 

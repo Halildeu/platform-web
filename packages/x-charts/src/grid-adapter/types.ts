@@ -27,7 +27,16 @@ export interface GridColumnDef {
 /*  Filter / Sort Models                                               */
 /* ------------------------------------------------------------------ */
 
-export type FilterOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'range' | 'contains';
+export type FilterOperator =
+  | 'eq'
+  | 'neq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'in'
+  | 'range'
+  | 'contains';
 
 export interface GridFilterEntry {
   field: string;
@@ -40,6 +49,14 @@ export type SortDirection = 'asc' | 'desc';
 export interface GridSortEntry {
   field: string;
   direction: SortDirection;
+  /**
+   * Multi-column sort priority (lower = primary). Optional because
+   * single-column sorts and adapters that don't surface multi-sort
+   * order can omit it. AGGridAdapter populates this from AG Grid's
+   * `sortIndex` so downstream consumers can stable-order columns
+   * even when the source emits sort entries unordered.
+   */
+  sortIndex?: number;
 }
 
 /* ------------------------------------------------------------------ */
