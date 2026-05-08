@@ -39,8 +39,10 @@ const baseInitOptions: BootstrapInitOptions = {
 const buildDeps = (overrides: Partial<BootstrapDeps>): BootstrapDeps => ({
   keycloak: {
     authenticated: true,
-    token: 'mock-jwt',
-    tokenParsed: { exp: Date.now() / 1000 + 3600 },
+    // PR #314: live getters (NOT pre-init snapshots) — keycloak-js
+    // sets the token inside init() during auth-code callback flow.
+    getToken: () => 'mock-jwt',
+    getTokenParsed: () => ({ exp: Date.now() / 1000 + 3600 }),
     init: vi.fn().mockResolvedValue(undefined),
   },
   initOptions: baseInitOptions,
@@ -129,7 +131,8 @@ describe('bootstrapAuthController — production controller import test', () => 
       buildDeps({
         keycloak: {
           authenticated: false,
-          token: null,
+          getToken: () => null,
+          getTokenParsed: () => undefined,
           init: vi.fn().mockResolvedValue(undefined),
         },
         dispatchPhase,
@@ -149,7 +152,8 @@ describe('bootstrapAuthController — production controller import test', () => 
       buildDeps({
         keycloak: {
           authenticated: false,
-          token: null,
+          getToken: () => null,
+          getTokenParsed: () => undefined,
           init: vi.fn().mockRejectedValue(kcErr),
         },
         dispatchPhase,
@@ -188,6 +192,49 @@ describe('bootstrapAuthController — production controller import test', () => 
     expect(result.finalPhase).toBe('unauthenticated');
     expect(dispatchPhase.mock.calls.map((c) => c[0])).toEqual(['keycloakReady']);
     // No cookieReady/transportReady dispatched after unmount
+  });
+
+  it('PR #314: token set INSIDE keycloak.init() (live getter sees mutation)', async () => {
+    // Repro of testai.acik.com regression: keycloak-js standard
+    // auth-code callback flow assigns keycloak.token from inside
+    // init() — the token does NOT exist on the keycloak instance
+    // before init() runs. A pre-init snapshot captures null and
+    // the controller dispatches 'unauthenticated' even though a
+    // valid token will be set milliseconds later. Live getters fix
+    // this by re-reading the value after init() resolves.
+    let liveToken: string | null = null;
+    const initFn = vi.fn().mockImplementation(async () => {
+      // Simulate keycloak-js' internal callback exchange — the token
+      // is set during init's await chain, NOT after it resolves.
+      liveToken = 'mock-token-from-auth-code-callback';
+    });
+
+    const result = await bootstrapAuthController(
+      buildDeps({
+        keycloak: {
+          authenticated: false,
+          getToken: () => liveToken,
+          getTokenParsed: () => (liveToken ? { exp: Date.now() / 1000 + 3600 } : undefined),
+          init: initFn,
+        },
+        dispatchPhase,
+        dispatchFailed,
+        dispatchSession,
+      }),
+    );
+
+    // Bootstrap MUST advance through all phases to transportReady,
+    // not stop at unauthenticated. This is the regression guard.
+    expect(result.finalPhase).toBe('transportReady');
+    expect(dispatchPhase.mock.calls.map((c) => c[0])).toEqual([
+      'keycloakReady',
+      'cookieReady',
+      'authzReady',
+      'transportReady',
+    ]);
+    expect(dispatchSession).toHaveBeenCalledTimes(1);
+    // Verify the dispatched session carries the live token
+    expect(dispatchSession.mock.calls[0][0].token).toBe('mock-token-from-auth-code-callback');
   });
 
   it('reducer integration: phase history matches dispatch order', () => {

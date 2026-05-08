@@ -28,10 +28,28 @@
  *       permissions (PermissionProvider handles fallback)</li>
  * </ul>
  */
+/**
+ * Phase 2 PR #314 (Codex thread 019e062b iter-0 P1 absorb): the
+ * keycloak instance is passed to the controller as a structural type
+ * with LIVE getters for {@code token} and {@code tokenParsed}.
+ *
+ * <p>Why getters and not plain properties: in keycloak-js@26+ the
+ * standard auth-code callback assigns {@code keycloak.token} INSIDE
+ * {@code keycloak.init()} — i.e. between the React component's
+ * useEffect tick that constructs the deps object and the controller's
+ * post-init read of the deps. If the React side passes
+ * {@code token: keycloak.token} as a plain field, the controller sees
+ * the pre-init snapshot (typically null on first cold load) and
+ * dispatches {@code unauthenticated}, leaving the freshly-set token
+ * stranded inside the keycloak instance. Live getter callbacks
+ * resolve at the moment the controller reads, after init completes.
+ */
 export interface BootstrapKeycloak {
   authenticated?: boolean;
-  token: string | null | undefined;
-  tokenParsed?: { exp?: number };
+  /** LIVE getter — re-read after each await boundary. */
+  getToken: () => string | null | undefined;
+  /** LIVE getter — re-read after each await boundary. */
+  getTokenParsed: () => { exp?: number } | undefined;
   init: (opts: BootstrapInitOptions) => Promise<void>;
 }
 
@@ -101,7 +119,12 @@ export async function bootstrapAuthController(deps: BootstrapDeps): Promise<Boot
     }
     deps.dispatchPhase('keycloakReady');
 
-    const kcToken = deps.keycloak.token ?? null;
+    // Codex thread 019e062b iter-0 P1 #1 absorb: read token via live
+    // getter, NOT via a snapshot taken before init() resolved. This
+    // is the key fix — keycloak-js sets keycloak.token inside init()
+    // for auth-code callback flow, and a pre-init snapshot would miss
+    // the freshly-issued token entirely.
+    const kcToken = deps.keycloak.getToken() ?? null;
     if (!kcToken) {
       deps.dispatchPhase('unauthenticated');
       return { finalPhase: 'unauthenticated', cookieAwaited };
@@ -132,7 +155,9 @@ export async function bootstrapAuthController(deps: BootstrapDeps): Promise<Boot
     deps.dispatchSession({
       token: kcToken,
       profile,
-      expiresAt: deps.keycloak.tokenParsed?.exp ? deps.keycloak.tokenParsed.exp * 1000 : null,
+      expiresAt: deps.keycloak.getTokenParsed()?.exp
+        ? (deps.keycloak.getTokenParsed() as { exp: number }).exp * 1000
+        : null,
       authzSnapshot: authzResult.rawResponse,
     });
 
