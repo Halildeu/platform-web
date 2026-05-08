@@ -14,6 +14,7 @@ import { createDevAuthSession, mapKeycloakProfile } from '../config/auth-helpers
 import { api, type SharedHttpRequestConfig } from '@mfe/shared-http';
 import { registerGridVariantsTokenResolver } from '@mfe/design-system';
 import { bootstrapAuthController, type BootstrapInitOptions } from './auth-bootstrap-controller';
+import { isAuthContractE2eEnabled } from '../observability/auth-contract-e2e-probe';
 
 /* ------------------------------------------------------------------ */
 /*  Fetch real application permissions from permission-service          */
@@ -242,15 +243,16 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
         });
 
         // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
-        // When window.__authContractMockToken is set (the Playwright
-        // probe planted it before navigation), the controller still
-        // runs the production sequence (cookie + authz + dispatch) but
-        // keycloak.init becomes a no-op that has already populated
-        // token + tokenParsed + authenticated from the mock JWT.
-        // Production bundles never see this branch — the mock token
-        // is only ever set under VITE_AUTH_CONTRACT_E2E=1.
+        // GUARDED by isAuthContractE2eEnabled() — production bundles
+        // (where VITE_AUTH_CONTRACT_E2E is unset) NEVER take this
+        // branch even if window.__authContractMockToken is somehow
+        // injected (Codex iter-3 P0 #1: defense-in-depth, do not rely
+        // on the probe-install gate alone). Test bundles set both the
+        // env flag AND the mock token slot.
         const mockToken =
-          typeof window !== 'undefined' ? window.__authContractMockToken : undefined;
+          isAuthContractE2eEnabled() && typeof window !== 'undefined'
+            ? window.__authContractMockToken
+            : undefined;
         if (mockToken) {
           const parts = mockToken.split('.');
           let exp = Math.floor(Date.now() / 1000) + 3600;

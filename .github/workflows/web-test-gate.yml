@@ -523,6 +523,12 @@ jobs:
           # (window.__authContractProbe) + AuthBootstrapper mock-token
           # bypass. Production builds (no env var) never expose either.
           VITE_AUTH_CONTRACT_E2E: '1'
+          # Codex iter-3 P2 #5 absorb: stack reuse signature does not
+          # include VITE_AUTH_CONTRACT_E2E, so a previously-started stack
+          # without the flag could be reused on local/self-hosted runs.
+          # Force a fresh stack so the probe + bypass are guaranteed to
+          # be in the running build.
+          FRONTEND_STACK_REUSE_RUNNING: '0'
         run: |
           # auth-business-routes-live stack keeps Keycloak mode active
           # (NOT permitAll/fakeAuth — Codex iter-2 must-fix #1). The

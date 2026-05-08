@@ -51,7 +51,15 @@ declare global {
   }
 }
 
-const isContractE2eEnabled = (): boolean => {
+/**
+ * Returns true iff the test-only auth contract E2E mode is enabled
+ * via build-time env flag. Production bundles (no flag) MUST always
+ * return false — used by both the probe install gate AND the
+ * AuthBootstrapper mock-Keycloak bypass to ensure the bypass branch
+ * cannot be tripped by a global injection in a production build
+ * (Codex iter-3 P0 #1 absorb).
+ */
+export const isAuthContractE2eEnabled = (): boolean => {
   if (typeof process === 'undefined' || !process.env) return false;
   const flag =
     process.env.VITE_AUTH_CONTRACT_E2E ?? process.env.NEXT_PUBLIC_AUTH_CONTRACT_E2E ?? '';
@@ -60,7 +68,7 @@ const isContractE2eEnabled = (): boolean => {
 
 export const installAuthContractE2eProbe = (store: Store): void => {
   if (typeof window === 'undefined') return;
-  if (!isContractE2eEnabled()) return;
+  if (!isAuthContractE2eEnabled()) return;
   // Idempotent: re-mount of AppProviders (StrictMode) must not re-install
   if (window.__authContractProbe) return;
 
