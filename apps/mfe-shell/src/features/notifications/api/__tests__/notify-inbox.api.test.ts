@@ -301,6 +301,91 @@ describe('notifyInboxApi prepareHeaders state-derived identity', () => {
   });
 });
 
+/**
+ * PR-5.X-quartet (Codex thread {@code 019e075d} iter-7 follow-up):
+ * the {@code unwrapRequestFetchFn} workaround forces RTK Query to call
+ * {@code fetch(url, init)} instead of {@code fetch(new Request(url,
+ * init))}. Live evidence on testai.acik.com showed the Request-object
+ * form lost identity headers somewhere between the frontend pod's
+ * nginx and the orchestrator (`fetch(url, { headers })` returned 200
+ * but `fetch(new Request(url, { headers }))` with the exact same
+ * headers returned 400 MissingRequestHeader). This test guards the
+ * fetcher contract: every dispatched query reaches the global
+ * {@code fetch} stub with a string URL, never a Request instance.
+ */
+describe('notifyInboxApi unwrapRequestFetchFn (Request→string workaround)', () => {
+  it('passes string URL + init to fetch and preserves Request semantics', async () => {
+    type CallSnapshot = {
+      inputType: string;
+      method: string;
+      headers: Record<string, string>;
+      credentials?: RequestCredentials;
+      hasSignal: boolean;
+    };
+    const calls: CallSnapshot[] = [];
+    const orig = (global as unknown as { fetch: typeof fetch }).fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          inputType:
+            typeof input === 'string' ? 'string' : input instanceof Request ? 'Request' : 'URL',
+          method: (init?.method ?? 'GET').toUpperCase(),
+          headers: headersToRecord(init?.headers),
+          credentials: init?.credentials,
+          // Codex iter-7 REVISE absorb: RTK Query writes api.signal +
+          // any per-request timeout signal onto the Request before
+          // fetchFn runs. The unwrap must forward that signal so
+          // abort/timeout/cancel continue to fire after the reissue.
+          hasSignal: init?.signal != null && typeof init.signal === 'object',
+        });
+        recorded.push({
+          url: typeof input === 'string' ? input : String(input),
+          method: (init?.method ?? 'GET').toUpperCase(),
+          headers: headersToRecord(init?.headers),
+          credentials: init?.credentials,
+        });
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [],
+              page: 0,
+              size: 20,
+              totalElements: 0,
+              totalPages: 0,
+              unreadCount: 0,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }),
+    );
+
+    const store = buildStore();
+    const result = await store.dispatch(notifyInboxApi.endpoints.listInbox.initiate(IDENTITY));
+    expect(result.status).toBe('fulfilled');
+
+    // Wire-level guarantee: the workaround always issues a string URL,
+    // never a Request instance.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].inputType).toBe('string');
+    expect(calls[0].method).toBe('GET');
+
+    // Header + credential preservation through the unwrap.
+    expect(calls[0].headers['x-org-id']).toBe('default');
+    expect(calls[0].headers['x-subscriber-id']).toBe('sub-1');
+    expect(calls[0].credentials).toBe('include');
+
+    // Abort/timeout signal must carry over so RTK Query cancellation
+    // and any per-request timeout continue to fire.
+    expect(calls[0].hasSignal).toBe(true);
+
+    // Restore original fetch handler for subsequent describe blocks.
+    vi.unstubAllGlobals();
+    (global as unknown as { fetch: typeof fetch }).fetch = orig;
+  });
+});
+
 describe('notifyInboxApi.archive', () => {
   it('POSTs to /{id}/archive and removes from the active list', async () => {
     const store = buildStore();
