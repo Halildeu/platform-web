@@ -8,6 +8,28 @@ vi.mock('../../../../i18n/useUsersI18n', () => ({
   useUsersI18n: () => ({ t: (k: string) => k, locale: 'tr' }),
 }));
 
+// PR-FE-1 (Codex 019e08e2 iter-7): UsersGrid.runAccessProbe now awaits
+// shell auth.ready() before the first fetchUsers, so tests must provide
+// a transport-ready mock; otherwise the fallback returns
+// {ok:false, reason:'unauthenticated'} and the grid renders the
+// unauthorized state instead of EntityGridTemplate.
+vi.mock('../../../../app/services/shell-services', () => ({
+  getShellServices: () => ({
+    auth: {
+      ready: () => Promise.resolve({ ok: true }),
+      isTransportReady: () => true,
+      getPhase: () => 'transportReady' as const,
+      getEpoch: () => 1,
+      getToken: () => 'test-token',
+      getUser: () => null,
+    },
+    notify: { push: () => {} },
+    telemetry: { emit: () => {} },
+    http: {},
+  }),
+  configureShellServices: () => {},
+}));
+
 // Capture props passed to EntityGridTemplate
 let mockCapturedProps: any = null;
 

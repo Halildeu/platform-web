@@ -28,6 +28,7 @@ import UserActions from './UserActions.ui';
 import { fetchUsers } from '../../../entities/user/api/users.api';
 import type { UsersQueryParams } from '../../../features/user-management/model/user-management.types';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
+import { getShellServices } from '../../../app/services/shell-services';
 
 declare global {
   interface Window {
@@ -745,6 +746,38 @@ const UsersGrid: React.FC<UsersGridProps> = ({
     setAccessProbeReady(false);
     onLoadingChange?.(true);
     try {
+      // PR-FE-1 (Codex thread 019e08e2 iter-7 AGREE absorb, 2026-05-08):
+      // wait for the shell's MFE Auth Transport Contract before the first
+      // protected fetch. Pre-fix the probe fired the moment UsersGrid
+      // mounted — often before AuthBootstrapper's transportReady phase —
+      // so the shell-side request interceptor short-circuited with
+      // AuthNotReadyError, which the catch below surfaced as the
+      // "auth-not-ready: unauthenticated" / "Kullanıcı verileri
+      // alınamadı" toast on every cold load of /admin/users. Awaiting
+      // auth.ready() lets the shell's auth FSM cookie+authz round-trip
+      // settle before the user-facing fetch starts. Fail-closed: if the
+      // resolver returns !ok we fall through to the existing
+      // network-error catch (toast still shown for genuine outages).
+      const authResult = await getShellServices().auth.ready();
+      if (!authResult.ok) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[mfe-users] auth.ready() returned !ok', authResult);
+        }
+        // Map the shell's unauthenticated/failed signal to the existing
+        // grid states so users see the right copy and the right CTA
+        // (Yeniden dene retries the probe — by then the shell is
+        // typically transportReady and the second attempt succeeds).
+        setGridState(authResult.reason === 'failed' ? 'network-error' : 'unauthorized');
+        notifyOnce(
+          authResult.reason === 'failed' ? 'network-error' : 'unauthorized',
+          authResult.reason === 'failed' ? 'error' : 'warning',
+          authResult.reason === 'failed'
+            ? 'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.'
+            : 'Kullanıcı verileri için oturumun hazırlanmasını bekliyoruz. Lütfen yeniden deneyin.',
+        );
+        return;
+      }
+
       const response = await fetchUsers({ page: 1, pageSize: 1 });
       const reason = response.meta?.reason;
 
