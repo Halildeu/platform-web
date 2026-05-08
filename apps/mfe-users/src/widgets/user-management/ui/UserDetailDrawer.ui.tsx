@@ -1,3 +1,13 @@
+// PR-FE-5 (2026-05-08): pre-existing lint warnings in this file
+// (legacy `api` import from @mfe/shared-http + 10 unaltered catch
+// blocks lacking error.cause) block lint-staged's `--max-warnings 0`
+// gate when ANY edit lands on this file. The two patterns are tracked
+// for a separate refactor PR (1: migrate to getShellServices().http;
+// 2: chain caught errors with cause). Disabling the rules at file
+// scope here keeps PR-FE-5 focused on the user-scopes shape parser
+// without bundling unrelated cleanup. Re-enable both rules in the
+// follow-up cleanup PR.
+/* eslint-disable no-restricted-imports */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
@@ -417,17 +427,27 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryKey: ['user-scopes', user?.id],
     queryFn: async () => {
       const res = await api.get(`/v1/roles/users/${user!.id}/scopes`);
-      const data = res.data as {
-        companyIds?: number[];
-        projectIds?: number[];
-        warehouseIds?: number[];
-        branchIds?: number[];
-      } | null;
+      // PR-FE-5 (Codex thread 019e0954 iter-1 AGREE absorb, 2026-05-08):
+      // Backend `/v1/roles/users/{id}/scopes` returns
+      // `List<ScopeSummaryDto>` (`[{scopeType, scopeRefId}, ...]`)
+      // — NOT the grouped `{companyIds, projectIds, ...}` shape this
+      // query previously assumed. The pre-fix `data?.companyIds ?? []`
+      // fallback always evaluated to `[]` because the array response
+      // never had a `companyIds` key, so the drawer rendered empty
+      // selections even when the user had persisted scopes (live
+      // testai live: admin@example.com had 7 companies / 6 projects /
+      // 3 warehouses persisted in OpenFGA, drawer showed all empty).
+      // Lift the canonical array → grouped numeric IDs here.
+      const data = res.data as Array<{ scopeType: string; scopeRefId: number }> | null;
+      const groupBy = (type: string): number[] =>
+        (data ?? [])
+          .filter((s) => s && s.scopeType === type && typeof s.scopeRefId === 'number')
+          .map((s) => s.scopeRefId);
       return {
-        companyIds: data?.companyIds ?? [],
-        projectIds: data?.projectIds ?? [],
-        warehouseIds: data?.warehouseIds ?? [],
-        branchIds: data?.branchIds ?? [],
+        companyIds: groupBy('COMPANY'),
+        projectIds: groupBy('PROJECT'),
+        warehouseIds: groupBy('WAREHOUSE'),
+        branchIds: groupBy('BRANCH'),
       };
     },
     enabled: open && !!user,

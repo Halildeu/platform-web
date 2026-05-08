@@ -280,8 +280,16 @@ describe('UserDetailDrawer.iter36 — load error guard', () => {
       }
       // Other queries — return what they normally would.
       if (url === '/v1/roles') return { data: [{ id: 1, name: 'ADMIN' }] };
+      // PR-FE-5 (Codex 019e0954 iter-1 AGREE absorb, 2026-05-08):
+      // backend `/v1/roles/users/{id}/scopes` returns the canonical
+      // `List<ScopeSummaryDto>` array — NOT the grouped object shape
+      // this mock previously used. The drawer's userScopesQuery now
+      // parses the array into grouped IDs locally, so the mock must
+      // emit the realistic array shape (empty here, since these test
+      // cases focus on the assignment-query error banner / disabled
+      // Save flow rather than scope rendering).
       if (url.includes('/scopes'))
-        return { data: { companyIds: [], projectIds: [], warehouseIds: [], branchIds: [] } };
+        return { data: [] as Array<{ scopeType: string; scopeRefId: number }> };
       return { data: [] };
     });
 
@@ -304,8 +312,16 @@ describe('UserDetailDrawer.iter36 — load error guard', () => {
         throw new Error('boom');
       }
       if (url === '/v1/roles') return { data: [{ id: 1, name: 'ADMIN' }] };
+      // PR-FE-5 (Codex 019e0954 iter-1 AGREE absorb, 2026-05-08):
+      // backend `/v1/roles/users/{id}/scopes` returns the canonical
+      // `List<ScopeSummaryDto>` array — NOT the grouped object shape
+      // this mock previously used. The drawer's userScopesQuery now
+      // parses the array into grouped IDs locally, so the mock must
+      // emit the realistic array shape (empty here, since these test
+      // cases focus on the assignment-query error banner / disabled
+      // Save flow rather than scope rendering).
       if (url.includes('/scopes'))
-        return { data: { companyIds: [], projectIds: [], warehouseIds: [], branchIds: [] } };
+        return { data: [] as Array<{ scopeType: string; scopeRefId: number }> };
       return { data: [] };
     });
 
