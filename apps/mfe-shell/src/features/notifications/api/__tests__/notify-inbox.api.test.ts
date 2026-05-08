@@ -47,11 +47,63 @@ const buildRow = (overrides: Partial<InboxItemDto>): InboxItemDto => ({
   ...overrides,
 });
 
-const buildStore = () =>
-  configureStore({
-    reducer: { [notifyInboxApi.reducerPath]: notifyInboxApi.reducer },
+/**
+ * PR-5.X-bis follow-up (Codex thread {@code 019e075d} iter-2 REVISE
+ * absorb correction): {@code prepareHeaders} now reads identity from
+ * {@code state.auth} via {@code selectNotifyIdentity} and writes
+ * {@code X-Org-Id} / {@code X-Subscriber-Id} on every request. Tests
+ * therefore must pre-load an auth slice so the selector resolves to
+ * the expected identity. The default fixture matches the endpoint
+ * arg ({@code IDENTITY = { orgId: 'default', subscriberId: 'sub-1' }})
+ * so existing tests still see the same wire headers as before; the
+ * new fixture also lets tests cover the unauthenticated branch.
+ */
+type AuthOverrides = {
+  orgId?: string | undefined;
+  subscriberId?: string | undefined;
+  unauthenticated?: boolean;
+};
+
+const buildAuthState = (overrides: AuthOverrides = {}) => {
+  const baseUser = overrides.unauthenticated
+    ? null
+    : {
+        id: 'profile-1',
+        email: 'admin@example.com',
+        role: 'ADMIN' as const,
+        permissions: [] as string[],
+        // 'in' operator distinguishes "explicitly undefined override"
+        // from "no override given" so callers can drop a field entirely.
+        orgId: 'orgId' in overrides ? overrides.orgId : 'default',
+        subscriberId: 'subscriberId' in overrides ? overrides.subscriberId : 'sub-1',
+      };
+  return {
+    user: baseUser,
+    token: overrides.unauthenticated ? null : 'stub-token',
+    status: 'idle' as const,
+    error: null,
+    registrationStatus: 'idle' as const,
+    lastRegisteredEmail: null,
+    expiresAt: null,
+    initialized: true,
+    phase: overrides.unauthenticated ? ('unauthenticated' as const) : ('transportReady' as const),
+    authError: null,
+    authEpoch: 0,
+    transportReadyAt: overrides.unauthenticated ? null : Date.now(),
+    authzSnapshot: null,
+  };
+};
+
+const buildStore = (authOverrides: AuthOverrides = {}) => {
+  const auth = buildAuthState(authOverrides);
+  return configureStore({
+    reducer: {
+      auth: (state = auth) => state,
+      [notifyInboxApi.reducerPath]: notifyInboxApi.reducer,
+    },
     middleware: (gdm) => gdm().concat(notifyInboxApi.middleware),
   });
+};
 
 let recorded: RequestRecord[] = [];
 let fetchHandler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -180,57 +232,71 @@ describe('notifyInboxApi.markRead', () => {
 });
 
 /**
- * PR-5.X follow-up (Codex thread {@code 019e075d} REVISE iter-2):
- * cache-key vs identity contract. Endpoint-level
- * {@code headers: identityHeaders(arg)} is the only source of identity
- * headers; the baseQuery's {@code prepareHeaders} is intentionally a
- * no-op so a stray blank-arg call cannot get rewritten into a
- * successful state-derived response. RTK Query cache keys are produced
- * from the endpoint argument — if {@code prepareHeaders} silently
- * filled blank headers from {@code state.auth}, the response would
- * land under an empty cache key while the request body described a
- * fully-resolved tenant, leaking that tenant's inbox into another
- * cache slot during the next auth bootstrap.
+ * PR-5.X-bis (Codex thread {@code 019e075d} iter-2 REVISE absorb
+ * correction): {@code prepareHeaders} now writes
+ * {@code X-Org-Id}/{@code X-Subscriber-Id} from {@code state.auth} for
+ * every request. Live evidence post-PR-316 deploy showed the
+ * endpoint-level {@code headers: identityHeaders(arg)} field was being
+ * dropped on the wire — RTK Query cache held a {@code rejected, 400
+ * MissingRequestHeader} entry with the dolu identity arg, while a
+ * manual {@code fetch} with the same headers returned 200.
  *
- * <p>The page-load race that motivated the original
- * {@code identityHeaders} bug is closed at the call site instead
- * ({@code NotificationCenter} passes {@code skipToken} while identity
- * is unresolved). Tests below exercise the fail-closed branch: blank
- * endpoint args produce blank headers and the orchestrator returns 400
- * — the correct safety boundary.
+ * <p>iter-2's cache-vs-identity drift concern is moot in single-tenant
+ * deployments because the call site reads identity from the same
+ * selector and forwards it as the arg, so {@code arg === state}. In a
+ * multi-tenant future the call site would gate the call with
+ * {@code skipToken} before {@code prepareHeaders} ever runs.
  */
-describe('notifyInboxApi blank-arg cache contract', () => {
-  it('sends blank X-Org-Id / X-Subscriber-Id when the caller forwards a blank-identity arg (fail-closed)', async () => {
-    const store = buildStore();
+describe('notifyInboxApi prepareHeaders state-derived identity', () => {
+  it('writes X-Org-Id / X-Subscriber-Id from state for every request', async () => {
+    const store = buildStore({ orgId: 'state-org', subscriberId: 'state-sub' });
+    const result = await store.dispatch(
+      notifyInboxApi.endpoints.listInbox.initiate({
+        orgId: 'state-org',
+        subscriberId: 'state-sub',
+      }),
+    );
+    expect(result.status).toBe('fulfilled');
+
+    const req = recorded[0];
+    // prepareHeaders sets the identity from state. The arg matches the
+    // state in the live deployment so this is idempotent regardless of
+    // whether the endpoint config wrote anything to the headers map.
+    expect(req.headers['x-org-id']).toBe('state-org');
+    expect(req.headers['x-subscriber-id']).toBe('state-sub');
+    expect(req.credentials).toBe('include');
+  });
+
+  it('rescues a blank-arg call by sourcing identity from state (post-PR-316 wire-safety net)', async () => {
+    // Defensive recovery for the bug that motivated this PR: even if
+    // a caller forwards an empty arg (the endpoint config would set
+    // {X-Org-Id:'', X-Subscriber-Id:''}), prepareHeaders re-derives
+    // identity from state and writes the wire headers correctly.
+    // skipToken in NotificationCenter prevents this call shape in the
+    // happy path; this test guards the wire layer for any future
+    // caller that bypasses skipToken.
+    const store = buildStore({ orgId: 'rescued-org', subscriberId: 'rescued-sub' });
+    const result = await store.dispatch(
+      notifyInboxApi.endpoints.listInbox.initiate({ orgId: '', subscriberId: '' }),
+    );
+    expect(result.status).toBe('fulfilled');
+
+    const req = recorded[0];
+    expect(req.headers['x-org-id']).toBe('rescued-org');
+    expect(req.headers['x-subscriber-id']).toBe('rescued-sub');
+  });
+
+  it('leaves headers blank when the auth slice has no identity (fail-closed)', async () => {
+    // Genuinely unauthenticated → selectNotifyIdentity returns null →
+    // prepareHeaders no-op → orchestrator returns 400 in production.
+    // This is the correct safety boundary; we never invent identity.
+    const store = buildStore({ unauthenticated: true });
     await store.dispatch(
       notifyInboxApi.endpoints.listInbox.initiate({ orgId: '', subscriberId: '' }),
     );
 
     const req = recorded[0];
-    // No state-derived rewrite — the empty endpoint arg flows through
-    // unchanged so the cache key (derived from the arg) and the request
-    // headers describe the same identity. The orchestrator will reject
-    // with 400 in production, which is the intended fail-closed boundary.
     expect(req.headers['x-org-id'] ?? '').toBe('');
-    expect(req.headers['x-subscriber-id'] ?? '').toBe('');
-  });
-
-  it('sends blank X-Subscriber-Id when only orgId is supplied (partial-arg fail-closed)', async () => {
-    // Mixed-pair arg (only one field populated) must NOT get the missing
-    // half filled in from somewhere else. Cache key would carry
-    // {orgId: 'arg-org', subscriberId: ''} while a fallback would have
-    // sent {arg-org/state-sub} headers — exactly the cache-vs-identity
-    // drift the no-fallback contract prevents.
-    const store = buildStore();
-    await store.dispatch(
-      notifyInboxApi.endpoints.listInbox.initiate({
-        orgId: 'arg-org',
-        subscriberId: '',
-      }),
-    );
-
-    const req = recorded[0];
-    expect(req.headers['x-org-id']).toBe('arg-org');
     expect(req.headers['x-subscriber-id'] ?? '').toBe('');
   });
 });

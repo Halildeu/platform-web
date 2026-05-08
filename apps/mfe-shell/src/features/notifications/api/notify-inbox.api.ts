@@ -1,4 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { RootState } from '../../../app/store/store';
+import { selectNotifyIdentity } from '../model/identity.selectors';
 import type {
   InboxItemActionArgs,
   InboxItemDto,
@@ -52,25 +54,58 @@ export const notifyInboxApi = createApi({
     // by the resource-server filter chain.
     credentials: 'include',
     /**
-     * Endpoint-level {@code headers: identityHeaders(arg)} is the single
-     * source of truth for {@code X-Org-Id} / {@code X-Subscriber-Id}.
+     * State-derived identity headers (PR-5.X-bis follow-up; Codex thread
+     * {@code 019e075d} iter-2 REVISE absorb correction).
      *
-     * <p>PR-5.X follow-up (Codex thread {@code 019e075d} REVISE iter-2):
-     * we deliberately do NOT fall back to a state-derived identity here.
-     * RTK Query cache keys come from the endpoint argument; if a stray
-     * blank-arg request were rewritten with a state header, the response
-     * would land under an empty cache key while the request body
-     * described a fully-resolved tenant — a cache-vs-identity drift that
-     * could leak one tenant's inbox into another's cache slot during an
-     * auth re-bootstrap.
+     * <p>Live evidence post-PR-316 deploy (FE pod {@code sha-dec128b}):
+     * RTK Query cache showed {@code listInbox({"orgId":"default",
+     * "subscriberId":"1"})} entry with status {@code "rejected"} and
+     * error {@code 400 MissingRequestHeader: X-Org-Id}. The endpoint
+     * config sets {@code headers: identityHeaders(arg)} but the field
+     * was not surfacing on the wire — the dolu-arg request reached the
+     * orchestrator with no identity headers at all. Manual {@code fetch}
+     * with the same headers returned 200, confirming the request shape
+     * was correct only when the call set them globally.
      *
-     * <p>The page-load race that motivated this work is closed at the
-     * call site instead ({@code NotificationCenter} now passes
-     * {@code skipToken} while identity is unresolved). Blank-arg calls
-     * fail-closed at the orchestrator (400 {@code MissingRequestHeader})
-     * which is the correct safety boundary.
+     * <p>{@code prepareHeaders} is the RTK Query API guaranteed to run
+     * for every request, so we set the identity here from
+     * {@code state.auth} via {@link selectNotifyIdentity}. The
+     * endpoint-level {@code headers: identityHeaders(arg)} is kept for
+     * cache-key parity, but the wire-level safety now lives here.
+     *
+     * <p>Codex iter-2 raised a cache-vs-identity drift concern about
+     * state-derived header fallbacks: a blank-arg request rewritten
+     * with state headers would land under the wrong cache key. That
+     * concern is moot in this single-tenant deployment because
+     * {@code arg.orgId === state.auth.user.orgId} and
+     * {@code arg.subscriberId === state.auth.user.subscriberId} are
+     * the same identity by construction (the call site reads identity
+     * from the same selector and passes it as the arg). Drift would
+     * only be possible if a multi-tenant operator handed in a
+     * different identity than their state, in which case
+     * {@code skipToken} (already wired in {@code NotificationCenter})
+     * would short-circuit the call before {@code prepareHeaders} runs.
+     *
+     * <p>Why we don't simply replace endpoint-level headers: the arg
+     * still drives the cache key, so endpoints continue to set headers
+     * for parity with future schemes that might derive identity per
+     * call. Endpoint-level headers are "intent"; {@code prepareHeaders}
+     * is "wire safety".
      */
-    prepareHeaders: (headers) => headers,
+    prepareHeaders: (headers, { getState }) => {
+      const identity = selectNotifyIdentity(getState() as RootState);
+      if (!identity) {
+        return headers;
+      }
+      // Always set both headers; the state-derived identity matches the
+      // arg-derived identity in this deployment, so this is idempotent
+      // when the endpoint config already set them and recovers the
+      // wire request when (as observed in production) the field was
+      // dropped between the endpoint config and the actual fetch.
+      headers.set('X-Org-Id', identity.orgId);
+      headers.set('X-Subscriber-Id', identity.subscriberId);
+      return headers;
+    },
   }),
   tagTypes: ['Inbox', 'UnreadCount'] as const,
   endpoints: (build) => ({
