@@ -44,6 +44,58 @@ function resolveInboxBaseUrl(): string {
   return `${origin}/api/v1/notify/inbox`;
 }
 
+/**
+ * Workaround for `Request`-object header drop observed at the wire layer
+ * (PR-5.X-quartet follow-up; Codex thread {@code 019e075d} iter-7).
+ *
+ * <p>Live evidence captured in DevTools on testai.acik.com:
+ * <pre>
+ *   fetch(url, { headers })                   → 200
+ *   fetch(new Request(url, { headers }))      → 400 MissingRequestHeader
+ *   fetch(url, { headers: new Headers(...) }) → 200
+ * </pre>
+ *
+ * <p>The two failing and passing calls carried identical header
+ * key/value pairs (asserted via header-entries dump in the spy);
+ * the only difference was the Request-vs-string input form to
+ * {@code fetch}. RTK Query 2.x's {@code fetchBaseQuery} defaults to
+ * the Request-object form ({@code new Request(url, init)} → {@code
+ * fetch(request)}), which trips this drop somewhere between the
+ * frontend pod's nginx and the orchestrator.
+ *
+ * <p>This fetchFn unwraps an incoming {@code Request} and re-issues
+ * the call with the string URL + plain init shape so the headers
+ * survive end-to-end. Investigation of the underlying proxy/runtime
+ * difference is queued as a separate follow-up — once isolated we
+ * can revert to RTK's default fetcher.
+ */
+async function unwrapRequestFetchFn(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  if (typeof Request !== 'undefined' && input instanceof Request) {
+    const headers: Record<string, string> = {};
+    input.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    const reissue: RequestInit = {
+      method: input.method,
+      headers,
+      credentials: input.credentials,
+      mode: input.mode,
+      cache: input.cache,
+      redirect: input.redirect,
+      referrer: input.referrer,
+      integrity: input.integrity,
+    };
+    if (input.method !== 'GET' && input.method !== 'HEAD') {
+      reissue.body = await input.clone().arrayBuffer();
+    }
+    return fetch(input.url, reissue);
+  }
+  return fetch(input, init);
+}
+
 export const notifyInboxApi = createApi({
   reducerPath: 'notifyInboxApi',
   baseQuery: fetchBaseQuery({
@@ -53,6 +105,7 @@ export const notifyInboxApi = createApi({
     // JWT. Without this, the request would be unauthenticated and rejected
     // by the resource-server filter chain.
     credentials: 'include',
+    fetchFn: unwrapRequestFetchFn,
     /**
      * State-derived identity headers (PR-5.X-bis follow-up; Codex thread
      * {@code 019e075d} iter-2 REVISE absorb correction).
