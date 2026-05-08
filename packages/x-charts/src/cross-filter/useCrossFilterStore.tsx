@@ -5,7 +5,6 @@
  * Components use `useCrossFilter(selector)` for surgical re-renders.
  */
 import { createContext, useContext, useRef } from 'react';
-import { useStore } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import {
   createCrossFilterStore,
@@ -77,15 +76,14 @@ export function useCrossFilter<T>(
     throw new Error('useCrossFilter must be used within a <CrossFilterProvider>');
   }
   // zustand v5 dropped the third `equalityFn` arg from `useStore`; the
-  // equality-aware helper moved to `zustand/traditional`. We branch
-  // here so existing call sites that omit `equalityFn` (every consumer
-  // today) keep using the lighter `useStore`, while the rare future
-  // call site that passes a custom comparator gets the traditional
-  // helper. Public hook signature unchanged.
-  if (equalityFn) {
-    return useStoreWithEqualityFn(store, selector, equalityFn);
-  }
-  return useStore(store, selector);
+  // equality-aware helper moved to `zustand/traditional`. We call it
+  // unconditionally here — branching between two different hooks based
+  // on `equalityFn` would change call order across renders (rules-of-
+  // hooks violation, flagged by Codex iter-1 thread 019e08a2).
+  // `useStoreWithEqualityFn` accepts `undefined` comparator and falls
+  // through to reference equality, matching the pre-v5 `useStore(store,
+  // selector)` semantics; safe for both 1-arg and 2-arg call sites.
+  return useStoreWithEqualityFn(store, selector, equalityFn);
 }
 
 /**

@@ -35,28 +35,33 @@ export function CrossFilterChart({
   className,
   children,
 }: CrossFilterChartProps) {
-  // `activeFilters` was destructured pre-existing but never read
-  // inside the component; renamed to `_activeFilters` to satisfy the
-  // repo-wide `no-unused-vars` rule (allowed-unused pattern is
-  // `^_`). The hook return shape stays identical for any future
-  // consumer that wants the live filter list.
-  const {
-    activeFilters: _activeFilters,
-    onChartClick,
-    isFiltered,
-    filterCount,
-    clearOwnFilter,
-  } = useChartCrossFilter({ chartId, emitFields, enabled });
+  // `activeFilters` is part of the hook return shape but never read
+  // inside this component; dropped from the destructure (Codex
+  // iter-1 thread 019e08a2 — preferred deletion over `_activeFilters`
+  // rename since the hook return shape isn't affected either way).
+  const { onChartClick, isFiltered, filterCount, clearOwnFilter } = useChartCrossFilter({
+    chartId,
+    emitFields,
+    enabled,
+  });
 
   // Signature matches the cloneElement target prop type
-  // (`onDataPointClick?: (e: unknown) => void`); the chart child
-  // forwards its event payload as `{ datum: Record<string, unknown> }`,
-  // so we narrow at the call boundary instead of typing the prop more
-  // tightly across all chart adapters.
+  // (`onDataPointClick?: (e: unknown) => void`). Chart adapters that
+  // pair with this wrapper emit `{ datum }` payloads (Bar/Line/Pie
+  // honour the `ChartClickEvent` contract); raw ECharts/Funnel/Radar/
+  // Waterfall events do NOT, and routing those into the cross-filter
+  // bus would silently emit empty filters because `datum[field]` is
+  // `undefined`. Codex iter-1 review (thread 019e08a2) flagged a
+  // permissive `?? {}` fallback as too quiet for an auto-wiring
+  // wrapper, so we type-guard explicitly: only forward events that
+  // carry a `datum` object, drop the rest.
   const handleClick = useCallback(
     (event: unknown) => {
-      const datum = (event as { datum?: Record<string, unknown> })?.datum ?? {};
-      onChartClick(datum);
+      const datum = (event as { datum?: unknown } | null)?.datum;
+      if (datum == null || typeof datum !== 'object') {
+        return;
+      }
+      onChartClick(datum as Record<string, unknown>);
     },
     [onChartClick],
   );
