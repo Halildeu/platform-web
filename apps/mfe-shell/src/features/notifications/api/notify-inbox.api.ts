@@ -51,15 +51,26 @@ export const notifyInboxApi = createApi({
     // JWT. Without this, the request would be unauthenticated and rejected
     // by the resource-server filter chain.
     credentials: 'include',
-    prepareHeaders: (headers, { getState: _getState, extra: _extra, endpoint: _endpoint }) => {
-      // X-Org-Id / X-Subscriber-Id are passed per-endpoint via the
-      // {@code identity} arg rather than a global selector; this keeps
-      // the API client orthogonal to the auth slice and lets
-      // {@code AuthBootstrapper} resolve the values once at boot.
-      // The headers themselves are appended in each endpoint's
-      // {@code query} function via the request config.
-      return headers;
-    },
+    /**
+     * Endpoint-level {@code headers: identityHeaders(arg)} is the single
+     * source of truth for {@code X-Org-Id} / {@code X-Subscriber-Id}.
+     *
+     * <p>PR-5.X follow-up (Codex thread {@code 019e075d} REVISE iter-2):
+     * we deliberately do NOT fall back to a state-derived identity here.
+     * RTK Query cache keys come from the endpoint argument; if a stray
+     * blank-arg request were rewritten with a state header, the response
+     * would land under an empty cache key while the request body
+     * described a fully-resolved tenant — a cache-vs-identity drift that
+     * could leak one tenant's inbox into another's cache slot during an
+     * auth re-bootstrap.
+     *
+     * <p>The page-load race that motivated this work is closed at the
+     * call site instead ({@code NotificationCenter} now passes
+     * {@code skipToken} while identity is unresolved). Blank-arg calls
+     * fail-closed at the orchestrator (400 {@code MissingRequestHeader})
+     * which is the correct safety boundary.
+     */
+    prepareHeaders: (headers) => headers,
   }),
   tagTypes: ['Inbox', 'UnreadCount'] as const,
   endpoints: (build) => ({

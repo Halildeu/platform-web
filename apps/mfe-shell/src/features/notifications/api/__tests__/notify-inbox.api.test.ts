@@ -179,6 +179,62 @@ describe('notifyInboxApi.markRead', () => {
   });
 });
 
+/**
+ * PR-5.X follow-up (Codex thread {@code 019e075d} REVISE iter-2):
+ * cache-key vs identity contract. Endpoint-level
+ * {@code headers: identityHeaders(arg)} is the only source of identity
+ * headers; the baseQuery's {@code prepareHeaders} is intentionally a
+ * no-op so a stray blank-arg call cannot get rewritten into a
+ * successful state-derived response. RTK Query cache keys are produced
+ * from the endpoint argument — if {@code prepareHeaders} silently
+ * filled blank headers from {@code state.auth}, the response would
+ * land under an empty cache key while the request body described a
+ * fully-resolved tenant, leaking that tenant's inbox into another
+ * cache slot during the next auth bootstrap.
+ *
+ * <p>The page-load race that motivated the original
+ * {@code identityHeaders} bug is closed at the call site instead
+ * ({@code NotificationCenter} passes {@code skipToken} while identity
+ * is unresolved). Tests below exercise the fail-closed branch: blank
+ * endpoint args produce blank headers and the orchestrator returns 400
+ * — the correct safety boundary.
+ */
+describe('notifyInboxApi blank-arg cache contract', () => {
+  it('sends blank X-Org-Id / X-Subscriber-Id when the caller forwards a blank-identity arg (fail-closed)', async () => {
+    const store = buildStore();
+    await store.dispatch(
+      notifyInboxApi.endpoints.listInbox.initiate({ orgId: '', subscriberId: '' }),
+    );
+
+    const req = recorded[0];
+    // No state-derived rewrite — the empty endpoint arg flows through
+    // unchanged so the cache key (derived from the arg) and the request
+    // headers describe the same identity. The orchestrator will reject
+    // with 400 in production, which is the intended fail-closed boundary.
+    expect(req.headers['x-org-id'] ?? '').toBe('');
+    expect(req.headers['x-subscriber-id'] ?? '').toBe('');
+  });
+
+  it('sends blank X-Subscriber-Id when only orgId is supplied (partial-arg fail-closed)', async () => {
+    // Mixed-pair arg (only one field populated) must NOT get the missing
+    // half filled in from somewhere else. Cache key would carry
+    // {orgId: 'arg-org', subscriberId: ''} while a fallback would have
+    // sent {arg-org/state-sub} headers — exactly the cache-vs-identity
+    // drift the no-fallback contract prevents.
+    const store = buildStore();
+    await store.dispatch(
+      notifyInboxApi.endpoints.listInbox.initiate({
+        orgId: 'arg-org',
+        subscriberId: '',
+      }),
+    );
+
+    const req = recorded[0];
+    expect(req.headers['x-org-id']).toBe('arg-org');
+    expect(req.headers['x-subscriber-id'] ?? '').toBe('');
+  });
+});
+
 describe('notifyInboxApi.archive', () => {
   it('POSTs to /{id}/archive and removes from the active list', async () => {
     const store = buildStore();
