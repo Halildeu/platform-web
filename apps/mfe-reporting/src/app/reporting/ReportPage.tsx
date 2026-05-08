@@ -559,7 +559,30 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           };
           const res: GridResponse<TRow> = await module.fetchRows(filters, req);
           params.success({ rowData: res.rows, rowCount: res.total });
+          // PR-FE-3 (Codex 019e08e2 iter-12 REVISE absorb): clear the
+          // tenant gate on a successful data fetch — covers the case
+          // where the user picks a company AFTER metadata succeeded
+          // (no metadata-path gate fired) and then the first data
+          // request unblocks. Without this, a stale gate would persist
+          // even after successful data arrives.
+          setTenantSelectionRequired(null);
         } catch (error: unknown) {
+          // PR-FE-3 (Codex 019e08e2 iter-12 REVISE absorb): tenant gate
+          // detection on the data path. Live symptom is `/data` 400
+          // tenant_selection_required (metadata 200 because backend
+          // resolves the schema before requiring the company header
+          // for yearly tables). Branch on the typed error, set the
+          // page-level gate state, suppress the generic toast — the
+          // CompanyPicker block render below takes over. AG Grid still
+          // sees params.fail() so the loading spinner stops.
+          if (isTenantSelectionRequiredError(error)) {
+            setTenantSelectionRequired({
+              reportKey: error.reportKey,
+              hint: error.hint,
+            });
+            params.fail?.();
+            return;
+          }
           params.fail?.();
           const messageText = error instanceof Error ? error.message : 'Veriler yüklenemedi.';
           showToast('error', messageText);
@@ -578,7 +601,21 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       const req: GridRequest = { page: 1, pageSize: 10000, quickFilter: '' };
       const res: GridResponse<TRow> = await module.fetchRows(filters, req);
       setClientRows(res.rows);
+      // PR-FE-3 (Codex 019e08e2 iter-12 REVISE absorb): clear gate on
+      // successful client-side load too (parallel to server-side branch).
+      setTenantSelectionRequired(null);
     } catch (error: unknown) {
+      // PR-FE-3 (Codex 019e08e2 iter-12 REVISE absorb): client-mode
+      // tenant gate handling. Same shape as the server-mode branch —
+      // typed error → state, no toast, empty rows.
+      if (isTenantSelectionRequiredError(error)) {
+        setTenantSelectionRequired({
+          reportKey: error.reportKey,
+          hint: error.hint,
+        });
+        setClientRows([]);
+        return;
+      }
       showToast('error', error instanceof Error ? error.message : 'Veriler yüklenemedi.');
       setClientRows([]);
     } finally {
