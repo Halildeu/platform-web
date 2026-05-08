@@ -40,14 +40,27 @@ const LoginPage = () => {
   useEffect(() => {
     let active = true;
 
-    if (permitAllMode || !initialized) {
+    if (permitAllMode) {
       setLoginHref(null);
-      setLoginHrefReady(initialized);
+      setLoginHrefReady(true);
       return () => {
         active = false;
       };
     }
 
+    // 2026-05-08 hotfix: removed `!initialized` guard. Previously, if
+    // AuthBootstrapper kept re-mounting (which it does when something
+    // about the auth FSM goes pending — e.g. silent SSO iframe
+    // post-message stuck), this useEffect's `initialized` dependency
+    // caused LoginPage to remount/cleanup repeatedly, throwing away the
+    // resolved loginHref each time. The login button then became a
+    // silent no-op because handleLogin's `if (!initialized) return`
+    // also fired. Symptom: user clicks "Güvenli Kurumsal Giriş", URL
+    // stays /login, no Keycloak redirect happens.
+    //
+    // Fix: resolve the login URL eagerly regardless of bootstrap state.
+    // The URL build is independent of keycloak.init() — it just
+    // formats query params from authConfig — so it's safe to call.
     setLoginHrefReady(false);
     resolveKeycloakLoginUrl({ redirectUri })
       .then((value) => {
@@ -72,16 +85,20 @@ const LoginPage = () => {
     return () => {
       active = false;
     };
-  }, [initialized, permitAllMode, redirectUri]);
+  }, [permitAllMode, redirectUri]);
 
   const handleLogin = () => {
     if (permitAllMode) {
       navigate(redirectPath);
       return;
     }
-    if (!initialized) {
-      return;
-    }
+    // 2026-05-08 hotfix: removed `!initialized` short-circuit. The
+    // login button MUST work whether or not the auth FSM has finished
+    // bootstrapping — bootstrap can hang on silent SSO iframe issues,
+    // and a user who clicks "Güvenli Kurumsal Giriş" expects a
+    // redirect, not a silent no-op. If `loginHref` is cached use it;
+    // otherwise fall back to `startKeycloakLogin()` which builds the
+    // URL inline.
     if (loginHref) {
       window.location.assign(loginHref);
       return;
@@ -137,7 +154,15 @@ const LoginPage = () => {
                   onClick={handleLogin}
                   data-testid="corporate-login-button"
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
@@ -149,9 +174,17 @@ const LoginPage = () => {
                   className={loginButtonClassName}
                   onClick={handleLogin}
                   data-testid="corporate-login-button"
-                  disabled={!initialized || !loginHrefReady}
+                  disabled={!loginHrefReady}
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
@@ -159,8 +192,11 @@ const LoginPage = () => {
                 </Button>
               )}
 
-              {!initialized || !loginHrefReady ? (
-                <p className="text-[11px] text-text-secondary" data-testid="corporate-login-pending">
+              {!loginHrefReady ? (
+                <p
+                  className="text-[11px] text-text-secondary"
+                  data-testid="corporate-login-pending"
+                >
                   Kurumsal kimlik doğrulama hazırlanıyor...
                 </p>
               ) : null}
@@ -168,14 +204,20 @@ const LoginPage = () => {
               {/* Güvenlik bilgisi */}
               <div className="rounded-xl border border-border-subtle bg-surface-muted/50 px-4 py-3">
                 <div className="flex items-start gap-2">
-                  <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-state-success-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-state-success-text"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     <path d="m9 12 2 2 4-4" />
                   </svg>
                   <div>
-                    <p className="text-[11px] font-medium text-text-primary">
-                      Güvenli oturum açma
-                    </p>
+                    <p className="text-[11px] font-medium text-text-primary">Güvenli oturum açma</p>
                     <p className="mt-0.5 text-[10px] text-text-tertiary">
                       OAuth 2.0 Authorization Code + PKCE ile korunan kurumsal kimlik doğrulama.
                       Şifreniz yalnızca güvenli kimlik sağlayıcıda işlenir.
