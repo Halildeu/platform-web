@@ -48,19 +48,34 @@ const LoginPage = () => {
       };
     }
 
-    // 2026-05-08 hotfix: removed `!initialized` guard. Previously, if
-    // AuthBootstrapper kept re-mounting (which it does when something
-    // about the auth FSM goes pending — e.g. silent SSO iframe
-    // post-message stuck), this useEffect's `initialized` dependency
-    // caused LoginPage to remount/cleanup repeatedly, throwing away the
-    // resolved loginHref each time. The login button then became a
-    // silent no-op because handleLogin's `if (!initialized) return`
-    // also fired. Symptom: user clicks "Güvenli Kurumsal Giriş", URL
-    // stays /login, no Keycloak redirect happens.
+    // 2026-05-08 second hotfix: re-introduce `initialized` dependency
+    // for the URL build (was removed in first hotfix to recover the
+    // no-op button, but caused a race — useEffect ran before
+    // keycloak.init() resolved, so keycloak.adapter was undefined and
+    // `keycloak.createLoginUrl()` threw `TypeError: Cannot read
+    // properties of undefined (reading 'redirectUri')`).
     //
-    // Fix: resolve the login URL eagerly regardless of bootstrap state.
-    // The URL build is independent of keycloak.init() — it just
-    // formats query params from authConfig — so it's safe to call.
+    // Why this is now safe even with re-mount loops: the user-facing
+    // button no-op is fixed at handleLogin level — handleLogin no
+    // longer has a `!initialized` early return, and falls back to
+    // `startKeycloakLogin()` (which awaits init internally) when
+    // loginHref is null. So even if useEffect skips because
+    // initialized=false, the button still works.
+    //
+    // The contract here is now:
+    //   - kc.init() pending  → loginHref stays null  → button click
+    //     falls through to startKeycloakLogin (awaits init, then
+    //     builds URL, then redirects)
+    //   - kc.init() done     → loginHref resolved   → button click
+    //     navigates instantly via the cached URL
+    if (!initialized) {
+      setLoginHref(null);
+      setLoginHrefReady(false);
+      return () => {
+        active = false;
+      };
+    }
+
     setLoginHrefReady(false);
     resolveKeycloakLoginUrl({ redirectUri })
       .then((value) => {
@@ -85,7 +100,7 @@ const LoginPage = () => {
     return () => {
       active = false;
     };
-  }, [permitAllMode, redirectUri]);
+  }, [initialized, permitAllMode, redirectUri]);
 
   const handleLogin = () => {
     if (permitAllMode) {
