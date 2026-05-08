@@ -4,11 +4,13 @@
 // environment, so this suite was effectively dead code in CI even
 // though the file shape suggested it was running.
 //
-// `webcrypto from 'node:crypto'` is replaced with `globalThis.crypto`
-// — vitest's jsdom environment provides a Web Crypto polyfill, and
-// the only thing this suite asks of crypto is that variants.api can
-// reach a `crypto` reference on the patched window. No production
-// behaviour change.
+// `webcrypto from 'node:crypto'` is replaced with `globalThis.crypto`.
+// `variants.api` reads the bare `crypto` global directly (see
+// `randomUUID()` call sites + the clone fallback in
+// `packages/design-system/src/lib/grid-variants/variants.api.ts`),
+// so the patched `window.crypto` is just defensive coverage for any
+// future indirect lookup. Node 25 + jsdom both expose
+// `globalThis.crypto.randomUUID`, so no production behaviour change.
 import { afterAll, beforeEach, describe, expect, test } from 'vitest';
 import {
   registerGridVariantsTokenResolver,
