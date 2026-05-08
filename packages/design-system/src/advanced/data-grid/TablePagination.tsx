@@ -4,20 +4,21 @@
  *
  * Single source of truth for grid pagination in @mfe/design-system.
  */
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import { IconButton } from "../../primitives/icon-button";
-import { Text } from "../../primitives/text";
-import { PaginationSizeChanger, type PaginationSizeOption } from "./PaginationSizeChanger";
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { IconButton } from '../../primitives/icon-button';
+import { Text } from '../../primitives/text';
+import { PaginationSizeChanger, type PaginationSizeOption } from './PaginationSizeChanger';
 import {
   clampPaginationPage,
   usePaginationState,
   type UsePaginationStateOptions,
-} from "./usePaginationState";
+} from './usePaginationState';
 import {
-  resolveAccessState, _accessStyles,
+  resolveAccessState,
+  _accessStyles,
   type AccessControlledProps,
   type AccessLevel,
-} from "../../internal/access-controller";
+} from '../../internal/access-controller';
 
 /* ------------------------------------------------------------------ */
 /*  TablePagination types                                              */
@@ -79,25 +80,25 @@ export type TablePaginationSlotProps = {
 };
 
 export interface TablePaginationProps extends AccessControlledProps, UsePaginationStateOptions {
-    /** Available page size options shown in the size selector. */
-    pageSizeOptions?: PaginationSizeOption[];
-    /** Additional CSS class name for the root element. */
-    className?: string;
-    /** Whether to show first/last page navigation buttons. */
-    showFirstLastButtons?: boolean;
-    /** Whether the total item count is known; when false, uses cursor pagination. */
-    totalItemsKnown?: boolean;
-    /** Whether there is a next page available (cursor pagination mode). */
-    hasNextPage?: boolean;
-    /** Locale-specific labels for range display and button aria-labels. */
-    localeText?: TablePaginationLocaleText;
-    /** @deprecated Use `slots.actions` instead. Custom actions component override. */
-    ActionsComponent?: React.ComponentType<TablePaginationActionsProps>;
-    /** Named slot overrides for sub-components. */
-    slots?: TablePaginationSlots;
-    /** Props forwarded to slot sub-components. */
-    slotProps?: TablePaginationSlotProps;
-  }
+  /** Available page size options shown in the size selector. */
+  pageSizeOptions?: PaginationSizeOption[];
+  /** Additional CSS class name for the root element. */
+  className?: string;
+  /** Whether to show first/last page navigation buttons. */
+  showFirstLastButtons?: boolean;
+  /** Whether the total item count is known; when false, uses cursor pagination. */
+  totalItemsKnown?: boolean;
+  /** Whether there is a next page available (cursor pagination mode). */
+  hasNextPage?: boolean;
+  /** Locale-specific labels for range display and button aria-labels. */
+  localeText?: TablePaginationLocaleText;
+  /** @deprecated Use `slots.actions` instead. Custom actions component override. */
+  ActionsComponent?: React.ComponentType<TablePaginationActionsProps>;
+  /** Named slot overrides for sub-components. */
+  slots?: TablePaginationSlots;
+  /** Props forwarded to slot sub-components. */
+  slotProps?: TablePaginationSlotProps;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Default actions                                                    */
@@ -127,10 +128,10 @@ const DefaultTablePaginationActions: React.FC<TablePaginationActionsProps> = ({
 }) => (
   <div
     className={[
-      "flex items-center gap-2 rounded-full border border-border-subtle/70 bg-[var(--surface-card))] px-2 py-1 shadow-[0_12px_24px_-22px_var(--shadow-color)] ring-1 ring-border-subtle/20 backdrop-blur-xs",
-      className ?? "",
+      'flex items-center gap-2 rounded-full border border-border-subtle/70 bg-[var(--surface-card))] px-2 py-1 shadow-[0_12px_24px_-22px_var(--shadow-color)] ring-1 ring-border-subtle/20 backdrop-blur-xs',
+      className ?? '',
     ]
-      .join(" ")
+      .join(' ')
       .trim()}
     data-slot="pagination-actions"
   >
@@ -185,7 +186,7 @@ const DefaultTablePaginationActions: React.FC<TablePaginationActionsProps> = ({
 /*  TablePagination component                                          */
 /* ------------------------------------------------------------------ */
 
-/** Pagination controls with page navigation, page-size selector, and item range display. 
+/** Pagination controls with page navigation, page-size selector, and item range display.
  * @example
  * ```tsx
  * <TablePagination />
@@ -193,200 +194,223 @@ const DefaultTablePaginationActions: React.FC<TablePaginationActionsProps> = ({
  * @since 1.0.0
  * @see [Docs](https://design.mfe.dev/components/table-pagination)
  */
-export const TablePagination = React.forwardRef<HTMLDivElement, TablePaginationProps>(({
-  totalItems,
-  page,
-  defaultPage,
-  onPageChange,
-  pageSize,
-  defaultPageSize,
-  onPageSizeChange,
-  resetPageOnPageSizeChange,
-  pageSizeOptions = [10, 20, 50, 100],
-  className,
-  showFirstLastButtons = false,
-  totalItemsKnown = true,
-  hasNextPage,
-  localeText,
-  ActionsComponent,
-  slots,
-  slotProps,
-  access = "full",
-  accessReason,
-}, ref) => {
-  const accessState = resolveAccessState(access);
-  const knownPagination = usePaginationState({
-    totalItems,
-    page,
-    defaultPage,
-    onPageChange,
-    pageSize,
-    defaultPageSize,
-    onPageSizeChange,
-    resetPageOnPageSizeChange,
-  });
-
-  // Unknown-total mode (cursor/infinite pagination)
-  const isPageControlled = typeof page === "number";
-  const isPageSizeControlled = typeof pageSize === "number";
-  const [unknownInternalPage, setUnknownInternalPage] = useState(() =>
-    Math.max(1, Math.trunc(Number(page ?? defaultPage ?? 1)) || 1),
-  );
-  const [unknownInternalPageSize, setUnknownInternalPageSize] = useState(() =>
-    normalizePageSize(pageSize ?? defaultPageSize),
-  );
-  const unknownPageSize = isPageSizeControlled ? normalizePageSize(pageSize) : unknownInternalPageSize;
-  const unknownPage = Math.max(
-    1,
-    Math.trunc(Number(isPageControlled ? page ?? defaultPage ?? 1 : unknownInternalPage)) || 1,
-  );
-  const unknownRangeStart = totalItems <= 0 ? 0 : (unknownPage - 1) * unknownPageSize + 1;
-  const unknownRangeEnd =
-    totalItems <= 0
-      ? 0
-      : Math.max(
-          unknownRangeStart,
-          Math.min(Math.max(totalItems, unknownRangeStart), unknownPage * unknownPageSize),
-        );
-
-  const setUnknownPage = useCallback(
-    (nextPage: number) => {
-      const normalizedPage = Math.max(1, Math.trunc(Number(nextPage)) || 1);
-      if (!isPageControlled) {
-        setUnknownInternalPage(normalizedPage);
-      }
-      onPageChange?.(normalizedPage);
-    },
-    [isPageControlled, onPageChange],
-  );
-
-  const setUnknownPageSize = useCallback(
-    (nextPageSize: number) => {
-      const normalizedPS = normalizePageSize(nextPageSize);
-      const nextPage = resetPageOnPageSizeChange === false ? unknownPage : 1;
-
-      if (!isPageSizeControlled) {
-        setUnknownInternalPageSize(normalizedPS);
-      }
-      if (!isPageControlled) {
-        setUnknownInternalPage(nextPage);
-      }
-
-      onPageSizeChange?.(normalizedPS);
-      if (nextPage !== unknownPage) {
-        onPageChange?.(nextPage);
-      }
-    },
-    [
-      isPageControlled,
-      isPageSizeControlled,
+export const TablePagination = React.forwardRef<HTMLDivElement, TablePaginationProps>(
+  (
+    {
+      totalItems,
+      page,
+      defaultPage,
       onPageChange,
+      pageSize,
+      defaultPageSize,
       onPageSizeChange,
       resetPageOnPageSizeChange,
-      unknownPage,
-    ],
-  );
+      pageSizeOptions = [10, 20, 50, 100],
+      className,
+      showFirstLastButtons = false,
+      totalItemsKnown = true,
+      hasNextPage,
+      localeText,
+      ActionsComponent,
+      slots,
+      slotProps,
+      access = 'full',
+      accessReason,
+    },
+    ref,
+  ) => {
+    const accessState = resolveAccessState(access);
+    const knownPagination = usePaginationState({
+      totalItems,
+      page,
+      defaultPage,
+      onPageChange,
+      pageSize,
+      defaultPageSize,
+      onPageSizeChange,
+      resetPageOnPageSizeChange,
+    });
 
-  const unknownPagination = {
-    page: clampPaginationPage(unknownPage, Number.MAX_SAFE_INTEGER),
-    pageSize: unknownPageSize,
-    pageRange: { start: unknownRangeStart, end: unknownRangeEnd },
-    canGoToPrevPage: unknownPage > 1,
-    canGoToNextPage: hasNextPage ?? true,
-    goToFirstPage: () => setUnknownPage(1),
-    goToLastPage: () => setUnknownPage(unknownPage),
-    goToPrevPage: () => setUnknownPage(unknownPage - 1),
-    goToNextPage: () => setUnknownPage(unknownPage + 1),
-    setPageSize: setUnknownPageSize,
-  };
-  const pagination = totalItemsKnown ? knownPagination : unknownPagination;
+    // Unknown-total mode (cursor/infinite pagination)
+    const isPageControlled = typeof page === 'number';
+    const isPageSizeControlled = typeof pageSize === 'number';
+    const [unknownInternalPage, setUnknownInternalPage] = useState(() =>
+      Math.max(1, Math.trunc(Number(page ?? defaultPage ?? 1)) || 1),
+    );
+    const [unknownInternalPageSize, setUnknownInternalPageSize] = useState(() =>
+      normalizePageSize(pageSize ?? defaultPageSize),
+    );
+    const unknownPageSize = isPageSizeControlled
+      ? normalizePageSize(pageSize)
+      : unknownInternalPageSize;
+    const unknownPage = Math.max(
+      1,
+      Math.trunc(Number(isPageControlled ? (page ?? defaultPage ?? 1) : unknownInternalPage)) || 1,
+    );
+    const unknownRangeStart = totalItems <= 0 ? 0 : (unknownPage - 1) * unknownPageSize + 1;
+    const unknownRangeEnd =
+      totalItems <= 0
+        ? 0
+        : Math.max(
+            unknownRangeStart,
+            Math.min(Math.max(totalItems, unknownRangeStart), unknownPage * unknownPageSize),
+          );
 
-  const rowsPerPageLabel = localeText?.rowsPerPageLabel ?? "Rows per page:";
-  const rangeLabel =
-    localeText?.rangeLabel ??
-    ((start: number, end: number, count: number) => `${start}-${end} of ${count}`);
-  const unknownTotalLabel =
-    localeText?.unknownTotalLabel ??
-    ((start: number, end: number) => `${start}-${end} of more than ${end}`);
-  const previousButtonLabel = localeText?.previousButtonLabel ?? "Previous page";
-  const nextButtonLabel = localeText?.nextButtonLabel ?? "Next page";
-  const firstButtonLabel = localeText?.firstButtonLabel ?? "First page";
-  const lastButtonLabel = localeText?.lastButtonLabel ?? "Last page";
-  const ResolvedActionsComponent = ActionsComponent ?? slots?.actions ?? DefaultTablePaginationActions;
+    const setUnknownPage = useCallback(
+      (nextPage: number) => {
+        const normalizedPage = Math.max(1, Math.trunc(Number(nextPage)) || 1);
+        if (!isPageControlled) {
+          setUnknownInternalPage(normalizedPage);
+        }
+        onPageChange?.(normalizedPage);
+      },
+      [isPageControlled, onPageChange],
+    );
 
-  if (accessState.isHidden) {
-    return null;
-  }
+    const setUnknownPageSize = useCallback(
+      (nextPageSize: number) => {
+        const normalizedPS = normalizePageSize(nextPageSize);
+        const nextPage = resetPageOnPageSizeChange === false ? unknownPage : 1;
 
-  return (
-    <div
-      ref={ref}
-      className={[
-        "relative flex flex-wrap items-center justify-end gap-4 overflow-hidden rounded-[28px] border border-border-subtle/80 bg-[var(--surface-card)] p-4 shadow-[0_22px_48px_-34px_var(--shadow-color)] ring-1 ring-border-subtle/20 backdrop-blur-xs before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-[var(--surface-card)] before:to-transparent",
-        className ?? "",
-      ]
-        .join(" ")
-        .trim()}
-      data-component="table-pagination"
-      data-access-state={accessState.state}
-      title={accessReason}
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <Text variant="secondary">{rowsPerPageLabel}</Text>
-        <PaginationSizeChanger
-          value={pagination.pageSize}
-          onValueChange={pagination.setPageSize}
-          options={pageSizeOptions}
+        if (!isPageSizeControlled) {
+          setUnknownInternalPageSize(normalizedPS);
+        }
+        if (!isPageControlled) {
+          setUnknownInternalPage(nextPage);
+        }
+
+        onPageSizeChange?.(normalizedPS);
+        if (nextPage !== unknownPage) {
+          onPageChange?.(nextPage);
+        }
+      },
+      [
+        isPageControlled,
+        isPageSizeControlled,
+        onPageChange,
+        onPageSizeChange,
+        resetPageOnPageSizeChange,
+        unknownPage,
+      ],
+    );
+
+    const unknownPagination = {
+      page: clampPaginationPage(unknownPage, Number.MAX_SAFE_INTEGER),
+      pageSize: unknownPageSize,
+      pageRange: { start: unknownRangeStart, end: unknownRangeEnd },
+      canGoToPrevPage: unknownPage > 1,
+      canGoToNextPage: hasNextPage ?? true,
+      goToFirstPage: () => setUnknownPage(1),
+      goToLastPage: () => setUnknownPage(unknownPage),
+      goToPrevPage: () => setUnknownPage(unknownPage - 1),
+      goToNextPage: () => setUnknownPage(unknownPage + 1),
+      setPageSize: setUnknownPageSize,
+    };
+    const pagination = totalItemsKnown ? knownPagination : unknownPagination;
+
+    const rowsPerPageLabel = localeText?.rowsPerPageLabel ?? 'Rows per page:';
+    const rangeLabel =
+      localeText?.rangeLabel ??
+      ((start: number, end: number, count: number) => `${start}-${end} of ${count}`);
+    const unknownTotalLabel =
+      localeText?.unknownTotalLabel ??
+      ((start: number, end: number) => `${start}-${end} of more than ${end}`);
+    const previousButtonLabel = localeText?.previousButtonLabel ?? 'Previous page';
+    const nextButtonLabel = localeText?.nextButtonLabel ?? 'Next page';
+    const firstButtonLabel = localeText?.firstButtonLabel ?? 'First page';
+    const lastButtonLabel = localeText?.lastButtonLabel ?? 'Last page';
+    const ResolvedActionsComponent =
+      ActionsComponent ?? slots?.actions ?? DefaultTablePaginationActions;
+
+    if (accessState.isHidden) {
+      return null;
+    }
+
+    return (
+      <div
+        ref={ref}
+        className={[
+          'relative flex flex-wrap items-center justify-end gap-4 overflow-hidden rounded-[28px] border border-border-subtle/80 bg-[var(--surface-card)] p-4 shadow-[0_22px_48px_-34px_var(--shadow-color)] ring-1 ring-border-subtle/20 backdrop-blur-xs before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-px before:bg-linear-to-r before:from-transparent before:via-[var(--surface-card)] before:to-transparent',
+          className ?? '',
+        ]
+          .join(' ')
+          .trim()}
+        data-component="table-pagination"
+        data-access-state={accessState.state}
+        title={accessReason}
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <Text variant="secondary">{rowsPerPageLabel}</Text>
+          <PaginationSizeChanger
+            value={pagination.pageSize}
+            onValueChange={pagination.setPageSize}
+            options={pageSizeOptions}
+            access={accessState.state}
+            accessReason={accessReason}
+            className="min-w-[132px]"
+          />
+        </div>
+
+        <Text className="min-w-[160px] rounded-full border border-border-subtle/70 bg-[var(--surface-card)] px-3 py-2 text-center text-text-primary shadow-[0_12px_24px_-22px_var(--shadow-color)] ring-1 ring-border-subtle/20 backdrop-blur-xs">
+          {totalItemsKnown
+            ? rangeLabel(pagination.pageRange.start, pagination.pageRange.end, totalItems, {
+                page: pagination.page,
+                pageSize: pagination.pageSize,
+                totalItemsKnown,
+              })
+            : unknownTotalLabel(
+                pagination.pageRange.start,
+                pagination.pageRange.end,
+                pagination.page,
+                pagination.pageSize,
+              )}
+        </Text>
+
+        <ResolvedActionsComponent
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          canGoToPrevPage={pagination.canGoToPrevPage}
+          canGoToNextPage={pagination.canGoToNextPage}
+          showFirstLastButtons={showFirstLastButtons}
+          totalItemsKnown={totalItemsKnown}
+          onFirstPage={pagination.goToFirstPage}
+          onPrevPage={pagination.goToPrevPage}
+          onNextPage={pagination.goToNextPage}
+          onLastPage={pagination.goToLastPage}
+          firstButtonLabel={firstButtonLabel}
+          previousButtonLabel={previousButtonLabel}
+          nextButtonLabel={nextButtonLabel}
+          lastButtonLabel={lastButtonLabel}
           access={accessState.state}
           accessReason={accessReason}
-          className="min-w-[132px]"
+          className={slotProps?.actions?.className}
         />
       </div>
+    );
+  },
+);
 
-      <Text className="min-w-[160px] rounded-full border border-border-subtle/70 bg-[var(--surface-card)] px-3 py-2 text-center text-text-primary shadow-[0_12px_24px_-22px_var(--shadow-color)] ring-1 ring-border-subtle/20 backdrop-blur-xs">
-        {totalItemsKnown
-          ? rangeLabel(pagination.pageRange.start, pagination.pageRange.end, totalItems, {
-              page: pagination.page,
-              pageSize: pagination.pageSize,
-              totalItemsKnown,
-            })
-          : unknownTotalLabel(
-              pagination.pageRange.start,
-              pagination.pageRange.end,
-              pagination.page,
-              pagination.pageSize,
-            )}
-      </Text>
-
-      <ResolvedActionsComponent
-        page={pagination.page}
-        pageSize={pagination.pageSize}
-        canGoToPrevPage={pagination.canGoToPrevPage}
-        canGoToNextPage={pagination.canGoToNextPage}
-        showFirstLastButtons={showFirstLastButtons}
-        totalItemsKnown={totalItemsKnown}
-        onFirstPage={pagination.goToFirstPage}
-        onPrevPage={pagination.goToPrevPage}
-        onNextPage={pagination.goToNextPage}
-        onLastPage={pagination.goToLastPage}
-        firstButtonLabel={firstButtonLabel}
-        previousButtonLabel={previousButtonLabel}
-        nextButtonLabel={nextButtonLabel}
-        lastButtonLabel={lastButtonLabel}
-        access={accessState.state}
-        accessReason={accessReason}
-        className={slotProps?.actions?.className}
-      />
-    </div>
-  );
-});
-
-TablePagination.displayName = "TablePagination";
+TablePagination.displayName = 'TablePagination';
 
 /* ------------------------------------------------------------------ */
 /*  useAgGridTablePagination — real AG Grid v34 pagination sync        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Subset of AG Grid v34's `GridApi` that the platform consumers
+ * actually call. Modelled as a structural type instead of importing
+ * `GridApi<RowData>` directly so that consumers without an AG Grid
+ * type dependency can still describe the shape; AG Grid's own
+ * `event.api` is structurally compatible.
+ *
+ * The fields below are the subset that survived the v34 type
+ * tightening: pagination + grid option + the infinite / SSRM cache
+ * + node-visibility methods that mfe-audit's `AuditEventFeed` uses
+ * for live-stream refresh and deep-link scrolling. All optional
+ * because not every AG Grid configuration exposes every method
+ * (e.g. `refreshInfiniteCache` only exists when `rowModelType:
+ * 'infinite'`).
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AgGridTablePaginationApi<_RowData = any> = {
   paginationGetCurrentPage?: () => number;
@@ -396,6 +420,17 @@ export type AgGridTablePaginationApi<_RowData = any> = {
   paginationGoToFirstPage?: () => void;
   setGridOption?: (key: string, value: unknown) => void;
   getDisplayedRowCount?: () => number;
+  // Infinite / SSRM cache management
+  refreshInfiniteCache?: () => void;
+  // Node iteration + visibility — used by deep-link scroll and live-
+  // event highlight in mfe-audit. Node shape is loose because AG Grid's
+  // `IRowNode<TData>` brings the full grid type graph along; the
+  // structural form below covers our actual usage.
+  forEachNode?: (
+    callback: (node: { data?: unknown; setSelected: (selected: boolean) => void }) => void,
+  ) => void;
+  ensureNodeVisible?: (node: unknown, position?: 'top' | 'middle' | 'bottom') => void;
+  ensureIndexVisible?: (index: number, position?: 'top' | 'middle' | 'bottom') => void;
 } & Record<string, unknown>;
 
 export type AgGridTablePaginationSnapshot = {
@@ -412,10 +447,7 @@ export type UseAgGridTablePaginationOptions<RowData = unknown> = {
     api: AgGridTablePaginationApi<RowData> | null,
     context: { pageSize: number; fallbackTotalItems: number },
   ) => number;
-  syncPageSizeToGrid?: (
-    api: AgGridTablePaginationApi<RowData>,
-    pageSize: number,
-  ) => void;
+  syncPageSizeToGrid?: (api: AgGridTablePaginationApi<RowData>, pageSize: number) => void;
 };
 
 export type UseAgGridTablePaginationResult<RowData = unknown> = {
@@ -425,9 +457,7 @@ export type UseAgGridTablePaginationResult<RowData = unknown> = {
   pageSizeRef: React.MutableRefObject<number>;
   paginationSnapshot: AgGridTablePaginationSnapshot;
   registerGridApi: (api: AgGridTablePaginationApi<RowData> | null) => void;
-  refreshPaginationSnapshot: (
-    api?: AgGridTablePaginationApi<RowData> | null,
-  ) => void;
+  refreshPaginationSnapshot: (api?: AgGridTablePaginationApi<RowData> | null) => void;
   handlePageChange: (nextPage: number) => void;
   handlePageSizeChange: (nextPageSize: number) => void;
 };
@@ -452,7 +482,7 @@ const DEFAULT_SNAPSHOT: AgGridTablePaginationSnapshot = {
  * - `paginationGoToPage(index)` expects 0-indexed page
  * - `setGridOption('paginationPageSize', size)` replaces old paginationSetPageSize
  */
-export const useAgGridTablePagination = <RowData = unknown>(
+export const useAgGridTablePagination = <RowData = unknown,>(
   options?: UseAgGridTablePaginationOptions<RowData>,
 ): UseAgGridTablePaginationResult<RowData> => {
   const initialPageSize = options?.initialPageSize ?? 10;
@@ -513,15 +543,12 @@ export const useAgGridTablePagination = <RowData = unknown>(
     [refreshPaginationSnapshot],
   );
 
-  const handlePageChange = useCallback(
-    (nextPage: number) => {
-      const api = gridApiRef.current;
-      if (!api) return;
-      // v34: paginationGoToPage expects 0-indexed
-      api.paginationGoToPage?.(Math.max(0, nextPage - 1));
-    },
-    [],
-  );
+  const handlePageChange = useCallback((nextPage: number) => {
+    const api = gridApiRef.current;
+    if (!api) return;
+    // v34: paginationGoToPage expects 0-indexed
+    api.paginationGoToPage?.(Math.max(0, nextPage - 1));
+  }, []);
 
   const handlePageSizeChange = useCallback(
     (nextPageSize: number) => {
@@ -536,7 +563,7 @@ export const useAgGridTablePagination = <RowData = unknown>(
         syncPageSizeToGridFn(api, normalizedSize);
       } else {
         // v34: setGridOption replaces old paginationSetPageSize
-        api.setGridOption?.("paginationPageSize", normalizedSize);
+        api.setGridOption?.('paginationPageSize', normalizedSize);
       }
     },
     [syncPageSizeToGridFn],
