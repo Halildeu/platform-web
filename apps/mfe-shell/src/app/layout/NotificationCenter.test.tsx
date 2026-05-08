@@ -105,8 +105,16 @@ vi.mock('../store/store.hooks', () => ({
 
 const markAllAsReadMutationMock = vi.fn();
 
+// Faz 23.4 PR-E.5 follow-up (Codex thread `019e075d` PARTIAL iter-1):
+// useListInboxQuery mock now captures the call arguments so tests can
+// assert that NotificationCenter passes `skipToken` while identity is
+// unresolved (instead of the previous placeholder that opened the
+// page-load race). The mutable `useListInboxQueryMock` lets each test
+// inspect what the hook was called with via `.mock.calls`.
+const useListInboxQueryMock = vi.fn((_arg: unknown, _opts?: unknown) => inboxQueryMock);
+
 vi.mock('../../features/notifications/api/notify-inbox.api', () => ({
-  useListInboxQuery: () => inboxQueryMock,
+  useListInboxQuery: (arg: unknown, opts?: unknown) => useListInboxQueryMock(arg, opts),
   useMarkReadMutation: () => [markReadMutationMock, { isLoading: false }],
   useArchiveMutation: () => [archiveMutationMock, { isLoading: false }],
   useMarkAllAsReadMutation: () => [markAllAsReadMutationMock, { isLoading: false }],
@@ -152,6 +160,7 @@ describe('NotificationCenter', () => {
     markReadMutationMock.mockReset();
     archiveMutationMock.mockReset();
     markAllAsReadMutationMock.mockReset();
+    useListInboxQueryMock.mockClear();
   });
 
   it('okunmamis sayiyi bell butonunda gosterir', () => {
@@ -360,6 +369,40 @@ describe('NotificationCenter', () => {
 
       const inboxTab = screen.getByRole('tab', { name: /Bildirimlerim/ });
       expect(inboxTab).toBeDisabled();
+    });
+
+    /**
+     * PR-5.X follow-up (Codex thread `019e075d` PARTIAL iter-1):
+     * regression guard for the page-load race. Earlier the component
+     * passed {@code inboxQueryArg ?? { orgId: '', subscriberId: '' }} as
+     * the hook arg, which let RTK Query schedule fetches with empty
+     * identity headers during the brief window when {@code identity}
+     * was still {@code null}. Now the hook receives {@code skipToken},
+     * which RTK Query short-circuits to a no-op without ever calling
+     * the endpoint's {@code query} function or initiating fetch.
+     */
+    it('passes skipToken to useListInboxQuery while identity is unresolved', async () => {
+      const { skipToken } = await import('@reduxjs/toolkit/query/react');
+      identityMock = null;
+      render(<NotificationCenter />);
+
+      expect(useListInboxQueryMock).toHaveBeenCalled();
+      const calls = useListInboxQueryMock.mock.calls;
+      // Every call before identity resolves must use skipToken — never
+      // a placeholder identity object.
+      for (const [arg] of calls) {
+        expect(arg).toBe(skipToken);
+      }
+    });
+
+    it('passes the resolved identity object to useListInboxQuery once identity is set', () => {
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      render(<NotificationCenter />);
+
+      const lastCall = useListInboxQueryMock.mock.calls.at(-1);
+      expect(lastCall).toBeDefined();
+      const [arg] = lastCall as [unknown];
+      expect(arg).toEqual({ orgId: 'default', subscriberId: '1204' });
     });
 
     /**

@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { skipToken } from '@reduxjs/toolkit/query/react';
 import { NotificationDrawer, type NotificationSurfaceItem } from '@mfe/design-system';
 import { NotificationBell } from './header/NotificationBell';
 
@@ -82,12 +83,22 @@ const NotificationCenter: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>(DEFAULT_TAB);
 
   // Backend inbox: only fetch once we have an authenticated identity. The
-  // selector returns null while AuthBootstrapper is still resolving, which
-  // also serves as the RTK Query "skip" signal.
+  // selector returns null while AuthBootstrapper is still resolving — we
+  // pass {@code skipToken} in that case so RTK Query never schedules a
+  // request and never inspects a placeholder argument.
+  //
+  // <p>PR-5.X follow-up (Codex thread {@code 019e075d}): the previous
+  // {@code inboxQueryArg ?? { orgId: '', subscriberId: '' }} placeholder
+  // combined with {@code skip: identity === null} let race conditions
+  // during {@code AuthBootstrapper}'s repeated init cycles slip an empty
+  // argument through to the fetcher; the request went out with blank
+  // {@code X-Org-Id} headers and the orchestrator returned 400.
+  // {@code skipToken} eliminates the placeholder branch entirely — when
+  // identity is {@code null} no request is dispatched and no headers are
+  // computed. Endpoint args still travel as-is when identity resolves so
+  // the orchestrator inbox cache key remains keyed by {@code (org, subscriber)}.
   const identity = useAppSelector(selectNotifyIdentity);
-  const inboxQueryArg = identity ?? undefined;
-  const inboxQuery = useListInboxQuery(inboxQueryArg ?? { orgId: '', subscriberId: '' }, {
-    skip: identity === null,
+  const inboxQuery = useListInboxQuery(identity ?? skipToken, {
     // Refetch when the user opens the drawer so the list is fresh after
     // mark-read / archive calls performed in another tab/window.
     refetchOnMountOrArgChange: true,

@@ -1,4 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { RootState } from '../../../app/store/store';
+import { selectNotifyIdentity } from '../model/identity.selectors';
 import type {
   InboxItemActionArgs,
   InboxItemDto,
@@ -51,13 +53,41 @@ export const notifyInboxApi = createApi({
     // JWT. Without this, the request would be unauthenticated and rejected
     // by the resource-server filter chain.
     credentials: 'include',
-    prepareHeaders: (headers, { getState: _getState, extra: _extra, endpoint: _endpoint }) => {
-      // X-Org-Id / X-Subscriber-Id are passed per-endpoint via the
-      // {@code identity} arg rather than a global selector; this keeps
-      // the API client orthogonal to the auth slice and lets
-      // {@code AuthBootstrapper} resolve the values once at boot.
-      // The headers themselves are appended in each endpoint's
-      // {@code query} function via the request config.
+    /**
+     * Defensive fallback for {@code X-Org-Id} / {@code X-Subscriber-Id}
+     * (PR-5.X follow-up; Codex thread {@code 019e075d} PARTIAL iter-1).
+     *
+     * <p>The endpoint-level {@code headers: identityHeaders(arg)} on every
+     * {@code query} remains the canonical source — resource identity and
+     * cache-key identity must come from the same place so RTK Query
+     * doesn't write a response under a stale tenant key. This pre-step
+     * only fills in headers that the endpoint config left unset/blank,
+     * which protects against the page-load race observed in production
+     * where {@code AuthBootstrapper} re-bootstraps several times in quick
+     * succession and the inbox query argument is briefly the placeholder
+     * {@code { orgId: '', subscriberId: '' }}. Without this fallback the
+     * fetch goes out with empty {@code X-Org-Id}, the gateway strips it,
+     * and the orchestrator returns 400 {@code MissingRequestHeader}.
+     *
+     * <p>Endpoint-level headers always win — if the caller supplied
+     * non-blank values we leave them untouched.
+     */
+    prepareHeaders: (headers, { getState }) => {
+      const hasOrg = (headers.get('X-Org-Id') ?? '').trim().length > 0;
+      const hasSubscriber = (headers.get('X-Subscriber-Id') ?? '').trim().length > 0;
+      if (hasOrg && hasSubscriber) {
+        return headers;
+      }
+      const identity = selectNotifyIdentity(getState() as RootState);
+      if (!identity) {
+        return headers;
+      }
+      if (!hasOrg) {
+        headers.set('X-Org-Id', identity.orgId);
+      }
+      if (!hasSubscriber) {
+        headers.set('X-Subscriber-Id', identity.subscriberId);
+      }
       return headers;
     },
   }),
