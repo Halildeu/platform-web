@@ -122,6 +122,26 @@ export const AppRouter: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        {/*
+         * PR-FE-2 (Codex thread 019e08e2 iter-7 AGREE absorb, 2026-05-08):
+         * `/admin/access/*` alias for the canonical `/access/*` route.
+         * Pre-fix the admin URL space included `/admin/users`,
+         * `/admin/reports/*`, `/admin/themes`, etc. but NOT
+         * `/admin/access/*` — direct navigation (browser address bar,
+         * bookmarks, dashboard breadcrumb) fell through the wildcard
+         * `*` route at the bottom and bounced the user to `/home` even
+         * with `modules.ACCESS=MANAGE`. The alias keeps the old
+         * non-prefixed `/access/*` route working and simply maps the
+         * `/admin/`-prefixed variant to the same element.
+         */}
+        <Route
+          path="/admin/access/*"
+          element={
+            <ProtectedRoute requiredModule="ACCESS">
+              <AccessModule />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/endpoint-admin/*"
           element={
@@ -136,6 +156,30 @@ export const AppRouter: React.FC = () => {
         />
         <Route
           path="/audit/events"
+          element={
+            <ProtectedRoute requiredModule="AUDIT">
+              <AuditModule />
+            </ProtectedRoute>
+          }
+        />
+        {/*
+         * PR-FE-2 (Codex thread 019e08e2 iter-7 AGREE absorb, 2026-05-08):
+         * `/admin/audit/events` alias — same rationale as
+         * `/admin/access/*` above. Direct navigation to the admin URL
+         * space variant previously fell through to `/home`; the alias
+         * routes it to the canonical AuditModule with the same
+         * `requiredModule="AUDIT"` guard.
+         */}
+        <Route
+          path="/admin/audit/events"
+          element={
+            <ProtectedRoute requiredModule="AUDIT">
+              <AuditModule />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/audit/*"
           element={
             <ProtectedRoute requiredModule="AUDIT">
               <AuditModule />
