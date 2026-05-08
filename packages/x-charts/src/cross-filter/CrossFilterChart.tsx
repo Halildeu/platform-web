@@ -35,20 +35,48 @@ export function CrossFilterChart({
   className,
   children,
 }: CrossFilterChartProps) {
-  const { activeFilters, onChartClick, isFiltered, filterCount, clearOwnFilter } =
-    useChartCrossFilter({ chartId, emitFields, enabled });
+  // `activeFilters` was destructured pre-existing but never read
+  // inside the component; renamed to `_activeFilters` to satisfy the
+  // repo-wide `no-unused-vars` rule (allowed-unused pattern is
+  // `^_`). The hook return shape stays identical for any future
+  // consumer that wants the live filter list.
+  const {
+    activeFilters: _activeFilters,
+    onChartClick,
+    isFiltered,
+    filterCount,
+    clearOwnFilter,
+  } = useChartCrossFilter({ chartId, emitFields, enabled });
 
+  // Signature matches the cloneElement target prop type
+  // (`onDataPointClick?: (e: unknown) => void`); the chart child
+  // forwards its event payload as `{ datum: Record<string, unknown> }`,
+  // so we narrow at the call boundary instead of typing the prop more
+  // tightly across all chart adapters.
   const handleClick = useCallback(
-    (event: { datum: Record<string, unknown> }) => {
-      onChartClick(event.datum);
+    (event: unknown) => {
+      const datum = (event as { datum?: Record<string, unknown> })?.datum ?? {};
+      onChartClick(datum);
     },
     [onChartClick],
   );
 
   // Clone child chart and inject onDataPointClick
+  //
+  // The fall-through `(children.props as Record<string, unknown>).onDataPointClick`
+  // is `unknown`, which TS no longer accepts as `((e: unknown) => void) | undefined`
+  // since the cloneElement overload tightening. We narrow to the matching
+  // function shape (or `undefined`) at the call site so the overload resolves.
+  // Behaviour is unchanged: when `enabled` is false we forward whatever the
+  // child already had on its `onDataPointClick` prop.
+  const passthroughOnDataPointClick = isValidElement(children)
+    ? ((children.props as Record<string, unknown>).onDataPointClick as
+        | ((e: unknown) => void)
+        | undefined)
+    : undefined;
   const chart = isValidElement(children)
     ? cloneElement(children as React.ReactElement<{ onDataPointClick?: (e: unknown) => void }>, {
-        onDataPointClick: enabled ? handleClick : (children.props as Record<string, unknown>).onDataPointClick,
+        onDataPointClick: enabled ? handleClick : passthroughOnDataPointClick,
       })
     : children;
 

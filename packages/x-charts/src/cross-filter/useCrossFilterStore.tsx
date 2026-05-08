@@ -4,14 +4,15 @@
  * Allows multiple dashboard instances to have isolated stores via Context.
  * Components use `useCrossFilter(selector)` for surgical re-renders.
  */
-import { createContext, useContext, useRef } from "react";
-import { useStore } from "zustand";
+import { createContext, useContext, useRef } from 'react';
+import { useStore } from 'zustand';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import {
   createCrossFilterStore,
   type CrossFilterStoreApi,
   type CreateCrossFilterStoreOptions,
-} from "./createCrossFilterStore";
-import type { CrossFilterStore } from "./types";
+} from './createCrossFilterStore';
+import type { CrossFilterStore } from './types';
 
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
@@ -38,16 +39,18 @@ export interface CrossFilterProviderProps {
  * </CrossFilterProvider>
  * ```
  */
-export function CrossFilterProvider({ children, options, store: externalStore }: CrossFilterProviderProps) {
+export function CrossFilterProvider({
+  children,
+  options,
+  store: externalStore,
+}: CrossFilterProviderProps) {
   const storeRef = useRef<CrossFilterStoreApi | null>(externalStore ?? null);
   if (!storeRef.current) {
     storeRef.current = createCrossFilterStore(options);
   }
 
   return (
-    <CrossFilterContext.Provider value={storeRef.current}>
-      {children}
-    </CrossFilterContext.Provider>
+    <CrossFilterContext.Provider value={storeRef.current}>{children}</CrossFilterContext.Provider>
   );
 }
 
@@ -71,9 +74,18 @@ export function useCrossFilter<T>(
 ): T {
   const store = useContext(CrossFilterContext);
   if (!store) {
-    throw new Error("useCrossFilter must be used within a <CrossFilterProvider>");
+    throw new Error('useCrossFilter must be used within a <CrossFilterProvider>');
   }
-  return useStore(store, selector, equalityFn);
+  // zustand v5 dropped the third `equalityFn` arg from `useStore`; the
+  // equality-aware helper moved to `zustand/traditional`. We branch
+  // here so existing call sites that omit `equalityFn` (every consumer
+  // today) keep using the lighter `useStore`, while the rare future
+  // call site that passes a custom comparator gets the traditional
+  // helper. Public hook signature unchanged.
+  if (equalityFn) {
+    return useStoreWithEqualityFn(store, selector, equalityFn);
+  }
+  return useStore(store, selector);
 }
 
 /**
@@ -82,7 +94,7 @@ export function useCrossFilter<T>(
 export function useCrossFilterStoreApi(): CrossFilterStoreApi {
   const store = useContext(CrossFilterContext);
   if (!store) {
-    throw new Error("useCrossFilterStoreApi must be used within a <CrossFilterProvider>");
+    throw new Error('useCrossFilterStoreApi must be used within a <CrossFilterProvider>');
   }
   return store;
 }
