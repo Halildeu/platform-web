@@ -352,9 +352,9 @@ describe('WaterfallChart shim', () => {
     // `WaterfallDataPoint.label`. The previous test asserted a
     // `label -> name` rename that drifted from the x-charts source
     // (`WaterfallDataPoint` declares `label`, not `name`); the shim
-    // now passes the field through unchanged. Side-carry `id` is
-    // preserved so DS-level click handlers can resolve back to the
-    // original item.
+    // now passes the field through unchanged. `id` is kept as
+    // legacy adapter metadata (not used by the click pipeline,
+    // which resolves via `dataIndex`).
     render(<WaterfallChart items={wfItems} />);
     expect(mockState.waterfall.at(-1)?.data).toEqual([
       { id: 'rev', label: 'Revenue', value: 1000, type: 'increase' },

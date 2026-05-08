@@ -52,9 +52,15 @@ type XWaterfallData = XWaterfallChartProps['data'];
 function adaptItemsToData(items: WaterfallItem[]): XWaterfallData {
   // x-charts `WaterfallDataPoint` uses `label` (not `name`); the
   // previous mapping emitted `name: it.label` which produced
-  // structurally-incompatible objects (`label` missing). The `id`
-  // stays as a side carry so DS-level click handlers can still
-  // resolve back to the original item by id.
+  // structurally-incompatible objects (`label` missing) and made
+  // the runtime category/aria/tooltip path silently fall back to
+  // `''` because `sanitizeDataPoints` defaults a missing `label`.
+  // `id` is kept as legacy adapter metadata; it survives the
+  // x-charts `sanitizeDataPoints` spread but doesn't reach the
+  // ECharts series data (which is rebuilt as `{ value, itemStyle }`),
+  // so it doesn't affect rendering or the current click pipeline.
+  // `adaptItemClick` resolves the original item via `dataIndex`,
+  // not `id` — keeping `id` here is harmless but not load-bearing.
   return items.map((it) => ({
     id: it.id,
     label: it.label,
