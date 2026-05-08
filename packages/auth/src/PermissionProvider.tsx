@@ -8,6 +8,28 @@ interface PermissionContextValue {
   authz: AuthzMeResponse | null;
   /** Whether initial load is complete */
   initialized: boolean;
+  /**
+   * PR-FE-4 (Codex thread 019e08e2 iter-15 AGREE absorb, 2026-05-08):
+   * `authorizationReady` is the canonical "permissions resolved with a
+   * concrete identity" gate. Distinct from `initialized` which fires
+   * even when /authz/me returned 401 / authz=null (session-expired
+   * path). Pre-fix `ProtectedRoute` used `initialized` as the wait
+   * gate, so a 401-during-bootstrap → `initialized=true, authz=null`
+   * → `isSuperAdmin()/hasModule()` both returned false → redirect to
+   * `/unauthorized` even when the user actually had MANAGE on the
+   * required module (live testai symptom on /admin/users). Post-fix
+   * gate is true only when:
+   * <ul>
+   *   <li>permitAll mode (no authz needed), OR</li>
+   *   <li>{@code authz?.userId} is non-empty (real identity loaded)</li>
+   * </ul>
+   * Sessions on a 401 path stay false → ProtectedRoute keeps showing
+   * a loading state (returns null) instead of bouncing to
+   * /unauthorized; the auth FSM's recovery loop (silent SSO,
+   * AuthBootstrapper retry, or operator login) eventually populates a
+   * real identity and the gate clears.
+   */
+  authorizationReady: boolean;
   /** Whether currently loading */
   loading: boolean;
   /**
@@ -42,6 +64,7 @@ interface PermissionContextValue {
 const PermissionContext = createContext<PermissionContextValue>({
   authz: null,
   initialized: false,
+  authorizationReady: false,
   loading: false,
   sessionExpired: false,
   hasModule: () => false,
@@ -256,6 +279,13 @@ export function PermissionProvider({
     () => ({
       authz,
       initialized,
+      // PR-FE-4 (Codex thread 019e08e2 iter-15 AGREE absorb): only true
+      // when there is a real identity behind the permissions snapshot.
+      // 401 / network-error / null-authz paths set initialized=true so
+      // ProtectedRoute exits the "still loading" branch — but they MUST
+      // NOT trip the permission deny path. Gate this explicitly via
+      // authorizationReady which the route guard waits on instead.
+      authorizationReady: permitAll || Boolean(authz?.userId),
       loading,
       sessionExpired,
       hasModule: (module: string) => {
@@ -292,6 +322,9 @@ export function PermissionProvider({
       refresh: loadAuthz,
     }),
     [authz, initialized, loading, sessionExpired, permitAll, loadAuthz],
+    // Note: `authorizationReady` is derived inline from {authz?.userId, permitAll}
+    // — both already in the dependency array, so the memoized value
+    // re-computes correctly without listing the derived flag explicitly.
   );
 
   return <PermissionContext.Provider value={value}>{children}</PermissionContext.Provider>;

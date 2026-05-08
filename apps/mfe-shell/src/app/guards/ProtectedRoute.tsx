@@ -34,13 +34,22 @@ export const ProtectedRoute = ({
     authPhase === 'authzReady' ||
     authPhase === 'refreshing';
   const permissions = usePermissions();
-  const { hasModule, isSuperAdmin, initialized: permissionsInitialized } = permissions;
+  // PR-FE-4 (Codex thread 019e08e2 iter-15 AGREE absorb, 2026-05-08):
+  // wait on `authorizationReady` (true only when a real identity has
+  // populated /authz/me) instead of `initialized` (true even on 401).
+  // Pre-fix /admin/users live symptom: cold mount race set
+  // initialized=true with authz=null → isSuperAdmin/hasModule both
+  // returned false → redirect to /unauthorized — even though the user
+  // had modules.USER_MANAGEMENT=MANAGE on the eventual /authz/me.
+  // The new gate keeps ProtectedRoute on its "still loading" path
+  // (returns null) until a concrete identity arrives.
+  const { hasModule, isSuperAdmin, authorizationReady } = permissions;
   const location = useLocation();
   const permitAllMode = isPermitAllMode();
 
   // Wait for both auth FSM AND permissions to be ready. transportReady is
   // the gate after which protected MFEs may fetch.
-  if (!initialized || isAuthBootstrapping || (!permitAllMode && token && !permissionsInitialized)) {
+  if (!initialized || isAuthBootstrapping || (!permitAllMode && token && !authorizationReady)) {
     return null;
   }
 

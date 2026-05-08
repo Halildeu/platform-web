@@ -18,6 +18,13 @@ const permissionsMock = {
   hasModule: () => true,
   isSuperAdmin: () => false,
   initialized: true,
+  // PR-FE-4 (Codex thread 019e08e2 iter-15 AGREE absorb, 2026-05-08):
+  // ProtectedRoute now waits on authorizationReady (real-identity gate)
+  // instead of initialized. Mock must default to true so the existing
+  // "renders children when authenticated and authorized" expectation
+  // continues to hold; the new dedicated cases below exercise the
+  // false → keep-loading branch.
+  authorizationReady: true,
 };
 
 const authModeMock = {
@@ -74,6 +81,7 @@ describe('ProtectedRoute', () => {
     authState.auth.token = null;
     permissionsMock.hasModule = () => true;
     permissionsMock.isSuperAdmin = () => false;
+    permissionsMock.authorizationReady = true;
     authState.auth.initialized = true;
     authModeMock.permitAll = false;
   });
@@ -117,6 +125,40 @@ describe('ProtectedRoute', () => {
     authState.auth.initialized = true;
 
     renderWithRouter();
+    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+  });
+
+  it('PR-FE-4: authorizationReady=false → returns null (still loading), no /unauthorized redirect', () => {
+    // Mirrors the testai cold-mount race: token+initialized=true but
+    // /authz/me hasn't populated authz yet → authorizationReady=false.
+    // Pre-fix this redirected to /unauthorized with reason='module_denied'
+    // because hasModule() returned false against an empty authz; post-fix
+    // the route guard stays in its "loading" branch (returns null) until
+    // authorizationReady flips true.
+    authState.auth.token = 'valid-token';
+    permissionsMock.hasModule = () => false;
+    permissionsMock.authorizationReady = false;
+
+    const { container } = renderWithRouter();
+
+    // Container empty: ProtectedRoute returned null; route guard did NOT
+    // navigate to /unauthorized.
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText('Unauthorized Page')).not.toBeInTheDocument();
+  });
+
+  it('PR-FE-4: authorizationReady=true + isSuperAdmin=true → renders children even if hasModule=false', () => {
+    // Real-identity superAdmin path: authz?.userId populated, isSuperAdmin
+    // returns true; module check bypassed. Verifies that the new
+    // authorizationReady gate composes correctly with the existing
+    // isSuperAdmin override (live testai user:1 superAdmin=true case).
+    authState.auth.token = 'valid-token';
+    permissionsMock.hasModule = () => false;
+    permissionsMock.isSuperAdmin = () => true;
+    permissionsMock.authorizationReady = true;
+
+    renderWithRouter();
+
     expect(screen.getByText('Protected Content')).toBeInTheDocument();
   });
 });
