@@ -241,6 +241,39 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           kcUrl: authConfig.keycloak.url,
         });
 
+        // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
+        // When window.__authContractMockToken is set (the Playwright
+        // probe planted it before navigation), the controller still
+        // runs the production sequence (cookie + authz + dispatch) but
+        // keycloak.init becomes a no-op that has already populated
+        // token + tokenParsed + authenticated from the mock JWT.
+        // Production bundles never see this branch — the mock token
+        // is only ever set under VITE_AUTH_CONTRACT_E2E=1.
+        const mockToken =
+          typeof window !== 'undefined' ? window.__authContractMockToken : undefined;
+        if (mockToken) {
+          const parts = mockToken.split('.');
+          let exp = Math.floor(Date.now() / 1000) + 3600;
+          if (parts.length === 3) {
+            try {
+              const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+              if (typeof payload.exp === 'number') {
+                exp = payload.exp;
+              }
+            } catch {
+              // fall back to default exp
+            }
+          }
+          (keycloak as { token: string | undefined }).token = mockToken;
+          (keycloak as { tokenParsed: Record<string, unknown> | undefined }).tokenParsed = {
+            exp,
+          };
+          (keycloak as { authenticated: boolean | undefined }).authenticated = true;
+          console.info('[AuthBootstrapper] e2e-mock bypass — keycloak.init no-op', {
+            exp,
+          });
+        }
+
         // Phase 2 PR-Auth-1 (Codex iter-25 §2 absorb, thread 019e0119):
         // bootstrap delegated to extracted controller so unit tests can
         // exercise the same code path. AuthBootstrapper.test.ts no longer
@@ -250,7 +283,9 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
             authenticated: keycloak.authenticated,
             token: keycloak.token,
             tokenParsed: keycloak.tokenParsed,
-            init: (opts) => keycloak.init(opts),
+            // PR-E2E-6: when mockToken set, init is a no-op; the keycloak
+            // surface already carries the test token from above.
+            init: mockToken ? async () => undefined : (opts) => keycloak.init(opts),
           },
           initOptions,
           setTokenCookie,

@@ -498,6 +498,53 @@ jobs:
           path: packages/design-system/src/__visual__/__snapshots__/invariants
           retention-days: 14
 
+  auth-contract-e2e-required:
+    name: Auth Transport Contract E2E (Chromium, hard gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Skip on baseline-only manual runs (matches visual-invariant pattern).
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run auth transport contract E2E (Chromium)
+        env:
+          # Phase 2 PR-E2E-6: enables the test-only window probe surface
+          # (window.__authContractProbe) + AuthBootstrapper mock-token
+          # bypass. Production builds (no env var) never expose either.
+          VITE_AUTH_CONTRACT_E2E: '1'
+        run: |
+          # auth-business-routes-live stack keeps Keycloak mode active
+          # (NOT permitAll/fakeAuth — Codex iter-2 must-fix #1). The
+          # AuthBootstrapper sees window.__authContractMockToken planted
+          # by Playwright before navigation, skips keycloak.init(), and
+          # runs the rest of the production bootstrap sequence so the
+          # transport-order assertion has real signal.
+          node ./scripts/ops/run-with-frontend-stack.mjs \
+            --stack auth-business-routes-live \
+            -- pnpm exec playwright test \
+              --config=tests/playwright/playwright.config.ts \
+              --project=chromium \
+              tests/playwright/auth-transport-contract.spec.ts
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: auth-contract-e2e-report
+          path: |
+            playwright-report
+            test-results
+
   web-test-gate-required:
     name: Web Test Gate (aggregator)
     runs-on: ubuntu-latest
@@ -508,6 +555,7 @@ jobs:
       - cssom-full-advisory
       - lint-warn-visibility-advisory
       - visual-invariant-required
+      - auth-contract-e2e-required
     # Always run so the aggregator can read advisory results when STRICT_GATES=true.
     # Skip on baseline-only manual runs (visual-invariant-required is skipped).
     if: always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline')
@@ -519,11 +567,13 @@ jobs:
           token_result="${{ needs.token-drift-required.result }}"
           cssom_result="${{ needs.cssom-canary-required.result }}"
           visual_result="${{ needs.visual-invariant-required.result }}"
+          auth_contract_result="${{ needs.auth-contract-e2e-required.result }}"
           echo "unit-required: $unit_result"
           echo "token-drift-required: $token_result"
           echo "cssom-canary-required: $cssom_result"
           echo "visual-invariant-required: $visual_result"
-          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" ]]; then
+          echo "auth-contract-e2e-required: $auth_contract_result"
+          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" || "$auth_contract_result" != "success" ]]; then
             echo "::error::A required job failed."
             exit 1
           fi
