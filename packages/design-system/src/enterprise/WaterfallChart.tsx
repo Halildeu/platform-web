@@ -50,9 +50,14 @@ export interface WaterfallChartProps extends AccessControlledProps {
 type XWaterfallData = XWaterfallChartProps['data'];
 
 function adaptItemsToData(items: WaterfallItem[]): XWaterfallData {
+  // x-charts `WaterfallDataPoint` uses `label` (not `name`); the
+  // previous mapping emitted `name: it.label` which produced
+  // structurally-incompatible objects (`label` missing). The `id`
+  // stays as a side carry so DS-level click handlers can still
+  // resolve back to the original item by id.
   return items.map((it) => ({
     id: it.id,
-    name: it.label,
+    label: it.label,
     value: it.value,
     type: it.type,
   })) as XWaterfallData;
