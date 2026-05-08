@@ -105,7 +105,19 @@ export function MatrixCanvas({
       <section style={{ marginTop: 24 }}>
         <h3>Form Controls</h3>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Input placeholder="Enter text" defaultValue="Sample" density={density} />
+          {/*
+            `Input` uses the narrower `FieldDensity` ('compact' |
+            'comfortable') from FieldControlPrimitives; the matrix
+            `density` prop also accepts 'spacious' for Button /
+            Checkbox / Switch. Map 'spacious' → 'comfortable' for the
+            Input row so the matrix canvas typechecks without
+            widening the field-primitive density contract.
+          */}
+          <Input
+            placeholder="Enter text"
+            defaultValue="Sample"
+            density={density === 'spacious' ? 'comfortable' : density}
+          />
           <Checkbox defaultChecked density={density} aria-label="Checkbox" />
           <Switch defaultChecked density={density} aria-label="Switch" />
         </div>

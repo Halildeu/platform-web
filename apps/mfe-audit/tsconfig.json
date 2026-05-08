@@ -18,7 +18,9 @@
     "jsx": "react-jsx",
     "paths": {
       "@mfe/design-system": ["../../packages/design-system/src"],
-      "@mfe/design-system/*": ["../../packages/design-system/src/*"]
+      "@mfe/design-system/*": ["../../packages/design-system/src/*"],
+      "@mfe/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@mfe/shared-http": ["../../packages/shared-http/src"]
     }
   },
   "include": ["src"]
