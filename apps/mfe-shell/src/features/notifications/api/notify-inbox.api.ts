@@ -78,6 +78,13 @@ async function unwrapRequestFetchFn(
     input.headers.forEach((value, key) => {
       headers[key] = value;
     });
+    // Codex iter-7 REVISE absorb: full Request semantics preservation.
+    // {@code signal} is the critical one — RTK Query writes
+    // {@code api.signal} (and any timeout signal) onto the Request
+    // before calling fetchFn, so dropping it would silently disable
+    // abort / timeout / cancel for inbox API queries. The remaining
+    // properties (referrerPolicy, keepalive) are added for parity so
+    // the unwrapped reissue is byte-equivalent to the original Request.
     const reissue: RequestInit = {
       method: input.method,
       headers,
@@ -86,9 +93,15 @@ async function unwrapRequestFetchFn(
       cache: input.cache,
       redirect: input.redirect,
       referrer: input.referrer,
+      referrerPolicy: input.referrerPolicy,
       integrity: input.integrity,
+      keepalive: input.keepalive,
+      signal: input.signal,
     };
-    if (input.method !== 'GET' && input.method !== 'HEAD') {
+    // Don't fabricate an empty ArrayBuffer when the caller never set a
+    // body — the RTK Query mutations that do carry payloads will hit
+    // this branch with input.body !== null and we faithfully forward.
+    if (input.method !== 'GET' && input.method !== 'HEAD' && input.body !== null) {
       reissue.body = await input.clone().arrayBuffer();
     }
     return fetch(input.url, reissue);

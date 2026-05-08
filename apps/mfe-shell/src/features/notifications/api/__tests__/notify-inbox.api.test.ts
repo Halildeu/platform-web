@@ -314,8 +314,15 @@ describe('notifyInboxApi prepareHeaders state-derived identity', () => {
  * {@code fetch} stub with a string URL, never a Request instance.
  */
 describe('notifyInboxApi unwrapRequestFetchFn (Request→string workaround)', () => {
-  it('passes string URL + init to fetch (never a Request instance)', async () => {
-    const calls: Array<{ inputType: string; method: string }> = [];
+  it('passes string URL + init to fetch and preserves Request semantics', async () => {
+    type CallSnapshot = {
+      inputType: string;
+      method: string;
+      headers: Record<string, string>;
+      credentials?: RequestCredentials;
+      hasSignal: boolean;
+    };
+    const calls: CallSnapshot[] = [];
     const orig = (global as unknown as { fetch: typeof fetch }).fetch;
     vi.stubGlobal(
       'fetch',
@@ -324,6 +331,13 @@ describe('notifyInboxApi unwrapRequestFetchFn (Request→string workaround)', ()
           inputType:
             typeof input === 'string' ? 'string' : input instanceof Request ? 'Request' : 'URL',
           method: (init?.method ?? 'GET').toUpperCase(),
+          headers: headersToRecord(init?.headers),
+          credentials: init?.credentials,
+          // Codex iter-7 REVISE absorb: RTK Query writes api.signal +
+          // any per-request timeout signal onto the Request before
+          // fetchFn runs. The unwrap must forward that signal so
+          // abort/timeout/cancel continue to fire after the reissue.
+          hasSignal: init?.signal != null && typeof init.signal === 'object',
         });
         recorded.push({
           url: typeof input === 'string' ? input : String(input),
@@ -356,6 +370,15 @@ describe('notifyInboxApi unwrapRequestFetchFn (Request→string workaround)', ()
     expect(calls).toHaveLength(1);
     expect(calls[0].inputType).toBe('string');
     expect(calls[0].method).toBe('GET');
+
+    // Header + credential preservation through the unwrap.
+    expect(calls[0].headers['x-org-id']).toBe('default');
+    expect(calls[0].headers['x-subscriber-id']).toBe('sub-1');
+    expect(calls[0].credentials).toBe('include');
+
+    // Abort/timeout signal must carry over so RTK Query cancellation
+    // and any per-request timeout continue to fire.
+    expect(calls[0].hasSignal).toBe(true);
 
     // Restore original fetch handler for subsequent describe blocks.
     vi.unstubAllGlobals();
