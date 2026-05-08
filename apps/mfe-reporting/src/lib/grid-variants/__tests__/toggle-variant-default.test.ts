@@ -1,5 +1,9 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+// Migrated from `node:test` to vitest (Wave 1 housekeeping).
+// The previous Node test runner imports failed at vitest collect
+// time because Vite cannot bundle Node built-ins from the test
+// environment, so this suite was effectively dead code in CI even
+// though the file shape suggested it was running.
+import { describe, test, expect } from 'vitest';
 import type { GridVariant } from '@mfe/shared-types';
 import { toggleVariantDefault } from '../toggle-variant-default';
 
@@ -21,58 +25,58 @@ const buildVariant = (overrides: Partial<GridVariant>): GridVariant => ({
   ...overrides,
 });
 
-test('toggleVariantDefault kişisel varyant için updateVariant çağırır', async () => {
-  const variant = buildVariant({ isGlobal: false });
-  const calls: string[] = [];
+describe('toggleVariantDefault', () => {
+  test('kişisel varyant için updateVariant çağırır', async () => {
+    const variant = buildVariant({ isGlobal: false });
+    const calls: string[] = [];
 
-  const updated = await toggleVariantDefault(variant, true, {
-    updateVariant: async (payload) => {
-      calls.push(`updateVariant:${JSON.stringify(payload)}`);
-      return buildVariant({ ...variant, ...payload, isDefault: payload.isDefault ?? false });
-    },
-    updatePreference: async (payload) => {
-      calls.push(`updatePreference:${JSON.stringify(payload)}`);
-      return buildVariant({ ...variant, isUserDefault: Boolean(payload.isDefault) });
-    },
+    const updated = await toggleVariantDefault(variant, true, {
+      updateVariant: async (payload) => {
+        calls.push(`updateVariant:${JSON.stringify(payload)}`);
+        return buildVariant({ ...variant, ...payload, isDefault: payload.isDefault ?? false });
+      },
+      updatePreference: async (payload) => {
+        calls.push(`updatePreference:${JSON.stringify(payload)}`);
+        return buildVariant({ ...variant, isUserDefault: Boolean(payload.isDefault) });
+      },
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/^updateVariant:/);
+    expect(updated.isDefault).toBe(true);
   });
 
-  assert.equal(calls.length, 1, 'Sadece updateVariant çağrılmalı');
-  assert.ok(calls[0].startsWith('updateVariant:'), 'İlk çağrı updateVariant olmalı');
-  assert.equal(updated.isDefault, true);
-});
+  test('global varyant için preference servisini çağırır', async () => {
+    const variant = buildVariant({ isGlobal: true });
+    const calls: string[] = [];
 
-test('toggleVariantDefault global varyant için preference servisini çağırır', async () => {
-  const variant = buildVariant({ isGlobal: true });
-  const calls: string[] = [];
+    const updated = await toggleVariantDefault(variant, true, {
+      updateVariant: async (payload) => {
+        calls.push(`updateVariant:${JSON.stringify(payload)}`);
+        return buildVariant({ ...variant, ...payload, isDefault: payload.isDefault ?? false });
+      },
+      updatePreference: async (payload) => {
+        calls.push(`updatePreference:${JSON.stringify(payload)}`);
+        return buildVariant({ ...variant, isUserDefault: Boolean(payload.isDefault) });
+      },
+    });
 
-  const updated = await toggleVariantDefault(variant, true, {
-    updateVariant: async (payload) => {
-      calls.push(`updateVariant:${JSON.stringify(payload)}`);
-      return buildVariant({ ...variant, ...payload, isDefault: payload.isDefault ?? false });
-    },
-    updatePreference: async (payload) => {
-      calls.push(`updatePreference:${JSON.stringify(payload)}`);
-      return buildVariant({ ...variant, isUserDefault: Boolean(payload.isDefault) });
-    },
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatch(/^updatePreference:/);
+    expect(updated.isUserDefault).toBe(true);
   });
 
-  assert.equal(calls.length, 1, 'Sadece updatePreference çağrılmalı');
-  assert.ok(calls[0].startsWith('updatePreference:'), 'Çağrı preference servisine gitmeli');
-  assert.equal(updated.isUserDefault, true);
-});
+  test('kişisel varyantta updateVariant hatasını yukarı fırlatır', async () => {
+    const variant = buildVariant({ isGlobal: false });
+    const error = new Error('update failed');
 
-test('toggleVariantDefault kişisel varyantta updateVariant hatasını yukarı fırlatır', async () => {
-  const variant = buildVariant({ isGlobal: false });
-  const error = new Error('update failed');
-
-  await assert.rejects(
-    () =>
+    await expect(
       toggleVariantDefault(variant, true, {
         updateVariant: async () => {
           throw error;
         },
         updatePreference: async () => buildVariant(variant),
       }),
-    error,
-  );
+    ).rejects.toThrow(error);
+  });
 });

@@ -113,8 +113,15 @@ function buildPdfFromImage(dataUrl: string, title?: string): Blob {
   objs.push('6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj');
 
   // Assemble PDF
+  //
+  // Wave 1 housekeeping: declared as `BlobPart[]` (instead of the
+  // narrower `(string | Uint8Array)[]`) so the array type matches the
+  // Blob constructor signature. TypeScript 5.x widened `Uint8Array` to
+  // `Uint8Array<ArrayBufferLike>`, which is no longer directly
+  // assignable to `BufferSource` (`ArrayBufferView<ArrayBuffer>`); the
+  // `BlobPart[]` type is what `new Blob(parts, ...)` actually wants.
   const header = '%PDF-1.4\n';
-  const parts: (string | Uint8Array)[] = [header];
+  const parts: BlobPart[] = [header];
   const offsets: number[] = [];
   let pos = header.length;
 
