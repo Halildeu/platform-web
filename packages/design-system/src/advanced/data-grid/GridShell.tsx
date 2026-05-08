@@ -38,7 +38,15 @@ import { isDrawerOpenSafeTarget } from './internal/drawer-target';
  * Local to GridShell on purpose — generalizing across DS handler
  * boundaries would expand iter-48's scope per Codex review.
  */
-function composeHandlers<E extends { event?: { defaultPrevented?: boolean } | null }>(
+// AG Grid v34 event types (`GridReadyEvent`, `PaginationChangedEvent`,
+// `FilterChangedEvent`, etc.) don't all expose an `event` DOM-event
+// field; only mouse/touch interaction events do. Constraining `E` to
+// `{ event?: ... }` rejected the typed AG Grid events at the call
+// sites, so the generic stays open (`object`) and the
+// `defaultPrevented` lookup walks through `unknown` at runtime —
+// behaviour unchanged for events that DO carry `event.event`, no-op
+// for events that don't.
+function composeHandlers<E extends object>(
   consumer: ((event: E) => void) | undefined,
   ds: (event: E) => void,
 ): (event: E) => void {
@@ -46,7 +54,8 @@ function composeHandlers<E extends { event?: { defaultPrevented?: boolean } | nu
     if (typeof consumer === 'function') {
       consumer(event);
     }
-    if (event.event?.defaultPrevented) return;
+    const domEvent = (event as { event?: { defaultPrevented?: boolean } | null }).event;
+    if (domEvent?.defaultPrevented) return;
     ds(event);
   };
 }

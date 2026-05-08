@@ -45,7 +45,8 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
       title={accessReason}
       data-access-state={accessState.state}
     >
-      <XPieChart data={data ?? []} {...(rest as XPieChartProps)} />
+      {/* Spread first; explicit `data` last (see AreaChart for context). */}
+      <XPieChart {...(rest as XPieChartProps)} data={data ?? []} />
     </div>
   );
 });
