@@ -32,11 +32,29 @@ import type { RootState } from '../../../app/store/store';
  *
  * <h3>OrgId</h3>
  *
- * Hard-coded {@code "default"} (single-tenant platform; no tenant claim
- * in JWT yet — Faz 24 hardening introduces it).
+ * <p>Faz 24 / PR-5.3 (Codex thread `019e0675` AGREE iter-1) — orgId is
+ * now sourced from the JWT principal:
+ *
+ * <ol>
+ *   <li>{@code state.auth.user.orgId} — single-org JWT claim
+ *       ({@code org_id} or {@code tenant_id} alias) carried into
+ *       {@code UserProfile} by {@code mapKeycloakProfile}.</li>
+ *   <li>{@code DEFAULT_ORG_ID} (legacy {@code "default"}) — transitional
+ *       fallback while real tokens still lack the {@code org_id} claim.
+ *       Removed in PR-5.4 once the {@code source="default"} cutover-gate
+ *       metric stays at zero for the observation window (24h prod /
+ *       4h pre-prod).</li>
+ * </ol>
+ *
+ * <p>Multi-org operators ({@code allowedOrgs.length > 1}) MUST resolve
+ * {@code orgId} via an explicit UI selector before the inbox call
+ * fires — picking {@code allowedOrgs[0]} silently is forbidden by the
+ * PR-5.3 contract. Until the multi-org UX ships the selector, those
+ * users see a {@code null} identity (skip inbox) which is the correct
+ * fail-closed behaviour.
  */
 
-/** Single-tenant default. Replace once tenant claim lands (Faz 24). */
+/** Legacy single-tenant default. Removed in PR-5.4 (strict cutover). */
 export const DEFAULT_ORG_ID = 'default' as const;
 
 /**
@@ -69,6 +87,33 @@ export const selectNotifyIdentity = (
   if (!subscriberId) {
     return null;
   }
+
+  // Faz 24 / PR-5.3 — prefer the JWT-derived orgId; only fall back to
+  // the legacy hardcoded default in the single-tenant canary path
+  // (no `allowedOrgs[]` claim either). Multi-org operators without
+  // an explicit selection get a fail-closed `null` so we never
+  // implicitly write to `DEFAULT_ORG_ID` when the principal has access
+  // to multiple orgs (Codex thread `019e0675` REVISE iter-3 absorb —
+  // implicit `default` would have been a worse form of the
+  // forbidden `allowedOrgs[0]` silent pick).
+  const profileOrgId = readProfileOrgId(state);
+  if (profileOrgId !== undefined) {
+    return { orgId: profileOrgId, subscriberId };
+  }
+
+  const allowedOrgs = readProfileAllowedOrgs(state);
+  if (allowedOrgs && allowedOrgs.length > 1) {
+    // Multi-org operator without a committed current selection.
+    // Skip the inbox call; the UI is expected to wire a selector
+    // that writes `state.auth.user.orgId` once the user picks one.
+    return null;
+  }
+
+  // Legacy / single-tenant canary path — token has neither `org_id`
+  // nor `allowed_orgs`, fall back to the historical `'default'`
+  // selector. PR-5.4 closes this fallback once the
+  // `notify_org_access_match_total{source="default"}` cutover-gate
+  // counter stays at zero for the observation window.
   return { orgId: DEFAULT_ORG_ID, subscriberId };
 };
 
@@ -111,4 +156,33 @@ const readAuthzUserId = (state: RootState): string | undefined => {
 
 const readProfileId = (state: RootState): string | undefined => {
   return coerceIdentityValue(state.auth.user?.id);
+};
+
+/**
+ * Pulls the JWT-derived {@code orgId} from the persisted profile. Set
+ * by {@code mapKeycloakProfile} from the {@code org_id} or
+ * {@code tenant_id} claim. Stays {@code undefined} for tokens that
+ * predate the Keycloak realm mapper rollout — the caller falls back
+ * to {@code DEFAULT_ORG_ID} during the PR-5.3 canary window.
+ */
+const readProfileOrgId = (state: RootState): string | undefined => {
+  return coerceIdentityValue(state.auth.user?.orgId);
+};
+
+/**
+ * Pulls the JWT-derived {@code allowedOrgs} list. Set by
+ * {@code mapKeycloakProfile} from the {@code allowed_orgs[]} claim.
+ * Used by {@link selectNotifyIdentity} only to decide between the
+ * legacy single-tenant fallback and a fail-closed {@code null} when
+ * the operator has multi-org reach but no committed current selection
+ * — picking {@code allowedOrgs[0]} silently is forbidden by the
+ * PR-5.3 contract.
+ */
+const readProfileAllowedOrgs = (state: RootState): string[] | undefined => {
+  const list = state.auth.user?.allowedOrgs;
+  if (!Array.isArray(list)) return undefined;
+  const normalised = list
+    .map((value) => coerceIdentityValue(value))
+    .filter((value): value is string => value !== undefined);
+  return normalised.length > 0 ? normalised : undefined;
 };

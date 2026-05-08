@@ -33,6 +33,37 @@ export interface UserProfile {
    * {@code subscriberId} JWT claim is rolled out.
    */
   subscriberId?: string;
+  /**
+   * Canonical tenant id (Faz 24 / PR-5.3 — Codex thread `019e0675`
+   * AGREE iter-1).
+   *
+   * <p>Sourced from the JWT {@code org_id} claim (preferred) or
+   * {@code tenant_id} alias. When the principal has access to a
+   * single org this field carries that org's id verbatim and
+   * downstream callers (notify selectors, intent submit body) use
+   * it as the explicit selector. {@code undefined} when the JWT
+   * has no org claim — the legacy {@code DEFAULT_ORG_ID} fallback
+   * still applies during PR-5.3's canary window and is removed in
+   * PR-5.4 once the {@code source="default"} cutover-gate metric
+   * is at zero.
+   *
+   * <p>Multi-org operators receive a non-empty {@code allowedOrgs}
+   * list instead; {@code orgId} stays {@code undefined} until the
+   * UI commits an explicit selection (no implicit
+   * {@code allowedOrgs[0]} pick — Codex iter-1 hard rule).
+   */
+  orgId?: string;
+  /**
+   * Allow-list of orgs the principal can address (Faz 24 / PR-5.3).
+   *
+   * <p>Sourced from the JWT {@code allowed_orgs} claim. Drives
+   * multi-tenant operator UX (org switcher, scoped lookups). The
+   * notify identity selector ignores this list when {@code orgId}
+   * is set; it only matters when the UI exposes an explicit
+   * current-org selection state. Picking {@code allowedOrgs[0]}
+   * silently is forbidden by the PR-5.3 contract.
+   */
+  allowedOrgs?: string[];
   email: string;
   role: string;
   permissions: string[];

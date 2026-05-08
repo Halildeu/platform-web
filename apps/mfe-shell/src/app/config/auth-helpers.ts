@@ -154,6 +154,45 @@ export const mapKeycloakProfile = (token: string | null): Partial<UserProfile> |
   } else if (typeof rawSubscriberId === 'number' && Number.isFinite(rawSubscriberId)) {
     subscriberId = String(rawSubscriberId);
   }
+
+  // Faz 24 / PR-5.3 (Codex thread `019e0675` AGREE iter-1): canonical
+  // tenant claim resolution. Single-org JWTs carry `org_id`
+  // (preferred) or `tenant_id` (alias). Multi-org operators carry
+  // `allowed_orgs[]` and the UI is responsible for picking the
+  // current selection — picking `allowed_orgs[0]` silently is
+  // forbidden by the PR-5.3 contract, so we DON'T derive `orgId`
+  // from the list here. Both shapes feed the notify identity
+  // selector; `DEFAULT_ORG_ID` fallback remains until PR-5.4
+  // closes it.
+  const rawOrgId = claimsObj?.['org_id'] ?? claimsObj?.['tenant_id'];
+  let orgId: string | undefined;
+  if (typeof rawOrgId === 'string') {
+    const trimmed = rawOrgId.trim();
+    orgId = trimmed.length > 0 ? trimmed : undefined;
+  } else if (typeof rawOrgId === 'number' && Number.isFinite(rawOrgId)) {
+    orgId = String(rawOrgId);
+  }
+
+  const rawAllowedOrgs = claimsObj?.['allowed_orgs'];
+  let allowedOrgs: string[] | undefined;
+  if (Array.isArray(rawAllowedOrgs)) {
+    const normalised = rawAllowedOrgs
+      .map((value: unknown) => {
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          return trimmed.length > 0 ? trimmed : undefined;
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          return String(value);
+        }
+        return undefined;
+      })
+      .filter((value: string | undefined): value is string => value !== undefined);
+    if (normalised.length > 0) {
+      allowedOrgs = normalised;
+    }
+  }
+
   return {
     id: (claims['sub'] as string) ?? undefined,
     email,
@@ -165,5 +204,7 @@ export const mapKeycloakProfile = (token: string | null): Partial<UserProfile> |
     // Only attach when present so reducers using `?? fallback` don't
     // accidentally see a `null` and treat it as "explicitly cleared".
     ...(subscriberId !== undefined ? { subscriberId } : {}),
+    ...(orgId !== undefined ? { orgId } : {}),
+    ...(allowedOrgs !== undefined ? { allowedOrgs } : {}),
   };
 };
