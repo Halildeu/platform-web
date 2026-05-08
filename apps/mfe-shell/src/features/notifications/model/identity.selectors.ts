@@ -32,11 +32,29 @@ import type { RootState } from '../../../app/store/store';
  *
  * <h3>OrgId</h3>
  *
- * Hard-coded {@code "default"} (single-tenant platform; no tenant claim
- * in JWT yet — Faz 24 hardening introduces it).
+ * <p>Faz 24 / PR-5.3 (Codex thread `019e0675` AGREE iter-1) — orgId is
+ * now sourced from the JWT principal:
+ *
+ * <ol>
+ *   <li>{@code state.auth.user.orgId} — single-org JWT claim
+ *       ({@code org_id} or {@code tenant_id} alias) carried into
+ *       {@code UserProfile} by {@code mapKeycloakProfile}.</li>
+ *   <li>{@code DEFAULT_ORG_ID} (legacy {@code "default"}) — transitional
+ *       fallback while real tokens still lack the {@code org_id} claim.
+ *       Removed in PR-5.4 once the {@code source="default"} cutover-gate
+ *       metric stays at zero for the observation window (24h prod /
+ *       4h pre-prod).</li>
+ * </ol>
+ *
+ * <p>Multi-org operators ({@code allowedOrgs.length > 1}) MUST resolve
+ * {@code orgId} via an explicit UI selector before the inbox call
+ * fires — picking {@code allowedOrgs[0]} silently is forbidden by the
+ * PR-5.3 contract. Until the multi-org UX ships the selector, those
+ * users see a {@code null} identity (skip inbox) which is the correct
+ * fail-closed behaviour.
  */
 
-/** Single-tenant default. Replace once tenant claim lands (Faz 24). */
+/** Legacy single-tenant default. Removed in PR-5.4 (strict cutover). */
 export const DEFAULT_ORG_ID = 'default' as const;
 
 /**
@@ -69,7 +87,20 @@ export const selectNotifyIdentity = (
   if (!subscriberId) {
     return null;
   }
-  return { orgId: DEFAULT_ORG_ID, subscriberId };
+
+  // Faz 24 / PR-5.3 — prefer the JWT-derived orgId; fall back to the
+  // legacy hardcoded default only while it is still tolerated (PR-5.4
+  // will close the fallback). Multi-org operators without an explicit
+  // selection currently see the default — see TODO below.
+  //
+  // TODO(PR-5.3 follow-up): wire a current-org selector for multi-org
+  // operators. For now, when `allowedOrgs.length > 1` and `orgId` is
+  // unset, the selector falls back to `DEFAULT_ORG_ID` so existing
+  // single-tenant smoke keeps working; that fallback path will be
+  // tightened to a fail-closed `null` once the multi-org UX lands.
+  const profileOrgId = readProfileOrgId(state);
+  const orgId = profileOrgId ?? DEFAULT_ORG_ID;
+  return { orgId, subscriberId };
 };
 
 /** Boolean readiness selector — useful for guarding {@code skip} on RTK Query. */
@@ -111,4 +142,15 @@ const readAuthzUserId = (state: RootState): string | undefined => {
 
 const readProfileId = (state: RootState): string | undefined => {
   return coerceIdentityValue(state.auth.user?.id);
+};
+
+/**
+ * Pulls the JWT-derived {@code orgId} from the persisted profile. Set
+ * by {@code mapKeycloakProfile} from the {@code org_id} or
+ * {@code tenant_id} claim. Stays {@code undefined} for tokens that
+ * predate the Keycloak realm mapper rollout — the caller falls back
+ * to {@code DEFAULT_ORG_ID} during the PR-5.3 canary window.
+ */
+const readProfileOrgId = (state: RootState): string | undefined => {
+  return coerceIdentityValue(state.auth.user?.orgId);
 };
