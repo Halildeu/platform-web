@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload HTML mutation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: x-charts-mutation-report-${{ github.run_id }}
           path: packages/x-charts/reports/mutation/
