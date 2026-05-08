@@ -347,12 +347,19 @@ describe('WaterfallChart shim', () => {
     expect(screen.getByTestId('x-waterfall-chart')).toBeInTheDocument();
   });
 
-  it('adapts items to data shape (label -> name)', () => {
+  it('adapts items to data shape (DS label -> x-charts label)', () => {
+    // The DS shim's `WaterfallItem.label` maps directly to x-charts'
+    // `WaterfallDataPoint.label`. The previous test asserted a
+    // `label -> name` rename that drifted from the x-charts source
+    // (`WaterfallDataPoint` declares `label`, not `name`); the shim
+    // now passes the field through unchanged. `id` is kept as
+    // legacy adapter metadata (not used by the click pipeline,
+    // which resolves via `dataIndex`).
     render(<WaterfallChart items={wfItems} />);
     expect(mockState.waterfall.at(-1)?.data).toEqual([
-      { id: 'rev', name: 'Revenue', value: 1000, type: 'increase' },
-      { id: 'cost', name: 'Costs', value: -400, type: 'decrease' },
-      { id: 'net', name: 'Net', value: 600, type: 'total' },
+      { id: 'rev', label: 'Revenue', value: 1000, type: 'increase' },
+      { id: 'cost', label: 'Costs', value: -400, type: 'decrease' },
+      { id: 'net', label: 'Net', value: 600, type: 'total' },
     ]);
   });
 
