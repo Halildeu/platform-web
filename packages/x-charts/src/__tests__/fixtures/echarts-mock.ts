@@ -41,7 +41,17 @@
  * same name and behaviour so the existing ~70 tests continue to pass
  * without edits. New introspection helpers are additive.
  */
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
+
+/**
+ * Vitest 4.x narrowed `ReturnType<typeof vi.fn>` to
+ * `Mock<Procedure | Constructable>` — a union TS won't let us call
+ * directly without `new`. The mocks here are always plain functions
+ * (no `new`), so `MockFn` aliases the callable shape we actually
+ * use; assertions like `instance.dispose.mock.calls.length` keep
+ * working because `Mock` already exposes the `.mock` property.
+ */
+type MockFn = Mock & ((...args: unknown[]) => unknown);
 
 /**
  * Hoisted refs so they survive vi.mock factory's hoisting and are stable
@@ -80,7 +90,7 @@ interface MockInstance {
   __dom: HTMLElement | null;
   __disposed: boolean;
   setOption: typeof setOptionMock;
-  dispose: ReturnType<typeof vi.fn>;
+  dispose: MockFn;
   resize: ReturnType<typeof vi.fn>;
   on: typeof onMock;
   off: typeof offMock;
