@@ -1,6 +1,4 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { RootState } from '../../../app/store/store';
-import { selectNotifyIdentity } from '../model/identity.selectors';
 import type {
   InboxItemActionArgs,
   InboxItemDto,
@@ -54,42 +52,25 @@ export const notifyInboxApi = createApi({
     // by the resource-server filter chain.
     credentials: 'include',
     /**
-     * Defensive fallback for {@code X-Org-Id} / {@code X-Subscriber-Id}
-     * (PR-5.X follow-up; Codex thread {@code 019e075d} PARTIAL iter-1).
+     * Endpoint-level {@code headers: identityHeaders(arg)} is the single
+     * source of truth for {@code X-Org-Id} / {@code X-Subscriber-Id}.
      *
-     * <p>The endpoint-level {@code headers: identityHeaders(arg)} on every
-     * {@code query} remains the canonical source — resource identity and
-     * cache-key identity must come from the same place so RTK Query
-     * doesn't write a response under a stale tenant key. This pre-step
-     * only fills in headers that the endpoint config left unset/blank,
-     * which protects against the page-load race observed in production
-     * where {@code AuthBootstrapper} re-bootstraps several times in quick
-     * succession and the inbox query argument is briefly the placeholder
-     * {@code { orgId: '', subscriberId: '' }}. Without this fallback the
-     * fetch goes out with empty {@code X-Org-Id}, the gateway strips it,
-     * and the orchestrator returns 400 {@code MissingRequestHeader}.
+     * <p>PR-5.X follow-up (Codex thread {@code 019e075d} REVISE iter-2):
+     * we deliberately do NOT fall back to a state-derived identity here.
+     * RTK Query cache keys come from the endpoint argument; if a stray
+     * blank-arg request were rewritten with a state header, the response
+     * would land under an empty cache key while the request body
+     * described a fully-resolved tenant — a cache-vs-identity drift that
+     * could leak one tenant's inbox into another's cache slot during an
+     * auth re-bootstrap.
      *
-     * <p>Endpoint-level headers always win — if the caller supplied
-     * non-blank values we leave them untouched.
+     * <p>The page-load race that motivated this work is closed at the
+     * call site instead ({@code NotificationCenter} now passes
+     * {@code skipToken} while identity is unresolved). Blank-arg calls
+     * fail-closed at the orchestrator (400 {@code MissingRequestHeader})
+     * which is the correct safety boundary.
      */
-    prepareHeaders: (headers, { getState }) => {
-      const hasOrg = (headers.get('X-Org-Id') ?? '').trim().length > 0;
-      const hasSubscriber = (headers.get('X-Subscriber-Id') ?? '').trim().length > 0;
-      if (hasOrg && hasSubscriber) {
-        return headers;
-      }
-      const identity = selectNotifyIdentity(getState() as RootState);
-      if (!identity) {
-        return headers;
-      }
-      if (!hasOrg) {
-        headers.set('X-Org-Id', identity.orgId);
-      }
-      if (!hasSubscriber) {
-        headers.set('X-Subscriber-Id', identity.subscriberId);
-      }
-      return headers;
-    },
+    prepareHeaders: (headers) => headers,
   }),
   tagTypes: ['Inbox', 'UnreadCount'] as const,
   endpoints: (build) => ({

@@ -47,64 +47,11 @@ const buildRow = (overrides: Partial<InboxItemDto>): InboxItemDto => ({
   ...overrides,
 });
 
-/**
- * PR-5.X follow-up (Codex thread {@code 019e075d} PARTIAL iter-1):
- * the inbox baseQuery now reads a defensive fallback identity from
- * {@code state.auth} via {@code selectNotifyIdentity}. Tests must
- * therefore pre-load an auth slice so the selector returns the
- * expected identity. Empty/blank endpoint headers exercise the
- * fallback branch; non-blank endpoint headers must still win.
- */
-type AuthOverrides = {
-  orgId?: string | undefined;
-  subscriberId?: string | undefined;
-  unauthenticated?: boolean;
-};
-
-const buildAuthState = (overrides: AuthOverrides = {}) => {
-  const baseUser = overrides.unauthenticated
-    ? null
-    : {
-        id: 'profile-1',
-        email: 'admin@example.com',
-        role: 'ADMIN' as const,
-        permissions: [] as string[],
-        // 'in' operator distinguishes "explicitly undefined override"
-        // (drop the field entirely so the selector returns null) from
-        // "no override given" (use the default canary identity).
-        orgId: 'orgId' in overrides ? overrides.orgId : 'default',
-        subscriberId: 'subscriberId' in overrides ? overrides.subscriberId : 'sub-1',
-      };
-  return {
-    user: baseUser,
-    token: overrides.unauthenticated ? null : 'stub-token',
-    status: 'idle' as const,
-    error: null,
-    registrationStatus: 'idle' as const,
-    lastRegisteredEmail: null,
-    expiresAt: null,
-    initialized: true,
-    phase: overrides.unauthenticated ? ('unauthenticated' as const) : ('transportReady' as const),
-    authError: null,
-    authEpoch: 0,
-    transportReadyAt: overrides.unauthenticated ? null : Date.now(),
-    authzSnapshot: null,
-  };
-};
-
-const buildStore = (authOverrides: AuthOverrides = {}) => {
-  const auth = buildAuthState(authOverrides);
-  return configureStore({
-    reducer: {
-      // Minimal pass-through auth slice so {@code selectNotifyIdentity}
-      // can resolve to the same identity the production selector would
-      // surface (state.auth.user.orgId / subscriberId).
-      auth: (state = auth) => state,
-      [notifyInboxApi.reducerPath]: notifyInboxApi.reducer,
-    },
+const buildStore = () =>
+  configureStore({
+    reducer: { [notifyInboxApi.reducerPath]: notifyInboxApi.reducer },
     middleware: (gdm) => gdm().concat(notifyInboxApi.middleware),
   });
-};
 
 let recorded: RequestRecord[] = [];
 let fetchHandler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -233,60 +180,57 @@ describe('notifyInboxApi.markRead', () => {
 });
 
 /**
- * PR-5.X follow-up (Codex thread {@code 019e075d} PARTIAL iter-1):
- * defensive {@code prepareHeaders} fallback. The endpoint-level
- * {@code identityHeaders(arg)} stays canonical so cache key and
- * resource identity come from the same place; this branch only kicks
- * in when the endpoint-level headers are blank — the production race
- * we observed at page-load when {@code AuthBootstrapper} was still
- * looping. Live evidence: 4x 400 {@code MissingRequestHeader} from
- * the orchestrator before tab-switch refetches landed with proper
- * headers. With the fallback wired the request goes out with the
- * state-derived identity even if the caller forgot to forward it.
+ * PR-5.X follow-up (Codex thread {@code 019e075d} REVISE iter-2):
+ * cache-key vs identity contract. Endpoint-level
+ * {@code headers: identityHeaders(arg)} is the only source of identity
+ * headers; the baseQuery's {@code prepareHeaders} is intentionally a
+ * no-op so a stray blank-arg call cannot get rewritten into a
+ * successful state-derived response. RTK Query cache keys are produced
+ * from the endpoint argument — if {@code prepareHeaders} silently
+ * filled blank headers from {@code state.auth}, the response would
+ * land under an empty cache key while the request body described a
+ * fully-resolved tenant, leaking that tenant's inbox into another
+ * cache slot during the next auth bootstrap.
+ *
+ * <p>The page-load race that motivated the original
+ * {@code identityHeaders} bug is closed at the call site instead
+ * ({@code NotificationCenter} passes {@code skipToken} while identity
+ * is unresolved). Tests below exercise the fail-closed branch: blank
+ * endpoint args produce blank headers and the orchestrator returns 400
+ * — the correct safety boundary.
  */
-describe('notifyInboxApi prepareHeaders defensive fallback', () => {
-  it('fills X-Org-Id / X-Subscriber-Id from state when endpoint headers are blank', async () => {
-    const store = buildStore({ orgId: 'default', subscriberId: 'sub-state' });
-    const result = await store.dispatch(
-      notifyInboxApi.endpoints.listInbox.initiate({ orgId: '', subscriberId: '' }),
-    );
-    expect(result.status).toBe('fulfilled');
-
-    const req = recorded[0];
-    expect(req.headers['x-org-id']).toBe('default');
-    expect(req.headers['x-subscriber-id']).toBe('sub-state');
-  });
-
-  it('does not override non-blank endpoint headers', async () => {
-    // Endpoint headers must win so the cache key, the response, and the
-    // header set always describe the same {@code (org, subscriber)} pair.
-    const store = buildStore({ orgId: 'state-org', subscriberId: 'state-sub' });
-    const result = await store.dispatch(
-      notifyInboxApi.endpoints.listInbox.initiate({
-        orgId: 'arg-org',
-        subscriberId: 'arg-sub',
-      }),
-    );
-    expect(result.status).toBe('fulfilled');
-
-    const req = recorded[0];
-    expect(req.headers['x-org-id']).toBe('arg-org');
-    expect(req.headers['x-subscriber-id']).toBe('arg-sub');
-  });
-
-  it('leaves headers blank when both endpoint and state are missing identity', async () => {
-    // Auth slice unauthenticated → state.auth.user === null →
-    // selectNotifyIdentity returns null → prepareHeaders no-op.
-    const store = buildStore({ unauthenticated: true });
+describe('notifyInboxApi blank-arg cache contract', () => {
+  it('sends blank X-Org-Id / X-Subscriber-Id when the caller forwards a blank-identity arg (fail-closed)', async () => {
+    const store = buildStore();
     await store.dispatch(
       notifyInboxApi.endpoints.listInbox.initiate({ orgId: '', subscriberId: '' }),
     );
 
     const req = recorded[0];
-    // No fallback when state has nothing to fill in. The orchestrator
-    // will reject with 400 — that's the correct fail-closed behaviour
-    // because there is genuinely no authenticated identity to claim.
+    // No state-derived rewrite — the empty endpoint arg flows through
+    // unchanged so the cache key (derived from the arg) and the request
+    // headers describe the same identity. The orchestrator will reject
+    // with 400 in production, which is the intended fail-closed boundary.
     expect(req.headers['x-org-id'] ?? '').toBe('');
+    expect(req.headers['x-subscriber-id'] ?? '').toBe('');
+  });
+
+  it('sends blank X-Subscriber-Id when only orgId is supplied (partial-arg fail-closed)', async () => {
+    // Mixed-pair arg (only one field populated) must NOT get the missing
+    // half filled in from somewhere else. Cache key would carry
+    // {orgId: 'arg-org', subscriberId: ''} while a fallback would have
+    // sent {arg-org/state-sub} headers — exactly the cache-vs-identity
+    // drift the no-fallback contract prevents.
+    const store = buildStore();
+    await store.dispatch(
+      notifyInboxApi.endpoints.listInbox.initiate({
+        orgId: 'arg-org',
+        subscriberId: '',
+      }),
+    );
+
+    const req = recorded[0];
+    expect(req.headers['x-org-id']).toBe('arg-org');
     expect(req.headers['x-subscriber-id'] ?? '').toBe('');
   });
 });
