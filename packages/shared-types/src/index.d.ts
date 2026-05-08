@@ -27,6 +27,19 @@ export interface UserProfile {
    * backend returned the UUID fallback.
    */
   subscriberId?: string;
+  /**
+   * Canonical tenant id (Faz 24 / PR-5.3). Sourced from JWT
+   * {@code org_id} (preferred) or {@code tenant_id} (alias).
+   * Undefined when the JWT has no org claim.
+   */
+  orgId?: string;
+  /**
+   * Allow-list of orgs the principal can address (Faz 24 / PR-5.3).
+   * Sourced from JWT {@code allowed_orgs[]}. Picking
+   * {@code allowedOrgs[0]} silently is forbidden by the PR-5.3
+   * contract.
+   */
+  allowedOrgs?: string[];
   email: string;
   role: string;
   permissions: string[];

@@ -103,3 +103,78 @@ describe('mapKeycloakProfile — Faz 23.6 PR-3 subscriberId claim', () => {
     expect(profile && 'subscriberId' in profile).toBe(false);
   });
 });
+
+describe('mapKeycloakProfile — Faz 24 / PR-5.3 orgId / allowedOrgs claim mapping', () => {
+  // Codex thread `019e0675` REVISE iter-3 absorb.
+  // Contract:
+  //   1. Prefer `org_id` over `tenant_id` (alias) when both exist.
+  //   2. Coerce numeric `org_id` to string.
+  //   3. Drop blank / unrecognised types to undefined.
+  //   4. Translate `allowed_orgs[]` → `allowedOrgs` after the same
+  //      string/number coercion + filter.
+  //   5. NEVER promote `allowed_orgs[0]` into `orgId` — that picks an
+  //      implicit current selection on multi-org operators.
+
+  it('maps JWT org_id claim into profile.orgId (preferred over tenant_id)', () => {
+    const token = buildJwt({
+      sub: 'kc-uuid-7',
+      email: 'op@tenant-alpha.example',
+      org_id: 'tenant-alpha',
+      tenant_id: 'tenant-zzz-stale',
+    });
+    const profile = mapKeycloakProfile(token);
+    expect(profile?.orgId).toBe('tenant-alpha');
+  });
+
+  it('falls back to tenant_id alias when org_id claim is missing', () => {
+    const token = buildJwt({
+      sub: 'kc-uuid-8',
+      email: 'op@tenant-beta.example',
+      tenant_id: 'tenant-beta',
+    });
+    const profile = mapKeycloakProfile(token);
+    expect(profile?.orgId).toBe('tenant-beta');
+  });
+
+  it('coerces numeric org_id to a string', () => {
+    const token = buildJwt({
+      sub: 'kc-uuid-9',
+      email: 'op@tenant-numeric.example',
+      org_id: 42,
+    });
+    const profile = mapKeycloakProfile(token);
+    expect(profile?.orgId).toBe('42');
+  });
+
+  it('drops blank or unrecognised org_id values to undefined', () => {
+    const token = buildJwt({
+      sub: 'kc-uuid-10',
+      email: 'op@empty-org.example',
+      org_id: '   ',
+    });
+    const profile = mapKeycloakProfile(token);
+    expect(profile && 'orgId' in profile).toBe(false);
+  });
+
+  it('maps allowed_orgs[] into profile.allowedOrgs without promoting to orgId', () => {
+    const token = buildJwt({
+      sub: 'kc-uuid-11',
+      email: 'admin@platform.example',
+      allowed_orgs: ['tenant-alpha', 'tenant-beta', '   ', 99],
+      // intentionally NO `org_id` / `tenant_id`: PR-5.3 hard rule —
+      // allowedOrgs[] never auto-promotes to a current selection.
+    });
+    const profile = mapKeycloakProfile(token);
+    expect(profile?.allowedOrgs).toEqual(['tenant-alpha', 'tenant-beta', '99']);
+    expect(profile && 'orgId' in profile).toBe(false);
+  });
+
+  it('omits allowedOrgs entirely when allowed_orgs is missing', () => {
+    const token = buildJwt({
+      sub: 'kc-uuid-12',
+      email: 'op@notenant.example',
+    });
+    const profile = mapKeycloakProfile(token);
+    expect(profile && 'allowedOrgs' in profile).toBe(false);
+  });
+});

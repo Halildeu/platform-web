@@ -88,19 +88,33 @@ export const selectNotifyIdentity = (
     return null;
   }
 
-  // Faz 24 / PR-5.3 — prefer the JWT-derived orgId; fall back to the
-  // legacy hardcoded default only while it is still tolerated (PR-5.4
-  // will close the fallback). Multi-org operators without an explicit
-  // selection currently see the default — see TODO below.
-  //
-  // TODO(PR-5.3 follow-up): wire a current-org selector for multi-org
-  // operators. For now, when `allowedOrgs.length > 1` and `orgId` is
-  // unset, the selector falls back to `DEFAULT_ORG_ID` so existing
-  // single-tenant smoke keeps working; that fallback path will be
-  // tightened to a fail-closed `null` once the multi-org UX lands.
+  // Faz 24 / PR-5.3 — prefer the JWT-derived orgId; only fall back to
+  // the legacy hardcoded default in the single-tenant canary path
+  // (no `allowedOrgs[]` claim either). Multi-org operators without
+  // an explicit selection get a fail-closed `null` so we never
+  // implicitly write to `DEFAULT_ORG_ID` when the principal has access
+  // to multiple orgs (Codex thread `019e0675` REVISE iter-3 absorb —
+  // implicit `default` would have been a worse form of the
+  // forbidden `allowedOrgs[0]` silent pick).
   const profileOrgId = readProfileOrgId(state);
-  const orgId = profileOrgId ?? DEFAULT_ORG_ID;
-  return { orgId, subscriberId };
+  if (profileOrgId !== undefined) {
+    return { orgId: profileOrgId, subscriberId };
+  }
+
+  const allowedOrgs = readProfileAllowedOrgs(state);
+  if (allowedOrgs && allowedOrgs.length > 1) {
+    // Multi-org operator without a committed current selection.
+    // Skip the inbox call; the UI is expected to wire a selector
+    // that writes `state.auth.user.orgId` once the user picks one.
+    return null;
+  }
+
+  // Legacy / single-tenant canary path — token has neither `org_id`
+  // nor `allowed_orgs`, fall back to the historical `'default'`
+  // selector. PR-5.4 closes this fallback once the
+  // `notify_org_access_match_total{source="default"}` cutover-gate
+  // counter stays at zero for the observation window.
+  return { orgId: DEFAULT_ORG_ID, subscriberId };
 };
 
 /** Boolean readiness selector — useful for guarding {@code skip} on RTK Query. */
@@ -153,4 +167,22 @@ const readProfileId = (state: RootState): string | undefined => {
  */
 const readProfileOrgId = (state: RootState): string | undefined => {
   return coerceIdentityValue(state.auth.user?.orgId);
+};
+
+/**
+ * Pulls the JWT-derived {@code allowedOrgs} list. Set by
+ * {@code mapKeycloakProfile} from the {@code allowed_orgs[]} claim.
+ * Used by {@link selectNotifyIdentity} only to decide between the
+ * legacy single-tenant fallback and a fail-closed {@code null} when
+ * the operator has multi-org reach but no committed current selection
+ * — picking {@code allowedOrgs[0]} silently is forbidden by the
+ * PR-5.3 contract.
+ */
+const readProfileAllowedOrgs = (state: RootState): string[] | undefined => {
+  const list = state.auth.user?.allowedOrgs;
+  if (!Array.isArray(list)) return undefined;
+  const normalised = list
+    .map((value) => coerceIdentityValue(value))
+    .filter((value): value is string => value !== undefined);
+  return normalised.length > 0 ? normalised : undefined;
 };

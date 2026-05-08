@@ -299,3 +299,112 @@ describe('selectNotifyIdentity — Faz 23.6 PR-3 JWT subscriberId claim flow', (
     });
   });
 });
+
+describe('selectNotifyIdentity — Faz 24 / PR-5.3 orgId resolution', () => {
+  // Codex thread `019e0675` REVISE iter-3 absorb: the selector must
+  // prefer `state.auth.user.orgId` over the legacy `DEFAULT_ORG_ID`
+  // fallback, and MUST fail closed with `null` when the principal is
+  // a multi-org operator who has not committed an explicit current
+  // selection. Implicit fallback to `DEFAULT_ORG_ID` in that case
+  // would silently write to the wrong tenant, the same vulnerability
+  // shape the `allowedOrgs[0]` ban was meant to close.
+
+  it('uses profile.orgId when present (single-org JWT claim)', () => {
+    const state = buildState({
+      user: {
+        id: 'kc-sub-uuid',
+        subscriberId: '1204',
+        orgId: 'tenant-alpha',
+        email: 'op@tenant-alpha.example',
+        role: 'user',
+        permissions: [],
+      },
+      authzSnapshot: null,
+    });
+    expect(selectNotifyIdentity(state)).toEqual({
+      orgId: 'tenant-alpha',
+      subscriberId: '1204',
+    });
+  });
+
+  it('returns null when allowedOrgs.length > 1 and orgId is unset (fail-closed)', () => {
+    const state = buildState({
+      user: {
+        id: 'kc-sub-uuid',
+        subscriberId: '1204',
+        // multi-org operator without a committed current selection
+        allowedOrgs: ['tenant-alpha', 'tenant-beta'],
+        email: 'admin@platform.example',
+        role: 'user',
+        permissions: [],
+      },
+      authzSnapshot: null,
+    });
+    expect(selectNotifyIdentity(state)).toBeNull();
+    expect(selectNotifyIdentityReady(state)).toBe(false);
+  });
+
+  it('keeps DEFAULT_ORG_ID legacy fallback when token has neither org_id nor allowed_orgs', () => {
+    // Pre-mapper-rollout token — single-tenant canary; PR-5.4 closes
+    // this fallback once the `source="default"` cutover-gate counter
+    // is at zero.
+    const state = buildState({
+      user: {
+        id: 'kc-sub-uuid',
+        subscriberId: '1204',
+        email: 'legacy@platform.example',
+        role: 'user',
+        permissions: [],
+      },
+      authzSnapshot: null,
+    });
+    expect(selectNotifyIdentity(state)).toEqual({
+      orgId: DEFAULT_ORG_ID,
+      subscriberId: '1204',
+    });
+  });
+
+  it('uses DEFAULT_ORG_ID when allowedOrgs.length === 1 and orgId is unset (degenerate single-org list)', () => {
+    // Edge case: JWT carries `allowed_orgs=["tenant-alpha"]` but no
+    // `org_id`. We treat this as the single-tenant canary fallback
+    // because there is no ambiguity about which org the operator
+    // can address. Multi-org reach (length > 1) is the fail-closed
+    // case.
+    const state = buildState({
+      user: {
+        id: 'kc-sub-uuid',
+        subscriberId: '1204',
+        allowedOrgs: ['tenant-alpha'],
+        email: 'op@tenant-alpha.example',
+        role: 'user',
+        permissions: [],
+      },
+      authzSnapshot: null,
+    });
+    expect(selectNotifyIdentity(state)).toEqual({
+      orgId: DEFAULT_ORG_ID,
+      subscriberId: '1204',
+    });
+  });
+
+  it('orgId precedence: profile.orgId beats allowedOrgs[]', () => {
+    // `org_id` claim is single-source-of-truth; `allowed_orgs[]`
+    // does not promote to the current selection even if length > 1.
+    const state = buildState({
+      user: {
+        id: 'kc-sub-uuid',
+        subscriberId: '1204',
+        orgId: 'tenant-current',
+        allowedOrgs: ['tenant-current', 'tenant-other'],
+        email: 'admin@platform.example',
+        role: 'user',
+        permissions: [],
+      },
+      authzSnapshot: null,
+    });
+    expect(selectNotifyIdentity(state)).toEqual({
+      orgId: 'tenant-current',
+      subscriberId: '1204',
+    });
+  });
+});
