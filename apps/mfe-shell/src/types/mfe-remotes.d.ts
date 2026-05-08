@@ -1,5 +1,13 @@
-import type { ApiInstance } from '@mfe/shared-http';
-import type { ShellNotificationEntry, ShellTelemetryEvent } from 'mfe_shell/services';
+// Top-level `import type` statements would convert this file from an
+// ambient declaration into a module — at which point the `declare
+// module 'mfe_*/shell-services'` blocks below become private exports
+// instead of global augmentations, and remote consumers see TS2307.
+// Use the inline `import()` type expression (which doesn't introduce
+// a top-level import statement) so this file stays ambient.
+
+type ApiInstance = import('@mfe/shared-http').ApiInstance;
+type ShellNotificationEntry = import('mfe_shell/services').ShellNotificationEntry;
+type ShellTelemetryEvent = import('mfe_shell/services').ShellTelemetryEvent;
 
 /**
  * Phase 2 PR-Auth-1 (Codex iter-26 §1 absorb, thread 019e0119):
