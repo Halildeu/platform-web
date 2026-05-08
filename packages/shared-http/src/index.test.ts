@@ -664,3 +664,158 @@ describe('shared-http single-flight refresh-on-401 (PR-Refresh-4)', () => {
     requestSpy.mockRestore();
   });
 });
+
+/*
+ * Phase 2 PR-Obs-5: observability counters wired into the request and
+ * response interceptors. Verifies the contract claimed in the plan:
+ *   - real response.status is recorded (not hardcoded 200)
+ *   - status-bearing errors land in the counter
+ *   - auth-ready gate rejections record bounded reason
+ *   - resolver THROW (not just !ok return) records 'resolver-throw'
+ *   - single-flight: only the OWNER records refresh attempt; waiters
+ *     increment refreshWaiterTotal separately
+ */
+describe('shared-http observability wire-up (PR-Obs-5)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('records real response.status on success (not hardcoded 200)', async () => {
+    const { mod } = await loadModule();
+    mod.__resetMetricsForTesting();
+    const handlers = (mod.api.interceptors.response as any).handlers ?? [];
+    const fulfilled = handlers[handlers.length - 1]?.fulfilled;
+
+    fulfilled?.({ status: 201, config: { method: 'POST' } });
+    fulfilled?.({ status: 204, config: { method: 'DELETE' } });
+    fulfilled?.({ status: 304, config: { method: 'GET' } });
+
+    const snap = mod.getMetricsSnapshot();
+    expect(snap.requestTotal['2xx_POST']).toBe(1);
+    expect(snap.requestTotal['2xx_DELETE']).toBe(1);
+    expect(snap.requestTotal['3xx_GET']).toBe(1);
+  });
+
+  it('records status-bearing errors (4xx/5xx)', async () => {
+    const { mod } = await loadModule();
+    mod.__resetMetricsForTesting();
+    const rejected = getResponseInterceptor(mod.api);
+
+    await expect(
+      rejected?.({ response: { status: 500 }, config: { method: 'GET' } } as AxiosError),
+    ).rejects.toBeDefined();
+    await expect(
+      rejected?.({ response: { status: 503 }, config: { method: 'POST' } } as AxiosError),
+    ).rejects.toBeDefined();
+
+    const snap = mod.getMetricsSnapshot();
+    expect(snap.requestTotal['5xx_GET']).toBe(1);
+    expect(snap.requestTotal['5xx_POST']).toBe(1);
+  });
+
+  it('records auth-not-ready when gate rejects (bounded reason)', async () => {
+    const { mod } = await loadModule();
+    mod.__resetMetricsForTesting();
+    const handler = getRequestInterceptor(mod.api);
+    mod.registerAuthReadyResolver(() => Promise.resolve({ ok: false, reason: 'unauthenticated' }));
+
+    await expect(handler?.({ headers: {} })).rejects.toMatchObject({
+      name: 'AuthNotReadyError',
+    });
+
+    const snap = mod.getMetricsSnapshot();
+    expect(snap.authNotReadyTotal.unauthenticated).toBe(1);
+  });
+
+  it('records resolver-throw when resolver itself throws (Codex iter-0 P1 #7)', async () => {
+    const { mod } = await loadModule();
+    mod.__resetMetricsForTesting();
+    const handler = getRequestInterceptor(mod.api);
+    const boom = new Error('resolver exploded');
+    mod.registerAuthReadyResolver(() => {
+      throw boom;
+    });
+
+    // The original error propagates (not wrapped in AuthNotReadyError);
+    // the counter still records the throw under bounded 'resolver-throw'.
+    await expect(handler?.({ headers: {} })).rejects.toBe(boom);
+
+    const snap = mod.getMetricsSnapshot();
+    expect(snap.authNotReadyTotal['resolver-throw']).toBe(1);
+  });
+
+  it('records ONLY the single-flight owner refresh attempt; waiters separate', async () => {
+    const { mod } = await loadModule();
+    mod.__resetMetricsForTesting();
+
+    let resolveRefresh!: () => void;
+    const refreshDone = new Promise<void>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    let refreshCalls = 0;
+    mod.registerRefreshHandler(async () => {
+      refreshCalls += 1;
+      await refreshDone;
+      return { ok: true, token: 'refreshed' };
+    });
+    mod.registerAuthTokenResolver(() => 'refreshed');
+
+    const requestSpy = vi.spyOn(mod.api, 'request').mockResolvedValue({ data: 'ok' } as never);
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error1 = {
+      response: { status: 401 },
+      config: { url: '/api/a', method: 'get', headers: {} },
+    } as AxiosError;
+    const error2 = {
+      response: { status: 401 },
+      config: { url: '/api/b', method: 'get', headers: {} },
+    } as AxiosError;
+    const error3 = {
+      response: { status: 401 },
+      config: { url: '/api/c', method: 'get', headers: {} },
+    } as AxiosError;
+
+    // Fire 3 simultaneous 401s — first is owner, others are waiters.
+    const p1 = rejected?.(error1);
+    const p2 = rejected?.(error2);
+    const p3 = rejected?.(error3);
+
+    // Let the in-flight refresh start
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(refreshCalls).toBe(1);
+
+    // Resolve refresh; all three callers retry
+    resolveRefresh();
+    await Promise.all([p1, p2, p3]);
+
+    const snap = mod.getMetricsSnapshot();
+    // Owner counted once, NOT three times
+    expect(snap.refreshAttemptTotal.ok).toBe(1);
+    expect(snap.refreshAttemptTotal.fail).toBe(0);
+    // Two waiters
+    expect(snap.refreshWaiterTotal).toBe(2);
+
+    requestSpy.mockRestore();
+  });
+
+  it('records refresh failure with normalised reason in recent ring', async () => {
+    const { mod } = await loadModule();
+    mod.__resetMetricsForTesting();
+    mod.registerRefreshHandler(async () => ({ ok: false, reason: 'refresh-closure-failed' }));
+    mod.registerAuthTokenResolver(() => 'token');
+
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 401 },
+      config: { url: '/api/a', method: 'get', headers: {} },
+    } as AxiosError;
+    await expect(rejected?.(error)).rejects.toBe(error);
+
+    const snap = mod.getMetricsSnapshot();
+    expect(snap.refreshAttemptTotal.fail).toBe(1);
+    expect(snap.recentRefreshFailures).toHaveLength(1);
+    expect(snap.recentRefreshFailures[0].reason).toBe('refresh-closure-failed');
+  });
+});

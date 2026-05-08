@@ -1,6 +1,13 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 export * from './telemetryClient';
 export * from './apiLogger';
+export * from './observability';
+import {
+  recordResponse,
+  recordRefreshAttempt,
+  recordRefreshWaiter,
+  recordAuthNotReady,
+} from './observability';
 
 type AuthMode = 'keycloak' | 'permitAll';
 
@@ -446,8 +453,20 @@ const installInterceptors = (client: AxiosInstance) => {
     // request abort, which only makes sense once the request is
     // actually about to fly.
     if (!skipGate && !isPermitAllMode() && authReadyResolver) {
-      const result = await authReadyResolver();
+      // Phase 2 PR-Obs-5: a resolver that throws (rather than returning
+      // typed {@code !ok}) is itself a failure mode worth recording —
+      // bounded reason {@code 'resolver-throw'} keeps cardinality flat
+      // (Codex iter-1 P1). The original error still propagates to the
+      // caller via the rethrow below.
+      let result: SharedHttpAuthReadyResult;
+      try {
+        result = await authReadyResolver();
+      } catch (resolverError) {
+        recordAuthNotReady('resolver-throw');
+        throw resolverError;
+      }
       if (!result.ok) {
+        recordAuthNotReady(result.reason ?? 'unknown');
         // Throwing inside a request interceptor short-circuits the
         // request — axios rejects the caller's promise with this
         // error. We use a typed error class plus a name-based guard
@@ -488,12 +507,21 @@ const installInterceptors = (client: AxiosInstance) => {
   client.interceptors.response.use(
     (response) => {
       releasePendingRequest(response.config);
+      // Phase 2 PR-Obs-5: record real response.status (not hardcoded
+      // 200 — Codex iter-0 P0 #3). 201/204/304 are preserved.
+      recordResponse(response.status, response.config?.method);
       return response;
     },
     async (error: AxiosError) => {
       releasePendingRequest(error.config);
       const requestConfig = (error.config ?? {}) as SharedHttpRequestConfig;
       const status = error?.response?.status;
+      // Phase 2 PR-Obs-5: status-bearing errors land in the request
+      // counter; network / CORS / abort errors are intentionally
+      // out-of-scope (Codex iter-1 P1: explicit bounded scope).
+      if (typeof status === 'number') {
+        recordResponse(status, error.config?.method);
+      }
       if (status === 401 && !isPermitAllMode()) {
         // Phase 2 PR-Refresh-4: single-flight refresh + retry pipeline.
         // Conditions for an attempt:
@@ -520,7 +548,14 @@ const installInterceptors = (client: AxiosInstance) => {
           // awaits the same Promise. The first caller starts the
           // refresh; subsequent callers race onto the in-flight
           // result and retry once it settles.
+          //
+          // Phase 2 PR-Obs-5: only the OWNER (refreshInFlight === null
+          // path) records a refresh attempt; waiters increment the
+          // separate refreshWaiterTotal so a single real refresh isn't
+          // multi-counted (Codex iter-0 P0 #4 + iter-1 final naming).
+          let isOwner = false;
           if (refreshInFlight === null) {
+            isOwner = true;
             // Codex iter-1 P2 absorb: wrap the handler invocation so a
             // SYNCHRONOUS throw (handler that throws before returning a
             // Promise) is also caught and converted to ok=false. The
@@ -537,8 +572,13 @@ const installInterceptors = (client: AxiosInstance) => {
             })().finally(() => {
               refreshInFlight = null;
             });
+          } else {
+            recordRefreshWaiter();
           }
           const refreshResult: RefreshResult = await refreshInFlight;
+          if (isOwner) {
+            recordRefreshAttempt(refreshResult.ok ? 'ok' : refreshResult.reason);
+          }
           if (refreshResult.ok) {
             // Retry the original request once. Mark with
             // __isRefreshAttempt so a follow-up 401 does NOT trigger

@@ -1,5 +1,6 @@
 import { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 export * from './telemetryClient';
+export * from './observability';
 type AuthMode = 'keycloak' | 'permitAll';
 type TokenResolver = () => string | null;
 type TraceIdResolver = () => string | null;
