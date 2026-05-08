@@ -27,6 +27,10 @@ import type { VariantColumnState } from '@mfe/design-system/advanced/data-grid/V
 import { useReportSchemaContext } from '../../hooks/useReportSchemaContext';
 import { enrichColumnsWithSchema } from '../../utils/enrichColumnsWithSchema';
 import { getShellServices } from '../services/shell-services';
+// PR-FE-3 (Codex 019e08e2 iter-11): typed error for tenant gate +
+// CompanyPicker for the in-page selection prompt.
+import { isTenantSelectionRequiredError } from '../../modules/dynamic-report/api';
+import { CompanyPicker } from '../../components/CompanyPicker';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -138,6 +142,16 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   const [reportCapabilities, setReportCapabilities] = React.useState<
     ReportCapabilities | undefined
   >(() => module.getCapabilities?.());
+  // PR-FE-3 (Codex 019e08e2 iter-11): tenant gate state. When set, the
+  // render layer suppresses the AG Grid datasource and shows a
+  // prominent CompanyPicker block instead — the user picks a company,
+  // CompanyPicker writes localStorage + reload, dynamic-report/api.ts
+  // sends the X-Company-Id header on the next mount and the gate
+  // clears (state stays null after a successful metadata fetch).
+  const [tenantSelectionRequired, setTenantSelectionRequired] = React.useState<{
+    reportKey: string;
+    hint?: string;
+  } | null>(null);
   /*
    * Reset capability state immediately when the module reference
    * changes (route → different report) so a stale {@code capability=true}
@@ -289,14 +303,23 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           // metadata fetch resolves; the same /metadata response carries
           // both the column list and the capabilities envelope.
           refreshCapabilities();
+          setTenantSelectionRequired(null);
         }
       })
-      .catch(() => {
-        // ensureColumnMeta swallows errors internally and resolves to
-        // `[]`; nothing more to do here besides triggering the re-render
-        // with the empty cache so the grid stops showing the loading
-        // spinner forever.
+      .catch((err) => {
+        // PR-FE-3 (Codex 019e08e2 iter-11 AGREE absorb, 2026-05-08):
+        // tenant_selection_required is now propagated as a typed error
+        // from metadata-cache. Branch on it to set the gate state so
+        // the render layer below shows a CompanyPicker block instead of
+        // the empty grid. Other failure classes preserve the legacy
+        // empty-cache outcome (see catch path above pre-fix).
         if (!cancelled) {
+          if (isTenantSelectionRequiredError(err)) {
+            setTenantSelectionRequired({
+              reportKey: err.reportKey,
+              hint: err.hint,
+            });
+          }
           setColumnMetaVersion((v) => v + 1);
           refreshCapabilities();
         }
@@ -698,6 +721,44 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
     return (
       <div className="rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs">
         <div className="h-4 w-36 animate-pulse rounded-full bg-surface-muted" />
+      </div>
+    );
+  }
+
+  // PR-FE-3 (Codex 019e08e2 iter-11 AGREE absorb, 2026-05-08): tenant
+  // gate prominent block. When the metadata or data fetch returned
+  // tenant_selection_required, suppress the AG Grid datasource and
+  // show a CompanyPicker block with the canonical
+  // "Bu rapor için şirket seçimi zorunlu" copy. CompanyPicker reload
+  // pattern (writes localStorage + window.location.reload) clears the
+  // gate on the next mount because dynamic-report/api.ts now sends
+  // X-Company-Id and the metadata fetch resolves cleanly.
+  if (tenantSelectionRequired) {
+    return (
+      <div data-testid={`report-page-${module.route}`}>
+        <PageLayout
+          {...pageLayoutPreset}
+          title={t(module.titleKey)}
+          description={t(module.descriptionKey)}
+          breadcrumbItems={breadcrumbItems}
+          descriptionRevealOnHover
+        >
+          <div
+            className="flex min-h-[320px] items-center justify-center rounded-3xl border border-border-subtle bg-surface-default p-8 shadow-xs"
+            data-testid="reporting-tenant-selection-gate"
+          >
+            <div className="flex max-w-xl flex-col items-center gap-4 text-center">
+              <h2 className="text-lg font-semibold text-text-primary">
+                Bu rapor için şirket seçimi zorunlu
+              </h2>
+              <p className="text-sm text-text-secondary">
+                {tenantSelectionRequired.hint ??
+                  'Yıllık şema raporu için aktif bir şirket seçmelisiniz. Aşağıdan seçim yaptığınızda sayfa otomatik yeniden yüklenir ve rapor verileri seçilen şirkete göre listelenir.'}
+              </p>
+              <CompanyPicker required />
+            </div>
+          </div>
+        </PageLayout>
       </div>
     );
   }
