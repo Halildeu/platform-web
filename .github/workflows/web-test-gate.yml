@@ -517,31 +517,51 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
+      - name: Start frontend dev server (Vite, Keycloak mode)
+        # Phase 2 PR-E2E-6: ALL backend endpoints are mocked via
+        # Playwright route() — no real backend access needed. Bypass
+        # the stack-runner (which waits for api-gateway/auth-service
+        # to be reachable on the runner) and start vite dev directly.
+        # The probe + mock token bypass let the test fully exercise the
+        # contract against a fully-mocked backend.
+        env:
+          # Probe + mock-token bypass enable
+          VITE_AUTH_CONTRACT_E2E: '1'
+          # Keep Keycloak mode (NOT permitAll/fakeAuth — Codex iter-2
+          # must-fix #1)
+          VITE_AUTH_MODE: keycloak
+          AUTH_MODE: keycloak
+          # Disable remote MFEs we don't need for the auth contract
+          VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE: '0'
+          SHELL_ENABLE_SUGGESTIONS_REMOTE: '0'
+          VITE_SHELL_ENABLE_ETHIC_REMOTE: '0'
+          SHELL_ENABLE_ETHIC_REMOTE: '0'
+        run: |
+          pnpm --filter mfe-shell start &
+          echo $! > /tmp/vite-pid
+          # Wait for vite to be reachable (max 90s)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/ > /dev/null; then
+              echo "Vite dev server reachable after ${i}x3s"
+              break
+            fi
+            sleep 3
+          done
+          curl -sI http://localhost:3000/ | head -5
       - name: Run auth transport contract E2E (Chromium)
         env:
-          # Phase 2 PR-E2E-6: enables the test-only window probe surface
-          # (window.__authContractProbe) + AuthBootstrapper mock-token
-          # bypass. Production builds (no env var) never expose either.
           VITE_AUTH_CONTRACT_E2E: '1'
-          # Codex iter-3 P2 #5 absorb: stack reuse signature does not
-          # include VITE_AUTH_CONTRACT_E2E, so a previously-started stack
-          # without the flag could be reused on local/self-hosted runs.
-          # Force a fresh stack so the probe + bypass are guaranteed to
-          # be in the running build.
-          FRONTEND_STACK_REUSE_RUNNING: '0'
         run: |
-          # auth-business-routes-live stack keeps Keycloak mode active
-          # (NOT permitAll/fakeAuth — Codex iter-2 must-fix #1). The
-          # AuthBootstrapper sees window.__authContractMockToken planted
-          # by Playwright before navigation, skips keycloak.init(), and
-          # runs the rest of the production bootstrap sequence so the
-          # transport-order assertion has real signal.
-          node ./scripts/ops/run-with-frontend-stack.mjs \
-            --stack auth-business-routes-live \
-            -- pnpm exec playwright test \
-              --config=tests/playwright/playwright.config.ts \
-              --project=chromium \
-              tests/playwright/auth-transport-contract.spec.ts
+          pnpm exec playwright test \
+            --config=tests/playwright/playwright.config.ts \
+            --project=chromium \
+            tests/playwright/auth-transport-contract.spec.ts
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -f /tmp/vite-pid ]; then
+            kill "$(cat /tmp/vite-pid)" 2>/dev/null || true
+          fi
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v5
