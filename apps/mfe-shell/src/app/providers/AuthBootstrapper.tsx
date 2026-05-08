@@ -14,6 +14,7 @@ import { createDevAuthSession, mapKeycloakProfile } from '../config/auth-helpers
 import { api, type SharedHttpRequestConfig } from '@mfe/shared-http';
 import { registerGridVariantsTokenResolver } from '@mfe/design-system';
 import { bootstrapAuthController, type BootstrapInitOptions } from './auth-bootstrap-controller';
+import { isAuthContractE2eEnabled } from '../observability/auth-contract-e2e-probe';
 
 /* ------------------------------------------------------------------ */
 /*  Fetch real application permissions from permission-service          */
@@ -241,6 +242,40 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           kcUrl: authConfig.keycloak.url,
         });
 
+        // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
+        // GUARDED by isAuthContractE2eEnabled() — production bundles
+        // (where VITE_AUTH_CONTRACT_E2E is unset) NEVER take this
+        // branch even if window.__authContractMockToken is somehow
+        // injected (Codex iter-3 P0 #1: defense-in-depth, do not rely
+        // on the probe-install gate alone). Test bundles set both the
+        // env flag AND the mock token slot.
+        const mockToken =
+          isAuthContractE2eEnabled() && typeof window !== 'undefined'
+            ? window.__authContractMockToken
+            : undefined;
+        if (mockToken) {
+          const parts = mockToken.split('.');
+          let exp = Math.floor(Date.now() / 1000) + 3600;
+          if (parts.length === 3) {
+            try {
+              const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+              if (typeof payload.exp === 'number') {
+                exp = payload.exp;
+              }
+            } catch {
+              // fall back to default exp
+            }
+          }
+          (keycloak as { token: string | undefined }).token = mockToken;
+          (keycloak as { tokenParsed: Record<string, unknown> | undefined }).tokenParsed = {
+            exp,
+          };
+          (keycloak as { authenticated: boolean | undefined }).authenticated = true;
+          console.info('[AuthBootstrapper] e2e-mock bypass — keycloak.init no-op', {
+            exp,
+          });
+        }
+
         // Phase 2 PR-Auth-1 (Codex iter-25 §2 absorb, thread 019e0119):
         // bootstrap delegated to extracted controller so unit tests can
         // exercise the same code path. AuthBootstrapper.test.ts no longer
@@ -250,7 +285,9 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
             authenticated: keycloak.authenticated,
             token: keycloak.token,
             tokenParsed: keycloak.tokenParsed,
-            init: (opts) => keycloak.init(opts),
+            // PR-E2E-6: when mockToken set, init is a no-op; the keycloak
+            // surface already carries the test token from above.
+            init: mockToken ? async () => undefined : (opts) => keycloak.init(opts),
           },
           initOptions,
           setTokenCookie,

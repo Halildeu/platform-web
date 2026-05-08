@@ -13,6 +13,7 @@ import { AuthBootstrapper } from './AuthBootstrapper';
 import { DownloadProgressListener } from './DownloadProgressListener';
 import { AuthFsmObserver } from '../observability/AuthFsmObserver';
 import { AuthDegradedBanner } from '../observability/AuthDegradedBanner';
+import { installAuthContractE2eProbe } from '../observability/auth-contract-e2e-probe';
 import { api } from '@mfe/shared-http';
 import { isPermitAllMode } from '../auth/auth-config';
 import { useAppSelector } from '../store/store.hooks';
@@ -53,6 +54,9 @@ export const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children
   if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
     window.__shellStore = store;
   }
+  // Phase 2 PR-E2E-6: install test-only window probe surface (idempotent;
+  // no-op when VITE_AUTH_CONTRACT_E2E is unset).
+  installAuthContractE2eProbe(store);
 
   return (
     <Provider store={store}>
