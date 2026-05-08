@@ -1,4 +1,8 @@
-import { AuditEvent } from '../types/audit-event';
+// Path was `../types/audit-event` which would resolve to
+// `src/types/audit-event` — that directory only contains MF shell
+// declaration files. The real `AuditEvent` type lives under
+// `src/app/types/audit-event.ts`.
+import { AuditEvent } from '../app/types/audit-event';
 
 export const fallbackAuditEvents: AuditEvent[] = Array.from({ length: 25 }).map((_, index) => {
   const id = `fallback-${index + 1}`;
@@ -13,10 +17,10 @@ export const fallbackAuditEvents: AuditEvent[] = Array.from({ length: 25 }).map(
     details: 'Mock audit event generated for UI fallback.',
     metadata: {
       scope: index % 2 === 0 ? 'global' : 'project',
-      actorId: 1000 + index
+      actorId: 1000 + index,
     },
     before: index % 2 === 0 ? null : { permissions: ['VIEW_USERS'] },
     after: index % 2 === 0 ? { permissions: ['VIEW_USERS', 'MANAGE_USERS'] } : null,
-    correlationId: `corr-${Math.floor(index / 5)}`
+    correlationId: `corr-${Math.floor(index / 5)}`,
   };
 });
