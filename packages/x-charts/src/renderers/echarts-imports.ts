@@ -74,8 +74,13 @@ export function registerECharts(): void {
     LineChart,
     PieChart,
     ScatterChart,
-    SankeyChart, TreemapChart, RadarChart, GaugeChart,
-    FunnelChart, HeatmapChart, SunburstChart,
+    SankeyChart,
+    TreemapChart,
+    RadarChart,
+    GaugeChart,
+    FunnelChart,
+    HeatmapChart,
+    SunburstChart,
     // Components
     TitleComponent,
     TooltipComponent,
@@ -99,4 +104,10 @@ export function registerECharts(): void {
 /*  Re-export core for renderer usage                                  */
 /* ------------------------------------------------------------------ */
 export { echarts };
-export type { ECharts, EChartsOption } from 'echarts/core';
+// echarts ≥6 renamed `EChartsOption` to `EChartsCoreOption`. Wave 1
+// housekeeping keeps the public x-charts symbol name as
+// `EChartsOption` (23+ consumer call sites depend on it) and aliases
+// to the renamed core export so the rename ripple stays inside this
+// barrel file. If echarts ever drops the export entirely the alias
+// breaks loudly here, which is the right place to surface it.
+export type { ECharts, EChartsCoreOption as EChartsOption } from 'echarts/core';

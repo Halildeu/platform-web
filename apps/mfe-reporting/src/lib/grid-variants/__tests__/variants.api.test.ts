@@ -1,6 +1,15 @@
-import { test, beforeEach, after } from 'node:test';
-import assert from 'node:assert/strict';
-import { webcrypto } from 'node:crypto';
+// Migrated from `node:test` to vitest (Wave 1 housekeeping).
+// The previous Node test runner imports failed at vitest collect
+// time because Vite cannot bundle Node built-ins from the test
+// environment, so this suite was effectively dead code in CI even
+// though the file shape suggested it was running.
+//
+// `webcrypto from 'node:crypto'` is replaced with `globalThis.crypto`
+// — vitest's jsdom environment provides a Web Crypto polyfill, and
+// the only thing this suite asks of crypto is that variants.api can
+// reach a `crypto` reference on the patched window. No production
+// behaviour change.
+import { afterAll, beforeEach, describe, expect, test } from 'vitest';
 import {
   registerGridVariantsTokenResolver,
   createGridVariant,
@@ -43,14 +52,14 @@ beforeEach(() => {
   const localStorage = new LocalStorageMock();
   (globalThis as any).window = {
     localStorage,
-    crypto: webcrypto,
+    crypto: globalThis.crypto,
   };
   (globalThis as any).localStorage = localStorage;
   (globalThis as any).fetch = failingFetch;
   registerGridVariantsTokenResolver();
 });
 
-after(() => {
+afterAll(() => {
   (globalThis as any).fetch = originalFetch;
   (globalThis as any).window = originalWindow;
   if (originalLocalStorage !== undefined) {
@@ -59,392 +68,398 @@ after(() => {
   registerGridVariantsTokenResolver();
 });
 
-test('sunucu erişilemediğinde varyantlar yerelde saklanır ve okunur', async () => {
-  const gridId = 'test-grid';
-  const payload = {
-    gridId,
-    name: 'Test Varyantı',
-    isDefault: false,
-    isGlobal: false,
-    isGlobalDefault: false,
-    schemaVersion: 1,
-    state: {
-      columnState: [{ colId: 'fullName', width: 200 }],
-      filterModel: null,
-    },
-  };
-
-  const created = await createGridVariant(payload);
-
-  assert.equal(created.name, payload.name);
-  assert.equal(created.gridId, gridId);
-  assert.equal(created.schemaVersion, payload.schemaVersion);
-  assert.equal(created.isGlobal, payload.isGlobal);
-  assert.equal(created.isGlobalDefault, payload.isGlobalDefault);
-
-  const storedRaw = (globalThis as any).window.localStorage.getItem('grid-variants');
-  assert.ok(storedRaw, 'localStorage boş olmamalı');
-
-  const parsed = JSON.parse(storedRaw!) as Record<string, any[]>;
-  assert.ok(Array.isArray(parsed[gridId]), 'Yerel varyant dizisi bulunamadı');
-  assert.equal(parsed[gridId][0].id, created.id);
-
-  const variants = await fetchGridVariants(gridId);
-  assert.equal(variants.length, 1);
-  assert.equal(variants[0].id, created.id);
-  assert.equal(variants[0].name, payload.name);
-  assert.equal(variants[0].isGlobal, payload.isGlobal);
-  assert.equal(variants[0].isGlobalDefault, payload.isGlobalDefault);
-  assert.deepEqual(variants[0].state.columnState, payload.state.columnState);
-});
-
-test('yerel kayıt isCompatible alanı yoksa uyumlu kabul edilir', async () => {
-  const gridId = 'legacy-grid';
-  const legacyVariant = {
-    id: 'legacy-1',
-    gridId,
-    name: 'Legacy',
-    isDefault: false,
-    isGlobal: false,
-    isGlobalDefault: false,
-    state: { columnState: [] },
-    schemaVersion: 1,
-    sortOrder: 0,
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-01T00:00:00.000Z',
-  };
-
-  const store = {
-    [gridId]: [legacyVariant],
-  };
-
-  (globalThis as any).window.localStorage.setItem('grid-variants', JSON.stringify(store));
-
-  const variants = await fetchGridVariants(gridId);
-  assert.equal(variants.length, 1);
-  assert.equal(variants[0].id, legacyVariant.id);
-  assert.equal(variants[0].isCompatible, true);
-});
-
-test('sunucudan gelen geçersiz state güvenli şekilde normalize edilir', async () => {
-  const gridId = 'bad-state-grid';
-  (globalThis as any).fetch = async () => ({
-    ok: true,
-    json: async () => [
-      {
-        id: 'remote-1',
-        gridId,
-        name: null,
-        isDefault: false,
-        isGlobal: false,
-        isGlobalDefault: false,
-        state: 'not-an-object',
-        schemaVersion: 1,
-        sortOrder: 0,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      },
-    ],
-  }) as any;
-
-  const variants = await fetchGridVariants(gridId);
-  assert.equal(variants.length, 1);
-  assert.equal(variants[0].id, 'remote-1');
-  assert.equal(variants[0].name, 'Adsız Varyant');
-  assert.deepEqual(variants[0].state, {});
-
-  (globalThis as any).fetch = failingFetch;
-});
-
-test('JSON string olarak gelen state çözümlenir', async () => {
-  const gridId = 'string-state-grid';
-  (globalThis as any).fetch = async () => ({
-    ok: true,
-    json: async () => [
-      {
-        id: 'remote-2',
-        gridId,
-        name: 'String State',
-        isDefault: false,
-        isGlobal: false,
-        isGlobalDefault: false,
-        state: JSON.stringify({
-          quickFilterText: 'abc',
-          columnState: [{ colId: 'email', width: 250 }],
-        }),
-        schemaVersion: 1,
-        sortOrder: 0,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      },
-    ],
-  }) as any;
-
-  const variants = await fetchGridVariants(gridId);
-  assert.equal(variants.length, 1);
-  assert.equal(variants[0].state.quickFilterText, 'abc');
-  assert.equal(variants[0].state.columnState?.[0]?.colId, 'email');
-
-  (globalThis as any).fetch = failingFetch;
-});
-
-test('metin olarak gelen boolean alanları doğru normalize eder', async () => {
-  const gridId = 'string-bool-grid';
-  (globalThis as any).fetch = async () => ({
-    ok: true,
-    json: async () => [
-      {
-        id: 'global-1',
-        gridId,
-        name: 'Global',
-        isDefault: '0',
-        isGlobal: '1',
-        isGlobalDefault: 'false',
-        isUserDefault: 'false',
-        isUserSelected: '0',
-        isCompatible: '1',
-        state: { columnState: [] },
-        schemaVersion: 1,
-        sortOrder: 0,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      },
-    ],
-  }) as any;
-
-  const variants = await fetchGridVariants(gridId);
-  assert.equal(variants.length, 1);
-  assert.equal(variants[0].isGlobal, true);
-  assert.equal(variants[0].isGlobalDefault, false);
-  assert.equal(variants[0].isUserDefault, false);
-  assert.equal(variants[0].isUserSelected, false);
-  assert.equal(variants[0].isCompatible, true);
-
-  (globalThis as any).fetch = failingFetch;
-});
-
-test('fetchGridVariants browser fetch kolunda public gateway path /api/v1/variants kullanır', async () => {
-  const gridId = 'public-path-grid';
-  const capturedUrls: string[] = [];
-
-  (globalThis as any).window.location = {
-    origin: 'https://testai.acik.com',
-  };
-  (globalThis as any).fetch = async (url: string) => {
-    capturedUrls.push(url);
-    return {
-      ok: true,
-      json: async () => [],
-    } as any;
-  };
-
-  await fetchGridVariants(gridId);
-
-  assert.deepEqual(capturedUrls, [
-    `https://testai.acik.com/api/v1/variants?gridId=${encodeURIComponent(gridId)}`,
-  ]);
-
-  (globalThis as any).fetch = failingFetch;
-});
-
-test('updateVariantPreference string boolean yanıtlarını normalize eder', async () => {
-  const gridId = 'preference-grid';
-  const variantId = 'global-2';
-  (globalThis as any).fetch = async () => ({
-    ok: true,
-    json: async () => ({
-      id: variantId,
+describe('variants.api', () => {
+  test('sunucu erişilemediğinde varyantlar yerelde saklanır ve okunur', async () => {
+    const gridId = 'test-grid';
+    const payload = {
       gridId,
-      name: 'Global Pref',
-      isDefault: 'false',
-      isGlobal: 'true',
-      isGlobalDefault: '0',
-      isUserDefault: '1',
-      isUserSelected: '1',
-      isCompatible: '1',
+      name: 'Test Varyantı',
+      isDefault: false,
+      isGlobal: false,
+      isGlobalDefault: false,
+      schemaVersion: 1,
+      state: {
+        columnState: [{ colId: 'fullName', width: 200 }],
+        filterModel: null,
+      },
+    };
+
+    const created = await createGridVariant(payload);
+
+    expect(created.name).toBe(payload.name);
+    expect(created.gridId).toBe(gridId);
+    expect(created.schemaVersion).toBe(payload.schemaVersion);
+    expect(created.isGlobal).toBe(payload.isGlobal);
+    expect(created.isGlobalDefault).toBe(payload.isGlobalDefault);
+
+    const storedRaw = (globalThis as any).window.localStorage.getItem('grid-variants');
+    expect(storedRaw).toBeTruthy();
+
+    const parsed = JSON.parse(storedRaw!) as Record<string, any[]>;
+    expect(Array.isArray(parsed[gridId])).toBe(true);
+    expect(parsed[gridId][0].id).toBe(created.id);
+
+    const variants = await fetchGridVariants(gridId);
+    expect(variants).toHaveLength(1);
+    expect(variants[0].id).toBe(created.id);
+    expect(variants[0].name).toBe(payload.name);
+    expect(variants[0].isGlobal).toBe(payload.isGlobal);
+    expect(variants[0].isGlobalDefault).toBe(payload.isGlobalDefault);
+    expect(variants[0].state.columnState).toEqual(payload.state.columnState);
+  });
+
+  test('yerel kayıt isCompatible alanı yoksa uyumlu kabul edilir', async () => {
+    const gridId = 'legacy-grid';
+    const legacyVariant = {
+      id: 'legacy-1',
+      gridId,
+      name: 'Legacy',
+      isDefault: false,
+      isGlobal: false,
+      isGlobalDefault: false,
       state: { columnState: [] },
       schemaVersion: 1,
       sortOrder: 0,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
-    }),
-  }) as any;
+    };
 
-  const updated = await updateVariantPreference({ variantId, isDefault: true });
-  assert.equal(updated.isGlobal, true);
-  assert.equal(updated.isUserDefault, true);
-  assert.equal(updated.isUserSelected, true);
-  assert.equal(updated.isGlobalDefault, false);
-  assert.equal(updated.isCompatible, true);
+    const store = {
+      [gridId]: [legacyVariant],
+    };
 
-  (globalThis as any).fetch = failingFetch;
-});
-
-test('updateVariantPreference sadece tek kişisel varsayılan bırakır', async () => {
-  const gridId = 'single-default-grid';
-  const personal = {
-    id: 'personal-1',
-    gridId,
-    name: 'Kişisel',
-    isDefault: true,
-    isGlobal: false,
-    isGlobalDefault: false,
-    isUserDefault: true,
-    isUserSelected: true,
-    state: { columnState: [] },
-    schemaVersion: 1,
-    sortOrder: 0,
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-01T00:00:00.000Z',
-    isCompatible: true,
-  };
-  const globalVariant = {
-    id: 'global-1',
-    gridId,
-    name: 'Global',
-    isDefault: false,
-    isGlobal: true,
-    isGlobalDefault: false,
-    isUserDefault: false,
-    isUserSelected: false,
-    state: { columnState: [] },
-    schemaVersion: 1,
-    sortOrder: 1,
-    createdAt: '2024-01-01T00:00:00.000Z',
-    updatedAt: '2024-01-01T00:00:00.000Z',
-    isCompatible: true,
-  };
-
-  const store = {
-    [gridId]: [personal, globalVariant],
-  };
-
-  (globalThis as any).window.localStorage.setItem('grid-variants', JSON.stringify(store));
-
-  const updatedGlobal = {
-    ...globalVariant,
-    isUserDefault: true,
-    isUserSelected: true,
-    updatedAt: '2024-01-01T00:01:00.000Z',
-  };
-  const updatedPersonal = {
-    ...personal,
-    isDefault: false,
-    isUserDefault: false,
-    isUserSelected: false,
-    updatedAt: '2024-01-01T00:01:00.000Z',
-  };
-
-  const previousFetch = (globalThis as any).fetch;
-  (globalThis as any).fetch = async (url: string, options?: RequestInit) => {
-    if (url.includes('/preference') && options?.method === 'PATCH') {
-      return {
-        ok: true,
-        json: async () => updatedGlobal,
-      } as any;
-    }
-    if (url.includes('/api/v1/variants') && url.includes('gridId=')) {
-      return {
-        ok: true,
-        json: async () => [updatedPersonal, updatedGlobal],
-      } as any;
-    }
-    return failingFetch();
-  };
-
-  try {
-    await updateVariantPreference({
-      variantId: globalVariant.id,
-      isDefault: true,
-      isSelected: true,
-    });
-
-    const storedRaw = (globalThis as any).window.localStorage.getItem('grid-variants');
-    assert.ok(storedRaw, 'localStorage boş olmamalı');
-    const parsed = JSON.parse(storedRaw!) as Record<string, any[]>;
-    const storedPersonal = parsed[gridId].find((item) => item.id === personal.id);
-    const storedGlobal = parsed[gridId].find((item) => item.id === globalVariant.id);
-
-    assert.equal(storedPersonal?.isUserDefault, false);
-    assert.equal(storedGlobal?.isUserDefault, true);
+    (globalThis as any).window.localStorage.setItem('grid-variants', JSON.stringify(store));
 
     const variants = await fetchGridVariants(gridId);
-    const userDefaults = variants.filter((variant) => variant.isUserDefault);
-    assert.equal(userDefaults.length, 1);
-    assert.equal(userDefaults[0].id, globalVariant.id);
-    const personalVariant = variants.find((variant) => variant.id === personal.id);
-    assert.equal(personalVariant?.isUserDefault, false);
-    assert.equal(personalVariant?.isDefault, false);
-  } finally {
-    (globalThis as any).fetch = previousFetch;
-  }
-});
+    expect(variants).toHaveLength(1);
+    expect(variants[0].id).toBe(legacyVariant.id);
+    expect(variants[0].isCompatible).toBe(true);
+  });
 
-test('updateVariantPreference istek gövdesi sadece varyant kimliğine göre değişir', async () => {
-  const capturedBodies: any[] = [];
-  (globalThis as any).fetch = async (_url: string, init?: RequestInit) => {
-    capturedBodies.push(init?.body ? JSON.parse(init.body as string) : null);
-    return {
-      ok: true,
-      json: async () => ({
-        id: init?.body ? JSON.parse(init.body as string).variantId : 'unknown',
-        gridId: 'grid',
-        name: 'Any',
-        isDefault: false,
-        isGlobal: true,
-        isGlobalDefault: false,
-        isUserDefault: false,
-        isUserSelected: false,
-        isCompatible: true,
-        state: { columnState: [] },
-        schemaVersion: 1,
-        sortOrder: 0,
-      }),
-    } as any;
-  };
+  test('sunucudan gelen geçersiz state güvenli şekilde normalize edilir', async () => {
+    const gridId = 'bad-state-grid';
+    (globalThis as any).fetch = async () =>
+      ({
+        ok: true,
+        json: async () => [
+          {
+            id: 'remote-1',
+            gridId,
+            name: null,
+            isDefault: false,
+            isGlobal: false,
+            isGlobalDefault: false,
+            state: 'not-an-object',
+            schemaVersion: 1,
+            sortOrder: 0,
+            createdAt: '2024-01-01T00:00:00.000Z',
+            updatedAt: '2024-01-01T00:00:00.000Z',
+          },
+        ],
+      }) as any;
 
-  await updateVariantPreference({ variantId: 'first', isDefault: true });
-  await updateVariantPreference({ variantId: 'second', isDefault: true });
+    const variants = await fetchGridVariants(gridId);
+    expect(variants).toHaveLength(1);
+    expect(variants[0].id).toBe('remote-1');
+    expect(variants[0].name).toBe('Adsız Varyant');
+    expect(variants[0].state).toEqual({});
 
-  assert.equal(capturedBodies.length, 2);
-  assert.deepEqual(
-    { ...capturedBodies[0], variantId: 'normalized' },
-    { ...capturedBodies[1], variantId: 'normalized' },
-  );
-  (globalThis as any).fetch = failingFetch;
-});
+    (globalThis as any).fetch = failingFetch;
+  });
 
-test('updateVariantPreference token resolver ile Authorization başlığını gönderir', async () => {
-  const capturedAuthorizationValues: Array<string | null> = [];
-  registerGridVariantsTokenResolver(() => 'resolver-token');
-  (globalThis as any).fetch = async (_url: string, init?: RequestInit) => {
-    capturedAuthorizationValues.push(new Headers(init?.headers).get('Authorization'));
-    return {
-      ok: true,
-      json: async () => ({
-        id: 'auth-test',
-        gridId: 'grid',
-        name: 'Auth Test',
-        isDefault: false,
-        isGlobal: true,
-        isGlobalDefault: false,
-        isUserDefault: true,
-        isUserSelected: true,
-        isCompatible: true,
-        state: { columnState: [] },
-        schemaVersion: 1,
-        sortOrder: 0,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-      }),
-    } as any;
-  };
+  test('JSON string olarak gelen state çözümlenir', async () => {
+    const gridId = 'string-state-grid';
+    (globalThis as any).fetch = async () =>
+      ({
+        ok: true,
+        json: async () => [
+          {
+            id: 'remote-2',
+            gridId,
+            name: 'String State',
+            isDefault: false,
+            isGlobal: false,
+            isGlobalDefault: false,
+            state: JSON.stringify({
+              quickFilterText: 'abc',
+              columnState: [{ colId: 'email', width: 250 }],
+            }),
+            schemaVersion: 1,
+            sortOrder: 0,
+            createdAt: '2024-01-01T00:00:00.000Z',
+            updatedAt: '2024-01-01T00:00:00.000Z',
+          },
+        ],
+      }) as any;
 
-  await updateVariantPreference({ variantId: 'auth-test', isDefault: true });
+    const variants = await fetchGridVariants(gridId);
+    expect(variants).toHaveLength(1);
+    expect(variants[0].state.quickFilterText).toBe('abc');
+    expect(variants[0].state.columnState?.[0]?.colId).toBe('email');
 
-  assert.equal(capturedAuthorizationValues.length, 1);
-  assert.equal(capturedAuthorizationValues[0], 'Bearer resolver-token');
+    (globalThis as any).fetch = failingFetch;
+  });
 
-  (globalThis as any).fetch = failingFetch;
-  registerGridVariantsTokenResolver();
+  test('metin olarak gelen boolean alanları doğru normalize eder', async () => {
+    const gridId = 'string-bool-grid';
+    (globalThis as any).fetch = async () =>
+      ({
+        ok: true,
+        json: async () => [
+          {
+            id: 'global-1',
+            gridId,
+            name: 'Global',
+            isDefault: '0',
+            isGlobal: '1',
+            isGlobalDefault: 'false',
+            isUserDefault: 'false',
+            isUserSelected: '0',
+            isCompatible: '1',
+            state: { columnState: [] },
+            schemaVersion: 1,
+            sortOrder: 0,
+            createdAt: '2024-01-01T00:00:00.000Z',
+            updatedAt: '2024-01-01T00:00:00.000Z',
+          },
+        ],
+      }) as any;
+
+    const variants = await fetchGridVariants(gridId);
+    expect(variants).toHaveLength(1);
+    expect(variants[0].isGlobal).toBe(true);
+    expect(variants[0].isGlobalDefault).toBe(false);
+    expect(variants[0].isUserDefault).toBe(false);
+    expect(variants[0].isUserSelected).toBe(false);
+    expect(variants[0].isCompatible).toBe(true);
+
+    (globalThis as any).fetch = failingFetch;
+  });
+
+  test('fetchGridVariants browser fetch kolunda public gateway path /api/v1/variants kullanır', async () => {
+    const gridId = 'public-path-grid';
+    const capturedUrls: string[] = [];
+
+    (globalThis as any).window.location = {
+      origin: 'https://testai.acik.com',
+    };
+    (globalThis as any).fetch = async (url: string) => {
+      capturedUrls.push(url);
+      return {
+        ok: true,
+        json: async () => [],
+      } as any;
+    };
+
+    await fetchGridVariants(gridId);
+
+    expect(capturedUrls).toEqual([
+      `https://testai.acik.com/api/v1/variants?gridId=${encodeURIComponent(gridId)}`,
+    ]);
+
+    (globalThis as any).fetch = failingFetch;
+  });
+
+  test('updateVariantPreference string boolean yanıtlarını normalize eder', async () => {
+    const gridId = 'preference-grid';
+    const variantId = 'global-2';
+    (globalThis as any).fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({
+          id: variantId,
+          gridId,
+          name: 'Global Pref',
+          isDefault: 'false',
+          isGlobal: 'true',
+          isGlobalDefault: '0',
+          isUserDefault: '1',
+          isUserSelected: '1',
+          isCompatible: '1',
+          state: { columnState: [] },
+          schemaVersion: 1,
+          sortOrder: 0,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        }),
+      }) as any;
+
+    const updated = await updateVariantPreference({ variantId, isDefault: true });
+    expect(updated.isGlobal).toBe(true);
+    expect(updated.isUserDefault).toBe(true);
+    expect(updated.isUserSelected).toBe(true);
+    expect(updated.isGlobalDefault).toBe(false);
+    expect(updated.isCompatible).toBe(true);
+
+    (globalThis as any).fetch = failingFetch;
+  });
+
+  test('updateVariantPreference sadece tek kişisel varsayılan bırakır', async () => {
+    const gridId = 'single-default-grid';
+    const personal = {
+      id: 'personal-1',
+      gridId,
+      name: 'Kişisel',
+      isDefault: true,
+      isGlobal: false,
+      isGlobalDefault: false,
+      isUserDefault: true,
+      isUserSelected: true,
+      state: { columnState: [] },
+      schemaVersion: 1,
+      sortOrder: 0,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      isCompatible: true,
+    };
+    const globalVariant = {
+      id: 'global-1',
+      gridId,
+      name: 'Global',
+      isDefault: false,
+      isGlobal: true,
+      isGlobalDefault: false,
+      isUserDefault: false,
+      isUserSelected: false,
+      state: { columnState: [] },
+      schemaVersion: 1,
+      sortOrder: 1,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      isCompatible: true,
+    };
+
+    const store = {
+      [gridId]: [personal, globalVariant],
+    };
+
+    (globalThis as any).window.localStorage.setItem('grid-variants', JSON.stringify(store));
+
+    const updatedGlobal = {
+      ...globalVariant,
+      isUserDefault: true,
+      isUserSelected: true,
+      updatedAt: '2024-01-01T00:01:00.000Z',
+    };
+    const updatedPersonal = {
+      ...personal,
+      isDefault: false,
+      isUserDefault: false,
+      isUserSelected: false,
+      updatedAt: '2024-01-01T00:01:00.000Z',
+    };
+
+    const previousFetch = (globalThis as any).fetch;
+    (globalThis as any).fetch = async (url: string, options?: RequestInit) => {
+      if (url.includes('/preference') && options?.method === 'PATCH') {
+        return {
+          ok: true,
+          json: async () => updatedGlobal,
+        } as any;
+      }
+      if (url.includes('/api/v1/variants') && url.includes('gridId=')) {
+        return {
+          ok: true,
+          json: async () => [updatedPersonal, updatedGlobal],
+        } as any;
+      }
+      return failingFetch();
+    };
+
+    try {
+      await updateVariantPreference({
+        variantId: globalVariant.id,
+        isDefault: true,
+        isSelected: true,
+      });
+
+      const storedRaw = (globalThis as any).window.localStorage.getItem('grid-variants');
+      expect(storedRaw).toBeTruthy();
+      const parsed = JSON.parse(storedRaw!) as Record<string, any[]>;
+      const storedPersonal = parsed[gridId].find((item) => item.id === personal.id);
+      const storedGlobal = parsed[gridId].find((item) => item.id === globalVariant.id);
+
+      expect(storedPersonal?.isUserDefault).toBe(false);
+      expect(storedGlobal?.isUserDefault).toBe(true);
+
+      const variants = await fetchGridVariants(gridId);
+      const userDefaults = variants.filter((variant) => variant.isUserDefault);
+      expect(userDefaults).toHaveLength(1);
+      expect(userDefaults[0].id).toBe(globalVariant.id);
+      const personalVariant = variants.find((variant) => variant.id === personal.id);
+      expect(personalVariant?.isUserDefault).toBe(false);
+      expect(personalVariant?.isDefault).toBe(false);
+    } finally {
+      (globalThis as any).fetch = previousFetch;
+    }
+  });
+
+  test('updateVariantPreference istek gövdesi sadece varyant kimliğine göre değişir', async () => {
+    const capturedBodies: any[] = [];
+    (globalThis as any).fetch = async (_url: string, init?: RequestInit) => {
+      capturedBodies.push(init?.body ? JSON.parse(init.body as string) : null);
+      return {
+        ok: true,
+        json: async () => ({
+          id: init?.body ? JSON.parse(init.body as string).variantId : 'unknown',
+          gridId: 'grid',
+          name: 'Any',
+          isDefault: false,
+          isGlobal: true,
+          isGlobalDefault: false,
+          isUserDefault: false,
+          isUserSelected: false,
+          isCompatible: true,
+          state: { columnState: [] },
+          schemaVersion: 1,
+          sortOrder: 0,
+        }),
+      } as any;
+    };
+
+    await updateVariantPreference({ variantId: 'first', isDefault: true });
+    await updateVariantPreference({ variantId: 'second', isDefault: true });
+
+    expect(capturedBodies).toHaveLength(2);
+    expect({ ...capturedBodies[0], variantId: 'normalized' }).toEqual({
+      ...capturedBodies[1],
+      variantId: 'normalized',
+    });
+    (globalThis as any).fetch = failingFetch;
+  });
+
+  test('updateVariantPreference token resolver ile Authorization başlığını gönderir', async () => {
+    const capturedAuthorizationValues: Array<string | null> = [];
+    registerGridVariantsTokenResolver(() => 'resolver-token');
+    (globalThis as any).fetch = async (_url: string, init?: RequestInit) => {
+      capturedAuthorizationValues.push(new Headers(init?.headers).get('Authorization'));
+      return {
+        ok: true,
+        json: async () => ({
+          id: 'auth-test',
+          gridId: 'grid',
+          name: 'Auth Test',
+          isDefault: false,
+          isGlobal: true,
+          isGlobalDefault: false,
+          isUserDefault: true,
+          isUserSelected: true,
+          isCompatible: true,
+          state: { columnState: [] },
+          schemaVersion: 1,
+          sortOrder: 0,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        }),
+      } as any;
+    };
+
+    await updateVariantPreference({ variantId: 'auth-test', isDefault: true });
+
+    expect(capturedAuthorizationValues).toHaveLength(1);
+    expect(capturedAuthorizationValues[0]).toBe('Bearer resolver-token');
+
+    (globalThis as any).fetch = failingFetch;
+    registerGridVariantsTokenResolver();
+  });
 });

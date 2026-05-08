@@ -283,13 +283,13 @@ export { lazyChartImport } from './performance/code-split';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type {
-  ChartSize,
-  ChartDataPoint,
-  ChartSeries,
-  ChartClickEvent,
-  ChartLocaleText,
-} from './types';
+// `ChartSize` is exported above (line 85) via the Faz 21.9 PR3a
+// `chartSize.ts` re-export, which keeps the runtime `CHART_CANVAS_HEIGHT`
+// + `CHART_SIZE_ORDER` constants and the type co-located. `chartSize.ts`
+// itself imports `ChartSize` from `./types`, so the source-of-truth
+// definition is unchanged — only the duplicate barrel-level export is
+// removed here to clear `TS2300: Duplicate identifier 'ChartSize'`.
+export type { ChartDataPoint, ChartSeries, ChartClickEvent, ChartLocaleText } from './types';
 
 /* ------------------------------------------------------------------ */
 /*  i18n locale auto-bind (Faz 21.5-A1)                                */
