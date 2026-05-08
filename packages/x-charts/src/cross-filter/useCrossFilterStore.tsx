@@ -4,14 +4,14 @@
  * Allows multiple dashboard instances to have isolated stores via Context.
  * Components use `useCrossFilter(selector)` for surgical re-renders.
  */
-import { createContext, useContext, useRef } from "react";
-import { useStore } from "zustand";
+import { createContext, useContext, useRef } from 'react';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import {
   createCrossFilterStore,
   type CrossFilterStoreApi,
   type CreateCrossFilterStoreOptions,
-} from "./createCrossFilterStore";
-import type { CrossFilterStore } from "./types";
+} from './createCrossFilterStore';
+import type { CrossFilterStore } from './types';
 
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
@@ -38,16 +38,18 @@ export interface CrossFilterProviderProps {
  * </CrossFilterProvider>
  * ```
  */
-export function CrossFilterProvider({ children, options, store: externalStore }: CrossFilterProviderProps) {
+export function CrossFilterProvider({
+  children,
+  options,
+  store: externalStore,
+}: CrossFilterProviderProps) {
   const storeRef = useRef<CrossFilterStoreApi | null>(externalStore ?? null);
   if (!storeRef.current) {
     storeRef.current = createCrossFilterStore(options);
   }
 
   return (
-    <CrossFilterContext.Provider value={storeRef.current}>
-      {children}
-    </CrossFilterContext.Provider>
+    <CrossFilterContext.Provider value={storeRef.current}>{children}</CrossFilterContext.Provider>
   );
 }
 
@@ -71,9 +73,17 @@ export function useCrossFilter<T>(
 ): T {
   const store = useContext(CrossFilterContext);
   if (!store) {
-    throw new Error("useCrossFilter must be used within a <CrossFilterProvider>");
+    throw new Error('useCrossFilter must be used within a <CrossFilterProvider>');
   }
-  return useStore(store, selector, equalityFn);
+  // zustand v5 dropped the third `equalityFn` arg from `useStore`; the
+  // equality-aware helper moved to `zustand/traditional`. We call it
+  // unconditionally here — branching between two different hooks based
+  // on `equalityFn` would change call order across renders (rules-of-
+  // hooks violation, flagged by Codex iter-1 thread 019e08a2).
+  // `useStoreWithEqualityFn` accepts `undefined` comparator and falls
+  // through to reference equality, matching the pre-v5 `useStore(store,
+  // selector)` semantics; safe for both 1-arg and 2-arg call sites.
+  return useStoreWithEqualityFn(store, selector, equalityFn);
 }
 
 /**
@@ -82,7 +92,7 @@ export function useCrossFilter<T>(
 export function useCrossFilterStoreApi(): CrossFilterStoreApi {
   const store = useContext(CrossFilterContext);
   if (!store) {
-    throw new Error("useCrossFilterStoreApi must be used within a <CrossFilterProvider>");
+    throw new Error('useCrossFilterStoreApi must be used within a <CrossFilterProvider>');
   }
   return store;
 }

@@ -11,7 +11,7 @@
 /*  Filter                                                             */
 /* ------------------------------------------------------------------ */
 
-export type FilterOperator = "eq" | "in" | "range" | "brush";
+export type FilterOperator = 'eq' | 'in' | 'range' | 'brush';
 
 export interface CrossFilterEntry {
   /** ID of the source chart/grid that created this filter. */
@@ -111,11 +111,11 @@ export type CrossFilterStore = CrossFilterState & CrossFilterActions;
 /* ------------------------------------------------------------------ */
 
 export type CrossFilterEventType =
-  | "FILTER_CHANGED"
-  | "FILTER_REMOVED"
-  | "FILTERS_CLEARED"
-  | "DRILL_CHANGED"
-  | "DRILL_RESET";
+  | 'FILTER_CHANGED'
+  | 'FILTER_REMOVED'
+  | 'FILTERS_CLEARED'
+  | 'DRILL_CHANGED'
+  | 'DRILL_RESET';
 
 export interface CrossFilterEvent {
   type: CrossFilterEventType;
@@ -127,3 +127,13 @@ export interface CrossFilterEvent {
 }
 
 export type CrossFilterEventListener = (event: CrossFilterEvent) => void;
+
+/* ------------------------------------------------------------------ */
+/*  Bridge re-export                                                   */
+/* ------------------------------------------------------------------ */
+
+// `CrossFilterBridge` lives in `eventBridge.ts` (where the
+// `createEventBridge` factory uses it directly). Re-exporting it
+// here so consumers like `useGridCrossFilter` can group cross-filter
+// types behind a single `./types` import surface.
+export type { CrossFilterBridge } from './eventBridge';

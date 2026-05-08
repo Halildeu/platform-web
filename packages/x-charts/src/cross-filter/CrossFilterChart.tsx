@@ -35,20 +35,53 @@ export function CrossFilterChart({
   className,
   children,
 }: CrossFilterChartProps) {
-  const { activeFilters, onChartClick, isFiltered, filterCount, clearOwnFilter } =
-    useChartCrossFilter({ chartId, emitFields, enabled });
+  // `activeFilters` is part of the hook return shape but never read
+  // inside this component; dropped from the destructure (Codex
+  // iter-1 thread 019e08a2 — preferred deletion over `_activeFilters`
+  // rename since the hook return shape isn't affected either way).
+  const { onChartClick, isFiltered, filterCount, clearOwnFilter } = useChartCrossFilter({
+    chartId,
+    emitFields,
+    enabled,
+  });
 
+  // Signature matches the cloneElement target prop type
+  // (`onDataPointClick?: (e: unknown) => void`). Chart adapters that
+  // pair with this wrapper emit `{ datum }` payloads (Bar/Line/Pie
+  // honour the `ChartClickEvent` contract); raw ECharts/Funnel/Radar/
+  // Waterfall events do NOT, and routing those into the cross-filter
+  // bus would silently emit empty filters because `datum[field]` is
+  // `undefined`. Codex iter-1 review (thread 019e08a2) flagged a
+  // permissive `?? {}` fallback as too quiet for an auto-wiring
+  // wrapper, so we type-guard explicitly: only forward events that
+  // carry a `datum` object, drop the rest.
   const handleClick = useCallback(
-    (event: { datum: Record<string, unknown> }) => {
-      onChartClick(event.datum);
+    (event: unknown) => {
+      const datum = (event as { datum?: unknown } | null)?.datum;
+      if (datum == null || typeof datum !== 'object') {
+        return;
+      }
+      onChartClick(datum as Record<string, unknown>);
     },
     [onChartClick],
   );
 
   // Clone child chart and inject onDataPointClick
+  //
+  // The fall-through `(children.props as Record<string, unknown>).onDataPointClick`
+  // is `unknown`, which TS no longer accepts as `((e: unknown) => void) | undefined`
+  // since the cloneElement overload tightening. We narrow to the matching
+  // function shape (or `undefined`) at the call site so the overload resolves.
+  // Behaviour is unchanged: when `enabled` is false we forward whatever the
+  // child already had on its `onDataPointClick` prop.
+  const passthroughOnDataPointClick = isValidElement(children)
+    ? ((children.props as Record<string, unknown>).onDataPointClick as
+        | ((e: unknown) => void)
+        | undefined)
+    : undefined;
   const chart = isValidElement(children)
     ? cloneElement(children as React.ReactElement<{ onDataPointClick?: (e: unknown) => void }>, {
-        onDataPointClick: enabled ? handleClick : (children.props as Record<string, unknown>).onDataPointClick,
+        onDataPointClick: enabled ? handleClick : passthroughOnDataPointClick,
       })
     : children;
 
