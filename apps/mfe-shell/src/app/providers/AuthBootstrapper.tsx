@@ -283,8 +283,14 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
         const result = await bootstrapAuthController({
           keycloak: {
             authenticated: keycloak.authenticated,
-            token: keycloak.token,
-            tokenParsed: keycloak.tokenParsed,
+            // PR #314 (Codex 019e062b iter-0 P1 #1 absorb): live
+            // getters, NOT pre-init snapshots. keycloak-js sets
+            // keycloak.token inside init() for auth-code callback;
+            // a snapshot taken here (before init resolved) would
+            // capture null and the controller would never see the
+            // freshly-issued token.
+            getToken: () => keycloak.token,
+            getTokenParsed: () => keycloak.tokenParsed,
             // PR-E2E-6: when mockToken set, init is a no-op; the keycloak
             // surface already carries the test token from above.
             init: mockToken ? async () => undefined : (opts) => keycloak.init(opts),
@@ -427,8 +433,23 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
         dispatch(setAuthInitialized(true));
       } catch (err) {
         console.warn('[AuthBootstrapper] onAuthSuccess closure failed:', err);
-        // Don't dispatch failed — bootstrap controller already owns
-        // failure semantics. This is a best-effort catch-up.
+        // Codex 019e062b iter-0 P1 #2 absorb: catch-up path MUST own
+        // its own failure semantics. Bootstrap controller may have
+        // returned 'unauthenticated' already (the very race this
+        // handler is designed to recover from), so leaving this as
+        // a silent warn keeps the FSM stuck on unauthenticated even
+        // though we observed kc.token. setAuthFailed gives the
+        // shell a deterministic terminal state to render the
+        // degraded UI.
+        if (mounted) {
+          dispatch(
+            setAuthFailed({
+              message:
+                'Auth cookie write failed during onAuthSuccess catch-up; protected requests cannot proceed.',
+              cause: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        }
       }
     };
 
