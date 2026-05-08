@@ -112,9 +112,25 @@ interface UsersGridProps {
   onLoadingChange?: (loading: boolean) => void;
 }
 
-type GridAccessState = 'idle' | 'unauthorized' | 'profile-missing' | 'network-error';
+// PR-FE-1 (Codex thread 019e08e2 iter-8 REVISE absorb, 2026-05-08):
+// `auth-not-ready` is a transient state distinct from `unauthorized`
+// (genuine 401/403 from the server) and from `network-error` (genuine
+// outage). It fires when the shell's auth FSM hasn't reached
+// `transportReady` by the time UsersGrid mounts — typical on cold load.
+// Inline retry CTA is shown so the user can re-attempt once the FSM
+// settles (usually within ~1s); toast suppressed to avoid noise.
+type GridAccessState =
+  | 'idle'
+  | 'unauthorized'
+  | 'profile-missing'
+  | 'network-error'
+  | 'auth-not-ready';
 
-const INLINE_ONLY_ACCESS_STATES = new Set<GridAccessState>(['unauthorized', 'profile-missing']);
+const INLINE_ONLY_ACCESS_STATES = new Set<GridAccessState>([
+  'unauthorized',
+  'profile-missing',
+  'auth-not-ready',
+]);
 
 const UsersGrid: React.FC<UsersGridProps> = ({
   onSelectUser,
@@ -763,18 +779,23 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         if (process.env.NODE_ENV !== 'production') {
           console.warn('[mfe-users] auth.ready() returned !ok', authResult);
         }
-        // Map the shell's unauthenticated/failed signal to the existing
-        // grid states so users see the right copy and the right CTA
-        // (Yeniden dene retries the probe — by then the shell is
-        // typically transportReady and the second attempt succeeds).
-        setGridState(authResult.reason === 'failed' ? 'network-error' : 'unauthorized');
-        notifyOnce(
-          authResult.reason === 'failed' ? 'network-error' : 'unauthorized',
-          authResult.reason === 'failed' ? 'error' : 'warning',
-          authResult.reason === 'failed'
-            ? 'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.'
-            : 'Kullanıcı verileri için oturumun hazırlanmasını bekliyoruz. Lütfen yeniden deneyin.',
-        );
+        // PR-FE-1 (Codex 019e08e2 iter-8 REVISE absorb): distinguish
+        // "transient — auth FSM not ready yet" (typical on cold mount)
+        // from "genuine outage" (failed reason). The transient case
+        // gets a dedicated `auth-not-ready` inline state with retry
+        // CTA — same UX shape as `network-error` but different copy
+        // and no toast (suppressed via INLINE_ONLY_ACCESS_STATES) so
+        // the user is not blamed for a system race. Real `failed`
+        // reasons still surface as `network-error` toast since those
+        // indicate something the user might fix (network/VPN/etc).
+        setGridState(authResult.reason === 'failed' ? 'network-error' : 'auth-not-ready');
+        if (authResult.reason === 'failed') {
+          notifyOnce(
+            'network-error',
+            'error',
+            'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.',
+          );
+        }
         return;
       }
 
@@ -930,13 +951,21 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         ? 'Kullanıcı verilerini görmek için yetkiniz bulunmuyor.'
         : gridAccessState === 'profile-missing'
           ? 'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.'
-          : 'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.';
+          : gridAccessState === 'auth-not-ready'
+            ? 'Kullanıcı verileri için oturumun hazırlanmasını bekliyoruz.'
+            : 'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.';
+
+    // PR-FE-1 (Codex 019e08e2 iter-8 REVISE absorb): auth-not-ready
+    // shares the retry CTA with network-error so transient FSM races
+    // are recoverable from the same inline UX without a toast.
+    const showRetryCta =
+      gridAccessState === 'network-error' || gridAccessState === 'auth-not-ready';
 
     return (
       <div className="flex min-h-[320px] items-center justify-center rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs">
         <div className="flex max-w-xl flex-col items-center gap-4 text-center">
           <Empty description={description} />
-          {gridAccessState === 'network-error' ? (
+          {showRetryCta ? (
             <Button type="button" onClick={handleRetry}>
               Yeniden dene
             </Button>
