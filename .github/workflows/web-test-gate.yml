@@ -517,32 +517,41 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
-      - name: Start frontend dev server (Vite, Keycloak mode)
-        # Phase 2 PR-E2E-6: ALL backend endpoints are mocked via
-        # Playwright route() — no real backend access needed. Bypass
-        # the stack-runner (which waits for api-gateway/auth-service
-        # to be reachable on the runner) and start vite dev directly.
-        # The probe + mock token bypass let the test fully exercise the
-        # contract against a fully-mocked backend.
+      - name: Build mfe-shell production bundle (Keycloak mode + probe)
+        # Production build properly dead-code-eliminates remote MFE
+        # static imports via __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__
+        # define, avoiding vite dev pre-bundling scan failures.
         env:
-          # Probe + mock-token bypass enable
           VITE_AUTH_CONTRACT_E2E: '1'
-          # Keep Keycloak mode (NOT permitAll/fakeAuth — Codex iter-2
-          # must-fix #1)
           VITE_AUTH_MODE: keycloak
           AUTH_MODE: keycloak
-          # Disable remote MFEs we don't need for the auth contract
+          VITE_SHELL_SKIP_REMOTE_SERVICES: '1'
+          SHELL_SKIP_REMOTE_SERVICES: '1'
           VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE: '0'
           SHELL_ENABLE_SUGGESTIONS_REMOTE: '0'
           VITE_SHELL_ENABLE_ETHIC_REMOTE: '0'
           SHELL_ENABLE_ETHIC_REMOTE: '0'
+          VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE: '0'
+          SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE: '0'
+          VITE_SHELL_ENABLE_REPORTING_REMOTE: '0'
+          SHELL_ENABLE_REPORTING_REMOTE: '0'
+          VITE_SHELL_ENABLE_USERS_REMOTE: '0'
+          SHELL_ENABLE_USERS_REMOTE: '0'
+          VITE_SHELL_ENABLE_ACCESS_REMOTE: '0'
+          SHELL_ENABLE_ACCESS_REMOTE: '0'
+          VITE_SHELL_ENABLE_AUDIT_REMOTE: '0'
+          SHELL_ENABLE_AUDIT_REMOTE: '0'
+        run: pnpm --filter mfe-shell build
+      - name: Serve built bundle (preview)
+        env:
+          VITE_AUTH_CONTRACT_E2E: '1'
         run: |
-          pnpm --filter mfe-shell start &
+          pnpm --filter mfe-shell exec vite preview --host 0.0.0.0 --port 3000 &
           echo $! > /tmp/vite-pid
-          # Wait for vite to be reachable (max 90s)
-          for i in $(seq 1 30); do
+          # Wait for preview server to be reachable (max 60s)
+          for i in $(seq 1 20); do
             if curl -sf http://localhost:3000/ > /dev/null; then
-              echo "Vite dev server reachable after ${i}x3s"
+              echo "Preview server reachable after ${i}x3s"
               break
             fi
             sleep 3
@@ -556,7 +565,7 @@ jobs:
             --config=tests/playwright/playwright.config.ts \
             --project=chromium \
             tests/playwright/auth-transport-contract.spec.ts
-      - name: Stop dev server
+      - name: Stop preview server
         if: always()
         run: |
           if [ -f /tmp/vite-pid ]; then
