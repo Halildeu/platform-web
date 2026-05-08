@@ -12,12 +12,21 @@
     "baseUrl": ".",
     "paths": {
       "@mfe/shared-http": ["../shared-http/src"],
-      "@mfe/shared-types": ["../shared-types/src/index.ts"]
+      "@mfe/shared-types": ["../shared-types/src/index.ts"],
+      "@mfe/design-system": ["src/index.ts"]
     },
     "outDir": "dist",
     "declaration": true,
     "declarationDir": "dist/types"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx", "**/*.stories.ts", "**/*.stories.tsx", "**/*.figma.tsx"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.stories.ts",
+    "**/*.stories.tsx",
+    "**/*.figma.tsx"
+  ]
 }
