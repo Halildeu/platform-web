@@ -357,6 +357,81 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
 
     bootstrap();
 
+    // 2026-05-08 third hotfix (PR #313): catch-up closure for the
+    // post-redirect auth code race.
+    //
+    // Repro: user lands at /login, kc.init() returns with kc.token=null
+    // (no Keycloak session yet). bootstrap controller dispatches
+    // 'unauthenticated' and returns early — setTokenCookie / authz
+    // never run. Then user clicks "Güvenli Kurumsal Giriş" → Keycloak
+    // login → redirect back with auth code. The page reload re-mounts
+    // AuthBootstrapper, which calls kc.init() again. This time kc.init
+    // exchanges the auth code for a token, so kc.token IS set after
+    // init. But by the time bootstrap awaits init, AppRouter has
+    // already rendered with token=null in Redux (rendered before init
+    // resolved) and Navigated to /login, blanking the URL.
+    //
+    // Symptoms (browser smoke verified):
+    //   pathname=/login
+    //   window.__keycloak.authenticated=true
+    //   window.__keycloak.token=true
+    //   document.cookie="" (no erp_access_token cookie set)
+    //   network: no /api/auth/cookie POST, no /api/v1/authz/me GET
+    //
+    // Why kc.token gets set even when bootstrap declared
+    // 'unauthenticated': Keycloak.js fires onAuthSuccess internally
+    // after the auth code exchange completes, even if the bootstrap
+    // controller already returned. The bootstrap controller checked
+    // kc.token at one specific moment; onAuthSuccess fires later.
+    //
+    // Fix: hook onAuthSuccess to run the same closure as the
+    // bootstrap success path — write the cookie, fetch authz, dispatch
+    // session + transportReady phase. Idempotent because:
+    //   - if bootstrap already advanced to transportReady, this
+    //     re-runs the closure (cookie write is idempotent server-side,
+    //     authz fetch returns same snapshot, dispatch is set-not-merge)
+    //   - if bootstrap declared 'unauthenticated' early, this catches
+    //     up and converts the FSM to transportReady.
+    keycloak.onAuthSuccess = async () => {
+      if (!mounted) return;
+      const token = keycloak.token;
+      if (!token) return;
+      console.info('[AuthBootstrapper] onAuthSuccess catch-up closure');
+      try {
+        await setTokenCookie(token);
+        if (!mounted) return;
+        const profile = mapKeycloakProfile(token);
+        const authzResult = await fetchAppPermissions(token);
+        if (!mounted) return;
+        const mergedProfile = profile
+          ? {
+              ...profile,
+              permissions:
+                authzResult.permissions.length > 0 ? authzResult.permissions : profile.permissions,
+              role: authzResult.superAdmin
+                ? 'ADMIN'
+                : authzResult.permissions.length > 0
+                  ? (authzResult.permissions.find((p) => p === 'ADMIN') ?? profile.role)
+                  : profile.role,
+            }
+          : undefined;
+        dispatch(
+          setKeycloakSession({
+            token,
+            profile: mergedProfile,
+            expiresAt: keycloak.tokenParsed?.exp ? keycloak.tokenParsed.exp * 1000 : null,
+            authzSnapshot: authzResult.rawResponse,
+          }),
+        );
+        dispatch(setAuthPhase('transportReady'));
+        dispatch(setAuthInitialized(true));
+      } catch (err) {
+        console.warn('[AuthBootstrapper] onAuthSuccess closure failed:', err);
+        // Don't dispatch failed — bootstrap controller already owns
+        // failure semantics. This is a best-effort catch-up.
+      }
+    };
+
     keycloak.onTokenExpired = async () => {
       // Phase 2 PR-Auth-1 (Codex iter-24 §Auth-1 absorb, thread 019e0119):
       // refresh path uses the same await sequence as bootstrap. Without
