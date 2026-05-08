@@ -28,6 +28,7 @@ import UserActions from './UserActions.ui';
 import { fetchUsers } from '../../../entities/user/api/users.api';
 import type { UsersQueryParams } from '../../../features/user-management/model/user-management.types';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
+import { getShellServices } from '../../../app/services/shell-services';
 
 declare global {
   interface Window {
@@ -111,9 +112,25 @@ interface UsersGridProps {
   onLoadingChange?: (loading: boolean) => void;
 }
 
-type GridAccessState = 'idle' | 'unauthorized' | 'profile-missing' | 'network-error';
+// PR-FE-1 (Codex thread 019e08e2 iter-8 REVISE absorb, 2026-05-08):
+// `auth-not-ready` is a transient state distinct from `unauthorized`
+// (genuine 401/403 from the server) and from `network-error` (genuine
+// outage). It fires when the shell's auth FSM hasn't reached
+// `transportReady` by the time UsersGrid mounts — typical on cold load.
+// Inline retry CTA is shown so the user can re-attempt once the FSM
+// settles (usually within ~1s); toast suppressed to avoid noise.
+type GridAccessState =
+  | 'idle'
+  | 'unauthorized'
+  | 'profile-missing'
+  | 'network-error'
+  | 'auth-not-ready';
 
-const INLINE_ONLY_ACCESS_STATES = new Set<GridAccessState>(['unauthorized', 'profile-missing']);
+const INLINE_ONLY_ACCESS_STATES = new Set<GridAccessState>([
+  'unauthorized',
+  'profile-missing',
+  'auth-not-ready',
+]);
 
 const UsersGrid: React.FC<UsersGridProps> = ({
   onSelectUser,
@@ -745,6 +762,43 @@ const UsersGrid: React.FC<UsersGridProps> = ({
     setAccessProbeReady(false);
     onLoadingChange?.(true);
     try {
+      // PR-FE-1 (Codex thread 019e08e2 iter-7 AGREE absorb, 2026-05-08):
+      // wait for the shell's MFE Auth Transport Contract before the first
+      // protected fetch. Pre-fix the probe fired the moment UsersGrid
+      // mounted — often before AuthBootstrapper's transportReady phase —
+      // so the shell-side request interceptor short-circuited with
+      // AuthNotReadyError, which the catch below surfaced as the
+      // "auth-not-ready: unauthenticated" / "Kullanıcı verileri
+      // alınamadı" toast on every cold load of /admin/users. Awaiting
+      // auth.ready() lets the shell's auth FSM cookie+authz round-trip
+      // settle before the user-facing fetch starts. Fail-closed: if the
+      // resolver returns !ok we fall through to the existing
+      // network-error catch (toast still shown for genuine outages).
+      const authResult = await getShellServices().auth.ready();
+      if (!authResult.ok) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[mfe-users] auth.ready() returned !ok', authResult);
+        }
+        // PR-FE-1 (Codex 019e08e2 iter-8 REVISE absorb): distinguish
+        // "transient — auth FSM not ready yet" (typical on cold mount)
+        // from "genuine outage" (failed reason). The transient case
+        // gets a dedicated `auth-not-ready` inline state with retry
+        // CTA — same UX shape as `network-error` but different copy
+        // and no toast (suppressed via INLINE_ONLY_ACCESS_STATES) so
+        // the user is not blamed for a system race. Real `failed`
+        // reasons still surface as `network-error` toast since those
+        // indicate something the user might fix (network/VPN/etc).
+        setGridState(authResult.reason === 'failed' ? 'network-error' : 'auth-not-ready');
+        if (authResult.reason === 'failed') {
+          notifyOnce(
+            'network-error',
+            'error',
+            'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.',
+          );
+        }
+        return;
+      }
+
       const response = await fetchUsers({ page: 1, pageSize: 1 });
       const reason = response.meta?.reason;
 
@@ -897,13 +951,21 @@ const UsersGrid: React.FC<UsersGridProps> = ({
         ? 'Kullanıcı verilerini görmek için yetkiniz bulunmuyor.'
         : gridAccessState === 'profile-missing'
           ? 'Profiliniz henüz oluşturulmamış. Lütfen sistem yöneticisiyle iletişime geçin.'
-          : 'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.';
+          : gridAccessState === 'auth-not-ready'
+            ? 'Kullanıcı verileri için oturumun hazırlanmasını bekliyoruz.'
+            : 'Kullanıcı verileri alınamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin.';
+
+    // PR-FE-1 (Codex 019e08e2 iter-8 REVISE absorb): auth-not-ready
+    // shares the retry CTA with network-error so transient FSM races
+    // are recoverable from the same inline UX without a toast.
+    const showRetryCta =
+      gridAccessState === 'network-error' || gridAccessState === 'auth-not-ready';
 
     return (
       <div className="flex min-h-[320px] items-center justify-center rounded-3xl border border-border-subtle bg-surface-default p-6 shadow-xs">
         <div className="flex max-w-xl flex-col items-center gap-4 text-center">
           <Empty description={description} />
-          {gridAccessState === 'network-error' ? (
+          {showRetryCta ? (
             <Button type="button" onClick={handleRetry}>
               Yeniden dene
             </Button>
