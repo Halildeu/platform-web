@@ -23,6 +23,12 @@ const { mockFetchReportMetadata, authReadyResult, currentEpoch } = vi.hoisted(()
 
 vi.mock('../api', () => ({
   fetchReportMetadata: mockFetchReportMetadata,
+  // PR-FE-3 (Codex 019e08e2 iter-11 AGREE absorb): metadata-cache
+  // imports `isTenantSelectionRequiredError` to decide which catch path
+  // rethrows vs swallows. The test mock must include it; without it the
+  // catch block calls `undefined(err)` and crashes the test.
+  isTenantSelectionRequiredError: (err: unknown) =>
+    err instanceof Error && (err as { name?: unknown }).name === 'TenantSelectionRequiredError',
 }));
 
 vi.mock('../../../app/services/shell-services', () => ({

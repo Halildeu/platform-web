@@ -1,4 +1,10 @@
+// PR-FE-3 (Codex 019e08e2 iter-11): direct axios usage is required for
+// the typed AxiosError narrowing in tenant-gate detection. The shell
+// http client is still used for the actual GET/POST calls — only the
+// `axios.isAxiosError` type guard and the AxiosError type are imported.
+// eslint-disable-next-line no-restricted-imports
 import axios, { AxiosError } from 'axios';
+// eslint-disable-next-line no-restricted-imports
 import { api, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
 import type { GridRequest, GridResponse } from '../../grid';
@@ -22,6 +28,72 @@ type ErrorResponse = {
   error?: string;
   message?: string;
   meta?: { traceId?: string };
+  // PR-FE-3 (Codex thread 019e08e2 iter-11 AGREE absorb, 2026-05-08):
+  // tenant_selection_required 400 surface (yearly reports). Backend
+  // YearlySchemaResolver returns {error: 'tenant_selection_required',
+  // reportKey, message, hint?} for super-admins and multi-company users
+  // with no X-Company-Id header. Frontend lifts this into a typed
+  // TenantSelectionRequiredError so ReportPage can render a prominent
+  // CompanyPicker gate instead of a generic error toast / redirect.
+  reportKey?: string;
+  hint?: string;
+};
+
+/**
+ * PR-FE-3 (Codex thread 019e08e2 iter-11 AGREE absorb, 2026-05-08):
+ * typed error for the yearly-report tenant gate. Distinct from
+ * generic 400s so ReportPage can branch on the presence of this class
+ * and render a CompanyPicker gate (no redirect, no generic toast).
+ *
+ * Pre-fix: yearly reports (e.g. fin-muhasebe-detay) returned a 400 with
+ * {error:'tenant_selection_required'} that was swallowed by metadata-
+ * cache as `emptyMeta()`, so ReportPage saw an empty metadata cache and
+ * produced a "report not found" outcome that bounced the user back to
+ * /admin/reports. The picker existed but was never reached because the
+ * page never settled.
+ */
+export class TenantSelectionRequiredError extends Error {
+  public readonly reportKey: string;
+  public readonly originalMessage?: string;
+  public readonly hint?: string;
+  public readonly status: number;
+
+  constructor(reportKey: string, originalMessage?: string, hint?: string) {
+    super(`tenant_selection_required:${reportKey}`);
+    this.name = 'TenantSelectionRequiredError';
+    this.reportKey = reportKey;
+    this.originalMessage = originalMessage;
+    this.hint = hint;
+    this.status = 400;
+  }
+}
+
+/**
+ * Type guard usable across module-federation boundaries (single-domain
+ * builds give each remote its own copy of TenantSelectionRequiredError,
+ * so `instanceof` is unreliable — name-based check is the canonical
+ * "is this our typed gate error" test).
+ */
+export const isTenantSelectionRequiredError = (err: unknown): err is TenantSelectionRequiredError =>
+  err instanceof Error && (err as { name?: unknown }).name === 'TenantSelectionRequiredError';
+
+/**
+ * Lifts an axios 400 with `error:'tenant_selection_required'` body into
+ * a {@link TenantSelectionRequiredError}. Returns `null` if the response
+ * shape doesn't match (caller falls through to existing 400 handling).
+ */
+const toTenantSelectionRequiredError = (
+  reportKeyHint: string,
+  error: AxiosError<ErrorResponse>,
+): TenantSelectionRequiredError | null => {
+  if (error.response?.status !== 400) {
+    return null;
+  }
+  const body = error.response.data;
+  if (body?.error !== 'tenant_selection_required') {
+    return null;
+  }
+  return new TenantSelectionRequiredError(body.reportKey ?? reportKeyHint, body.message, body.hint);
 };
 
 const REPORTS_BASE = '/v1/reports';
@@ -91,10 +163,30 @@ export const fetchReportCategories = async (): Promise<ReportCategory[]> => {
 
 export const fetchReportMetadata = async (reportKey: string): Promise<ReportMetadata> => {
   const client = resolveHttpClient();
-  const { data } = await client.get<ReportMetadata>(`${REPORTS_BASE}/${reportKey}/metadata`, {
-    headers: buildCompanyHeaders(),
-  });
-  return data;
+  // PR-FE-3 (Codex 019e08e2 iter-11 AGREE absorb): tenant gate detection.
+  // Pre-fix: any 400 from /metadata propagated as a generic axios error
+  // and was swallowed by metadata-cache as emptyMeta() — yearly reports
+  // surfaced as "no columns" silent failure. Now we lift the
+  // tenant_selection_required body into a typed error so ReportPage can
+  // render a CompanyPicker gate; other 400s preserve the legacy
+  // generic-throw + cache emptyMeta path.
+  try {
+    const { data } = await client.get<ReportMetadata>(`${REPORTS_BASE}/${reportKey}/metadata`, {
+      headers: buildCompanyHeaders(),
+    });
+    return data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const tenantError = toTenantSelectionRequiredError(
+        reportKey,
+        error as AxiosError<ErrorResponse>,
+      );
+      if (tenantError) {
+        throw tenantError;
+      }
+    }
+    throw error;
+  }
 };
 
 /**
@@ -144,7 +236,6 @@ export const fetchCompanyOptions = async (): Promise<CompanyOption[] | null> => 
       }
     }
     // Unexpected error — also fall back, log for diagnostics.
-    // eslint-disable-next-line no-console
     console.warn('[fetchCompanyOptions] unexpected error, falling back:', error);
     return null;
   }
@@ -274,11 +365,9 @@ const fetchReportDataGrouped = async (
 
   try {
     const client = resolveHttpClient();
-    const { data } = await client.post<PagedResultDto>(
-      `${REPORTS_BASE}/${reportKey}/query`,
-      body,
-      { headers: buildCompanyHeaders() },
-    );
+    const { data } = await client.post<PagedResultDto>(`${REPORTS_BASE}/${reportKey}/query`, body, {
+      headers: buildCompanyHeaders(),
+    });
     const items = Array.isArray(data?.items) ? data.items : [];
     return {
       rows: items,
@@ -290,13 +379,22 @@ const fetchReportDataGrouped = async (
       const status = response.response?.status;
       const traceId = response.response?.data?.meta?.traceId;
       if (traceId && process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
         console.warn(`[mfe-reporting/${reportKey}/query] traceId`, traceId);
       }
       if (status === 401 || status === 403) {
-        throw new Error('Rapor verileri için yetki bulunmuyor');
+        throw new Error('Rapor verileri için yetki bulunmuyor', { cause: error });
       }
       if (status === 400) {
+        // PR-FE-3 (Codex 019e08e2 iter-11): tenant gate FIRST. Backend
+        // YearlySchemaResolver returns 400 with error:'tenant_selection_required'
+        // for super-admin / multi-company users without X-Company-Id.
+        // Lift this into a typed error before falling through to the
+        // generic ReportQueryError path; ReportPage branches on the typed
+        // class to render a CompanyPicker gate (no toast).
+        const tenantError = toTenantSelectionRequiredError(reportKey, response);
+        if (tenantError) {
+          throw tenantError;
+        }
         // Surface the structured error so the caller can branch on
         // .code without parsing strings (#272c will inspect this to
         // revert offending grouping state, #272a will branch on
@@ -306,9 +404,9 @@ const fetchReportDataGrouped = async (
         const detail = data?.message ?? 'Sorgu yapısı reddedildi';
         throw new ReportQueryError(code, `[${code}] ${detail}`, 400);
       }
-      throw new Error(`Rapor verileri alınamadı (HTTP ${status ?? '??'})`);
+      throw new Error(`Rapor verileri alınamadı (HTTP ${status ?? '??'})`, { cause: error });
     }
-    throw new Error('Rapor verileri alınamadı');
+    throw new Error('Rapor verileri alınamadı', { cause: error });
   }
 };
 
@@ -383,11 +481,22 @@ export const fetchReportData = async (
         console.warn(`[mfe-reporting/${reportKey}] traceId`, traceId);
       }
       if (status === 401 || status === 403) {
-        throw new Error('Rapor verileri için yetki bulunmuyor');
+        throw new Error('Rapor verileri için yetki bulunmuyor', { cause: error });
       }
-      throw new Error(`Rapor verileri alınamadı (HTTP ${status ?? '??'})`);
+      // PR-FE-3 (Codex 019e08e2 iter-11): same tenant gate detection on
+      // the flat data path. fin-muhasebe-detay yearly schema returns
+      // 400/tenant_selection_required here when no X-Company-Id is set;
+      // the typed error lets ReportPage gate the grid and surface the
+      // CompanyPicker prominently.
+      if (status === 400) {
+        const tenantError = toTenantSelectionRequiredError(reportKey, response);
+        if (tenantError) {
+          throw tenantError;
+        }
+      }
+      throw new Error(`Rapor verileri alınamadı (HTTP ${status ?? '??'})`, { cause: error });
     }
-    throw new Error('Rapor verileri alınamadı');
+    throw new Error('Rapor verileri alınamadı', { cause: error });
   }
 };
 

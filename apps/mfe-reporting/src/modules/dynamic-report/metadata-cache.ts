@@ -1,5 +1,5 @@
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
-import { fetchReportMetadata } from './api';
+import { fetchReportMetadata, isTenantSelectionRequiredError } from './api';
 import type { ReportCapabilities, ReportColumnMeta } from './types';
 import { getShellServices } from '../../app/services/shell-services';
 
@@ -305,6 +305,15 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
     } catch (err) {
       if (process.env.NODE_ENV !== 'production') {
         console.warn(`[mfe-reporting/metadata-cache] fetch failed for ${reportKey}:`, err);
+      }
+      // PR-FE-3 (Codex 019e08e2 iter-11 AGREE absorb, 2026-05-08):
+      // tenant_selection_required is a typed error that callers MUST see
+      // (ReportPage branches on it to render the CompanyPicker gate
+      // instead of a generic empty cache). Other failure classes keep
+      // the legacy swallow + emptyMeta() behaviour so the retry-the-
+      // metadata-fetch flow stays unchanged for non-tenant errors.
+      if (isTenantSelectionRequiredError(err)) {
+        throw err;
       }
       // Do NOT cache the failure — let the next caller retry.
       return emptyMeta();
