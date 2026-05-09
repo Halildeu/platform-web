@@ -261,7 +261,7 @@ describe('GaugeChart onDataPointClick contract', () => {
 });
 
 describe('RadarChart onDataPointClick contract', () => {
-  it('emits polygon-level datum { seriesName, label, values, indicators }', () => {
+  it('emits polygon-level datum { seriesName, label, values, indicators } when click coordinates are absent', () => {
     const onClick = vi.fn<(e: ChartClickEvent) => void>();
     render(
       <RadarChart
@@ -290,6 +290,126 @@ describe('RadarChart onDataPointClick contract', () => {
       values: [85, 70, 90],
       indicators: ['Hız', 'Güç', 'Verimlilik'],
     });
+    // No coordinates supplied → indicator enrichment falls back.
+    expect(datum.indicator).toBeUndefined();
+    expect(datum.indicatorIndex).toBeUndefined();
+    expect(datum.indicatorValue).toBeUndefined();
+  });
+
+  it('v2: emits indicator-level enrichment when click coordinates resolve to a specific axis', () => {
+    // ECharts radar lays out indicators clockwise from top:
+    // index 0 = top (-π/2), index 1 = right, index 2 = bottom-right,
+    // index 3 = bottom-left. With a 200×200 container centered at
+    // (100, 100), a click at (100, 30) sits 70px above center →
+    // angle = 0 in the helper's normalised frame → indicator 0 (Hız).
+    const rectMock = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 200,
+      height: 200,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 200,
+      toJSON() {
+        return '';
+      },
+    });
+    try {
+      const onClick = vi.fn<(e: ChartClickEvent) => void>();
+      render(
+        <RadarChart
+          indicators={[
+            { name: 'Hız', max: 100 }, // index 0, top
+            { name: 'Güç', max: 100 }, // index 1, right
+            { name: 'Verimlilik', max: 100 }, // index 2, bottom-right
+            { name: 'Konfor', max: 100 }, // index 3, bottom-left
+          ]}
+          series={[{ name: 'Model X', data: [85, 70, 90, 60] }]}
+          onDataPointClick={onClick}
+        />,
+      );
+
+      getLastClickHandler()({
+        seriesName: 'Model X',
+        name: 'Model X',
+        value: [85, 70, 90, 60],
+        dataIndex: 0,
+        event: { offsetX: 100, offsetY: 30 }, // top → indicator 0
+      });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+      const datum = onClick.mock.calls[0][0].datum;
+      expect(datum).toMatchObject({
+        seriesName: 'Model X',
+        // label upgrades to indicator name when v2 enrichment fires
+        label: 'Hız',
+        indicator: 'Hız',
+        indicatorIndex: 0,
+        indicatorValue: 85,
+        // Polygon-level fields still present for backward-compat
+        values: [85, 70, 90, 60],
+        indicators: ['Hız', 'Güç', 'Verimlilik', 'Konfor'],
+      });
+      // Top-level event.value upgrades to indicatorValue (85), not the
+      // legacy `values[0]` fallback (also happens to be 85 here, so we
+      // assert the explicit field instead).
+      expect(onClick.mock.calls[0][0].value).toBe(85);
+      expect(onClick.mock.calls[0][0].label).toBe('Hız');
+    } finally {
+      rectMock.mockRestore();
+    }
+  });
+
+  it('v2: clicks too close to the center fall back to polygon-level only (dead-zone)', () => {
+    const rectMock = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 200,
+      height: 200,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 200,
+      toJSON() {
+        return '';
+      },
+    });
+    try {
+      const onClick = vi.fn<(e: ChartClickEvent) => void>();
+      render(
+        <RadarChart
+          indicators={[
+            { name: 'Hız', max: 100 },
+            { name: 'Güç', max: 100 },
+            { name: 'Verimlilik', max: 100 },
+            { name: 'Konfor', max: 100 },
+          ]}
+          series={[{ name: 'Model X', data: [85, 70, 90, 60] }]}
+          onDataPointClick={onClick}
+        />,
+      );
+
+      // Click at (102, 102) — 2px diagonal from center → inside the 5%
+      // min-radius dead-zone (10px on a 200×200 container).
+      getLastClickHandler()({
+        seriesName: 'Model X',
+        name: 'Model X',
+        value: [85, 70, 90, 60],
+        dataIndex: 0,
+        event: { offsetX: 102, offsetY: 102 },
+      });
+
+      const datum = onClick.mock.calls[0][0].datum;
+      expect(datum.indicator).toBeUndefined();
+      expect(datum.indicatorIndex).toBeUndefined();
+      expect(datum.indicatorValue).toBeUndefined();
+      // Polygon-level still emitted.
+      expect(datum.seriesName).toBe('Model X');
+      expect(datum.values).toEqual([85, 70, 90, 60]);
+    } finally {
+      rectMock.mockRestore();
+    }
   });
 });
 

@@ -88,11 +88,22 @@ export interface RadarChartProps extends AccessControlledProps {
   /** Custom value formatter for tooltip. */
   valueFormatter?: (v: number) => string;
   /**
-   * Callback fired when a series polygon is clicked. Emits a canonical
-   * `ChartClickEvent` with `datum: { seriesName, label: seriesName,
-   * values, indicators }` — polygon-level (whole series), not
-   * per-indicator. Indicator-level emission requires custom hit
-   * mapping and is tracked as v2 follow-up (Codex iter-2 blocker).
+   * Callback fired when the radar polygon is clicked. Emits a canonical
+   * `ChartClickEvent`:
+   *
+   * Polygon-level (always present):
+   * `datum: { seriesName, label, values, indicators }`
+   *
+   * Indicator-level v2 enrichment (when click coordinates resolve to a
+   * specific axis): also includes `{ indicator, indicatorIndex,
+   * indicatorValue }`. The cross-filter wrapper can pick
+   * `emitFields: ['indicator']` for per-axis drill, or fall back to
+   * `['seriesName']` for polygon-level filter.
+   *
+   * Falls back to polygon-only emission when the click lands too
+   * close to the center (dead-zone, no clear axis), in test
+   * environments without coordinate events, or when the container
+   * ref isn't measurable yet.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
@@ -136,6 +147,66 @@ const DEFAULT_PALETTE = [
 
 const escapeHtml = (t: string): string =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * Resolve which indicator is closest to a click on the radar polygon.
+ *
+ * ECharts radar lays out indicators clockwise starting at the top
+ * (12 o'clock = `-π/2` in standard math angle). With N indicators,
+ * indicator `i` sits at angle `i × (2π / N) - π/2`. Given a click's
+ * `(offsetX, offsetY)` relative to the chart container we:
+ *
+ *   1. Translate to vector from container center.
+ *   2. Skip clicks too close to the center (no meaningful indicator).
+ *   3. Compute the click angle and snap to the nearest indicator slot.
+ *
+ * Returns `null` when the indicator can't be resolved (event missing
+ * coordinates, click near center, container ref not yet measured).
+ *
+ * Indicator-level v2 (Codex thread 019e0c25 iter-1 backlog item):
+ * polygon-level v1 only emitted whole-series datum; consumers asked
+ * for per-indicator drill so the cross-filter wrapper could pin a
+ * single dimension. The mapping is a heuristic — ECharts doesn't
+ * surface per-indicator click as a native event — but the
+ * approximation is stable enough for cross-filter emit when the
+ * caller chooses `emitFields: ['indicator']`. Polygon-level fields
+ * stay on the datum for backward-compat callers.
+ */
+function resolveIndicatorAtClick(
+  offsetX: number | undefined,
+  offsetY: number | undefined,
+  containerRect: DOMRect | null,
+  indicatorCount: number,
+): number | null {
+  if (typeof offsetX !== 'number' || typeof offsetY !== 'number') return null;
+  if (containerRect == null) return null;
+  if (indicatorCount <= 0) return null;
+
+  // Container-relative center. ECharts default radius `'75%'` keeps
+  // the polygon centred in the container; the exact center pixel is
+  // good enough for nearest-angle snapping (we don't need radial
+  // distance — only the angle).
+  const cx = containerRect.width / 2;
+  const cy = containerRect.height / 2;
+  const dx = offsetX - cx;
+  const dy = offsetY - cy;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  // Dead-zone near center: indicator inference is unreliable here, and
+  // the click most likely lands on the polygon's interior rather than
+  // a specific axis.
+  const minRadius = Math.min(containerRect.width, containerRect.height) * 0.05;
+  if (distance < minRadius) return null;
+
+  // ECharts radar indicators start at top (-π/2) and go clockwise.
+  // Standard `atan2(dy, dx)` returns angle measured counter-clockwise
+  // from the +x axis; normalise so 0 = top, increasing clockwise.
+  const rawAngle = Math.atan2(dy, dx);
+  const TWO_PI = 2 * Math.PI;
+  const normalised = (rawAngle + Math.PI / 2 + TWO_PI) % TWO_PI;
+  const slot = normalised / (TWO_PI / indicatorCount);
+  return Math.round(slot) % indicatorCount;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -341,31 +412,63 @@ const RadarChartInner = React.forwardRef<
     (params: unknown) => {
       if (!onDataPointClick) return;
       // ECharts radar click params shape: `{ name?, value: number[],
-      // seriesName?, dataIndex?, data: { name, value } }`. We surface
-      // a polygon-level datum that includes the indicator NAMES so a
-      // cross-filter wrapper can emit, say, `seriesName` as the
-      // canonical filter field.
+      // seriesName?, dataIndex?, data: { name, value }, event: {
+      // offsetX, offsetY } }`. We surface a polygon-level datum that
+      // includes the indicator NAMES + values; v2 enrichment uses the
+      // click coordinates (when present) to also identify the SINGLE
+      // closest indicator so cross-filter consumers can emit
+      // per-axis filters (`emitFields: ['indicator']`).
       const p = params as {
         seriesName?: string;
         name?: string;
         value?: unknown;
         dataIndex?: number;
         data?: unknown;
+        event?: { offsetX?: number; offsetY?: number };
       };
       const valuesArr = Array.isArray(p.value) ? (p.value as number[]) : [];
       const seriesName =
         (typeof p.seriesName === 'string' ? p.seriesName : undefined) ??
         (typeof p.name === 'string' ? p.name : '');
       const indicatorNames = indicators.map((ind) => ind.name);
+
+      // v2 indicator-level enrichment (Codex iter-1 backlog item).
+      // Heuristic: snap the click angle to the closest indicator
+      // axis (see `resolveIndicatorAtClick` above). Returns `null`
+      // when coordinates aren't available (test environments, raw
+      // ECharts events that omit `event.offsetX/Y`) or the click is
+      // too close to the center to disambiguate.
+      const containerRect = ownContainerRef.current?.getBoundingClientRect() ?? null;
+      const indicatorIdx = resolveIndicatorAtClick(
+        p.event?.offsetX,
+        p.event?.offsetY,
+        containerRect,
+        indicators.length,
+      );
+      const indicator =
+        indicatorIdx != null && indicatorIdx >= 0 && indicatorIdx < indicators.length
+          ? indicators[indicatorIdx]
+          : null;
+      const indicatorValue =
+        indicator != null && typeof valuesArr[indicatorIdx as number] === 'number'
+          ? valuesArr[indicatorIdx as number]
+          : undefined;
+
       onDataPointClick({
         datum: {
+          // Polygon-level fields (backward-compat with v1):
           seriesName,
-          label: seriesName,
+          label: indicator?.name ?? seriesName,
           values: valuesArr,
           indicators: indicatorNames,
+          // v2 indicator-level enrichment (undefined when click is in
+          // the polygon dead-zone or coordinates are missing):
+          indicator: indicator?.name,
+          indicatorIndex: indicatorIdx ?? undefined,
+          indicatorValue,
         },
-        value: typeof valuesArr[0] === 'number' ? valuesArr[0] : undefined,
-        label: seriesName,
+        value: indicatorValue ?? (typeof valuesArr[0] === 'number' ? valuesArr[0] : undefined),
+        label: indicator?.name ?? seriesName,
       });
     },
     [onDataPointClick, indicators],
