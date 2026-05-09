@@ -788,6 +788,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   gradient
 />`,
     features: [
+      'cross-filter',
       'stacked',
       'gradient-fill',
       'tooltip',
@@ -975,6 +976,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Correlation Plot"
 />`,
     features: [
+      'cross-filter',
       'bubble-size',
       'tooltip',
       'responsive',
@@ -1165,6 +1167,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="CPU Usage"
 />`,
     features: [
+      'cross-filter',
       'threshold-colors',
       'animation',
       'responsive',
@@ -1337,6 +1340,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Service Comparison"
 />`,
     features: [
+      'cross-filter',
       'multi-axis',
       'overlay',
       'tooltip',
@@ -1520,6 +1524,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Budget Allocation"
 />`,
     features: [
+      'cross-filter',
       'drill-down',
       'tooltip',
       'responsive',
@@ -1714,6 +1719,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Activity Heatmap"
 />`,
     features: [
+      'cross-filter',
       'color-scale',
       'tooltip',
       'responsive',
@@ -1879,6 +1885,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Revenue Breakdown"
 />`,
     features: [
+      'cross-filter',
       'total-markers',
       'color-coding',
       'tooltip',
@@ -2066,6 +2073,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Sales Funnel"
 />`,
     features: [
+      'cross-filter',
       'conversion-rates',
       'tooltip',
       'responsive',
@@ -2265,6 +2273,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Budget Flow"
 />`,
     features: [
+      'cross-filter',
       'node-dragging',
       'tooltip',
       'responsive',
@@ -2445,6 +2454,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   title="Organization"
 />`,
     features: [
+      'cross-filter',
       'drill-down',
       'tooltip',
       'responsive',
