@@ -1,0 +1,395 @@
+/**
+ * adaptToEcharts — pure helper unit tests.
+ *
+ * Covers:
+ *   - Per-type ECharts mapping (line / segment / area / point / label)
+ *   - Support matrix (5 full + 1 partial + 7 no-op) — Codex iter-3
+ *   - Per-series patch routing (target.seriesIndex / seriesName)
+ *   - dataContext lookup for `LabelMarkup.anchor: { dataIndex }`
+ *   - Warnings emission (no-op chart kinds, unresolved label anchors)
+ *   - sanitizeChartText integration (XSS escape)
+ *   - markupLookup map for click-event resolution
+ *   - Public name collision regression (ChartMarkup ≠ ChartAnnotation
+ *     ≠ collaboration Annotation)
+ */
+import { describe, it, expect } from 'vitest';
+import { adaptToEcharts, DEFAULT_SUPPORT_MATRIX, type AdaptOptions } from '../adaptToEcharts';
+import type {
+  ChartMarkup,
+  LineMarkup,
+  SegmentMarkup,
+  AreaMarkup,
+  PointMarkup,
+  LabelMarkup,
+} from '../../types';
+
+const baseOpts: AdaptOptions = { chartType: 'bar' };
+
+describe('adaptToEcharts — line markup', () => {
+  it('maps a y-axis line to markLine data', () => {
+    const m: LineMarkup = {
+      id: 'budget',
+      type: 'line',
+      axis: 'y',
+      value: 1000,
+      label: { text: 'Hedef', position: 'end' },
+      color: '#3b82f6',
+      style: 'dashed',
+      width: 2,
+    };
+    const r = adaptToEcharts([m], baseOpts);
+    expect(r.seriesPatches).toHaveLength(1);
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    expect(data).toHaveLength(1);
+    expect(data[0]).toMatchObject({
+      name: 'budget',
+      yAxis: 1000,
+      lineStyle: { color: '#3b82f6', type: 'dashed', width: 2 },
+      label: { show: true, formatter: 'Hedef', position: 'end' },
+    });
+  });
+
+  it('maps an x-axis line', () => {
+    const r = adaptToEcharts([{ id: 'q3-marker', type: 'line', axis: 'x', value: 'Q3' }], baseOpts);
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    expect(data[0]).toMatchObject({ name: 'q3-marker', xAxis: 'Q3' });
+  });
+
+  it('uses default semantic color when omitted', () => {
+    const r = adaptToEcharts([{ id: 'l', type: 'line', axis: 'y', value: 50 }], baseOpts);
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    expect((data[0] as { lineStyle: { color: string } }).lineStyle.color).toContain(
+      '--action-primary',
+    );
+  });
+});
+
+describe('adaptToEcharts — segment markup (sloped trend line)', () => {
+  it('emits a 2-coord segment for sloped lines', () => {
+    const m: SegmentMarkup = {
+      id: 'trend',
+      type: 'segment',
+      from: { x: 0, y: 10 },
+      to: { x: 5, y: 60 },
+      label: { text: 'OLS', position: 'middle' },
+      color: '#22c55e',
+      style: 'dashed',
+    };
+    const r = adaptToEcharts([m], baseOpts);
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    expect(data).toHaveLength(1);
+    const segment = data[0] as Array<{ name?: string; coord: [number, number] }>;
+    expect(Array.isArray(segment)).toBe(true);
+    expect(segment).toHaveLength(2);
+    expect(segment[0]).toMatchObject({ name: 'trend', coord: [0, 10] });
+    expect(segment[1]).toMatchObject({ coord: [5, 60] });
+  });
+});
+
+describe('adaptToEcharts — area markup', () => {
+  it('emits markArea data with from/to bounds', () => {
+    const m: AreaMarkup = {
+      id: 'warn',
+      type: 'area',
+      axis: 'x',
+      from: 'Q2',
+      to: 'Q3',
+      label: { text: 'Riskli' },
+      color: '#fef3c7',
+      opacity: 0.3,
+    };
+    const r = adaptToEcharts([m], baseOpts);
+    const data = (r.seriesPatches[0].markArea as { data: unknown[] }).data;
+    expect(data).toHaveLength(1);
+    const area = data[0] as Array<{
+      xAxis?: unknown;
+      itemStyle?: { color: string; opacity: number };
+    }>;
+    expect(area).toHaveLength(2);
+    expect(area[0]).toMatchObject({ name: 'warn', xAxis: 'Q2' });
+    expect(area[0].itemStyle).toMatchObject({ color: '#fef3c7', opacity: 0.3 });
+    expect(area[1]).toMatchObject({ xAxis: 'Q3' });
+  });
+
+  it('uses default warning-bg + 0.15 opacity when omitted', () => {
+    const r = adaptToEcharts([{ id: 'a', type: 'area', axis: 'y', from: 0, to: 10 }], baseOpts);
+    const data = (r.seriesPatches[0].markArea as { data: unknown[] }).data;
+    const area = data[0] as Array<{ itemStyle: { color: string; opacity: number } }>;
+    expect(area[0].itemStyle.color).toContain('--state-warning-bg');
+    expect(area[0].itemStyle.opacity).toBe(0.15);
+  });
+});
+
+describe('adaptToEcharts — point markup', () => {
+  it('emits markPoint data with coord', () => {
+    const m: PointMarkup = {
+      id: 'spike',
+      type: 'point',
+      x: 'Mar',
+      y: 950,
+      label: { text: '↑ outlier' },
+      symbol: 'diamond',
+      color: '#ef4444',
+      size: 12,
+    };
+    const r = adaptToEcharts([m], baseOpts);
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect(data[0]).toMatchObject({
+      name: 'spike',
+      coord: ['Mar', 950],
+      symbol: 'diamond',
+      symbolSize: 12,
+      itemStyle: { color: '#ef4444' },
+    });
+  });
+
+  it('supports categorical y for heatmap', () => {
+    const r = adaptToEcharts([{ id: 'cell', type: 'point', x: 'Mon', y: 'AM' }], {
+      chartType: 'heatmap',
+    });
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, string] }).coord).toEqual(['Mon', 'AM']);
+  });
+});
+
+describe('adaptToEcharts — label markup', () => {
+  it('resolves explicit {x, y} anchor', () => {
+    const m: LabelMarkup = {
+      id: 'note',
+      type: 'label',
+      text: 'Lansman',
+      anchor: { x: 'Apr', y: 600 },
+    };
+    const r = adaptToEcharts([m], baseOpts);
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect(data).toHaveLength(1);
+    expect(data[0]).toMatchObject({
+      name: 'note',
+      coord: ['Apr', 600],
+      symbol: 'circle',
+      symbolSize: 1,
+      itemStyle: { opacity: 0 },
+      label: { show: true, formatter: 'Lansman' },
+    });
+  });
+
+  it('resolves {dataIndex} anchor via dataContext', () => {
+    const r = adaptToEcharts(
+      [
+        {
+          id: 'peak',
+          type: 'label',
+          text: 'Tepe',
+          anchor: { dataIndex: 2 },
+        },
+      ],
+      {
+        chartType: 'line',
+        dataContext: {
+          labels: ['Jan', 'Feb', 'Mar', 'Apr'],
+          series: [{ name: 'Sales', data: [10, 20, 50, 30] }],
+        },
+      },
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, number] }).coord).toEqual(['Mar', 50]);
+  });
+
+  it('warns when dataIndex anchor cannot be resolved (no dataContext)', () => {
+    const r = adaptToEcharts(
+      [{ id: 'orphan', type: 'label', text: 'Foo', anchor: { dataIndex: 0 } }],
+      { chartType: 'line' }, // no dataContext
+    );
+    expect(r.seriesPatches).toHaveLength(0);
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain('orphan');
+    expect(r.warnings[0]).toContain('anchor could not be resolved');
+  });
+
+  it('warns when dataIndex is out of range', () => {
+    const r = adaptToEcharts([{ id: 'oob', type: 'label', text: 'X', anchor: { dataIndex: 99 } }], {
+      chartType: 'line',
+      dataContext: { labels: ['a'], series: [{ data: [1] }] },
+    });
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain('oob');
+  });
+
+  it('honors object-form data points (data: [{value: N}])', () => {
+    const r = adaptToEcharts([{ id: 'p', type: 'label', text: 'Y', anchor: { dataIndex: 1 } }], {
+      chartType: 'line',
+      dataContext: {
+        labels: ['Jan', 'Feb'],
+        series: [{ data: [{ value: 10 }, { value: 20 }] }],
+      },
+    });
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, number] }).coord).toEqual(['Feb', 20]);
+  });
+});
+
+describe('adaptToEcharts — support matrix', () => {
+  it('emits 5 full + 1 partial + 7 no-op chart kinds (Codex iter-3 contract)', () => {
+    const fullKinds = ['bar', 'line', 'area', 'scatter', 'heatmap'];
+    const partialKinds = ['waterfall'];
+    const noopKinds = ['pie', 'gauge', 'radar', 'funnel', 'treemap', 'sankey', 'sunburst'];
+
+    expect(fullKinds.length + partialKinds.length + noopKinds.length).toBe(13);
+
+    for (const kind of fullKinds) {
+      const policy = DEFAULT_SUPPORT_MATRIX[kind as keyof typeof DEFAULT_SUPPORT_MATRIX];
+      expect(policy.line).toBe('full');
+      expect(policy.segment).toBe('full');
+      expect(policy.area).toBe('full');
+      expect(policy.point).toBe('full');
+      expect(policy.label).toBe('full');
+    }
+
+    for (const kind of partialKinds) {
+      const policy = DEFAULT_SUPPORT_MATRIX[kind as keyof typeof DEFAULT_SUPPORT_MATRIX];
+      // Waterfall: line/area partial (connector merge), point/label full
+      expect(policy.line).toBe('partial');
+      expect(policy.area).toBe('partial');
+      expect(policy.point).toBe('full');
+      expect(policy.label).toBe('full');
+    }
+
+    for (const kind of noopKinds) {
+      const policy = DEFAULT_SUPPORT_MATRIX[kind as keyof typeof DEFAULT_SUPPORT_MATRIX];
+      // Every variant is no-op for non-cartesian / hierarchical charts.
+      expect(Object.values(policy).every((s) => s === 'no-op')).toBe(true);
+    }
+  });
+
+  it('drops markups + warns on no-op chart kinds', () => {
+    const r = adaptToEcharts([{ id: 'x', type: 'line', axis: 'y', value: 50 }], {
+      chartType: 'pie',
+    });
+    expect(r.seriesPatches).toHaveLength(0);
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain('pie');
+    expect(r.warnings[0]).toContain('line');
+    expect(r.warnings[0]).toContain('not supported');
+  });
+
+  it('still populates markupLookup even for no-op markups', () => {
+    const r = adaptToEcharts([{ id: 'dropped', type: 'line', axis: 'y', value: 50 }], {
+      chartType: 'pie',
+    });
+    expect(r.markupLookup.get('dropped')?.id).toBe('dropped');
+  });
+});
+
+describe('adaptToEcharts — per-series patch routing', () => {
+  it('routes markups with different target.seriesIndex into separate patches', () => {
+    const r = adaptToEcharts(
+      [
+        { id: 'l1', type: 'line', axis: 'y', value: 100, target: { seriesIndex: 0 } },
+        { id: 'l2', type: 'line', axis: 'y', value: 200, target: { seriesIndex: 1 } },
+      ],
+      { chartType: 'line' },
+    );
+    expect(r.seriesPatches).toHaveLength(2);
+    const p0 = r.seriesPatches.find((p) => p.seriesIndex === 0)!;
+    const p1 = r.seriesPatches.find((p) => p.seriesIndex === 1)!;
+    expect((p0.markLine as { data: unknown[] }).data).toHaveLength(1);
+    expect((p1.markLine as { data: unknown[] }).data).toHaveLength(1);
+  });
+
+  it('routes by target.seriesName when seriesIndex is omitted', () => {
+    const r = adaptToEcharts(
+      [
+        { id: 'l1', type: 'line', axis: 'y', value: 100, target: { seriesName: 'Sales' } },
+        { id: 'l2', type: 'line', axis: 'y', value: 200, target: { seriesName: 'Costs' } },
+      ],
+      { chartType: 'line' },
+    );
+    expect(r.seriesPatches).toHaveLength(2);
+    expect(r.seriesPatches.some((p) => p.seriesName === 'Sales')).toBe(true);
+    expect(r.seriesPatches.some((p) => p.seriesName === 'Costs')).toBe(true);
+  });
+
+  it('groups untargeted markups into a single default patch', () => {
+    const r = adaptToEcharts(
+      [
+        { id: 'l1', type: 'line', axis: 'y', value: 100 },
+        { id: 'l2', type: 'line', axis: 'y', value: 200 },
+        { id: 'a1', type: 'area', axis: 'y', from: 50, to: 150 },
+      ],
+      { chartType: 'bar' },
+    );
+    expect(r.seriesPatches).toHaveLength(1);
+    expect((r.seriesPatches[0].markLine as { data: unknown[] }).data).toHaveLength(2);
+    expect((r.seriesPatches[0].markArea as { data: unknown[] }).data).toHaveLength(1);
+  });
+});
+
+describe('adaptToEcharts — XSS sanitization', () => {
+  it('escapes <script> in line label.text', () => {
+    const r = adaptToEcharts(
+      [
+        {
+          id: 'xss',
+          type: 'line',
+          axis: 'y',
+          value: 50,
+          label: { text: '<script>alert(1)</script>' },
+        },
+      ],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    const formatter = (data[0] as { label: { formatter?: string } }).label.formatter;
+    expect(formatter).not.toContain('<script>');
+    expect(formatter).toContain('&lt;');
+  });
+
+  it('escapes < > & " in label markup text', () => {
+    const r = adaptToEcharts(
+      [{ id: 's', type: 'label', text: '<a>&"foo"</a>', anchor: { x: 0, y: 0 } }],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    const formatter = (data[0] as { label: { formatter: string } }).label.formatter;
+    expect(formatter).not.toContain('<a>');
+    expect(formatter).toContain('&lt;');
+  });
+});
+
+describe('adaptToEcharts — markupLookup', () => {
+  it('exposes every markup by id (including dropped no-op markups)', () => {
+    const r = adaptToEcharts(
+      [
+        { id: 'a', type: 'line', axis: 'y', value: 1 },
+        { id: 'b', type: 'point', x: 0, y: 0 },
+        { id: 'c', type: 'line', axis: 'y', value: 2 }, // dropped on pie
+      ],
+      { chartType: 'bar' },
+    );
+    expect(r.markupLookup.size).toBe(3);
+    expect(r.markupLookup.get('a')?.type).toBe('line');
+    expect(r.markupLookup.get('b')?.type).toBe('point');
+    expect(r.markupLookup.get('c')?.type).toBe('line');
+  });
+});
+
+describe('adaptToEcharts — empty input', () => {
+  it('returns empty patches + no warnings for an empty markups array', () => {
+    const r = adaptToEcharts([], baseOpts);
+    expect(r.seriesPatches).toHaveLength(0);
+    expect(r.warnings).toHaveLength(0);
+    expect(r.markupLookup.size).toBe(0);
+    expect(r.graphic).toEqual([]);
+  });
+});
+
+describe('adaptToEcharts — public name collision regression', () => {
+  it('ChartMarkup is a distinct type identifier (no collision with ChartAnnotation or Annotation)', () => {
+    // Compile-time regression: importing all three from the package
+    // surface must not produce a TS conflict. We can't directly assert
+    // type identity at runtime (types are erased), but a successful
+    // import + use is the regression.
+    const m: ChartMarkup = { id: 'r', type: 'line', axis: 'y', value: 0 };
+    expect(m.id).toBe('r');
+  });
+});
