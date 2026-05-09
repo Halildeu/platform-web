@@ -14,7 +14,14 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
-import { useEChartsRenderer } from './renderers';
+import {
+  chooseRenderer,
+  detectWebGLCapability,
+  type RendererFallbackEvent,
+  type RendererMode,
+  useEChartsRenderer,
+} from './renderers';
+import { registerEChartsGL } from './renderers/gl';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -115,6 +122,23 @@ export interface LineChartProps extends AccessControlledProps {
   density?: ChartDensityPreference;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
+  /**
+   * Renderer mode — Faz 21.11 PR-A1.5 (Big Data Renderer Router).
+   * `'auto'` (default) routes by total point count across all series:
+   * <50K Canvas raw, 50K..100K Canvas+LTTB, ≥100K WebGL (lazy
+   * `echarts-gl` with `linesGL` series). Force a backend with
+   * `'canvas' | 'svg' | 'webgl'`. WebGL falls back to Canvas when
+   * unsupported and fires `onRendererFallback`. @default "auto"
+   */
+  renderer?: RendererMode;
+  /** Renderer downgrade callback (see `renderer` prop). */
+  onRendererFallback?: (event: RendererFallbackEvent) => void;
+  /**
+   * Hard cross-filter requirement — when true, the router will NEVER
+   * upgrade to WebGL above the cross-filter ceiling (default 500K).
+   * @default false
+   */
+  crossFilterRequired?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -177,11 +201,60 @@ const LineChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    renderer: rendererMode = 'auto',
+    onRendererFallback,
+    crossFilterRequired = false,
     ...rest
   },
   forwardedRef,
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
+
+  // Faz 21.11 PR-A1.5 — Big Data Renderer Router decision. Total point
+  // count across all series feeds the router; WebGL chunk lazy-loads
+  // and the line series swaps to `linesGL` for the GL backend.
+  const totalPointCount = useMemo(
+    () => (seriesData ?? []).reduce((sum, s) => sum + (s.data?.length ?? 0), 0),
+    [seriesData],
+  );
+  const rendererDecision = useMemo(
+    () =>
+      chooseRenderer({
+        requestedMode: rendererMode,
+        pointCount: totalPointCount,
+        webgl: detectWebGLCapability(),
+        crossFilterRequired,
+        hasInteraction: !!onDataPointClick,
+      }),
+    [rendererMode, totalPointCount, crossFilterRequired, onDataPointClick],
+  );
+
+  // Lazy-load `echarts-gl` the first time the router picks WebGL.
+  React.useEffect(() => {
+    if (rendererDecision.backend === 'webgl') {
+      void registerEChartsGL();
+    }
+  }, [rendererDecision.backend]);
+
+  // Surface the fallback advisory.
+  React.useEffect(() => {
+    if (
+      onRendererFallback &&
+      rendererDecision.requestedMode !== 'auto' &&
+      rendererDecision.requestedMode !== rendererDecision.backend
+    ) {
+      onRendererFallback({
+        requested: rendererDecision.requestedMode,
+        actual: rendererDecision.backend,
+        reason: rendererDecision.reason,
+      });
+    }
+  }, [
+    rendererDecision.backend,
+    rendererDecision.requestedMode,
+    rendererDecision.reason,
+    onRendererFallback,
+  ]);
   const safeSeries = useMemo(() => sanitizeSeries(seriesData), [seriesData]);
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;
@@ -241,8 +314,14 @@ const LineChartInner = React.forwardRef<
       icon: 'roundRect',
     });
 
+    // Faz 21.11 PR-A1.5 — swap to `linesGL` when the router routed
+    // to the WebGL backend. The GL series ships via the lazy-
+    // registered `echarts-gl` chunk; visual contract preserved.
+    const seriesType =
+      rendererDecision.backend === 'webgl' ? ('linesGL' as const) : ('line' as const);
+
     const echartsSeriesList = safeSeries.map((s, i) => ({
-      type: 'line' as const,
+      type: seriesType,
       name: s.name,
       data: s.data,
       smooth: curved,
@@ -364,6 +443,9 @@ const LineChartInner = React.forwardRef<
     breakpoint,
     // Markup patches drive series.markLine / markArea / markPoint.
     markupResult,
+    // Faz 21.11 PR-A1.5 — recompute when the router decides to swap
+    // between `line` and `linesGL` series types.
+    rendererDecision.backend,
   ]);
 
   const handleClick = useCallback(

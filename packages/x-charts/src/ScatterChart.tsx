@@ -14,7 +14,14 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { guardChartCallback } from './access/guardChartCallback';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import {
+  chooseRenderer,
+  detectWebGLCapability,
+  type RendererFallbackEvent,
+  type RendererMode,
+  useEChartsRenderer,
+} from './renderers';
+import { registerEChartsGL } from './renderers/gl';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -113,6 +120,29 @@ export interface ScatterChartProps extends AccessControlledProps {
   density?: ChartDensityPreference;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
+  /**
+   * Renderer mode — Faz 21.11 PR-A1.5 (Big Data Renderer Router).
+   * `'auto'` (default) routes by point count: <50K Canvas raw,
+   * 50K..100K Canvas+LTTB, ≥100K WebGL (lazy `echarts-gl`). Force a
+   * specific backend with `'canvas' | 'svg' | 'webgl'`. WebGL falls
+   * back to Canvas when unsupported and fires `onRendererFallback`.
+   * @default "auto"
+   */
+  renderer?: RendererMode;
+  /**
+   * Callback fired when the requested renderer was downgraded (e.g.
+   * `renderer='webgl'` but the browser does not support WebGL, so the
+   * router routed to Canvas). Lets dashboards surface a banner without
+   * polling the router decision themselves.
+   */
+  onRendererFallback?: (event: RendererFallbackEvent) => void;
+  /**
+   * Hard cross-filter requirement — when true the router will NEVER
+   * upgrade to WebGL above the cross-filter ceiling (default 500K).
+   * Use for trading dashboards where losing click → drilldown is
+   * unacceptable. @default false
+   */
+  crossFilterRequired?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -181,11 +211,61 @@ const ScatterChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    renderer: rendererMode = 'auto',
+    onRendererFallback,
+    crossFilterRequired = false,
     ...rest
   },
   forwardedRef,
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
+
+  // Faz 21.11 PR-A1.5 — Big Data Renderer Router decision. Routes
+  // Canvas / SVG / WebGL based on point count, browser capability
+  // and the cross-filter requirement flag. WebGL chunk (`echarts-gl`)
+  // is registered lazily on first use; if the browser does not
+  // support WebGL the router transparently falls back to Canvas + LTTB
+  // and fires `onRendererFallback`.
+  const rendererDecision = useMemo(
+    () =>
+      chooseRenderer({
+        requestedMode: rendererMode,
+        pointCount: data?.length ?? 0,
+        webgl: detectWebGLCapability(),
+        crossFilterRequired,
+        hasInteraction: !!onDataPointClick,
+      }),
+    [rendererMode, data?.length, crossFilterRequired, onDataPointClick],
+  );
+
+  // Lazy-load `echarts-gl` the first time the router picks the WebGL
+  // backend. Idempotent / single-flight inside `registerEChartsGL`.
+  React.useEffect(() => {
+    if (rendererDecision.backend === 'webgl') {
+      void registerEChartsGL();
+    }
+  }, [rendererDecision.backend]);
+
+  // Surface the fallback advisory to dashboards that asked for
+  // a specific renderer but ended up on a different one.
+  React.useEffect(() => {
+    if (
+      onRendererFallback &&
+      rendererDecision.requestedMode !== 'auto' &&
+      rendererDecision.requestedMode !== rendererDecision.backend
+    ) {
+      onRendererFallback({
+        requested: rendererDecision.requestedMode,
+        actual: rendererDecision.backend,
+        reason: rendererDecision.reason,
+      });
+    }
+  }, [
+    rendererDecision.backend,
+    rendererDecision.requestedMode,
+    rendererDecision.reason,
+    onRendererFallback,
+  ]);
 
   // Markup overlay adapter — Codex thread 019e0df1. Scatter has no
   // category labels; dataContext omitted (LabelMarkup must use
@@ -378,7 +458,10 @@ const ScatterChartInner = React.forwardRef<
       series: mergeMarkupPatches(
         [
           {
-            type: 'scatter',
+            // Faz 21.11 PR-A1.5 — swap to `scatterGL` when the router
+            // routed to the WebGL backend; the GL series type ships
+            // via the lazy-registered `echarts-gl` chunk.
+            type: rendererDecision.backend === 'webgl' ? 'scatterGL' : 'scatter',
             data: scatterData,
             symbolSize: symbolSizeFn,
             itemStyle: {
@@ -429,6 +512,9 @@ const ScatterChartInner = React.forwardRef<
     breakpoint,
     // Markup patches drive series.markLine / markArea / markPoint.
     markupResult,
+    // Faz 21.11 PR-A1.5 — recompute when the router decides to swap
+    // between `scatter` and `scatterGL` series types.
+    rendererDecision.backend,
   ]);
 
   // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts scatter
