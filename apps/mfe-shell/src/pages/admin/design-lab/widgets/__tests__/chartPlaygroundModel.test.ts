@@ -507,11 +507,13 @@ describe('chartPlaygroundModel — preset gallery', () => {
 });
 
 describe('chartPlaygroundModel — feature badges', () => {
-  it('returns beta badge for cross-filter (Faz 22 stabilising)', () => {
-    const badge = getFeatureBadge('cross-filter');
-    expect(badge).not.toBeNull();
-    expect(badge?.label).toBe('beta');
-    expect(badge?.tooltip).toContain('Faz 22');
+  it('returns null for cross-filter (promoted to stable after the 13-chart rollout sweep)', () => {
+    // Previously this returned a `beta` badge with a "Faz 22" tooltip.
+    // PR #338 wired all 13 chart adapters through the canonical
+    // `ChartClickEvent` contract and PR #339 surfaced the badge on
+    // every chart. Live testai smoke (13/13 BETA → 0 BETA after this
+    // change) + 38 new tests close the BETA → stable promotion gate.
+    expect(getFeatureBadge('cross-filter')).toBeNull();
   });
 
   it('returns null for stable features so the chip strip stays clean', () => {

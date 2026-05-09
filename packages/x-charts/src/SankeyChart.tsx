@@ -332,7 +332,11 @@ const SankeyChartInner = React.forwardRef<
             borderWidth: 1,
             borderColor: 'var(--bg-surface, #ffffff)',
           },
-          cursor: onNodeClick ? 'pointer' : 'default',
+          // Cursor reflects clickability through EITHER callback so that
+          // consumers wrapping the chart in `CrossFilterChart` (which
+          // injects only `onDataPointClick`) still see a pointer
+          // affordance. Codex iter-2 thread 019e0c25 P3 absorb.
+          cursor: onNodeClick || onDataPointClick ? 'pointer' : 'default',
         },
       ],
       aria: {
@@ -358,6 +362,7 @@ const SankeyChartInner = React.forwardRef<
     fmt,
     animate,
     onNodeClick,
+    onDataPointClick,
     isEmpty,
     decalEnabled,
     decalPatterns,

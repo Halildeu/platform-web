@@ -1108,17 +1108,25 @@ export interface FeatureBadgeMeta {
 }
 
 /**
- * Per-feature badge metadata (e.g. `cross-filter` is currently `beta`).
- * Keeps the catalog `features: string[]` shape unchanged — consumers
- * lookup the badge separately. MUI X uses a similar "New" badge to
- * highlight recently-added capabilities (Range bar variant, Data Grid
- * integration). We use this for the same discovery purpose.
+ * Per-feature badge metadata. Used by the chart-detail feature chip
+ * strip to flag capabilities whose API isn't yet stable (e.g. Range
+ * bar variant in MUI X uses a similar "New" badge).
+ *
+ * `cross-filter` was previously `beta` — promoted to `stable` after
+ * the cross-filter rollout sweep wired all 13 charts through the
+ * `ChartClickEvent` adapter (PR #338) and surfaced the BETA badge on
+ * every chart in the catalog (PR #339). The 13/13 testai live smoke
+ * + 38 new tests + per-key debounce regression net make the API
+ * surface stable enough to drop the BETA chip; consumers that want
+ * the API tracking note can read it from the cross-filter wrapper
+ * JSDoc.
+ *
+ * Keeping the table as `Record<>` so future BETA features can join
+ * with a one-line entry.
  */
 const FEATURE_BADGES: Record<string, FeatureBadgeMeta> = {
-  'cross-filter': {
-    label: 'beta',
-    tooltip: 'Cross-filter chart→grid bridge — API may evolve in Faz 22',
-  },
+  // No BETA features at this time — `cross-filter` promoted to
+  // stable after the 13-chart rollout sweep.
 };
 
 /** Lookup the badge for a feature flag. Returns `null` when no badge applies. */
