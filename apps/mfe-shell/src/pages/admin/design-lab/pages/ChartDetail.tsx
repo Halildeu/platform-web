@@ -4221,7 +4221,7 @@ function PlaygroundPropEditor({
         )}
       </div>
 
-      {(kind === 'enum' || kind === 'tristate') && (
+      {(kind === 'enum' || kind === 'tristate' || kind === 'preset') && (
         <select
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}

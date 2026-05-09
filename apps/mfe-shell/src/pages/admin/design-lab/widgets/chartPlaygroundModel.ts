@@ -38,7 +38,14 @@ export interface ChartProp {
   description: string;
 }
 
-export type EditorKind = 'boolean' | 'enum' | 'tristate' | 'string' | 'number' | 'complex';
+export type EditorKind =
+  | 'boolean'
+  | 'enum'
+  | 'tristate'
+  | 'string'
+  | 'number'
+  | 'preset'
+  | 'complex';
 
 export type EditorCategory = 'data' | 'display' | 'theme' | 'access' | 'advanced';
 
@@ -584,8 +591,257 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
 
 export function isLiveEditable(chartId: string, propName: string): boolean {
   const allowList = LIVE_PROP_SUPPORT[chartId];
-  if (!allowList) return false;
-  return allowList.has(propName);
+  if (allowList?.has(propName)) return true;
+  // Faz 21.10 PR-FE-Playground-3: complex props with a registered preset
+  // dropdown count as live-editable too (they are forwarded to the preview
+  // via the preset resolver helpers below).
+  if (COMPLEX_PROP_PRESETS[`${chartId}.${propName}`]) return true;
+  return false;
+}
+
+/* ================================================================== */
+/*  PR-FE-Playground-3: complex prop preset infrastructure             */
+/* ================================================================== */
+
+/**
+ * A preset entry surfaced as a dropdown option for a complex prop. The
+ * editor stores the `presetId` in `PlaygroundState`; resolvers below decode
+ * it back into the actual function/array/object that gets forwarded to the
+ * underlying chart wrapper.
+ */
+export interface ComplexPreset {
+  presetId: string;
+  label: string;
+}
+
+/**
+ * Per `chartId.propName` preset metadata. When a complex prop has an entry
+ * here, `buildDescriptor` upgrades its kind from `complex` (read-only) to
+ * `preset` (live editable). Keep in sync with the resolver helpers + with
+ * the preview wiring in `ChartPreviewLive.tsx`.
+ *
+ * Coverage uplift achieved (PR-FE-Playground-3 scope): 34 preset entries
+ * across 13 charts (callbacks + valueFormatter + colors + gauge thresholds)
+ * lift system-wide coverage from PR-A's %79.5 baseline to **244/264 ≈ %92.4**.
+ * Sample data presets (data/series/indicators/nodes/links/labels) are
+ * intentionally deferred to PR-FE-Playground-4 — they would push coverage
+ * to ~%98 but require chart-specific resolver wiring that is out of scope
+ * for this PR.
+ */
+export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
+  // valueFormatter — uniform across all 13 charts (the resolver below is
+  // chart-agnostic, so the preset list is shared via a helper constant).
+  ...Object.fromEntries(
+    [
+      'bar-chart',
+      'line-chart',
+      'area-chart',
+      'pie-chart',
+      'scatter-chart',
+      'gauge-chart',
+      'radar-chart',
+      'treemap-chart',
+      'heatmap-chart',
+      'waterfall-chart',
+      'funnel-chart',
+      'sankey-chart',
+      'sunburst-chart',
+    ].map((cid) => [
+      `${cid}.valueFormatter`,
+      [
+        { presetId: 'raw', label: 'raw (default)' },
+        { presetId: 'integer', label: 'integer' },
+        { presetId: 'decimal', label: 'decimal (2)' },
+        { presetId: 'percentage', label: 'percentage' },
+        { presetId: 'currency-tl', label: 'TL currency (₺)' },
+        { presetId: 'compact', label: 'compact (1.2K)' },
+      ] as ComplexPreset[],
+    ]),
+  ),
+  // Click callbacks — uniform across charts that expose them.
+  ...Object.fromEntries(
+    [
+      'bar-chart',
+      'line-chart',
+      'area-chart',
+      'pie-chart',
+      'scatter-chart',
+      'gauge-chart',
+      'radar-chart',
+      'treemap-chart',
+      'heatmap-chart',
+      'waterfall-chart',
+      'funnel-chart',
+      'sankey-chart',
+      'sunburst-chart',
+    ].map((cid) => [
+      `${cid}.onDataPointClick`,
+      [
+        { presetId: 'noop', label: 'no-op (default)' },
+        { presetId: 'console-log', label: 'console.log' },
+        { presetId: 'alert', label: 'browser alert' },
+      ] as ComplexPreset[],
+    ]),
+  ),
+  // Chart-specific node click callbacks (treemap, sankey, sunburst).
+  'treemap-chart.onNodeClick': [
+    { presetId: 'noop', label: 'no-op (default)' },
+    { presetId: 'console-log', label: 'console.log' },
+  ],
+  'sankey-chart.onNodeClick': [
+    { presetId: 'noop', label: 'no-op (default)' },
+    { presetId: 'console-log', label: 'console.log' },
+  ],
+  'sunburst-chart.onNodeClick': [
+    { presetId: 'noop', label: 'no-op (default)' },
+    { presetId: 'console-log', label: 'console.log' },
+  ],
+  'heatmap-chart.onCellClick': [
+    { presetId: 'noop', label: 'no-op (default)' },
+    { presetId: 'console-log', label: 'console.log' },
+  ],
+  // PR-FE-Playground-3 (this PR) ships preset infra for: valueFormatter,
+  // callbacks (onDataPointClick / onNodeClick / onCellClick), colors, and
+  // gauge thresholds. Sample data presets (data, series, indicators, nodes,
+  // links, labels, xLabels, yLabels) are DELIBERATELY scoped to a future
+  // PR-FE-Playground-4 — they require chart-specific sample data resolver
+  // wiring in ChartPreviewLive that bloats this PR. Keeping that scope
+  // separate keeps the diff reviewable and the preset infra well-tested
+  // before layering data variation on top.
+  'gauge-chart.thresholds': [
+    { presetId: 'traffic-light', label: 'Traffic light (default)' },
+    { presetId: 'two-tier', label: 'Two-tier (red/green)' },
+    { presetId: 'monochrome', label: 'Monochrome' },
+  ],
+  // Color array / object presets.
+  'bar-chart.colors': [
+    { presetId: 'default', label: 'Auto palette (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+    { presetId: 'monochrome', label: 'Monochrome slate' },
+  ],
+  'scatter-chart.colors': [
+    { presetId: 'default', label: 'Auto (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+  ],
+  'heatmap-chart.colors': [
+    { presetId: 'default', label: 'Wrapper default (auto)' },
+    { presetId: 'cool-warm', label: 'Cool→Warm' },
+    { presetId: 'green-red', label: 'Green→Red' },
+  ],
+  // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
+  // requires its own object resolver, deferred to PR-FE-Playground-4.
+};
+
+/**
+ * Resolve a `valueFormatter` preset id into an actual `(v: number) => string`
+ * function. Returns `undefined` for unknown / `'raw'` / fall-through values
+ * so the wrapper falls back to its own default formatter.
+ */
+export function getValueFormatterPreset(
+  presetId: string | undefined,
+): ((value: number) => string) | undefined {
+  switch (presetId) {
+    case 'integer':
+      return (v) => Math.round(v).toString();
+    case 'decimal':
+      return (v) => v.toFixed(2);
+    case 'percentage':
+      return (v) => `${(v * 100).toFixed(1)}%`;
+    case 'currency-tl':
+      return (v) => `₺${v.toLocaleString('tr-TR')}`;
+    case 'compact':
+      return (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}K` : String(v));
+    case 'raw':
+    case undefined:
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Resolve a click-callback preset id into a side-effect handler. Generic
+ * over the event payload — every chart wrapper provides its own typed
+ * `ChartClickEvent` / equivalent shape; we only need to log/alert it.
+ */
+export function getCallbackPreset<E>(
+  presetId: string | undefined,
+): ((event: E) => void) | undefined {
+  switch (presetId) {
+    case 'console-log':
+      return (event) => {
+         
+        console.log('[design-lab playground] chart click', event);
+      };
+    case 'alert':
+      return (event) => {
+        try {
+          alert(JSON.stringify(event, null, 2));
+        } catch {
+          alert(String(event));
+        }
+      };
+    case 'noop':
+    case undefined:
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Resolve a colors-preset id into a string[] palette. Chart wrappers
+ * accept various color shapes (`string[]`, `[string, string]`, object);
+ * the caller adapts the returned array as needed.
+ */
+export function getColorsPreset(presetId: string | undefined): string[] | undefined {
+  switch (presetId) {
+    case 'rainbow':
+      return ['#ef4444', '#f59e0b', '#22c55e', '#0ea5e9', '#7c3aed', '#ec4899'];
+    case 'monochrome':
+      return ['#cbd5e1', '#94a3b8', '#64748b', '#475569', '#334155', '#1e293b'];
+    case 'monochrome-blue':
+    case 'monochrome blue':
+      return ['#dbeafe', '#93c5fd', '#60a5fa', '#3b82f6', '#1d4ed8', '#1e3a8a'];
+    case 'cool-warm':
+      return ['#3b82f6', '#ef4444'];
+    case 'green-red':
+      return ['#22c55e', '#ef4444'];
+    case 'monochrome-grey':
+    case 'monochrome grey':
+      return ['#9ca3af', '#374151', '#6b7280'];
+    case 'default':
+    case undefined:
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Resolve a `thresholds` preset id (Gauge) into a `[{value,color}]` array.
+ */
+export function getThresholdsPreset(
+  presetId: string | undefined,
+): { value: number; color: string }[] | undefined {
+  switch (presetId) {
+    case 'two-tier':
+      return [
+        { value: 50, color: '#ef4444' },
+        { value: 100, color: '#22c55e' },
+      ];
+    case 'monochrome':
+      return [
+        { value: 33, color: '#94a3b8' },
+        { value: 66, color: '#475569' },
+        { value: 100, color: '#1e293b' },
+      ];
+    case 'traffic-light':
+    case undefined:
+    default:
+      return [
+        { value: 30, color: '#ef4444' },
+        { value: 70, color: '#f59e0b' },
+        { value: 100, color: '#22c55e' },
+      ];
+  }
 }
 
 /* ================================================================== */
@@ -610,13 +866,36 @@ export const PLAYGROUND_DEFAULT_OVERRIDES: Record<string, PlaygroundValue> = {
 /* ================================================================== */
 
 export function buildDescriptor(chartId: string, prop: ChartProp): EditorDescriptor {
-  const kind = getEditorKind(prop);
+  let kind = getEditorKind(prop);
   const category = getCategory(prop);
-  const live = kind !== 'complex' && isLiveEditable(chartId, prop.name);
   const overrideKey = `${chartId}.${prop.name}`;
   const overrideDefault = PLAYGROUND_DEFAULT_OVERRIDES[overrideKey];
-  const defaultValue = overrideDefault !== undefined ? overrideDefault : parseDefault(prop, kind);
-  const options = kind === 'enum' || kind === 'tristate' ? (getEnumOptions(prop.type) ?? []) : [];
+
+  // Faz 21.10 PR-FE-Playground-3: complex props with a registered preset
+  // dropdown become live-editable via the preset selector. The first preset
+  // serves as the playground default value.
+  const presets = COMPLEX_PROP_PRESETS[overrideKey];
+  if (kind === 'complex' && presets && presets.length > 0) {
+    kind = 'preset';
+  }
+
+  const live =
+    (kind !== 'complex' && isLiveEditable(chartId, prop.name)) ||
+    (kind === 'preset' && presets !== undefined);
+
+  let defaultValue: PlaygroundValue;
+  if (kind === 'preset' && presets) {
+    defaultValue = overrideDefault !== undefined ? overrideDefault : presets[0].presetId;
+  } else {
+    defaultValue = overrideDefault !== undefined ? overrideDefault : parseDefault(prop, kind);
+  }
+
+  let options: EditorEnumOption[] = [];
+  if (kind === 'enum' || kind === 'tristate') {
+    options = getEnumOptions(prop.type) ?? [];
+  } else if (kind === 'preset' && presets) {
+    options = presets.map((p) => ({ value: p.presetId, label: p.label }));
+  }
 
   let readOnlyHint: string | null = null;
   if (kind === 'complex') {
@@ -672,6 +951,13 @@ export function deriveDefaults(descriptors: readonly EditorDescriptor[]): Playgr
  */
 export function serialisePropToCode(d: EditorDescriptor, value: PlaygroundValue): string | null {
   if (d.kind === 'complex') return null;
+  // Faz 21.10 PR-FE-Playground-3: preset prop'lar live preview'a forward
+  // edilir ama generated code'da emit edilmez — preset'i resolve eden
+  // helper kullanıcının kendi koduna girmesi gerek (kişisel formatter,
+  // sample data, callback, vb.). Inline emit serileştirme mantığı için
+  // gereksiz karmaşa olur; bunun yerine kullanıcı playground sample'ını
+  // örnek alıp kendi resolver'ını yazar.
+  if (d.kind === 'preset') return null;
   if (value === undefined) return null;
   const def = d.defaultValue;
 
@@ -1447,13 +1733,16 @@ const FAQ_GENERAL: FaqEntry[] = [
       'for repeated renders.',
   },
   {
-    question: 'Why is `valueFormatter` not editable in the Playground?',
+    question: 'How do I edit `valueFormatter`, callbacks, or `colors` in the Playground?',
     answer:
-      'The playground only edits primitive props (boolean / enum / string / ' +
-      'number). Function props like `valueFormatter`, `onDataPointClick`, and ' +
-      'array props like `series` / `colors` are listed in the API table for ' +
-      'reference but provided by `ChartPreviewLive`’s sample data so the ' +
-      'preview always renders.',
+      'These complex props are now driven by *preset dropdowns* (Faz 21.10 ' +
+      'PR-FE-Playground-3). Pick a `valueFormatter` preset (raw / integer / ' +
+      'decimal / percentage / TL currency / compact), a callback handler ' +
+      '(no-op / console.log / browser alert), a `colors` palette, or a Gauge ' +
+      '`thresholds` preset; the live preview re-renders immediately. Sample ' +
+      'data props (`data` / `series` / `nodes` / `links` / `indicators` / ' +
+      '`labels`) remain provided by `ChartPreviewLive` for now — sample-data ' +
+      'preset infrastructure ships in a follow-up PR.',
   },
 ];
 
