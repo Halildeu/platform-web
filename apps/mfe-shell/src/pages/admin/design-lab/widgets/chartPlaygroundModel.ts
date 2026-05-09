@@ -136,6 +136,19 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'disabled', label: 'disabled' },
     { value: 'hidden', label: 'hidden' },
   ],
+  // Faz 21.10 PR-FE-Playground-2: SunburstHighlightPolicy is a clean
+  // string-literal union from SunburstChart source. SankeyFocusMode
+  // (`boolean | 'allEdges' | 'outEdges' | 'inEdges'`) is intentionally
+  // NOT exposed here — Codex review 019e0ddf finding #3: wrapper maps all
+  // truthy strings to the same `adjacency` runtime path, and the only
+  // semantically distinct mode (`false` = disabled) requires tristate
+  // handling we are deferring to PR-FE-Playground-3.
+  SunburstHighlightPolicy: [
+    { value: 'descendant', label: 'descendant (default)' },
+    { value: 'ancestor', label: 'ancestor' },
+    { value: 'self', label: 'self' },
+    { value: 'none', label: 'none' },
+  ],
 };
 
 const ACCESS_LEVEL_INLINE = '"full" | "readonly" | "disabled" | "hidden"';
@@ -323,6 +336,13 @@ export const CATEGORY_DEFAULT_OPEN: Record<EditorCategory, boolean> = {
  * so users aren't given a no-op control. Keep this in sync with
  * `ChartPreviewLive.tsx`.
  */
+// Faz 21.10 PR-FE-Playground-2: primitive expansion — every chart now
+// exposes the full common axis (title/description/className + theme/decal/
+// density/accent/access/accessReason) plus chart-specific primitives that
+// `ChartPreviewLive` forwards. Complex props (data, series, callbacks,
+// colors, thresholds) remain read-only here and are addressed in a
+// follow-up PR via the preset infrastructure. Coverage uplift: system-wide
+// ~%48 → ~%80, every chart picks up an additional 3-11 primitive props.
 export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
   'bar-chart': new Set([
     'showValues',
@@ -350,11 +370,14 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'animate',
     'size',
     'title',
+    'description',
+    'className',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
   'area-chart': new Set([
     'stacked',
@@ -366,11 +389,14 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'animate',
     'size',
     'title',
+    'description',
+    'className',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
   'pie-chart': new Set([
     'donut',
@@ -380,82 +406,180 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'animate',
     'size',
     'title',
+    'description',
+    'className',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
   'scatter-chart': new Set([
     'size',
     'title',
+    'description',
+    'className',
     'xLabel',
     'yLabel',
+    'showGrid',
+    'showLegend',
+    'bubble',
+    'noDataText',
+    'animate',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
   'gauge-chart': new Set([
     'size',
     'title',
+    'description',
+    'className',
     'value',
     'min',
     'max',
+    'startAngle',
+    'endAngle',
+    'showProgress',
+    'splitNumber',
+    'showAxisLabel',
+    'animate',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
-  // Faz 21.10 PR-FE-Playground-1: cover the 7 enterprise charts that were
-  // previously read-only in the playground. Sticking to the props that
-  // `ChartPreviewLive` actually forwards — data/series/indicators stay
-  // complex (sample data) and remain read-only.
   'radar-chart': new Set([
     'title',
+    'description',
+    'className',
+    'shape',
+    'showArea',
+    'showLabels',
     'showLegend',
+    'splitNumber',
+    'animate',
     'size',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
-  'treemap-chart': new Set(['title', 'size', 'theme', 'decal', 'density', 'accent', 'access']),
+  'treemap-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'size',
+    'showLegend',
+    'showBreadcrumb',
+    'leafDepth',
+    'visibleMin',
+    'animate',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
+    'description',
+    'className',
+    'min',
+    'max',
     'showValues',
+    'showLegend',
+    'animate',
     'size',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
   'waterfall-chart': new Set([
     'title',
+    'description',
+    'className',
     'showValues',
+    'showConnector',
+    'orientation',
+    'showLegend',
+    'animate',
     'size',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
   'funnel-chart': new Set([
     'title',
+    'description',
+    'className',
+    'sort',
+    'gap',
+    'showLabels',
+    'labelPosition',
     'showConversion',
+    'orientation',
+    'funnelAlign',
+    'showLegend',
+    'animate',
     'size',
     'theme',
     'decal',
     'density',
     'accent',
     'access',
+    'accessReason',
   ]),
-  'sankey-chart': new Set(['title', 'size', 'theme', 'decal', 'density', 'accent', 'access']),
-  'sunburst-chart': new Set(['title', 'size', 'theme', 'decal', 'density', 'accent', 'access']),
+  'sankey-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'orient',
+    'nodeWidth',
+    'nodeGap',
+    'draggable',
+    'lineStyle',
+    'showLegend',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
+  'sunburst-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'sort',
+    'highlightPolicy',
+    'showLegend',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
 };
 
 export function isLiveEditable(chartId: string, propName: string): boolean {
@@ -681,6 +805,24 @@ export function getNum(state: PlaygroundState | undefined, key: string, fallback
     return Number.isFinite(n) ? n : fallback;
   }
   return fallback;
+}
+
+/**
+ * Read an OPTIONAL number toggle — returns `undefined` (not a fallback) when
+ * the user has not set the toggle. Lets the wrapper apply its own default
+ * (e.g. HeatmapChart's `minProp ?? dataMin` auto-scale) instead of forcing
+ * an explicit value into the preview that the generated code does not emit.
+ * Codex review thread `019e0ddf` REVISE finding #1 (heatmap min/max parity).
+ */
+export function getOptNum(state: PlaygroundState | undefined, key: string): number | undefined {
+  if (!state || !(key in state)) return undefined;
+  const v = state[key];
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string' && v.trim().length > 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
 }
 
 /**

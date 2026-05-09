@@ -47,6 +47,7 @@ import {
   getDecal,
   getEnum,
   getNum,
+  getOptNum,
   getOptStr,
   getStr,
   getPreviewSurfaceStyle,
@@ -290,6 +291,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             labels={categories}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             size={sizeFor('lg')}
             showDots={isOn(toggles, 'showDots', true)}
             showGrid={isOn(toggles, 'showGrid', true)}
@@ -302,6 +305,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -324,6 +328,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             labels={categories}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             size={sizeFor('lg')}
             stacked={isOn(toggles, 'stacked', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
@@ -337,6 +343,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -355,6 +362,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           <PieChart
             data={categories.slice(0, 5).map((c, i) => ({ label: c, value: values1[i] }))}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             size={sizeFor('lg')}
             donut={isOn(toggles, 'donut', true)}
             showLabels={isOn(toggles, 'showLabels', true)}
@@ -366,6 +375,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -384,14 +394,22 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           <ScatterChart
             data={values1.map((v, i) => ({ x: v, y: values2[i], label: categories[i] }))}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             xLabel={getStr(toggles, 'xLabel', 'Seri A')}
             yLabel={getStr(toggles, 'yLabel', 'Seri B')}
             size={sizeFor('lg')}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            bubble={isOn(toggles, 'bubble', false)}
+            noDataText={getStr(toggles, 'noDataText', 'Veri yok')}
+            animate={isOn(toggles, 'animate', true)}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -412,17 +430,26 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             min={getNum(toggles, 'min', 0)}
             max={getNum(toggles, 'max', 100)}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             thresholds={[
               { value: 30, color: '#ef4444' },
               { value: 70, color: '#f59e0b' },
               { value: 100, color: '#22c55e' },
             ]}
             size={sizeFor('lg')}
+            startAngle={getNum(toggles, 'startAngle', 225)}
+            endAngle={getNum(toggles, 'endAngle', -45)}
+            showProgress={isOn(toggles, 'showProgress', false)}
+            splitNumber={getNum(toggles, 'splitNumber', 10)}
+            showAxisLabel={isOn(toggles, 'showAxisLabel', true)}
+            animate={isOn(toggles, 'animate', true)}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -451,13 +478,21 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { name: 'Ekip B', data: [65, 90, 70, 85, 55] },
             ]}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            shape={getEnum(toggles, 'shape', 'polygon')}
+            showArea={isOn(toggles, 'showArea', true)}
+            showLabels={isOn(toggles, 'showLabels', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
+            splitNumber={getNum(toggles, 'splitNumber', 5)}
+            animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -493,12 +528,20 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               },
             ]}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             size={sizeFor('lg')}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            showBreadcrumb={isOn(toggles, 'showBreadcrumb', true)}
+            leafDepth={getNum(toggles, 'leafDepth', 1)}
+            visibleMin={getNum(toggles, 'visibleMin', 300)}
+            animate={isOn(toggles, 'animate', true)}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -535,13 +578,20 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             xLabels={['Pzt', 'Sal', 'Çar', 'Per', 'Cum']}
             yLabels={['Sabah', 'Öğle', 'Akşam']}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            min={getOptNum(toggles, 'min')}
+            max={getOptNum(toggles, 'max')}
             showValues={isOn(toggles, 'showValues', true)}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -567,13 +617,20 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { label: 'Sonuç', value: 1250 },
             ]}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             showValues={isOn(toggles, 'showValues', true)}
+            showConnector={isOn(toggles, 'showConnector', true)}
+            orientation={getEnum(toggles, 'orientation', 'vertical')}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -597,13 +654,24 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { name: 'Satın Alma', value: 500 },
             ]}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            sort={getEnum(toggles, 'sort', 'descending')}
+            gap={getNum(toggles, 'gap', 2)}
+            showLabels={isOn(toggles, 'showLabels', true)}
+            labelPosition={getEnum(toggles, 'labelPosition', 'inside')}
             showConversion={isOn(toggles, 'showConversion', true)}
+            orientation={getEnum(toggles, 'orientation', 'vertical')}
+            funnelAlign={getEnum(toggles, 'funnelAlign', 'center')}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -633,12 +701,22 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { source: 'Kaynak B', target: 'Hedef Y', value: 40 },
             ]}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            orient={getEnum(toggles, 'orient', 'horizontal')}
+            nodeWidth={getNum(toggles, 'nodeWidth', 20)}
+            nodeGap={getNum(toggles, 'nodeGap', 8)}
+            draggable={isOn(toggles, 'draggable', true)}
+            lineStyle={getEnum(toggles, 'lineStyle', 'gradient')}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
@@ -677,12 +755,19 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               },
             ]}
             title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            sort={getEnum(toggles, 'sort', 'desc')}
+            highlightPolicy={getEnum(toggles, 'highlightPolicy', 'descendant')}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
           />
         </PreviewBox>
       );
