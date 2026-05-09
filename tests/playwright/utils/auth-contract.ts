@@ -210,10 +210,10 @@ export const mockBootstrapEndpoints = async (
  * each saw the first test fail with `Timeout 15000ms exceeded` while
  * later tests in the serial describe block were skipped.
  *
- * The 25 s ceiling is wider than the 60 s test budget so a genuine
- * regression (FSM stuck before `transportReady`, store wiring
- * broken) still surfaces — it just stops drowning the PR list in
- * cold-runner timeouts.
+ * The 25 s ceiling stays narrower than the 60 s per-test budget so a
+ * genuine regression (FSM stuck before `transportReady`, store
+ * wiring broken) still surfaces — it just stops drowning the PR
+ * list in cold-runner timeouts.
  */
 export const waitForTransportReady = async (page: Page, timeoutMs = 25_000): Promise<void> => {
   await page.waitForFunction(
