@@ -519,6 +519,16 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // single-in-flight + queued-latest model — see scheduleAutoSave
   // and the flushQueueRef useEffect below.
   const saveGranulesMutation = useMutation({
+    // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #2): TanStack
+    // mutation scope. Mutations with the same scope.id run serially
+    // — when one is pending, others queue at the TanStack level
+    // and only execute after the previous one settles. Closes the
+    // close-flush ordering race: under (in-flight A + close + B
+    // queued) Effect A fires B via a fresh mutate(), pre-fix this
+    // would race A on the wire and a slow A finishing late could
+    // overwrite B's final state server-side. Scoped serialization
+    // keeps full-replacement PUTs in submission order.
+    scope: { id: 'role-drawer-granules-autosave' },
     mutationFn: async (vars: { draft: GrantSnapshot; seq: number; roleId: string }) => {
       if (!isPersistedRoleId(vars.roleId)) return;
       const granules: Granule[] = [];
@@ -665,11 +675,20 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         grantsEqual(last.actionGrants, next.actionGrants) &&
         grantsEqual(last.reportGrants, next.reportGrants)
       ) {
-        // If nothing was in flight, surface 'saved' explicitly so
-        // the badge transitions out of 'saving' (a previous tick
-        // might have flipped it on its way to here).
-        if (!inFlightRef.current && autoSaveStatus !== 'saved') {
-          setAutoSaveStatus('saved');
+        // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #1): only
+        // promote 'saving' → 'saved'; do NOT touch 'idle' or
+        // 'error'. Pre-fix the equality-skip path's
+        // `if (autoSaveStatus !== 'saved' && autoSaveStatus !== 'error')`
+        // also flipped 'idle' to 'saved'. Combined with the new
+        // 4-second 'saved' → 'idle' fade, the observer would fire
+        // (scheduleAutoSave deps included autoSaveStatus, so its
+        // identity changed when status flipped), the equality
+        // skip ran, and 'idle' was promoted right back to 'saved'
+        // — visually killing the fade. Functional setter form
+        // also lets us drop autoSaveStatus from this callback's
+        // dependency list, which closes the loop entirely.
+        if (!inFlightRef.current) {
+          setAutoSaveStatus((status) => (status === 'saving' ? 'saved' : status));
         }
         return;
       }
@@ -709,7 +728,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         });
       }, 500);
     },
-    [saveGranulesMutation, grantsEqual, canEdit, autoSaveStatus],
+    // PR-FE-9 absorb iter-2: autoSaveStatus removed from deps so
+    // the fade-induced 'idle' status flip does NOT re-create this
+    // callback's identity and re-fire the observer that promoted
+    // 'idle' → 'saved' via the equality-skip path. Functional
+    // setter above (status === 'saving' ? 'saved' : status) lets
+    // us read current status without a closure capture.
+    [saveGranulesMutation, grantsEqual, canEdit],
   );
 
   // PR-FE-7 absorb iter-2: bind the queue-flush function via a ref
@@ -791,6 +816,77 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       }
     };
   }, []);
+
+  // PR-FE-9 (2026-05-09): status fade. Auto-save's canonical-saved
+  // state used to live in the footer indefinitely; the green "Tüm
+  // değişiklikler kaydedildi" message creates persistent visual
+  // noise once the admin has stopped editing. Fade to the neutral
+  // 'idle' state after 4 seconds so the footer settles down. Only
+  // 'saved' fades — 'saving' stays put while a PUT is on the wire,
+  // and 'error' must persist until the admin acknowledges (clicks
+  // Tekrar dene or makes another change).
+  React.useEffect(() => {
+    if (autoSaveStatus !== 'saved') return;
+    const t = setTimeout(() => {
+      setAutoSaveStatus('idle');
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [autoSaveStatus]);
+
+  // PR-FE-9 (2026-05-09): close-flush. Drawer dismissal (ESC,
+  // backdrop click, X button) used to leave a 500ms-pending edit
+  // unsent — the unmount-cleanup useEffect above clearTimeout's the
+  // debounce timer without firing the buffered save. From the
+  // admin's perspective they "saved" by toggling and then closed
+  // the drawer expecting persistence. Close-flush forces an
+  // immediate mutate when the user closes mid-debounce so the last
+  // edit lands.
+  //
+  // Pattern: fire-and-forget mutate (mutation lifecycle continues
+  // after unmount via React Query; our seq + roleId ownership
+  // guard already drops onSuccess writes into a torn-down tree
+  // because activeRoleIdRef will be undefined post-unmount). We do
+  // not await — that would slow the close UI by 500ms+.
+  const handleClose = React.useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+      // Build a current-state snapshot identical to what the
+      // scheduler would have sent at fire time.
+      const next: GrantSnapshot = { moduleGrants, actionGrants, reportGrants };
+      const last = lastSavedDraftRef.current;
+      const isDelta =
+        !last ||
+        !grantsEqual(last.moduleGrants, next.moduleGrants) ||
+        !grantsEqual(last.actionGrants, next.actionGrants) ||
+        !grantsEqual(last.reportGrants, next.reportGrants);
+      const targetRoleId = activeRoleIdRef.current;
+      if (
+        canEditRef.current &&
+        grantsLoadedRef.current &&
+        isDelta &&
+        targetRoleId !== undefined &&
+        !inFlightRef.current
+      ) {
+        // Fire immediately. Server commits; UI unmounts before
+        // onSuccess fires but the seq guard in onSuccess already
+        // handles "owner moved on" gracefully.
+        inFlightRef.current = true;
+        saveSeqRef.current += 1;
+        saveGranulesMutation.mutate({
+          draft: next,
+          seq: saveSeqRef.current,
+          roleId: targetRoleId,
+        });
+      } else if (isDelta && inFlightRef.current && targetRoleId !== undefined) {
+        // Save is in flight; queue the latest draft so onSuccess
+        // flushes it before unmount. (queueDraftRef is read after
+        // unmount via React Query's stable mutation reference.)
+        queuedDraftRef.current = next;
+      }
+    }
+    onClose();
+  }, [moduleGrants, actionGrants, reportGrants, grantsEqual, onClose, saveGranulesMutation]);
 
   // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #6): retry sends
   // the failed draft straight back. We do NOT lift the failed draft
@@ -1089,7 +1185,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   return (
     <DetailDrawer
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={role.name}
       subtitle={role.description || t('access.drawer.noDescription')}
       leading={
