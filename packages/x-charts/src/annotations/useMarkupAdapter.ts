@@ -1,3 +1,4 @@
+ 
 /**
  * useMarkupAdapter — React hook wrapper around `adaptToEcharts`.
  *
@@ -66,7 +67,6 @@ export function useMarkupAdapter(
     if (signature === lastSignature.current) return;
     lastSignature.current = signature;
     for (const w of result.warnings) {
-       
       console.warn(w);
     }
   }, [devMode, result.warnings]);
