@@ -14,7 +14,14 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { guardChartCallback } from './access/guardChartCallback';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import {
+  chooseRenderer,
+  detectWebGLCapability,
+  type RendererFallbackEvent,
+  type RendererMode,
+  useEChartsRenderer,
+} from './renderers';
+import { isEChartsGLRegistered, registerEChartsGL } from './renderers/gl';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -113,6 +120,30 @@ export interface ScatterChartProps extends AccessControlledProps {
   density?: ChartDensityPreference;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
+  /**
+   * Renderer mode — Faz 21.11 PR-A1.5 (Big Data Renderer Router).
+   * `'auto'` (default) routes by point count: <50K Canvas raw,
+   * 50K..100K Canvas (LTTB sampling lands in PR-A2), ≥100K WebGL
+   * (lazy `echarts-gl`). Force a
+   * specific backend with `'canvas' | 'svg' | 'webgl'`. WebGL falls
+   * back to Canvas when unsupported and fires `onRendererFallback`.
+   * @default "auto"
+   */
+  renderer?: RendererMode;
+  /**
+   * Callback fired when the requested renderer was downgraded (e.g.
+   * `renderer='webgl'` but the browser does not support WebGL, so the
+   * router routed to Canvas). Lets dashboards surface a banner without
+   * polling the router decision themselves.
+   */
+  onRendererFallback?: (event: RendererFallbackEvent) => void;
+  /**
+   * Hard cross-filter requirement — when true the router will NEVER
+   * upgrade to WebGL above the cross-filter ceiling (default 500K).
+   * Use for trading dashboards where losing click → drilldown is
+   * unacceptable. @default false
+   */
+  crossFilterRequired?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -181,11 +212,101 @@ const ScatterChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    renderer: rendererMode = 'auto',
+    onRendererFallback,
+    crossFilterRequired = false,
     ...rest
   },
   forwardedRef,
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
+
+  // Faz 21.11 PR-A1.5 — Big Data Renderer Router decision. Routes
+  // Canvas / SVG / WebGL based on point count, browser capability
+  // and the cross-filter requirement flag. WebGL chunk (`echarts-gl`)
+  // is registered lazily on first use; if the browser does not
+  // support WebGL the router transparently falls back to Canvas
+  // (LTTB / anomaly-aware sampling lands in PR-A2)
+  // and fires `onRendererFallback`.
+  const rendererDecision = useMemo(
+    () =>
+      chooseRenderer({
+        requestedMode: rendererMode,
+        pointCount: data?.length ?? 0,
+        webgl: detectWebGLCapability(),
+        crossFilterRequired,
+        hasInteraction: !!onDataPointClick,
+      }),
+    [rendererMode, data?.length, crossFilterRequired, onDataPointClick],
+  );
+
+  // Lazy-load `echarts-gl` the first time the router picks the WebGL
+  // backend, and gate the `'scatterGL'` series.type on the registration
+  // promise actually resolving (Codex iter-A1.5 race-fix).
+  //
+  // Without `glReady`, the option memo would emit `series.type='scatterGL'`
+  // immediately on render — but `useEChartsRenderer.setOption` runs in
+  // a commit-phase effect that may execute before the lazy `import()`
+  // resolves. ECharts then sees an unknown series type and either skips
+  // the series or throws (engine-version dependent). Holding the GL
+  // series type back until `glReady===true` lets the chart render the
+  // canvas series first; once registration completes the option memo
+  // recomputes and the renderer swaps to GL on the next setOption.
+  const wantsWebGL = rendererDecision.backend === 'webgl';
+  const [glReady, setGlReady] = React.useState<boolean>(() => isEChartsGLRegistered());
+  React.useEffect(() => {
+    if (!wantsWebGL) return;
+    if (isEChartsGLRegistered()) {
+      setGlReady(true);
+      return;
+    }
+    let cancelled = false;
+    setGlReady(false);
+    registerEChartsGL()
+      .then(() => {
+        if (!cancelled) setGlReady(true);
+      })
+      .catch(() => {
+        // Registration failure leaves the chart on the empty option
+        // briefly until next data refresh — no throw, no blank chart
+        // poison. Telemetry could be surfaced via a future
+        // `onRendererFallback` extension.
+        if (!cancelled) setGlReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsWebGL]);
+  const useGLSeriesType = wantsWebGL && glReady;
+  // Codex iter-A1.5b BLOCKER 1 — when WebGL is the chosen backend but
+  // the lazy `echarts-gl` chunk has not yet resolved, suppress the
+  // entire option so ECharts does NOT first paint the canvas
+  // `scatter` series with 1M points (which would defeat the WebGL
+  // ceiling claim). The empty option briefly displays the no-data
+  // path; the option memo recomputes once `glReady` flips and the
+  // GL series type lights up.
+  const webGLPending = wantsWebGL && !glReady;
+
+  // Surface the fallback advisory to dashboards that asked for
+  // a specific renderer but ended up on a different one.
+  React.useEffect(() => {
+    if (
+      onRendererFallback &&
+      rendererDecision.requestedMode !== 'auto' &&
+      rendererDecision.requestedMode !== rendererDecision.backend
+    ) {
+      onRendererFallback({
+        requested: rendererDecision.requestedMode,
+        actual: rendererDecision.backend,
+        reason: rendererDecision.reason,
+      });
+    }
+  }, [
+    rendererDecision.backend,
+    rendererDecision.requestedMode,
+    rendererDecision.reason,
+    onRendererFallback,
+  ]);
 
   // Markup overlay adapter — Codex thread 019e0df1. Scatter has no
   // category labels; dataContext omitted (LabelMarkup must use
@@ -229,7 +350,12 @@ const ScatterChartInner = React.forwardRef<
   });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Codex iter-A1.5b BLOCKER 1 — `webGLPending` suppresses the
+    // option entirely while `echarts-gl` is still loading. This
+    // prevents the canvas `scatter` series from rendering 1M points
+    // before the GL chunk arrives (which would defeat the WebGL
+    // ceiling claim).
+    if (isEmpty || webGLPending) return null;
 
     const palette = colors ?? effectivePalette ?? getDefaultPalette();
     const fontFamily = getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
@@ -378,7 +504,13 @@ const ScatterChartInner = React.forwardRef<
       series: mergeMarkupPatches(
         [
           {
-            type: 'scatter',
+            // Faz 21.11 PR-A1.5 — swap to `scatterGL` when the router
+            // routed to the WebGL backend AND the lazy `echarts-gl`
+            // registration has actually resolved (`useGLSeriesType`).
+            // Until then we render the canvas `scatter` series so
+            // there is no race window where ECharts sees an unknown
+            // series.type. Codex iter-A1.5 race-fix.
+            type: useGLSeriesType ? 'scatterGL' : 'scatter',
             data: scatterData,
             symbolSize: symbolSizeFn,
             itemStyle: {
@@ -429,6 +561,14 @@ const ScatterChartInner = React.forwardRef<
     breakpoint,
     // Markup patches drive series.markLine / markArea / markPoint.
     markupResult,
+    // Faz 21.11 PR-A1.5 — recompute when the router decides to swap
+    // between `scatter` and `scatterGL` series types. The `useGLSeriesType`
+    // flag is true only when the router wants WebGL AND the lazy
+    // registration has resolved (Codex iter-A1.5 race-fix gate).
+    useGLSeriesType,
+    // Codex iter-A1.5b — `webGLPending` short-circuits the option to
+    // null while `echarts-gl` is still loading.
+    webGLPending,
   ]);
 
   // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts scatter
@@ -506,14 +646,24 @@ const ScatterChartInner = React.forwardRef<
   // each point to {label: explicit-label-or-coordinate, value: y}
   // for SR consumption. The hidden table shows label + y-value;
   // x-coordinates surface only via tooltip (ECharts handles them).
-  const a11yData = useMemo(
-    () =>
-      safeData.map((d, i) => ({
-        label: d.label ?? `Point ${i + 1} (${d.x}, ${d.y})`,
-        value: d.y,
-      })),
-    [safeData],
-  );
+  //
+  // Codex iter-A1.5b BLOCKER 2 — cap the hidden a11y table at
+  // {@link A11Y_BIG_DATA_ROW_LIMIT} rows when the dataset would
+  // otherwise blow the DOM up to 1M `<tr>` elements (the WebGL
+  // ceiling claim is meaningless if the screen-reader fallback table
+  // hits 1M rows). PR-A2 will replace this with anomaly-aware
+  // sampled rows that preserve outliers.
+  const a11yData = useMemo(() => {
+    const A11Y_BIG_DATA_ROW_LIMIT = 1_000;
+    const source =
+      safeData.length > A11Y_BIG_DATA_ROW_LIMIT
+        ? safeData.slice(0, A11Y_BIG_DATA_ROW_LIMIT)
+        : safeData;
+    return source.map((d, i) => ({
+      label: d.label ?? `Point ${i + 1} (${d.x}, ${d.y})`,
+      value: d.y,
+    }));
+  }, [safeData]);
   const a11y = useChartA11y({
     chartType: 'scatter',
     data: a11yData,

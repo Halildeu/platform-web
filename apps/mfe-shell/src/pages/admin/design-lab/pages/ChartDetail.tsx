@@ -1025,6 +1025,30 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Accent palette override.',
       },
       {
+        name: 'renderer',
+        type: 'RendererMode',
+        required: false,
+        default: '"auto"',
+        description:
+          "Renderer mode — Faz 21.11 PR-A1.5 (Big Data Renderer Router).\n`'auto'` (default) routes by point count: <50K Canvas raw,\n50K..100K Canvas (LTTB sampling lands in PR-A2), ≥100K WebGL\n(lazy `echarts-gl`). Force a\nspecific backend with `'canvas' | 'svg' | 'webgl'`. WebGL falls\nback to Canvas when unsupported and fires `onRendererFallback`.",
+      },
+      {
+        name: 'onRendererFallback',
+        type: '(event: RendererFallbackEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          "Callback fired when the requested renderer was downgraded (e.g.\n`renderer='webgl'` but the browser does not support WebGL, so the\nrouter routed to Canvas). Lets dashboards surface a banner without\npolling the router decision themselves.",
+      },
+      {
+        name: 'crossFilterRequired',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description:
+          'Hard cross-filter requirement — when true the router will NEVER\nupgrade to WebGL above the cross-filter ceiling (default 500K).\nUse for trading dashboards where losing click → drilldown is\nunacceptable.',
+      },
+      {
         name: 'access',
         type: '"full" | "readonly" | "disabled" | "hidden"',
         required: false,
