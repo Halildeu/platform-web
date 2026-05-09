@@ -217,6 +217,25 @@ const users = {
     'You are about to remove access to {count} item(s). The user will no longer see data in this scope. Continue?',
   'users.detail.section.scopes.subtitleWithTotals':
     '{total} total permissions — {companies} companies, {projects} projects, {warehouses} warehouses, {branches} branches.',
+  // PR-FE-12 (2026-05-09): hierarchical scope picker view.
+  'users.detail.scopes.viewToggle.label': 'Data access view',
+  'users.detail.scopes.viewToggle.flat': 'Flat list',
+  'users.detail.scopes.viewToggle.hierarchy': 'Hierarchical',
+  'users.detail.scopes.hier.empty':
+    'No assigned companies or child scopes to display in the hierarchical view. Switch to Flat list to add some.',
+  'users.detail.scopes.hier.noChildren': 'No child scopes assigned',
+  'users.detail.scopes.hier.childCount': '{count} child scope(s)',
+  'users.detail.scopes.hier.subheader.projects': 'Projects ({count})',
+  'users.detail.scopes.hier.subheader.branches': 'Branches ({count})',
+  'users.detail.scopes.hier.subheader.warehouses': 'Warehouses ({count})',
+  'users.detail.scopes.hier.orphan.header': 'Orphan scopes ({count}) — parent company not assigned',
+  'users.detail.scopes.hier.orphan.help':
+    'These child scopes have no assigned parent company. For consistency, either add the parent company or remove these entries.',
+  // PR-FE-12 absorb iter-2 (Codex thread 019e0df3 #1).
+  'users.detail.scopes.hier.unknown.header': 'Companies not found in master data ({count})',
+  'users.detail.scopes.hier.unknown.help':
+    'These companies are assigned but could not be fetched from master data (transient failure, soft-delete, or different tenant). Listed below to keep the assignment visible; remove if intentional.',
+  'users.detail.scopes.hier.unknown.placeholder': 'Unknown company #{id}',
   'users.grid.columns.roles': 'Roles',
 };
 
