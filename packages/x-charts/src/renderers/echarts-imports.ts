@@ -22,10 +22,14 @@
  *     locale string'leri tanımlıyordu — bu artık ölü kod ama dokunmadan
  *     bırakıldı (zarar yok, locale dosyaları human-translated).
  *
- *   - **DataZoomComponent → DataZoomInsideComponent:** Tüm dataZoom
- *     kullanımı `type: 'inside'` (`responsive/buildResponsiveDataZoom.ts`
- *     + `spec/chartSpecToEChartsOption.ts`). Slider/control/select
- *     hiç kullanılmıyor. Inside-only modular import çok daha küçük.
+ *   - **DataZoomComponent → DataZoomInside + DataZoomSlider:**
+ *     `responsive/buildResponsiveDataZoom.ts` `type: 'inside'` üretiyor;
+ *     `spec/chartSpecToEChartsOption.ts:281` `interaction.zoom_pan`
+ *     açıkken `[{ type: 'inside' }, { type: 'slider', bottom: 20 }]`
+ *     üretiyor. Control/select hiç kullanılmıyor. Inside + Slider
+ *     modular import full installer'dan küçük (control/select drop).
+ *     Codex iter-1 review fix: ilk versiyon sadece Inside register
+ *     etmişti, slider option emit'i runtime crash veriyordu.
  */
 
 /* ------------------------------------------------------------------ */
@@ -66,11 +70,15 @@ import { LegendComponent } from 'echarts/components';
 import { GridComponent } from 'echarts/components';
 import { DatasetComponent } from 'echarts/components';
 import { TransformComponent } from 'echarts/components';
-// DataZoomInsideComponent only (no slider/control/select). Faz A: every
-// production dataZoom emission uses `type: 'inside'`. Switching from
-// `DataZoomComponent` (full installer) to the inside-only modular path
-// drops the unused slider/control surfaces from base bundle.
-import { DataZoomInsideComponent } from 'echarts/components';
+// DataZoom — Inside + Slider only (no control/select). Faz A: ChartSpec
+// `interaction.zoom_pan` transformer (`spec/chartSpecToEChartsOption.ts:281`)
+// emits BOTH `type: 'inside'` and `type: 'slider'`; responsive helper
+// emits `type: 'inside'`. The DataZoomComponent FULL installer also
+// pulls in unused control/select surfaces, so we register only the
+// two modular paths actually used. Codex post-impl review iter-1
+// caught the slider runtime requirement (would have crashed
+// `Component dataZoom.slider is used but not imported.`).
+import { DataZoomInsideComponent, DataZoomSliderComponent } from 'echarts/components';
 // ToolboxComponent removed Faz A — `ChartToolbar` + `useChartExport`
 // handle export/zoom UX DOM-side. No chart shim emits `option.toolbox`.
 import { AriaComponent } from 'echarts/components';
@@ -112,6 +120,7 @@ export function registerECharts(): void {
     DatasetComponent,
     TransformComponent,
     DataZoomInsideComponent, // Faz A: was DataZoomComponent (full installer)
+    DataZoomSliderComponent, // ChartSpec zoom_pan transformer needs slider
     // ToolboxComponent: Faz A removed (DOM-side ChartToolbar / useChartExport)
     AriaComponent,
     MarkLineComponent,
