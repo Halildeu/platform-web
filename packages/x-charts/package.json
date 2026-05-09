@@ -55,6 +55,7 @@
     "@mfe/shared-types": "*",
     "clsx": "^2.1.1",
     "echarts": "^5.6.0",
+    "echarts-gl": "^2.0.9",
     "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.13"
   },
@@ -64,10 +65,10 @@
   "devDependencies": {
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
-    "@testing-library/react": "^16.3.0",
     "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^16.3.0",
     "@vitejs/plugin-react": "^6.0.1",
-    "vitest": "^4.1.5",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.5"
   }
 }
