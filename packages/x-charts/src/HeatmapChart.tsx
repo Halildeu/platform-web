@@ -301,31 +301,53 @@ const HeatmapChartInner = React.forwardRef<
   }, [data, xLabels, yLabels, isEmpty]);
 
   // Markup overlay adapter — Codex thread 019e0df1 + iter-2 v2 backlog
-  // closure (PR follow-up). `dataContext.series[0].data[i]` carries
-  // the cell-tuple shape `{ x, y, value }` so `LabelMarkup.anchor:
-  // { dataIndex }` resolves to the categorical (xCat, yCat) pair via
-  // the heatmap branch in `resolveLabelAnchor`. Cartesian-friendly
-  // `labels` + `xLabels`/`yLabels` are still exposed for the
-  // alternative `{ xLabel, yLabel }` shorthand and for backward-
-  // compat with consumers that probed the older shape.
-  const markupResult = useMarkupAdapter(markups, {
-    chartType: 'heatmap',
-    dataContext: {
+  // closure + post-impl review iter-3 (Codex thread 019e0e80).
+  //
+  // `dataContext.series[0].data[i]` carries the cell-tuple shape
+  // `{ x, y, value }` so `LabelMarkup.anchor: { dataIndex }` resolves
+  // to the categorical (xCat, yCat) pair via the heatmap branch in
+  // `resolveLabelAnchor`. Cartesian-friendly `labels` + `xLabels` /
+  // `yLabels` are still exposed for the alternative `{ xLabel, yLabel }`
+  // shorthand and for backward-compat with consumers that probed the
+  // older shape.
+  //
+  // The cell-tuple array is allocated only when at least one markup
+  // actually needs `{ dataIndex }` resolution (Codex iter-3 P1: render-
+  // time O(n) allocation should not run when consumers don't pass
+  // `markups` or only pass `{ x, y }` / `{ xLabel, yLabel }` anchors).
+  // The whole `dataContext` object is also `useMemo`-stable so
+  // `useMarkupAdapter`'s memo doesn't bust on identity churn.
+  const markupNeedsDataIndex = useMemo(
+    () =>
+      Array.isArray(markups) &&
+      markups.some(
+        (m) => m.type === 'label' && 'dataIndex' in m.anchor && m.anchor.dataIndex !== undefined,
+      ),
+    [markups],
+  );
+  const markupDataContext = useMemo(
+    () => ({
       xLabels: normalized?.xCats,
       yLabels: normalized?.yCats,
       labels: normalized?.xCats,
-      series: normalized
-        ? [
-            {
-              data: normalized.normalized.map(([xi, yi, v]) => ({
-                x: normalized.xCats[xi] ?? String(xi),
-                y: normalized.yCats[yi] ?? String(yi),
-                value: v,
-              })),
-            },
-          ]
-        : undefined,
-    },
+      series:
+        normalized && markupNeedsDataIndex
+          ? [
+              {
+                data: normalized.normalized.map(([xi, yi, v]) => ({
+                  x: normalized.xCats[xi] ?? String(xi),
+                  y: normalized.yCats[yi] ?? String(yi),
+                  value: v,
+                })),
+              },
+            ]
+          : undefined,
+    }),
+    [normalized, markupNeedsDataIndex],
+  );
+  const markupResult = useMarkupAdapter(markups, {
+    chartType: 'heatmap',
+    dataContext: markupDataContext,
   });
 
   const option = useMemo((): EChartsOption | null => {
@@ -472,6 +494,8 @@ const HeatmapChartInner = React.forwardRef<
     densityFontMultiplier,
     densityPaddingMultiplier,
     breakpoint,
+    normalized,
+    markupResult,
   ]);
 
   const handleClick = useCallback(

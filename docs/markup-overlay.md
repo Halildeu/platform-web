@@ -385,7 +385,7 @@ side effects.
 - **API source**: `packages/x-charts/src/annotations/`
 - **Types**: `packages/x-charts/src/types.ts` (`ChartMarkup` discriminated union)
 - **Tests**:
-  - `adaptToEcharts.test.ts` (24 unit case)
+  - `adaptToEcharts.test.ts` (32 unit case)
   - `computeTrendOverlay.test.ts` (14 case incl. numeric x finite guards)
   - `computeAnomalyOverlay.test.ts` (6 case)
   - `markup-bench.test.ts` (4 perf gate)
