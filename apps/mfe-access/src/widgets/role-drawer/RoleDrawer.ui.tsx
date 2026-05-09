@@ -146,6 +146,12 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     'module',
     'ACCESS',
   );
+  // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc): the read-only gate
+  // used to live ONLY on the Save button via `access={editAccess}`.
+  // Now that the button is gone, every mutation entry-point —
+  // setters, scheduler, retry handler — must consult this flag.
+  // Defense-in-depth: the JSX selects are also `disabled={!canEdit}`.
+  const canEdit = editAccess === 'full';
 
   // --- Catalog query ---
   // Codex CNS thread 019d9a28 Tur 14-15: persisted role için fallback YASAK.
@@ -281,6 +287,16 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   const debounceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveSeqRef = React.useRef(0);
   const grantsLoadedRef = React.useRef(false);
+  // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc): single-in-flight +
+  // queued-latest model so two PUT /granules requests never race on
+  // the server. Without this, the seq-guard only protects the UI
+  // commit; the server itself could still apply requests in arrival
+  // order (PUT v1 arriving after PUT v2 → server final = v1, stale).
+  const inFlightRef = React.useRef(false);
+  const queuedDraftRef = React.useRef<GrantSnapshot | null>(null);
+  // Forward-decl ref so the mutation's onSuccess can flush the queued
+  // draft without a temporal-dead-zone reference to itself.
+  const flushQueueRef = React.useRef<(() => boolean) | null>(null);
   const [, setSelectedUser] = React.useState<AutocompleteOption | null>(null);
   const [userSearchOptions, setUserSearchOptions] = React.useState<AutocompleteOption[]>([]);
   const [userSearchLoading, setUserSearchLoading] = React.useState(false);
@@ -322,6 +338,23 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setActionGrants({});
     setReportGrants({});
     setDirty(false);
+    // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #2): full autosave
+    // reset on role switch. Without this, an in-flight save from
+    // role A could land after role B is selected and overwrite B's
+    // snapshot; the seq bump poisons stale onSuccess/onError because
+    // their `result.seq !== saveSeqRef.current` guard now fires for
+    // anything in flight at the moment of the switch.
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    grantsLoadedRef.current = false;
+    lastSavedDraftRef.current = null;
+    failedDraftRef.current = null;
+    inFlightRef.current = false;
+    queuedDraftRef.current = null;
+    saveSeqRef.current += 1;
+    setAutoSaveStatus('idle');
     // Use role.id (string) instead of role (object ref) so re-renders with the
     // same role identity don't trigger a state reset (the previous race vector).
   }, [role?.id, initialModsFromRole]);
@@ -346,12 +379,14 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   React.useEffect(() => {
     if (!role) return;
     const granules = roleGranulesQuery.data;
-    if (!granules || granules.length === 0) return;
+    // Wait for the query to actually complete (undefined === still
+    // loading or disabled). null is a sentinel for non-persisted role.
+    if (granules === undefined) return;
     const mods: Record<string, string> = {};
     const acts: Record<string, string> = {};
     const reps: Record<string, string> = {};
     let written = false;
-    for (const g of granules) {
+    for (const g of granules ?? []) {
       const gAny = g as {
         type?: string;
         key?: string;
@@ -385,23 +420,37 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         // entry in this batch contributes a real grant.
       }
     }
-    if (!written) return; // no writable entry in granules — preserve lazy/Effect-A state
-    setModuleGrants(mods);
-    setActionGrants(acts);
-    setReportGrants(reps);
-    setDirty(false);
-    // PR-FE-7: seed the canonical snapshot once granules arrive so a
-    // subsequent error can revert here, AND open the autosave gate.
-    // Pre-load edits MUST NOT trigger a save (would persist {} to the
-    // server before the user has even seen the current state).
-    lastSavedDraftRef.current = {
-      moduleGrants: mods,
-      actionGrants: acts,
-      reportGrants: reps,
-    };
+    if (written) {
+      setModuleGrants(mods);
+      setActionGrants(acts);
+      setReportGrants(reps);
+      setDirty(false);
+      // PR-FE-7: seed the canonical snapshot once granules arrive so a
+      // subsequent error can revert here, AND open the autosave gate.
+      // Pre-load edits MUST NOT trigger a save (would persist {} to the
+      // server before the user has even seen the current state).
+      lastSavedDraftRef.current = {
+        moduleGrants: mods,
+        actionGrants: acts,
+        reportGrants: reps,
+      };
+    } else {
+      // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #3): empty (or
+      // wholly-unrecognized) granules is still a valid canonical
+      // state — "no grants yet". Effect-A's props-derived modules
+      // ARE the saved snapshot for this role; seed it so the first
+      // grant the admin adds becomes a real delta and triggers a
+      // save (pre-fix the gate stayed closed and zero-grant roles
+      // could never auto-save their first edit).
+      lastSavedDraftRef.current = {
+        moduleGrants: initialModsFromRole(role),
+        actionGrants: {},
+        reportGrants: {},
+      };
+    }
     grantsLoadedRef.current = true;
     setAutoSaveStatus('saved');
-  }, [role?.id, roleGranulesQuery.data]);
+  }, [role?.id, roleGranulesQuery.data, initialModsFromRole]);
 
   // --- User search handler ---
   // Threshold 3 (P1.7 user feedback): 2-char queries return too many matches in
@@ -433,64 +482,108 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   }, []);
 
   // --- Save granules mutation ---
-  // PR-FE-7 (Codex 019e0bd3 iter-1 AGREE absorb, 2026-05-09): mutation
-  // now takes an explicit draft snapshot parameter instead of reading
-  // closure state. Stale closures from rapid keystrokes were the
-  // out-of-order risk Codex flagged; passing the snapshot at schedule
-  // time pins the request body deterministically.
+  // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc): mutation signature
+  // expanded to `{ draft, seq }` so onError can read the seq it was
+  // launched with (closure-only seq capture in onSuccess wasn't
+  // enough for stale-error detection). The whole flow now follows a
+  // single-in-flight + queued-latest model — see scheduleAutoSave
+  // and the flushQueueRef useEffect below.
   const saveGranulesMutation = useMutation({
-    mutationFn: async (draft: GrantSnapshot) => {
+    mutationFn: async (vars: { draft: GrantSnapshot; seq: number }) => {
       if (!isPersistedRoleId(role?.id)) return;
       const granules: Granule[] = [];
-      for (const [key, grant] of Object.entries(draft.moduleGrants)) {
+      for (const [key, grant] of Object.entries(vars.draft.moduleGrants)) {
         if (grant !== 'NONE') granules.push({ type: 'module', key, grant });
       }
-      for (const [key, grant] of Object.entries(draft.actionGrants)) {
+      for (const [key, grant] of Object.entries(vars.draft.actionGrants)) {
         granules.push({ type: 'action', key, grant });
       }
       // Codex 019dda1c iter-26: skip catalog-stale report keys (e.g.
       // legacy group keys from prior versions) so a save does not
       // re-introduce rows the catalog has dropped.
       const validReportKeys = new Set((catalog?.reports ?? []).map((r) => r.key));
-      for (const [key, grant] of Object.entries(draft.reportGrants)) {
+      for (const [key, grant] of Object.entries(vars.draft.reportGrants)) {
         if (!validReportKeys.has(key)) continue;
         granules.push({ type: 'report', key, grant });
       }
       // PAGE granules removed in iter-27 — backend rejects them at
       // validateAndNormalize (PermissionType enum has no PAGE value).
-      const seq = saveSeqRef.current;
       await api.put(`/v1/roles/${role!.id}/granules`, { permissions: granules });
-      return { seq, draft };
+      return { seq: vars.seq, draft: vars.draft };
     },
     onSuccess: (result) => {
+      // Mark slot free regardless; the queue flush below decides
+      // whether to claim it again.
+      inFlightRef.current = false;
+      // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #4): stale-success
+      // guard. Without this, a slow earlier response could land
+      // after a newer save's seq bump and (a) re-commit its older
+      // draft as canonical, (b) trigger invalidate which refetches
+      // server state and re-seeds Effect B with old data. Both vectors
+      // could regress the user's pending edits.
+      if (!result || result.seq !== saveSeqRef.current) {
+        flushQueueRef.current?.();
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       // Codex 019dd9d6 iter-20: drawer's own source-of-truth (role-granules
       // detail query) must also be invalidated so the next reopen pulls fresh
       // server state instead of stale cached data parsed by Effect B.
       queryClient.invalidateQueries({ queryKey: ['role-granules', role?.id] });
-      // PR-FE-7: only commit the new canonical snapshot if THIS is the
-      // most-recent save; a slow earlier response cannot regress a
-      // newer one. seq monotonicity guards out-of-order arrivals.
-      if (result && result.seq === saveSeqRef.current) {
-        lastSavedDraftRef.current = result.draft;
-        failedDraftRef.current = null;
+      // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #6): explicitly
+      // sync visible state to the just-saved draft. For the normal
+      // scheduled-save flow this is a no-op (state already equals
+      // draft). For the retry-after-revert flow it lifts the
+      // failed-draft back into the UI so "Kaydedildi" reflects what
+      // the admin actually sees in the dropdowns.
+      setModuleGrants(result.draft.moduleGrants);
+      setActionGrants(result.draft.actionGrants);
+      setReportGrants(result.draft.reportGrants);
+      lastSavedDraftRef.current = result.draft;
+      failedDraftRef.current = null;
+      setDirty(false);
+      // If a newer draft is already queued, fire it; otherwise
+      // settle to 'saved'. The status flag must reflect whether
+      // any save is still in flight so the badge is honest.
+      if (!flushQueueRef.current?.()) {
         setAutoSaveStatus('saved');
       }
-      setDirty(false);
     },
-    onError: (err: Error, draft: GrantSnapshot) => {
+    onError: (err: Error, vars) => {
+      inFlightRef.current = false;
+      // Stale error from a previous role/save — drop banner. The
+      // user has already moved on; surfacing an error for a request
+      // they no longer care about would be confusing.
+      if (!vars || vars.seq !== saveSeqRef.current) {
+        // Drop queue too: a stale error means the chain might be
+        // poisoned. Forcing the user to start fresh is safer than
+        // auto-firing the queued draft into an unknown server state.
+        queuedDraftRef.current = null;
+        return;
+      }
       // PR-FE-7: revert to the last server-accepted snapshot so the UI
       // is honest about persistence ("Kaydedilemedi, son kayıtlı duruma
       // dönüldü"). The retry banner remembers the failed draft so the
       // user can re-attempt the same change without retyping.
-      failedDraftRef.current = draft;
-      setAutoSaveStatus('error');
+      failedDraftRef.current = vars.draft;
+      // Drop the queue on a fresh error: the user's next action
+      // should be an explicit retry (or another edit), not an
+      // implicit chain-fire of whatever was buffered behind this
+      // failed save.
+      queuedDraftRef.current = null;
       const snap = lastSavedDraftRef.current;
       if (snap) {
         setModuleGrants(snap.moduleGrants);
         setActionGrants(snap.actionGrants);
         setReportGrants(snap.reportGrants);
       }
+      // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #6): the visible
+      // state has been reverted to canonical, so dirty=false aligns
+      // with the "tüm değişiklikler kaydedildi" reality minus the
+      // explicit "Kaydedilemedi" banner. Pre-fix the unsaved-changes
+      // badge could still be lit alongside the revert message.
+      setDirty(false);
+      setAutoSaveStatus('error');
       pushToast('error', err.message || t('access.notifications.permissionSaveError'));
     },
   });
@@ -509,18 +602,27 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     return true;
   }, []);
 
-  // PR-FE-7: debounce-and-fire scheduler. Every grant change calls
-  // this function via the useEffect below; rapid edits collapse into
-  // a single PUT 500ms after the last keystroke. The snapshot is
-  // captured at schedule time so the mutation body cannot drift if
-  // the user keeps typing while the request is in flight.
+  // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #5): clear the
+  // pending timer FIRST, equality-check SECOND. Pre-fix flow: saved
+  // A → user types B (timer set, status=saving) → user reverts to A
+  // (equality returns true → no-op) → 500ms later the B timer fires
+  // and PUTs B back. Now reverting cancels the timer regardless,
+  // which is the only correct semantics.
   const scheduleAutoSave = React.useCallback(
     (next: GrantSnapshot) => {
-      if (!grantsLoadedRef.current) return;
-      // Skip when the snapshot is identical to the last server-
-      // accepted state — Effect B (granules query seed) repeatedly
-      // calls setModuleGrants with the canonical map, and we do not
-      // want every reopen to re-PUT identical bytes.
+      if (!grantsLoadedRef.current || !canEdit) return;
+
+      // Step 1 — cancel any pending timer. A subsequent equality-
+      // skip return is now safe: even if we don't fire, we won't
+      // leave a stale timer aimed at an obsolete draft.
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
+      // Step 2 — equality skip. Effect B's canonical seed and any
+      // round-trip through invalidate-refetch can call this with
+      // the snapshot equal to lastSavedDraft. Don't churn the wire.
       const last = lastSavedDraftRef.current;
       if (
         last &&
@@ -528,21 +630,51 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         grantsEqual(last.actionGrants, next.actionGrants) &&
         grantsEqual(last.reportGrants, next.reportGrants)
       ) {
+        // If nothing was in flight, surface 'saved' explicitly so
+        // the badge transitions out of 'saving' (a previous tick
+        // might have flipped it on its way to here).
+        if (!inFlightRef.current && autoSaveStatus !== 'saved') {
+          setAutoSaveStatus('saved');
+        }
         return;
       }
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
-      }
+
+      // Step 3 — schedule the save 500ms later.
       setAutoSaveStatus('saving');
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null;
+        // Single-in-flight + queued-latest: if a save is on the
+        // wire, just buffer the latest draft. onSuccess/onError
+        // (via flushQueueRef) will pull it back out.
+        if (inFlightRef.current) {
+          queuedDraftRef.current = next;
+          return;
+        }
+        inFlightRef.current = true;
         saveSeqRef.current += 1;
-        saveGranulesMutation.mutate(next);
+        saveGranulesMutation.mutate({ draft: next, seq: saveSeqRef.current });
       }, 500);
     },
-    [saveGranulesMutation, grantsEqual],
+    [saveGranulesMutation, grantsEqual, canEdit, autoSaveStatus],
   );
+
+  // PR-FE-7 absorb iter-2: bind the queue-flush function via a ref
+  // so the mutation's onSuccess (defined upstream of this hook
+  // call) can fire it without a temporal-dead-zone reference. The
+  // ref reads the latest mutate function on every render, so
+  // queue flushes always hit the freshest mutation instance.
+  React.useEffect(() => {
+    flushQueueRef.current = () => {
+      const queued = queuedDraftRef.current;
+      if (!queued) return false;
+      queuedDraftRef.current = null;
+      inFlightRef.current = true;
+      saveSeqRef.current += 1;
+      setAutoSaveStatus('saving');
+      saveGranulesMutation.mutate({ draft: queued, seq: saveSeqRef.current });
+      return true;
+    };
+  }, [saveGranulesMutation]);
 
   // PR-FE-7: state observer. Watches the grant maps and schedules an
   // auto-save whenever they change. Centralizing the trigger here
@@ -550,10 +682,15 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // setActionLevel, setActionGroupLevel, setReportLevel,
   // setReportGroupLevel) and guarantees that any future handler
   // contributes to the auto-save flow without forgetting to wire it.
+  // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #1): also gate on
+  // canEdit. The setters return early in read-only mode, but Effect
+  // B's seed call still flows through here on every render — gate
+  // here too so a permissions flip during an open drawer doesn't
+  // leak a save.
   React.useEffect(() => {
-    if (!grantsLoadedRef.current) return;
+    if (!grantsLoadedRef.current || !canEdit) return;
     scheduleAutoSave({ moduleGrants, actionGrants, reportGrants });
-  }, [moduleGrants, actionGrants, reportGrants, scheduleAutoSave]);
+  }, [moduleGrants, actionGrants, reportGrants, scheduleAutoSave, canEdit]);
 
   // PR-FE-7: cleanup pending debounce when the component unmounts so
   // we never fire after the user has navigated away.
@@ -566,16 +703,35 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     };
   }, []);
 
-  // PR-FE-7: explicit retry handler for the error banner. Sends the
-  // last failed draft back without forcing the user to redo the
-  // change that produced it.
+  // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #6): retry sends
+  // the failed draft straight back. We do NOT lift the failed draft
+  // into UI state here — onSuccess does that with `result.draft`,
+  // which keeps the visible state and the canonical snapshot in
+  // lockstep. Pushing the state up here would also trigger the
+  // observer effect → another debounced save, racing with the
+  // retry mutation we just fired.
   const handleAutoSaveRetry = React.useCallback(() => {
+    if (!canEdit) return;
     const failed = failedDraftRef.current;
     if (!failed) return;
-    setAutoSaveStatus('saving');
+    // Cancel any straggling debounce so the retry isn't doubled
+    // by the observer effect firing on the (yet-unchanged) state.
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (inFlightRef.current) {
+      // Another save is already running (rare — typically retry is
+      // pressed only after error which already cleared inFlight).
+      // Queue the failed draft as latest so onSuccess flushes it.
+      queuedDraftRef.current = failed;
+      return;
+    }
+    inFlightRef.current = true;
     saveSeqRef.current += 1;
-    saveGranulesMutation.mutate(failed);
-  }, [saveGranulesMutation]);
+    setAutoSaveStatus('saving');
+    saveGranulesMutation.mutate({ draft: failed, seq: saveSeqRef.current });
+  }, [saveGranulesMutation, canEdit]);
 
   // --- Add member mutation ---
   const addMemberMutation = useMutation({
@@ -725,7 +881,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   }
 
   // --- Helpers ---
+  // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #1): every grant
+  // setter now early-returns when canEdit is false. The drawer
+  // dropdowns are also `disabled={!canEdit}` (defense-in-depth), but
+  // a programmatic onChange or future code path that bypasses the
+  // disabled prop will still hit this gate.
   const setModule = (key: string, level: string) => {
+    if (!canEdit) return;
     setModuleGrants((prev) => ({ ...prev, [key]: level }));
     setDirty(true);
   };
@@ -737,6 +899,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // hides the option for non-deniable actions, but this setter still accepts
   // it as a no-op safety net.
   const setActionLevel = (key: string, level: 'NONE' | 'ALLOW' | 'DENY') => {
+    if (!canEdit) return;
     setActionGrants((prev) => {
       const next = { ...prev };
       if (level === 'NONE') {
@@ -756,6 +919,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // ALLOW instead (or stay NONE if the bulk choice is NONE), so the user
   // never sees a confusing "some changed, some didn't" partial state.
   const setActionGroupLevel = (moduleKey: string, level: 'NONE' | 'ALLOW' | 'DENY') => {
+    if (!canEdit) return;
     setActionGrants((prev) => {
       const next = { ...prev };
       const acts = catalog?.actions.filter((a) => a.module === moduleKey) ?? [];
@@ -783,6 +947,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   //   MANAGE → tam yetki
   // Eski toggleReport (ALLOW toggle) yerine setReportLevel(key, level).
   const setReportLevel = (key: string, level: 'NONE' | 'VIEW' | 'MANAGE') => {
+    if (!canEdit) return;
     setReportGrants((prev) => {
       if (level === 'NONE') {
         const next = { ...prev };
@@ -804,6 +969,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // (drawer kapanışta NONE rapor entry zaten payload'a girmez).
   // VIEW/MANAGE seçilirse her rapor için aynı level set edilir.
   const setReportGroupLevel = (groupKey: string, level: 'NONE' | 'VIEW' | 'MANAGE') => {
+    if (!canEdit) return;
     setReportGrants((prev) => {
       const next = { ...prev };
       // Codex 019dda1c iter-26: bulk filter must match the same `category ??
@@ -882,9 +1048,10 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                   ?
                 </button>
                 <select
-                  className="rounded-lg border border-border-subtle bg-surface-default px-3 py-1.5 text-sm"
+                  className="rounded-lg border border-border-subtle bg-surface-default px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                   value={moduleGrants[mod.key] ?? 'NONE'}
                   onChange={(e) => setModule(mod.key, e.target.value)}
+                  disabled={!canEdit}
                 >
                   {LEVEL_OPTIONS.map((level) => (
                     <option key={level} value={level}>
@@ -968,11 +1135,12 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                           if (v === 'MIXED') return;
                           setActionGroupLevel(moduleKey, v);
                         }}
-                        className="rounded border border-border-subtle bg-surface-default px-2 py-0.5 text-xs font-normal"
+                        className="rounded border border-border-subtle bg-surface-default px-2 py-0.5 text-xs font-normal disabled:cursor-not-allowed disabled:opacity-50"
                         data-testid={`action-group-level-${moduleKey}`}
                         aria-label={t('access.drawer.actionsBulkLevelAria', {
                           module: moduleLabel,
                         })}
+                        disabled={!canEdit}
                       >
                         <option value="NONE">{t('access.drawer.actionsLevel.none')}</option>
                         <option value="ALLOW">{t('access.drawer.actionsLevel.allow')}</option>
@@ -1009,10 +1177,11 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                             }
                             className={
                               currentLevel === 'DENY'
-                                ? 'rounded border border-state-danger-border bg-state-danger-surface px-2 py-0.5 text-xs text-state-danger-text'
-                                : 'rounded border border-border-subtle bg-surface-muted px-2 py-0.5 text-xs'
+                                ? 'rounded border border-state-danger-border bg-state-danger-surface px-2 py-0.5 text-xs text-state-danger-text disabled:cursor-not-allowed disabled:opacity-50'
+                                : 'rounded border border-border-subtle bg-surface-muted px-2 py-0.5 text-xs disabled:cursor-not-allowed disabled:opacity-50'
                             }
                             data-testid={`action-level-${action.key}`}
+                            disabled={!canEdit}
                           >
                             <option value="NONE">{t('access.drawer.actionsLevel.none')}</option>
                             <option value="ALLOW">{t('access.drawer.actionsLevel.allow')}</option>
@@ -1141,11 +1310,12 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                           if (v === 'MIXED') return; // MIXED placeholder, no-op
                           setReportGroupLevel(groupKey, v);
                         }}
-                        className="rounded border border-border-subtle bg-surface-default px-2 py-0.5 text-xs font-normal"
+                        className="rounded border border-border-subtle bg-surface-default px-2 py-0.5 text-xs font-normal disabled:cursor-not-allowed disabled:opacity-50"
                         data-testid={`report-group-level-${groupKey}`}
                         aria-label={t('access.drawer.reportsBulkLevelAria', {
                           module: moduleLabel,
                         })}
+                        disabled={!canEdit}
                       >
                         <option value="NONE">{t('access.drawer.reportLevel.none')}</option>
                         <option value="VIEW">{t('access.drawer.reportLevel.view')}</option>
@@ -1183,8 +1353,9 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
                                 e.target.value as 'NONE' | 'VIEW' | 'MANAGE',
                               )
                             }
-                            className="rounded border border-border-subtle bg-surface-muted px-2 py-0.5 text-xs"
+                            className="rounded border border-border-subtle bg-surface-muted px-2 py-0.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                             data-testid={`report-level-${report.key}`}
+                            disabled={!canEdit}
                           >
                             <option value="NONE">{t('access.drawer.reportLevel.none')}</option>
                             <option value="VIEW">{t('access.drawer.reportLevel.view')}</option>

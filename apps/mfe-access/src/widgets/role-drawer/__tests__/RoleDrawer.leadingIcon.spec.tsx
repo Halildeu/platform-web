@@ -27,7 +27,10 @@ import '@testing-library/jest-dom/vitest';
 
 vi.mock('@mfe/auth', () => ({
   usePermissions: () => ({ authz: { userId: 'test-user' } }),
-  useZanzibarAccess: () => ({ access: 'enabled', reason: undefined }),
+  // PR-FE-7 absorb iter-2: real ZanzibarAccessLevel type is
+  // 'full' | 'readonly' | 'disabled' | 'hidden' — pre-fix mock
+  // used a non-existent 'enabled'.
+  useZanzibarAccess: () => ({ access: 'full', reason: undefined }),
 }));
 
 vi.mock('@mfe/shared-http', () => ({

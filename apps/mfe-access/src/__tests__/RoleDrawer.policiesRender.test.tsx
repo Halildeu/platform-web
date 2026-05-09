@@ -40,7 +40,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('@mfe/auth', () => ({
   usePermissions: () => ({ authz: { userId: 'test-user' } }),
-  useZanzibarAccess: () => ({ access: 'enabled', reason: undefined }),
+  // PR-FE-7 absorb iter-2: real ZanzibarAccessLevel type is
+  // 'full' | 'readonly' | 'disabled' | 'hidden' — pre-fix mock used
+  // a non-existent 'enabled' which silently failed the new
+  // `canEdit === editAccess === 'full'` gate added to setters.
+  useZanzibarAccess: () => ({ access: 'full', reason: undefined }),
 }));
 
 vi.mock('@mfe/shared-http', () => ({
