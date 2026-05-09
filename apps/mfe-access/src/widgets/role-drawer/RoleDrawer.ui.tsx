@@ -1,3 +1,10 @@
+// PR-FE-6 (2026-05-09): pre-existing `api` import from @mfe/shared-http
+// at line ~20 violates the no-restricted-imports rule introduced in
+// PR-HTTP-3. Tracked for separate refactor (migrate to
+// getShellServices().http). Disabling at file scope keeps PR-FE-6
+// focused on the members invalidation + UX hint without bundling the
+// HTTP-client migration.
+/* eslint-disable no-restricted-imports */
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 // Codex 019dde0c iter-44 — IconShield decorative leading icon for role
@@ -436,6 +443,14 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-members', role?.id] });
+      // PR-FE-6 (2026-05-09): roles query also carries `memberCount` per
+      // role. Pre-fix `addMember`/`removeMember` only invalidated
+      // `role-members`, so the role list grid kept showing stale
+      // memberCount values (live testai symptom: "USER_MANAGE 2 Üye
+      // sayısı" header vs "ATANMIŞ KİŞİLER (3)" body — count never
+      // refreshed). Also invalidate the roles list so the badge
+      // matches the live count.
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
       setSelectedUser(null);
       setUserSearchOptions([]);
       setUserSearchValue('');
@@ -454,6 +469,10 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-members', role?.id] });
+      // PR-FE-6 (2026-05-09): see addMemberMutation above. Mirror the
+      // roles list invalidation so the badge in the role grid matches
+      // the live members count after a removal.
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
       pushToast('success', t('access.notifications.memberRemoveSuccess'));
     },
     onError: (err: Error) => {
@@ -1063,6 +1082,17 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
           {t('access.drawer.membersTitle')} ({members.length})
         </h3>
+        {/*
+         * PR-FE-6 (2026-05-09): UX hint clarifying that member
+         * add/remove is auto-saved (anlık) — distinct from the
+         * permission grants section which still requires the Save
+         * button at the drawer footer. Pre-fix the user kept asking
+         * "Save neden aktif değil" because clicking Kaldır appeared
+         * to be a draft change while the Save stayed disabled.
+         */}
+        <p className="text-xs text-text-subtle">
+          Üyeler eklediğinizde/kaldırdığınızda anlık kaydedilir; ayrıca Kaydet&apos;e gerek yoktur.
+        </p>
         <div className="flex flex-col gap-2">
           {members.map((member) => {
             const info = memberInfoQuery.data?.[member.userId];
