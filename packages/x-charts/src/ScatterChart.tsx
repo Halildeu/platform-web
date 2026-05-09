@@ -21,7 +21,7 @@ import {
   type RendererMode,
   useEChartsRenderer,
 } from './renderers';
-import { registerEChartsGL } from './renderers/gl';
+import { isEChartsGLRegistered, registerEChartsGL } from './renderers/gl';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
@@ -239,12 +239,42 @@ const ScatterChartInner = React.forwardRef<
   );
 
   // Lazy-load `echarts-gl` the first time the router picks the WebGL
-  // backend. Idempotent / single-flight inside `registerEChartsGL`.
+  // backend, and gate the `'scatterGL'` series.type on the registration
+  // promise actually resolving (Codex iter-A1.5 race-fix).
+  //
+  // Without `glReady`, the option memo would emit `series.type='scatterGL'`
+  // immediately on render — but `useEChartsRenderer.setOption` runs in
+  // a commit-phase effect that may execute before the lazy `import()`
+  // resolves. ECharts then sees an unknown series type and either skips
+  // the series or throws (engine-version dependent). Holding the GL
+  // series type back until `glReady===true` lets the chart render the
+  // canvas series first; once registration completes the option memo
+  // recomputes and the renderer swaps to GL on the next setOption.
+  const wantsWebGL = rendererDecision.backend === 'webgl';
+  const [glReady, setGlReady] = React.useState<boolean>(() => isEChartsGLRegistered());
   React.useEffect(() => {
-    if (rendererDecision.backend === 'webgl') {
-      void registerEChartsGL();
+    if (!wantsWebGL) return;
+    if (isEChartsGLRegistered()) {
+      setGlReady(true);
+      return;
     }
-  }, [rendererDecision.backend]);
+    let cancelled = false;
+    setGlReady(false);
+    registerEChartsGL()
+      .then(() => {
+        if (!cancelled) setGlReady(true);
+      })
+      .catch(() => {
+        // Registration failure leaves us on the canvas series — no
+        // throw, no blank chart. Telemetry could be surfaced via a
+        // future `onRendererFallback` extension.
+        if (!cancelled) setGlReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsWebGL]);
+  const useGLSeriesType = wantsWebGL && glReady;
 
   // Surface the fallback advisory to dashboards that asked for
   // a specific renderer but ended up on a different one.
@@ -459,9 +489,12 @@ const ScatterChartInner = React.forwardRef<
         [
           {
             // Faz 21.11 PR-A1.5 — swap to `scatterGL` when the router
-            // routed to the WebGL backend; the GL series type ships
-            // via the lazy-registered `echarts-gl` chunk.
-            type: rendererDecision.backend === 'webgl' ? 'scatterGL' : 'scatter',
+            // routed to the WebGL backend AND the lazy `echarts-gl`
+            // registration has actually resolved (`useGLSeriesType`).
+            // Until then we render the canvas `scatter` series so
+            // there is no race window where ECharts sees an unknown
+            // series.type. Codex iter-A1.5 race-fix.
+            type: useGLSeriesType ? 'scatterGL' : 'scatter',
             data: scatterData,
             symbolSize: symbolSizeFn,
             itemStyle: {
@@ -513,8 +546,10 @@ const ScatterChartInner = React.forwardRef<
     // Markup patches drive series.markLine / markArea / markPoint.
     markupResult,
     // Faz 21.11 PR-A1.5 — recompute when the router decides to swap
-    // between `scatter` and `scatterGL` series types.
-    rendererDecision.backend,
+    // between `scatter` and `scatterGL` series types. The `useGLSeriesType`
+    // flag is true only when the router wants WebGL AND the lazy
+    // registration has resolved (Codex iter-A1.5 race-fix gate).
+    useGLSeriesType,
   ]);
 
   // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts scatter
