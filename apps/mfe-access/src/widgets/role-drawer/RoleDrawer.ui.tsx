@@ -665,11 +665,20 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         grantsEqual(last.actionGrants, next.actionGrants) &&
         grantsEqual(last.reportGrants, next.reportGrants)
       ) {
-        // If nothing was in flight, surface 'saved' explicitly so
-        // the badge transitions out of 'saving' (a previous tick
-        // might have flipped it on its way to here).
-        if (!inFlightRef.current && autoSaveStatus !== 'saved') {
-          setAutoSaveStatus('saved');
+        // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #1): only
+        // promote 'saving' → 'saved'; do NOT touch 'idle' or
+        // 'error'. Pre-fix the equality-skip path's
+        // `if (autoSaveStatus !== 'saved' && autoSaveStatus !== 'error')`
+        // also flipped 'idle' to 'saved'. Combined with the new
+        // 4-second 'saved' → 'idle' fade, the observer would fire
+        // (scheduleAutoSave deps included autoSaveStatus, so its
+        // identity changed when status flipped), the equality
+        // skip ran, and 'idle' was promoted right back to 'saved'
+        // — visually killing the fade. Functional setter form
+        // also lets us drop autoSaveStatus from this callback's
+        // dependency list, which closes the loop entirely.
+        if (!inFlightRef.current) {
+          setAutoSaveStatus((status) => (status === 'saving' ? 'saved' : status));
         }
         return;
       }
@@ -709,7 +718,13 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         });
       }, 500);
     },
-    [saveGranulesMutation, grantsEqual, canEdit, autoSaveStatus],
+    // PR-FE-9 absorb iter-2: autoSaveStatus removed from deps so
+    // the fade-induced 'idle' status flip does NOT re-create this
+    // callback's identity and re-fire the observer that promoted
+    // 'idle' → 'saved' via the equality-skip path. Functional
+    // setter above (status === 'saving' ? 'saved' : status) lets
+    // us read current status without a closure capture.
+    [saveGranulesMutation, grantsEqual, canEdit],
   );
 
   // PR-FE-7 absorb iter-2: bind the queue-flush function via a ref

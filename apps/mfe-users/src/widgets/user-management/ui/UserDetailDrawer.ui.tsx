@@ -306,6 +306,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // tripped a strict tsc / type-aware CI even though template-string
   // URL interpolation made the runtime path coincidentally work.
   const activeUserIdRef = React.useRef<UserDetail['id'] | undefined>(undefined);
+  // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #2): forward-decl
+  // ref so Effect U (which fires before saveAssignmentMutation is
+  // declared) can flush a close-flush queued draft for the
+  // outgoing user. A useEffect lower down sets this ref's current
+  // to the mutation's `mutate` function on every render.
+  const closeFlushMutateRef = React.useRef<
+    ((vars: { draft: AssignmentSnapshot; seq: number; userId: UserDetail['id'] }) => void) | null
+  >(null);
   // Eager sync on every render — see PR-FE-7 absorb iter-3 rationale.
   canEditRef.current = canEdit;
 
@@ -516,6 +524,44 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   useEffect(() => {
     setSessionTimeoutMinutes(user?.sessionTimeoutMinutes ?? 15);
     setDirty(false);
+    // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #2): pre-reset
+    // close-flush flush. handleClose under (in-flight + delta)
+    // pushes the latest snapshot onto queuedDraftRef and calls
+    // onClose; the parent then sets user=null and Effect U fires.
+    // Pre-fix this branch wiped queuedDraftRef BEFORE any flush
+    // path could see it, and the slow in-flight save's onSuccess
+    // would later see activeUserIdRef=undefined and drop without
+    // committing the queued draft. Final result: silent data loss
+    // for an edit the admin made just before closing.
+    //
+    // Fix: if we're transitioning AWAY from a previous user (id
+    // mismatch or unmount-equivalent user=null) AND there's a
+    // queued draft for that previous user, fire it now BEFORE we
+    // poison the slot. Owner is captured pre-reset; mutation runs
+    // after Effect U's reset (queue/owner cleared) but its
+    // onSuccess will drop because activeUserIdRef no longer
+    // matches — that's fine; the server commit is what matters
+    // (UI is unmounting anyway).
+    //
+    // saveAssignmentMutation is declared below this effect (and
+    // hooks order matters), so we go through closeFlushMutateRef
+    // which a useEffect lower down keeps current.
+    const previousUserId = activeUserIdRef.current;
+    const pendingQueued = queuedDraftRef.current;
+    if (
+      pendingQueued &&
+      previousUserId !== undefined &&
+      previousUserId !== user?.id &&
+      pendingQueued.roleIds.length > 0
+    ) {
+      saveSeqRef.current += 1;
+      closeFlushMutateRef.current?.({
+        draft: pendingQueued,
+        seq: saveSeqRef.current,
+        userId: previousUserId,
+      });
+    }
+
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
@@ -715,15 +761,21 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       // prevents a redundant POST on every reopen.
       const last = lastSavedDraftRef.current;
       if (last && draftEqual(last, next)) {
-        // PR-FE-8 absorb iter-2 (Codex thread 019e0c12 #2): do NOT
-        // overwrite an active 'error' status here. The onError
-        // handler reverts visible state to canonical, which fires
-        // the observer effect with `next === lastSaved`; pre-fix
-        // we'd have flipped 'error' → 'saved' silently and the
-        // retry button + "Kaydedilemedi" message would vanish
-        // before the admin could click Tekrar dene.
-        if (!inFlightRef.current && autoSaveStatus !== 'saved' && autoSaveStatus !== 'error') {
-          setAutoSaveStatus('saved');
+        // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #1): only
+        // promote 'saving' → 'saved'; functional setter form so
+        // the closure has no `autoSaveStatus` capture, which lets
+        // us drop it from this callback's dependency list. Pre-fix
+        // the equality-skip path's
+        // `if (autoSaveStatus !== 'saved' && autoSaveStatus !== 'error')`
+        // also flipped 'idle' to 'saved'. Combined with the new
+        // 4-second 'saved' → 'idle' fade, the observer would fire
+        // (scheduleAutoSave deps included autoSaveStatus, identity
+        // change), the equality skip ran, and 'idle' was promoted
+        // back to 'saved' — visually killing the fade.
+        // 'error' is preserved by the conditional (status only
+        // changes when it's currently 'saving').
+        if (!inFlightRef.current) {
+          setAutoSaveStatus((status) => (status === 'saving' ? 'saved' : status));
         }
         return;
       }
@@ -756,7 +808,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         });
       }, 500);
     },
-    [saveAssignmentMutation, draftEqual, canEdit, autoSaveStatus],
+    // PR-FE-9 absorb iter-2: autoSaveStatus removed from deps so
+    // the fade-induced 'idle' status flip does NOT re-create this
+    // callback's identity and re-fire the observer that promoted
+    // 'idle' → 'saved' via the equality-skip path.
+    [saveAssignmentMutation, draftEqual, canEdit],
   );
 
   // PR-FE-8: state observer. Watches all five selection arrays and
@@ -807,6 +863,16 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     }, 4000);
     return () => clearTimeout(timer);
   }, [autoSaveStatus]);
+
+  // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #2): keep
+  // closeFlushMutateRef pointed at the latest mutation.mutate so
+  // Effect U's pre-reset close-flush flush can fire it through a
+  // forward-decl. mutate is stable across renders for a given
+  // mutation object, so this useEffect realistically runs once
+  // per saveAssignmentMutation lifecycle (initial mount).
+  useEffect(() => {
+    closeFlushMutateRef.current = saveAssignmentMutation.mutate;
+  }, [saveAssignmentMutation]);
 
   // PR-FE-8: bind queue-flush function via ref so the mutation's
   // onSuccess can fire it without a temporal-dead-zone reference.
