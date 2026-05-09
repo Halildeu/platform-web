@@ -301,7 +301,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const queuedDraftRef = React.useRef<AssignmentSnapshot | null>(null);
   const flushQueueRef = React.useRef<(() => boolean) | null>(null);
   const canEditRef = React.useRef(false);
-  const activeUserIdRef = React.useRef<number | undefined>(undefined);
+  // PR-FE-8 absorb iter-2 (Codex thread 019e0c12 #4): UserDetail.id is
+  // `string` per shared-types — pre-fix used `number` and would have
+  // tripped a strict tsc / type-aware CI even though template-string
+  // URL interpolation made the runtime path coincidentally work.
+  const activeUserIdRef = React.useRef<UserDetail['id'] | undefined>(undefined);
   // Eager sync on every render — see PR-FE-7 absorb iter-3 rationale.
   canEditRef.current = canEdit;
 
@@ -556,8 +560,15 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     lastSavedDraftRef.current = seeded;
     assignmentLoadedRef.current = true;
     setAutoSaveStatus('saved');
+    // PR-FE-8 absorb iter-2 (Codex thread 019e0c12 #3): use `user?.id`
+    // instead of the `user` object reference. Same-id re-renders (parent
+    // hands a fresh UserDetail object for the same logical user)
+    // would otherwise re-fire the seed mid-edit, clobbering the
+    // admin's local selection with the canonical baseline and
+    // resetting dirty=false. RoleDrawer's Effect A made the same
+    // pivot for the same race vector.
   }, [
-    user,
+    user?.id,
     userRolesQuery.data,
     userScopesQuery.data,
     userRolesQuery.isError,
@@ -571,7 +582,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // schedule and POST-time cannot redirect a stale draft to the new
   // user's endpoint (mirrors RoleDrawer absorb iter-3 #2 fix).
   const saveAssignmentMutation = useMutation({
-    mutationFn: async (vars: { draft: AssignmentSnapshot; seq: number; userId: number }) => {
+    mutationFn: async (vars: {
+      draft: AssignmentSnapshot;
+      seq: number;
+      userId: UserDetail['id'];
+    }) => {
       await api.post(`/v1/authz/users/${vars.userId}/assignments`, {
         roleIds: vars.draft.roleIds,
         scopes: {
@@ -679,12 +694,35 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         debounceTimerRef.current = null;
       }
 
+      // PR-FE-8 absorb iter-2 (Codex thread 019e0c12 #1): empty
+      // roleIds hard-block. Pre-fix the legacy gate disabled the
+      // Save button when the admin had unchecked the last role; the
+      // auto-save model removed that gate so an unchecked-last-role
+      // edit would have flowed through to a POST with `roleIds: []`,
+      // wiping the user's effective access. Drop the queue too —
+      // the noRolesWarning footer surface explains the situation
+      // and the next edit (re-check a role) re-fires normally.
+      if (next.roleIds.length === 0) {
+        queuedDraftRef.current = null;
+        // Status is observed by the noRolesWarning branch in the
+        // footer when dirty=true, so explicit status mutation is
+        // unnecessary here. Leave whatever was previously set.
+        return;
+      }
+
       // Step 2 — equality skip. The seed effect above repeatedly
       // calls setSelected* with canonical values; equality check
       // prevents a redundant POST on every reopen.
       const last = lastSavedDraftRef.current;
       if (last && draftEqual(last, next)) {
-        if (!inFlightRef.current && autoSaveStatus !== 'saved') {
+        // PR-FE-8 absorb iter-2 (Codex thread 019e0c12 #2): do NOT
+        // overwrite an active 'error' status here. The onError
+        // handler reverts visible state to canonical, which fires
+        // the observer effect with `next === lastSaved`; pre-fix
+        // we'd have flipped 'error' → 'saved' silently and the
+        // retry button + "Kaydedilemedi" message would vanish
+        // before the admin could click Tekrar dene.
+        if (!inFlightRef.current && autoSaveStatus !== 'saved' && autoSaveStatus !== 'error') {
           setAutoSaveStatus('saved');
         }
         return;
@@ -697,6 +735,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         debounceTimerRef.current = null;
         if (!canEditRef.current) return;
         if (scheduledUserId === undefined || scheduledUserId !== activeUserIdRef.current) return;
+        // PR-FE-8 absorb iter-2 #1: defense-in-depth — even if the
+        // observer somehow scheduled a save before the empty-
+        // roleIds gate above (e.g. future code path that bypasses
+        // it), the timer callback re-checks here.
+        if (next.roleIds.length === 0) {
+          queuedDraftRef.current = null;
+          return;
+        }
         if (inFlightRef.current) {
           queuedDraftRef.current = next;
           return;
@@ -757,6 +803,15 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         queuedDraftRef.current = null;
         return false;
       }
+      // PR-FE-8 absorb iter-2 (Codex thread 019e0c12 #1): empty-
+      // roleIds gate at the queue flush layer too. The scheduler
+      // would have already dropped this case, but a future code
+      // path that pushes directly to queuedDraftRef must not
+      // bypass the invariant.
+      if (queued.roleIds.length === 0) {
+        queuedDraftRef.current = null;
+        return false;
+      }
       const scheduledUserId = activeUserIdRef.current;
       queuedDraftRef.current = null;
       inFlightRef.current = true;
@@ -795,6 +850,15 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     if (!canEdit) return;
     const failed = failedDraftRef.current;
     if (!failed) return;
+    // PR-FE-8 absorb iter-2 (Codex thread 019e0c12 #1): a failed
+    // draft with empty roleIds is invalid by the same reasoning the
+    // scheduler enforces; clearing failedDraftRef here keeps the
+    // retry button from resurfacing if the admin happens to land
+    // on the no-roles state and the previous error sticks around.
+    if (failed.roleIds.length === 0) {
+      failedDraftRef.current = null;
+      return;
+    }
     const targetUserId = activeUserIdRef.current;
     if (targetUserId === undefined) return;
     if (debounceTimerRef.current) {
