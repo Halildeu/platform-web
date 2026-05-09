@@ -123,7 +123,8 @@ export interface ScatterChartProps extends AccessControlledProps {
   /**
    * Renderer mode — Faz 21.11 PR-A1.5 (Big Data Renderer Router).
    * `'auto'` (default) routes by point count: <50K Canvas raw,
-   * 50K..100K Canvas+LTTB, ≥100K WebGL (lazy `echarts-gl`). Force a
+   * 50K..100K Canvas (LTTB sampling lands in PR-A2), ≥100K WebGL
+   * (lazy `echarts-gl`). Force a
    * specific backend with `'canvas' | 'svg' | 'webgl'`. WebGL falls
    * back to Canvas when unsupported and fires `onRendererFallback`.
    * @default "auto"
@@ -224,7 +225,8 @@ const ScatterChartInner = React.forwardRef<
   // Canvas / SVG / WebGL based on point count, browser capability
   // and the cross-filter requirement flag. WebGL chunk (`echarts-gl`)
   // is registered lazily on first use; if the browser does not
-  // support WebGL the router transparently falls back to Canvas + LTTB
+  // support WebGL the router transparently falls back to Canvas
+  // (LTTB / anomaly-aware sampling lands in PR-A2)
   // and fires `onRendererFallback`.
   const rendererDecision = useMemo(
     () =>
@@ -265,9 +267,10 @@ const ScatterChartInner = React.forwardRef<
         if (!cancelled) setGlReady(true);
       })
       .catch(() => {
-        // Registration failure leaves us on the canvas series — no
-        // throw, no blank chart. Telemetry could be surfaced via a
-        // future `onRendererFallback` extension.
+        // Registration failure leaves the chart on the empty option
+        // briefly until next data refresh — no throw, no blank chart
+        // poison. Telemetry could be surfaced via a future
+        // `onRendererFallback` extension.
         if (!cancelled) setGlReady(false);
       });
     return () => {
@@ -275,6 +278,14 @@ const ScatterChartInner = React.forwardRef<
     };
   }, [wantsWebGL]);
   const useGLSeriesType = wantsWebGL && glReady;
+  // Codex iter-A1.5b BLOCKER 1 — when WebGL is the chosen backend but
+  // the lazy `echarts-gl` chunk has not yet resolved, suppress the
+  // entire option so ECharts does NOT first paint the canvas
+  // `scatter` series with 1M points (which would defeat the WebGL
+  // ceiling claim). The empty option briefly displays the no-data
+  // path; the option memo recomputes once `glReady` flips and the
+  // GL series type lights up.
+  const webGLPending = wantsWebGL && !glReady;
 
   // Surface the fallback advisory to dashboards that asked for
   // a specific renderer but ended up on a different one.
@@ -339,7 +350,12 @@ const ScatterChartInner = React.forwardRef<
   });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Codex iter-A1.5b BLOCKER 1 — `webGLPending` suppresses the
+    // option entirely while `echarts-gl` is still loading. This
+    // prevents the canvas `scatter` series from rendering 1M points
+    // before the GL chunk arrives (which would defeat the WebGL
+    // ceiling claim).
+    if (isEmpty || webGLPending) return null;
 
     const palette = colors ?? effectivePalette ?? getDefaultPalette();
     const fontFamily = getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
@@ -550,6 +566,9 @@ const ScatterChartInner = React.forwardRef<
     // flag is true only when the router wants WebGL AND the lazy
     // registration has resolved (Codex iter-A1.5 race-fix gate).
     useGLSeriesType,
+    // Codex iter-A1.5b — `webGLPending` short-circuits the option to
+    // null while `echarts-gl` is still loading.
+    webGLPending,
   ]);
 
   // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts scatter
@@ -627,14 +646,24 @@ const ScatterChartInner = React.forwardRef<
   // each point to {label: explicit-label-or-coordinate, value: y}
   // for SR consumption. The hidden table shows label + y-value;
   // x-coordinates surface only via tooltip (ECharts handles them).
-  const a11yData = useMemo(
-    () =>
-      safeData.map((d, i) => ({
-        label: d.label ?? `Point ${i + 1} (${d.x}, ${d.y})`,
-        value: d.y,
-      })),
-    [safeData],
-  );
+  //
+  // Codex iter-A1.5b BLOCKER 2 — cap the hidden a11y table at
+  // {@link A11Y_BIG_DATA_ROW_LIMIT} rows when the dataset would
+  // otherwise blow the DOM up to 1M `<tr>` elements (the WebGL
+  // ceiling claim is meaningless if the screen-reader fallback table
+  // hits 1M rows). PR-A2 will replace this with anomaly-aware
+  // sampled rows that preserve outliers.
+  const a11yData = useMemo(() => {
+    const A11Y_BIG_DATA_ROW_LIMIT = 1_000;
+    const source =
+      safeData.length > A11Y_BIG_DATA_ROW_LIMIT
+        ? safeData.slice(0, A11Y_BIG_DATA_ROW_LIMIT)
+        : safeData;
+    return source.map((d, i) => ({
+      label: d.label ?? `Point ${i + 1} (${d.x}, ${d.y})`,
+      value: d.y,
+    }));
+  }, [safeData]);
   const a11y = useChartA11y({
     chartType: 'scatter',
     data: a11yData,
