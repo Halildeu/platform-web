@@ -11,7 +11,17 @@ const chromiumArgs = treatInsecureOriginAsSecure
 export default defineConfig({
   testDir: __dirname,
   timeout: 60 * 1000,
-  retries: 0,
+  // CI runs auth-transport-contract against a freshly-built Module
+  // Federation host where the bootstrap chain (api-gateway proxy +
+  // mfe_* remote pre-bundling + auth.cookie + authz.me) routinely
+  // takes longer than the 10 s `waitForTransportReady` default on a
+  // cold runner. The gate has been advisory since PR #310 (commit
+  // 583f36e6) — single-shot CI flakes have produced 5 consecutive
+  // PR-noise reports even though the underlying contract is healthy
+  // on warm runs. Two retries let a real regression slow ALL three
+  // attempts (still visible) while normal CI variance lands on a
+  // later pass.
+  retries: process.env.CI ? 2 : 0,
   reporter: [['list']],
   fullyParallel: false,
   use: {
@@ -30,7 +40,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        ...((executablePath || chromiumArgs.length > 0)
+        ...(executablePath || chromiumArgs.length > 0
           ? {
               launchOptions: {
                 ...(executablePath ? { executablePath } : {}),

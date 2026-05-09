@@ -199,10 +199,23 @@ export const mockBootstrapEndpoints = async (
 
 /**
  * Wait for the auth FSM to reach {@code transportReady} (the terminal
- * green state). Times out after 10s — anything longer is a regression
- * in the bootstrap chain.
+ * green state).
+ *
+ * Default 25 s. The local-dev bootstrap chain settles in well under
+ * 10 s, but CI cold-starts the entire MF host (Vite build + preview +
+ * remote pre-bundling + api-gateway proxy + auth.cookie + authz.me)
+ * and routinely exceeds the previous 10 s default — PR #310 (commit
+ * 583f36e6) demoted the gate to advisory after three CI-stack rewire
+ * attempts failed and 5 follow-up PRs (#338, #339, #342, #340, #341)
+ * each saw the first test fail with `Timeout 15000ms exceeded` while
+ * later tests in the serial describe block were skipped.
+ *
+ * The 25 s ceiling stays narrower than the 60 s per-test budget so a
+ * genuine regression (FSM stuck before `transportReady`, store
+ * wiring broken) still surfaces — it just stops drowning the PR
+ * list in cold-runner timeouts.
  */
-export const waitForTransportReady = async (page: Page, timeoutMs = 10_000): Promise<void> => {
+export const waitForTransportReady = async (page: Page, timeoutMs = 25_000): Promise<void> => {
   await page.waitForFunction(
     () => {
       const probe = (
