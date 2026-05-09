@@ -381,7 +381,8 @@ async function main() {
       }
       console.log(``);
       console.log(`Source of truth: esbuild metafile.inputs path matching.`);
-      console.log(`Use --json for the full path list per module.`);
+      console.log(`Human output truncates to 3 representative example paths per module.`);
+      console.log(`Use --json for the same data in machine-readable form.`);
     }
     process.exit(0);
   }
