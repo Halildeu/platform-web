@@ -351,7 +351,7 @@ describe('access="readonly" — handler-bearing charts suppress listener install
 /*  guard is caught.                                                   */
 /* ================================================================== */
 
-const DUAL_CALLBACK_CASES: Case[] = [
+const DUAL_CALLBACK_CASES: ChartCase[] = [
   {
     name: 'TreemapChart (onDataPointClick)',
     handlerBearing: true,
