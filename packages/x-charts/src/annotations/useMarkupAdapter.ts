@@ -1,4 +1,3 @@
- 
 /**
  * useMarkupAdapter — React hook wrapper around `adaptToEcharts`.
  *
@@ -10,6 +9,7 @@
  * ergonomics shim only. Codex iter-3 absorbed split (compute first,
  * hook second).
  */
+ 
 import { useEffect, useMemo, useRef } from 'react';
 import { adaptToEcharts, type AdaptOptions, type AdaptResult } from './adaptToEcharts';
 import type { ChartMarkup } from '../types';
