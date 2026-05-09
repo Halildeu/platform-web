@@ -278,6 +278,13 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // persisted across drawer reopens because admins typically
   // pick one mode per session.
   const [scopesView, setScopesView] = useState<'flat' | 'hierarchy'>('flat');
+  // PR-FE-12 absorb iter-3 (Codex thread 019e0df3 P2): refs to
+  // the two radio buttons so arrow-key handler can move focus to
+  // the newly-checked option (WAI-ARIA radiogroup pattern: arrow
+  // keys "move and check" together; focus must land on the new
+  // selection, not stay on the old).
+  const flatToggleRef = React.useRef<HTMLButtonElement | null>(null);
+  const hierToggleRef = React.useRef<HTMLButtonElement | null>(null);
 
   // PR-FE-8 (Codex thread 019e0bd3 iter-1 AGREE absorb, 2026-05-09):
   // mirror RoleDrawer's auto-save pattern (PR-FE-7) for the
@@ -1918,10 +1925,23 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             onKeyDown={(e) => {
               if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
               e.preventDefault();
-              setScopesView((prev) => (prev === 'flat' ? 'hierarchy' : 'flat'));
+              // PR-FE-12 absorb iter-3 (Codex thread 019e0df3 P2):
+              // WAI-ARIA radiogroup pattern requires arrow keys
+              // to BOTH move focus AND check the new option. Pre-
+              // fix only checked. Now we set state and explicitly
+              // focus the newly-checked button after React commits
+              // (queueMicrotask defers past the state flush so the
+              // ref points at the correctly-rendered button).
+              const next = scopesView === 'flat' ? 'hierarchy' : 'flat';
+              setScopesView(next);
+              queueMicrotask(() => {
+                if (next === 'flat') flatToggleRef.current?.focus();
+                else hierToggleRef.current?.focus();
+              });
             }}
           >
             <button
+              ref={flatToggleRef}
               type="button"
               role="radio"
               aria-checked={scopesView === 'flat'}
@@ -1937,6 +1957,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
               {t('users.detail.scopes.viewToggle.flat')}
             </button>
             <button
+              ref={hierToggleRef}
               type="button"
               role="radio"
               aria-checked={scopesView === 'hierarchy'}
