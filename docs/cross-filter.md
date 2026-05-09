@@ -130,8 +130,10 @@ Cross-filter event'lerini AG Grid filter model'a translate eder
 (tenant-aware, SSRM uyumlu).
 
 ```tsx
-import { useGridCrossFilter } from '@mfe/x-charts';
+import { useState } from 'react';
+import { AgGridReact } from 'ag-grid-react';
 import type { GridApi } from 'ag-grid-community';
+import { useGridCrossFilter } from '@mfe/x-charts';
 
 function GridWithCrossFilter() {
   const [gridApi, setGridApi] = useState<GridApi | null>(null);
@@ -157,7 +159,7 @@ function GridWithCrossFilter() {
 ```tsx
 import { useDrillDown } from '@mfe/x-charts';
 
-const { drillTo, drillUp, drillPath, breadcrumb, canUndo, canRedo } = useDrillDown({
+const { drillTo, drillUp, drillPath, breadcrumbs, canUndo, canRedo } = useDrillDown({
   levels: [
     { field: 'region', label: 'Bölge' },
     { field: 'city', label: 'Şehir' },
