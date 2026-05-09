@@ -37,6 +37,15 @@ import type { EChartsOption } from './renderers/echarts-imports';
 
 export type ChartSize = 'sm' | 'md' | 'lg';
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// canonical `ChartClickEvent`. Radar's ECharts click event is
+// polygon-level (a series item with all values), not per-indicator;
+// indicator-level emission was punted to v2 backlog (Codex iter-2
+// blocker — would require synthetic hit mapping).
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export type RadarIndicator = {
   /** Axis name displayed at the spoke end. */
   name: string;
@@ -78,8 +87,14 @@ export interface RadarChartProps extends AccessControlledProps {
   animate?: boolean;
   /** Custom value formatter for tooltip. */
   valueFormatter?: (v: number) => string;
-  /** Callback fired when a data point is clicked. */
-  onDataPointClick?: (params: unknown) => void;
+  /**
+   * Callback fired when a series polygon is clicked. Emits a canonical
+   * `ChartClickEvent` with `datum: { seriesName, label: seriesName,
+   * values, indicators }` — polygon-level (whole series), not
+   * per-indicator. Indicator-level emission requires custom hit
+   * mapping and is tracked as v2 follow-up (Codex iter-2 blocker).
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -325,9 +340,35 @@ const RadarChartInner = React.forwardRef<
   const handleClick = useCallback(
     (params: unknown) => {
       if (!onDataPointClick) return;
-      onDataPointClick(params);
+      // ECharts radar click params shape: `{ name?, value: number[],
+      // seriesName?, dataIndex?, data: { name, value } }`. We surface
+      // a polygon-level datum that includes the indicator NAMES so a
+      // cross-filter wrapper can emit, say, `seriesName` as the
+      // canonical filter field.
+      const p = params as {
+        seriesName?: string;
+        name?: string;
+        value?: unknown;
+        dataIndex?: number;
+        data?: unknown;
+      };
+      const valuesArr = Array.isArray(p.value) ? (p.value as number[]) : [];
+      const seriesName =
+        (typeof p.seriesName === 'string' ? p.seriesName : undefined) ??
+        (typeof p.name === 'string' ? p.name : '');
+      const indicatorNames = indicators.map((ind) => ind.name);
+      onDataPointClick({
+        datum: {
+          seriesName,
+          label: seriesName,
+          values: valuesArr,
+          indicators: indicatorNames,
+        },
+        value: typeof valuesArr[0] === 'number' ? valuesArr[0] : undefined,
+        label: seriesName,
+      });
     },
-    [onDataPointClick],
+    [onDataPointClick, indicators],
   );
 
   const { containerRef, instance } = useEChartsRenderer({

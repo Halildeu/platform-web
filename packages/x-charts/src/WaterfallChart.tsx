@@ -43,6 +43,15 @@ import type { EChartsOption } from './renderers/echarts-imports';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// canonical `ChartClickEvent`. Waterfall datum exposes both the
+// chart-displayed cumulative value and the raw input value, plus the
+// resolved item type ('increase' / 'decrease' / 'total') so consumers
+// can filter by category meaning.
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export type WaterfallItemType = 'increase' | 'decrease' | 'total';
 
 export interface WaterfallDataPoint {
@@ -79,8 +88,16 @@ export interface WaterfallChartProps extends AccessControlledProps {
   showLegend?: boolean;
   /** Animate bars on mount. @default true */
   animate?: boolean;
-  /** Callback fired when a bar is clicked. */
-  onDataPointClick?: (params: unknown) => void;
+  /**
+   * Callback fired when a visible bar is clicked. Emits a canonical
+   * `ChartClickEvent` with `datum: { label, value: displayedValue,
+   * rawValue, type }` — `displayedValue` is what ECharts renders
+   * (cumulative for 'total' bars, signed delta for inc/dec); `rawValue`
+   * is the original `WaterfallDataPoint.value` from props; `type` is
+   * the resolved `WaterfallItemType`. Hidden base-stack series clicks
+   * are filtered out (they aren't user-meaningful).
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -439,11 +456,37 @@ const WaterfallChartInner = React.forwardRef<
   const handleClick = useCallback(
     (params: unknown) => {
       if (!onDataPointClick) return;
-      const p = params as { seriesName: string };
+      const p = params as {
+        seriesName?: string;
+        name?: string;
+        value?: number;
+        dataIndex?: number;
+      };
+      // Drop hidden base-stack series clicks — they are an
+      // implementation detail of the floating-bar effect, not a
+      // user-meaningful waterfall step.
       if (p.seriesName === '__waterfall_base__') return;
-      onDataPointClick(params);
+
+      const idx = typeof p.dataIndex === 'number' ? p.dataIndex : -1;
+      const item = idx >= 0 && idx < data.length ? data[idx] : undefined;
+      if (!item) return;
+
+      const displayedValue = typeof p.value === 'number' ? p.value : item.value;
+      const rawValue = item.value;
+      const itemType = resolveType(item, idx, data.length);
+
+      onDataPointClick({
+        datum: {
+          label: item.label,
+          value: displayedValue,
+          rawValue,
+          type: itemType,
+        },
+        value: displayedValue,
+        label: item.label,
+      });
     },
-    [onDataPointClick],
+    [onDataPointClick, data],
   );
 
   const { containerRef, instance } = useEChartsRenderer({

@@ -37,6 +37,15 @@ import type { EChartsOption } from './renderers/echarts-imports';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// canonical `ChartClickEvent`. Sunburst datum mirrors the Treemap
+// shape (hierarchical chart with breadcrumb path); `depth` is derived
+// from `treePathInfo.length - 1` and falls back to `0` when ECharts
+// doesn't surface the breadcrumb.
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export interface SunburstNode {
   /** Display name for this node. */
   name: string;
@@ -82,8 +91,22 @@ export interface SunburstChartProps extends AccessControlledProps {
   valueFormatter?: (v: number) => string;
   /** Animate on mount. @default true */
   animate?: boolean;
-  /** Callback fired when a node is clicked. */
+  /**
+   * Legacy callback fired when a node is clicked. Receives a tight
+   * `{ name, value, data }` shape. Coexists with the new
+   * `onDataPointClick`; when both are supplied, `onDataPointClick`
+   * fires FIRST and `onNodeClick` fires second so cross-filter
+   * forwarding never blocks the legacy handler. Codex iter-2 thread
+   * 019e0c25 absorb.
+   */
   onNodeClick?: (params: { name: string; value: number; data: unknown }) => void;
+  /**
+   * Canonical cross-filter callback. Emits a `ChartClickEvent` with
+   * `datum: { name, label: name, value, treePathInfo, path, depth,
+   * data }`. `depth = treePathInfo.length - 1` (root counted), 0
+   * fallback when ECharts doesn't surface the breadcrumb.
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -249,6 +272,7 @@ const SunburstChartInner = React.forwardRef<
     valueFormatter,
     animate = true,
     onNodeClick,
+    onDataPointClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -404,18 +428,50 @@ const SunburstChartInner = React.forwardRef<
 
   const handleClick = useCallback(
     (params: unknown) => {
-      if (!onNodeClick) return;
-      const p = params as { name: string; value: number; data: unknown };
-      onNodeClick({ name: p.name, value: p.value, data: p.data });
+      // Coexistence — Codex iter-2 thread 019e0c25 absorb. Fire
+      // `onDataPointClick` FIRST so the cross-filter bus sees the
+      // event before any side effects of the legacy handler.
+      const p = params as {
+        name?: string;
+        value?: number;
+        data?: unknown;
+        treePathInfo?: Array<{ name: string; value: number; dataIndex: number }>;
+      };
+      const name = typeof p.name === 'string' ? p.name : '';
+      const value = typeof p.value === 'number' ? p.value : 0;
+
+      if (onDataPointClick) {
+        const treePathInfo = Array.isArray(p.treePathInfo) ? p.treePathInfo : undefined;
+        const path = treePathInfo ? treePathInfo.map((t) => t.name).join(' > ') : undefined;
+        // depth = treePathInfo.length - 1 (root counted), 0 fallback.
+        const depth = treePathInfo && treePathInfo.length > 0 ? treePathInfo.length - 1 : 0;
+        onDataPointClick({
+          datum: {
+            name,
+            label: name,
+            value,
+            treePathInfo,
+            path,
+            depth,
+            data: p.data,
+          },
+          value,
+          label: name,
+        });
+      }
+
+      if (onNodeClick) {
+        onNodeClick({ name, value, data: p.data });
+      }
     },
-    [onNodeClick],
+    [onNodeClick, onDataPointClick],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onNodeClick ? handleClick : undefined,
+    onClick: onNodeClick || onDataPointClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. Sunburst is hierarchical;
@@ -488,7 +544,7 @@ SunburstChartInner.displayName = 'SunburstChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps>(
-  function SunburstChart({ access, accessReason, onNodeClick, ...rest }, ref) {
+  function SunburstChart({ access, accessReason, onNodeClick, onDataPointClick, ...rest }, ref) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -496,6 +552,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
           ref={ref}
           {...rest}
           onNodeClick={guardChartCallback(state, onNodeClick)}
+          onDataPointClick={guardChartCallback(state, onDataPointClick)}
         />
       </ChartAccessGate>
     );
