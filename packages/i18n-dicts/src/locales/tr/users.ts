@@ -210,6 +210,22 @@ const users = {
   'users.detail.autosave.retry': 'Tekrar dene',
   'users.detail.assignmentError': 'Rol ve erişim atamaları kaydedilemedi.',
   'users.detail.readOnly': 'Bu kullanıcıyı düzenleme yetkiniz yok.',
+  // PR-FE-11 (2026-05-09): scope picker layout split + chip-area UX.
+  // User feedback: "filtre alanı için sürekli farklı yere tıklıyorum
+  // eklenen alanların box alanın içerinde değil altında görülmeşs daha
+  // kullanıcı dostu olur". Chip area now lives in a separate box
+  // BELOW the search input; these strings power the new surface.
+  'users.detail.scopes.chipsHeader': '{count} öğe seçili',
+  'users.detail.scopes.chipsEmpty': 'Henüz bu kapsamda yetki yok. Eklemek için yukarıdan arayın.',
+  'users.detail.scopes.clearAll': 'Tümünü kaldır',
+  'users.detail.scopes.clearAllConfirm':
+    '{count} öğe erişimini kaldıracaksınız. Bu kullanıcı bu kapsamda veri göremeyecek. Devam edilsin mi?',
+  // PR-FE-11: section subtitle totals. Pre-fix the subtitle was a
+  // generic "Bu kullanıcının görebileceği veri kapsamı." — admins
+  // had to tab through every panel to count their scope assignments.
+  // The new subtitle surfaces the breakdown inline.
+  'users.detail.section.scopes.subtitleWithTotals':
+    '{total} toplam yetki — {companies} şirket, {projects} proje, {warehouses} depo, {branches} şube.',
   'users.grid.columns.roles': 'Roller',
 };
 

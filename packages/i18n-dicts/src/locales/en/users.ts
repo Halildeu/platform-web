@@ -209,6 +209,14 @@ const users = {
   'users.detail.autosave.retry': 'Retry',
   'users.detail.assignmentError': 'Role and access assignments could not be saved.',
   'users.detail.readOnly': 'You do not have permission to edit this user.',
+  // PR-FE-11 (2026-05-09): scope picker layout split + chip-area UX.
+  'users.detail.scopes.chipsHeader': '{count} selected',
+  'users.detail.scopes.chipsEmpty': 'No access yet in this scope. Search above to add.',
+  'users.detail.scopes.clearAll': 'Remove all',
+  'users.detail.scopes.clearAllConfirm':
+    'You are about to remove access to {count} item(s). The user will no longer see data in this scope. Continue?',
+  'users.detail.section.scopes.subtitleWithTotals':
+    '{total} total permissions — {companies} companies, {projects} projects, {warehouses} warehouses, {branches} branches.',
   'users.grid.columns.roles': 'Roles',
 };
 

@@ -1200,6 +1200,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   }> = ({ items, selected, setter }) => {
     const isLargeList = items.length > LARGE_LIST_THRESHOLD;
     const [inputValue, setInputValue] = React.useState('');
+    // PR-FE-11 (2026-05-09): controlled `open` state. Pre-PR-FE-11
+    // the Combobox dropdown closed after every multi-select pick;
+    // adding 8 companies meant 8 separate "click trigger → search →
+    // pick → close" cycles. User feedback (2026-05-09): "tıklayınca
+    // alttaki boxın altına eklenmeli listbox kapanmamalı". We now
+    // force-keep the dropdown open after a pick so multiple items
+    // can be added in one session.
+    const [comboboxOpen, setComboboxOpen] = React.useState(false);
     // Skip flag for the Combobox's post-select input-clear — see header
     // comment "fourth pass". Set in handleValuesChange, consumed in
     // handleInputChange.
@@ -1262,6 +1270,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           .filter((id) => Number.isFinite(id));
         setter(nextIds);
         setDirty(true);
+        // PR-FE-11: force-keep the dropdown open after a multi-select
+        // pick so the admin can keep adding without re-clicking the
+        // trigger. This is the user-requested "listbox kapanmasın"
+        // behavior and the cornerstone of the layout split: chips
+        // appear in the area below while the dropdown stays put.
+        setComboboxOpen(true);
         // Combobox auto-clears the input after a multi-select pick. For
         // large lists that obliterates the visible match set; signal
         // handleInputChange to swallow the next ''-event so the query
@@ -1272,7 +1286,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           skipNextClearRef.current = true;
         }
       },
-      [setter, isLargeList, inputValue],
+      // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #1): canEdit
+      // listed in deps so a stale closure cannot mutate state after
+      // the gate has flipped readonly. Mirrors the canEditRef
+      // hardening PR-FE-7 absorb iter-3 added on the autosave path.
+      [setter, isLargeList, inputValue, canEdit],
     );
 
     const handleInputChange = React.useCallback((value: string) => {
@@ -1301,44 +1319,184 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       ? t('users.detail.scopes.placeholderLarge', { total: items.length })
       : t('users.detail.scopes.placeholder');
 
+    // PR-FE-11: ordered selected entities for the chip-area below.
+    // Built from `items` (the master-data list) intersected with
+    // `selected` (the user's current scope ids). Preserves the
+    // master-data ordering.
+    const selectedItems = React.useMemo(
+      () => items.filter((item) => selected.includes(item.id)),
+      [items, selected],
+    );
+
+    const handleRemoveChip = React.useCallback(
+      (itemId: number) => {
+        if (!canEdit) return;
+        setter((prev) => prev.filter((id) => id !== itemId));
+        setDirty(true);
+      },
+      // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #1): canEdit
+      // included so the gate is closed-over correctly when the
+      // permission flips. Same rationale as handleValuesChange.
+      [setter, canEdit],
+    );
+
+    const handleClearAll = React.useCallback(() => {
+      if (!canEdit || selected.length === 0) return;
+      // PR-FE-11: soft confirm. Pre-PR-FE-11 the Combobox's
+      // built-in clear-all (× icon, top-right) silently dropped
+      // every selected scope and triggered an auto-save POST. With
+      // 8+ companies / 6 projects on screen, an accidental click
+      // could wipe the user's data access. Now we route clear-all
+      // through this confirm dialog before mutating state.
+      const confirmed =
+        typeof window === 'undefined'
+          ? true
+          : window.confirm(t('users.detail.scopes.clearAllConfirm', { count: selected.length }));
+      if (!confirmed) return;
+      setter([]);
+      setDirty(true);
+      // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #1): t added
+      // to deps so locale changes during a long-lived drawer
+      // session correctly re-translate the confirm copy. canEdit
+      // was already in deps from iter-1.
+    }, [canEdit, selected.length, setter, t]);
+
     return (
-      <div className="mt-2">
-        <Combobox
-          selectionMode="multiple"
-          options={visibleOptions}
-          values={values}
-          onValuesChange={handleValuesChange}
-          inputValue={inputValue}
-          onInputChange={handleInputChange}
-          clearable
-          placeholder={placeholderCopy}
-          noOptionsText={noOptionsCopy}
-          tagRemoveLabel={t('users.detail.scopes.tagRemoveLabel')}
-          access={canEdit ? 'full' : 'readonly'}
-          disabledItemFocusPolicy="skip"
-          renderOption={(option, state) => (
-            <div className="flex w-full items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                {option.description ? (
-                  <span className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-text-subtle">
-                    {option.description}
+      // PR-FE-11 (Codex thread 019e0bd3 user feedback 2026-05-09):
+      // layout split. Pre-fix the DS Combobox rendered chips inline
+      // with the search input — admin had to fish for the (often
+      // truncated) input among 8+ chips, and tab order was visually
+      // crowded. User feedback: "filtre alanı için sürekli farklı
+      // yere tıklıyorum eklenen alanların box alanın içerinde değil
+      // altında görülmeşs daha kullanıcı dostu olur". The Combobox
+      // is now visually search-only — its inline chip rendering is
+      // suppressed via the Tailwind arbitrary descendant selector
+      // `[&_[data-created-tag]]:hidden`. Selected items render in
+      // the dedicated chip-area box BELOW, with full names visible
+      // (no truncation), code prefix badges, and explicit per-chip
+      // remove + clear-all controls.
+      <div className="mt-2 flex flex-col gap-3">
+        {/* TOP: search/filter input + dropdown */}
+        <div className="[&_[data-created-tag]]:hidden">
+          <Combobox
+            selectionMode="multiple"
+            options={visibleOptions}
+            values={values}
+            onValuesChange={handleValuesChange}
+            inputValue={inputValue}
+            onInputChange={handleInputChange}
+            open={comboboxOpen}
+            onOpenChange={setComboboxOpen}
+            clearable={false}
+            placeholder={placeholderCopy}
+            noOptionsText={noOptionsCopy}
+            tagRemoveLabel={t('users.detail.scopes.tagRemoveLabel')}
+            access={canEdit ? 'full' : 'readonly'}
+            disabledItemFocusPolicy="skip"
+            renderOption={(option, state) => (
+              <div className="flex w-full items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  {option.description ? (
+                    <span className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-text-subtle">
+                      {/*
+                       * PR-FE-11 absorb iter-2 (Codex thread 019e0ce8
+                       * non-blocking nit): mirror the chip-area
+                       * uppercase normalization here so dropdown and
+                       * chip-area badges always look identical
+                       * regardless of backend casing.
+                       */}
+                      {option.description.toLocaleUpperCase('tr-TR')}
+                    </span>
+                  ) : null}
+                  <span className="truncate text-sm text-text-primary">{option.label}</span>
+                </div>
+                {state.selected ? (
+                  <span
+                    className="shrink-0 text-state-info-text"
+                    aria-hidden="true"
+                    data-testid="scope-option-selected-mark"
+                  >
+                    ✓
                   </span>
                 ) : null}
-                <span className="truncate text-sm text-text-primary">{option.label}</span>
               </div>
-              {state.selected ? (
-                <span
-                  className="shrink-0 text-state-info-text"
-                  aria-hidden="true"
-                  data-testid="scope-option-selected-mark"
+            )}
+            data-testid="scope-multiselect"
+          />
+        </div>
+
+        {/* BOTTOM: selected chip-area (separate box, full names visible) */}
+        {selectedItems.length === 0 ? (
+          <p className="text-xs italic text-text-subtle" data-testid="scope-chips-empty">
+            {t('users.detail.scopes.chipsEmpty')}
+          </p>
+        ) : (
+          <div
+            className="rounded-2xl border border-border-subtle bg-surface-muted/30 p-3"
+            data-testid="scope-chips-area"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span
+                className="text-xs font-semibold uppercase tracking-wide text-text-subtle"
+                data-testid="scope-chips-header"
+              >
+                {t('users.detail.scopes.chipsHeader', { count: selectedItems.length })}
+              </span>
+              {canEdit && selectedItems.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="text-xs text-state-danger-text hover:underline"
+                  data-testid="scope-chips-clear-all"
                 >
-                  ✓
-                </span>
+                  {t('users.detail.scopes.clearAll')}
+                </button>
               ) : null}
             </div>
-          )}
-          data-testid="scope-multiselect"
-        />
+            <ul className="flex flex-wrap gap-2" role="list">
+              {selectedItems.map((item) => {
+                // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #2):
+                // normalize the code badge to uppercase. master-data
+                // backend may emit mixed case (PROJECT_NUMBER all-
+                // upper, COMPANY_SHORT_CODE uppercase, SPECIAL_CODE
+                // technically free-form); the chip badge convention
+                // is uppercase for visual disambiguation, so we
+                // normalize at display time. tr-TR locale is used so
+                // i ↔ İ converts correctly under Turkish casing
+                // rules (default JS toUpperCase miscasts on tr).
+                const displayCode = item.code?.toLocaleUpperCase('tr-TR');
+                const fullLabel = displayCode ? `[${displayCode}] ${item.name}` : item.name;
+                return (
+                  <li
+                    key={item.id}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle bg-surface-default px-3 py-1"
+                    title={fullLabel}
+                    data-testid={`scope-chip-${item.id}`}
+                  >
+                    {displayCode ? (
+                      <span className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
+                        {displayCode}
+                      </span>
+                    ) : null}
+                    <span className="text-sm font-medium text-text-primary">{item.name}</span>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-text-subtle hover:bg-state-danger-bg hover:text-state-danger-text"
+                        aria-label={`${t('users.detail.scopes.tagRemoveLabel')}: ${fullLabel}`}
+                        title={`${t('users.detail.scopes.tagRemoveLabel')}: ${fullLabel}`}
+                        onClick={() => handleRemoveChip(item.id)}
+                        data-testid={`scope-chip-remove-${item.id}`}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     );
   };
@@ -1677,8 +1835,33 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           <h3 className="text-base font-semibold text-text-primary">
             {t('users.detail.section.scopes')}
           </h3>
-          <p className="text-xs text-text-subtle mt-1">
-            {t('users.detail.section.scopes.subtitle')}
+          {/*
+           * PR-FE-11 (2026-05-09): subtitle now surfaces the totals
+           * breakdown inline. Pre-fix the subtitle was a generic
+           * "Bu kullanıcının görebileceği veri kapsamı." — admins had
+           * to tab through every panel to count their scope
+           * assignments. With (8 + 6 + 3 + 1) = 18 typical scope
+           * loadouts on testai, an inline totals subtitle answers
+           * "how broad is this user's access?" at a glance.
+           */}
+          <p className="mt-1 text-xs text-text-subtle" data-testid="scopes-totals-subtitle">
+            {selectedCompanyIds.length +
+              selectedProjectIds.length +
+              selectedWarehouseIds.length +
+              selectedBranchIds.length >
+            0
+              ? t('users.detail.section.scopes.subtitleWithTotals', {
+                  total:
+                    selectedCompanyIds.length +
+                    selectedProjectIds.length +
+                    selectedWarehouseIds.length +
+                    selectedBranchIds.length,
+                  companies: selectedCompanyIds.length,
+                  projects: selectedProjectIds.length,
+                  warehouses: selectedWarehouseIds.length,
+                  branches: selectedBranchIds.length,
+                })
+              : t('users.detail.section.scopes.subtitle')}
           </p>
           <div className="mt-3">
             <Tabs items={scopeTabs} variant="line" size="sm" />
