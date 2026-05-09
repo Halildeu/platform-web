@@ -297,6 +297,25 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // Forward-decl ref so the mutation's onSuccess can flush the queued
   // draft without a temporal-dead-zone reference to itself.
   const flushQueueRef = React.useRef<(() => boolean) | null>(null);
+  // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc): refs for async
+  // gate hardening and stale-response ownership guard.
+  // - canEditRef: timer callbacks and the queue flush close over
+  //   the canEdit value at the time they were captured. If the
+  //   permission gate flips false during a debounce, those captures
+  //   are stale; the ref always reads the latest value.
+  // - activeRoleIdRef: lets onSuccess / onError detect that a
+  //   response belongs to a role the user has since switched away
+  //   from, and silently drop it instead of touching current
+  //   in-flight / queue / canonical state for a different role.
+  const canEditRef = React.useRef(false);
+  const activeRoleIdRef = React.useRef<string | undefined>(undefined);
+  // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc): keep canEditRef
+  // current on every render so async closures (timer callbacks,
+  // queue flush) see the latest gate value without a re-bind. Done
+  // eagerly rather than in a useEffect so the ref is current
+  // before the very next mutation/timer callback that might fire
+  // on this same render.
+  canEditRef.current = canEdit;
   const [, setSelectedUser] = React.useState<AutocompleteOption | null>(null);
   const [userSearchOptions, setUserSearchOptions] = React.useState<AutocompleteOption[]>([]);
   const [userSearchLoading, setUserSearchLoading] = React.useState(false);
@@ -354,6 +373,17 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     inFlightRef.current = false;
     queuedDraftRef.current = null;
     saveSeqRef.current += 1;
+    // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #2): mark this
+    // role as the active owner. onSuccess / onError compare each
+    // response's vars.roleId against this ref so a stale response
+    // from a role the user has switched away from is dropped
+    // without touching current in-flight / queue / canonical
+    // state for the new role. Pure seq-guard wasn't enough — a
+    // response in-flight at the same tick as the role swap
+    // could still arrive with seq matching (the bump below
+    // closes the window only AFTER it executes; refs make the
+    // boundary explicit).
+    activeRoleIdRef.current = role.id;
     setAutoSaveStatus('idle');
     // Use role.id (string) instead of role (object ref) so re-renders with the
     // same role identity don't trigger a state reset (the previous race vector).
@@ -489,8 +519,8 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // single-in-flight + queued-latest model — see scheduleAutoSave
   // and the flushQueueRef useEffect below.
   const saveGranulesMutation = useMutation({
-    mutationFn: async (vars: { draft: GrantSnapshot; seq: number }) => {
-      if (!isPersistedRoleId(role?.id)) return;
+    mutationFn: async (vars: { draft: GrantSnapshot; seq: number; roleId: string }) => {
+      if (!isPersistedRoleId(vars.roleId)) return;
       const granules: Granule[] = [];
       for (const [key, grant] of Object.entries(vars.draft.moduleGrants)) {
         if (grant !== 'NONE') granules.push({ type: 'module', key, grant });
@@ -508,28 +538,35 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       }
       // PAGE granules removed in iter-27 — backend rejects them at
       // validateAndNormalize (PermissionType enum has no PAGE value).
-      await api.put(`/v1/roles/${role!.id}/granules`, { permissions: granules });
-      return { seq: vars.seq, draft: vars.draft };
+      // PR-FE-7 absorb iter-3: PUT URL pinned to vars.roleId so a
+      // role switch between schedule-time and PUT-time can't redirect
+      // a stale draft to the new role's endpoint.
+      await api.put(`/v1/roles/${vars.roleId}/granules`, { permissions: granules });
+      return { seq: vars.seq, draft: vars.draft, roleId: vars.roleId };
     },
     onSuccess: (result) => {
-      // Mark slot free regardless; the queue flush below decides
-      // whether to claim it again.
-      inFlightRef.current = false;
-      // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #4): stale-success
-      // guard. Without this, a slow earlier response could land
-      // after a newer save's seq bump and (a) re-commit its older
-      // draft as canonical, (b) trigger invalidate which refetches
-      // server state and re-seeds Effect B with old data. Both vectors
-      // could regress the user's pending edits.
-      if (!result || result.seq !== saveSeqRef.current) {
-        flushQueueRef.current?.();
+      // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #2): ownership
+      // guard. A stale response (from a previous role, or a
+      // superseded save on the same role) does NOT own the active
+      // in-flight slot. Touching inFlightRef / queuedDraftRef from
+      // a stale path could (a) prematurely free the current
+      // owner's slot or (b) flush the new role's queue at the
+      // wrong instant. Drop the response silently — the actual
+      // owner's success/error will resolve normally on its turn.
+      if (
+        !result ||
+        result.seq !== saveSeqRef.current ||
+        result.roleId !== activeRoleIdRef.current
+      ) {
         return;
       }
+      // We own the slot — release it.
+      inFlightRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       // Codex 019dd9d6 iter-20: drawer's own source-of-truth (role-granules
       // detail query) must also be invalidated so the next reopen pulls fresh
       // server state instead of stale cached data parsed by Effect B.
-      queryClient.invalidateQueries({ queryKey: ['role-granules', role?.id] });
+      queryClient.invalidateQueries({ queryKey: ['role-granules', result.roleId] });
       // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #6): explicitly
       // sync visible state to the just-saved draft. For the normal
       // scheduled-save flow this is a no-op (state already equals
@@ -550,17 +587,15 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       }
     },
     onError: (err: Error, vars) => {
-      inFlightRef.current = false;
-      // Stale error from a previous role/save — drop banner. The
-      // user has already moved on; surfacing an error for a request
-      // they no longer care about would be confusing.
-      if (!vars || vars.seq !== saveSeqRef.current) {
-        // Drop queue too: a stale error means the chain might be
-        // poisoned. Forcing the user to start fresh is safer than
-        // auto-firing the queued draft into an unknown server state.
-        queuedDraftRef.current = null;
+      // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #2): same
+      // ownership guard as onSuccess. Stale errors from a previous
+      // role / superseded save must not touch current in-flight,
+      // queue, or visible state. The current owner will surface
+      // its own outcome.
+      if (!vars || vars.seq !== saveSeqRef.current || vars.roleId !== activeRoleIdRef.current) {
         return;
       }
+      inFlightRef.current = false;
       // PR-FE-7: revert to the last server-accepted snapshot so the UI
       // is honest about persistence ("Kaydedilemedi, son kayıtlı duruma
       // dönüldü"). The retry banner remembers the failed draft so the
@@ -641,8 +676,23 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
       // Step 3 — schedule the save 500ms later.
       setAutoSaveStatus('saving');
+      // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #1): capture
+      // role.id at schedule time so the timer's PUT goes to the
+      // intended role even if the user keeps clicking. Effect A
+      // would clearTimeout this on a switch, but capturing here
+      // is the belt that goes with that suspenders.
+      const scheduledRoleId = activeRoleIdRef.current;
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null;
+        // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #1): the
+        // canEdit value the closure captured may be stale by
+        // now — the gate could have flipped during the 500ms
+        // debounce. Read the ref instead. Same defense applies
+        // to the role: if the user switched away during debounce,
+        // Effect A should have cleared this timer, but if a
+        // stale fire slips through we still drop the save.
+        if (!canEditRef.current) return;
+        if (!scheduledRoleId || scheduledRoleId !== activeRoleIdRef.current) return;
         // Single-in-flight + queued-latest: if a save is on the
         // wire, just buffer the latest draft. onSuccess/onError
         // (via flushQueueRef) will pull it back out.
@@ -652,7 +702,11 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
         }
         inFlightRef.current = true;
         saveSeqRef.current += 1;
-        saveGranulesMutation.mutate({ draft: next, seq: saveSeqRef.current });
+        saveGranulesMutation.mutate({
+          draft: next,
+          seq: saveSeqRef.current,
+          roleId: scheduledRoleId,
+        });
       }, 500);
     },
     [saveGranulesMutation, grantsEqual, canEdit, autoSaveStatus],
@@ -667,14 +721,49 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     flushQueueRef.current = () => {
       const queued = queuedDraftRef.current;
       if (!queued) return false;
+      // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #1): even when
+      // a queued draft exists, refuse to flush it if the gate has
+      // flipped or the active role has changed since the queue
+      // entry was placed. Drop the queue entry; the canonical
+      // state survives via lastSavedDraftRef.
+      if (!canEditRef.current || !activeRoleIdRef.current) {
+        queuedDraftRef.current = null;
+        return false;
+      }
+      const scheduledRoleId = activeRoleIdRef.current;
       queuedDraftRef.current = null;
       inFlightRef.current = true;
       saveSeqRef.current += 1;
       setAutoSaveStatus('saving');
-      saveGranulesMutation.mutate({ draft: queued, seq: saveSeqRef.current });
+      saveGranulesMutation.mutate({
+        draft: queued,
+        seq: saveSeqRef.current,
+        roleId: scheduledRoleId,
+      });
       return true;
     };
   }, [saveGranulesMutation]);
+
+  // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #1): canEdit-flip
+  // handler. When the gate transitions full → readonly/disabled/
+  // hidden, drop pending and queued work so a half-finished edit
+  // does not slip through. The in-flight mutation (if any) is
+  // allowed to settle on its own — onSuccess / onError will run
+  // normally and surface the result. Only NEW saves are blocked.
+  React.useEffect(() => {
+    if (canEdit) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    queuedDraftRef.current = null;
+    // Status: only flip out of 'saving' if there's nothing actively
+    // on the wire. If a real PUT is in flight, keep 'saving' so the
+    // badge doesn't lie about the network state.
+    if (!inFlightRef.current && autoSaveStatus === 'saving') {
+      setAutoSaveStatus('saved');
+    }
+  }, [canEdit, autoSaveStatus]);
 
   // PR-FE-7: state observer. Watches the grant maps and schedules an
   // auto-save whenever they change. Centralizing the trigger here
@@ -714,6 +803,11 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     if (!canEdit) return;
     const failed = failedDraftRef.current;
     if (!failed) return;
+    // PR-FE-7 absorb iter-3: also refuse retry if the active
+    // role changed since the failure. Stale retry would target
+    // the wrong endpoint with the previous role's draft.
+    const targetRoleId = activeRoleIdRef.current;
+    if (!targetRoleId) return;
     // Cancel any straggling debounce so the retry isn't doubled
     // by the observer effect firing on the (yet-unchanged) state.
     if (debounceTimerRef.current) {
@@ -730,7 +824,11 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     inFlightRef.current = true;
     saveSeqRef.current += 1;
     setAutoSaveStatus('saving');
-    saveGranulesMutation.mutate({ draft: failed, seq: saveSeqRef.current });
+    saveGranulesMutation.mutate({
+      draft: failed,
+      seq: saveSeqRef.current,
+      roleId: targetRoleId,
+    });
   }, [saveGranulesMutation, canEdit]);
 
   // --- Add member mutation ---

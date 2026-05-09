@@ -44,7 +44,10 @@ vi.mock('@mfe/auth', () => ({
   // 'full' | 'readonly' | 'disabled' | 'hidden' — pre-fix mock used
   // a non-existent 'enabled' which silently failed the new
   // `canEdit === editAccess === 'full'` gate added to setters.
-  useZanzibarAccess: () => ({ access: 'full', reason: undefined }),
+  // PR-FE-7 absorb iter-3: factory wrapped in vi.fn so individual
+  // tests can override the access level via mockReturnValueOnce
+  // (read-only / disabled simulations).
+  useZanzibarAccess: vi.fn(() => ({ access: 'full', loading: false, reason: '' })),
 }));
 
 vi.mock('@mfe/shared-http', () => ({
@@ -88,6 +91,7 @@ vi.mock('@mfe/design-system', async () => {
 });
 
 import { api } from '@mfe/shared-http';
+import { useZanzibarAccess } from '@mfe/auth';
 import RoleDrawerWrapper from '../widgets/role-drawer/RoleDrawer.ui';
 import type { AccessRole } from '../features/access-management/model/access.types';
 
@@ -153,6 +157,11 @@ const renderDrawer = (role: AccessRole | null = buildRole()) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // PR-FE-7 absorb iter-3: reset useZanzibarAccess mock to default
+  // 'full' between tests. vi.clearAllMocks() clears CALL history
+  // but preserves mockReturnValue settings, so a per-test override
+  // (e.g. the readonly test) would leak into subsequent tests.
+  vi.mocked(useZanzibarAccess).mockReturnValue({ access: 'full', loading: false, reason: '' });
   (api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
     if (url === '/v1/authz/catalog') return { data: buildCatalog() };
     if (url.startsWith('/v1/roles/') && url.endsWith('/members')) return { data: [] };
@@ -665,5 +674,155 @@ describe('RoleDrawer — iter-19 policies render regression guard', () => {
       values.includes('VIEW') && values.includes('MANAGE'),
       `iter-20 unknown partial: Effect B written=false guard çalışmıyor; lazy init state ezildi. Values: ${JSON.stringify(values)}`,
     ).toBe(true);
+  });
+
+  // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #1): readonly gate
+  // verification. Codex demanded a test that proves a permission
+  // flip / readonly access level cannot leak a PUT through the
+  // auto-save scheduler. We assert two facts: (a) every grant
+  // <select> renders with `disabled` set, (b) no PUT lands within
+  // the debounce window even after a programmatic change event
+  // bypasses the disabled attribute (defense-in-depth: the setters
+  // also gate on canEdit).
+  it('PR-FE-7: readonly editAccess blocks auto-save PUT and disables grant selects', async () => {
+    vi.mocked(useZanzibarAccess).mockReturnValue({
+      access: 'readonly',
+      loading: false,
+      reason: '',
+    });
+    renderDrawer();
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+
+    const selects = Array.from(drawer.querySelectorAll<HTMLSelectElement>('select'));
+    expect(
+      selects.every((s) => s.disabled),
+      `readonly gate: every grant select must be disabled. Found ${selects.filter((s) => !s.disabled).length} enabled`,
+    ).toBe(true);
+
+    // Simulate a programmatic change anyway (covers the case
+    // where a future bug strips the `disabled` attribute).
+    const firstSelect = selects.find(
+      (s) => s.dataset.testid?.startsWith('role-module-level-') ?? false,
+    );
+    if (firstSelect) {
+      const { fireEvent } = await import('@testing-library/react');
+      fireEvent.change(firstSelect, { target: { value: 'MANAGE' } });
+    }
+
+    // Wait past the 500ms debounce window plus a buffer.
+    await new Promise((r) => setTimeout(r, 700));
+
+    expect(
+      (api.put as ReturnType<typeof vi.fn>).mock.calls.length,
+      'PR-FE-7 readonly: PUT /granules must not fire when canEdit=false',
+    ).toBe(0);
+  });
+
+  // PR-FE-7 absorb iter-3 (Codex thread 019e0bdc #2): role switch
+  // ownership guard. The pre-fix bug: a slow PUT for role A could
+  // resolve AFTER the user had already switched to role B and
+  // started a B-PUT. Without an owner-id guard, A's onSuccess
+  // would have prematurely freed inFlightRef and could have
+  // flushed B's queue at the wrong instant. We assert that
+  // re-rendering with a different role:
+  //   1. clears the debounce timer (no late PUT for the old role)
+  //   2. resets autosave refs (lastSavedDraftRef, queue, inFlight)
+  //   3. lets a save on the NEW role proceed normally without a
+  //      stale response from the old role disrupting it
+  // The shape of this test is observability-focused: we drive an
+  // edit on role A, switch to role B before debounce fires, edit
+  // role B, and assert exactly one PUT (B's) lands at B's URL.
+  it('PR-FE-7: role switch cancels in-flight A-debounce; B-debounce fires for B only', async () => {
+    const putMock = api.put as ReturnType<typeof vi.fn>;
+    putMock.mockResolvedValue({ data: {} });
+
+    const roleA = buildRole({ id: '10', name: 'ROLE_A' });
+    const roleB = buildRole({ id: '20', name: 'ROLE_B' });
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const { rerender } = render(
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        React.createElement(RoleDrawerWrapper, {
+          open: true,
+          mode: 'view',
+          role: roleA,
+          onClose: () => undefined,
+          t: (key: string) => key,
+          formatNumber: (n: number) => String(n),
+          formatDate: () => '',
+        } as React.ComponentProps<typeof RoleDrawerWrapper>),
+      ),
+    );
+
+    const drawer = await screen.findByTestId('role-drawer');
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0), {
+      timeout: 3_000,
+    });
+
+    // Fire a change on role A (this would set a 500ms debounce timer).
+    const aSelect = drawer.querySelector<HTMLSelectElement>('select');
+    expect(aSelect).toBeTruthy();
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(aSelect!, { target: { value: 'MANAGE' } });
+
+    // Switch to role B BEFORE A's debounce fires (well under 500ms).
+    await new Promise((r) => setTimeout(r, 100));
+    rerender(
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        React.createElement(RoleDrawerWrapper, {
+          open: true,
+          mode: 'view',
+          role: roleB,
+          onClose: () => undefined,
+          t: (key: string) => key,
+          formatNumber: (n: number) => String(n),
+          formatDate: () => '',
+        } as React.ComponentProps<typeof RoleDrawerWrapper>),
+      ),
+    );
+
+    // Wait long enough for any timer from A to have fired (500ms +
+    // buffer). Effect A should have cleared it; if the absorb #2
+    // regression returns, an A-PUT would land here.
+    await waitFor(
+      () => {
+        const aPutCalls = putMock.mock.calls.filter(([url]) => url === '/v1/roles/10/granules');
+        expect(
+          aPutCalls.length,
+          'PR-FE-7 role-switch: stale A-PUT must not fire after role swap',
+        ).toBe(0);
+      },
+      { timeout: 1_500 },
+    );
+
+    // Now edit role B and let its debounce fire normally.
+    await waitFor(() => expect(drawer.querySelectorAll('select').length).toBeGreaterThan(0));
+    const bSelect = drawer.querySelector<HTMLSelectElement>('select');
+    expect(bSelect).toBeTruthy();
+    fireEvent.change(bSelect!, { target: { value: 'MANAGE' } });
+
+    await waitFor(
+      () => {
+        const bPutCalls = putMock.mock.calls.filter(([url]) => url === '/v1/roles/20/granules');
+        expect(
+          bPutCalls.length,
+          'PR-FE-7 role-switch: B-PUT must fire normally after role swap',
+        ).toBeGreaterThanOrEqual(1);
+      },
+      { timeout: 2_000 },
+    );
+
+    // Final invariant: zero PUTs for role A's URL.
+    const aPutCalls = putMock.mock.calls.filter(([url]) => url === '/v1/roles/10/granules');
+    expect(aPutCalls.length).toBe(0);
   });
 });
