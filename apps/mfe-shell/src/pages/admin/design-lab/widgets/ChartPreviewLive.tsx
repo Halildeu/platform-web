@@ -44,13 +44,17 @@ import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
 import PerfUtilityDemoLive, { type PerfUtilityId } from './PerfUtilityDemoLive';
 import {
   getBool,
+  getCallbackPreset,
+  getColorsPreset,
   getDecal,
   getEnum,
   getNum,
   getOptNum,
   getOptStr,
-  getStr,
   getPreviewSurfaceStyle,
+  getStr,
+  getThresholdsPreset,
+  getValueFormatterPreset,
   type PlaygroundState,
 } from './chartPlaygroundModel';
 
@@ -263,6 +267,9 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
+            colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -300,6 +307,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             curved={isOn(toggles, 'curved', false)}
             showArea={isOn(toggles, 'showArea', false)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -338,6 +347,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             gradient={isOn(toggles, 'gradient', true)}
             curved={isOn(toggles, 'curved', true)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -370,6 +381,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showLegend={isOn(toggles, 'showLegend', false)}
             showPercentage={isOn(toggles, 'showPercentage', true)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -404,6 +417,9 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             bubble={isOn(toggles, 'bubble', false)}
             noDataText={getStr(toggles, 'noDataText', 'Veri yok')}
             animate={isOn(toggles, 'animate', true)}
+            colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -432,11 +448,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
-            thresholds={[
-              { value: 30, color: '#ef4444' },
-              { value: 70, color: '#f59e0b' },
-              { value: 100, color: '#22c55e' },
-            ]}
+            thresholds={getThresholdsPreset(getEnum(toggles, 'thresholds', 'traffic-light'))}
             size={sizeFor('lg')}
             startAngle={getNum(toggles, 'startAngle', 225)}
             endAngle={getNum(toggles, 'endAngle', -45)}
@@ -444,6 +456,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             splitNumber={getNum(toggles, 'splitNumber', 10)}
             showAxisLabel={isOn(toggles, 'showAxisLabel', true)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -486,6 +500,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showLegend={isOn(toggles, 'showLegend', true)}
             splitNumber={getNum(toggles, 'splitNumber', 5)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
@@ -536,6 +552,9 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             leafDepth={getNum(toggles, 'leafDepth', 1)}
             visibleMin={getNum(toggles, 'visibleMin', 300)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            onNodeClick={getCallbackPreset(getEnum(toggles, 'onNodeClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -582,9 +601,15 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             className={getOptStr(toggles, 'className')}
             min={getOptNum(toggles, 'min')}
             max={getOptNum(toggles, 'max')}
+            colors={
+              getColorsPreset(getEnum(toggles, 'colors', 'default')) as [string, string] | undefined
+            }
             showValues={isOn(toggles, 'showValues', true)}
             showLegend={isOn(toggles, 'showLegend', true)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            onCellClick={getCallbackPreset(getEnum(toggles, 'onCellClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
@@ -624,6 +649,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             orientation={getEnum(toggles, 'orientation', 'vertical')}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
@@ -665,6 +692,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             funnelAlign={getEnum(toggles, 'funnelAlign', 'center')}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
@@ -710,6 +739,9 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             lineStyle={getEnum(toggles, 'lineStyle', 'gradient')}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            onNodeClick={getCallbackPreset(getEnum(toggles, 'onNodeClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
@@ -761,6 +793,9 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             highlightPolicy={getEnum(toggles, 'highlightPolicy', 'descendant')}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            onNodeClick={getCallbackPreset(getEnum(toggles, 'onNodeClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}

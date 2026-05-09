@@ -7,6 +7,7 @@ import {
   applyPreset,
   buildDescriptor,
   buildDescriptors,
+  COMPLEX_PROP_PRESETS,
   decodeBase64Utf8,
   decodePlaygroundState,
   deriveDefaults,
@@ -14,8 +15,10 @@ import {
   encodePlaygroundState,
   generatePlaygroundCode,
   getBool,
+  getCallbackPreset,
   getCategory,
   getChartPresets,
+  getColorsPreset,
   getDecal,
   getEditorKind,
   getEnum,
@@ -27,6 +30,8 @@ import {
   getPerformanceGuidance,
   getSampleData,
   getStr,
+  getThresholdsPreset,
+  getValueFormatterPreset,
   isLiveEditable,
   LIVE_PROP_SUPPORT,
   parseDefault,
@@ -169,15 +174,18 @@ describe('chartPlaygroundModel — categorization', () => {
 
 describe('chartPlaygroundModel — descriptor + defaults', () => {
   it('marks supported props live and unsupported read-only', () => {
+    // PR-FE-Playground-3 absorb: `onDataPointClick` is now a preset-mapped
+    // complex prop (live editable via dropdown). Switch to `innerLabel`
+    // (React.ReactNode, no preset) for the read-only path.
     const showGrid = mkProp({ name: 'showGrid', type: 'boolean', default: 'true' });
-    const onClick = mkProp({ name: 'onDataPointClick', type: '(e: any) => void' });
+    const innerLabel = mkProp({ name: 'innerLabel', type: 'React.ReactNode' });
     const dBar = buildDescriptor('bar-chart', showGrid);
-    const dCb = buildDescriptor('bar-chart', onClick);
+    const dInner = buildDescriptor('pie-chart', innerLabel);
     expect(dBar.liveEditable).toBe(true);
     expect(dBar.readOnlyHint).toBeNull();
-    expect(dCb.liveEditable).toBe(false);
-    expect(dCb.kind).toBe('complex');
-    expect(dCb.readOnlyHint).toMatch(/Code\/API only/);
+    expect(dInner.liveEditable).toBe(false);
+    expect(dInner.kind).toBe('complex');
+    expect(dInner.readOnlyHint).toMatch(/Code\/API only/);
   });
 
   it('respects sidecar default overrides', () => {
@@ -804,13 +812,15 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
 /*  (Codex 019e0ddf REVISE finding #4 — assert real coverage target)   */
 /* ================================================================== */
 
-describe('chartPlaygroundModel — exact per-chart live count (PR-A target lock)', () => {
-  // These numbers are the contract: PR-A locks per-chart counts so future
-  // changes can't silently regress (e.g. accidentally removing a forwarded
-  // prop, or adding a misleading "live" prop that the wrapper ignores).
-  // PR-FE-Playground-3 (preset infra) will lift these as complex props
-  // become live editable; that PR will update this map atomically.
-  const EXPECTED_LIVE_COUNTS: Record<string, number> = {
+describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)', () => {
+  // PR-FE-Playground-3 lifts the count by adding `preset` editor kind for
+  // complex props (valueFormatter, onDataPointClick / onNodeClick /
+  // onCellClick, colors, gauge.thresholds). These preset-driven props are
+  // live-editable via the dropdown and `isLiveEditable` returns true thanks
+  // to the COMPLEX_PROP_PRESETS lookup — so the per-chart count below
+  // counts (a) the LIVE_PROP_SUPPORT primitive set + (b) preset-mapped
+  // complex props for that chartId.
+  const PRIMITIVE_LIVE_COUNTS: Record<string, number> = {
     'bar-chart': 15,
     'line-chart': 16,
     'area-chart': 17,
@@ -822,28 +832,166 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-A target lock)
     'heatmap-chart': 15,
     'waterfall-chart': 15,
     'funnel-chart': 19,
-    'sankey-chart': 17, // focusNodeAdjacency excluded — Codex 019e0ddf #3
+    'sankey-chart': 17,
     'sunburst-chart': 14,
   };
 
-  // Total = 210, system-wide coverage = 210 / 264 ≈ %79.5 (PR-A target).
-  const EXPECTED_TOTAL = Object.values(EXPECTED_LIVE_COUNTS).reduce((a, b) => a + b, 0);
-  const TOTAL_CATALOG_PROPS = 264; // sum of CHART_CATALOG[i].props.length
+  // Per-chart preset-enabled complex prop count from COMPLEX_PROP_PRESETS.
+  const PRESET_COUNTS: Record<string, number> = {
+    'bar-chart': 3, // valueFormatter, onDataPointClick, colors
+    'line-chart': 2, // valueFormatter, onDataPointClick
+    'area-chart': 2,
+    'pie-chart': 2,
+    'scatter-chart': 3, // + colors
+    'gauge-chart': 3, // + thresholds
+    'radar-chart': 2,
+    'treemap-chart': 3, // + onNodeClick
+    'heatmap-chart': 4, // + onCellClick + colors
+    'waterfall-chart': 2,
+    'funnel-chart': 2,
+    'sankey-chart': 3, // + onNodeClick
+    'sunburst-chart': 3, // + onNodeClick
+  };
 
-  it.each(Object.entries(EXPECTED_LIVE_COUNTS))(
-    'chart "%s" has exactly %i live editable props',
+  // Total = 210 (primitives) + 34 (presets) = 244, coverage = 244 / 264 ≈ %92.4
+  const TOTAL_CATALOG_PROPS = 264;
+  const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
+  const PRESET_TOTAL = Object.values(PRESET_COUNTS).reduce((a, b) => a + b, 0);
+  const EXPECTED_TOTAL = PRIMITIVE_TOTAL + PRESET_TOTAL;
+
+  it.each(Object.entries(PRIMITIVE_LIVE_COUNTS))(
+    'chart "%s" LIVE_PROP_SUPPORT primitive set size = %i',
     (chartId, expected) => {
       expect(LIVE_PROP_SUPPORT[chartId]?.size).toBe(expected);
     },
   );
 
-  it('system-wide total live-editable count matches PR-A target (~%80)', () => {
-    let total = 0;
-    for (const chartId of Object.keys(EXPECTED_LIVE_COUNTS)) {
-      total += LIVE_PROP_SUPPORT[chartId]?.size ?? 0;
+  it.each(Object.entries(PRESET_COUNTS))(
+    'chart "%s" exposes %i preset-driven props via COMPLEX_PROP_PRESETS',
+    (chartId, expected) => {
+      const presetKeys = Object.keys(COMPLEX_PROP_PRESETS).filter((k) =>
+        k.startsWith(`${chartId}.`),
+      );
+      expect(presetKeys.length).toBe(expected);
+    },
+  );
+
+  it('system-wide live count (primitives + presets) hits PR-B target (~%92)', () => {
+    let primitives = 0;
+    for (const chartId of Object.keys(PRIMITIVE_LIVE_COUNTS)) {
+      primitives += LIVE_PROP_SUPPORT[chartId]?.size ?? 0;
     }
+    expect(primitives).toBe(PRIMITIVE_TOTAL);
+
+    const presets = Object.keys(COMPLEX_PROP_PRESETS).length;
+    expect(presets).toBe(PRESET_TOTAL);
+
+    const total = primitives + presets;
     expect(total).toBe(EXPECTED_TOTAL);
-    // Coverage floor for PR-A: at least %75 of the catalog.
-    expect(total / TOTAL_CATALOG_PROPS).toBeGreaterThanOrEqual(0.75);
+    // Coverage floor for PR-B: at least %90 of the catalog (user request).
+    expect(total / TOTAL_CATALOG_PROPS).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+/* ================================================================== */
+/*  PR-FE-Playground-3: preset infrastructure tests                    */
+/* ================================================================== */
+
+describe('chartPlaygroundModel — preset infrastructure (PR-B)', () => {
+  it('valueFormatter preset resolves currency-tl correctly', () => {
+    const fn = getValueFormatterPreset('currency-tl');
+    expect(fn).toBeDefined();
+    expect(fn?.(1234.5)).toBe('₺1.234,5');
+  });
+
+  it('valueFormatter preset resolves percentage correctly', () => {
+    const fn = getValueFormatterPreset('percentage');
+    expect(fn?.(0.456)).toBe('45.6%');
+  });
+
+  it('valueFormatter preset resolves compact correctly', () => {
+    const fn = getValueFormatterPreset('compact');
+    expect(fn?.(2500)).toBe('2.5K');
+    expect(fn?.(42)).toBe('42');
+  });
+
+  it('valueFormatter preset returns undefined for raw / unknown / undefined', () => {
+    expect(getValueFormatterPreset('raw')).toBeUndefined();
+    expect(getValueFormatterPreset(undefined)).toBeUndefined();
+    expect(getValueFormatterPreset('does-not-exist')).toBeUndefined();
+  });
+
+  it('callback preset returns side-effecting handler for console-log', () => {
+    const fn = getCallbackPreset<{ x: number }>('console-log');
+    expect(fn).toBeDefined();
+    expect(typeof fn).toBe('function');
+  });
+
+  it('callback preset returns undefined for noop / unknown', () => {
+    expect(getCallbackPreset('noop')).toBeUndefined();
+    expect(getCallbackPreset(undefined)).toBeUndefined();
+  });
+
+  it('colors preset returns rainbow palette', () => {
+    const palette = getColorsPreset('rainbow');
+    expect(Array.isArray(palette)).toBe(true);
+    expect(palette?.length).toBeGreaterThan(0);
+  });
+
+  it('colors preset returns undefined for default / unknown', () => {
+    expect(getColorsPreset('default')).toBeUndefined();
+    expect(getColorsPreset(undefined)).toBeUndefined();
+  });
+
+  it('thresholds preset returns traffic-light by default', () => {
+    const t = getThresholdsPreset(undefined);
+    expect(t).toEqual([
+      { value: 30, color: '#ef4444' },
+      { value: 70, color: '#f59e0b' },
+      { value: 100, color: '#22c55e' },
+    ]);
+  });
+
+  it('thresholds preset returns two-tier on demand', () => {
+    const t = getThresholdsPreset('two-tier');
+    expect(t?.length).toBe(2);
+  });
+
+  it('buildDescriptor upgrades complex prop with preset to kind=preset, liveEditable=true', () => {
+    const formatterProp: ChartProp = {
+      name: 'valueFormatter',
+      type: '(value: number) => string',
+      required: false,
+      default: '—',
+      description: '',
+    };
+    const d = buildDescriptor('bar-chart', formatterProp);
+    expect(d.kind).toBe('preset');
+    expect(d.liveEditable).toBe(true);
+    expect(d.options.length).toBeGreaterThan(0);
+    expect(d.defaultValue).toBe('raw'); // first preset id
+  });
+
+  it('isLiveEditable returns true for preset-mapped complex prop', () => {
+    expect(isLiveEditable('bar-chart', 'valueFormatter')).toBe(true);
+    expect(isLiveEditable('gauge-chart', 'thresholds')).toBe(true);
+    expect(isLiveEditable('heatmap-chart', 'onCellClick')).toBe(true);
+  });
+
+  it('isLiveEditable returns false for complex prop WITHOUT preset', () => {
+    expect(isLiveEditable('pie-chart', 'innerLabel')).toBe(false); // React.ReactNode, no preset
+    expect(isLiveEditable('treemap-chart', 'data')).toBe(false); // sample data preset deferred to PR-B2
+  });
+
+  it('serialisePropToCode skips preset props in generated code', () => {
+    const formatterProp: ChartProp = {
+      name: 'valueFormatter',
+      type: '(value: number) => string',
+      required: false,
+      default: '—',
+      description: '',
+    };
+    const d = buildDescriptor('bar-chart', formatterProp);
+    expect(serialisePropToCode(d, 'currency-tl')).toBeNull();
   });
 });
