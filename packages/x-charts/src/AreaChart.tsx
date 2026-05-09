@@ -55,6 +55,12 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
+
 export interface AreaChartProps extends AccessControlledProps {
   /** Series to render as filled areas. */
   series: ChartSeries[];
@@ -93,6 +99,10 @@ export interface AreaChartProps extends AccessControlledProps {
    * series + label axis rather than spreading any backing object.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups (Codex thread 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked. */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -188,6 +198,8 @@ const AreaChartInner = React.forwardRef<
     description,
     className,
     onDataPointClick,
+    markups,
+    onMarkupClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -201,6 +213,15 @@ const AreaChartInner = React.forwardRef<
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;
   const hasMultiSeries = safeSeries.length > 1;
+
+  // Markup overlay adapter — Codex thread 019e0df1.
+  const markupResult = useMarkupAdapter(markups, {
+    chartType: 'area',
+    dataContext: {
+      labels,
+      series: safeSeries.map((s) => ({ name: s.name, data: s.data })),
+    },
+  });
 
   // Same DOM node feeds breakpoint observer and ECharts renderer.
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
@@ -326,7 +347,7 @@ const AreaChartInner = React.forwardRef<
           lineStyle: { type: 'dashed' as const },
         },
       },
-      series: echartsSeriesList,
+      series: mergeMarkupPatches(echartsSeriesList, markupResult.seriesPatches),
       aria: {
         enabled: true,
         label: {
@@ -363,6 +384,8 @@ const AreaChartInner = React.forwardRef<
     densityPaddingMultiplier,
     effectivePalette,
     breakpoint,
+    // Markup patches drive series.markLine / markArea / markPoint.
+    markupResult,
   ]);
 
   // Cross-filter adapter — Codex thread 019e0c25 absorb. Series-based
@@ -373,14 +396,36 @@ const AreaChartInner = React.forwardRef<
   // value).
   const handleClick = useCallback(
     (params: unknown) => {
-      if (!onDataPointClick) return;
       const p = params as {
+        componentType?: string;
         seriesName?: string;
         seriesIndex?: number;
         dataIndex?: number;
         name?: string;
         value?: number;
       };
+      // Markup overlay click — Codex thread 019e0df1 absorb.
+      if (
+        p.componentType === 'markLine' ||
+        p.componentType === 'markArea' ||
+        p.componentType === 'markPoint'
+      ) {
+        if (!onMarkupClick) return;
+        const lookupName = typeof p.name === 'string' ? p.name : undefined;
+        const markup = lookupName ? markupResult.markupLookup.get(lookupName) : undefined;
+        if (markup) {
+          onMarkupClick({
+            markup,
+            chartType: 'area',
+            seriesIndex: p.seriesIndex,
+            dataIndex: p.dataIndex,
+            nativeParams: params,
+          });
+        }
+        return;
+      }
+
+      if (!onDataPointClick) return;
       const value = typeof p.value === 'number' ? p.value : undefined;
       onDataPointClick({
         datum: {
@@ -394,14 +439,14 @@ const AreaChartInner = React.forwardRef<
         label: p.name,
       });
     },
-    [onDataPointClick],
+    [onDataPointClick, onMarkupClick, markupResult],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onDataPointClick ? handleClick : undefined,
+    onClick: onDataPointClick || onMarkupClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y (same series→flat mapping as
@@ -475,7 +520,7 @@ AreaChartInner.displayName = 'AreaChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(function AreaChart(
-  { access, accessReason, onDataPointClick, ...rest },
+  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   // Access-aware callback gating — Codex iter-2 thread 019e0c25 absorb.
@@ -488,6 +533,7 @@ export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(functi
         ref={ref}
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

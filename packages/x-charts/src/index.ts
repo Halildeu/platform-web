@@ -292,6 +292,51 @@ export { lazyChartImport } from './performance/code-split';
 export type { ChartDataPoint, ChartSeries, ChartClickEvent, ChartLocaleText } from './types';
 
 /* ------------------------------------------------------------------ */
+/*  Markup overlay layer (Highcharts annotation parity)                */
+/*                                                                     */
+/*  Distinct from spec-level `ChartAnnotation` (`spec/ChartSpec.ts`)   */
+/*  and collaboration-level `Annotation`                              */
+/*  (`collaboration/chart-annotations.ts`). Codex thread 019e0df1     */
+/*  iter-3 AGREE absorb: name collision avoided via `ChartMarkup`.    */
+/* ------------------------------------------------------------------ */
+export type {
+  ChartMarkup,
+  ChartMarkupClickEvent,
+  BaseMarkup,
+  LineMarkup,
+  SegmentMarkup,
+  AreaMarkup,
+  PointMarkup,
+  LabelMarkup,
+} from './types';
+export { adaptToEcharts, DEFAULT_SUPPORT_MATRIX } from './annotations/adaptToEcharts';
+export type {
+  AdaptOptions,
+  AdaptResult,
+  SeriesPatch,
+  MarkupChartKind,
+  MarkupTypeKey,
+  MarkupSupport,
+  MarkupSupportMatrix,
+  MarkupDataContext,
+} from './annotations/adaptToEcharts';
+export { useMarkupAdapter } from './annotations/useMarkupAdapter';
+export type { UseMarkupAdapterOptions } from './annotations/useMarkupAdapter';
+export { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
+export {
+  computeTrendOverlay,
+  type ComputeTrendOverlayOptions,
+  type TrendOverlayPoint,
+} from './annotations/computeTrendOverlay';
+export {
+  computeAnomalyOverlay,
+  type ComputeAnomalyOverlayOptions,
+  type AnomalyOverlayPoint,
+} from './annotations/computeAnomalyOverlay';
+export { useTrendOverlay } from './annotations/useTrendOverlay';
+export { useAnomalyOverlay } from './annotations/useAnomalyOverlay';
+
+/* ------------------------------------------------------------------ */
 /*  i18n locale auto-bind (Faz 21.5-A1)                                */
 /*                                                                     */
 /*  registerEChartsLocale / getEChartsLocale / ECHARTS_LOCALE_MAP and  */

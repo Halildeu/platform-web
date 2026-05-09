@@ -211,8 +211,20 @@ iter-2'de regression'lı bulundu, fix ile correctness gate kapatıldı.
 
 ## Bilinen sınırlamalar
 
-- **Highcharts annotation parity** — annotation/shape/marker module
-  henüz yok; roadmap candidate.
+- **Highcharts annotation parity v1 STABLE** — `ChartMarkup` runtime
+  overlay layer (line / segment / area / point / label) `@mfe/x-charts`
+  root'tan export, 5 cartesian chart full + Waterfall partial + 7
+  hierarchical/non-cartesian chart no-op (PR #350). AI overlay hooks
+  (`useTrendOverlay` OLS regression + `useAnomalyOverlay` IQR fences)
+  hazır. **Bilinen kapsam dipnotu**: `LabelMarkup.anchor: { dataIndex }`
+  cartesian chart'larda explicit `{ x, y }` anchor için tam çalışır;
+  `{ dataIndex }` shorthand resolution Bar (single series) + Line +
+  Area için kanıtlı, Heatmap için `dataContext.series` zenginleştirme
+  v2 backlog'da (Codex iter-2 absorb). **v2 backlog**:
+  editable/draggable annotations, drawing tools UI, Stock-specific
+  tech analysis (Fibonacci/Pitchfork/Elliott Wave), Pie/Gauge/Funnel
+  native series-label patches, Radar indicator anchor, Heatmap
+  `dataIndex` anchor enrichment.
 - **AG Charts dashboard composer parity** — `ChartDashboard` mevcut
   ama drag-drop authoring yok.
 

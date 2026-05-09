@@ -48,6 +48,11 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1) — Funnel is NO-OP.
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+
 export interface FunnelDataPoint {
   /** Stage name displayed in labels and tooltip. */
   name: string;
@@ -93,6 +98,10 @@ export interface FunnelChartProps extends AccessControlledProps {
    * avoid emitting a misleading filter field).
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups — NO-OP on Funnel (Codex 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Funnel). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -189,6 +198,8 @@ const FunnelChartInner = React.forwardRef<
     valueFormatter,
     animate = true,
     onDataPointClick,
+    markups,
+    onMarkupClick: _onMarkupClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -199,6 +210,9 @@ const FunnelChartInner = React.forwardRef<
   forwardedRef,
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
+
+  // Markup overlay adapter — Codex 019e0df1. NO-OP on Funnel.
+  useMarkupAdapter(markups, { chartType: 'funnel' });
   const isEmpty = !data || data.length === 0;
   const safeData = useMemo(
     () => sanitizeDataPoints(data as never) as unknown as FunnelDataPoint[],
@@ -475,7 +489,7 @@ FunnelChartInner.displayName = 'FunnelChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(function FunnelChart(
-  { access, accessReason, onDataPointClick, ...rest },
+  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -485,6 +499,7 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
         ref={ref}
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

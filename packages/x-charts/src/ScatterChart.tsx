@@ -52,6 +52,12 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
+
 export interface ScatterChartProps extends AccessControlledProps {
   /** Data points for the scatter plot. */
   data: ScatterDataPoint[];
@@ -89,6 +95,10 @@ export interface ScatterChartProps extends AccessControlledProps {
    * when no explicit label is set.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups (Codex thread 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked. */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -165,6 +175,8 @@ const ScatterChartInner = React.forwardRef<
     bubble = false,
     noDataText = 'Veri yok',
     onDataPointClick,
+    markups,
+    onMarkupClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -174,6 +186,13 @@ const ScatterChartInner = React.forwardRef<
   forwardedRef,
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
+
+  // Markup overlay adapter — Codex thread 019e0df1. Scatter has no
+  // category labels; dataContext omitted (LabelMarkup must use
+  // explicit {x, y} anchor).
+  const markupResult = useMarkupAdapter(markups, {
+    chartType: 'scatter',
+  });
   const safeData = useMemo(
     () =>
       (data ?? []).map((d) => ({
@@ -356,20 +375,23 @@ const ScatterChartInner = React.forwardRef<
           lineStyle: { color: bgMuted, type: 'dashed' as const },
         },
       },
-      series: [
-        {
-          type: 'scatter',
-          data: scatterData,
-          symbolSize: symbolSizeFn,
-          itemStyle: {
-            color: palette[0],
+      series: mergeMarkupPatches(
+        [
+          {
+            type: 'scatter',
+            data: scatterData,
+            symbolSize: symbolSizeFn,
+            itemStyle: {
+              color: palette[0],
+            },
+            emphasis: {
+              focus: 'self',
+              itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' },
+            },
           },
-          emphasis: {
-            focus: 'self',
-            itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' },
-          },
-        },
-      ],
+        ],
+        markupResult.seriesPatches,
+      ),
       aria: {
         enabled: true,
         label: {
@@ -405,6 +427,8 @@ const ScatterChartInner = React.forwardRef<
     densityPaddingMultiplier,
     effectivePalette,
     breakpoint,
+    // Markup patches drive series.markLine / markArea / markPoint.
+    markupResult,
   ]);
 
   // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts scatter
@@ -415,13 +439,36 @@ const ScatterChartInner = React.forwardRef<
   // `dataIndex`.
   const handleClick = useCallback(
     (params: unknown) => {
-      if (!onDataPointClick) return;
       const p = params as {
+        componentType?: string;
         data?: unknown;
         value?: unknown;
         name?: string;
         dataIndex?: number;
+        seriesIndex?: number;
       };
+      // Markup overlay click — Codex thread 019e0df1 absorb.
+      if (
+        p.componentType === 'markLine' ||
+        p.componentType === 'markArea' ||
+        p.componentType === 'markPoint'
+      ) {
+        if (!onMarkupClick) return;
+        const lookupName = typeof p.name === 'string' ? p.name : undefined;
+        const markup = lookupName ? markupResult.markupLookup.get(lookupName) : undefined;
+        if (markup) {
+          onMarkupClick({
+            markup,
+            chartType: 'scatter',
+            seriesIndex: p.seriesIndex,
+            dataIndex: p.dataIndex,
+            nativeParams: params,
+          });
+        }
+        return;
+      }
+
+      if (!onDataPointClick) return;
       const valueArr = Array.isArray(p.value) ? (p.value as number[]) : null;
       const x = valueArr?.[0];
       const y = valueArr?.[1];
@@ -444,7 +491,7 @@ const ScatterChartInner = React.forwardRef<
         label,
       });
     },
-    [onDataPointClick],
+    [onDataPointClick, onMarkupClick, markupResult],
   );
 
   // Use centralized renderer hook
@@ -452,7 +499,7 @@ const ScatterChartInner = React.forwardRef<
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onDataPointClick ? handleClick : undefined,
+    onClick: onDataPointClick || onMarkupClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. ScatterChart is 2D — flatten
@@ -529,7 +576,7 @@ ScatterChartInner.displayName = 'ScatterChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
-  function ScatterChart({ access, accessReason, onDataPointClick, ...rest }, ref) {
+  function ScatterChart({ access, accessReason, onDataPointClick, onMarkupClick, ...rest }, ref) {
     // Access-aware callback gating — Codex iter-2 absorb.
     const { state } = resolveAccessState(access);
     return (
@@ -538,6 +585,7 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           ref={ref}
           {...rest}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
+          onMarkupClick={guardChartCallback(state, onMarkupClick)}
         />
       </ChartAccessGate>
     );

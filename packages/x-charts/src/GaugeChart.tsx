@@ -55,6 +55,11 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1) — Gauge is NO-OP.
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+
 export interface GaugeChartProps extends AccessControlledProps {
   /** Current gauge value. */
   value: number;
@@ -97,6 +102,10 @@ export interface GaugeChartProps extends AccessControlledProps {
    * `GaugeChartProps` field; Codex iter-2 thread 019e0c25 blocker).
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups — NO-OP on Gauge (Codex 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Gauge). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -192,6 +201,8 @@ const GaugeChartInner = React.forwardRef<
     animate = true,
     className,
     onDataPointClick,
+    markups,
+    onMarkupClick: _onMarkupClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -203,6 +214,10 @@ const GaugeChartInner = React.forwardRef<
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = value == null;
   const safeValue = sanitizeNumber(value);
+
+  // Markup overlay adapter — Codex 019e0df1. NO-OP on Gauge; called
+  // for dev warnings when markups supplied.
+  useMarkupAdapter(markups, { chartType: 'gauge' });
   const fmt = valueFormatter ?? formatCompact;
 
   // Faz 21.9 PR3c: container ref + breakpoint for responsive gauge.
@@ -433,7 +448,7 @@ GaugeChartInner.displayName = 'GaugeChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(function GaugeChart(
-  { access, accessReason, onDataPointClick, ...rest },
+  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   // Access-aware callback gating — Codex iter-2 absorb.
@@ -444,6 +459,7 @@ export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(func
         ref={ref}
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

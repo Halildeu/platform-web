@@ -46,6 +46,12 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1) — Sunburst is NO-OP
+// (hierarchical chart, no x/y axis semantics).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+
 export interface SunburstNode {
   /** Display name for this node. */
   name: string;
@@ -107,6 +113,10 @@ export interface SunburstChartProps extends AccessControlledProps {
    * fallback when ECharts doesn't surface the breadcrumb.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups — NO-OP on Sunburst (Codex 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Sunburst). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -273,6 +283,8 @@ const SunburstChartInner = React.forwardRef<
     animate = true,
     onNodeClick,
     onDataPointClick,
+    markups,
+    onMarkupClick: _onMarkupClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -284,6 +296,9 @@ const SunburstChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
+
+  // Markup overlay adapter — Codex 019e0df1. NO-OP on Sunburst.
+  useMarkupAdapter(markups, { chartType: 'sunburst' });
 
   // Faz 21.9 PR3d: container ref + breakpoint for responsive sunburst.
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
@@ -549,7 +564,10 @@ SunburstChartInner.displayName = 'SunburstChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps>(
-  function SunburstChart({ access, accessReason, onNodeClick, onDataPointClick, ...rest }, ref) {
+  function SunburstChart(
+    { access, accessReason, onNodeClick, onDataPointClick, onMarkupClick, ...rest },
+    ref,
+  ) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -558,6 +576,7 @@ export const SunburstChart = React.forwardRef<HTMLDivElement, SunburstChartProps
           {...rest}
           onNodeClick={guardChartCallback(state, onNodeClick)}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
+          onMarkupClick={guardChartCallback(state, onMarkupClick)}
         />
       </ChartAccessGate>
     );
