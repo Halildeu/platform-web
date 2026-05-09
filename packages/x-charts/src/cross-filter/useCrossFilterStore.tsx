@@ -4,7 +4,7 @@
  * Allows multiple dashboard instances to have isolated stores via Context.
  * Components use `useCrossFilter(selector)` for surgical re-renders.
  */
-import { createContext, useContext, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import {
   createCrossFilterStore,
@@ -44,9 +44,25 @@ export function CrossFilterProvider({
   store: externalStore,
 }: CrossFilterProviderProps) {
   const storeRef = useRef<CrossFilterStoreApi | null>(externalStore ?? null);
+  // Track whether THIS provider instance owns the store (only owners are
+  // allowed to dispose it; an externally-provided store outlives the
+  // provider and must remain usable after unmount).
+  const ownsStoreRef = useRef(externalStore == null);
   if (!storeRef.current) {
     storeRef.current = createCrossFilterStore(options);
   }
+
+  useEffect(() => {
+    return () => {
+      // Drop pending debounced setFilter timers on unmount so a torn-down
+      // provider can't mutate state asynchronously after consumers have
+      // moved on. External stores (passed via `store` prop) are owned by
+      // the caller and are NOT disposed here.
+      if (ownsStoreRef.current && storeRef.current) {
+        storeRef.current.getState()._disposeTimers();
+      }
+    };
+  }, []);
 
   return (
     <CrossFilterContext.Provider value={storeRef.current}>{children}</CrossFilterContext.Provider>

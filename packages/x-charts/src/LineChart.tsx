@@ -48,11 +48,12 @@ export type ChartSeries = {
   color?: string;
 };
 
-export type ChartClickEvent = {
-  datum: Record<string, unknown>;
-  value?: number;
-  label?: string;
-};
+// Re-exported for backward compatibility — canonical definition lives in
+// `./types` so every chart adapter shares the same `ChartClickEvent`
+// shape (Codex iter-2 thread 019e0c25 review absorb).
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
 
 export interface LineChartProps extends AccessControlledProps {
   /** Series to render as lines. */

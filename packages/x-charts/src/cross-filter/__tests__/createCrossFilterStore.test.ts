@@ -64,6 +64,51 @@ describe('createCrossFilterStore', () => {
       expect(entry?.value).toBe('US');
     });
 
+    // Regression — Codex iter-2 (thread 019e0c25) blocker: the previous
+    // implementation kept a single global `debounceTimer`, so distinct
+    // (chartId, field) intents within the same debounce window cancelled
+    // each other and silently dropped filter writes. Per-key timers must
+    // let independent intents land independently.
+    it('per-key timers — distinct (chartId,field) intents do not cancel each other', () => {
+      const store = createCrossFilterStore({ debounceMs: 100 });
+      const { setFilter } = store.getState();
+
+      // Same tick: 4 distinct (chartId, field) intents
+      setFilter(makeFilter('region', 'EU', 'chart-A'));
+      setFilter(makeFilter('category', 'X', 'chart-A'));
+      setFilter(makeFilter('region', 'US', 'chart-B'));
+      setFilter(makeFilter('quarter', 'Q1', 'chart-C'));
+
+      vi.advanceTimersByTime(100);
+
+      // All 4 intents must have been recorded — global-timer impl would
+      // have dropped the first 3.
+      expect(store.getState().filters.size).toBe(4);
+      expect(store.getState().filters.get('chart-A:region')?.value).toBe('EU');
+      expect(store.getState().filters.get('chart-A:category')?.value).toBe('X');
+      expect(store.getState().filters.get('chart-B:region')?.value).toBe('US');
+      expect(store.getState().filters.get('chart-C:quarter')?.value).toBe('Q1');
+    });
+
+    // Regression — same Codex iter-2 blocker, opposite axis: rapid
+    // updates on the SAME (chartId, field) must still coalesce (last
+    // write wins) WITHOUT affecting other keys whose timers are pending.
+    it('per-key timers — same key still coalesces without disturbing other keys', () => {
+      const store = createCrossFilterStore({ debounceMs: 100 });
+      const { setFilter } = store.getState();
+
+      setFilter(makeFilter('region', 'EU', 'chart-A'));
+      setFilter(makeFilter('category', 'X', 'chart-A'));
+      vi.advanceTimersByTime(50);
+      // Coalesce on (chart-A, region); leave (chart-A, category) pending
+      setFilter(makeFilter('region', 'US', 'chart-A'));
+      vi.advanceTimersByTime(100);
+
+      expect(store.getState().filters.size).toBe(2);
+      expect(store.getState().filters.get('chart-A:region')?.value).toBe('US');
+      expect(store.getState().filters.get('chart-A:category')?.value).toBe('X');
+    });
+
     it('pushes to history', () => {
       const store = createCrossFilterStore({ debounceMs: 0 });
       store.getState().setFilter(makeFilter('region', 'EU'));
@@ -121,6 +166,70 @@ describe('createCrossFilterStore', () => {
       const store = createCrossFilterStore({ debounceMs: 0 });
       store.getState().clearAllFilters();
       expect(store.getState().past).toHaveLength(0);
+    });
+
+    // Regression — pending debounced setFilter must NOT silently revive
+    // a filter that the caller has cleared. Codex iter-2 absorb.
+    it('cancels pending debounced setFilter writes', () => {
+      const store = createCrossFilterStore({ debounceMs: 100 });
+      store.getState().setFilter(makeFilter('region', 'EU'));
+      // Don't advance — leave the timer pending
+      store.getState().clearAllFilters();
+      vi.advanceTimersByTime(200);
+      // The pending setFilter must have been cancelled.
+      expect(store.getState().filters.size).toBe(0);
+    });
+  });
+
+  describe('removeFilter pending-timer cancellation', () => {
+    // Regression — Codex iter-2 absorb: a removeFilter on a key whose
+    // setFilter is still pending must cancel that pending write,
+    // otherwise the timer fires later and silently revives the entry
+    // the caller intended to drop.
+    it('cancels pending setFilter for the same key', () => {
+      const store = createCrossFilterStore({ debounceMs: 100 });
+      const { setFilter, removeFilter } = store.getState();
+
+      // Land an existing filter so removeFilter has something to drop
+      setFilter(makeFilter('region', 'EU'));
+      vi.advanceTimersByTime(100);
+      expect(store.getState().filters.size).toBe(1);
+
+      // Schedule a successor write, then remove BEFORE the timer fires
+      setFilter(makeFilter('region', 'US'));
+      removeFilter('chart-1:region');
+      vi.advanceTimersByTime(200);
+
+      // No revival
+      expect(store.getState().filters.size).toBe(0);
+    });
+  });
+
+  describe('_disposeTimers (provider unmount cleanup)', () => {
+    // Regression — Codex iter-2 absorb: provider unmount must drop every
+    // pending setFilter timer so a torn-down store cannot mutate state
+    // after consumers have moved on.
+    it('drops every pending debounced write', () => {
+      const store = createCrossFilterStore({ debounceMs: 100 });
+      const { setFilter, _disposeTimers } = store.getState();
+
+      setFilter(makeFilter('region', 'EU', 'chart-A'));
+      setFilter(makeFilter('category', 'X', 'chart-B'));
+      setFilter(makeFilter('quarter', 'Q1', 'chart-C'));
+
+      _disposeTimers();
+      vi.advanceTimersByTime(200);
+
+      expect(store.getState().filters.size).toBe(0);
+      expect(store.getState().past).toHaveLength(0);
+    });
+
+    it('is idempotent — second call is a no-op', () => {
+      const store = createCrossFilterStore({ debounceMs: 100 });
+      store.getState().setFilter(makeFilter('region', 'EU'));
+      store.getState()._disposeTimers();
+      // Second call must not throw
+      expect(() => store.getState()._disposeTimers()).not.toThrow();
     });
   });
 
