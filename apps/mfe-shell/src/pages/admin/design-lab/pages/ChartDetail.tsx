@@ -191,6 +191,21 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Callback fired when a data point (bar) is clicked.',
       },
       {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Visual overlay markups — threshold lines, highlight bands, anomaly\nmarkers, KPI labels. Renders on top of the bars without affecting\nthe data series. See `ChartMarkup` type docs for variant details.',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
+      },
+      {
         name: 'theme',
         type: 'ChartThemePreference',
         required: false,
@@ -373,6 +388,21 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Callback fired when a data point (marker) is clicked.',
       },
       {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Visual overlay markups — threshold lines, highlight bands, anomaly\nmarkers, KPI labels. Codex thread 019e0df1 iter-3 absorb.',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
+      },
+      {
         name: 'theme',
         type: 'ChartThemePreference',
         required: false,
@@ -545,6 +575,21 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'undefined',
         description: 'Callback fired when a data point (slice) is clicked.',
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Visual overlay markups (Codex thread 019e0df1) — NO-OP on Pie.\nProp accepted for API consistency; dev warning surfaces when\nmarkups are supplied (label/threshold semantics need v2 native\nseries-label patches).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Pie).',
       },
       {
         name: 'theme',
@@ -736,6 +781,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Callback fired when a data point is clicked. The emitted\n`ChartClickEvent` exposes a `datum` shape compatible with the\ncross-filter wrapper: `{ seriesName, label, value, dataIndex,\nseriesIndex }`. AreaChart is a series-based chart (no raw row\nsupplied per data point), so the datum is constructed from the\nseries + label axis rather than spreading any backing object.',
       },
       {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups (Codex thread 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
+      },
+      {
         name: 'theme',
         type: 'ChartThemePreference',
         required: false,
@@ -922,6 +981,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         default: 'undefined',
         description:
           'Callback fired when a data point is clicked. The emitted\n`ChartClickEvent` exposes a datum compatible with the cross-filter\nwrapper: `{ x, y, size, label, dataIndex }`. `value` mirrors `y`\n(the primary measure) and `label` falls back to `Point N (x, y)`\nwhen no explicit label is set.',
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups (Codex thread 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
       },
       {
         name: 'theme',
@@ -1118,6 +1191,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           "Callback fired when the gauge dial is clicked. Emits a\n`ChartClickEvent` with `datum: { label, name, value, min, max }`\n— `target` is intentionally NOT included (it isn't a\n`GaugeChartProps` field; Codex iter-2 thread 019e0c25 blocker).",
       },
       {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — NO-OP on Gauge (Codex 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Gauge).',
+      },
+      {
         name: 'theme',
         type: 'ChartThemePreference',
         required: false,
@@ -1278,6 +1365,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         default: 'undefined',
         description:
           "Callback fired when the radar polygon is clicked. Emits a canonical\n`ChartClickEvent`. v1 polygon-level fields stay stable across\nversions; v2 enrichment is purely ADDITIVE.\n\nv1 fields (always present):\n- `datum.seriesName`, `datum.label` (= seriesName), `datum.values`,\n  `datum.indicators`\n- top-level `event.label` = seriesName\n- top-level `event.value` = `values[0]` when numeric\n\nv2 indicator-level enrichment (additive, fires only when click\ncoordinates resolve to a specific axis outside the 5% center\ndead-zone):\n- `datum.indicator` (axis name)\n- `datum.indicatorIndex` (0-based axis position)\n- `datum.indicatorValue` (numeric value at that axis for the\n  clicked series)\n\nCross-filter consumers wanting series-level filter:\n  `<CrossFilterChart emitFields={['seriesName']}>` — v1 contract.\nCross-filter consumers wanting per-axis drill:\n  `<CrossFilterChart emitFields={['indicator']}>` — v2 opt-in.\nThe two surfaces never overwrite each other.",
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — NO-OP on Radar (Codex 019e0df1; v2 backlog).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Radar).',
       },
       {
         name: 'className',
@@ -1453,6 +1554,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         default: 'undefined',
         description:
           "Canonical cross-filter callback. Emits a `ChartClickEvent` with\n`datum: { name, label: name, value, treePathInfo, path, depth,\ndata }`. `depth` is derived from `treePathInfo.length - 1` and\ndefaults to `0` when ECharts doesn't surface the breadcrumb.",
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — NO-OP on Treemap (Codex 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Treemap).',
       },
       {
         name: 'animate',
@@ -1660,6 +1775,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           "Canonical cross-filter callback. Emits a `ChartClickEvent` with\n`datum: { x, y, xLabel, yLabel, value, label: '${xLabel}/${yLabel}' }`\n— `x`/`y` are numeric category indices; `xLabel`/`yLabel` are the\nresolved category strings (which the cross-filter wrapper would\ntypically emit as filter values).",
       },
       {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups (Codex thread 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
+      },
+      {
         name: 'className',
         type: 'string',
         required: false,
@@ -1823,6 +1952,21 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         default: 'undefined',
         description:
           "Callback fired when a visible bar is clicked. Emits a canonical\n`ChartClickEvent` with `datum: { label, value: displayedValue,\nrawValue, type }` — `displayedValue` is what ECharts renders\n(cumulative for 'total' bars, signed delta for inc/dec); `rawValue`\nis the original `WaterfallDataPoint.value` from props; `type` is\nthe resolved `WaterfallItemType`. Hidden base-stack series clicks\nare filtered out (they aren't user-meaningful).",
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Visual overlay markups (Codex thread 019e0df1). Partial support:\nline + area patches MERGE with the existing connector markLine on\nthe visible value series; base series (`__waterfall_base__`) is\nuntouched. Use `target.seriesName: 'Waterfall'` for explicit\nrouting if needed.",
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
       },
       {
         name: 'className',
@@ -2011,6 +2155,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         default: 'undefined',
         description:
           "Callback fired when a stage is clicked. Emits a canonical\n`ChartClickEvent` with `datum: { label, value, percent,\nconversionPercent? }` — `percent` is ECharts' default total-vs-max\nratio; `conversionPercent` is the stage-vs-previous ratio and is\nonly included when `showConversion` is true (otherwise omitted to\navoid emitting a misleading filter field).",
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — NO-OP on Funnel (Codex 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Funnel).',
       },
       {
         name: 'className',
@@ -2209,6 +2367,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           "Canonical cross-filter callback. Emits a `ChartClickEvent` for\nBOTH node clicks and edge clicks. Datum shape varies:\n- node: `{ dataType: 'node', name, label: name, value: flowThrough }`\n- edge: `{ dataType: 'edge', source, target, value, label: 'source → target' }`\n`value` for nodes is ECharts' computed flow-through; for edges it\nis the link `value` (volume of flow). The cross-filter wrapper\ncan pick `name` (node) or `source`/`target` (edge) as canonical\nfilter fields.",
       },
       {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — NO-OP on Sankey (Codex 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Sankey).',
+      },
+      {
         name: 'className',
         type: 'string',
         required: false,
@@ -2386,6 +2558,20 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         default: 'undefined',
         description:
           "Canonical cross-filter callback. Emits a `ChartClickEvent` with\n`datum: { name, label: name, value, treePathInfo, path, depth,\ndata }`. `depth = treePathInfo.length - 1` (root counted), 0\nfallback when ECharts doesn't surface the breadcrumb.",
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — NO-OP on Sunburst (Codex 019e0df1).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Sunburst).',
       },
       {
         name: 'className',
