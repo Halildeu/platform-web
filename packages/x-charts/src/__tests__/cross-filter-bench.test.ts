@@ -68,12 +68,20 @@ describe('cross-filter store performance gates (best-of-3)', () => {
     vi.useRealTimers();
   });
 
-  it('1000 sequential setFilter writes — flush < 200ms', () => {
-    // Budget tuned for jsdom + zustand history-snapshot overhead. The
-    // hot path here is `makeSnapshot` cloning Map state on every flush;
-    // 200ms covers ~110ms typical + 2x runner-drift headroom. A real
-    // regression (say, dropping the historyCap slice and growing past
-    // unbounded) would balloon by an order of magnitude, not by 30%.
+  it('1000 sequential setFilter writes — flush < 500ms', () => {
+    // Budget tuned for jsdom + zustand history-snapshot overhead +
+    // shared CI runner drift. The hot path here is `makeSnapshot`
+    // cloning Map state on every flush.
+    //
+    // Local M-series Mac jsdom: ~110ms best-of-3.
+    // GitHub Actions Linux jsdom (the runner this gate executes on):
+    // ~305ms best-of-3 (PR #338 first run).
+    //
+    // 500ms keeps real regressions caught (an unbounded `past` array
+    // or a dropped historyCap slice would balloon by 5-10x, well past
+    // this ceiling) while letting normal runner drift pass without a
+    // flake. Codex iter-2 (thread 019e0c25) explicitly warned this
+    // would happen with the 200ms ceiling — first CI run confirmed.
     const { min } = measureBestOf(() => {
       const store = createCrossFilterStore({ debounceMs: 0 });
       for (let i = 0; i < 1000; i++) {
@@ -82,7 +90,7 @@ describe('cross-filter store performance gates (best-of-3)', () => {
       vi.advanceTimersByTime(0);
       return store.getState().filters.size;
     });
-    expect(min).toBeLessThan(200);
+    expect(min).toBeLessThan(500);
   });
 
   it('100 distinct (chartId,field) timers + single flush — < 50ms', () => {
