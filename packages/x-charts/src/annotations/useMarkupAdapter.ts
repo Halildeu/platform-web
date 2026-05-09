@@ -2,16 +2,18 @@
  * useMarkupAdapter — React hook wrapper around `adaptToEcharts`.
  *
  * Memoises the per-render adapter call and surfaces dev warnings via
- * `console.warn` (suppressed in production). Chart shims call this
- * during render and merge `seriesPatches` into their ECharts options.
+ * `devWarn` (which wraps `console.warn` and lives in its own file so
+ * this module stays `no-console`-clean — see `devWarn.ts`). Chart
+ * shims call this during render and merge `seriesPatches` into their
+ * ECharts options.
  *
  * Pure compute lives in `adaptToEcharts.ts`; this is the React-side
  * ergonomics shim only. Codex iter-3 absorbed split (compute first,
  * hook second).
  */
- 
 import { useEffect, useMemo, useRef } from 'react';
 import { adaptToEcharts, type AdaptOptions, type AdaptResult } from './adaptToEcharts';
+import { devWarn } from './devWarn';
 import type { ChartMarkup } from '../types';
 
 export interface UseMarkupAdapterOptions extends Omit<AdaptOptions, 'devMode'> {
@@ -67,7 +69,7 @@ export function useMarkupAdapter(
     if (signature === lastSignature.current) return;
     lastSignature.current = signature;
     for (const w of result.warnings) {
-      console.warn(w);
+      devWarn(w);
     }
   }, [devMode, result.warnings]);
 
