@@ -267,7 +267,7 @@ SunburstChart
     size?: 'sm' | 'md' | 'lg';
     title?: string;
     onNodeClick?: (params: { name: string; value: number; data: unknown }) => void; // legacy
-    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical, fires FIRST then legacy onNodeClick
     markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP (hierarchical)
     onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
@@ -319,8 +319,8 @@ SankeyChart
     links: { source: string; target: string; value: number }[];
     size?: 'sm' | 'md' | 'lg';
     title?: string;
-    onNodeClick?: (params: { name: string; data: unknown }) => void; // legacy (node-only)
-    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical, datum: { dataType: 'node' | 'edge', ... }
+    onNodeClick?: (params: { name: string; data: unknown }) => void; // legacy (node-only — edge clicks NEVER fire this)
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical: node click fires FIRST then legacy onNodeClick; edge click fires only this (no legacy)
     markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP (network, no x/y axis)
     onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }

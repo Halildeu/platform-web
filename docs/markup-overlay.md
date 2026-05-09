@@ -73,11 +73,17 @@ Her markup `BaseMarkup`'tan extend eder:
 ```ts
 interface BaseMarkup {
   id: string; // ZORUNLU — click lookup key
-  ariaLabel?: string; // SR override
+  ariaLabel?: string; // RESERVED metadata — ECharts aria mapping v2 backlog (şu an SR'a forward edilmiyor)
   source?: 'manual' | 'ai_trend' | 'ai_anomaly' | 'threshold';
   target?: { seriesIndex?: number; seriesName?: string };
 }
 ```
+
+> **`ariaLabel` durumu (Codex post-impl review absorb):** Şu an sadece
+> tipte tutulan metadata. `adaptToEcharts` mapper'ları ECharts
+> `aria` field'larına forward etmiyor; chart-level `aria.label.description`
+> mevcut (`ChartA11yShell` üzerinden) ama per-markup SR override v2
+> backlog (drawing tools UI ile gelecek).
 
 ### LineMarkup — axis-aligned threshold
 

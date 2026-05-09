@@ -216,9 +216,7 @@ paylaşan ikinci feature: `ChartMarkup` runtime visual overlay
 (threshold lines, highlight bands, anomaly markers, KPI labels,
 trend/anomaly AI hooks). Tam consumer guide: **[docs/markup-overlay.md](./markup-overlay.md)**.
 
-İki feature ayrı callback'ler kullanır (`onDataPointClick` data click
-
-- cross-filter, `onMarkupClick` markup overlay click) → karışmaz.
+İki feature ayrı callback'ler kullanır: `onDataPointClick` (data click + cross-filter) ve `onMarkupClick` (markup overlay click) — karışmaz.
 
 ---
 
