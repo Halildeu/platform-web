@@ -354,3 +354,18 @@ export {
   __getChartsLocaleListenerCountForTests,
 } from './i18n/locale-store';
 export type { NumberFormatOptions, DateFormatOptions } from './i18n/formatters';
+
+/* ------------------------------------------------------------------ */
+/*  Benchmark harness exports — Faz 21.11 PR-A1.6a                     */
+/*                                                                     */
+/*  Benchmark fixtures + the deterministic mulberry32 RNG are exposed  */
+/*  via the dedicated `@mfe/x-charts/benchmark` subpath, NOT via this  */
+/*  main barrel. Importing `<ScatterChart>` from the main barrel must  */
+/*  not drag the fixture generators into the wrapper bundle (CONTRACT  */
+/*  §7 / PR-F2 wrapperOnly observability).                             */
+/*                                                                     */
+/*  Consumers (e.g. design-lab benchmark route):                       */
+/*    import {                                                         */
+/*      generateUniformScatter, BENCHMARK_TIERS                        */
+/*    } from '@mfe/x-charts/benchmark';                                */
+/* ------------------------------------------------------------------ */

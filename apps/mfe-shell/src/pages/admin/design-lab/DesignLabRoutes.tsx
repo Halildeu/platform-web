@@ -1,106 +1,119 @@
-import React, { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import React, { lazy, Suspense } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 /* ------------------------------------------------------------------ */
 /*  Lazy-loaded page components — each becomes its own chunk           */
 /* ------------------------------------------------------------------ */
 
-const DesignLabLayout = lazy(() => import("./DesignLabLayout"));
-const DesignLabLanding = lazy(() => import("./pages/DesignLabLanding"));
+const DesignLabLayout = lazy(() => import('./DesignLabLayout'));
+const DesignLabLanding = lazy(() => import('./pages/DesignLabLanding'));
 
 /* Design Tokens (was: Foundations) */
-const DesignTokensListing = lazy(() => import("./pages/DesignTokensListing"));
-const DesignTokenDetail = lazy(() => import("./pages/DesignTokenDetail"));
+const DesignTokensListing = lazy(() => import('./pages/DesignTokensListing'));
+const DesignTokenDetail = lazy(() => import('./pages/DesignTokenDetail'));
 
 /* Theme Builder */
-const ThemeBuilderPage = lazy(() => import("./pages/ThemeBuilderPage"));
+const ThemeBuilderPage = lazy(() => import('./pages/ThemeBuilderPage'));
 
 /* Primitives */
-const PrimitivesListing = lazy(() => import("./pages/PrimitivesListing"));
+const PrimitivesListing = lazy(() => import('./pages/PrimitivesListing'));
 
 /* Components */
-const ComponentsListing = lazy(() => import("./pages/ComponentsListing"));
-const ComponentGroupListing = lazy(
-  () => import("./pages/ComponentGroupListing"),
-);
-const ComponentDetail = lazy(() => import("./pages/ComponentDetail"));
-const APIDetail = lazy(() => import("./pages/APIDetail"));
+const ComponentsListing = lazy(() => import('./pages/ComponentsListing'));
+const ComponentGroupListing = lazy(() => import('./pages/ComponentGroupListing'));
+const ComponentDetail = lazy(() => import('./pages/ComponentDetail'));
+const APIDetail = lazy(() => import('./pages/APIDetail'));
 
 /* Patterns (was: Pages) */
-const PagesListing = lazy(() => import("./pages/PagesListing"));
-const PageTemplateDetail = lazy(() => import("./pages/PageTemplateDetail"));
+const PagesListing = lazy(() => import('./pages/PagesListing'));
+const PageTemplateDetail = lazy(() => import('./pages/PageTemplateDetail'));
 
 /* Advanced */
-const AdvancedListing = lazy(() => import("./pages/AdvancedListing"));
+const AdvancedListing = lazy(() => import('./pages/AdvancedListing'));
 
 /* Icon Gallery */
-const IconGalleryPage = lazy(() => import("./pages/IconGalleryPage"));
+const IconGalleryPage = lazy(() => import('./pages/IconGalleryPage'));
 
 /* Bundle Size */
-const BundleSizePage = lazy(() => import("./pages/BundleSizePage"));
+const BundleSizePage = lazy(() => import('./pages/BundleSizePage'));
 
 /* Recipes */
-const RecipesListing = lazy(() => import("./pages/RecipesListing"));
-const RecipeDetail = lazy(() => import("./pages/RecipeDetail"));
+const RecipesListing = lazy(() => import('./pages/RecipesListing'));
+const RecipeDetail = lazy(() => import('./pages/RecipeDetail'));
 
 /* Ecosystem */
-const EcosystemListing = lazy(() => import("./pages/EcosystemListing"));
-const ExtensionDetail = lazy(() => import("./pages/ExtensionDetail"));
+const EcosystemListing = lazy(() => import('./pages/EcosystemListing'));
+const ExtensionDetail = lazy(() => import('./pages/ExtensionDetail'));
 
 /* Charts */
-const ChartsListing = lazy(() => import("./pages/ChartsListing"));
-const ChartDetail = lazy(() => import("./pages/ChartDetail"));
+const ChartsListing = lazy(() => import('./pages/ChartsListing'));
+const ChartDetail = lazy(() => import('./pages/ChartDetail'));
 
 /* Developer Experience */
-const DependencyGraphPage = lazy(() => import("./pages/DependencyGraphPage"));
-const UsageAnalyticsPage = lazy(() => import("./pages/UsageAnalyticsPage"));
+const DependencyGraphPage = lazy(() => import('./pages/DependencyGraphPage'));
+const UsageAnalyticsPage = lazy(() => import('./pages/UsageAnalyticsPage'));
 
 /* Enterprise */
-const FigmaSyncPage = lazy(() => import("./pages/FigmaSyncPage"));
-const VisualRegressionPage = lazy(() => import("./pages/VisualRegressionPage"));
+const FigmaSyncPage = lazy(() => import('./pages/FigmaSyncPage'));
+const VisualRegressionPage = lazy(() => import('./pages/VisualRegressionPage'));
 
 /* Migration */
-const MigrationGuidePage = lazy(() => import("./pages/MigrationGuidePage"));
+const MigrationGuidePage = lazy(() => import('./pages/MigrationGuidePage'));
 
 /* Theming Guide */
-const ThemingGuidePage = lazy(() => import("./pages/ThemingGuidePage"));
+const ThemingGuidePage = lazy(() => import('./pages/ThemingGuidePage'));
 
 /* Parity Dashboard */
-const ParityDashboardPage = lazy(() => import("./pages/ParityDashboardPage"));
+const ParityDashboardPage = lazy(() => import('./pages/ParityDashboardPage'));
 
 /* Adoption Insights */
-const InsightsDashboardPage = lazy(() => import("./pages/InsightsDashboardPage"));
+const InsightsDashboardPage = lazy(() => import('./pages/InsightsDashboardPage'));
 
-/* Quality Audit */
-const QualityAuditPage = lazy(() => import("./pages/QualityAuditPage"));
-
-/* Quality Dashboard */
-const QualityDashboardPage = lazy(() => import("./pages/QualityDashboardPage"));
+/* Quality Dashboard (also serves the legacy /quality-audit route) */
+const QualityDashboardPage = lazy(() => import('./pages/QualityDashboardPage'));
 
 /* Visual Composition Builder */
-const ComposePage = lazy(() => import("./compose/ComposePage"));
+const ComposePage = lazy(() => import('./compose/ComposePage'));
 
 /* Cross-Component Interaction Playground */
-const InteractionPlayground = lazy(() => import("./interaction/InteractionPlayground"));
+const InteractionPlayground = lazy(() => import('./interaction/InteractionPlayground'));
 
 /* Governance Plane */
-const GovernancePage = lazy(() => import("./pages/GovernancePage"));
+const GovernancePage = lazy(() => import('./pages/GovernancePage'));
 
 /* Observability */
-const ObservabilityPage = lazy(() => import("./pages/ObservabilityPage"));
+const ObservabilityPage = lazy(() => import('./pages/ObservabilityPage'));
 
 /* Intelligence */
-const IntelligencePage = lazy(() => import("./pages/IntelligencePage"));
+const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 
 /* Leadership Proof */
-const LeadershipProofPage = lazy(() => import("./pages/LeadershipProofPage"));
+const LeadershipProofPage = lazy(() => import('./pages/LeadershipProofPage'));
 
 /* X Suite Runtime Preview (iframe target for Design Lab dual preview) */
-const XSuiteRuntimePreview = lazy(() => import("./XSuiteRuntimePreview"));
+const XSuiteRuntimePreview = lazy(() => import('./XSuiteRuntimePreview'));
 
-/* Legacy — kept for backward-compat redirects */
-const FoundationsListing = lazy(() => import("./pages/FoundationsListing"));
-const FoundationDetail = lazy(() => import("./pages/FoundationDetail"));
+/* ------------------------------------------------------------------ */
+/*  Benchmark Route — Faz 21.11 PR-A1.6a (flag-gated, dev-only)        */
+/*                                                                     */
+/*  Fail-closed: only mounted when                                     */
+/*    VITE_ENABLE_DESIGN_LAB_BENCHMARK === "true" AND                 */
+/*    import.meta.env.MODE !== "production"                            */
+/*                                                                     */
+/*  Sidebar entry intentionally NOT registered — deep-link only        */
+/*  (`/admin/design-lab/benchmark`). Internal harness, not a public    */
+/*  user surface. The 1M tier + Playwright artifact lands in PR-A1.6b. */
+/* ------------------------------------------------------------------ */
+const benchmarkRouteEnabled: boolean =
+  import.meta.env.VITE_ENABLE_DESIGN_LAB_BENCHMARK === 'true' &&
+  import.meta.env.MODE !== 'production';
+
+const BenchmarkRoute = benchmarkRouteEnabled ? lazy(() => import('./pages/BenchmarkRoute')) : null;
+
+/* Legacy redirect targets — `FoundationsListing` and `FoundationDetail`
+ * were retired when Design Tokens absorbed the layer. The remaining
+ * legacy URLs are handled by the `<Navigate>` redirects below, so the
+ * lazy chunks no longer have to be hoisted here. */
 
 /* ------------------------------------------------------------------ */
 /*  Skeleton fallback (shared across all lazy boundaries)              */
@@ -124,59 +137,51 @@ function PageSkeleton() {
 
 function LegacyUrlRedirect() {
   const params = new URLSearchParams(window.location.search);
-  const mode = params.get("dl_mode");
-  const group = params.get("dl_group");
-  const item = params.get("dl_item");
-  const recipe = params.get("dl_recipe");
-  const template = params.get("dl_template");
-  const extension = params.get("dl_extension");
-  const foundation = params.get("dl_foundation");
-  const section = params.get("dl_section");
+  const mode = params.get('dl_mode');
+  const group = params.get('dl_group');
+  const item = params.get('dl_item');
+  const recipe = params.get('dl_recipe');
+  const template = params.get('dl_template');
+  const extension = params.get('dl_extension');
+  const foundation = params.get('dl_foundation');
+  const section = params.get('dl_section');
 
   // If no legacy params, render nothing (index route will handle it)
   if (!mode && !section) return null;
 
-  const effectiveMode = mode ?? section ?? "components";
+  const effectiveMode = mode ?? section ?? 'components';
 
-  let targetPath = "/admin/design-lab";
+  let targetPath = '/admin/design-lab';
 
   switch (effectiveMode) {
-    case "foundations":
-      targetPath += foundation
-        ? `/design/${foundation}`
-        : "/design";
+    case 'foundations':
+      targetPath += foundation ? `/design/${foundation}` : '/design';
       break;
 
-    case "components":
+    case 'components':
       if (group && item) {
         targetPath += `/components/${group}/${encodeURIComponent(item)}`;
       } else if (group) {
         targetPath += `/components/${group}`;
       } else {
-        targetPath += "/components";
+        targetPath += '/components';
       }
       break;
 
-    case "recipes":
-      targetPath += recipe
-        ? `/recipes/${recipe}`
-        : "/recipes";
+    case 'recipes':
+      targetPath += recipe ? `/recipes/${recipe}` : '/recipes';
       break;
 
-    case "pages":
-      targetPath += template
-        ? `/patterns/${template}`
-        : "/patterns";
+    case 'pages':
+      targetPath += template ? `/patterns/${template}` : '/patterns';
       break;
 
-    case "ecosystem":
-      targetPath += extension
-        ? `/ecosystem/${extension}`
-        : "/ecosystem";
+    case 'ecosystem':
+      targetPath += extension ? `/ecosystem/${extension}` : '/ecosystem';
       break;
 
     default:
-      targetPath = "/admin/design-lab";
+      targetPath = '/admin/design-lab';
   }
 
   return <Navigate to={targetPath} replace />;
@@ -206,32 +211,20 @@ export const DesignLabRoutes: React.FC = () => (
 
         {/* Primitives layer */}
         <Route path="primitives" element={<PrimitivesListing />} />
-        <Route
-          path="primitives/:groupId/:itemId"
-          element={<ComponentDetail />}
-        />
+        <Route path="primitives/:groupId/:itemId" element={<ComponentDetail />} />
 
         {/* Components layer */}
         <Route path="components" element={<ComponentsListing />} />
         <Route path="components/:groupId" element={<ComponentGroupListing />} />
-        <Route
-          path="components/:groupId/:itemId"
-          element={<ComponentDetail />}
-        />
+        <Route path="components/:groupId/:itemId" element={<ComponentDetail />} />
 
         {/* Patterns layer (was: Pages) */}
         <Route path="patterns" element={<PagesListing />} />
-        <Route
-          path="patterns/:templateId"
-          element={<PageTemplateDetail />}
-        />
+        <Route path="patterns/:templateId" element={<PageTemplateDetail />} />
 
         {/* Advanced layer */}
         <Route path="advanced" element={<AdvancedListing />} />
-        <Route
-          path="advanced/:itemId"
-          element={<ComponentDetail />}
-        />
+        <Route path="advanced/:itemId" element={<ComponentDetail />} />
 
         {/* APIs layer */}
         <Route path="apis" element={<AdvancedListing />} />
@@ -292,32 +285,22 @@ export const DesignLabRoutes: React.FC = () => (
 
         {/* Ecosystem layer */}
         <Route path="ecosystem" element={<EcosystemListing />} />
-        <Route
-          path="ecosystem/:extensionId"
-          element={<ExtensionDetail />}
-        />
+        <Route path="ecosystem/:extensionId" element={<ExtensionDetail />} />
 
         {/* Charts layer */}
         <Route path="charts" element={<ChartsListing />} />
         <Route path="charts/:chartId" element={<ChartDetail />} />
 
+        {/* Benchmark harness (PR-A1.6a — flag-gated, deep-link only) */}
+        {benchmarkRouteEnabled && BenchmarkRoute && (
+          <Route path="benchmark" element={<BenchmarkRoute />} />
+        )}
+
         {/* ---- Backward-compat redirects ---- */}
-        <Route
-          path="foundations"
-          element={<Navigate to="/admin/design-lab/design" replace />}
-        />
-        <Route
-          path="foundations/:familyId"
-          element={<FoundationsRedirect />}
-        />
-        <Route
-          path="pages"
-          element={<Navigate to="/admin/design-lab/patterns" replace />}
-        />
-        <Route
-          path="pages/:templateId"
-          element={<PagesRedirect />}
-        />
+        <Route path="foundations" element={<Navigate to="/admin/design-lab/design" replace />} />
+        <Route path="foundations/:familyId" element={<FoundationsRedirect />} />
+        <Route path="pages" element={<Navigate to="/admin/design-lab/patterns" replace />} />
+        <Route path="pages/:templateId" element={<PagesRedirect />} />
 
         {/* Legacy query-param redirect (catch-all within layout) */}
         <Route path="*" element={<LegacyUrlRedirect />} />
@@ -332,12 +315,12 @@ export const DesignLabRoutes: React.FC = () => (
 /* ---- Redirect helpers for parameterized legacy routes ---- */
 
 function FoundationsRedirect() {
-  const familyId = window.location.pathname.split("/").pop();
+  const familyId = window.location.pathname.split('/').pop();
   return <Navigate to={`/admin/design-lab/design/${familyId}`} replace />;
 }
 
 function PagesRedirect() {
-  const templateId = window.location.pathname.split("/").pop();
+  const templateId = window.location.pathname.split('/').pop();
   return <Navigate to={`/admin/design-lab/patterns/${templateId}`} replace />;
 }
 

@@ -31,6 +31,11 @@
       "types": "./src/ssr/index.ts",
       "import": "./src/ssr/index.ts",
       "default": "./src/ssr/index.ts"
+    },
+    "./benchmark": {
+      "types": "./src/performance/benchmark/index.ts",
+      "import": "./src/performance/benchmark/index.ts",
+      "default": "./src/performance/benchmark/index.ts"
     }
   },
   "files": [
