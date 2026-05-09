@@ -56,19 +56,27 @@ export function computeTrendOverlay(options: ComputeTrendOverlayOptions): ChartM
 
   if (!Array.isArray(data) || data.length < 2) return [];
 
-  // Index-based regression — works for both numeric and categorical
-  // x-axes. The output segment's `from.x` / `to.x` use the ORIGINAL
-  // x value (string for category, number for numeric) so ECharts
-  // resolves it natively in the chart's coordinate system.
-  const xVals = data.map((_, i) => i);
+  // Codex post-impl review absorb (P1): when EVERY x is numeric,
+  // run regression on actual x values so irregular spacing /
+  // timestamps produce a correct slope. Categorical (or mixed)
+  // arrays fall back to index-based regression and the segment
+  // endpoints carry the ORIGINAL labels so ECharts resolves them
+  // via the chart's coordinate system.
+  const allNumericX = data.every((d) => typeof d.x === 'number');
+  const xVals = allNumericX ? (data.map((d) => d.x) as number[]) : data.map((_, i) => i);
   const yVals = data.map((d) => d.y);
   const reg = linearRegression(xVals, yVals);
 
   const lastIdx = data.length - 1;
   const fromX = data[0].x;
   const toX = data[lastIdx].x;
-  const fromY = reg.intercept;
-  const toY = reg.slope * lastIdx + reg.intercept;
+  // For numeric x, evaluate the regression line at the actual first
+  // and last x; for index-based fallback, evaluate at index 0 and
+  // index `lastIdx`.
+  const fromY = allNumericX ? reg.slope * (data[0].x as number) + reg.intercept : reg.intercept;
+  const toY = allNumericX
+    ? reg.slope * (data[lastIdx].x as number) + reg.intercept
+    : reg.slope * lastIdx + reg.intercept;
 
   const segment: ChartMarkup = {
     id: `${idPrefix}-segment`,

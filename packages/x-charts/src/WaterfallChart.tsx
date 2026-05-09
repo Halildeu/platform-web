@@ -409,9 +409,14 @@ const WaterfallChartInner = React.forwardRef<
           ? {
               symbol: 'none',
               lineStyle: { color: '#94a3b8', type: 'dashed' as const, width: 1 },
-              data: markLineData,
+              // Codex post-impl review (P1): per-item `silent: true`
+              // on connector entries instead of object-level `silent`,
+              // so when `mergeMarkupPatches` appends user-supplied
+              // markup lines/segments to this same markLine they keep
+              // their default clickable behaviour and `onMarkupClick`
+              // fires.
+              data: markLineData.map((d) => ({ ...d, silent: true })),
               label: { show: false },
-              silent: true,
             }
           : undefined,
       cursor: onDataPointClick ? 'pointer' : ('default' as const),

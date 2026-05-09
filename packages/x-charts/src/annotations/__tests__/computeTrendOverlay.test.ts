@@ -108,6 +108,36 @@ describe('computeTrendOverlay — categorical x', () => {
   });
 });
 
+describe('computeTrendOverlay — numeric x with irregular spacing', () => {
+  // Codex post-impl review absorb (P1): irregular numeric x must
+  // use ACTUAL x values (not indices) so the slope reflects real
+  // spacing. Index-based fallback would compute slope per index,
+  // which is wrong for time series with gaps.
+  it('uses actual x values when every x is numeric (irregular spacing)', () => {
+    // y = 2x + 1 sampled at irregular x = [0, 1, 5, 10]
+    const data = [
+      { x: 0, y: 1 },
+      { x: 1, y: 3 },
+      { x: 5, y: 11 },
+      { x: 10, y: 21 },
+    ];
+    const out = computeTrendOverlay({ data });
+    const segment = out[0] as SegmentMarkup;
+    // Endpoints carry the original numeric x values (0 and 10), and
+    // y = 2x + 1 → fromY=1, toY=21. Index-based fallback would give
+    // wrong slope (~6.67 per index step) and the wrong toY (~21
+    // vs. evaluating index 3 with that slope).
+    expect(segment.from.x).toBe(0);
+    expect(segment.from.y).toBeCloseTo(1, 3);
+    expect(segment.to.x).toBe(10);
+    expect(segment.to.y).toBeCloseTo(21, 3);
+
+    const label = out[1] as LabelMarkup;
+    // Slope should be ~2 per actual x unit, NOT per index.
+    expect(label.text).toContain('Slope: 2.00');
+  });
+});
+
 describe('computeTrendOverlay — robust to noise', () => {
   it('returns reasonable r² (<1) for noisy data', () => {
     const data = [
