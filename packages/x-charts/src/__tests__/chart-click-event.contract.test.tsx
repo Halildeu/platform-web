@@ -107,7 +107,11 @@ describe('BarChart onDataPointClick contract', () => {
 });
 
 describe('LineChart onDataPointClick contract', () => {
-  it('emits a series-aware datum with seriesName / label / value', () => {
+  it('emits { seriesName, label, value, dataIndex, seriesIndex } (Area pattern)', () => {
+    // Codex thread 019e0c25 post-impl review fix: LineChart datum must
+    // include `dataIndex` and `seriesIndex` to match the canonical
+    // table; the previous truncated `{seriesName, label, value}` made
+    // the cross-filter wrapper unable to emit those fields.
     const onClick = vi.fn<(e: ChartClickEvent) => void>();
     render(
       <LineChart
@@ -131,6 +135,8 @@ describe('LineChart onDataPointClick contract', () => {
       seriesName: 'Sales',
       label: 'Feb',
       value: 20,
+      dataIndex: 1,
+      seriesIndex: 0,
     });
   });
 });

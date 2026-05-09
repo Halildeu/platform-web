@@ -306,12 +306,23 @@ const FULL_SUITE_DATA = {
     { label: 'Sanayi', value: 540 },
     { label: 'Hizmet', value: 720 },
   ],
-  scatter: Array.from({ length: 30 }, (_, i) => ({
-    x: Math.random() * 10,
-    y: Math.random() * 10,
-    size: 10 + Math.random() * 30,
-    label: `P${i + 1}`,
-  })),
+  // Deterministic synthetic scatter — Codex thread 019e0c25 post-impl
+  // review absorb: replace `Math.random()` with a seeded LCG so
+  // snapshot/render gates that consume this story stay stable across
+  // CI runs.
+  scatter: (() => {
+    let seed = 42;
+    const next = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    return Array.from({ length: 30 }, (_, i) => ({
+      x: next() * 10,
+      y: next() * 10,
+      size: 10 + next() * 30,
+      label: `P${i + 1}`,
+    }));
+  })(),
   hierarchical: [
     {
       name: 'Root',
@@ -342,12 +353,21 @@ const FULL_SUITE_DATA = {
       { source: 'Asia', target: 'Store', value: 200 },
     ],
   },
-  heatmap: Array.from({ length: 5 }, (_, x) =>
-    Array.from(
-      { length: 5 },
-      (_, y) => [x, y, Math.round(Math.random() * 100)] as [number, number, number],
-    ),
-  ).flat(),
+  // Deterministic heatmap — same seeded LCG so the rendered intensity
+  // matrix is identical run-to-run (Codex post-impl review absorb).
+  heatmap: (() => {
+    let seed = 7;
+    const next = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+    return Array.from({ length: 5 }, (_, x) =>
+      Array.from(
+        { length: 5 },
+        (_, y) => [x, y, Math.round(next() * 100)] as [number, number, number],
+      ),
+    ).flat();
+  })(),
   radar: {
     indicators: [
       { name: 'Hız', max: 100 },
@@ -379,8 +399,10 @@ export const FullSuite = () => (
       <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary, #6b7280)' }}>
         Click any element in any chart. Every adapter forwards a canonical
         <code> ChartClickEvent </code>
-        through <code>CrossFilterChart</code> into the shared store; the active-filter indicator
-        appears on the chart whose click landed.
+        through <code>CrossFilterChart</code> into the shared cross-filter bus.{' '}
+        <code>useChartCrossFilter</code> intentionally hides each chart&apos;s OWN filter from
+        itself, so the active-filter indicator appears on the OTHER charts (the ones consuming the
+        bus filter), not on the one you clicked.
       </p>
       <DashboardControls />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>

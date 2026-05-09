@@ -342,10 +342,29 @@ const LineChartInner = React.forwardRef<
   const handleClick = useCallback(
     (params: unknown) => {
       if (!onDataPointClick) return;
-      const p = params as { seriesName: string; name: string; value: number; dataIndex: number };
+      // Codex thread 019e0c25 post-impl review: align LineChart datum
+      // with the canonical Area pattern. `dataIndex` and `seriesIndex`
+      // were absent in the previous shape, which made the cross-filter
+      // wrapper unable to surface those fields when emitFields included
+      // them — and the contract test was asserting the truncated shape
+      // rather than catching the drift.
+      const p = params as {
+        seriesName?: string;
+        seriesIndex?: number;
+        dataIndex?: number;
+        name?: string;
+        value?: number;
+      };
+      const value = typeof p.value === 'number' ? p.value : undefined;
       onDataPointClick({
-        datum: { seriesName: p.seriesName, label: p.name, value: p.value },
-        value: p.value,
+        datum: {
+          seriesName: p.seriesName ?? '',
+          label: p.name ?? '',
+          value,
+          dataIndex: typeof p.dataIndex === 'number' ? p.dataIndex : undefined,
+          seriesIndex: typeof p.seriesIndex === 'number' ? p.seriesIndex : undefined,
+        },
+        value,
         label: p.name,
       });
     },

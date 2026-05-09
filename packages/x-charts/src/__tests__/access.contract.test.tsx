@@ -109,7 +109,7 @@ const CASES: ChartCase[] = [
   },
   {
     name: 'AreaChart',
-    handlerBearing: false,
+    handlerBearing: true,
     render: (o) => (
       <AreaChart
         series={[{ name: 's1', data: [1] }]}
@@ -117,6 +117,7 @@ const CASES: ChartCase[] = [
         animate={false}
         access={o.access}
         accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
       />
     ),
   },
@@ -135,16 +136,28 @@ const CASES: ChartCase[] = [
   },
   {
     name: 'ScatterChart',
-    handlerBearing: false,
+    handlerBearing: true,
     render: (o) => (
-      <ScatterChart data={[{ x: 1, y: 1 }]} access={o.access} accessReason={o.accessReason} />
+      <ScatterChart
+        data={[{ x: 1, y: 1 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
     ),
   },
   {
     name: 'GaugeChart',
-    handlerBearing: false,
+    handlerBearing: true,
     render: (o) => (
-      <GaugeChart value={50} min={0} max={100} access={o.access} accessReason={o.accessReason} />
+      <GaugeChart
+        value={50}
+        min={0}
+        max={100}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
     ),
   },
   {
@@ -318,6 +331,101 @@ describe('access="readonly" — handler-bearing charts suppress listener install
 
   it.each(handlerBearing)(
     '$name with onClick + access="disabled" registers ZERO click listeners',
+    ({ render: factory }) => {
+      const handler = () => {};
+      render(factory({ access: 'disabled', onClick: handler }));
+      expect(clickListenerRegistrations()).toHaveLength(0);
+    },
+  );
+});
+
+/* ================================================================== */
+/*  Cross-filter dual-callback charts — onDataPointClick guard         */
+/*                                                                     */
+/*  Codex thread 019e0c25 post-impl review absorb. The cases above     */
+/*  exercise each chart through ITS canonical click prop (e.g. Treemap */
+/*  via `onNodeClick`); they do NOT cover the new `onDataPointClick`   */
+/*  surface for charts that expose BOTH callbacks. This block          */
+/*  duplicates the readonly/disabled listener-suppression contract but */
+/*  through the new cross-filter callback so a regression on either    */
+/*  guard is caught.                                                   */
+/* ================================================================== */
+
+const DUAL_CALLBACK_CASES: Case[] = [
+  {
+    name: 'TreemapChart (onDataPointClick)',
+    handlerBearing: true,
+    render: (o) => (
+      <TreemapChart
+        data={[{ name: 'A', value: 1 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+  {
+    name: 'HeatmapChart (onDataPointClick)',
+    handlerBearing: true,
+    render: (o) => (
+      <HeatmapChart
+        data={[[0, 0, 1]]}
+        xLabels={['x']}
+        yLabels={['y']}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+  {
+    name: 'SankeyChart (onDataPointClick)',
+    handlerBearing: true,
+    render: (o) => (
+      <SankeyChart
+        nodes={[{ name: 'A' }, { name: 'B' }]}
+        links={[{ source: 'A', target: 'B', value: 1 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+  {
+    name: 'SunburstChart (onDataPointClick)',
+    handlerBearing: true,
+    render: (o) => (
+      <SunburstChart
+        data={[{ name: 'A', value: 1 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+];
+
+describe('Cross-filter onDataPointClick — access guard regression (dual-callback charts)', () => {
+  it.each(DUAL_CALLBACK_CASES)(
+    '$name with access="full" registers at least one click listener',
+    ({ render: factory }) => {
+      const handler = () => {};
+      render(factory({ access: 'full', onClick: handler }));
+      expect(clickListenerRegistrations().length).toBeGreaterThanOrEqual(1);
+    },
+  );
+
+  it.each(DUAL_CALLBACK_CASES)(
+    '$name with access="readonly" registers ZERO click listeners',
+    ({ render: factory }) => {
+      const handler = () => {};
+      render(factory({ access: 'readonly', onClick: handler }));
+      expect(clickListenerRegistrations()).toHaveLength(0);
+    },
+  );
+
+  it.each(DUAL_CALLBACK_CASES)(
+    '$name with access="disabled" registers ZERO click listeners',
     ({ render: factory }) => {
       const handler = () => {};
       render(factory({ access: 'disabled', onClick: handler }));
