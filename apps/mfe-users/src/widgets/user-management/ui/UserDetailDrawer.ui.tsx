@@ -1286,7 +1286,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           skipNextClearRef.current = true;
         }
       },
-      [setter, isLargeList, inputValue],
+      // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #1): canEdit
+      // listed in deps so a stale closure cannot mutate state after
+      // the gate has flipped readonly. Mirrors the canEditRef
+      // hardening PR-FE-7 absorb iter-3 added on the autosave path.
+      [setter, isLargeList, inputValue, canEdit],
     );
 
     const handleInputChange = React.useCallback((value: string) => {
@@ -1330,7 +1334,10 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
         setter((prev) => prev.filter((id) => id !== itemId));
         setDirty(true);
       },
-      [setter],
+      // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #1): canEdit
+      // included so the gate is closed-over correctly when the
+      // permission flips. Same rationale as handleValuesChange.
+      [setter, canEdit],
     );
 
     const handleClearAll = React.useCallback(() => {
@@ -1348,7 +1355,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       if (!confirmed) return;
       setter([]);
       setDirty(true);
-    }, [canEdit, selected.length, setter]);
+      // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #1): t added
+      // to deps so locale changes during a long-lived drawer
+      // session correctly re-translate the confirm copy. canEdit
+      // was already in deps from iter-1.
+    }, [canEdit, selected.length, setter, t]);
 
     return (
       // PR-FE-11 (Codex thread 019e0bd3 user feedback 2026-05-09):
@@ -1437,7 +1448,17 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             </div>
             <ul className="flex flex-wrap gap-2" role="list">
               {selectedItems.map((item) => {
-                const fullLabel = item.code ? `[${item.code}] ${item.name}` : item.name;
+                // PR-FE-11 absorb iter-2 (Codex thread 019e0ce8 #2):
+                // normalize the code badge to uppercase. master-data
+                // backend may emit mixed case (PROJECT_NUMBER all-
+                // upper, COMPANY_SHORT_CODE uppercase, SPECIAL_CODE
+                // technically free-form); the chip badge convention
+                // is uppercase for visual disambiguation, so we
+                // normalize at display time. tr-TR locale is used so
+                // i ↔ İ converts correctly under Turkish casing
+                // rules (default JS toUpperCase miscasts on tr).
+                const displayCode = item.code?.toLocaleUpperCase('tr-TR');
+                const fullLabel = displayCode ? `[${displayCode}] ${item.name}` : item.name;
                 return (
                   <li
                     key={item.id}
@@ -1445,9 +1466,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
                     title={fullLabel}
                     data-testid={`scope-chip-${item.id}`}
                   >
-                    {item.code ? (
+                    {displayCode ? (
                       <span className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[10px] text-text-subtle">
-                        {item.code}
+                        {displayCode}
                       </span>
                     ) : null}
                     <span className="text-sm font-medium text-text-primary">{item.name}</span>
