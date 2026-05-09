@@ -793,6 +793,21 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     };
   }, []);
 
+  // PR-FE-9 (2026-05-09): status fade. The green "Tüm değişiklikler
+  // kaydedildi" indicator persisted indefinitely after every save,
+  // creating visual noise once the admin had stopped editing. Fade
+  // 'saved' to neutral 'idle' after 4 seconds so the footer settles
+  // down. Mirrors the RoleDrawer fade introduced in PR-FE-9. Only
+  // 'saved' fades — 'saving' stays put while the POST is on the
+  // wire, and 'error' must persist until the admin acknowledges.
+  useEffect(() => {
+    if (autoSaveStatus !== 'saved') return;
+    const timer = setTimeout(() => {
+      setAutoSaveStatus('idle');
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [autoSaveStatus]);
+
   // PR-FE-8: bind queue-flush function via ref so the mutation's
   // onSuccess can fire it without a temporal-dead-zone reference.
   useEffect(() => {
@@ -901,18 +916,75 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // any user interaction below via the load banner.
   void assignmentLoading;
 
-  // Dirty close guard. ESC, backdrop, and the explicit Cancel button all funnel
-  // through this. Pre-iter-36 the user could lose unsaved role/scope changes
-  // by hitting ESC; the design-system DetailDrawer wires useEscapeKey to its
-  // onClose, so wrapping onClose at this layer is enough.
+  // PR-FE-9 (2026-05-09): close-flush. Pre-PR-FE-9 the dirty-close
+  // confirm popup (window.confirm) protected against accidental
+  // unsaved-loss. PR-FE-8 introduced auto-save which already
+  // persists every state change, so the confirm dialog became
+  // redundant friction. The remaining edge case is a 500ms-pending
+  // debounce: the user toggles a role and immediately clicks ESC
+  // / backdrop / X before the timer fires. Pre-fix the unmount
+  // cleanup useEffect would clearTimeout the debounce without
+  // firing the buffered draft, silently dropping the edit. Now we
+  // flush it before unmount.
+  //
+  // Pattern: fire-and-forget mutate (mutation lifecycle continues
+  // after unmount via React Query; the seq + userId ownership
+  // guard already handles "owner moved on" because activeUserIdRef
+  // is wiped by Effect U on user.id change). Not awaited — that
+  // would slow the close UI unnecessarily.
   const handleClose = useCallback(() => {
-    if (dirty) {
-      const ok =
-        typeof window !== 'undefined' ? window.confirm(t('users.detail.dirtyCloseConfirm')) : true;
-      if (!ok) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+      const next: AssignmentSnapshot = {
+        roleIds: selectedRoleIds,
+        companyIds: selectedCompanyIds,
+        projectIds: selectedProjectIds,
+        warehouseIds: selectedWarehouseIds,
+        branchIds: selectedBranchIds,
+      };
+      const last = lastSavedDraftRef.current;
+      const isDelta = !last || !draftEqual(last, next);
+      const targetUserId = activeUserIdRef.current;
+      // Empty roleIds gate: the scheduler hard-blocks empty
+      // roleIds. close-flush respects the same invariant — never
+      // POST `roleIds: []` even on close.
+      if (
+        canEditRef.current &&
+        assignmentLoadedRef.current &&
+        isDelta &&
+        targetUserId !== undefined &&
+        next.roleIds.length > 0 &&
+        !inFlightRef.current
+      ) {
+        inFlightRef.current = true;
+        saveSeqRef.current += 1;
+        saveAssignmentMutation.mutate({
+          draft: next,
+          seq: saveSeqRef.current,
+          userId: targetUserId,
+        });
+      } else if (
+        isDelta &&
+        inFlightRef.current &&
+        targetUserId !== undefined &&
+        next.roleIds.length > 0
+      ) {
+        // In flight; queue the latest so onSuccess flushes it.
+        queuedDraftRef.current = next;
+      }
     }
     onClose();
-  }, [dirty, onClose, t]);
+  }, [
+    selectedRoleIds,
+    selectedCompanyIds,
+    selectedProjectIds,
+    selectedWarehouseIds,
+    selectedBranchIds,
+    draftEqual,
+    onClose,
+    saveAssignmentMutation,
+  ]);
 
   // PR-FE-8 absorb-from-RoleDrawer iter-2 #1: defense-in-depth gate
   // at the setter level. The Checkbox is also `disabled={!canEdit}`

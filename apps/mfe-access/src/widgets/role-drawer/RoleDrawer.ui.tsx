@@ -792,6 +792,77 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     };
   }, []);
 
+  // PR-FE-9 (2026-05-09): status fade. Auto-save's canonical-saved
+  // state used to live in the footer indefinitely; the green "Tüm
+  // değişiklikler kaydedildi" message creates persistent visual
+  // noise once the admin has stopped editing. Fade to the neutral
+  // 'idle' state after 4 seconds so the footer settles down. Only
+  // 'saved' fades — 'saving' stays put while a PUT is on the wire,
+  // and 'error' must persist until the admin acknowledges (clicks
+  // Tekrar dene or makes another change).
+  React.useEffect(() => {
+    if (autoSaveStatus !== 'saved') return;
+    const t = setTimeout(() => {
+      setAutoSaveStatus('idle');
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [autoSaveStatus]);
+
+  // PR-FE-9 (2026-05-09): close-flush. Drawer dismissal (ESC,
+  // backdrop click, X button) used to leave a 500ms-pending edit
+  // unsent — the unmount-cleanup useEffect above clearTimeout's the
+  // debounce timer without firing the buffered save. From the
+  // admin's perspective they "saved" by toggling and then closed
+  // the drawer expecting persistence. Close-flush forces an
+  // immediate mutate when the user closes mid-debounce so the last
+  // edit lands.
+  //
+  // Pattern: fire-and-forget mutate (mutation lifecycle continues
+  // after unmount via React Query; our seq + roleId ownership
+  // guard already drops onSuccess writes into a torn-down tree
+  // because activeRoleIdRef will be undefined post-unmount). We do
+  // not await — that would slow the close UI by 500ms+.
+  const handleClose = React.useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+      // Build a current-state snapshot identical to what the
+      // scheduler would have sent at fire time.
+      const next: GrantSnapshot = { moduleGrants, actionGrants, reportGrants };
+      const last = lastSavedDraftRef.current;
+      const isDelta =
+        !last ||
+        !grantsEqual(last.moduleGrants, next.moduleGrants) ||
+        !grantsEqual(last.actionGrants, next.actionGrants) ||
+        !grantsEqual(last.reportGrants, next.reportGrants);
+      const targetRoleId = activeRoleIdRef.current;
+      if (
+        canEditRef.current &&
+        grantsLoadedRef.current &&
+        isDelta &&
+        targetRoleId !== undefined &&
+        !inFlightRef.current
+      ) {
+        // Fire immediately. Server commits; UI unmounts before
+        // onSuccess fires but the seq guard in onSuccess already
+        // handles "owner moved on" gracefully.
+        inFlightRef.current = true;
+        saveSeqRef.current += 1;
+        saveGranulesMutation.mutate({
+          draft: next,
+          seq: saveSeqRef.current,
+          roleId: targetRoleId,
+        });
+      } else if (isDelta && inFlightRef.current && targetRoleId !== undefined) {
+        // Save is in flight; queue the latest draft so onSuccess
+        // flushes it before unmount. (queueDraftRef is read after
+        // unmount via React Query's stable mutation reference.)
+        queuedDraftRef.current = next;
+      }
+    }
+    onClose();
+  }, [moduleGrants, actionGrants, reportGrants, grantsEqual, onClose, saveGranulesMutation]);
+
   // PR-FE-7 absorb iter-2 (Codex thread 019e0bdc #6): retry sends
   // the failed draft straight back. We do NOT lift the failed draft
   // into UI state here — onSuccess does that with `result.draft`,
@@ -1089,7 +1160,7 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   return (
     <DetailDrawer
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={role.name}
       subtitle={role.description || t('access.drawer.noDescription')}
       leading={
