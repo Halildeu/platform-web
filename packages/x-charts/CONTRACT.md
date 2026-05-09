@@ -162,6 +162,8 @@ BarChart
     title?: string;
     series?: ChartSeries[];                        // multi-series grouping
     onDataPointClick?: (e: ChartClickEvent) => void;
+    markups?: ChartMarkup[];                       // PR #350 — markup overlay (full)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 LineChart
@@ -178,6 +180,8 @@ LineChart
     animate?: boolean;
     title?: string;
     onDataPointClick?: (e: ChartClickEvent) => void;
+    markups?: ChartMarkup[];                       // PR #350 — markup overlay (full)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 AreaChart
@@ -193,6 +197,9 @@ AreaChart
     curved?: boolean;
     animate?: boolean;
     title?: string;
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — cross-filter sweep
+    markups?: ChartMarkup[];                       // PR #350 — markup overlay (full)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 PieChart
@@ -206,6 +213,8 @@ PieChart
     animate?: boolean;
     title?: string;
     onDataPointClick?: (e: ChartClickEvent) => void;
+    markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP (dev warning)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 ScatterChart
@@ -218,6 +227,9 @@ ScatterChart
     description?: string;
     xLabel?: string;
     yLabel?: string;
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — cross-filter sweep
+    markups?: ChartMarkup[];                       // PR #350 — markup overlay (full)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 RadarChart
@@ -233,7 +245,9 @@ RadarChart
     title?: string;
     animate?: boolean;
     valueFormatter?: (v: number) => string;
-    onDataPointClick?: (e: unknown) => void;
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #345 — Radar v2 indicator-level enrichment
+    markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP (Radar indicator anchor v2 backlog)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 TreemapChart
@@ -241,6 +255,10 @@ TreemapChart
     data: TreemapNode[];                           // hierarchical { name, value?, children? }
     size?: 'sm' | 'md' | 'lg';
     title?: string;
+    onNodeClick?: (params: { name: string; value: number; data: unknown }) => void; // legacy
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical, fires FIRST then legacy
+    markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP (hierarchical, no x/y axis)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 SunburstChart
@@ -248,6 +266,10 @@ SunburstChart
     data: SunburstNode[];                          // hierarchical
     size?: 'sm' | 'md' | 'lg';
     title?: string;
+    onNodeClick?: (params: { name: string; value: number; data: unknown }) => void; // legacy
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical
+    markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP (hierarchical)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 HeatmapChart
@@ -265,7 +287,10 @@ HeatmapChart
     cellSize?: number | 'auto';                      // default 'auto'
     showLegend?: boolean;                            // visualMap legend, default true
     animate?: boolean;
-    onCellClick?: (params: { x: number; y: number; value: number }) => void;
+    onCellClick?: (params: { x: number; y: number; value: number }) => void; // legacy (numeric indices)
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical, datum: { x, y, xLabel, yLabel, value, label }
+    markups?: ChartMarkup[];                       // PR #350 — markup overlay (full; LabelMarkup needs explicit { x, y } anchor — { dataIndex } shorthand v2 backlog)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 FunnelChart
@@ -283,7 +308,9 @@ FunnelChart
     showLegend?: boolean;
     valueFormatter?: (v: number) => string;
     animate?: boolean;
-    onDataPointClick?: (params: unknown) => void;
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — datum: { label, value, percent, conversionPercent? }
+    markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 SankeyChart
@@ -292,6 +319,10 @@ SankeyChart
     links: { source: string; target: string; value: number }[];
     size?: 'sm' | 'md' | 'lg';
     title?: string;
+    onNodeClick?: (params: { name: string; data: unknown }) => void; // legacy (node-only)
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical, datum: { dataType: 'node' | 'edge', ... }
+    markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP (network, no x/y axis)
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 GaugeChart
@@ -302,6 +333,9 @@ GaugeChart
     size?: 'sm' | 'md' | 'lg';
     thresholds?: { value: number; color: string }[];
     title?: string;
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — datum: { label, name, value, min, max }
+    markups?: ChartMarkup[];                       // PR #350 — accepted, NO-OP
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 WaterfallChart
@@ -316,7 +350,9 @@ WaterfallChart
     orientation?: 'vertical' | 'horizontal';
     showLegend?: boolean;
     animate?: boolean;
-    onDataPointClick?: (params: unknown) => void;
+    onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — datum: { label, value, rawValue, type }
+    markups?: ChartMarkup[];                       // PR #350 — partial: line/area MERGE with existing connector markLine; base series untouched
+    onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
 ChartContainer
@@ -624,6 +660,13 @@ npx madge --circular packages/x-charts/src      # must be 0 cycles
 ```
 
 ### ChartMarkup Overlay Layer (PR #350 — Highcharts annotation parity)
+
+> **Full consumer guide:** [`docs/markup-overlay.md`](../../docs/markup-overlay.md)
+> — type catalog, support matrix per chart, click-vs-data dispatch,
+> AI overlay hooks (`useTrendOverlay` / `useAnomalyOverlay`), perf
+> gates, and v2 backlog. The §1 prop blocks above already list
+> `markups` + `onMarkupClick` per chart for quick API reference;
+> this section keeps the architectural summary.
 
 Every chart shim above accepts two ADDITIONAL public props on top of
 its existing surface — wired uniformly via `useMarkupAdapter` +
