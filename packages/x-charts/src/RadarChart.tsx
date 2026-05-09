@@ -39,9 +39,12 @@ export type ChartSize = 'sm' | 'md' | 'lg';
 
 // Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
 // canonical `ChartClickEvent`. Radar's ECharts click event is
-// polygon-level (a series item with all values), not per-indicator;
-// indicator-level emission was punted to v2 backlog (Codex iter-2
-// blocker — would require synthetic hit mapping).
+// polygon-level (a series item with all values), not per-indicator.
+// PR #345 added v2 indicator-level enrichment via click-coordinate
+// + container-geometry angle math (`resolveIndicatorAtClick` below)
+// — additive only: v1 polygon fields stay stable, new
+// `indicator`/`indicatorIndex`/`indicatorValue` fields surface
+// alongside them when the click resolves to a specific axis.
 export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
@@ -89,21 +92,28 @@ export interface RadarChartProps extends AccessControlledProps {
   valueFormatter?: (v: number) => string;
   /**
    * Callback fired when the radar polygon is clicked. Emits a canonical
-   * `ChartClickEvent`:
+   * `ChartClickEvent`. v1 polygon-level fields stay stable across
+   * versions; v2 enrichment is purely ADDITIVE.
    *
-   * Polygon-level (always present):
-   * `datum: { seriesName, label, values, indicators }`
+   * v1 fields (always present):
+   * - `datum.seriesName`, `datum.label` (= seriesName), `datum.values`,
+   *   `datum.indicators`
+   * - top-level `event.label` = seriesName
+   * - top-level `event.value` = `values[0]` when numeric
    *
-   * Indicator-level v2 enrichment (when click coordinates resolve to a
-   * specific axis): also includes `{ indicator, indicatorIndex,
-   * indicatorValue }`. The cross-filter wrapper can pick
-   * `emitFields: ['indicator']` for per-axis drill, or fall back to
-   * `['seriesName']` for polygon-level filter.
+   * v2 indicator-level enrichment (additive, fires only when click
+   * coordinates resolve to a specific axis outside the 5% center
+   * dead-zone):
+   * - `datum.indicator` (axis name)
+   * - `datum.indicatorIndex` (0-based axis position)
+   * - `datum.indicatorValue` (numeric value at that axis for the
+   *   clicked series)
    *
-   * Falls back to polygon-only emission when the click lands too
-   * close to the center (dead-zone, no clear axis), in test
-   * environments without coordinate events, or when the container
-   * ref isn't measurable yet.
+   * Cross-filter consumers wanting series-level filter:
+   *   `<CrossFilterChart emitFields={['seriesName']}>` — v1 contract.
+   * Cross-filter consumers wanting per-axis drill:
+   *   `<CrossFilterChart emitFields={['indicator']}>` — v2 opt-in.
+   * The two surfaces never overwrite each other.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
@@ -454,21 +464,33 @@ const RadarChartInner = React.forwardRef<
           ? valuesArr[indicatorIdx as number]
           : undefined;
 
+      // Backward-compat contract — Codex review absorb (PR #345 P1):
+      // v1 alanları (`label`, top-level `label`, top-level `value`) v2
+      // enrichment'a göre KAYMASI YOK. Mevcut consumer'lar
+      // `emitFields: ['label']` veya `['value']` kullanıyorsa
+      // browser event'leri series label/value'sunu görmeye devam
+      // etmeli. Indicator-level drill için TAMAMEN AYRI yeni alanlar:
+      // `indicator`, `indicatorIndex`, `indicatorValue`. Per-axis
+      // filter isteyen consumer EXPLICIT olarak `emitFields:
+      // ['indicator']` veya `['indicatorValue']` seçer.
       onDataPointClick({
         datum: {
-          // Polygon-level fields (backward-compat with v1):
+          // v1 polygon-level fields (stable across versions):
           seriesName,
-          label: indicator?.name ?? seriesName,
+          label: seriesName,
           values: valuesArr,
           indicators: indicatorNames,
           // v2 indicator-level enrichment (undefined when click is in
-          // the polygon dead-zone or coordinates are missing):
+          // the polygon dead-zone or coordinates are missing). These
+          // are ADDITIVE — v1 fields above never reflect indicator
+          // state.
           indicator: indicator?.name,
           indicatorIndex: indicatorIdx ?? undefined,
           indicatorValue,
         },
-        value: indicatorValue ?? (typeof valuesArr[0] === 'number' ? valuesArr[0] : undefined),
-        label: indicator?.name ?? seriesName,
+        // Top-level event fields stay v1 stable.
+        value: typeof valuesArr[0] === 'number' ? valuesArr[0] : undefined,
+        label: seriesName,
       });
     },
     [onDataPointClick, indicators],

@@ -296,12 +296,21 @@ describe('RadarChart onDataPointClick contract', () => {
     expect(datum.indicatorValue).toBeUndefined();
   });
 
-  it('v2: emits indicator-level enrichment when click coordinates resolve to a specific axis', () => {
+  it('v2: emits ADDITIVE indicator-level enrichment without overwriting v1 polygon fields', () => {
+    // Backward-compat contract (Codex review absorb, PR #345 P1):
+    // when v2 enrichment fires, v1 fields STAY put — only the new
+    // `indicator`/`indicatorIndex`/`indicatorValue` reflect the
+    // resolved axis. Test picks an axis index where v1 fallback
+    // (`values[0]`) and v2 (`indicatorValue`) DIFFER so the contract
+    // is observable.
+    //
     // ECharts radar lays out indicators clockwise from top:
-    // index 0 = top (-π/2), index 1 = right, index 2 = bottom-right,
-    // index 3 = bottom-left. With a 200×200 container centered at
-    // (100, 100), a click at (100, 30) sits 70px above center →
-    // angle = 0 in the helper's normalised frame → indicator 0 (Hız).
+    // index 0 = top (-π/2), index 1 = right (0), index 2 = bottom
+    // (π/2), index 3 = left (π). With a 200×200 container centred at
+    // (100, 100), a click at (170, 100) sits 70 px to the right →
+    // the helper snaps it to indicator 1 ('Güç', value 70). v1
+    // fallback would be `values[0] = 85`, so a regression that lets
+    // v2 overwrite would surface as `value: 70` instead of 85.
     const rectMock = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: 200,
       height: 200,
@@ -320,10 +329,10 @@ describe('RadarChart onDataPointClick contract', () => {
       render(
         <RadarChart
           indicators={[
-            { name: 'Hız', max: 100 }, // index 0, top
-            { name: 'Güç', max: 100 }, // index 1, right
-            { name: 'Verimlilik', max: 100 }, // index 2, bottom-right
-            { name: 'Konfor', max: 100 }, // index 3, bottom-left
+            { name: 'Hız', max: 100 }, // index 0, top, value 85
+            { name: 'Güç', max: 100 }, // index 1, right, value 70 (≠ values[0])
+            { name: 'Verimlilik', max: 100 }, // index 2, bottom, value 90
+            { name: 'Konfor', max: 100 }, // index 3, left, value 60
           ]}
           series={[{ name: 'Model X', data: [85, 70, 90, 60] }]}
           onDataPointClick={onClick}
@@ -335,27 +344,24 @@ describe('RadarChart onDataPointClick contract', () => {
         name: 'Model X',
         value: [85, 70, 90, 60],
         dataIndex: 0,
-        event: { offsetX: 100, offsetY: 30 }, // top → indicator 0
+        event: { offsetX: 170, offsetY: 100 }, // right → indicator 1 (Güç)
       });
 
       expect(onClick).toHaveBeenCalledTimes(1);
-      const datum = onClick.mock.calls[0][0].datum;
-      expect(datum).toMatchObject({
-        seriesName: 'Model X',
-        // label upgrades to indicator name when v2 enrichment fires
-        label: 'Hız',
-        indicator: 'Hız',
-        indicatorIndex: 0,
-        indicatorValue: 85,
-        // Polygon-level fields still present for backward-compat
-        values: [85, 70, 90, 60],
-        indicators: ['Hız', 'Güç', 'Verimlilik', 'Konfor'],
-      });
-      // Top-level event.value upgrades to indicatorValue (85), not the
-      // legacy `values[0]` fallback (also happens to be 85 here, so we
-      // assert the explicit field instead).
-      expect(onClick.mock.calls[0][0].value).toBe(85);
-      expect(onClick.mock.calls[0][0].label).toBe('Hız');
+      const event = onClick.mock.calls[0][0];
+
+      // v1 contract — polygon-level fields stable, NOT overwritten.
+      expect(event.label).toBe('Model X'); // seriesName, NOT 'Güç'
+      expect(event.value).toBe(85); // values[0], NOT 70
+      expect(event.datum.label).toBe('Model X');
+      expect(event.datum.seriesName).toBe('Model X');
+      expect(event.datum.values).toEqual([85, 70, 90, 60]);
+      expect(event.datum.indicators).toEqual(['Hız', 'Güç', 'Verimlilik', 'Konfor']);
+
+      // v2 enrichment — additive, separate fields.
+      expect(event.datum.indicator).toBe('Güç');
+      expect(event.datum.indicatorIndex).toBe(1);
+      expect(event.datum.indicatorValue).toBe(70);
     } finally {
       rectMock.mockRestore();
     }
