@@ -15,12 +15,24 @@
  *     exact `getSummary()` return so we can pin the migration without
  *     coupling to RNG noise.
  *
- * Determinism: seeded mulberry32 + uniform pick (no Box-Muller noise).
- * Counts are tiny but proportions are intentional (50% gender split,
- * 4 departments, 3 age buckets, 1 manager, 1 disabled employee) so
- * the dashboard cards produce non-zero values for every KPI.
+ * Determinism (Codex iter-2 absorb):
+ *   - Seeded mulberry32 + uniform pick (no Box-Muller noise).
+ *   - Strict `i % 2` gender alternation across the WHOLE 50-row set
+ *     so the fixture produces an exact 25/25 split. The previous
+ *     iteration used `i < count / 2` which still left the second half
+ *     RNG-dependent and skewed the actual ratio (28F/22M).
+ *
+ * Summary parity (Codex iter-2 absorb):
+ *   - `FIXTURE_SUMMARY` is produced by the canonical `computeSummary`
+ *     from `mock-data.ts`, NOT a hand-duplicated `computeFixtureSummary`.
+ *     This guarantees the fixture stays in lock-step with the
+ *     production summary kernel — drift in `genderDistribution`
+ *     ordering, `agePyramid` zero-fill, `disciplinaryActions`
+ *     hard-coded values, or the `avgAge` rounding rule automatically
+ *     propagates to the contract test (zero-cost parity).
  */
 import type { HrDemographicRow, DemographicSummary } from '../types';
+import { computeSummary } from '../mock-data';
 
 /* ------------------------------------------------------------------ */
 /*  Seeded RNG (mulberry32 — same kernel as mock-data.ts)              */
@@ -57,6 +69,8 @@ const POSITION_LEVELS = ['Uzman', 'Müdür'] as const;
 /**
  * Generate a deterministic 50-employee fixture. Same seed → same rows
  * → same summary. Safe to call multiple times (no module-level state).
+ *
+ * Strict 25/25 gender split via `i % 2` for every row (Codex iter-2).
  */
 export function generateFixtureEmployees(count: number = FIXTURE_SIZE): HrDemographicRow[] {
   const rng = createRng(FIXTURE_SEED);
@@ -64,8 +78,8 @@ export function generateFixtureEmployees(count: number = FIXTURE_SIZE): HrDemogr
   const rows: HrDemographicRow[] = [];
 
   for (let i = 0; i < count; i++) {
-    // Force exact 50/50 gender split for the first 2 rows, then RNG.
-    const isFemale = i < count / 2 ? i % 2 === 0 : rng() < 0.5;
+    // Strict alternation across the whole dataset → exact 25/25 split.
+    const isFemale = i % 2 === 0;
     const gender: HrDemographicRow['gender'] = isFemale ? 'Kadın' : 'Erkek';
 
     const age = 25 + (i % 25); // 25-49 deterministic spread
@@ -122,146 +136,22 @@ export function generateFixtureEmployees(count: number = FIXTURE_SIZE): HrDemogr
 }
 
 /* ------------------------------------------------------------------ */
-/*  Fixture summary — pre-computed at module load                      */
-/* ------------------------------------------------------------------ */
-
-/**
- * Compute a `DemographicSummary` from fixture rows. Mirrors the shape
- * of `mock-data.ts → computeSummary` but stripped to the keys the
- * dashboard actually reads, with realistic deterministic values.
- *
- * The test asserts on these exact numbers so any drift in the
- * `DemographicSummary` shape OR the dashboard's read paths surfaces
- * as a failed expectation rather than a snapshot diff.
- */
-export function computeFixtureSummary(rows: HrDemographicRow[]): DemographicSummary {
-  const total = rows.length;
-  const males = rows.filter((r) => r.gender === 'Erkek').length;
-  const females = rows.filter((r) => r.gender === 'Kadın').length;
-  const others = total - males - females;
-
-  const malePct = Math.round((males / total) * 100);
-  const femalePct = Math.round((females / total) * 100);
-  const otherPct = 100 - malePct - femalePct;
-
-  const avgAge = rows.reduce((s, r) => s + r.age, 0) / total;
-  const avgTenure = rows.reduce((s, r) => s + r.tenureYears, 0) / total;
-
-  const managers = rows.filter((r) => r.isManager);
-  const femaleManagers = managers.filter((r) => r.gender === 'Kadın');
-  const femaleManagerRate =
-    managers.length > 0 ? Math.round((femaleManagers.length / managers.length) * 100) : 0;
-
-  const disabilityCount = rows.filter((r) => r.hasDisability).length;
-  const disabilityRate = Math.round((disabilityCount / total) * 1000) / 10;
-  const managerRatio = Math.round((managers.length / total) * 1000) / 10;
-
-  const countBy = <T>(arr: T[], fn: (t: T) => string) => {
-    const map = new Map<string, number>();
-    for (const item of arr) {
-      const k = fn(item);
-      map.set(k, (map.get(k) ?? 0) + 1);
-    }
-    return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({ label, value }));
-  };
-
-  const ageGroup = (a: number) =>
-    a < 30 ? '25-29' : a < 35 ? '30-34' : a < 40 ? '35-39' : a < 45 ? '40-44' : '45-49';
-
-  const tenureGroup = (y: number) =>
-    y < 1 ? '<1 yıl' : y < 3 ? '1-3 yıl' : y < 5 ? '3-5 yıl' : '5+ yıl';
-
-  const ethicsTrainingRate =
-    Math.round((rows.filter((r) => r.ethicsTrainingComplete).length / total) * 1000) / 10;
-
-  return {
-    totalHeadcount: total,
-    genderRatio: { male: malePct, female: femalePct, other: otherPct },
-    avgAge: Math.round(avgAge * 10) / 10,
-    avgTenure: Math.round(avgTenure * 10) / 10,
-    turnoverRate: 14.2,
-    deiScore: 75,
-
-    genderDistribution: [
-      { label: 'Erkek', value: males },
-      { label: 'Kadın', value: females },
-      ...(others > 0 ? [{ label: 'Diğer', value: others }] : []),
-    ],
-    ageGroups: countBy(rows, (r) => ageGroup(r.age)),
-    educationLevels: countBy(rows, (r) => r.education),
-    departments: countBy(rows, (r) => r.department),
-    tenureDistribution: countBy(rows, (r) => tenureGroup(r.tenureYears)),
-    employmentTypes: countBy(rows, (r) => r.employmentType),
-    generationDistribution: countBy(rows, (r) => r.generation),
-    disabilityRate,
-    managerRatio,
-    femaleManagerRate,
-
-    maritalStatusDistribution: countBy(rows, (r) => r.maritalStatus),
-    militaryStatusDistribution: countBy(
-      rows.filter((r) => r.gender === 'Erkek'),
-      (r) => r.militaryStatus,
-    ),
-    disabilityDistribution: [
-      { label: 'Var', value: disabilityCount },
-      { label: 'Yok', value: total - disabilityCount },
-    ],
-
-    locationDistribution: countBy(rows, (r) => r.location),
-    positionLevelDistribution: countBy(rows, (r) => r.positionLevel),
-    spanOfControl: managers.length > 0 ? Math.round((total / managers.length) * 10) / 10 : 0,
-
-    absenteeismRate: 4.2,
-    timeToFillDays: 38,
-    internalTransferRate: 8.5,
-    promotionRate: 6.2,
-    voluntaryTurnoverRate: 9.1,
-    involuntaryTurnoverRate: 2.9,
-
-    ethicsTrainingRate,
-    whistleblowerCases: 7,
-    disciplinaryActions: [
-      { label: 'Uyarı', value: 12 },
-      { label: 'Kınama', value: 4 },
-      { label: 'Fesih', value: 2 },
-    ],
-    dataPrivacyComplianceRate: 94.5,
-
-    avgSalaryByGender: [
-      { label: 'Erkek', value: 28500 },
-      { label: 'Kadın', value: 26800 },
-    ],
-    genderPayGapPercent: 5.9,
-
-    agePyramid: rows.reduce<DemographicSummary['agePyramid']>((acc, r) => {
-      const grp = ageGroup(r.age);
-      let entry = acc.find((e) => e.ageGroup === grp);
-      if (!entry) {
-        entry = { ageGroup: grp, male: 0, female: 0 };
-        acc.push(entry);
-      }
-      if (r.gender === 'Erkek') entry.male += 1;
-      else if (r.gender === 'Kadın') entry.female += 1;
-      return acc;
-    }, []),
-  };
-}
-
-/* ------------------------------------------------------------------ */
 /*  Pre-computed fixture exports                                       */
 /* ------------------------------------------------------------------ */
 
 /**
  * Stable 50-employee fixture rows. Re-computed at module load; safe
  * to import from contract / story / fixture-renderer tests.
+ *
+ * Strict 25/25 gender split (`i % 2`) and deterministic department /
+ * location / education / employment / position / marital distribution.
  */
 export const FIXTURE_ROWS: HrDemographicRow[] = generateFixtureEmployees();
 
 /**
- * Pre-computed `DemographicSummary` from `FIXTURE_ROWS`. Use as the
- * mock return value for `getSummary()` in contract tests so the
- * dashboard renders against a known dataset.
+ * `DemographicSummary` produced by the canonical `computeSummary`
+ * (`mock-data.ts`). Use as the mock return value for `getSummary()`
+ * in contract tests so the dashboard renders against a known
+ * dataset whose summary is guaranteed in-parity with production.
  */
-export const FIXTURE_SUMMARY: DemographicSummary = computeFixtureSummary(FIXTURE_ROWS);
+export const FIXTURE_SUMMARY: DemographicSummary = computeSummary(FIXTURE_ROWS);

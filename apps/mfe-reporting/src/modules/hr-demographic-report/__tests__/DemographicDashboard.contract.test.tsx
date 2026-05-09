@@ -3,21 +3,21 @@
  * DemographicDashboard contract test (Faz 21.10 Wave 4 reporting
  * fixture — ChartDashboard.Item migration unblock).
  *
- * Why this exists:
- *   - The dashboard reads `getSummary()` synchronously and feeds the
- *     resulting `DemographicSummary` into 20+ XCharts wrappers
- *     (PieChart / BarChart / TreemapChart inside `XChartContainer`).
- *   - Wave 4 rewrites the layout to use `ChartDashboard.Item` with
- *     responsive column hints. Without a render-time guard it's easy
- *     to accidentally drop a chart, mis-read a summary key, or change
- *     a series shape and only catch it via visual diff much later.
- *   - This test renders the whole dashboard against the fixture
- *     summary and asserts on:
- *       (a) component mounts without throwing,
- *       (b) every KPI card receives the expected fixture value,
- *       (c) every chart wrapper receives the expected non-empty
- *           series shape (pies have slices, bars have categories,
- *           treemap has nodes).
+ * Codex iter-2 absorb (REVISE → AGREE-pending):
+ *   - Use `importOriginal + ...actual` so the mock automatically
+ *     surfaces ChartDashboard / ChartDashboard.Item / useChartTheme
+ *     etc. when Wave 4 introduces them. Targeted overrides ONLY for
+ *     the rendering layer (PieChart / BarChart / TreemapChart) so we
+ *     can capture series shapes without invoking ECharts.
+ *   - Treemap is now HARD-required (no `if (treemap)` escape hatch).
+ *   - Six primary KPIs asserted by name + value (was 2).
+ *   - BarChart contract pinned to the age-groups distribution
+ *     specifically (was "any non-empty bar").
+ *   - Department treemap pinned to FIXTURE_SUMMARY.departments
+ *     label/value set.
+ *   - Required chart count floor lifted from `>= 5` to `>= 7`
+ *     (current dashboard renders 7 chart elements; lower than that
+ *     means a section was dropped).
  *
  * Mutation discipline (each assertion would fail under a plausible
  * regression):
@@ -25,10 +25,11 @@
  *   - "rename `genderDistribution`" → pieReceivesGenderSlices
  *   - "drop department treemap"    → treemapReceivesDeptHierarchy
  *   - "skip getSummary call"        → mountReadsSummarySync
+ *   - "drop age groups bar"         → barReceivesAgeGroups
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import { FIXTURE_ROWS, FIXTURE_SUMMARY } from '../__fixtures__/demographic.fixture';
 
@@ -43,12 +44,17 @@ vi.mock('../api', () => ({
   getLiveCharts: vi.fn().mockResolvedValue(null),
   isLiveDataAvailable: vi.fn(() => false),
   refreshLiveData: vi.fn(),
+  // GridResponse shape in this repo is `{ rows, total }` — see
+  // `apps/mfe-reporting/src/grid/index.ts`. Codex iter-1 verified.
   fetchHrDemographicRows: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
 }));
 
 /* ---------------------------------------------------------------- */
-/*  Mock @mfe/x-charts — capture chart props into a registry so we  */
-/*  can assert series shapes without rendering ECharts itself.       */
+/*  Mock @mfe/x-charts — capture chart props into a registry. We     */
+/*  inherit every other named export from the real module via       */
+/*  importOriginal so future ChartDashboard / useChartTheme /        */
+/*  ChartContainer-Item additions survive without test edits        */
+/*  (Codex iter-2 absorb).                                           */
 /* ---------------------------------------------------------------- */
 
 interface CapturedChart {
@@ -67,7 +73,9 @@ interface CapturedKpi {
 }
 const kpiRegistry: CapturedKpi[] = [];
 
-vi.mock('@mfe/x-charts', () => {
+vi.mock('@mfe/x-charts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@mfe/x-charts')>();
+
   const PieChart = (props: { data?: unknown; title?: string }) => {
     chartRegistry.push({ type: 'pie', title: props.title, data: props.data });
     return <div data-testid="x-pie" data-title={props.title ?? ''} />;
@@ -102,7 +110,9 @@ vi.mock('@mfe/x-charts', () => {
       </div>
     );
   };
+
   return {
+    ...actual,
     PieChart,
     BarChart,
     TreemapChart,
@@ -131,30 +141,63 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     expect(getSummary).toHaveBeenCalled();
   });
 
-  it('kpiBlockReadsSummaryKeys: every primary KPI card receives a fixture-derived value', () => {
+  it('kpiBlockReadsSummaryKeys: six primary KPI cards each receive a fixture-derived value', () => {
     render(<DemographicDashboard />);
 
-    // Total headcount must be visible (50 from fixture). The dashboard
-    // uses Turkish labels without diacritics ("Toplam Calisan").
-    const headcountKpi = kpiRegistry.find((k) => /toplam|headcount|calisan|çalışan/i.test(k.title));
-    expect(headcountKpi).toBeDefined();
-    expect(String(headcountKpi!.value)).toContain(String(FIXTURE_SUMMARY.totalHeadcount));
+    // Six primary KPIs at the top of the dashboard
+    // (DemographicDashboard.tsx:1158-1186). Codex iter-2: assert all
+    // six by label substring (Turkish without diacritics + diacritics
+    // both accepted) so a partial drop trips the test even if the
+    // remaining cards still render.
+    const KPI_CONTRACTS: Array<{ name: string; pattern: RegExp; expectedValue: string }> = [
+      {
+        name: 'totalHeadcount',
+        pattern: /toplam|headcount|calisan|çalışan/i,
+        expectedValue: String(FIXTURE_SUMMARY.totalHeadcount),
+      },
+      {
+        name: 'genderRatio',
+        pattern: /kadin|erkek|kadın|gender/i,
+        expectedValue: `${FIXTURE_SUMMARY.genderRatio.female}/${FIXTURE_SUMMARY.genderRatio.male}`,
+      },
+      {
+        name: 'avgAge',
+        pattern: /\bortalama\s*ya[sş]\b|avg\s*age/i,
+        // The dashboard formats avg age via `.toFixed(1)`.
+        expectedValue: FIXTURE_SUMMARY.avgAge.toFixed(1),
+      },
+      {
+        name: 'avgTenure',
+        pattern: /kidem|tenure/i,
+        expectedValue: FIXTURE_SUMMARY.avgTenure.toFixed(1),
+      },
+      {
+        name: 'turnoverRate',
+        pattern: /devir|turnover/i,
+        expectedValue: `${FIXTURE_SUMMARY.turnoverRate}`,
+      },
+      {
+        name: 'deiScore',
+        pattern: /dei|equity|inclus/i,
+        expectedValue: `${FIXTURE_SUMMARY.deiScore}`,
+      },
+    ];
 
-    // Avg age — dashboard label is "Ortalama Yas" (no diacritic in
-    // source). `summary.avgAge.toFixed(1)` formats it as e.g. "33.0".
-    const avgAgeKpi = kpiRegistry.find((k) => /\byas\b|\byaş\b|age|ortalama/i.test(k.title));
-    expect(avgAgeKpi).toBeDefined();
-    // Match the stringified single-decimal form (e.g. "33.0") rather
-    // than the raw float — the dashboard always passes through
-    // `.toFixed(1)`.
-    expect(String(avgAgeKpi!.value)).toContain(FIXTURE_SUMMARY.avgAge.toFixed(1));
+    for (const contract of KPI_CONTRACTS) {
+      const kpi = kpiRegistry.find((k) => contract.pattern.test(k.title));
+      expect(kpi, `KPI not found: ${contract.name}`).toBeDefined();
+      expect(
+        String(kpi!.value),
+        `KPI ${contract.name} expected to contain "${contract.expectedValue}", got "${String(
+          kpi!.value,
+        )}"`,
+      ).toContain(contract.expectedValue);
+    }
   });
 
-  it('pieReceivesGenderSlices: at least one PieChart receives the genderDistribution series', () => {
+  it('pieReceivesGenderSlices: a PieChart receives the genderDistribution series with summed total = headcount', () => {
     render(<DemographicDashboard />);
 
-    // Look for a pie that carries the same {label, value} entries as
-    // FIXTURE_SUMMARY.genderDistribution.
     const fixtureLabels = FIXTURE_SUMMARY.genderDistribution.map((g) => g.label).sort();
 
     const matchingPie = chartRegistry.find(
@@ -166,43 +209,65 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
           .sort()
           .join('|') === fixtureLabels.join('|'),
     );
-    expect(matchingPie).toBeDefined();
+    expect(
+      matchingPie,
+      'No PieChart matched FIXTURE_SUMMARY.genderDistribution labels',
+    ).toBeDefined();
     const pieData = matchingPie!.data as Array<{ label: string; value: number }>;
     const totalPieValue = pieData.reduce((s, d) => s + d.value, 0);
     expect(totalPieValue).toBe(FIXTURE_ROWS.length);
   });
 
-  it('barReceivesNonEmptyDistribution: at least one BarChart receives a non-empty fixture distribution', () => {
+  it('barReceivesAgeGroups: a BarChart receives the ageGroups distribution', () => {
     render(<DemographicDashboard />);
 
-    const nonEmptyBar = chartRegistry.find(
-      (c) => c.type === 'bar' && Array.isArray(c.data) && (c.data as unknown[]).length > 0,
+    const ageLabels = FIXTURE_SUMMARY.ageGroups.map((a) => a.label).sort();
+
+    const ageBar = chartRegistry.find(
+      (c) =>
+        c.type === 'bar' &&
+        Array.isArray(c.data) &&
+        (c.data as Array<{ label: string }>)
+          .map((d) => d.label)
+          .sort()
+          .join('|') === ageLabels.join('|'),
     );
-    expect(nonEmptyBar).toBeDefined();
+    expect(ageBar, 'No BarChart matched FIXTURE_SUMMARY.ageGroups labels').toBeDefined();
+    const ageBarData = ageBar!.data as Array<{ label: string; value: number }>;
+    const totalAgeBarValue = ageBarData.reduce((s, d) => s + d.value, 0);
+    expect(totalAgeBarValue).toBe(FIXTURE_ROWS.length);
   });
 
-  it('treemapReceivesDeptHierarchy: at least one TreemapChart is rendered for the org breakdown', () => {
+  it('treemapReceivesDeptHierarchy: a TreemapChart MUST be rendered for the department breakdown', () => {
     render(<DemographicDashboard />);
 
+    // Codex iter-2: HARD requirement (was optional). The current
+    // dashboard renders one Treemap for `summary.departments`; if
+    // Wave 4 drops it, that's a Wave-4 scope reduction we want to
+    // surface, not silently swallow.
     const treemap = chartRegistry.find((c) => c.type === 'treemap');
-    // Treemap is optional in the dashboard — the contract is "if it
-    // exists, it must receive non-undefined data". Drift to "removed
-    // entirely" is also a legitimate refactor signal we want flagged.
-    if (treemap) {
-      expect(treemap.data).toBeDefined();
-    } else {
-      // Document the absence so reviewers see this branch was
-      // intentional.
-      expect(chartRegistry.length).toBeGreaterThan(0);
-    }
+    expect(treemap, 'TreemapChart for department breakdown was not rendered').toBeDefined();
+
+    const treemapData = treemap!.data as Array<{ label: string; value: number }>;
+    expect(Array.isArray(treemapData)).toBe(true);
+
+    const treemapLabels = treemapData.map((d) => d.label).sort();
+    const fixtureDeptLabels = FIXTURE_SUMMARY.departments.map((d) => d.label).sort();
+    expect(treemapLabels).toEqual(fixtureDeptLabels);
+
+    // Sum of treemap leaves must equal headcount (every employee
+    // belongs to exactly one department).
+    const totalTreemapValue = treemapData.reduce((s, d) => s + d.value, 0);
+    expect(totalTreemapValue).toBe(FIXTURE_ROWS.length);
   });
 
-  it('chartRegistryHasMultipleEntries: dashboard renders the full chart strip (>= 5 charts)', () => {
+  it('chartRegistryHasMultipleEntries: dashboard renders the full chart strip (>= 7 charts)', () => {
     render(<DemographicDashboard />);
-    // Wave 3 had ~12 charts; Wave 4 may shuffle them via
-    // ChartDashboard.Item, but anything below 5 means a section
-    // got dropped — flag it.
-    expect(chartRegistry.length).toBeGreaterThanOrEqual(5);
+    // Codex iter-2: floor lifted from `>= 5` to `>= 7`. The current
+    // dashboard renders 7 chart elements (4 pie/bar/treemap top-row +
+    // 3 inside lower sections). Anything below means a Wave-4 layout
+    // dropped a chart — flag it.
+    expect(chartRegistry.length).toBeGreaterThanOrEqual(7);
   });
 
   it('semanticDomLandmarksPresent: dashboard exposes at least one heading for screen readers', () => {
@@ -216,32 +281,43 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     const { container } = render(<DemographicDashboard />);
 
     const containers = container.querySelectorAll('[data-testid="x-chart-container"]');
-    // Defensive: at least as many containers as charts is fine; one
-    // container per chart is the canonical pattern, but Wave 4 may
-    // group two related charts into a single container item.
     const chartElements = container.querySelectorAll(
       '[data-testid="x-pie"], [data-testid="x-bar"], [data-testid="x-treemap"]',
     );
     expect(containers.length).toBeGreaterThan(0);
     expect(chartElements.length).toBe(chartRegistry.length);
-    // Every chart element must have an ancestor with
-    // data-testid="x-chart-container" — proves no chart got
-    // hoisted out of the container during the migration.
+
     for (const ch of Array.from(chartElements)) {
       const ancestorContainer = ch.closest('[data-testid="x-chart-container"]');
-      expect(ancestorContainer).not.toBeNull();
+      expect(ancestorContainer, `Chart ${ch.tagName} escaped XChartContainer scope`).not.toBeNull();
     }
+  });
 
-    // Use `within` for one container to confirm at least one chart
-    // is reachable through the testing-library scoping helper —
-    // catches accidental Portal escapes.
-    if (containers.length > 0) {
-      const first = containers[0] as HTMLElement;
-      const inside = within(first).queryAllByTestId(/^x-(pie|bar|treemap)$/);
-      // First container must scope at least zero charts (it could
-      // be a header item) — this assertion proves `within` works
-      // against the mock without throwing.
-      expect(inside.length).toBeGreaterThanOrEqual(0);
+  it('fixtureSummaryIsCanonical: FIXTURE_SUMMARY agePyramid uses canonical 9-bucket zero-fill', () => {
+    // Codex iter-2 parity check: `mock-data.ts → computeSummary` zero-
+    // fills the agePyramid against AGE_PYRAMID_ORDER (9 buckets:
+    // 20-24 .. 60+). We assert the canonical shape directly so any
+    // future drift in `computeSummary` (or accidental reintroduction
+    // of a hand-duplicated `computeFixtureSummary`) trips the test.
+    const expectedBuckets = [
+      '20-24',
+      '25-29',
+      '30-34',
+      '35-39',
+      '40-44',
+      '45-49',
+      '50-54',
+      '55-59',
+      '60+',
+    ];
+    expect(FIXTURE_SUMMARY.agePyramid.map((p) => p.ageGroup)).toEqual(expectedBuckets);
+    // Every bucket should expose a numeric male+female pair (zero-filled).
+    for (const bucket of FIXTURE_SUMMARY.agePyramid) {
+      expect(typeof bucket.male).toBe('number');
+      expect(typeof bucket.female).toBe('number');
     }
+    // Sum of male+female across buckets must equal headcount.
+    const total = FIXTURE_SUMMARY.agePyramid.reduce((s, p) => s + p.male + p.female, 0);
+    expect(total).toBe(FIXTURE_ROWS.length);
   });
 });
