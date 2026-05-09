@@ -7,7 +7,11 @@ import {
   applyPreset,
   buildDescriptor,
   buildDescriptors,
+  decodeBase64Utf8,
+  decodePlaygroundState,
   deriveDefaults,
+  encodeBase64Utf8,
+  encodePlaygroundState,
   generatePlaygroundCode,
   getBool,
   getCategory,
@@ -28,6 +32,8 @@ import {
   parseStringLiteralUnion,
   serialisePropToCode,
   type ChartProp,
+  type PlaygroundState,
+  type PlaygroundValue,
 } from '../chartPlaygroundModel';
 
 const mkProp = (over: Partial<ChartProp> = {}): ChartProp => ({
@@ -561,5 +567,159 @@ describe('chartPlaygroundModel — performance guidance + FAQ', () => {
     expect(faq).toContain('colors');
     expect(faq).toContain('access');
     expect(faq).toContain('valueformatter');
+  });
+});
+
+/* ================================================================== */
+/*  URL persistence (Faz 21.10 PR-FE-Playground-1, Codex 019e0d02)    */
+/* ================================================================== */
+
+describe('chartPlaygroundModel — Base64 UTF-8 helpers', () => {
+  it('round-trips ASCII strings', () => {
+    expect(decodeBase64Utf8(encodeBase64Utf8('hello world'))).toBe('hello world');
+  });
+
+  it('round-trips Turkish characters that would crash plain btoa', () => {
+    const sample = 'İş gücü Ağırlık Şirket Çankaya Ümraniye';
+    expect(decodeBase64Utf8(encodeBase64Utf8(sample))).toBe(sample);
+    // Sanity check: plain btoa would throw on these characters.
+    expect(() => btoa(sample)).toThrow();
+  });
+
+  it('round-trips emoji', () => {
+    const sample = '🚀📊📈 chart playground';
+    expect(decodeBase64Utf8(encodeBase64Utf8(sample))).toBe(sample);
+  });
+
+  it('handles long strings without call-stack overflow (chunked encode)', () => {
+    const sample = 'A'.repeat(100_000);
+    const round = decodeBase64Utf8(encodeBase64Utf8(sample));
+    expect(round.length).toBe(sample.length);
+    expect(round).toBe(sample);
+  });
+});
+
+describe('chartPlaygroundModel — encodePlaygroundState / decodePlaygroundState', () => {
+  const defaults: PlaygroundState = {
+    showValues: false,
+    showGrid: true,
+    title: 'Bar Chart',
+    size: 'md',
+  };
+  const validKeys: ReadonlySet<string> = new Set([
+    'showValues',
+    'showGrid',
+    'title',
+    'size',
+    'orientation',
+    'theme',
+  ]);
+
+  it('returns null when state matches defaults (URL stays clean)', () => {
+    expect(encodePlaygroundState({ ...defaults }, defaults)).toBeNull();
+  });
+
+  it('encodes only the diff vs defaults', () => {
+    const encoded = encodePlaygroundState({ ...defaults, showValues: true }, defaults);
+    expect(encoded).not.toBeNull();
+    const decoded = decodePlaygroundState(encoded, defaults, validKeys);
+    expect(decoded.showValues).toBe(true);
+    // Untouched defaults preserved on round-trip merge.
+    expect(decoded.showGrid).toBe(true);
+    expect(decoded.title).toBe('Bar Chart');
+  });
+
+  it('round-trips Turkish title without crashing (REVISE fix)', () => {
+    const stateWithTr: PlaygroundState = { ...defaults, title: 'İş gücü dağılımı' };
+    const encoded = encodePlaygroundState(stateWithTr, defaults);
+    expect(encoded).not.toBeNull();
+    const decoded = decodePlaygroundState(encoded, defaults, validKeys);
+    expect(decoded.title).toBe('İş gücü dağılımı');
+  });
+
+  it('round-trips emoji in string props', () => {
+    const stateWithEmoji: PlaygroundState = { ...defaults, title: '📊 Grafik 🚀' };
+    const encoded = encodePlaygroundState(stateWithEmoji, defaults);
+    const decoded = decodePlaygroundState(encoded, defaults, validKeys);
+    expect(decoded.title).toBe('📊 Grafik 🚀');
+  });
+
+  it('falls back to defaults on malformed base64', () => {
+    const decoded = decodePlaygroundState('!!!not-base64!!!', defaults, validKeys);
+    expect(decoded).toEqual(defaults);
+  });
+
+  it('falls back to defaults on invalid JSON inside valid base64', () => {
+    const decoded = decodePlaygroundState(btoa('not-json'), defaults, validKeys);
+    expect(decoded).toEqual(defaults);
+  });
+
+  it('returns defaults when encoded is null (no URL param)', () => {
+    expect(decodePlaygroundState(null, defaults, validKeys)).toEqual(defaults);
+  });
+
+  it('filters out cross-chart stale keys (bar-chart link pasted into pie-chart)', () => {
+    // bar-chart user encoded `orientation` + `donut` (donut belongs to pie).
+    const stateWithLeak = {
+      ...defaults,
+      orientation: 'horizontal' as PlaygroundValue,
+      donut: true as PlaygroundValue,
+    };
+    const encoded = encodePlaygroundState(stateWithLeak, defaults);
+    // Pie-chart's validKeys lacks `donut` (and validKeys above lacks it too).
+    const decoded = decodePlaygroundState(encoded, defaults, validKeys);
+    expect(decoded.orientation).toBe('horizontal');
+    expect((decoded as Record<string, PlaygroundValue>).donut).toBeUndefined();
+  });
+
+  it('LIVE_PROP_SUPPORT entries match props actually forwarded by ChartPreviewLive', () => {
+    // Smoke-level invariant: every chartId in LIVE_PROP_SUPPORT exposes only
+    // primitive editor kinds (boolean/string/number/enum/tristate). Complex
+    // props leak past `liveEditable` only via descriptor builder.
+    const sankey: ChartProp[] = [
+      { name: 'title', type: 'string', required: false, default: '—', description: '' },
+      { name: 'size', type: 'ChartSize', required: false, default: '"md"', description: '' },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto"',
+        description: '',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto"',
+        description: '',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: '',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: '',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description: '',
+      },
+    ];
+    const descriptors = buildDescriptors('sankey-chart', sankey);
+    // Every prop SankeyChart's LIVE_PROP_SUPPORT exposes should be liveEditable now.
+    for (const d of descriptors) {
+      expect(isLiveEditable('sankey-chart', d.prop.name)).toBe(true);
+      expect(d.liveEditable).toBe(true);
+    }
   });
 });

@@ -428,9 +428,16 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
       );
     }
 
-    case 'radar-chart':
+    case 'radar-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <RadarChart
             indicators={[
               { name: 'Satış', max: 100 },
@@ -443,16 +450,29 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { name: 'Ekip A', data: [85, 70, 95, 60, 80] },
               { name: 'Ekip B', data: [65, 90, 70, 85, 55] },
             ]}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
             showLegend={isOn(toggles, 'showLegend', true)}
             size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'treemap-chart':
+    case 'treemap-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <TreemapChart
             data={[
               {
@@ -472,15 +492,28 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
                 ],
               },
             ]}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
             size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'heatmap-chart':
+    case 'heatmap-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <HeatmapChart
             data={[
               [0, 0, 10],
@@ -501,16 +534,29 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             ]}
             xLabels={['Pzt', 'Sal', 'Çar', 'Per', 'Cum']}
             yLabels={['Sabah', 'Öğle', 'Akşam']}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
             showValues={isOn(toggles, 'showValues', true)}
             size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'waterfall-chart':
+    case 'waterfall-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <WaterfallChart
             data={[
               { label: 'Başlangıç', value: 1000 },
@@ -520,16 +566,29 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { label: 'Vergi', value: -100 },
               { label: 'Sonuç', value: 1250 },
             ]}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
             showValues={isOn(toggles, 'showValues', true)}
             size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'funnel-chart':
+    case 'funnel-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <FunnelChart
             data={[
               { name: 'Ziyaret', value: 5000 },
@@ -537,16 +596,29 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { name: 'Deneme', value: 1500 },
               { name: 'Satın Alma', value: 500 },
             ]}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
             showConversion={isOn(toggles, 'showConversion', true)}
             size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'sankey-chart':
+    case 'sankey-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <SankeyChart
             nodes={[
               { name: 'Kaynak A' },
@@ -560,15 +632,28 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
               { source: 'Kaynak B', target: 'Hedef X', value: 10 },
               { source: 'Kaynak B', target: 'Hedef Y', value: 40 },
             ]}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
             size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
-    case 'sunburst-chart':
+    case 'sunburst-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
       return (
-        <PreviewBox ref={containerRef} testId={testId} height={finalHeight}>
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
           <SunburstChart
             data={[
               {
@@ -591,11 +676,17 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
                 ],
               },
             ]}
-            title={chartName}
+            title={getStr(toggles, 'title', chartName)}
             size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
           />
         </PreviewBox>
       );
+    }
 
     case 'kpi-card':
       return (
