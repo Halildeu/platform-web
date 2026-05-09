@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 /* ------------------------------------------------------------------ */
 /*  AG Grid Setup — Module registration & license                      */
@@ -11,12 +11,18 @@
 /*  Safe to import multiple times (ModuleRegistry is idempotent).      */
 /* ------------------------------------------------------------------ */
 
-import { ModuleRegistry, AllCommunityModule, CsvExportModule, InfiniteRowModelModule } from "ag-grid-community";
+import {
+  ModuleRegistry,
+  AllCommunityModule,
+  CsvExportModule,
+  InfiniteRowModelModule,
+} from 'ag-grid-community';
 import {
   ServerSideRowModelModule,
   ServerSideRowModelApiModule,
   AdvancedFilterModule,
   SetFilterModule,
+  MultiFilterModule,
   SideBarModule,
   ColumnsToolPanelModule,
   FiltersToolPanelModule,
@@ -38,9 +44,9 @@ import {
   RichSelectModule,
   HighlightChangesModule,
   GridStateModule,
-} from "ag-grid-enterprise";
-import { AgChartsEnterpriseModule } from "ag-charts-enterprise";
-import { setupAgGridLicense } from "../../lib/ag-grid-license";
+} from 'ag-grid-enterprise';
+import { AgChartsEnterpriseModule } from 'ag-charts-enterprise';
+import { setupAgGridLicense } from '../../lib/ag-grid-license';
 
 /* ── License ─────────────────────────────────────────────────────── */
 // Immediate attempt (works when process.env is available via DefinePlugin)
@@ -75,42 +81,54 @@ ModuleRegistry.registerModules([
   AllCommunityModule,
 
   // Row models
-  ServerSideRowModelModule,       // mfe-reporting, mfe-users (SSRM)
-  ServerSideRowModelApiModule,    // SSRM API (refreshServerSide, retryServerSideLoads)
-  InfiniteRowModelModule,         // mfe-audit (infinite scroll)
+  ServerSideRowModelModule, // mfe-reporting, mfe-users (SSRM)
+  ServerSideRowModelApiModule, // SSRM API (refreshServerSide, retryServerSideLoads)
+  InfiniteRowModelModule, // mfe-audit (infinite scroll)
 
   // Filtering
-  AdvancedFilterModule,           // mfe-users advanced filter
-  SetFilterModule,                // column set filter
+  AdvancedFilterModule, // mfe-users advanced filter
+  SetFilterModule, // column set filter
+  // PR-FE-10 (2026-05-09): MultiFilterModule. Pre-fix the live
+  // /access/roles + /admin/users grids ran into AG Grid console
+  // error #200 ("Unable to use filter as MultiFilterModule is not
+  // registered" / "Unable to use AG Grid 'floatingFilterComponent'
+  // component: agMultiColumnFloatingFilter as MultiFilterModule
+  // is not registered"). Browser smoke verify on testai during
+  // PR-FE-7/8 deploy chain captured 8 cascading instances per
+  // page load — burying any real errors. The MFE consumer side
+  // configures `agMultiColumnFloatingFilter` and a multi-filter
+  // column type; the registration that was missing here closes
+  // both errors at once.
+  MultiFilterModule,
 
   // Side bar & panels
-  SideBarModule,                  // sidebar container
-  ColumnsToolPanelModule,         // columns tool panel
-  FiltersToolPanelModule,         // filters tool panel
+  SideBarModule, // sidebar container
+  ColumnsToolPanelModule, // columns tool panel
+  FiltersToolPanelModule, // filters tool panel
 
   // Menus
-  MenuModule,                     // context menu
-  ColumnMenuModule,               // column header menu
+  MenuModule, // context menu
+  ColumnMenuModule, // column header menu
 
   // Export
-  CsvExportModule,                // CSV export
-  ExcelExportModule,              // Excel export
+  CsvExportModule, // CSV export
+  ExcelExportModule, // Excel export
 
   // Clipboard
-  ClipboardModule,                // copy/paste
+  ClipboardModule, // copy/paste
 
   // Row Grouping (drag column headers to group panel)
-  RowGroupingModule,              // grouping engine
-  RowGroupingPanelModule,         // drop zone panel above headers
+  RowGroupingModule, // grouping engine
+  RowGroupingPanelModule, // drop zone panel above headers
 
   // Pivot (rotate grouped data into columns)
-  PivotModule,                    // pivot mode engine
+  PivotModule, // pivot mode engine
 
   // Status Bar (row count, selection count, aggregations)
-  StatusBarModule,                // bottom status bar
+  StatusBarModule, // bottom status bar
 
   // Range Selection (Excel-like cell range select + aggregation)
-  RangeSelectionModule,           // cell range selection
+  RangeSelectionModule, // cell range selection
 
   // Find (Ctrl+F in-grid search)
   FindModule,
