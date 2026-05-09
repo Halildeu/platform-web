@@ -5,8 +5,8 @@
  * Self-contained with hardcoded chart catalog (13 charts).
  */
 
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileCode2,
   BookOpen,
@@ -25,7 +25,9 @@ import ChartPreviewLive from '../widgets/ChartPreviewLive';
 import {
   applyPreset,
   buildDescriptors,
+  decodePlaygroundState,
   deriveDefaults,
+  encodePlaygroundState,
   generatePlaygroundCode,
   getChartPresets,
   getFaq,
@@ -3853,13 +3855,48 @@ function PlaygroundTab({ chart }: { chart: ChartMeta }) {
     [chart.id, chart.props],
   );
   const defaults = useMemo<PlaygroundState>(() => deriveDefaults(descriptors), [descriptors]);
-  const [pgState, setPgState] = useState<PlaygroundState>(defaults);
 
-  // Reset playground state when the user navigates between charts (otherwise
-  // stale BarChart toggles would leak into LineChart's props editor).
+  // URL persistence (Faz 21.10 PR-FE-Playground-1, Codex iter-1 absorb):
+  //   - On first mount, hydrate from `?p=<base64 JSON of non-default props>`
+  //     via UTF-8 safe `decodePlaygroundState` (Codex 019e0d02 REVISE: raw
+  //     `atob`+JSON would have crashed on Turkish title `İş gücü`).
+  //   - `validKeys` filters out cross-chart stale keys so a `?p=` shared
+  //     from bar-chart and pasted into pie-chart silently drops irrelevant
+  //     props instead of leaking them downstream.
+  //   - On chart navigation, drop hydrated state in favour of the new
+  //     chart's defaults — `lastChartId` ref distinguishes "first render"
+  //     from "chart changed" so the URL hydration is not clobbered.
+  //   - State → URL sync writes the diff via `encodePlaygroundState` in
+  //     `replace` mode (no history pollution); empty diff → `?p=` deleted.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const validKeys = useMemo<ReadonlySet<string>>(
+    () => new Set(descriptors.map((d) => d.prop.name)),
+    [descriptors],
+  );
+  const [pgState, setPgState] = useState<PlaygroundState>(() =>
+    decodePlaygroundState(searchParams.get('p'), defaults, validKeys),
+  );
+  const lastChartId = useRef(chart.id);
   useEffect(() => {
+    if (lastChartId.current === chart.id) return;
+    lastChartId.current = chart.id;
     setPgState(defaults);
   }, [chart.id, defaults]);
+  useEffect(() => {
+    const encoded = encodePlaygroundState(pgState, defaults);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (encoded === null) {
+          next.delete('p');
+        } else {
+          next.set('p', encoded);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  }, [pgState, defaults, setSearchParams]);
 
   // Group descriptors by category for the categorised editor layout. We
   // preserve the catalog order within each category.

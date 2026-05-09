@@ -409,6 +409,53 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'accent',
     'access',
   ]),
+  // Faz 21.10 PR-FE-Playground-1: cover the 7 enterprise charts that were
+  // previously read-only in the playground. Sticking to the props that
+  // `ChartPreviewLive` actually forwards — data/series/indicators stay
+  // complex (sample data) and remain read-only.
+  'radar-chart': new Set([
+    'title',
+    'showLegend',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+  ]),
+  'treemap-chart': new Set(['title', 'size', 'theme', 'decal', 'density', 'accent', 'access']),
+  'heatmap-chart': new Set([
+    'title',
+    'showValues',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+  ]),
+  'waterfall-chart': new Set([
+    'title',
+    'showValues',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+  ]),
+  'funnel-chart': new Set([
+    'title',
+    'showConversion',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+  ]),
+  'sankey-chart': new Set(['title', 'size', 'theme', 'decal', 'density', 'accent', 'access']),
+  'sunburst-chart': new Set(['title', 'size', 'theme', 'decal', 'density', 'accent', 'access']),
 };
 
 export function isLiveEditable(chartId: string, propName: string): boolean {
@@ -1296,5 +1343,77 @@ export function getPreviewSurfaceStyle(theme: string | undefined): CSSProperties
       return { background: '#f8fafc', color: '#0f172a' };
     default:
       return undefined;
+  }
+}
+
+/* ================================================================== */
+/*  URL persistence (Faz 21.10 PR-FE-Playground-1)                     */
+/* ================================================================== */
+
+/**
+ * UTF-8 safe Base64 encode. `btoa` only accepts latin1 so non-Latin
+ * characters (e.g. a Turkish title `İş gücü`, an emoji 🚀) would throw
+ * `InvalidCharacterError` and crash the URL sync effect. Codex review
+ * thread `019e0d02` REVISE — encode bytes via `TextEncoder` before btoa.
+ */
+export function encodeBase64Utf8(input: string): string {
+  const bytes = new TextEncoder().encode(input);
+  let binary = '';
+  // Avoid `String.fromCharCode(...bytes)` which blows the call stack on
+  // long strings; chunked accumulation is safe for any size.
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+/** Reverse of `encodeBase64Utf8` — atob → byte array → UTF-8 decode. */
+export function decodeBase64Utf8(input: string): string {
+  const binary = atob(input);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Encode the diff between current playground state and catalog defaults
+ * into a URL-safe Base64 string. Returns `null` when the diff is empty
+ * (caller can omit the URL parameter entirely so the URL stays clean).
+ */
+export function encodePlaygroundState(
+  state: PlaygroundState,
+  defaults: PlaygroundState,
+): string | null {
+  const diff: Record<string, PlaygroundValue> = {};
+  for (const k of Object.keys(state)) {
+    if (state[k] !== defaults[k]) diff[k] = state[k];
+  }
+  if (Object.keys(diff).length === 0) return null;
+  return encodeBase64Utf8(JSON.stringify(diff));
+}
+
+/**
+ * Decode a URL-encoded playground state diff and merge with catalog
+ * defaults. `validKeys` filters out cross-chart stale keys — e.g. a `?p=`
+ * produced on bar-chart and pasted into pie-chart's URL silently drops
+ * the irrelevant props instead of leaking them downstream. Falls back to
+ * `defaults` on any parse error (malformed base64, invalid JSON, etc.)
+ * so a corrupted share link cannot crash the editor.
+ */
+export function decodePlaygroundState(
+  encoded: string | null,
+  defaults: PlaygroundState,
+  validKeys: ReadonlySet<string>,
+): PlaygroundState {
+  if (!encoded) return defaults;
+  try {
+    const parsed = JSON.parse(decodeBase64Utf8(encoded)) as Record<string, PlaygroundValue>;
+    const filtered: Record<string, PlaygroundValue> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (validKeys.has(k)) filtered[k] = v;
+    }
+    return { ...defaults, ...filtered };
+  } catch {
+    return defaults;
   }
 }
