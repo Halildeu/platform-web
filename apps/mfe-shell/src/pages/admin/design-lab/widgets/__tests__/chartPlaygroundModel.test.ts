@@ -28,6 +28,7 @@ import {
   getSampleData,
   getStr,
   isLiveEditable,
+  LIVE_PROP_SUPPORT,
   parseDefault,
   parseStringLiteralUnion,
   serialisePropToCode,
@@ -197,8 +198,15 @@ describe('chartPlaygroundModel — descriptor + defaults', () => {
   });
 
   it('flags chart ids without a live-prop entry as fully read-only', () => {
+    // Faz 21.10 PR-FE-Playground-2: every known chart now has at least the
+    // common-axis primitives, so the original `treemap-chart.animate=false`
+    // case is no longer representative — `treemap-chart.animate` is now
+    // live. Use an unknown chartId to assert the fallback path, plus a
+    // complex prop on a known chart to assert non-live props stay false.
     expect(isLiveEditable('bar-chart', 'animate')).toBe(true);
-    expect(isLiveEditable('treemap-chart', 'animate')).toBe(false);
+    expect(isLiveEditable('treemap-chart', 'animate')).toBe(true);
+    expect(isLiveEditable('treemap-chart', 'data')).toBe(false);
+    expect(isLiveEditable('unknown-chart', 'animate')).toBe(false);
   });
 });
 
@@ -721,5 +729,121 @@ describe('chartPlaygroundModel — encodePlaygroundState / decodePlaygroundState
       expect(isLiveEditable('sankey-chart', d.prop.name)).toBe(true);
       expect(d.liveEditable).toBe(true);
     }
+  });
+});
+
+/* ================================================================== */
+/*  PR-FE-Playground-2: common-axis coverage invariants                */
+/* ================================================================== */
+
+describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () => {
+  // Every chart in the catalog must expose the same baseline set of
+  // primitive props so the playground is consistent across chart types.
+  // Complex props (data/series/callbacks/colors/thresholds) intentionally
+  // stay read-only here — they are addressed via the preset infrastructure
+  // in a follow-up PR.
+  const ALL_CHART_IDS = [
+    'bar-chart',
+    'line-chart',
+    'area-chart',
+    'pie-chart',
+    'scatter-chart',
+    'gauge-chart',
+    'radar-chart',
+    'treemap-chart',
+    'heatmap-chart',
+    'waterfall-chart',
+    'funnel-chart',
+    'sankey-chart',
+    'sunburst-chart',
+  ];
+  const COMMON_AXIS = [
+    'title',
+    'description',
+    'className',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+    'size',
+    'animate',
+  ];
+
+  it.each(ALL_CHART_IDS)('chart "%s" exposes the full common axis as live editable', (chartId) => {
+    for (const prop of COMMON_AXIS) {
+      expect(isLiveEditable(chartId, prop)).toBe(true);
+    }
+  });
+
+  it('unknown chart ids fall through to read-only', () => {
+    for (const prop of COMMON_AXIS) {
+      expect(isLiveEditable('does-not-exist', prop)).toBe(false);
+    }
+  });
+
+  it('per-chart live-editable count matches the manual coverage uplift target', () => {
+    // Sanity bounds — exact numbers shift as we add chart-specific
+    // primitives, but the system-wide total should be well above the
+    // pre-PR baseline of 73. Lower bound is conservative (PR-A floor),
+    // upper bound is sensible cap (no chart accidentally adds 30+ entries).
+    let total = 0;
+    for (const chartId of ALL_CHART_IDS) {
+      const count = COMMON_AXIS.filter((p) => isLiveEditable(chartId, p)).length;
+      expect(count).toBe(COMMON_AXIS.length);
+      total += count;
+    }
+    // 13 charts × 11 common-axis props = 143 just from common axis.
+    expect(total).toBe(ALL_CHART_IDS.length * COMMON_AXIS.length);
+  });
+});
+
+/* ================================================================== */
+/*  PR-FE-Playground-2: per-chart exact live-count + system total      */
+/*  (Codex 019e0ddf REVISE finding #4 — assert real coverage target)   */
+/* ================================================================== */
+
+describe('chartPlaygroundModel — exact per-chart live count (PR-A target lock)', () => {
+  // These numbers are the contract: PR-A locks per-chart counts so future
+  // changes can't silently regress (e.g. accidentally removing a forwarded
+  // prop, or adding a misleading "live" prop that the wrapper ignores).
+  // PR-FE-Playground-3 (preset infra) will lift these as complex props
+  // become live editable; that PR will update this map atomically.
+  const EXPECTED_LIVE_COUNTS: Record<string, number> = {
+    'bar-chart': 15,
+    'line-chart': 16,
+    'area-chart': 17,
+    'pie-chart': 15,
+    'scatter-chart': 17,
+    'gauge-chart': 19,
+    'radar-chart': 16,
+    'treemap-chart': 15,
+    'heatmap-chart': 15,
+    'waterfall-chart': 15,
+    'funnel-chart': 19,
+    'sankey-chart': 17, // focusNodeAdjacency excluded — Codex 019e0ddf #3
+    'sunburst-chart': 14,
+  };
+
+  // Total = 210, system-wide coverage = 210 / 264 ≈ %79.5 (PR-A target).
+  const EXPECTED_TOTAL = Object.values(EXPECTED_LIVE_COUNTS).reduce((a, b) => a + b, 0);
+  const TOTAL_CATALOG_PROPS = 264; // sum of CHART_CATALOG[i].props.length
+
+  it.each(Object.entries(EXPECTED_LIVE_COUNTS))(
+    'chart "%s" has exactly %i live editable props',
+    (chartId, expected) => {
+      expect(LIVE_PROP_SUPPORT[chartId]?.size).toBe(expected);
+    },
+  );
+
+  it('system-wide total live-editable count matches PR-A target (~%80)', () => {
+    let total = 0;
+    for (const chartId of Object.keys(EXPECTED_LIVE_COUNTS)) {
+      total += LIVE_PROP_SUPPORT[chartId]?.size ?? 0;
+    }
+    expect(total).toBe(EXPECTED_TOTAL);
+    // Coverage floor for PR-A: at least %75 of the catalog.
+    expect(total / TOTAL_CATALOG_PROPS).toBeGreaterThanOrEqual(0.75);
   });
 });
