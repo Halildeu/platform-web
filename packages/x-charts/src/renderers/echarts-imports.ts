@@ -6,6 +6,30 @@
  * This file is the SINGLE ENTRY POINT for all ECharts imports in the platform.
  *
  * @see decisions/topics/chart-viz-engine-selection.v1.json (D-007)
+ *
+ * Faz 21.11 Faz A — register list trim (Codex thread `019e0ecf` mutabakat,
+ * `019e0efc` A0 measurement). Aşağıdaki üç bileşen base register'dan
+ * çıkarıldı:
+ *
+ *   - **SVGRenderer:** Hiçbir chart shim `init({ renderer: 'svg' })`
+ *     çağırmıyor; canvas default ve `useEChartsRenderer` `renderer`
+ *     prop'u expose etmiyor. SVG bundle'da 12 zrender path entry yer
+ *     kaplıyordu (A0 `--scan-leakage` bulgusu).
+ *
+ *   - **ToolboxComponent:** Hiçbir chart shim `option.toolbox` üretmiyor;
+ *     export/zoom/pan UX `ChartToolbar` + `useChartExport` üzerinden
+ *     DOM-side yapılıyor. Sadece `i18n/echarts-locale.ts` toolbox
+ *     locale string'leri tanımlıyordu — bu artık ölü kod ama dokunmadan
+ *     bırakıldı (zarar yok, locale dosyaları human-translated).
+ *
+ *   - **DataZoomComponent → DataZoomInside + DataZoomSlider:**
+ *     `responsive/buildResponsiveDataZoom.ts` `type: 'inside'` üretiyor;
+ *     `spec/chartSpecToEChartsOption.ts:281` `interaction.zoom_pan`
+ *     açıkken `[{ type: 'inside' }, { type: 'slider', bottom: 20 }]`
+ *     üretiyor. Control/select hiç kullanılmıyor. Inside + Slider
+ *     modular import full installer'dan küçük (control/select drop).
+ *     Codex iter-1 review fix: ilk versiyon sadece Inside register
+ *     etmişti, slider option emit'i runtime crash veriyordu.
  */
 
 /* ------------------------------------------------------------------ */
@@ -14,10 +38,9 @@
 import * as echarts from 'echarts/core';
 
 /* ------------------------------------------------------------------ */
-/*  Renderers — Canvas default, SVG for SSR/a11y fallback             */
+/*  Renderers — Canvas only (SVG removed Faz A; not used by any shim) */
 /* ------------------------------------------------------------------ */
 import { CanvasRenderer } from 'echarts/renderers';
-import { SVGRenderer } from 'echarts/renderers';
 
 /* ------------------------------------------------------------------ */
 /*  Chart Types (add new types here as needed)                         */
@@ -47,8 +70,17 @@ import { LegendComponent } from 'echarts/components';
 import { GridComponent } from 'echarts/components';
 import { DatasetComponent } from 'echarts/components';
 import { TransformComponent } from 'echarts/components';
-import { DataZoomComponent } from 'echarts/components';
-import { ToolboxComponent } from 'echarts/components';
+// DataZoom — Inside + Slider only (no control/select). Faz A: ChartSpec
+// `interaction.zoom_pan` transformer (`spec/chartSpecToEChartsOption.ts:281`)
+// emits BOTH `type: 'inside'` and `type: 'slider'`; responsive helper
+// emits `type: 'inside'`. The DataZoomComponent FULL installer also
+// pulls in unused control/select surfaces, so we register only the
+// two modular paths actually used. Codex post-impl review iter-1
+// caught the slider runtime requirement (would have crashed
+// `Component dataZoom.slider is used but not imported.`).
+import { DataZoomInsideComponent, DataZoomSliderComponent } from 'echarts/components';
+// ToolboxComponent removed Faz A — `ChartToolbar` + `useChartExport`
+// handle export/zoom UX DOM-side. No chart shim emits `option.toolbox`.
 import { AriaComponent } from 'echarts/components';
 import { MarkLineComponent } from 'echarts/components';
 import { MarkPointComponent } from 'echarts/components';
@@ -66,9 +98,8 @@ export function registerECharts(): void {
   if (_registered) return;
 
   echarts.use([
-    // Renderers
+    // Renderers — Canvas only (Faz A: SVGRenderer removed)
     CanvasRenderer,
-    SVGRenderer,
     // Charts
     BarChart,
     LineChart,
@@ -88,8 +119,9 @@ export function registerECharts(): void {
     GridComponent,
     DatasetComponent,
     TransformComponent,
-    DataZoomComponent,
-    ToolboxComponent,
+    DataZoomInsideComponent, // Faz A: was DataZoomComponent (full installer)
+    DataZoomSliderComponent, // ChartSpec zoom_pan transformer needs slider
+    // ToolboxComponent: Faz A removed (DOM-side ChartToolbar / useChartExport)
     AriaComponent,
     MarkLineComponent,
     MarkPointComponent,
