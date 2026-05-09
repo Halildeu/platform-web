@@ -10,6 +10,8 @@
  */
 import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { guardChartCallback } from './access/guardChartCallback';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
@@ -43,6 +45,13 @@ export type ScatterDataPoint = {
 
 export type ChartSize = 'sm' | 'md' | 'lg';
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// the canonical `ChartClickEvent` so the cross-filter wrapper sees the
+// same shape across all 13 charts.
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export interface ScatterChartProps extends AccessControlledProps {
   /** Data points for the scatter plot. */
   data: ScatterDataPoint[];
@@ -72,6 +81,14 @@ export interface ScatterChartProps extends AccessControlledProps {
   bubble?: boolean;
   /** Text shown when data is empty. @default "Veri yok" */
   noDataText?: string;
+  /**
+   * Callback fired when a data point is clicked. The emitted
+   * `ChartClickEvent` exposes a datum compatible with the cross-filter
+   * wrapper: `{ x, y, size, label, dataIndex }`. `value` mirrors `y`
+   * (the primary measure) and `label` falls back to `Point N (x, y)`
+   * when no explicit label is set.
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -147,6 +164,7 @@ const ScatterChartInner = React.forwardRef<
     yLabel,
     bubble = false,
     noDataText = 'Veri yok',
+    onDataPointClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -389,11 +407,52 @@ const ScatterChartInner = React.forwardRef<
     breakpoint,
   ]);
 
+  // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts scatter
+  // emits `params.value = [x, y]` or `[x, y, size]` (bubble). Some
+  // configurations also expose `params.data` as the original
+  // `ScatterDataPoint`. Build a structured datum so the cross-filter
+  // wrapper can emit fields like `label`, `x`, `y`, `size`, or
+  // `dataIndex`.
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onDataPointClick) return;
+      const p = params as {
+        data?: unknown;
+        value?: unknown;
+        name?: string;
+        dataIndex?: number;
+      };
+      const valueArr = Array.isArray(p.value) ? (p.value as number[]) : null;
+      const x = valueArr?.[0];
+      const y = valueArr?.[1];
+      const sz = valueArr?.[2];
+      const raw =
+        typeof p.data === 'object' && p.data !== null ? (p.data as Record<string, unknown>) : {};
+      const label =
+        (typeof raw.label === 'string' ? (raw.label as string) : undefined) ??
+        (p.name && p.name.length > 0 ? p.name : undefined) ??
+        (typeof x === 'number' && typeof y === 'number' ? `(${x}, ${y})` : undefined);
+      onDataPointClick({
+        datum: {
+          x,
+          y,
+          size: typeof sz === 'number' ? sz : undefined,
+          label,
+          dataIndex: typeof p.dataIndex === 'number' ? p.dataIndex : undefined,
+        },
+        value: typeof y === 'number' ? y : undefined,
+        label,
+      });
+    },
+    [onDataPointClick],
+  );
+
   // Use centralized renderer hook
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. ScatterChart is 2D — flatten
@@ -470,10 +529,16 @@ ScatterChartInner.displayName = 'ScatterChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
-  function ScatterChart({ access, accessReason, ...rest }, ref) {
+  function ScatterChart({ access, accessReason, onDataPointClick, ...rest }, ref) {
+    // Access-aware callback gating — Codex iter-2 absorb.
+    const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
-        <ScatterChartInner ref={ref} {...rest} />
+        <ScatterChartInner
+          ref={ref}
+          {...rest}
+          onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        />
       </ChartAccessGate>
     );
   },

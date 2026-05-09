@@ -11,6 +11,8 @@
  */
 import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { guardChartCallback } from './access/guardChartCallback';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
@@ -43,6 +45,15 @@ export type GaugeThreshold = {
   /** Optional label for the zone. */
   label?: string;
 };
+
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// the canonical `ChartClickEvent`. Gauge is a single-value chart, so
+// the datum surfaces the dial label, the value, and the configured
+// `min`/`max` bounds (no synthetic `target` field — Codex iter-1
+// blocker).
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
 
 export interface GaugeChartProps extends AccessControlledProps {
   /** Current gauge value. */
@@ -79,6 +90,13 @@ export interface GaugeChartProps extends AccessControlledProps {
   animate?: boolean;
   /** Additional class name. */
   className?: string;
+  /**
+   * Callback fired when the gauge dial is clicked. Emits a
+   * `ChartClickEvent` with `datum: { label, name, value, min, max }`
+   * — `target` is intentionally NOT included (it isn't a
+   * `GaugeChartProps` field; Codex iter-2 thread 019e0c25 blocker).
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -173,6 +191,7 @@ const GaugeChartInner = React.forwardRef<
     valueFormatter,
     animate = true,
     className,
+    onDataPointClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -314,10 +333,38 @@ const GaugeChartInner = React.forwardRef<
     breakpoint,
   ]);
 
+  // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts gauge
+  // emits `params.value` as the numeric reading and `params.name` as
+  // the gauge title (carried via `data: [{ value, name }]`). We surface
+  // a structured datum that the cross-filter wrapper can emit on
+  // canonical fields like `label` or `name`. `target` is intentionally
+  // NOT in the datum — it isn't a Gauge prop (Codex iter-1 blocker).
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onDataPointClick) return;
+      const p = params as { value?: number; name?: string };
+      const v = typeof p.value === 'number' ? p.value : safeValue;
+      const label = title ?? p.name ?? 'Value';
+      onDataPointClick({
+        datum: {
+          label,
+          name: label,
+          value: v,
+          min,
+          max,
+        },
+        value: v,
+        label,
+      });
+    },
+    [onDataPointClick, safeValue, title, min, max],
+  );
+
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. Gauge has a single value
@@ -386,12 +433,18 @@ GaugeChartInner.displayName = 'GaugeChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const GaugeChart = React.forwardRef<HTMLDivElement, GaugeChartProps>(function GaugeChart(
-  { access, accessReason, ...rest },
+  { access, accessReason, onDataPointClick, ...rest },
   ref,
 ) {
+  // Access-aware callback gating — Codex iter-2 absorb.
+  const { state } = resolveAccessState(access);
   return (
     <ChartAccessGate access={access} accessReason={accessReason}>
-      <GaugeChartInner ref={ref} {...rest} />
+      <GaugeChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
     </ChartAccessGate>
   );
 });
