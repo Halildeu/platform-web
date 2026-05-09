@@ -125,12 +125,24 @@ export interface PointMarkup extends BaseMarkup {
  * Anchor variants:
  *   - `{ x, y }` — explicit data coordinate (any axis type)
  *   - `{ dataIndex, seriesIndex? }` — resolved against `dataContext`
- *     in the adapter (no runtime ECharts call)
+ *     in the adapter (no runtime ECharts call). Cartesian charts
+ *     (Bar/Line/Area) read `dataContext.labels[dataIndex]` +
+ *     `series[seriesIndex].data[dataIndex]`. Heatmap reads
+ *     `dataContext.series[0].data[dataIndex]` which now carries the
+ *     `{ x, y, value }` cell-tuple shape (closes the v2 backlog
+ *     item from Codex thread `019e0e20` iter-2).
+ *   - `{ xLabel, yLabel }` — Heatmap-friendly categorical anchor
+ *     that bypasses `dataContext` entirely. Use when you already
+ *     know the cell labels and want a one-liner anchor without
+ *     digging through the normalized data array.
  */
 export interface LabelMarkup extends BaseMarkup {
   type: 'label';
   text: string;
-  anchor: { x: number | string; y: number | string } | { dataIndex: number; seriesIndex?: number };
+  anchor:
+    | { x: number | string; y: number | string }
+    | { dataIndex: number; seriesIndex?: number }
+    | { xLabel: string; yLabel: string };
   color?: string;
   background?: string;
 }

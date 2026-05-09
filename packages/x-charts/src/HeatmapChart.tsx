@@ -300,15 +300,31 @@ const HeatmapChartInner = React.forwardRef<
     }
   }, [data, xLabels, yLabels, isEmpty]);
 
-  // Markup overlay adapter — Codex thread 019e0df1. dataContext uses
-  // resolved categorical xLabels/yLabels (normalized.xCats/yCats) so
-  // LabelMarkup with `dataIndex` anchor still resolves.
+  // Markup overlay adapter — Codex thread 019e0df1 + iter-2 v2 backlog
+  // closure (PR follow-up). `dataContext.series[0].data[i]` carries
+  // the cell-tuple shape `{ x, y, value }` so `LabelMarkup.anchor:
+  // { dataIndex }` resolves to the categorical (xCat, yCat) pair via
+  // the heatmap branch in `resolveLabelAnchor`. Cartesian-friendly
+  // `labels` + `xLabels`/`yLabels` are still exposed for the
+  // alternative `{ xLabel, yLabel }` shorthand and for backward-
+  // compat with consumers that probed the older shape.
   const markupResult = useMarkupAdapter(markups, {
     chartType: 'heatmap',
     dataContext: {
       xLabels: normalized?.xCats,
       yLabels: normalized?.yCats,
       labels: normalized?.xCats,
+      series: normalized
+        ? [
+            {
+              data: normalized.normalized.map(([xi, yi, v]) => ({
+                x: normalized.xCats[xi] ?? String(xi),
+                y: normalized.yCats[yi] ?? String(yi),
+                value: v,
+              })),
+            },
+          ]
+        : undefined,
     },
   });
 
