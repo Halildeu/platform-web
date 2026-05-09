@@ -628,6 +628,17 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // schedule and POST-time cannot redirect a stale draft to the new
   // user's endpoint (mirrors RoleDrawer absorb iter-3 #2 fix).
   const saveAssignmentMutation = useMutation({
+    // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #2): TanStack
+    // mutation scope. Mutations with the same scope.id run
+    // serially — when one is pending, others queue at the
+    // TanStack level and only execute after the previous one
+    // settles. Closes the close-flush ordering race: under
+    // (in-flight A + close + B queued) Effect U fires B via a
+    // fresh mutate(); pre-fix this would race A on the wire and
+    // a slow A finishing late could overwrite B's final state
+    // server-side. Scoped serialization keeps full-replacement
+    // POSTs in submission order.
+    scope: { id: 'user-detail-assignment-autosave' },
     mutationFn: async (vars: {
       draft: AssignmentSnapshot;
       seq: number;

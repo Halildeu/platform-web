@@ -519,6 +519,16 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   // single-in-flight + queued-latest model — see scheduleAutoSave
   // and the flushQueueRef useEffect below.
   const saveGranulesMutation = useMutation({
+    // PR-FE-9 absorb iter-2 (Codex thread 019e0c84 #2): TanStack
+    // mutation scope. Mutations with the same scope.id run serially
+    // — when one is pending, others queue at the TanStack level
+    // and only execute after the previous one settles. Closes the
+    // close-flush ordering race: under (in-flight A + close + B
+    // queued) Effect A fires B via a fresh mutate(), pre-fix this
+    // would race A on the wire and a slow A finishing late could
+    // overwrite B's final state server-side. Scoped serialization
+    // keeps full-replacement PUTs in submission order.
+    scope: { id: 'role-drawer-granules-autosave' },
     mutationFn: async (vars: { draft: GrantSnapshot; seq: number; roleId: string }) => {
       if (!isPersistedRoleId(vars.roleId)) return;
       const granules: Granule[] = [];
