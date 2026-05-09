@@ -64,6 +64,15 @@ export function computeTrendOverlay(options: ComputeTrendOverlayOptions): ChartM
   const dataAllFiniteY = data.every((d) => Number.isFinite(d.y));
   if (!dataAllFiniteY) return [];
 
+  // Codex iter-3 absorb: ANY numeric `x` that is non-finite (NaN /
+  // Infinity / -Infinity) must reject the whole computation. The
+  // earlier iter-2 fix only checked `typeof === 'number'` for the
+  // detection step; an Infinity x would slip through as
+  // `allNumericX = true` and produce garbage segment endpoints.
+  // Treat "numeric but non-finite" as input-error → empty result.
+  const anyNumericNonFiniteX = data.some((d) => typeof d.x === 'number' && !Number.isFinite(d.x));
+  if (anyNumericNonFiniteX) return [];
+
   // When EVERY x is numeric AND finite, run regression on actual
   // x values so irregular spacing / timestamps produce a correct
   // slope. Categorical (or mixed numeric+string) arrays fall back

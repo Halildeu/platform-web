@@ -108,6 +108,56 @@ describe('computeTrendOverlay — categorical x', () => {
   });
 });
 
+describe('computeTrendOverlay — Number.isFinite guards', () => {
+  // Codex iter-3 absorb: NaN / Infinity must NOT slip through the
+  // numeric detection — defensive guard on a public helper.
+  it('returns [] when any y is NaN', () => {
+    const data = [
+      { x: 0, y: 1 },
+      { x: 1, y: NaN },
+      { x: 2, y: 3 },
+    ];
+    expect(computeTrendOverlay({ data })).toEqual([]);
+  });
+
+  it('returns [] when any y is Infinity', () => {
+    const data = [
+      { x: 0, y: 1 },
+      { x: 1, y: Infinity },
+      { x: 2, y: 3 },
+    ];
+    expect(computeTrendOverlay({ data })).toEqual([]);
+  });
+
+  it('returns [] when any numeric x is NaN (does NOT silently fall through to index fallback)', () => {
+    const data = [
+      { x: 0, y: 1 },
+      { x: NaN, y: 2 },
+      { x: 2, y: 3 },
+    ];
+    expect(computeTrendOverlay({ data })).toEqual([]);
+  });
+
+  it('returns [] when any numeric x is Infinity', () => {
+    const data = [
+      { x: 0, y: 1 },
+      { x: Infinity, y: 2 },
+      { x: 2, y: 3 },
+    ];
+    expect(computeTrendOverlay({ data })).toEqual([]);
+  });
+
+  it('still works when all x are categorical strings (numeric guard does NOT reject them)', () => {
+    const data = [
+      { x: 'Jan', y: 10 },
+      { x: 'Feb', y: 20 },
+      { x: 'Mar', y: 30 },
+    ];
+    const out = computeTrendOverlay({ data });
+    expect(out.length).toBeGreaterThan(0);
+  });
+});
+
 describe('computeTrendOverlay — numeric x with irregular spacing', () => {
   // Codex post-impl review absorb (P1): irregular numeric x must
   // use ACTUAL x values (not indices) so the slope reflects real
