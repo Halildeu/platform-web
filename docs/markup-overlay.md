@@ -152,19 +152,29 @@ interface BaseMarkup {
   id: 'campaign-note',
   type: 'label',
   text: 'Spring campaign launched',
-  // İki anchor varyantı:
+  // Üç anchor varyantı:
   anchor: { x: 'Apr', y: 600 },                    // explicit data coord
   // veya:
   anchor: { dataIndex: 5, seriesIndex?: 0 },       // dataContext lookup
+  // veya (Heatmap-friendly shorthand):
+  anchor: { xLabel: 'Wed', yLabel: 'AM' },         // categorical kısa-yol
   color?: string;
   background?: string;
 }
 ```
 
 > **`anchor: { dataIndex }` shorthand kapsamı:** Bar (single series),
-> Line, Area chart'larda `dataContext` üzerinden çalışır. Heatmap
-> için **explicit `{ x, y }` anchor şart** (Heatmap dataContext.series
-> enrichment v2 backlog).
+> Line, Area chart'larda `dataContext.labels[i]` + `series[s].data[i]`
+> üzerinden çalışır. **Heatmap** için de artık desteklenir — shim
+> `dataContext.series[0].data[i]` içine `{ x: <xCat>, y: <yCat>,
+value }` cell-tuple koyduğu için resolver kategorik (xCat, yCat)
+> çiftini direkt çıkarır.
+>
+> **`anchor: { xLabel, yLabel }` shorthand:** Heatmap için
+> `dataContext` lookup'ına gerek bırakmayan kısa-yol — cell label'ları
+> zaten elindeyse `anchor: { xLabel: 'Wed', yLabel: 'AM' }` yeter.
+> Bu varyant tüm chart'larda kabul edilir; uygunluk koordinat
+> sistemine bağlıdır (numeric axis'te string verirsen ECharts hizalayamaz).
 
 ---
 
@@ -172,24 +182,26 @@ interface BaseMarkup {
 
 (Codex iter-3 absorbed contract — 5 full + 1 partial + 7 no-op)
 
-| Chart              | line | segment | area | point | label | Strateji               |
-| ------------------ | :--: | :-----: | :--: | :---: | :---: | ---------------------- |
-| **BarChart**       |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full (cartesian)       |
-| **LineChart**      |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full                   |
-| **AreaChart**      |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full                   |
-| **ScatterChart**   |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full                   |
-| **HeatmapChart**   |  ✅  |   ✅    |  ✅  |  ✅   |  ✅¹  | full (categorical x/y) |
-| **WaterfallChart** |  ⚠️  |   ✅    |  ⚠️  |  ✅   |  ✅   | partial²               |
-| PieChart           |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op + dev warning    |
-| GaugeChart         |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op + dev warning    |
-| RadarChart         |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op³                 |
-| FunnelChart        |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op + dev warning    |
-| TreemapChart       |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op (hierarchical)   |
-| SankeyChart        |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op (network)        |
-| SunburstChart      |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op (hierarchical)   |
+| Chart              | line | segment | area | point | label | Strateji                |
+| ------------------ | :--: | :-----: | :--: | :---: | :---: | ----------------------- |
+| **BarChart**       |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full (cartesian)        |
+| **LineChart**      |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full                    |
+| **AreaChart**      |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full                    |
+| **ScatterChart**   |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full                    |
+| **HeatmapChart**   |  ✅  |   ✅    |  ✅  |  ✅   |  ✅   | full (categorical x/y)¹ |
+| **WaterfallChart** |  ⚠️  |   ✅    |  ⚠️  |  ✅   |  ✅   | partial²                |
+| PieChart           |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op + dev warning     |
+| GaugeChart         |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op + dev warning     |
+| RadarChart         |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op³                  |
+| FunnelChart        |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op + dev warning     |
+| TreemapChart       |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op (hierarchical)    |
+| SankeyChart        |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op (network)         |
+| SunburstChart      |  ❌  |   ❌    |  ❌  |  ❌   |  ❌   | no-op (hierarchical)    |
 
-¹ Heatmap LabelMarkup için **explicit `{ x, y }` anchor şart** —
-`dataContext.series` enrichment v2 backlog.
+¹ Heatmap LabelMarkup üç anchor varyantını da destekler: explicit
+`{ x, y }`, `{ dataIndex, seriesIndex? }` (shim `dataContext.series[0].data[i]`
+içine cell-tuple `{x, y, value}` koyar), veya kısa-yol
+`{ xLabel, yLabel }`.
 
 ² Waterfall: line/area patches mevcut connector `markLine` ile MERGE
 edilir (Codex iter-2 P1: per-endpoint `silent: true` connector
@@ -354,17 +366,17 @@ side effects.
 
 ## Bilinen sınırlamalar (v2 backlog)
 
-| Item                                                                  | Durum                                   |
-| --------------------------------------------------------------------- | --------------------------------------- |
-| **Heatmap LabelMarkup `dataIndex` anchor**                            | Şu an no-op — explicit `{ x, y }` şart  |
-| **Pie/Gauge/Funnel native series-label patches**                      | v2 backlog (markup → series.label)      |
-| **Radar indicator anchor** (`anchor: { indicatorIndex }`)             | v2 backlog                              |
-| **Drawing tools UI** (toolbar + state + serialize)                    | v2 — Highcharts Stock Tools parity      |
-| **Editable / draggable annotations**                                  | v2 — drag handle + transform state      |
-| **Stock-specific tech analysis** (Fibonacci, Pitchfork, Elliott Wave) | v2 — finansal alan, ihtiyaca göre defer |
-| **Multi-user annotation sync** (`useRealTimeData` ile collab)         | v2                                      |
-| **`movingAverage` / `exponential` trend method**                      | v2 (şu an OLS only)                     |
-| **`zscore` anomaly method**                                           | v2 (şu an IQR only)                     |
+| Item                                                                  | Durum                                                                               |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| ~~**Heatmap LabelMarkup `dataIndex` anchor**~~                        | ✅ Closed — `{ dataIndex }` + `{ xLabel, yLabel }` (Codex thread `019e0e20` iter-2) |
+| **Pie/Gauge/Funnel native series-label patches**                      | v2 backlog (markup → series.label)                                                  |
+| **Radar indicator anchor** (`anchor: { indicatorIndex }`)             | v2 backlog                                                                          |
+| **Drawing tools UI** (toolbar + state + serialize)                    | v2 — Highcharts Stock Tools parity                                                  |
+| **Editable / draggable annotations**                                  | v2 — drag handle + transform state                                                  |
+| **Stock-specific tech analysis** (Fibonacci, Pitchfork, Elliott Wave) | v2 — finansal alan, ihtiyaca göre defer                                             |
+| **Multi-user annotation sync** (`useRealTimeData` ile collab)         | v2                                                                                  |
+| **`movingAverage` / `exponential` trend method**                      | v2 (şu an OLS only)                                                                 |
+| **`zscore` anomaly method**                                           | v2 (şu an IQR only)                                                                 |
 
 ---
 
@@ -373,7 +385,7 @@ side effects.
 - **API source**: `packages/x-charts/src/annotations/`
 - **Types**: `packages/x-charts/src/types.ts` (`ChartMarkup` discriminated union)
 - **Tests**:
-  - `adaptToEcharts.test.ts` (24 unit case)
+  - `adaptToEcharts.test.ts` (32 unit case)
   - `computeTrendOverlay.test.ts` (14 case incl. numeric x finite guards)
   - `computeAnomalyOverlay.test.ts` (6 case)
   - `markup-bench.test.ts` (4 perf gate)

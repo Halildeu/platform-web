@@ -414,6 +414,85 @@ describe('HeatmapChart option shape', () => {
   it('handles empty data without throwing', () => {
     expect(() => render(<HeatmapChart data={[]} xLabels={[]} yLabels={[]} />)).not.toThrow();
   });
+
+  it('rerender with new markups refreshes series[0].markPoint.data (no stale dep)', () => {
+    // Codex post-impl iter-3 P1: option memo previously omitted
+    // `markupResult` from its dependency array, so toggling markups
+    // updated the click-lookup but NOT the visual markPoint patches.
+    // This test pins the regression closed.
+    const baseProps = {
+      data: [
+        [0, 0, 1],
+        [1, 0, 5],
+        [0, 1, 7],
+      ] as Array<[number, number, number]>,
+      xLabels: ['Mon', 'Tue'],
+      yLabels: ['AM', 'PM'],
+      animate: false,
+    };
+    const { rerender } = render(<HeatmapChart {...baseProps} />);
+    // Initial render: no markups → no markPoint patch on series[0].
+    expect((series()[0] as { markPoint?: { data: unknown[] } }).markPoint).toBeUndefined();
+
+    rerender(
+      <HeatmapChart
+        {...baseProps}
+        markups={[
+          {
+            id: 'spike-anchor',
+            type: 'label',
+            text: 'Spike',
+            anchor: { dataIndex: 1 },
+          },
+        ]}
+      />,
+    );
+    // After rerender: markPoint patch must be present and resolve to
+    // the cell-tuple (xCat='Tue', yCat='AM') via the heatmap branch.
+    const refreshed = series()[0] as { markPoint?: { data: unknown[] } };
+    expect(refreshed.markPoint).toBeDefined();
+    expect(refreshed.markPoint!.data).toHaveLength(1);
+    expect((refreshed.markPoint!.data[0] as { coord: [string, string] }).coord).toEqual([
+      'Tue',
+      'AM',
+    ]);
+
+    // Toggling back to no markups must also flush the patch (memo dep
+    // works in both directions).
+    rerender(<HeatmapChart {...baseProps} />);
+    expect((series()[0] as { markPoint?: { data: unknown[] } }).markPoint).toBeUndefined();
+  });
+
+  it('skips cell-tuple allocation when no markup needs dataIndex anchor', () => {
+    // Codex post-impl iter-3 P1: render-time O(n) allocation should not
+    // run when consumers don't pass `markups` or only pass `{ x, y }` /
+    // `{ xLabel, yLabel }` anchors. We can't directly observe the
+    // allocation, but we can prove that a `{ xLabel, yLabel }` markup
+    // resolves WITHOUT exercising the cell-tuple branch — the resolver
+    // returns `[xLabel, yLabel]` directly.
+    render(
+      <HeatmapChart
+        data={[
+          [0, 0, 1],
+          [1, 1, 9],
+        ]}
+        xLabels={['Mon', 'Tue']}
+        yLabels={['AM', 'PM']}
+        animate={false}
+        markups={[
+          {
+            id: 'shorthand',
+            type: 'label',
+            text: 'Tepe',
+            anchor: { xLabel: 'Tue', yLabel: 'PM' },
+          },
+        ]}
+      />,
+    );
+    const sx = series()[0] as { markPoint?: { data: unknown[] } };
+    expect(sx.markPoint).toBeDefined();
+    expect((sx.markPoint!.data[0] as { coord: [string, string] }).coord).toEqual(['Tue', 'PM']);
+  });
 });
 
 /* ================================================================== */

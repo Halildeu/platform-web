@@ -289,7 +289,7 @@ HeatmapChart
     animate?: boolean;
     onCellClick?: (params: { x: number; y: number; value: number }) => void; // legacy (numeric indices)
     onDataPointClick?: (e: ChartClickEvent) => void; // PR #338 — canonical, datum: { x, y, xLabel, yLabel, value, label }
-    markups?: ChartMarkup[];                       // PR #350 — markup overlay (full; LabelMarkup needs explicit { x, y } anchor — { dataIndex } shorthand v2 backlog)
+    markups?: ChartMarkup[];                       // PR #350 + v2 follow-up — markup overlay (full); LabelMarkup accepts { x, y }, { dataIndex, seriesIndex? } (cell-tuple resolution), or { xLabel, yLabel } shorthand
     onMarkupClick?: (e: ChartMarkupClickEvent) => void;
   }
 
@@ -711,9 +711,19 @@ series-label patches + Radar indicator anchor are v2 backlog.
 layer intentionally returns no patches and surfaces a dev
 warning.
 
-`LabelMarkup.anchor` accepts either `{ x, y }` (explicit data
-coordinate) or `{ dataIndex, seriesIndex? }` (resolved against the
-chart shim's `dataContext`). The `dataIndex` shorthand is currently
-honored on Bar (single series) + Line + Area; Heatmap requires the
-explicit `{ x, y }` form (Codex iter-2 absorb — Heatmap
-`dataContext.series` enrichment is v2 backlog).
+`LabelMarkup.anchor` accepts three variants:
+
+1. `{ x, y }` — explicit data coordinate (any chart, any axis type).
+2. `{ dataIndex, seriesIndex? }` — resolved against the chart shim's
+   `dataContext`. Cartesian charts (Bar single-series / Line / Area)
+   read `labels[i]` + `series[s].data[i]`. **Heatmap** is now also
+   supported: the shim feeds `dataContext.series[0].data[i]` as the
+   cell-tuple `{ x: <xCat>, y: <yCat>, value }`, so the resolver
+   hands `[xCat, yCat]` directly to ECharts (closes Codex thread
+   `019e0e20` iter-2 v2 backlog).
+3. `{ xLabel, yLabel }` — Heatmap-friendly categorical shorthand
+   that bypasses `dataContext` entirely. Use when the consumer
+   already knows the cell labels and wants a one-liner anchor. The
+   adapter forwards `[xLabel, yLabel]` to ECharts unchanged; whether
+   the chart can render it is up to the underlying coordinate
+   system (numeric axis + string label = ECharts mismatch).

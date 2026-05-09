@@ -260,10 +260,38 @@ function resolveLabelAnchor(
   if ('x' in m.anchor && 'y' in m.anchor) {
     return [m.anchor.x, m.anchor.y];
   }
+  // Heatmap-friendly categorical shorthand — closes the v2 backlog
+  // item from Codex thread `019e0e20` iter-2. Bypasses `dataContext`
+  // entirely (consumers who already know the cell labels can write
+  // `anchor: { xLabel, yLabel }` and skip the normalized-array
+  // gymnastics required for `{ dataIndex }` on Heatmap).
+  if ('xLabel' in m.anchor && 'yLabel' in m.anchor) {
+    return [m.anchor.xLabel, m.anchor.yLabel];
+  }
   if (!ctx) return null;
   const { dataIndex, seriesIndex = 0 } = m.anchor;
+
+  // Heatmap path — `dataContext.series[0].data[dataIndex]` carries
+  // a `{ x, y, value }` cell tuple (HeatmapChart populates this from
+  // its `normalized.normalized.map(([xi, yi, v]) => ({x: xCats[xi],
+  // y: yCats[yi], value: v}))` so the resolver picks up the
+  // categorical labels directly). Cartesian charts (Bar/Line/Area)
+  // hit the fall-through path below.
+  const seriesEntry = ctx.series?.[seriesIndex];
+  const heatmapItem = seriesEntry?.data?.[dataIndex];
+  if (heatmapItem && typeof heatmapItem === 'object' && 'x' in heatmapItem && 'y' in heatmapItem) {
+    const cell = heatmapItem as { x: unknown; y: unknown };
+    if (
+      (typeof cell.x === 'string' || typeof cell.x === 'number') &&
+      (typeof cell.y === 'string' || typeof cell.y === 'number')
+    ) {
+      return [cell.x, cell.y];
+    }
+  }
+
+  // Cartesian fallback — labels[i] for x, series[seriesIndex].data[i] for y.
   const x = ctx.labels?.[dataIndex];
-  const yRaw = ctx.series?.[seriesIndex]?.data?.[dataIndex];
+  const yRaw = seriesEntry?.data?.[dataIndex];
   if (x === undefined || yRaw === undefined) return null;
   // y can be {value, ...} object or raw number; normalise.
   const y =

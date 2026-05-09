@@ -228,6 +228,175 @@ describe('adaptToEcharts — label markup', () => {
   });
 });
 
+describe('adaptToEcharts — Heatmap dataIndex enrichment (v2 backlog closure)', () => {
+  // Codex thread `019e0e20` iter-2 backlog: prior to this, Heatmap shims
+  // could not resolve `LabelMarkup.anchor: { dataIndex }` because the
+  // adapter only knew the cartesian shape (`labels[i]` + `data[i]`).
+  // Heatmap shim now feeds `dataContext.series[0].data[i]` as the
+  // cell-tuple `{ x: <xCat>, y: <yCat>, value: <v> }`, and the
+  // resolver picks up `[cell.x, cell.y]` directly.
+  it('resolves {dataIndex} on heatmap via cell-tuple shape {x, y, value}', () => {
+    const r = adaptToEcharts(
+      [{ id: 'cell-2', type: 'label', text: 'Spike', anchor: { dataIndex: 2 } }],
+      {
+        chartType: 'heatmap',
+        dataContext: {
+          xLabels: ['Mon', 'Tue', 'Wed'],
+          yLabels: ['AM', 'PM'],
+          labels: ['Mon', 'Tue', 'Wed'],
+          series: [
+            {
+              data: [
+                { x: 'Mon', y: 'AM', value: 1 },
+                { x: 'Tue', y: 'AM', value: 2 },
+                { x: 'Wed', y: 'AM', value: 99 },
+                { x: 'Mon', y: 'PM', value: 4 },
+              ],
+            },
+          ],
+        },
+      },
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect(data).toHaveLength(1);
+    expect((data[0] as { coord: [string, string] }).coord).toEqual(['Wed', 'AM']);
+  });
+
+  it('falls back to cartesian path when series data items are plain numbers', () => {
+    // Defensive: a non-Heatmap shim populating dataContext should still
+    // resolve via labels[i] + data[i] (the original cartesian path).
+    const r = adaptToEcharts(
+      [{ id: 'plain', type: 'label', text: 'Z', anchor: { dataIndex: 1 } }],
+      {
+        chartType: 'line',
+        dataContext: {
+          labels: ['A', 'B'],
+          series: [{ data: [10, 20] }],
+        },
+      },
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, number] }).coord).toEqual(['B', 20]);
+  });
+
+  it('falls through to cartesian when an object data item lacks {x, y} keys', () => {
+    // Defensive: `{value: N}` legacy shape continues to resolve via the
+    // cartesian fallback and does NOT collide with the heatmap branch.
+    const r = adaptToEcharts(
+      [{ id: 'legacy', type: 'label', text: 'L', anchor: { dataIndex: 0 } }],
+      {
+        chartType: 'line',
+        dataContext: {
+          labels: ['Jan'],
+          series: [{ data: [{ value: 42 }] }],
+        },
+      },
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, number] }).coord).toEqual(['Jan', 42]);
+  });
+
+  it('falls through to cartesian {value} reading when cell tuple x/y are non-stringy / non-numeric', () => {
+    // Defensive: if a future shim feeds a malformed cell shape (e.g.
+    // `{x: null, y: 'AM', value: 1}`), the heatmap branch refuses
+    // (null x rejects the type guard) and the cartesian fallback
+    // picks up `value: 1`. The resolver still produces a coord, just
+    // using the cartesian semantics of the markup.
+    const r = adaptToEcharts(
+      [{ id: 'bad', type: 'label', text: 'Bad', anchor: { dataIndex: 0 } }],
+      {
+        chartType: 'heatmap',
+        dataContext: {
+          labels: ['Mon'],
+          series: [{ data: [{ x: null, y: 'AM', value: 1 }] }],
+        },
+      },
+    );
+    expect(r.warnings).toHaveLength(0);
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, number] }).coord).toEqual(['Mon', 1]);
+  });
+
+  it('drops markup + warns when cell tuple is fully malformed (no recoverable value)', () => {
+    // If neither the heatmap branch nor the cartesian {value} fallback
+    // can extract a numeric y, the adapter drops the markup and warns
+    // — same contract as legacy "out of range" behaviour.
+    const r = adaptToEcharts(
+      [{ id: 'orphan-cell', type: 'label', text: 'X', anchor: { dataIndex: 0 } }],
+      {
+        chartType: 'heatmap',
+        dataContext: {
+          labels: ['Mon'],
+          series: [{ data: [{ x: null, y: 'AM' }] }], // no value, no x string
+        },
+      },
+    );
+    expect(r.seriesPatches).toHaveLength(0);
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain('orphan-cell');
+  });
+});
+
+describe('adaptToEcharts — LabelMarkup {xLabel, yLabel} shorthand', () => {
+  // Heatmap-friendly categorical anchor that bypasses dataContext.
+  // Use when the consumer already knows the cell labels.
+  it('resolves {xLabel, yLabel} directly without dataContext', () => {
+    const r = adaptToEcharts(
+      [
+        {
+          id: 'shorthand',
+          type: 'label',
+          text: 'Tepe',
+          anchor: { xLabel: 'Wed', yLabel: 'AM' },
+        },
+      ],
+      { chartType: 'heatmap' },
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect(data).toHaveLength(1);
+    expect((data[0] as { coord: [string, string] }).coord).toEqual(['Wed', 'AM']);
+    expect((data[0] as { name: string }).name).toBe('shorthand');
+  });
+
+  it('works on cartesian charts too (string x, numeric y not required)', () => {
+    // The shorthand is a tunneling escape hatch: the adapter just hands
+    // `[xLabel, yLabel]` to ECharts. Whether the chart can render it is
+    // up to the underlying coordinate system.
+    const r = adaptToEcharts(
+      [{ id: 'cart', type: 'label', text: 'X', anchor: { xLabel: 'Q3', yLabel: 'High' } }],
+      { chartType: 'bar' },
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, string] }).coord).toEqual(['Q3', 'High']);
+  });
+
+  it('does not collide with {dataIndex} resolution path', () => {
+    // Sanity: if both keys could theoretically collide (they cannot —
+    // the union is exclusive — but TS structural typing might let
+    // something slip), the {xLabel,yLabel} branch wins because it's
+    // checked before dataIndex.
+    const r = adaptToEcharts(
+      [
+        {
+          id: 'precedence',
+          type: 'label',
+          text: 'P',
+          anchor: { xLabel: 'A', yLabel: 'B' },
+        },
+      ],
+      {
+        chartType: 'heatmap',
+        dataContext: {
+          labels: ['ZZZ'],
+          series: [{ data: [{ x: 'never', y: 'used', value: 0 }] }],
+        },
+      },
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { coord: [string, string] }).coord).toEqual(['A', 'B']);
+  });
+});
+
 describe('adaptToEcharts — support matrix', () => {
   it('emits 5 full + 1 partial + 7 no-op chart kinds (Codex iter-3 contract)', () => {
     const fullKinds = ['bar', 'line', 'area', 'scatter', 'heatmap'];
