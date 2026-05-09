@@ -36,14 +36,42 @@
  *   CI never auto-writes the baseline; size growth must be intentional
  *   and reviewed.
  *
+ * A0 spike modes (Faz 21.11+, bundle optimization decision pack):
+ *
+ *     --probe=<chartName>  Synthesise a bundle from a tiny entry that
+ *                          imports ONLY the named chart wrapper from the
+ *                          x-charts barrel. Reveals whether tree-shake
+ *                          actually keeps Sankey/Sunburst/Treemap/etc.
+ *                          OUT of a single-chart consumer's bundle.
+ *                          Read-only. Does NOT touch baseline.
+ *
+ *     --scan-leakage       Bundle the full barrel as `contractTotal`
+ *                          WITH `metafile: true`, then walk
+ *                          `metafile.inputs` keys for known ECharts /
+ *                          zrender module path patterns. Reports which
+ *                          enterprise modules actually live inside the
+ *                          base bundle (path-based, NOT substring). The
+ *                          metafile is the source of truth — minify
+ *                          renames symbols and elides path strings, so
+ *                          a literal output-buffer search produces
+ *                          false negatives (Codex iter-1 fix). Read-only.
+ *
+ *   Both probe/scan modes are diagnostic; they NEVER write the baseline
+ *   and NEVER fail CI. They feed data into Faz A bundle optimization
+ *   decisions (lazy register, gating, barrel splitting). `--probe`
+ *   uses esbuild `stdin` so the script never writes to disk and works
+ *   under strict read-only sandboxes.
+ *
  * Usage:
  *   node scripts/ci/x-charts-bundle-check.mjs              # check, exit 1 if over
  *   node scripts/ci/x-charts-bundle-check.mjs --json       # machine output
  *   node scripts/ci/x-charts-bundle-check.mjs --update-baseline  # write baseline
+ *   node scripts/ci/x-charts-bundle-check.mjs --probe=BarChart   # A0 single-chart probe
+ *   node scripts/ci/x-charts-bundle-check.mjs --scan-leakage     # A0 module signature scan
  *
  * Exit codes:
- *   0  All metrics within threshold
- *   1  contractTotal exceeded threshold
+ *   0  All metrics within threshold (or probe/scan completed)
+ *   1  contractTotal exceeded threshold (gate mode only)
  *   2  CLI / esbuild error
  */
 
@@ -65,6 +93,9 @@ const BASELINE_GROWTH_FACTOR = 1.2;
 const args = process.argv.slice(2);
 const wantJson = args.includes("--json");
 const wantUpdate = args.includes("--update-baseline");
+const wantScanLeakage = args.includes("--scan-leakage");
+const probeArg = args.find((a) => a.startsWith("--probe="));
+const probeChart = probeArg ? probeArg.slice("--probe=".length) : null;
 
 /* ------------------------------------------------------------------ */
 /*  esbuild bundle helper                                              */
@@ -73,10 +104,21 @@ const wantUpdate = args.includes("--update-baseline");
 /**
  * Bundle the x-charts entry with the given external list and return
  * raw + gzipped sizes for the produced ESM output.
+ *
+ * @param externals      Modules to mark `external` (kept out of bundle).
+ * @param label          Human-readable label for error messages.
+ * @param syntheticInput Optional `{ contents, sourcefile }` for stdin-
+ *                       based bundling (used by `--probe` so the
+ *                       script never writes to disk — works under
+ *                       strict read-only sandboxes; Codex iter-1 fix).
+ *                       When omitted, bundles the public barrel entry.
+ * @param wantMetafile   When true, esbuild emits a metafile mapping
+ *                       (used by `--scan-leakage` to walk module paths
+ *                       instead of unreliable substring scanning;
+ *                       Codex iter-1 fix).
  */
-async function bundle(externals, label) {
-  const result = await build({
-    entryPoints: [ENTRY],
+async function bundle(externals, label, syntheticInput = null, wantMetafile = false) {
+  const buildOpts = {
     bundle: true,
     format: "esm",
     minify: true,
@@ -85,8 +127,21 @@ async function bundle(externals, label) {
     platform: "neutral",
     target: ["es2020"],
     logLevel: "error",
-    metafile: false,
-  });
+    metafile: wantMetafile,
+  };
+
+  if (syntheticInput) {
+    buildOpts.stdin = {
+      contents: syntheticInput.contents,
+      resolveDir: X_CHARTS_ROOT,
+      sourcefile: syntheticInput.sourcefile ?? "synthetic-probe.ts",
+      loader: "ts",
+    };
+  } else {
+    buildOpts.entryPoints = [ENTRY];
+  }
+
+  const result = await build(buildOpts);
 
   if (!result.outputFiles || result.outputFiles.length === 0) {
     throw new Error(`esbuild produced no output for ${label}`);
@@ -95,7 +150,7 @@ async function bundle(externals, label) {
   const buffer = Buffer.from(result.outputFiles[0].contents);
   const raw = buffer.byteLength;
   const gzip = gzipSync(buffer).byteLength;
-  return { raw, gzip };
+  return { raw, gzip, metafile: result.metafile ?? null };
 }
 
 /* ------------------------------------------------------------------ */
@@ -138,6 +193,155 @@ const WRAPPER_ONLY_EXTERNAL = [
 const CONTRACT_TOTAL_EXTERNAL = [...ALWAYS_EXTERNAL, ...ECHARTS_GL_EXTERNAL];
 
 /* ------------------------------------------------------------------ */
+/*  A0 spike — synthetic single-chart probe + module signature scan    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Whitelist of chart names that the probe accepts. Each maps to the
+ * exact named export on the x-charts barrel so a typo gets caught early
+ * (a wrong name silently produces an empty bundle and the result is
+ * misleading).
+ */
+const PROBE_CHART_WHITELIST = new Set([
+  "BarChart",
+  "LineChart",
+  "AreaChart",
+  "ScatterChart",
+  "PieChart",
+  "GaugeChart",
+  "RadarChart",
+  "TreemapChart",
+  "HeatmapChart",
+  "WaterfallChart",
+  "FunnelChart",
+  "SankeyChart",
+  "SunburstChart",
+]);
+
+/**
+ * Bundle a tiny synthetic entry that imports ONLY the named chart
+ * from `@mfe/x-charts`. Reveals whether tree-shake actually keeps the
+ * other 12 chart implementations + their ECharts components OUT of a
+ * single-chart consumer's bundle.
+ *
+ * Uses esbuild `stdin` so the script never writes to disk — works
+ * under strict read-only sandboxes. (Codex iter-1 fix; previously
+ * `mkdtempSync(tmpdir())` failed with EPERM in restricted envs.)
+ *
+ * Reports raw + gzip for both `wrapperOnly` and `contractTotal`
+ * externals strategies. Read-only — never writes baseline.
+ */
+async function probeSingleChart(chartName) {
+  if (!PROBE_CHART_WHITELIST.has(chartName)) {
+    throw new Error(
+      `Unknown probe chart: '${chartName}'. Allowed: ${[...PROBE_CHART_WHITELIST].join(", ")}`,
+    );
+  }
+
+  // Synthetic entry: named import + value re-export so esbuild's DCE
+  // can't drop the chart reference. `pin` may be minified to a single
+  // letter, but the export side-effect keeps the chart module alive.
+  // Path uses './src/index.ts' so resolveDir=X_CHARTS_ROOT picks up the
+  // local source ahead of any cached node_modules copy.
+  const syntheticContents =
+    `import { ${chartName} } from "./src/index.ts";\n` +
+    `export const pin: typeof ${chartName} = ${chartName};\n`;
+  const syntheticInput = { contents: syntheticContents, sourcefile: `probe-${chartName}.ts` };
+
+  const probeBundle = await bundle(
+    CONTRACT_TOTAL_EXTERNAL,
+    `probe:${chartName}`,
+    syntheticInput,
+  );
+  const probeWrapperOnly = await bundle(
+    WRAPPER_ONLY_EXTERNAL,
+    `probeWrapperOnly:${chartName}`,
+    syntheticInput,
+  );
+  // Drop metafile from the probe payload — it's only relevant for scan
+  // mode and would bloat `--json` output.
+  return {
+    chart: chartName,
+    contractTotal: { raw: probeBundle.raw, gzip: probeBundle.gzip },
+    wrapperOnly: { raw: probeWrapperOnly.raw, gzip: probeWrapperOnly.gzip },
+  };
+}
+
+/**
+ * Module path scan — produce the full `contractTotal` bundle WITH
+ * esbuild's `metafile: true`, then walk the metafile.inputs map
+ * looking for known ECharts/zrender module path fragments. Reveals
+ * which enterprise modules actually live inside the base bundle.
+ *
+ * Why metafile and not substring search (Codex iter-1 absorb):
+ * minify renames symbols and elides path strings, so a literal
+ * substring scan produces false negatives (e.g. `SVGRenderer`
+ * present in metafile inputs but invisible in the minified output
+ * buffer). Metafile is the source of truth.
+ *
+ * Each entry maps an ECharts module name to:
+ *   - a regex over `metafile.inputs[*]` keys (the include test)
+ *   - a list of representative path examples (for the report)
+ */
+const LEAKAGE_SIGNATURES = [
+  { module: "SankeyChart", pathPattern: /echarts\/lib\/chart\/sankey\b/ },
+  { module: "SunburstChart", pathPattern: /echarts\/lib\/chart\/sunburst\b/ },
+  { module: "TreemapChart", pathPattern: /echarts\/lib\/chart\/treemap\b/ },
+  { module: "FunnelChart", pathPattern: /echarts\/lib\/chart\/funnel\b/ },
+  { module: "HeatmapChart", pathPattern: /echarts\/lib\/chart\/heatmap\b/ },
+  { module: "RadarChart", pathPattern: /echarts\/lib\/chart\/radar\b/ },
+  { module: "GaugeChart", pathPattern: /echarts\/lib\/chart\/gauge\b/ },
+  { module: "ScatterChart", pathPattern: /echarts\/lib\/chart\/scatter\b/ },
+  { module: "PieChart", pathPattern: /echarts\/lib\/chart\/pie\b/ },
+  { module: "BarChart", pathPattern: /echarts\/lib\/chart\/bar\b/ },
+  { module: "LineChart", pathPattern: /echarts\/lib\/chart\/line\b/ },
+  // ECharts 5 ships MarkLine/MarkArea/MarkPoint as a SHARED `marker`
+  // module; the three `import { MarkXxxComponent }` calls in
+  // `echarts-imports.ts` resolve to the same path tree. Pattern below
+  // tolerates either the legacy per-mark path (if any) or the shared
+  // `marker/` tree that holds all three impls.
+  { module: "MarkLineComponent", pathPattern: /echarts\/lib\/component\/(markLine|marker)\b/ },
+  { module: "MarkAreaComponent", pathPattern: /echarts\/lib\/component\/(markArea|marker)\b/ },
+  { module: "MarkPointComponent", pathPattern: /echarts\/lib\/component\/(markPoint|marker)\b/ },
+  { module: "VisualMapComponent", pathPattern: /echarts\/lib\/component\/visualMap\b/ },
+  { module: "DataZoomComponent", pathPattern: /echarts\/lib\/component\/dataZoom\b/ },
+  {
+    module: "DataZoomSelectFeature",
+    pathPattern: /echarts\/lib\/component\/dataZoom\/(install|select)/,
+  },
+  { module: "ToolboxComponent", pathPattern: /echarts\/lib\/component\/toolbox\b/ },
+  { module: "DatasetComponent", pathPattern: /echarts\/lib\/component\/dataset\b/ },
+  { module: "TransformComponent", pathPattern: /echarts\/lib\/component\/transform\b/ },
+  { module: "CanvasRenderer", pathPattern: /(echarts|zrender)\/lib\/(renderer|canvas)\/.*[Cc]anvas/ },
+  { module: "SVGRenderer", pathPattern: /(echarts\/lib\/renderer\/installSVGRenderer|zrender\/lib\/svg)/ },
+];
+
+async function scanLeakage() {
+  const { metafile } = await bundle(
+    CONTRACT_TOTAL_EXTERNAL,
+    "scan-leakage",
+    null,
+    /*wantMetafile*/ true,
+  );
+
+  if (!metafile) {
+    throw new Error("scan-leakage: esbuild produced no metafile");
+  }
+
+  const inputPaths = Object.keys(metafile.inputs);
+
+  return LEAKAGE_SIGNATURES.map(({ module, pathPattern }) => {
+    const matches = inputPaths.filter((p) => pathPattern.test(p));
+    return {
+      module,
+      present: matches.length > 0,
+      pathHits: matches.length,
+      examples: matches.slice(0, 3), // truncate; full list in --json mode
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -155,8 +359,63 @@ async function main() {
   process.stderr.write(`\nx-charts bundle check (PR-F2 gate)\n`);
   process.stderr.write(`Entry:      ${ENTRY.replace(ROOT + "/", "")}\n`);
 
-  const wrapperOnly = await bundle(WRAPPER_ONLY_EXTERNAL, "wrapperOnly");
-  const contractTotal = await bundle(CONTRACT_TOTAL_EXTERNAL, "contractTotal");
+  /* --- A0 spike: single-chart probe --- */
+  if (probeChart) {
+    process.stderr.write(`Mode:       probe (chart=${probeChart})\n\n`);
+    const probe = await probeSingleChart(probeChart);
+    if (wantJson) {
+      console.log(JSON.stringify(probe, null, 2));
+    } else {
+      console.log(`Synthetic single-chart probe — ${probe.chart}`);
+      console.log(`  wrapperOnly:   raw=${fmtKB(probe.wrapperOnly.raw)}  gzip=${fmtKB(probe.wrapperOnly.gzip)}`);
+      console.log(`  contractTotal: raw=${fmtKB(probe.contractTotal.raw)}  gzip=${fmtKB(probe.contractTotal.gzip)}`);
+      console.log(``);
+      console.log(`Compare against the full barrel (run \`--json\` without \`--probe=\`).`);
+      console.log(`If contractTotal here ≈ full barrel, tree-shake is NOT working —`);
+      console.log(`Faz A/B lazy split is required.`);
+    }
+    process.exit(0);
+  }
+
+  /* --- A0 spike: leakage scan (metafile-based, Codex iter-1 fix) --- */
+  if (wantScanLeakage) {
+    process.stderr.write(`Mode:       scan-leakage (metafile path scan)\n\n`);
+    const scan = await scanLeakage();
+    if (wantJson) {
+      console.log(JSON.stringify({ leakage: scan }, null, 2));
+    } else {
+      console.log(`ECharts module path scan (contractTotal bundle, metafile-based)`);
+      console.log(`  ${scan.length} modules probed.\n`);
+      const present = scan.filter((s) => s.present);
+      const absent = scan.filter((s) => !s.present);
+      console.log(`Present in bundle (${present.length}):`);
+      for (const s of present) {
+        const exampleList = s.examples.length
+          ? ` ['${s.examples[0]}'${s.examples.length > 1 ? `, +${s.examples.length - 1}` : ""}]`
+          : "";
+        console.log(`  ✓ ${s.module}  pathHits=${s.pathHits}${exampleList}`);
+      }
+      if (absent.length > 0) {
+        console.log(`\nAbsent (${absent.length}):`);
+        for (const s of absent) {
+          console.log(`  ✗ ${s.module}`);
+        }
+      }
+      console.log(``);
+      console.log(`Source of truth: esbuild metafile.inputs path matching.`);
+      console.log(`Human output truncates to 3 representative example paths per module.`);
+      console.log(`Use --json for the same data in machine-readable form.`);
+    }
+    process.exit(0);
+  }
+
+  // Default gate path: drop metafile field from output (kept inside the
+  // bundle() return shape only for `--scan-leakage` consumers; the
+  // public CI gate JSON contract has always been `{raw, gzip}` only).
+  const wrapperOnlyFull = await bundle(WRAPPER_ONLY_EXTERNAL, "wrapperOnly");
+  const contractTotalFull = await bundle(CONTRACT_TOTAL_EXTERNAL, "contractTotal");
+  const wrapperOnly = { raw: wrapperOnlyFull.raw, gzip: wrapperOnlyFull.gzip };
+  const contractTotal = { raw: contractTotalFull.raw, gzip: contractTotalFull.gzip };
 
   /* --- Baseline + threshold --- */
   let baseline = null;
