@@ -106,14 +106,36 @@ async function bundle(externals, label) {
 // realistic environment; treat them as external in BOTH metrics.
 const ALWAYS_EXTERNAL = ["react", "react-dom", "@mfe/shared-types"];
 
+// `echarts-gl` is a lazy chunk loaded ONLY when the WebGL renderer
+// path is taken (PR-A1 `registerEChartsGL` dynamic import). It does
+// not participate in the initial wrapper bundle nor the CONTRACT §7
+// chart artifact a consumer ships up-front. The shared `zrender`
+// runtime that `echarts-gl@2.x` reaches into for utility helpers
+// also stays external for the same reason.
+//
+// Without these externals esbuild walks into `echarts-gl` and tries
+// to resolve `zrender/lib/animation/Animator` (no `.js` extension)
+// in the lazy chunk path, which fails the bundle-size build with
+// six unresolved-import errors. Guarding both packages here keeps
+// the contractTotal measurement honest (initial graph only) and
+// matches the bundle-guard test invariant (`echarts-gl` is never
+// statically imported anywhere in the source tree).
+const ECHARTS_GL_EXTERNAL = [
+  "echarts-gl",
+  "echarts-gl/*",
+  "zrender",
+  "zrender/*",
+];
+
 const WRAPPER_ONLY_EXTERNAL = [
   ...ALWAYS_EXTERNAL,
+  ...ECHARTS_GL_EXTERNAL,
   "echarts",
   "echarts/*",
   "echarts-extension-amap",
 ];
 
-const CONTRACT_TOTAL_EXTERNAL = ALWAYS_EXTERNAL;
+const CONTRACT_TOTAL_EXTERNAL = [...ALWAYS_EXTERNAL, ...ECHARTS_GL_EXTERNAL];
 
 /* ------------------------------------------------------------------ */
 /*  Main                                                               */
