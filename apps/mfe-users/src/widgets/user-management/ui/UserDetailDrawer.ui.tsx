@@ -10,6 +10,7 @@
 /* eslint-disable no-restricted-imports */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
+import HierarchicalScopePicker from './HierarchicalScopePicker';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
 // Codex 019ddd78 iter-38 P1 — primitive switch from DetailDrawer (read-only
@@ -70,6 +71,19 @@ interface ScopeEntity {
    */
   code?: string | null;
   name: string;
+  /**
+   * PR-FE-12 (2026-05-09): parent FK fields surfaced by the
+   * backend MasterDataItemDto (PR-BE-15). Drives the hierarchical
+   * scope picker view. All three are nullable — top-level
+   * OUR_COMPANY rows have no parents; project/branch rows have
+   * parentCompanyId (target OUR_COMPANY.COMP_ID); department/
+   * warehouse rows may have both parentCompanyId and parentBranchId.
+   * parentProjectId is reserved for future scope types and is
+   * always null today.
+   */
+  parentCompanyId?: number | null;
+  parentBranchId?: number | null;
+  parentProjectId?: number | null;
 }
 
 const FALLBACK_ROLE_OPTIONS: RoleOption[] = [
@@ -257,6 +271,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // (below that threshold the list is readable as-is).
   const [roleSearch, setRoleSearch] = useState('');
 
+  // PR-FE-12 (2026-05-09): scope picker view mode. 'flat' is the
+  // default (PR-FE-11 4-tab Tabs surface); 'hierarchy' is opt-in
+  // and renders OUR_COMPANY → assigned children tree with an
+  // orphan-bucket banner. Toggle is local-only state — not
+  // persisted across drawer reopens because admins typically
+  // pick one mode per session.
+  const [scopesView, setScopesView] = useState<'flat' | 'hierarchy'>('flat');
+
   // PR-FE-8 (Codex thread 019e0bd3 iter-1 AGREE absorb, 2026-05-09):
   // mirror RoleDrawer's auto-save pattern (PR-FE-7) for the
   // UserDetailDrawer. Drop the manual Save / Cancel buttons; every
@@ -404,17 +426,34 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // (PROJECT_NUMBER, COMPANY_SHORT_CODE, SPECIAL_CODE) per master-data
   // item. Pipe it through the ScopeEntity mapping so the drawer can
   // render "[code] name" disambiguation alongside the checkbox label.
-  type MasterDataItem = { id: number; code?: string | null; name: string; status?: boolean };
+  // PR-FE-12 (2026-05-09): three new optional parent FK fields
+  // (parentCompanyId, parentBranchId, parentProjectId) emitted by
+  // PR-BE-15 backend. Pre-PR-BE-15 deploys will simply omit them
+  // (Jackson default tolerant); the hierarchical view falls back to
+  // an "all orphans" rendering in that case.
+  type MasterDataItem = {
+    id: number;
+    code?: string | null;
+    name: string;
+    parentCompanyId?: number | null;
+    parentBranchId?: number | null;
+    parentProjectId?: number | null;
+    status?: boolean;
+  };
+  const mapMasterDataItem = (m: MasterDataItem): ScopeEntity => ({
+    id: m.id,
+    code: m.code ?? null,
+    name: m.name,
+    parentCompanyId: m.parentCompanyId ?? null,
+    parentBranchId: m.parentBranchId ?? null,
+    parentProjectId: m.parentProjectId ?? null,
+  });
   const companiesQuery = useQuery({
     queryKey: ['scope-companies'],
     queryFn: async () => {
       try {
         const res = await api.get('/v1/master-data/companies');
-        return ((res.data as MasterDataItem[]) ?? []).map((c) => ({
-          id: c.id,
-          code: c.code ?? null,
-          name: c.name,
-        })) as ScopeEntity[];
+        return ((res.data as MasterDataItem[]) ?? []).map(mapMasterDataItem) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
@@ -427,11 +466,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get('/v1/master-data/projects');
-        return ((res.data as MasterDataItem[]) ?? []).map((p) => ({
-          id: p.id,
-          code: p.code ?? null,
-          name: p.name,
-        })) as ScopeEntity[];
+        return ((res.data as MasterDataItem[]) ?? []).map(mapMasterDataItem) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
@@ -444,11 +479,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get('/v1/master-data/departments');
-        return ((res.data as MasterDataItem[]) ?? []).map((w) => ({
-          id: w.id,
-          code: w.code ?? null,
-          name: w.name,
-        })) as ScopeEntity[];
+        return ((res.data as MasterDataItem[]) ?? []).map(mapMasterDataItem) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
@@ -461,11 +492,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     queryFn: async () => {
       try {
         const res = await api.get('/v1/master-data/branches');
-        return ((res.data as MasterDataItem[]) ?? []).map((b) => ({
-          id: b.id,
-          code: b.code ?? null,
-          name: b.name,
-        })) as ScopeEntity[];
+        return ((res.data as MasterDataItem[]) ?? []).map(mapMasterDataItem) as ScopeEntity[];
       } catch {
         return [] as ScopeEntity[];
       }
@@ -1863,8 +1890,72 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
                 })
               : t('users.detail.section.scopes.subtitle')}
           </p>
+          {/*
+           * PR-FE-12 (2026-05-09): view toggle. Default 'flat' (PR-FE-11
+           * Tabs surface) preserves the existing UX so admins are not
+           * surprised. Opt-in 'hierarchy' renders the OUR_COMPANY tree
+           * with assigned children grouped under each company plus an
+           * orphan-bucket banner for child assignments whose parent
+           * OUR_COMPANY is not in the assigned set. Backed by the
+           * parentCompanyId / parentBranchId fields PR-BE-15 added to
+           * MasterDataItemDto.
+           */}
+          <div
+            className="mt-3 inline-flex rounded-full border border-border-subtle bg-surface-muted/30 p-0.5 text-xs"
+            role="tablist"
+            data-testid="scopes-view-toggle"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={scopesView === 'flat'}
+              onClick={() => setScopesView('flat')}
+              className={
+                scopesView === 'flat'
+                  ? 'rounded-full bg-surface-default px-3 py-1 font-semibold text-text-primary shadow-sm'
+                  : 'rounded-full px-3 py-1 text-text-subtle hover:text-text-primary'
+              }
+              data-testid="scopes-view-toggle-flat"
+            >
+              {t('users.detail.scopes.viewToggle.flat')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={scopesView === 'hierarchy'}
+              onClick={() => setScopesView('hierarchy')}
+              className={
+                scopesView === 'hierarchy'
+                  ? 'rounded-full bg-surface-default px-3 py-1 font-semibold text-text-primary shadow-sm'
+                  : 'rounded-full px-3 py-1 text-text-subtle hover:text-text-primary'
+              }
+              data-testid="scopes-view-toggle-hierarchy"
+            >
+              {t('users.detail.scopes.viewToggle.hierarchy')}
+            </button>
+          </div>
           <div className="mt-3">
-            <Tabs items={scopeTabs} variant="line" size="sm" />
+            {scopesView === 'flat' ? (
+              <Tabs items={scopeTabs} variant="line" size="sm" />
+            ) : (
+              <HierarchicalScopePicker
+                companies={companies}
+                projects={projects}
+                warehouses={warehouses}
+                branches={branches}
+                selectedCompanyIds={selectedCompanyIds}
+                selectedProjectIds={selectedProjectIds}
+                selectedWarehouseIds={selectedWarehouseIds}
+                selectedBranchIds={selectedBranchIds}
+                setSelectedCompanyIds={setSelectedCompanyIds}
+                setSelectedProjectIds={setSelectedProjectIds}
+                setSelectedWarehouseIds={setSelectedWarehouseIds}
+                setSelectedBranchIds={setSelectedBranchIds}
+                setDirty={setDirty}
+                canEdit={canEdit}
+                t={t}
+              />
+            )}
           </div>
         </section>
 

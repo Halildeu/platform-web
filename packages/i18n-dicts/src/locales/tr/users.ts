@@ -226,6 +226,20 @@ const users = {
   // The new subtitle surfaces the breakdown inline.
   'users.detail.section.scopes.subtitleWithTotals':
     '{total} toplam yetki — {companies} şirket, {projects} proje, {warehouses} depo, {branches} şube.',
+  // PR-FE-12 (2026-05-09): hierarchical scope picker view — admin
+  // "kim neye erişiyor" sorusunu tek bakışta yanıtlayabilsin.
+  'users.detail.scopes.viewToggle.flat': 'Düz Liste',
+  'users.detail.scopes.viewToggle.hierarchy': 'Hiyerarşik',
+  'users.detail.scopes.hier.empty':
+    'Hiyerarşik görünümde gösterilecek atanmış şirket veya alt yetki yok. Eklemek için Düz Liste sekmesine geçin.',
+  'users.detail.scopes.hier.noChildren': 'Alt yetki atanmamış',
+  'users.detail.scopes.hier.childCount': '{count} alt yetki',
+  'users.detail.scopes.hier.subheader.projects': 'Projeler ({count})',
+  'users.detail.scopes.hier.subheader.branches': 'Şubeler ({count})',
+  'users.detail.scopes.hier.subheader.warehouses': 'Depolar ({count})',
+  'users.detail.scopes.hier.orphan.header': 'Öksüz kapsamlar ({count}) — parent şirket atanmadan',
+  'users.detail.scopes.hier.orphan.help':
+    'Bu alt yetkiler için parent şirket atanmamış. Tutarlılık için ya ilgili şirketi ekleyin ya da bu kayıtları kaldırın.',
   'users.grid.columns.roles': 'Roller',
 };
 
