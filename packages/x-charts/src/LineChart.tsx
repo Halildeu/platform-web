@@ -55,6 +55,13 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay types (Highcharts annotation parity, Codex thread
+// 019e0df1 iter-3 AGREE).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
+
 export interface LineChartProps extends AccessControlledProps {
   /** Series to render as lines. */
   series: ChartSeries[];
@@ -84,6 +91,13 @@ export interface LineChartProps extends AccessControlledProps {
   className?: string;
   /** Callback fired when a data point (marker) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /**
+   * Visual overlay markups — threshold lines, highlight bands, anomaly
+   * markers, KPI labels. Codex thread 019e0df1 iter-3 absorb.
+   */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked. */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -157,6 +171,8 @@ const LineChartInner = React.forwardRef<
     description,
     className,
     onDataPointClick,
+    markups,
+    onMarkupClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -170,6 +186,15 @@ const LineChartInner = React.forwardRef<
   const isEmpty = safeSeries.length === 0 || !labels || labels.length === 0;
   const fmt = valueFormatter ?? formatCompact;
   const hasMultiSeries = safeSeries.length > 1;
+
+  // Markup overlay adapter — Codex thread 019e0df1.
+  const markupResult = useMarkupAdapter(markups, {
+    chartType: 'line',
+    dataContext: {
+      labels,
+      series: safeSeries.map((s) => ({ name: s.name, data: s.data })),
+    },
+  });
 
   // Container ref shared with the renderer (via setRefs) so the same DOM node
   // drives both useResponsiveBreakpoint and useEChartsRenderer's resize loop.
@@ -298,7 +323,7 @@ const LineChartInner = React.forwardRef<
           lineStyle: { type: 'dashed' as const },
         },
       },
-      series: echartsSeriesList,
+      series: mergeMarkupPatches(echartsSeriesList, markupResult.seriesPatches),
       aria: {
         enabled: true,
         label: {
@@ -337,10 +362,42 @@ const LineChartInner = React.forwardRef<
     // Breakpoint drives axisLabel rotation/interval, legend orientation,
     // grid padding, and dataZoom enablement (Codex 019defa5).
     breakpoint,
+    // Markup patches drive series.markLine / markArea / markPoint.
+    markupResult,
   ]);
 
   const handleClick = useCallback(
     (params: unknown) => {
+      const p = params as {
+        componentType?: string;
+        seriesName?: string;
+        seriesIndex?: number;
+        dataIndex?: number;
+        name?: string;
+        value?: number;
+      };
+      // Markup overlay click — Codex thread 019e0df1 absorb. Early
+      // return so onDataPointClick does NOT fire on the same event.
+      if (
+        p.componentType === 'markLine' ||
+        p.componentType === 'markArea' ||
+        p.componentType === 'markPoint'
+      ) {
+        if (!onMarkupClick) return;
+        const lookupName = typeof p.name === 'string' ? p.name : undefined;
+        const markup = lookupName ? markupResult.markupLookup.get(lookupName) : undefined;
+        if (markup) {
+          onMarkupClick({
+            markup,
+            chartType: 'line',
+            seriesIndex: p.seriesIndex,
+            dataIndex: p.dataIndex,
+            nativeParams: params,
+          });
+        }
+        return;
+      }
+
       if (!onDataPointClick) return;
       // Codex thread 019e0c25 post-impl review: align LineChart datum
       // with the canonical Area pattern. `dataIndex` and `seriesIndex`
@@ -348,13 +405,6 @@ const LineChartInner = React.forwardRef<
       // wrapper unable to surface those fields when emitFields included
       // them — and the contract test was asserting the truncated shape
       // rather than catching the drift.
-      const p = params as {
-        seriesName?: string;
-        seriesIndex?: number;
-        dataIndex?: number;
-        name?: string;
-        value?: number;
-      };
       const value = typeof p.value === 'number' ? p.value : undefined;
       onDataPointClick({
         datum: {
@@ -368,14 +418,14 @@ const LineChartInner = React.forwardRef<
         label: p.name,
       });
     },
-    [onDataPointClick],
+    [onDataPointClick, onMarkupClick, markupResult],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onDataPointClick ? handleClick : undefined,
+    onClick: onDataPointClick || onMarkupClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. Adapt LineChart's series-based
@@ -454,7 +504,7 @@ LineChartInner.displayName = 'LineChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(function LineChart(
-  { access, accessReason, onDataPointClick, ...rest },
+  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -464,6 +514,7 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
         ref={ref}
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

@@ -50,6 +50,13 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1) — Pie is NO-OP per the
+// support matrix. Prop accepted for API consistency across all 13
+// charts; dev warning surfaces when a markup is supplied.
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+
 export interface PieChartProps extends AccessControlledProps {
   /** Data points to render as slices. */
   data: ChartDataPoint[];
@@ -77,6 +84,15 @@ export interface PieChartProps extends AccessControlledProps {
   className?: string;
   /** Callback fired when a data point (slice) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /**
+   * Visual overlay markups (Codex thread 019e0df1) — NO-OP on Pie.
+   * Prop accepted for API consistency; dev warning surfaces when
+   * markups are supplied (label/threshold semantics need v2 native
+   * series-label patches).
+   */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Pie). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -146,6 +162,8 @@ const PieChartInner = React.forwardRef<
     description,
     className,
     onDataPointClick,
+    markups,
+    onMarkupClick: _onMarkupClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -155,6 +173,12 @@ const PieChartInner = React.forwardRef<
   forwardedRef,
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
+
+  // Markup overlay adapter — Codex thread 019e0df1. Pie is NO-OP per
+  // the support matrix; we still call the adapter so dev warnings
+  // surface when the consumer supplies markups (helps catch
+  // misconfiguration during development).
+  useMarkupAdapter(markups, { chartType: 'pie' });
 
   const safeData = useMemo(() => sanitizeDataPoints(data), [data]);
   const validData = useMemo(() => safeData.filter((d) => d.value > 0), [safeData]);
@@ -414,7 +438,7 @@ PieChartInner.displayName = 'PieChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function PieChart(
-  { access, accessReason, onDataPointClick, ...rest },
+  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -424,6 +448,7 @@ export const PieChart = React.forwardRef<HTMLDivElement, PieChartProps>(function
         ref={ref}
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

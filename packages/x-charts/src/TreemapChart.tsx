@@ -44,6 +44,12 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1) — Treemap is NO-OP
+// (hierarchical chart, no x/y axis semantics).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+
 export type TreemapNode = {
   /** Display name for the node. */
   name: string;
@@ -93,6 +99,10 @@ export interface TreemapChartProps extends AccessControlledProps {
    * defaults to `0` when ECharts doesn't surface the breadcrumb.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups — NO-OP on Treemap (Codex 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Treemap). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /** Animate on mount. @default true */
   animate?: boolean;
   /** Additional class name. */
@@ -218,6 +228,8 @@ const TreemapChartInner = React.forwardRef<
     valueFormatter,
     onNodeClick,
     onDataPointClick,
+    markups,
+    onMarkupClick: _onMarkupClick,
     animate = true,
     className,
     theme: themePreference = 'auto',
@@ -230,6 +242,9 @@ const TreemapChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
+
+  // Markup overlay adapter — Codex 019e0df1. NO-OP on Treemap.
+  useMarkupAdapter(markups, { chartType: 'treemap' });
 
   // Faz 21.9 PR3d: container ref + breakpoint for responsive treemap.
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
@@ -488,7 +503,10 @@ TreemapChartInner.displayName = 'TreemapChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
-  function TreemapChart({ access, accessReason, onNodeClick, onDataPointClick, ...rest }, ref) {
+  function TreemapChart(
+    { access, accessReason, onNodeClick, onDataPointClick, onMarkupClick, ...rest },
+    ref,
+  ) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -497,6 +515,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
           {...rest}
           onNodeClick={guardChartCallback(state, onNodeClick)}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
+          onMarkupClick={guardChartCallback(state, onMarkupClick)}
         />
       </ChartAccessGate>
     );

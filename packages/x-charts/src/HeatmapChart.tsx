@@ -45,6 +45,12 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
+
 export type HeatmapTupleData = [number, number, number];
 
 export type HeatmapObjectData = {
@@ -97,6 +103,10 @@ export interface HeatmapChartProps extends AccessControlledProps {
    * typically emit as filter values).
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups (Codex thread 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked. */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -241,6 +251,8 @@ const HeatmapChartInner = React.forwardRef<
     animate = true,
     onCellClick,
     onDataPointClick,
+    markups,
+    onMarkupClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -287,6 +299,18 @@ const HeatmapChartInner = React.forwardRef<
       return null;
     }
   }, [data, xLabels, yLabels, isEmpty]);
+
+  // Markup overlay adapter — Codex thread 019e0df1. dataContext uses
+  // resolved categorical xLabels/yLabels (normalized.xCats/yCats) so
+  // LabelMarkup with `dataIndex` anchor still resolves.
+  const markupResult = useMarkupAdapter(markups, {
+    chartType: 'heatmap',
+    dataContext: {
+      xLabels: normalized?.xCats,
+      yLabels: normalized?.yCats,
+      labels: normalized?.xCats,
+    },
+  });
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty || !normalized) return null;
@@ -381,27 +405,30 @@ const HeatmapChartInner = React.forwardRef<
         },
         textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
       },
-      series: [
-        {
-          type: 'heatmap' as const,
-          data: norm,
-          label: {
-            show: showValues,
-            fontSize: scaleFontSize(10, densityFontMultiplier),
-            formatter: (params: { value: [number, number, number] }) =>
-              escapeHtml(fmt(sanitizeNumber(params.value[2]))),
-          },
-          emphasis: {
-            itemStyle: {
-              borderColor: '#333',
-              borderWidth: 2,
-              shadowBlur: 8,
-              shadowColor: 'rgba(0,0,0,0.25)',
+      series: mergeMarkupPatches(
+        [
+          {
+            type: 'heatmap' as const,
+            data: norm,
+            label: {
+              show: showValues,
+              fontSize: scaleFontSize(10, densityFontMultiplier),
+              formatter: (params: { value: [number, number, number] }) =>
+                escapeHtml(fmt(sanitizeNumber(params.value[2]))),
             },
+            emphasis: {
+              itemStyle: {
+                borderColor: '#333',
+                borderWidth: 2,
+                shadowBlur: 8,
+                shadowColor: 'rgba(0,0,0,0.25)',
+              },
+            },
+            ...(cellSize !== 'auto' ? { itemStyle: { width: cellSize, height: cellSize } } : {}),
           },
-          ...(cellSize !== 'auto' ? { itemStyle: { width: cellSize, height: cellSize } } : {}),
-        },
-      ],
+        ],
+        markupResult.seriesPatches,
+      ),
       aria: {
         enabled: true,
         label: {
@@ -433,6 +460,35 @@ const HeatmapChartInner = React.forwardRef<
 
   const handleClick = useCallback(
     (params: unknown) => {
+      // Markup overlay click — Codex thread 019e0df1 absorb. Early
+      // return so neither cross-filter nor legacy onCellClick fires
+      // for an overlay event.
+      const pAny = params as {
+        componentType?: string;
+        name?: string;
+        seriesIndex?: number;
+        dataIndex?: number;
+      };
+      if (
+        pAny.componentType === 'markLine' ||
+        pAny.componentType === 'markArea' ||
+        pAny.componentType === 'markPoint'
+      ) {
+        if (!onMarkupClick) return;
+        const lookupName = typeof pAny.name === 'string' ? pAny.name : undefined;
+        const markup = lookupName ? markupResult.markupLookup.get(lookupName) : undefined;
+        if (markup) {
+          onMarkupClick({
+            markup,
+            chartType: 'heatmap',
+            seriesIndex: pAny.seriesIndex,
+            dataIndex: pAny.dataIndex,
+            nativeParams: params,
+          });
+        }
+        return;
+      }
+
       // Coexistence — Codex iter-2 thread 019e0c25 absorb: cross-filter
       // wrapper requires the canonical `ChartClickEvent` shape; legacy
       // consumers still rely on `onCellClick` with numeric indices.
@@ -464,14 +520,14 @@ const HeatmapChartInner = React.forwardRef<
         onCellClick({ x: xi, y: yi, value: v });
       }
     },
-    [onCellClick, onDataPointClick, normalized],
+    [onCellClick, onDataPointClick, onMarkupClick, normalized, markupResult],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onCellClick || onDataPointClick ? handleClick : undefined,
+    onClick: onCellClick || onDataPointClick || onMarkupClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. Heatmap is a 2D matrix —
@@ -546,7 +602,10 @@ HeatmapChartInner.displayName = 'HeatmapChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
-  function HeatmapChart({ access, accessReason, onCellClick, onDataPointClick, ...rest }, ref) {
+  function HeatmapChart(
+    { access, accessReason, onCellClick, onDataPointClick, onMarkupClick, ...rest },
+    ref,
+  ) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -555,6 +614,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           {...rest}
           onCellClick={guardChartCallback(state, onCellClick)}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
+          onMarkupClick={guardChartCallback(state, onMarkupClick)}
         />
       </ChartAccessGate>
     );

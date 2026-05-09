@@ -48,6 +48,12 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1) — Sankey is NO-OP (network
+// chart, no x/y axis semantics).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+
 export interface SankeyNode {
   /** Unique node name (used as identifier in links). */
   name: string;
@@ -112,6 +118,10 @@ export interface SankeyChartProps extends AccessControlledProps {
    * filter fields.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups — NO-OP on Sankey (Codex 019e0df1). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Sankey). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -195,6 +205,8 @@ const SankeyChartInner = React.forwardRef<
     animate = true,
     onNodeClick,
     onDataPointClick,
+    markups,
+    onMarkupClick: _onMarkupClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -206,6 +218,9 @@ const SankeyChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !nodes || nodes.length === 0 || !links || links.length === 0;
+
+  // Markup overlay adapter — Codex 019e0df1. NO-OP on Sankey.
+  useMarkupAdapter(markups, { chartType: 'sankey' });
 
   // Faz 21.9 PR3d: container ref + breakpoint for responsive sankey.
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
@@ -528,7 +543,7 @@ SankeyChartInner.displayName = 'SankeyChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(function SankeyChart(
-  { access, accessReason, onNodeClick, onDataPointClick, ...rest },
+  { access, accessReason, onNodeClick, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -539,6 +554,7 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
         {...rest}
         onNodeClick={guardChartCallback(state, onNodeClick)}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

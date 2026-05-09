@@ -49,6 +49,13 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1) — Radar is NO-OP. Indicator-
+// anchor markups planned for v2 (matches Radar v2 cross-filter
+// indicator-level pattern from PR #345).
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+
 export type RadarIndicator = {
   /** Axis name displayed at the spoke end. */
   name: string;
@@ -116,6 +123,10 @@ export interface RadarChartProps extends AccessControlledProps {
    * The two surfaces never overwrite each other.
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups — NO-OP on Radar (Codex 019e0df1; v2 backlog). */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Radar). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -246,6 +257,8 @@ const RadarChartInner = React.forwardRef<
     valueFormatter,
     animate = true,
     onDataPointClick,
+    markups,
+    onMarkupClick: _onMarkupClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -257,6 +270,9 @@ const RadarChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !indicators || indicators.length === 0 || !series || series.length === 0;
+
+  // Markup overlay adapter — Codex 019e0df1. NO-OP on Radar.
+  useMarkupAdapter(markups, { chartType: 'radar' });
   const fmt = valueFormatter ?? formatCompact;
 
   // Faz 21.9 PR3c: container ref + breakpoint for responsive radar.
@@ -574,7 +590,7 @@ RadarChartInner.displayName = 'RadarChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(function RadarChart(
-  { access, accessReason, onDataPointClick, ...rest },
+  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -584,6 +600,7 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
         ref={ref}
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

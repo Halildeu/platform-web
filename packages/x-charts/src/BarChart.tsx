@@ -56,6 +56,14 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay types (Highcharts annotation parity, Codex thread
+// 019e0df1 iter-3 AGREE). Re-exported so consumers can import
+// `ChartMarkup` from either the chart shim or `@mfe/x-charts` root.
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
+
 export interface BarChartProps extends AccessControlledProps {
   /** Data points to render as bars. */
   data: ChartDataPoint[];
@@ -85,6 +93,14 @@ export interface BarChartProps extends AccessControlledProps {
   series?: { field: string; name: string; color?: string }[];
   /** Callback fired when a data point (bar) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /**
+   * Visual overlay markups — threshold lines, highlight bands, anomaly
+   * markers, KPI labels. Renders on top of the bars without affecting
+   * the data series. See `ChartMarkup` type docs for variant details.
+   */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked. */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals (data-appearance / data-theme / media)
@@ -161,6 +177,8 @@ const BarChartInner = React.forwardRef<
     className,
     series: seriesDef,
     onDataPointClick,
+    markups,
+    onMarkupClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -197,6 +215,18 @@ const BarChartInner = React.forwardRef<
     decal: decalPreference,
     density: densityPreference,
     accent: accentPreference,
+  });
+
+  // Markup overlay adapter — Codex thread 019e0df1 absorb. dataContext
+  // built from props for `LabelMarkup.anchor: { dataIndex }` resolution
+  // (pure adapter — no ECharts instance needed).
+  const markupResult = useMarkupAdapter(markups, {
+    chartType: 'bar',
+    orientation,
+    dataContext: {
+      labels: safeData.map((d) => d.label),
+      series: [{ data: safeData.map((d) => d.value) }],
+    },
   });
 
   const option = useMemo((): EChartsOption | null => {
@@ -342,7 +372,7 @@ const BarChartInner = React.forwardRef<
       ...(responsiveDataZoom ? { dataZoom: responsiveDataZoom } : {}),
       xAxis: isHorizontal ? valueAxis : categoryAxis,
       yAxis: isHorizontal ? categoryAxis : valueAxis,
-      series: echartsSeriesList,
+      series: mergeMarkupPatches(echartsSeriesList, markupResult.seriesPatches),
       aria: {
         enabled: true,
         label: {
@@ -382,28 +412,62 @@ const BarChartInner = React.forwardRef<
     // Breakpoint drives axisLabel rotation/interval, legend orientation,
     // grid padding, and dataZoom enablement (Codex 019defa5).
     breakpoint,
+    // Markup patches drive series.markLine / markArea / markPoint
+    // (Codex thread 019e0df1).
+    markupResult,
   ]);
 
   const handleClick = useCallback(
     (params: unknown) => {
+      // Markup overlay click dispatch — Codex thread 019e0df1 iter-3
+      // absorb. ECharts surfaces `componentType: 'markLine' |
+      // 'markArea' | 'markPoint'` for overlay events; we early-return
+      // so `onDataPointClick` does NOT fire on the same event.
+      const p = params as {
+        componentType?: string;
+        data?: unknown;
+        name?: string;
+        value?: number;
+        dataIndex?: number;
+        seriesIndex?: number;
+      };
+      if (
+        p.componentType === 'markLine' ||
+        p.componentType === 'markArea' ||
+        p.componentType === 'markPoint'
+      ) {
+        if (!onMarkupClick) return;
+        const lookupName = typeof p.name === 'string' ? p.name : undefined;
+        const markup = lookupName ? markupResult.markupLookup.get(lookupName) : undefined;
+        if (markup) {
+          onMarkupClick({
+            markup,
+            chartType: 'bar',
+            seriesIndex: p.seriesIndex,
+            dataIndex: p.dataIndex,
+            nativeParams: params,
+          });
+        }
+        return;
+      }
+
       if (!onDataPointClick) return;
-      const p = params as { data: unknown; name: string; value: number; dataIndex: number };
       const raw =
         typeof p.data === 'object' && p.data !== null ? (p.data as Record<string, unknown>) : {};
       onDataPointClick({
         datum: { ...raw, label: p.name, value: p.value },
         value: typeof p.value === 'number' ? p.value : (raw.value as number),
-        label: p.name,
+        label: p.name ?? '',
       });
     },
-    [onDataPointClick],
+    [onDataPointClick, onMarkupClick, markupResult],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onDataPointClick ? handleClick : undefined,
+    onClick: onDataPointClick || onMarkupClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B1 (Codex iter-7): default-on a11y composer.
@@ -479,7 +543,7 @@ BarChartInner.displayName = 'BarChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function BarChart(
-  { access, accessReason, onDataPointClick, ...rest },
+  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -489,6 +553,7 @@ export const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(function
         ref={ref}
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
       />
     </ChartAccessGate>
   );

@@ -52,6 +52,16 @@ export type { ChartClickEvent } from './types';
 import type { ChartClickEvent as ChartClickEventCanonical } from './types';
 type ChartClickEvent = ChartClickEventCanonical;
 
+// Markup overlay (Codex thread 019e0df1). Waterfall is partial: the
+// `mergeMarkupPatches` helper APPENDS to the existing markLine on the
+// visible value series (used for connector lines between bars), so
+// new threshold lines coexist with the connectors without clobbering.
+// Base series (`__waterfall_base__`) is left untouched.
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import { useMarkupAdapter } from './annotations/useMarkupAdapter';
+import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
+
 export type WaterfallItemType = 'increase' | 'decrease' | 'total';
 
 export interface WaterfallDataPoint {
@@ -98,6 +108,16 @@ export interface WaterfallChartProps extends AccessControlledProps {
    * are filtered out (they aren't user-meaningful).
    */
   onDataPointClick?: (event: ChartClickEvent) => void;
+  /**
+   * Visual overlay markups (Codex thread 019e0df1). Partial support:
+   * line + area patches MERGE with the existing connector markLine on
+   * the visible value series; base series (`__waterfall_base__`) is
+   * untouched. Use `target.seriesName: 'Waterfall'` for explicit
+   * routing if needed.
+   */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked. */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -180,6 +200,8 @@ const WaterfallChartInner = React.forwardRef<
     showLegend = false,
     animate = true,
     onDataPointClick,
+    markups,
+    onMarkupClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -197,6 +219,17 @@ const WaterfallChartInner = React.forwardRef<
     [data],
   );
   const fmt = valueFormatter ?? formatCompact;
+
+  // Markup overlay adapter — Codex thread 019e0df1. dataContext from
+  // safeData (label = item.label, value = item.value).
+  const markupResult = useMarkupAdapter(markups, {
+    chartType: 'waterfall',
+    orientation,
+    dataContext: {
+      labels: safeData.map((d) => d.label),
+      series: [{ data: safeData.map((d) => d.value) }],
+    },
+  });
 
   // Faz 21.9 PR3c: same DOM node feeds breakpoint observer + ECharts renderer.
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
@@ -422,7 +455,21 @@ const WaterfallChartInner = React.forwardRef<
       ...(dataZoom ? { dataZoom } : {}),
       xAxis: isHorizontal ? valueAxis : categoryAxis,
       yAxis: isHorizontal ? categoryAxis : valueAxis,
-      series: [baseSeries, valueSeries],
+      // mergeMarkupPatches ROUTES to first series by default (no
+      // target). To keep the base stack untouched and merge into the
+      // value series, we pre-route via target=seriesIndex:1 in the
+      // adapter call... but Waterfall users won't always set target.
+      // Solution: merge into [baseSeries, valueSeries] and force
+      // patches without target to land on valueSeries (index 1) by
+      // pre-mapping. mergeMarkupPatches default targets index 0,
+      // which is __waterfall_base__ — not what we want for connector
+      // merge. Pre-map default patches to seriesIndex: 1.
+      series: mergeMarkupPatches(
+        [baseSeries, valueSeries],
+        markupResult.seriesPatches.map((p) =>
+          p.seriesIndex === undefined && p.seriesName === undefined ? { ...p, seriesIndex: 1 } : p,
+        ),
+      ),
       aria: {
         enabled: true,
         label: {
@@ -451,10 +498,42 @@ const WaterfallChartInner = React.forwardRef<
     densitySpacingMultiplier,
     densityPaddingMultiplier,
     breakpoint,
+    // Markup patches drive series.markLine / markArea / markPoint
+    // (Codex thread 019e0df1).
+    markupResult,
   ]);
 
   const handleClick = useCallback(
     (params: unknown) => {
+      const pAny = params as {
+        componentType?: string;
+        name?: string;
+        seriesIndex?: number;
+        dataIndex?: number;
+      };
+      // Markup overlay click — Codex thread 019e0df1 absorb. Early
+      // return so onDataPointClick (and the base-series filter) does
+      // NOT fire for an overlay event.
+      if (
+        pAny.componentType === 'markLine' ||
+        pAny.componentType === 'markArea' ||
+        pAny.componentType === 'markPoint'
+      ) {
+        if (!onMarkupClick) return;
+        const lookupName = typeof pAny.name === 'string' ? pAny.name : undefined;
+        const markup = lookupName ? markupResult.markupLookup.get(lookupName) : undefined;
+        if (markup) {
+          onMarkupClick({
+            markup,
+            chartType: 'waterfall',
+            seriesIndex: pAny.seriesIndex,
+            dataIndex: pAny.dataIndex,
+            nativeParams: params,
+          });
+        }
+        return;
+      }
+
       if (!onDataPointClick) return;
       const p = params as {
         seriesName?: string;
@@ -486,14 +565,14 @@ const WaterfallChartInner = React.forwardRef<
         label: item.label,
       });
     },
-    [onDataPointClick, data],
+    [onDataPointClick, onMarkupClick, markupResult, data],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onDataPointClick ? handleClick : undefined,
+    onClick: onDataPointClick || onMarkupClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. WaterfallChart's data is
@@ -563,7 +642,7 @@ WaterfallChartInner.displayName = 'WaterfallChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartProps>(
-  function WaterfallChart({ access, accessReason, onDataPointClick, ...rest }, ref) {
+  function WaterfallChart({ access, accessReason, onDataPointClick, onMarkupClick, ...rest }, ref) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -571,6 +650,7 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
           ref={ref}
           {...rest}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
+          onMarkupClick={guardChartCallback(state, onMarkupClick)}
         />
       </ChartAccessGate>
     );
