@@ -1275,7 +1275,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'undefined',
         description:
-          'Callback fired when a series polygon is clicked. Emits a canonical\n`ChartClickEvent` with `datum: { seriesName, label: seriesName,\nvalues, indicators }` — polygon-level (whole series), not\nper-indicator. Indicator-level emission requires custom hit\nmapping and is tracked as v2 follow-up (Codex iter-2 blocker).',
+          "Callback fired when the radar polygon is clicked. Emits a canonical\n`ChartClickEvent`. v1 polygon-level fields stay stable across\nversions; v2 enrichment is purely ADDITIVE.\n\nv1 fields (always present):\n- `datum.seriesName`, `datum.label` (= seriesName), `datum.values`,\n  `datum.indicators`\n- top-level `event.label` = seriesName\n- top-level `event.value` = `values[0]` when numeric\n\nv2 indicator-level enrichment (additive, fires only when click\ncoordinates resolve to a specific axis outside the 5% center\ndead-zone):\n- `datum.indicator` (axis name)\n- `datum.indicatorIndex` (0-based axis position)\n- `datum.indicatorValue` (numeric value at that axis for the\n  clicked series)\n\nCross-filter consumers wanting series-level filter:\n  `<CrossFilterChart emitFields={['seriesName']}>` — v1 contract.\nCross-filter consumers wanting per-axis drill:\n  `<CrossFilterChart emitFields={['indicator']}>` — v2 opt-in.\nThe two surfaces never overwrite each other.",
       },
       {
         name: 'className',
