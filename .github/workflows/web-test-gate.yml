@@ -162,7 +162,7 @@ jobs:
         run: pnpm run test:cssom:full
       - name: Upload Vitest report on failure
         if: steps.cssom_full_run.outcome == 'failure'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: cssom-full-report
           path: |
@@ -400,7 +400,7 @@ jobs:
 
       - name: Upload filtered warning report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: lint-warn-report
           path: |
@@ -453,7 +453,7 @@ jobs:
           npx playwright test --config playwright.invariants.config.ts
       - name: Upload diff on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: visual-invariant-diff
           path: |
@@ -492,7 +492,7 @@ jobs:
           cd packages/design-system
           npx playwright test --config playwright.invariants.config.ts --update-snapshots
       - name: Upload baseline artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: visual-invariant-linux-baseline
           path: packages/design-system/src/__visual__/__snapshots__/invariants
@@ -583,7 +583,7 @@ jobs:
           fi
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: auth-contract-e2e-report
           path: |
