@@ -261,7 +261,7 @@ describe('GaugeChart onDataPointClick contract', () => {
 });
 
 describe('RadarChart onDataPointClick contract', () => {
-  it('emits polygon-level datum { seriesName, label, values, indicators }', () => {
+  it('emits polygon-level datum { seriesName, label, values, indicators } when click coordinates are absent', () => {
     const onClick = vi.fn<(e: ChartClickEvent) => void>();
     render(
       <RadarChart
@@ -290,6 +290,132 @@ describe('RadarChart onDataPointClick contract', () => {
       values: [85, 70, 90],
       indicators: ['Hız', 'Güç', 'Verimlilik'],
     });
+    // No coordinates supplied → indicator enrichment falls back.
+    expect(datum.indicator).toBeUndefined();
+    expect(datum.indicatorIndex).toBeUndefined();
+    expect(datum.indicatorValue).toBeUndefined();
+  });
+
+  it('v2: emits ADDITIVE indicator-level enrichment without overwriting v1 polygon fields', () => {
+    // Backward-compat contract (Codex review absorb, PR #345 P1):
+    // when v2 enrichment fires, v1 fields STAY put — only the new
+    // `indicator`/`indicatorIndex`/`indicatorValue` reflect the
+    // resolved axis. Test picks an axis index where v1 fallback
+    // (`values[0]`) and v2 (`indicatorValue`) DIFFER so the contract
+    // is observable.
+    //
+    // ECharts radar lays out indicators clockwise from top:
+    // index 0 = top (-π/2), index 1 = right (0), index 2 = bottom
+    // (π/2), index 3 = left (π). With a 200×200 container centred at
+    // (100, 100), a click at (170, 100) sits 70 px to the right →
+    // the helper snaps it to indicator 1 ('Güç', value 70). v1
+    // fallback would be `values[0] = 85`, so a regression that lets
+    // v2 overwrite would surface as `value: 70` instead of 85.
+    const rectMock = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 200,
+      height: 200,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 200,
+      toJSON() {
+        return '';
+      },
+    });
+    try {
+      const onClick = vi.fn<(e: ChartClickEvent) => void>();
+      render(
+        <RadarChart
+          indicators={[
+            { name: 'Hız', max: 100 }, // index 0, top, value 85
+            { name: 'Güç', max: 100 }, // index 1, right, value 70 (≠ values[0])
+            { name: 'Verimlilik', max: 100 }, // index 2, bottom, value 90
+            { name: 'Konfor', max: 100 }, // index 3, left, value 60
+          ]}
+          series={[{ name: 'Model X', data: [85, 70, 90, 60] }]}
+          onDataPointClick={onClick}
+        />,
+      );
+
+      getLastClickHandler()({
+        seriesName: 'Model X',
+        name: 'Model X',
+        value: [85, 70, 90, 60],
+        dataIndex: 0,
+        event: { offsetX: 170, offsetY: 100 }, // right → indicator 1 (Güç)
+      });
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+      const event = onClick.mock.calls[0][0];
+
+      // v1 contract — polygon-level fields stable, NOT overwritten.
+      expect(event.label).toBe('Model X'); // seriesName, NOT 'Güç'
+      expect(event.value).toBe(85); // values[0], NOT 70
+      expect(event.datum.label).toBe('Model X');
+      expect(event.datum.seriesName).toBe('Model X');
+      expect(event.datum.values).toEqual([85, 70, 90, 60]);
+      expect(event.datum.indicators).toEqual(['Hız', 'Güç', 'Verimlilik', 'Konfor']);
+
+      // v2 enrichment — additive, separate fields.
+      expect(event.datum.indicator).toBe('Güç');
+      expect(event.datum.indicatorIndex).toBe(1);
+      expect(event.datum.indicatorValue).toBe(70);
+    } finally {
+      rectMock.mockRestore();
+    }
+  });
+
+  it('v2: clicks too close to the center fall back to polygon-level only (dead-zone)', () => {
+    const rectMock = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 200,
+      height: 200,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 200,
+      toJSON() {
+        return '';
+      },
+    });
+    try {
+      const onClick = vi.fn<(e: ChartClickEvent) => void>();
+      render(
+        <RadarChart
+          indicators={[
+            { name: 'Hız', max: 100 },
+            { name: 'Güç', max: 100 },
+            { name: 'Verimlilik', max: 100 },
+            { name: 'Konfor', max: 100 },
+          ]}
+          series={[{ name: 'Model X', data: [85, 70, 90, 60] }]}
+          onDataPointClick={onClick}
+        />,
+      );
+
+      // Click at (102, 102) — 2px diagonal from center → inside the 5%
+      // min-radius dead-zone (10px on a 200×200 container).
+      getLastClickHandler()({
+        seriesName: 'Model X',
+        name: 'Model X',
+        value: [85, 70, 90, 60],
+        dataIndex: 0,
+        event: { offsetX: 102, offsetY: 102 },
+      });
+
+      const datum = onClick.mock.calls[0][0].datum;
+      expect(datum.indicator).toBeUndefined();
+      expect(datum.indicatorIndex).toBeUndefined();
+      expect(datum.indicatorValue).toBeUndefined();
+      // Polygon-level still emitted.
+      expect(datum.seriesName).toBe('Model X');
+      expect(datum.values).toEqual([85, 70, 90, 60]);
+    } finally {
+      rectMock.mockRestore();
+    }
   });
 });
 

@@ -421,6 +421,61 @@ describe('cross-filter full-chain integration (13/13 charts)', () => {
     expect(store.getState().filters.get('radar-full:seriesName')?.value).toBe('Model X');
   });
 
+  it('RadarChart v2 full chain — click coordinates → store filter on emitFields=[indicator]', () => {
+    // Codex review absorb (PR #345 P1 follow-up): per-indicator drill
+    // through the wrapper. Click coordinates resolve to indicator 1
+    // ('Güç') via the angle-snap helper; cross-filter store should
+    // see `radar-v2:indicator = 'Güç'` (NOT 'Model X', which is the
+    // v1 seriesName fallback).
+    const rectMock = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 200,
+      height: 200,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 200,
+      toJSON() {
+        return '';
+      },
+    });
+    try {
+      const store = createCrossFilterStore({ debounceMs: 0 });
+      render(
+        <CrossFilterProvider store={store}>
+          <CrossFilterChart chartId="radar-v2" emitFields={['indicator']}>
+            <RadarChart
+              indicators={[
+                { name: 'Hız', max: 100 },
+                { name: 'Güç', max: 100 },
+                { name: 'Verimlilik', max: 100 },
+                { name: 'Konfor', max: 100 },
+              ]}
+              series={[{ name: 'Model X', data: [85, 70, 90, 60] }]}
+              onDataPointClick={() => {}}
+            />
+          </CrossFilterChart>
+        </CrossFilterProvider>,
+      );
+
+      act(() => {
+        getLastClickHandler()({
+          seriesName: 'Model X',
+          name: 'Model X',
+          value: [85, 70, 90, 60],
+          dataIndex: 0,
+          event: { offsetX: 170, offsetY: 100 }, // right → indicator 1
+        });
+        vi.advanceTimersByTime(0);
+      });
+
+      expect(store.getState().filters.get('radar-v2:indicator')?.value).toBe('Güç');
+    } finally {
+      rectMock.mockRestore();
+    }
+  });
+
   it('TreemapChart full chain — click → store filter on emitFields=[name]', () => {
     const store = createCrossFilterStore({ debounceMs: 0 });
     render(
