@@ -199,6 +199,17 @@ const users = {
   'users.detail.noRolesWarning': 'En az bir rol seçilmelidir.',
   'users.detail.loadingRoles': 'Yükleniyor...',
   'users.detail.assignmentSaved': 'Rol ve erişim atamaları kaydedildi.',
+  // PR-FE-8 (2026-05-09): user-detail drawer auto-save UX strings
+  // (parallel of role drawer's "kaydet ve vazgeç olmayacak şekilde
+  // ilerleyelim" UX consistency directive). Save / Cancel buttons
+  // removed; status indicator + retry handle every state change.
+  'users.detail.autosave.saving': 'Kaydediliyor...',
+  'users.detail.autosave.saved': 'Tüm değişiklikler kaydedildi',
+  'users.detail.autosave.error': 'Kaydedilemedi, son kayıtlı duruma dönüldü.',
+  'users.detail.autosave.hint': 'Tüm değişiklikler otomatik kaydedilir.',
+  'users.detail.autosave.retry': 'Tekrar dene',
+  'users.detail.assignmentError': 'Rol ve erişim atamaları kaydedilemedi.',
+  'users.detail.readOnly': 'Bu kullanıcıyı düzenleme yetkiniz yok.',
   'users.grid.columns.roles': 'Roller',
 };
 

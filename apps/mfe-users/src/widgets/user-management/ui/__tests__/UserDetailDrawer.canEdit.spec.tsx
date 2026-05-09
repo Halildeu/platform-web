@@ -304,48 +304,93 @@ describe('UserDetailDrawer.iter36 — load error guard', () => {
     );
   });
 
-  it('disables Save while assignment queries are in error state', async () => {
+  // PR-FE-8 (2026-05-09): Save button removed in favor of auto-save.
+  // The assignment-load-error guard now surfaces a load-error message
+  // in the footer status indicator instead of disabling a Save button.
+  // The new assertion: footer renders `drawer-autosave-load-error`,
+  // and no POST /v1/authz/users/{id}/assignments fires (the autosave
+  // gate stays closed when assignmentLoadError is true via the seed
+  // effect's early return on isError).
+  it('PR-FE-8: surfaces load-error footer message + blocks auto-save POST', async () => {
     const sharedHttp = await import('@mfe/shared-http');
-    const apiMock = (sharedHttp as { api: { get: ReturnType<typeof vi.fn> } }).api;
+    const apiMock = (
+      sharedHttp as { api: { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> } }
+    ).api;
     apiMock.get.mockImplementation(async (url: string) => {
       if (url.includes('/authz/users/') && url.endsWith('/roles')) {
         throw new Error('boom');
       }
       if (url === '/v1/roles') return { data: [{ id: 1, name: 'ADMIN' }] };
-      // PR-FE-5 (Codex 019e0954 iter-1 AGREE absorb, 2026-05-08):
-      // backend `/v1/roles/users/{id}/scopes` returns the canonical
-      // `List<ScopeSummaryDto>` array — NOT the grouped object shape
-      // this mock previously used. The drawer's userScopesQuery now
-      // parses the array into grouped IDs locally, so the mock must
-      // emit the realistic array shape (empty here, since these test
-      // cases focus on the assignment-query error banner / disabled
-      // Save flow rather than scope rendering).
       if (url.includes('/scopes'))
         return { data: [] as Array<{ scopeType: string; scopeRefId: number }> };
       return { data: [] };
     });
+    apiMock.post.mockClear();
 
     renderDrawer();
 
     await waitFor(
       () => {
-        const saveButton = screen.queryByTestId('drawer-save-button') as HTMLButtonElement | null;
-        // Footer renders only when canEdit; since we mock superAdmin=true canEdit=true.
-        expect(saveButton).not.toBeNull();
-        expect(saveButton!.disabled).toBe(true);
+        const errorMsg = screen.queryByTestId('drawer-autosave-load-error');
+        expect(
+          errorMsg,
+          'PR-FE-8 load-error footer message must render under load-error',
+        ).not.toBeNull();
       },
       { timeout: 4000 },
     );
+
+    // Wait past the debounce window plus a buffer to confirm the
+    // observer effect did not fire a save.
+    await new Promise((r) => setTimeout(r, 700));
+    const assignmentPosts = apiMock.post.mock.calls.filter(([url]) =>
+      String(url).includes('/assignments'),
+    );
+    expect(
+      assignmentPosts.length,
+      'PR-FE-8: assignmentLoadError must keep the autosave gate closed',
+    ).toBe(0);
   });
 
-  it('renders the dirty hint and Save in the sticky footer slot', async () => {
+  // PR-FE-8 (2026-05-09): the legacy "dirty hint + Save button" footer
+  // pattern was replaced with an auto-save status indicator. Footer
+  // now renders unconditionally for canEdit users (no Save button to
+  // gate on dirty), and after the initial seed completes it shows the
+  // "saved" indicator. We verify the footer slot is populated and the
+  // saved-state testid is rendered.
+  it('PR-FE-8: footer renders auto-save status indicator (no Save button)', async () => {
+    // Reset api.get implementation — the previous test in this
+    // describe block leaves the /authz/users/{id}/roles error stub
+    // in place; vi.clearAllMocks does not reset mockImplementation,
+    // and the file-level beforeEach lives in the OUTER describe.
+    // Without this, userRolesQuery would still error and the seed
+    // effect would early-return on isError, never reaching the
+    // 'saved' status the test asserts on.
+    const sharedHttp = await import('@mfe/shared-http');
+    const apiMock = (sharedHttp as { api: { get: ReturnType<typeof vi.fn> } }).api;
+    apiMock.get.mockImplementation(async (url: string) => {
+      if (url === '/v1/roles') return { data: [{ id: 1, name: 'ADMIN' }] };
+      if (url.includes('/authz/users/') && url.endsWith('/roles')) {
+        return { data: [{ roleId: 1 }] };
+      }
+      if (url.includes('/scopes')) {
+        return { data: [] as Array<{ scopeType: string; scopeRefId: number }> };
+      }
+      return { data: [] };
+    });
+
     renderDrawer();
     await waitFor(() => {
       const footer = screen.queryByTestId('drawer-footer');
       expect(footer, 'footer slot should be populated').not.toBeNull();
     });
-    // Save button lives in the footer (sticky), not in the body.
-    const saveButton = screen.getByTestId('drawer-save-button');
-    expect(saveButton).toBeTruthy();
+    // Pre-PR-FE-8 looked for `drawer-save-button`; that no longer
+    // exists. The auto-save model puts a status indicator in its place.
+    const savedIndicator = await screen.findByTestId('drawer-autosave-saved', undefined, {
+      timeout: 4000,
+    });
+    expect(savedIndicator).toBeTruthy();
+    // No legacy Save button should remain.
+    expect(screen.queryByTestId('drawer-save-button')).toBeNull();
   });
 });

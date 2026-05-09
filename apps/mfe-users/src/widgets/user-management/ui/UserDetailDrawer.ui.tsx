@@ -257,6 +257,54 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   // (below that threshold the list is readable as-is).
   const [roleSearch, setRoleSearch] = useState('');
 
+  // PR-FE-8 (Codex thread 019e0bd3 iter-1 AGREE absorb, 2026-05-09):
+  // mirror RoleDrawer's auto-save pattern (PR-FE-7) for the
+  // UserDetailDrawer. Drop the manual Save / Cancel buttons; every
+  // role/scope change auto-saves after a 500ms debounce. Refs back the
+  // commit pipeline:
+  //   - lastSavedDraftRef: last assignment the server accepted; revert
+  //     target on error so the UI snaps back to the canonical state.
+  //   - failedDraftRef: last draft that failed; the retry banner sends
+  //     this exact payload back without forcing the user to redo the
+  //     keystrokes that produced it.
+  //   - debounceTimerRef: in-flight setTimeout handle so rapid edits
+  //     collapse into one POST.
+  //   - saveSeqRef: monotonic counter so a stale response (slow network
+  //     beating a fast follow-up) cannot overwrite a fresher snapshot.
+  //   - assignmentLoadedRef: gate so initial reseed (Effect S below)
+  //     does not trigger a save before the canonical baseline lands.
+  //   - inFlightRef + queuedDraftRef + flushQueueRef: single-in-flight
+  //     + queued-latest model (PR-FE-7 absorb iter-2). Prevents two
+  //     POST /assignments racing on the server.
+  //   - canEditRef: live-read gate for async closures (timer / queue
+  //     flush). Closures captured during a 'full' window can't fire
+  //     after the gate has flipped to readonly (PR-FE-7 absorb iter-3).
+  //   - activeUserIdRef: response ownership guard. A stale response
+  //     from a user the admin has switched away from is dropped
+  //     silently without touching current in-flight / queue state
+  //     (PR-FE-7 absorb iter-3).
+  type AssignmentSnapshot = {
+    roleIds: number[];
+    companyIds: number[];
+    projectIds: number[];
+    warehouseIds: number[];
+    branchIds: number[];
+  };
+  type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>('idle');
+  const lastSavedDraftRef = React.useRef<AssignmentSnapshot | null>(null);
+  const failedDraftRef = React.useRef<AssignmentSnapshot | null>(null);
+  const debounceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveSeqRef = React.useRef(0);
+  const assignmentLoadedRef = React.useRef(false);
+  const inFlightRef = React.useRef(false);
+  const queuedDraftRef = React.useRef<AssignmentSnapshot | null>(null);
+  const flushQueueRef = React.useRef<(() => boolean) | null>(null);
+  const canEditRef = React.useRef(false);
+  const activeUserIdRef = React.useRef<number | undefined>(undefined);
+  // Eager sync on every render — see PR-FE-7 absorb iter-3 rationale.
+  canEditRef.current = canEdit;
+
   // --- Queries (all hooks MUST be above any early return) ---
   // 2026-04-29 fix: kullanıcı feedback "users da sınırlı roller görünüyor"
   // (sadece 5 fallback rol). Backend /v1/roles 16 rol dönerken frontend
@@ -454,46 +502,318 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     retry: 1,
   });
 
-  // Reset state when user changes
+  // PR-FE-8 (Codex thread 019e0bd3 iter-1 AGREE absorb, 2026-05-09):
+  // Effect U — user-id change reset. Mirrors RoleDrawer Effect A:
+  // when the drawer is reopened with a different user (or `user`
+  // becomes null and then a new one), wipe every autosave ref so a
+  // stale response from the previous user cannot land on the new
+  // user's state. saveSeqRef bump poisons callbacks that were in
+  // flight at the moment of the switch (their owner check fails).
   useEffect(() => {
-    if (userRolesQuery.data) {
-      setSelectedRoleIds(userRolesQuery.data);
-    }
     setSessionTimeoutMinutes(user?.sessionTimeoutMinutes ?? 15);
     setDirty(false);
-  }, [user?.id, userRolesQuery.data]);
-
-  // Initialize scope selections from user's current assignments
-  useEffect(() => {
-    if (userScopesQuery.data) {
-      setSelectedCompanyIds(userScopesQuery.data.companyIds);
-      setSelectedProjectIds(userScopesQuery.data.projectIds);
-      setSelectedWarehouseIds(userScopesQuery.data.warehouseIds);
-      setSelectedBranchIds(userScopesQuery.data.branchIds);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
-  }, [userScopesQuery.data]);
+    assignmentLoadedRef.current = false;
+    lastSavedDraftRef.current = null;
+    failedDraftRef.current = null;
+    inFlightRef.current = false;
+    queuedDraftRef.current = null;
+    saveSeqRef.current += 1;
+    activeUserIdRef.current = user?.id;
+    setAutoSaveStatus('idle');
+  }, [user?.id]);
+
+  // PR-FE-8: Effect S — initial canonical seed. Mirrors RoleDrawer
+  // Effect B's empty-set semantics. Open the autosave gate when BOTH
+  // queries that source the assignment baseline have settled:
+  //   - userRolesQuery → roleIds[]
+  //   - userScopesQuery → grouped scope ids
+  // If either is in-flight or errored, leave the gate closed so an
+  // observer-triggered POST cannot persist a partial state. The
+  // assignmentLoadError banner (rendered below) explains the situation
+  // and offers a retry.
+  useEffect(() => {
+    if (!user) return;
+    if (userRolesQuery.isError || userScopesQuery.isError) return;
+    if (userRolesQuery.data === undefined || userScopesQuery.data === undefined) return;
+
+    const seeded: AssignmentSnapshot = {
+      roleIds: userRolesQuery.data,
+      companyIds: userScopesQuery.data.companyIds,
+      projectIds: userScopesQuery.data.projectIds,
+      warehouseIds: userScopesQuery.data.warehouseIds,
+      branchIds: userScopesQuery.data.branchIds,
+    };
+    setSelectedRoleIds(seeded.roleIds);
+    setSelectedCompanyIds(seeded.companyIds);
+    setSelectedProjectIds(seeded.projectIds);
+    setSelectedWarehouseIds(seeded.warehouseIds);
+    setSelectedBranchIds(seeded.branchIds);
+    setDirty(false);
+    lastSavedDraftRef.current = seeded;
+    assignmentLoadedRef.current = true;
+    setAutoSaveStatus('saved');
+  }, [
+    user,
+    userRolesQuery.data,
+    userScopesQuery.data,
+    userRolesQuery.isError,
+    userScopesQuery.isError,
+  ]);
 
   // --- Mutations ---
-  const assignMutation = useMutation({
-    mutationFn: async () => {
-      await api.post(`/v1/authz/users/${user!.id}/assignments`, {
-        roleIds: selectedRoleIds,
+  // PR-FE-8 (Codex thread 019e0bd3 iter-1 AGREE absorb, 2026-05-09):
+  // mutation now takes an explicit `{draft, seq, userId}` snapshot.
+  // userId is captured at schedule-time so a user switch between
+  // schedule and POST-time cannot redirect a stale draft to the new
+  // user's endpoint (mirrors RoleDrawer absorb iter-3 #2 fix).
+  const saveAssignmentMutation = useMutation({
+    mutationFn: async (vars: { draft: AssignmentSnapshot; seq: number; userId: number }) => {
+      await api.post(`/v1/authz/users/${vars.userId}/assignments`, {
+        roleIds: vars.draft.roleIds,
         scopes: {
-          companyIds: selectedCompanyIds,
-          projectIds: selectedProjectIds,
-          warehouseIds: selectedWarehouseIds,
-          branchIds: selectedBranchIds,
+          companyIds: vars.draft.companyIds,
+          projectIds: vars.draft.projectIds,
+          warehouseIds: vars.draft.warehouseIds,
+          branchIds: vars.draft.branchIds,
         },
       });
+      return { seq: vars.seq, draft: vars.draft, userId: vars.userId };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // PR-FE-8 absorb-from-RoleDrawer iter-3 #2: ownership guard. A
+      // stale response (slow earlier save, or a save from a previous
+      // user) does NOT own the active in-flight slot. Touching
+      // inFlightRef / queuedDraftRef from a stale path would
+      // prematurely free the current owner's slot or flush the new
+      // user's queue at the wrong instant. Drop silently — the
+      // actual owner's success/error will resolve normally.
+      if (
+        !result ||
+        result.seq !== saveSeqRef.current ||
+        result.userId !== activeUserIdRef.current
+      ) {
+        return;
+      }
+      inFlightRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      queryClient.invalidateQueries({ queryKey: ['user-roles', user?.id] });
-      pushToast('success', t('users.detail.assignmentSaved'));
+      queryClient.invalidateQueries({ queryKey: ['user-roles', result.userId] });
+      queryClient.invalidateQueries({ queryKey: ['user-scopes', result.userId] });
+      // Sync visible state to the just-saved draft. For the normal
+      // scheduled-save flow this is a no-op (state already equals
+      // draft). For the retry-after-revert flow it lifts the failed
+      // draft back into the UI so "Kaydedildi" reflects what the
+      // admin sees.
+      setSelectedRoleIds(result.draft.roleIds);
+      setSelectedCompanyIds(result.draft.companyIds);
+      setSelectedProjectIds(result.draft.projectIds);
+      setSelectedWarehouseIds(result.draft.warehouseIds);
+      setSelectedBranchIds(result.draft.branchIds);
+      lastSavedDraftRef.current = result.draft;
+      failedDraftRef.current = null;
       setDirty(false);
+      // If a newer draft is queued, fire it; otherwise settle to
+      // 'saved'. Status must reflect any in-flight save honestly.
+      if (!flushQueueRef.current?.()) {
+        setAutoSaveStatus('saved');
+      }
     },
-    onError: (err: Error) => pushToast('error', err.message),
+    onError: (err: Error, vars) => {
+      if (!vars || vars.seq !== saveSeqRef.current || vars.userId !== activeUserIdRef.current) {
+        return;
+      }
+      inFlightRef.current = false;
+      failedDraftRef.current = vars.draft;
+      // Drop the queue on a fresh error: the user's next action
+      // should be an explicit retry (or another edit), not a
+      // chain-fire of whatever was buffered behind this failure.
+      queuedDraftRef.current = null;
+      const snap = lastSavedDraftRef.current;
+      if (snap) {
+        setSelectedRoleIds(snap.roleIds);
+        setSelectedCompanyIds(snap.companyIds);
+        setSelectedProjectIds(snap.projectIds);
+        setSelectedWarehouseIds(snap.warehouseIds);
+        setSelectedBranchIds(snap.branchIds);
+      }
+      // Visible state has been reverted to canonical; dirty=false
+      // aligns with the "kaydedilemedi" banner, no badge conflict.
+      setDirty(false);
+      setAutoSaveStatus('error');
+      pushToast('error', err.message || t('users.detail.assignmentError'));
+    },
   });
+
+  // PR-FE-8: shallow array equality for snapshot diff.
+  const arrayEqual = React.useCallback((a: number[], b: number[]) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }, []);
+  const draftEqual = React.useCallback(
+    (a: AssignmentSnapshot, b: AssignmentSnapshot) =>
+      arrayEqual(a.roleIds, b.roleIds) &&
+      arrayEqual(a.companyIds, b.companyIds) &&
+      arrayEqual(a.projectIds, b.projectIds) &&
+      arrayEqual(a.warehouseIds, b.warehouseIds) &&
+      arrayEqual(a.branchIds, b.branchIds),
+    [arrayEqual],
+  );
+
+  // PR-FE-8: debounce-and-fire scheduler. Pre-fix UserDetailDrawer
+  // had no debounce; the refactor brings it in line with RoleDrawer.
+  // The 500ms window collapses rapid edits (toggling several roles
+  // / scopes in quick succession) into one POST.
+  const scheduleAutoSave = React.useCallback(
+    (next: AssignmentSnapshot) => {
+      if (!assignmentLoadedRef.current || !canEdit) return;
+
+      // Step 1 — clear pending timer first (PR-FE-7 absorb #5).
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
+      // Step 2 — equality skip. The seed effect above repeatedly
+      // calls setSelected* with canonical values; equality check
+      // prevents a redundant POST on every reopen.
+      const last = lastSavedDraftRef.current;
+      if (last && draftEqual(last, next)) {
+        if (!inFlightRef.current && autoSaveStatus !== 'saved') {
+          setAutoSaveStatus('saved');
+        }
+        return;
+      }
+
+      // Step 3 — schedule the POST 500ms later.
+      setAutoSaveStatus('saving');
+      const scheduledUserId = activeUserIdRef.current;
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        if (!canEditRef.current) return;
+        if (scheduledUserId === undefined || scheduledUserId !== activeUserIdRef.current) return;
+        if (inFlightRef.current) {
+          queuedDraftRef.current = next;
+          return;
+        }
+        inFlightRef.current = true;
+        saveSeqRef.current += 1;
+        saveAssignmentMutation.mutate({
+          draft: next,
+          seq: saveSeqRef.current,
+          userId: scheduledUserId,
+        });
+      }, 500);
+    },
+    [saveAssignmentMutation, draftEqual, canEdit, autoSaveStatus],
+  );
+
+  // PR-FE-8: state observer. Watches all five selection arrays and
+  // schedules an auto-save whenever they change. Centralizing the
+  // trigger here means future setters automatically participate
+  // without needing to remember to wire scheduleAutoSave themselves.
+  useEffect(() => {
+    if (!assignmentLoadedRef.current || !canEdit) return;
+    scheduleAutoSave({
+      roleIds: selectedRoleIds,
+      companyIds: selectedCompanyIds,
+      projectIds: selectedProjectIds,
+      warehouseIds: selectedWarehouseIds,
+      branchIds: selectedBranchIds,
+    });
+  }, [
+    selectedRoleIds,
+    selectedCompanyIds,
+    selectedProjectIds,
+    selectedWarehouseIds,
+    selectedBranchIds,
+    scheduleAutoSave,
+    canEdit,
+  ]);
+
+  // PR-FE-8: cleanup pending debounce on unmount so we never fire
+  // after the user has closed the drawer.
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // PR-FE-8: bind queue-flush function via ref so the mutation's
+  // onSuccess can fire it without a temporal-dead-zone reference.
+  useEffect(() => {
+    flushQueueRef.current = () => {
+      const queued = queuedDraftRef.current;
+      if (!queued) return false;
+      if (!canEditRef.current || activeUserIdRef.current === undefined) {
+        queuedDraftRef.current = null;
+        return false;
+      }
+      const scheduledUserId = activeUserIdRef.current;
+      queuedDraftRef.current = null;
+      inFlightRef.current = true;
+      saveSeqRef.current += 1;
+      setAutoSaveStatus('saving');
+      saveAssignmentMutation.mutate({
+        draft: queued,
+        seq: saveSeqRef.current,
+        userId: scheduledUserId,
+      });
+      return true;
+    };
+  }, [saveAssignmentMutation]);
+
+  // PR-FE-8 absorb-from-RoleDrawer iter-3 #1: canEdit-flip handler.
+  // When the gate transitions full → readonly/disabled/hidden, drop
+  // pending and queued work so a half-finished edit cannot slip
+  // through. The in-flight mutation (if any) is allowed to settle
+  // on its own — onSuccess/onError will surface its outcome.
+  useEffect(() => {
+    if (canEdit) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    queuedDraftRef.current = null;
+    if (!inFlightRef.current && autoSaveStatus === 'saving') {
+      setAutoSaveStatus('saved');
+    }
+  }, [canEdit, autoSaveStatus]);
+
+  // PR-FE-8: explicit retry handler for the error banner. Sends the
+  // last failed draft back without forcing the admin to redo the
+  // toggles that produced it.
+  const handleAutoSaveRetry = useCallback(() => {
+    if (!canEdit) return;
+    const failed = failedDraftRef.current;
+    if (!failed) return;
+    const targetUserId = activeUserIdRef.current;
+    if (targetUserId === undefined) return;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (inFlightRef.current) {
+      queuedDraftRef.current = failed;
+      return;
+    }
+    inFlightRef.current = true;
+    saveSeqRef.current += 1;
+    setAutoSaveStatus('saving');
+    saveAssignmentMutation.mutate({
+      draft: failed,
+      seq: saveSeqRef.current,
+      userId: targetUserId,
+    });
+  }, [saveAssignmentMutation, canEdit]);
 
   // Codex 019ddd5b iter-36 — P0 Save Safety derivation.
   //
@@ -512,10 +832,10 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     rolesQuery.refetch();
   }, [userRolesQuery, userScopesQuery, rolesQuery]);
 
-  const handleSave = () => {
-    if (assignmentLoadError) return; // defensive: button is also disabled
-    assignMutation.mutate();
-  };
+  // PR-FE-8: legacy handleSave removed. Auto-save scheduler covers
+  // every state change automatically. assignmentLoading still gates
+  // any user interaction below via the load banner.
+  void assignmentLoading;
 
   // Dirty close guard. ESC, backdrop, and the explicit Cancel button all funnel
   // through this. Pre-iter-36 the user could lose unsaved role/scope changes
@@ -530,7 +850,12 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     onClose();
   }, [dirty, onClose, t]);
 
+  // PR-FE-8 absorb-from-RoleDrawer iter-2 #1: defense-in-depth gate
+  // at the setter level. The Checkbox is also `disabled={!canEdit}`
+  // (preserved below); a programmatic onChange that bypasses the
+  // disabled prop still hits this gate.
   const toggleRole = (roleId: number) => {
+    if (!canEdit) return;
     setSelectedRoleIds((prev) =>
       prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId],
     );
@@ -714,6 +1039,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
 
     const handleValuesChange = React.useCallback(
       (nextValues: string[]) => {
+        // PR-FE-8 absorb-from-RoleDrawer iter-2 #1: defense-in-depth
+        // gate at the scope-setter wrapper. Combobox already enforces
+        // `access={canEdit ? 'full' : 'readonly'}`, but a programmatic
+        // values-change still flows through here.
+        if (!canEdit) return;
         const nextIds = nextValues
           .map((value) => Number(value))
           .filter((id) => Number.isFinite(id));
@@ -837,59 +1167,64 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
     },
   ];
 
-  // Codex 019ddd5b iter-36 — sticky footer via DetailDrawer.footer slot.
-  // Pre-iter-36 the actions sat inside the scrollable body so users had to
-  // scroll past every role/scope to reach Save. The design-system
-  // DetailDrawer already exposes a sticky footer slot; we just feed it.
-  const dirtyCount =
-    selectedRoleIds.length !== (userRolesQuery.data ?? []).length ||
-    selectedRoleIds.some((id) => !(userRolesQuery.data ?? []).includes(id))
-      ? 1
-      : 0;
-  const saveLabel = dirty ? t('users.detail.save.scope') : t('users.detail.save.scope');
-  const saveDisabled =
-    !dirty ||
-    assignMutation.isPending ||
-    selectedRoleIds.length === 0 ||
-    assignmentLoadError ||
-    assignmentLoading;
-
-  const drawerFooter = canEdit ? (
-    <div className="flex flex-col gap-2">
-      {dirty && (
-        <p className="text-xs text-text-subtle italic" data-testid="drawer-dirty-hint">
-          {t('users.detail.dirtyHint')}
-        </p>
-      )}
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={handleClose}
-          className="rounded-xl border border-border-subtle px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface-muted"
-        >
-          {t('users.detail.cancel')}
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saveDisabled}
-          title={
-            assignmentLoadError
-              ? t('users.detail.loadError.body')
-              : selectedRoleIds.length === 0
-                ? t('users.detail.noRolesWarning')
-                : undefined
-          }
-          className="rounded-xl bg-action-primary px-4 py-2 text-sm font-semibold text-action-primary-text shadow-xs hover:opacity-90 disabled:opacity-50"
-          data-testid="drawer-save-button"
-        >
-          {assignMutation.isPending ? t('users.detail.saving') : saveLabel}
-        </button>
+  // PR-FE-8 (Codex thread 019e0bd3 iter-1 AGREE absorb, 2026-05-09):
+  // legacy Save / Cancel / dirtyHint footer replaced with an auto-save
+  // status indicator + retry button. Mirrors RoleDrawer's PR-FE-7
+  // footer layout. The access-denied branch (canEdit === false) keeps
+  // its existing "no edit permission" surface; the non-canEdit users
+  // still see read-only role/scope state without a phantom Save button.
+  const drawerFooter = (
+    <div className="flex items-center justify-between gap-3 pt-2 text-xs text-text-subtle">
+      <div className="flex items-center gap-2">
+        {!canEdit ? (
+          <span className="text-state-warning-text" data-testid="drawer-no-edit-permission">
+            {t('users.detail.readOnly')}
+          </span>
+        ) : assignmentLoadError ? (
+          <span className="text-state-danger-text" data-testid="drawer-autosave-load-error">
+            {t('users.detail.loadError.body')}
+          </span>
+        ) : selectedRoleIds.length === 0 && dirty ? (
+          <span className="text-state-warning-text">{t('users.detail.noRolesWarning')}</span>
+        ) : autoSaveStatus === 'saving' ? (
+          <span aria-live="polite" className="inline-flex items-center gap-1.5">
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-state-info-text" />
+            {t('users.detail.autosave.saving')}
+          </span>
+        ) : autoSaveStatus === 'saved' ? (
+          <span
+            aria-live="polite"
+            className="inline-flex items-center gap-1.5 text-state-success-text"
+            data-testid="drawer-autosave-saved"
+          >
+            <span className="inline-flex h-2 w-2 rounded-full bg-state-success-text" />
+            {t('users.detail.autosave.saved')}
+          </span>
+        ) : autoSaveStatus === 'error' ? (
+          <span
+            aria-live="assertive"
+            className="text-state-danger-text"
+            data-testid="drawer-autosave-error"
+          >
+            {t('users.detail.autosave.error')}
+          </span>
+        ) : (
+          <span>{t('users.detail.autosave.hint')}</span>
+        )}
       </div>
+      {canEdit && autoSaveStatus === 'error' && failedDraftRef.current ? (
+        <button
+          type="button"
+          onClick={handleAutoSaveRetry}
+          disabled={saveAssignmentMutation.isPending}
+          className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-muted disabled:opacity-50"
+          data-testid="drawer-autosave-retry"
+        >
+          {t('users.detail.autosave.retry')}
+        </button>
+      ) : null}
     </div>
-  ) : undefined;
-  // dirtyCount currently used only for analytics future work; suppress lint.
-  void dirtyCount;
+  );
 
   return (
     <FormDrawer
