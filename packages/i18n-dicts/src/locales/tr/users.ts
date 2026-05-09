@@ -228,6 +228,7 @@ const users = {
     '{total} toplam yetki — {companies} şirket, {projects} proje, {warehouses} depo, {branches} şube.',
   // PR-FE-12 (2026-05-09): hierarchical scope picker view — admin
   // "kim neye erişiyor" sorusunu tek bakışta yanıtlayabilsin.
+  'users.detail.scopes.viewToggle.label': 'Veri erişimi görünümü',
   'users.detail.scopes.viewToggle.flat': 'Düz Liste',
   'users.detail.scopes.viewToggle.hierarchy': 'Hiyerarşik',
   'users.detail.scopes.hier.empty':
@@ -240,6 +241,12 @@ const users = {
   'users.detail.scopes.hier.orphan.header': 'Öksüz kapsamlar ({count}) — parent şirket atanmadan',
   'users.detail.scopes.hier.orphan.help':
     'Bu alt yetkiler için parent şirket atanmamış. Tutarlılık için ya ilgili şirketi ekleyin ya da bu kayıtları kaldırın.',
+  // PR-FE-12 absorb iter-2 (Codex thread 019e0df3 #1):
+  // unknown company placeholder strings.
+  'users.detail.scopes.hier.unknown.header': "Master-data'da bulunamayan şirketler ({count})",
+  'users.detail.scopes.hier.unknown.help':
+    'Bu şirketlere erişim atanmış ama master-data listesinden çekilemedi (geçici hata, soft-delete veya farklı tenant). Atamayı görünür tutmak için aşağıda gösterildi; gerekirse kaldırabilirsiniz.',
+  'users.detail.scopes.hier.unknown.placeholder': 'Bilinmeyen şirket #{id}',
   'users.grid.columns.roles': 'Roller',
 };
 

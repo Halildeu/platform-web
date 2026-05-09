@@ -1,4 +1,3 @@
- 
 /**
  * PR-FE-12 (2026-05-09): Hierarchical Scope Picker.
  *
@@ -129,44 +128,59 @@ const HierarchicalScopePicker: React.FC<HierarchicalScopePickerProps> = ({
   canEdit,
   t,
 }) => {
+  // PR-FE-12 absorb iter-2 (Codex thread 019e0df3 #2 perf):
+  // pre-build Set memos for membership checks. Pre-fix the
+  // indexing loops below used `selectedIds.includes(id)` which is
+  // O(n) per row → O(n × m) overall. With 29k projects and ~500
+  // selected ids the linear path becomes a render bottleneck.
+  const selectedProjectIdSet = React.useMemo(
+    () => new Set(selectedProjectIds),
+    [selectedProjectIds],
+  );
+  const selectedBranchIdSet = React.useMemo(() => new Set(selectedBranchIds), [selectedBranchIds]);
+  const selectedWarehouseIdSet = React.useMemo(
+    () => new Set(selectedWarehouseIds),
+    [selectedWarehouseIds],
+  );
+
   // Index assigned children by parent company id for O(1) lookup
   // during the company-by-company render below. Keeps the render
   // function pure and avoids quadratic filters on each company row.
   const assignedProjectsByCompany = React.useMemo(() => {
     const idx = new Map<number, ScopeEntity[]>();
     for (const p of projects) {
-      if (!selectedProjectIds.includes(p.id)) continue;
+      if (!selectedProjectIdSet.has(p.id)) continue;
       const key = p.parentCompanyId ?? -1; // -1 sentinel → orphan bucket
       const list = idx.get(key) ?? [];
       list.push(p);
       idx.set(key, list);
     }
     return idx;
-  }, [projects, selectedProjectIds]);
+  }, [projects, selectedProjectIdSet]);
 
   const assignedBranchesByCompany = React.useMemo(() => {
     const idx = new Map<number, ScopeEntity[]>();
     for (const b of branches) {
-      if (!selectedBranchIds.includes(b.id)) continue;
+      if (!selectedBranchIdSet.has(b.id)) continue;
       const key = b.parentCompanyId ?? -1;
       const list = idx.get(key) ?? [];
       list.push(b);
       idx.set(key, list);
     }
     return idx;
-  }, [branches, selectedBranchIds]);
+  }, [branches, selectedBranchIdSet]);
 
   const assignedWarehousesByCompany = React.useMemo(() => {
     const idx = new Map<number, ScopeEntity[]>();
     for (const w of warehouses) {
-      if (!selectedWarehouseIds.includes(w.id)) continue;
+      if (!selectedWarehouseIdSet.has(w.id)) continue;
       const key = w.parentCompanyId ?? -1;
       const list = idx.get(key) ?? [];
       list.push(w);
       idx.set(key, list);
     }
     return idx;
-  }, [warehouses, selectedWarehouseIds]);
+  }, [warehouses, selectedWarehouseIdSet]);
 
   // Selected companies in master-data order so the rendered tree is stable
   // across re-renders (no jumps when an unrelated array re-references).
@@ -175,9 +189,31 @@ const HierarchicalScopePicker: React.FC<HierarchicalScopePickerProps> = ({
     [companies, selectedCompanyIds],
   );
 
-  const selectedCompanyIdSet = React.useMemo(
-    () => new Set(selectedCompanyIds),
-    [selectedCompanyIds],
+  // PR-FE-12 absorb iter-2 (Codex thread 019e0df3 #1 P1):
+  // "renderable selected companies" — companies that are BOTH
+  // assigned AND present in the master-data list. Pre-fix the
+  // orphan filter trusted `selectedCompanyIds` directly, so an
+  // assigned company that the master-data endpoint failed to
+  // return would hide all its child scopes from the tree (the
+  // child's parentCompanyId was in the selected set, so it
+  // wouldn't be marked orphan; but no company node existed to
+  // render it under). Now we use the renderable set for the
+  // orphan check; child scopes whose parent is selected-but-
+  // missing bubble into the orphan bucket so the admin still
+  // sees them.
+  const renderableCompanyIdSet = React.useMemo(() => {
+    const set = new Set<number>();
+    for (const c of selectedCompanies) set.add(c.id);
+    return set;
+  }, [selectedCompanies]);
+
+  // PR-FE-12 absorb iter-2 #1: companies that are assigned but
+  // missing from master-data — surface as placeholder "unknown"
+  // nodes so the admin sees the assignment exists, even if the
+  // master-data lookup failed (transient, soft-delete, RLS).
+  const unknownSelectedCompanyIds = React.useMemo(
+    () => selectedCompanyIds.filter((id) => !renderableCompanyIdSet.has(id)),
+    [selectedCompanyIds, renderableCompanyIdSet],
   );
 
   // Orphan children — assigned but their parent company is either NOT
@@ -190,28 +226,28 @@ const HierarchicalScopePicker: React.FC<HierarchicalScopePickerProps> = ({
     () =>
       projects.filter(
         (p) =>
-          selectedProjectIds.includes(p.id) &&
-          (p.parentCompanyId == null || !selectedCompanyIdSet.has(p.parentCompanyId)),
+          selectedProjectIdSet.has(p.id) &&
+          (p.parentCompanyId == null || !renderableCompanyIdSet.has(p.parentCompanyId)),
       ),
-    [projects, selectedProjectIds, selectedCompanyIdSet],
+    [projects, selectedProjectIdSet, renderableCompanyIdSet],
   );
   const orphanBranches = React.useMemo(
     () =>
       branches.filter(
         (b) =>
-          selectedBranchIds.includes(b.id) &&
-          (b.parentCompanyId == null || !selectedCompanyIdSet.has(b.parentCompanyId)),
+          selectedBranchIdSet.has(b.id) &&
+          (b.parentCompanyId == null || !renderableCompanyIdSet.has(b.parentCompanyId)),
       ),
-    [branches, selectedBranchIds, selectedCompanyIdSet],
+    [branches, selectedBranchIdSet, renderableCompanyIdSet],
   );
   const orphanWarehouses = React.useMemo(
     () =>
       warehouses.filter(
         (w) =>
-          selectedWarehouseIds.includes(w.id) &&
-          (w.parentCompanyId == null || !selectedCompanyIdSet.has(w.parentCompanyId)),
+          selectedWarehouseIdSet.has(w.id) &&
+          (w.parentCompanyId == null || !renderableCompanyIdSet.has(w.parentCompanyId)),
       ),
-    [warehouses, selectedWarehouseIds, selectedCompanyIdSet],
+    [warehouses, selectedWarehouseIdSet, renderableCompanyIdSet],
   );
   const orphanCount = orphanProjects.length + orphanBranches.length + orphanWarehouses.length;
 
@@ -240,7 +276,11 @@ const HierarchicalScopePicker: React.FC<HierarchicalScopePickerProps> = ({
     setDirty(true);
   };
 
-  if (selectedCompanies.length === 0 && orphanCount === 0) {
+  if (
+    selectedCompanies.length === 0 &&
+    unknownSelectedCompanyIds.length === 0 &&
+    orphanCount === 0
+  ) {
     return (
       <p className="mt-2 text-xs italic text-text-subtle" data-testid="hier-empty">
         {t('users.detail.scopes.hier.empty')}
@@ -357,6 +397,56 @@ const HierarchicalScopePicker: React.FC<HierarchicalScopePickerProps> = ({
           </div>
         );
       })}
+
+      {/* PR-FE-12 absorb iter-2 #1: unknown company placeholders.
+          Companies that are assigned but missing from master-data
+          (transient fetch failure / soft-delete / RLS) — render as
+          dashed placeholder boxes so the assignment is visible and
+          the admin can remove if intentional. Without these the
+          assignment would be silently invisible. */}
+      {unknownSelectedCompanyIds.length > 0 ? (
+        <div
+          className="rounded-2xl border border-dashed border-border-subtle bg-surface-muted/20 p-3"
+          data-testid="hier-unknown-companies"
+        >
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-subtle">
+            {t('users.detail.scopes.hier.unknown.header', {
+              count: unknownSelectedCompanyIds.length,
+            })}
+          </p>
+          <p className="mb-2 text-xs text-text-secondary">
+            {t('users.detail.scopes.hier.unknown.help')}
+          </p>
+          <ul className="flex flex-col gap-1" role="list">
+            {unknownSelectedCompanyIds.map((id) => (
+              <li
+                key={id}
+                className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-surface-default px-3 py-1.5 text-sm"
+                data-testid={`hier-unknown-company-${id}`}
+              >
+                <span className="flex items-center gap-2">
+                  <span aria-hidden="true">📁</span>
+                  <span className="text-text-primary">
+                    {t('users.detail.scopes.hier.unknown.placeholder', { id })}
+                  </span>
+                </span>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCompany(id)}
+                    className="ml-2 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-text-subtle hover:bg-state-danger-bg hover:text-state-danger-text"
+                    aria-label={`${t('users.detail.scopes.tagRemoveLabel')}: ${t('users.detail.scopes.hier.unknown.placeholder', { id })}`}
+                    title={`${t('users.detail.scopes.tagRemoveLabel')}: ${t('users.detail.scopes.hier.unknown.placeholder', { id })}`}
+                    data-testid={`hier-unknown-company-remove-${id}`}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {/* Orphan bucket */}
       {orphanCount > 0 ? (

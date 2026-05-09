@@ -1900,15 +1900,32 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
            * parentCompanyId / parentBranchId fields PR-BE-15 added to
            * MasterDataItemDto.
            */}
+          {/*
+           * PR-FE-12 absorb iter-2 (Codex thread 019e0df3 #2):
+           * proper radiogroup ARIA pattern. Pre-fix used
+           * role="tablist"/"tab" without aria-controls /
+           * tabpanel / arrow-key roving — partial pattern that
+           * misleads screen readers about the widget contract.
+           * Two-state mutually-exclusive selection is exactly
+           * what radiogroup expresses; arrow-key handler covers
+           * the standard left/right navigation between options.
+           */}
           <div
+            role="radiogroup"
+            aria-label={t('users.detail.scopes.viewToggle.label')}
             className="mt-3 inline-flex rounded-full border border-border-subtle bg-surface-muted/30 p-0.5 text-xs"
-            role="tablist"
             data-testid="scopes-view-toggle"
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+              e.preventDefault();
+              setScopesView((prev) => (prev === 'flat' ? 'hierarchy' : 'flat'));
+            }}
           >
             <button
               type="button"
-              role="tab"
-              aria-selected={scopesView === 'flat'}
+              role="radio"
+              aria-checked={scopesView === 'flat'}
+              tabIndex={scopesView === 'flat' ? 0 : -1}
               onClick={() => setScopesView('flat')}
               className={
                 scopesView === 'flat'
@@ -1921,8 +1938,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             </button>
             <button
               type="button"
-              role="tab"
-              aria-selected={scopesView === 'hierarchy'}
+              role="radio"
+              aria-checked={scopesView === 'hierarchy'}
+              tabIndex={scopesView === 'hierarchy' ? 0 : -1}
               onClick={() => setScopesView('hierarchy')}
               className={
                 scopesView === 'hierarchy'
