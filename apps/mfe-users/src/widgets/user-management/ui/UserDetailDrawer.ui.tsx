@@ -1398,7 +1398,14 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
                 <div className="flex min-w-0 items-center gap-2">
                   {option.description ? (
                     <span className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-text-subtle">
-                      {option.description}
+                      {/*
+                       * PR-FE-11 absorb iter-2 (Codex thread 019e0ce8
+                       * non-blocking nit): mirror the chip-area
+                       * uppercase normalization here so dropdown and
+                       * chip-area badges always look identical
+                       * regardless of backend casing.
+                       */}
+                      {option.description.toLocaleUpperCase('tr-TR')}
                     </span>
                   ) : null}
                   <span className="truncate text-sm text-text-primary">{option.label}</span>
