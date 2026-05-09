@@ -1030,7 +1030,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: '"auto"',
         description:
-          "Renderer mode — Faz 21.11 PR-A1.5 (Big Data Renderer Router).\n`'auto'` (default) routes by point count: <50K Canvas raw,\n50K..100K Canvas+LTTB, ≥100K WebGL (lazy `echarts-gl`). Force a\nspecific backend with `'canvas' | 'svg' | 'webgl'`. WebGL falls\nback to Canvas when unsupported and fires `onRendererFallback`.",
+          "Renderer mode — Faz 21.11 PR-A1.5 (Big Data Renderer Router).\n`'auto'` (default) routes by point count: <50K Canvas raw,\n50K..100K Canvas (LTTB sampling lands in PR-A2), ≥100K WebGL\n(lazy `echarts-gl`). Force a specific backend with\n`'canvas' | 'svg' | 'webgl'`. WebGL falls back to Canvas when\nunsupported and fires `onRendererFallback`.",
       },
       {
         name: 'onRendererFallback',
