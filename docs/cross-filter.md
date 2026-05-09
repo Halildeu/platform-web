@@ -66,22 +66,22 @@ seçtiği alanları filter event olarak yayar.
 
 ### Canonical `emitFields` tablosu
 
-| Chart                  | datum şekli                                                    | Önerilen `emitFields`                |
-| ---------------------- | -------------------------------------------------------------- | ------------------------------------ |
-| **BarChart**           | `{ ...raw, label, value }`                                     | `['label']` (veya raw row alanı)     |
-| **LineChart**          | `{ seriesName, label, value, dataIndex, seriesIndex }`         | `['label']`                          |
-| **AreaChart**          | `{ seriesName, label, value, dataIndex, seriesIndex }`         | `['label']`                          |
-| **PieChart**           | `{ ...raw, label, value }`                                     | `['label']`                          |
-| **ScatterChart**       | `{ x, y, size, label, dataIndex }`                             | `['label']` veya `['x']`             |
-| **GaugeChart**         | `{ label, name, value, min, max }`                             | `['name']`                           |
-| **RadarChart**         | `{ seriesName, label, values, indicators }` (polygon-level v1) | `['seriesName']`                     |
-| **TreemapChart**       | `{ name, label, value, treePathInfo, path, depth, data }`      | `['name']`                           |
-| **HeatmapChart**       | `{ x, y, xLabel, yLabel, value, label }`                       | `['xLabel', 'yLabel']` (multi-field) |
-| **WaterfallChart**     | `{ label, value, rawValue, type }`                             | `['label']`                          |
-| **FunnelChart**        | `{ label, value, percent, conversionPercent? }`                | `['label']`                          |
-| **SankeyChart** (node) | `{ dataType: 'node', name, label, value }`                     | `['name']`                           |
-| **SankeyChart** (edge) | `{ dataType: 'edge', source, target, value, label }`           | `['source', 'target']` (multi-field) |
-| **SunburstChart**      | `{ name, label, value, treePathInfo, path, depth, data }`      | `['name']`                           |
+| Chart                  | datum şekli                                                                                                                                                                            | Önerilen `emitFields`                                                     |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **BarChart**           | `{ ...raw, label, value }`                                                                                                                                                             | `['label']` (veya raw row alanı)                                          |
+| **LineChart**          | `{ seriesName, label, value, dataIndex, seriesIndex }`                                                                                                                                 | `['label']`                                                               |
+| **AreaChart**          | `{ seriesName, label, value, dataIndex, seriesIndex }`                                                                                                                                 | `['label']`                                                               |
+| **PieChart**           | `{ ...raw, label, value }`                                                                                                                                                             | `['label']`                                                               |
+| **ScatterChart**       | `{ x, y, size, label, dataIndex }`                                                                                                                                                     | `['label']` veya `['x']`                                                  |
+| **GaugeChart**         | `{ label, name, value, min, max }`                                                                                                                                                     | `['name']`                                                                |
+| **RadarChart**         | v1: `{ seriesName, label, values, indicators }` (polygon-level, always present) <br/> v2 (additive when click coords resolve to axis): `{ indicator, indicatorIndex, indicatorValue }` | `['seriesName']` (polygon) <br/> `['indicator']` (per-axis drill, opt-in) |
+| **TreemapChart**       | `{ name, label, value, treePathInfo, path, depth, data }`                                                                                                                              | `['name']`                                                                |
+| **HeatmapChart**       | `{ x, y, xLabel, yLabel, value, label }`                                                                                                                                               | `['xLabel', 'yLabel']` (multi-field)                                      |
+| **WaterfallChart**     | `{ label, value, rawValue, type }`                                                                                                                                                     | `['label']`                                                               |
+| **FunnelChart**        | `{ label, value, percent, conversionPercent? }`                                                                                                                                        | `['label']`                                                               |
+| **SankeyChart** (node) | `{ dataType: 'node', name, label, value }`                                                                                                                                             | `['name']`                                                                |
+| **SankeyChart** (edge) | `{ dataType: 'edge', source, target, value, label }`                                                                                                                                   | `['source', 'target']` (multi-field)                                      |
+| **SunburstChart**      | `{ name, label, value, treePathInfo, path, depth, data }`                                                                                                                              | `['name']`                                                                |
 
 > `Sankey` tek chart'tır ama iki click target tipi yayar
 > (`dataType: 'node' \| 'edge'`). Tek bir `<CrossFilterChart>` instance
@@ -113,20 +113,58 @@ callback'i tetikler (legacy `onNodeClick` node-only by design).
 
 ## Diğer faydalı API'ler
 
+### Store state — `useCrossFilter`
+
 ```tsx
-import { useCrossFilter, useGridCrossFilter, useDrillDown } from '@mfe/x-charts';
+import { useCrossFilter } from '@mfe/x-charts';
 
 // Aktif filter listesi + clear / undo / redo
 const filters = useCrossFilter((s) => s.filters);
 const undo = useCrossFilter((s) => s.undo);
 const clearAll = useCrossFilter((s) => s.clearAllFilters);
+```
 
-// Chart → AG Grid bridge: cross-filter event'lerini AG Grid filter
-// model'a translate eder (tenant-aware, server-side row model uyumlu)
-const gridFilterModel = useGridCrossFilter();
+### Chart → AG Grid bridge — `useGridCrossFilter`
 
-// 3-seviye drill-down (region → city → store) breadcrumb + undo
-const { drillTo, drillUp, drillPath } = useDrillDown();
+Cross-filter event'lerini AG Grid filter model'a translate eder
+(tenant-aware, SSRM uyumlu).
+
+```tsx
+import { useGridCrossFilter } from '@mfe/x-charts';
+import type { GridApi } from 'ag-grid-community';
+
+function GridWithCrossFilter() {
+  const [gridApi, setGridApi] = useState<GridApi | null>(null);
+
+  const { activeFilters, pushGridFilters } = useGridCrossFilter({
+    gridId: 'orders-grid',
+    gridApi,
+    syncStoreToGrid: true, // store değişimleri grid filter model'a yansır
+    syncGridToStore: true, // grid filter değişimi store'a yansır
+  });
+
+  return (
+    <AgGridReact
+      onGridReady={(p) => setGridApi(p.api)}
+      // ... other props
+    />
+  );
+}
+```
+
+### 3-seviye drill-down — `useDrillDown`
+
+```tsx
+import { useDrillDown } from '@mfe/x-charts';
+
+const { drillTo, drillUp, drillPath, breadcrumb, canUndo, canRedo } = useDrillDown({
+  levels: [
+    { field: 'region', label: 'Bölge' },
+    { field: 'city', label: 'Şehir' },
+    { field: 'store', label: 'Mağaza' },
+  ],
+  rootLabel: 'Tümü',
+});
 ```
 
 ---
@@ -169,11 +207,8 @@ iter-2'de regression'lı bulundu, fix ile correctness gate kapatıldı.
 
 ---
 
-## Bilinen sınırlamalar (v2 backlog)
+## Bilinen sınırlamalar
 
-- **Radar indicator-level click** — şu an polygon-level v1 (whole
-  series). Per-indicator drill için custom hit-mapping gerekir;
-  Codex iter-1'de v2 backlog'a alındı.
 - **Highcharts annotation parity** — annotation/shape/marker module
   henüz yok; roadmap candidate.
 - **AG Charts dashboard composer parity** — `ChartDashboard` mevcut
@@ -183,10 +218,13 @@ iter-2'de regression'lı bulundu, fix ile correctness gate kapatıldı.
 
 ## İlgili dokümanlar
 
-- ADR: `decisions/topics/chart-viz-engine-selection.v1.json` (D-006
-  cross-filter bus karar belgesi)
-- API source: `packages/x-charts/src/cross-filter/`
-- Tests: `packages/x-charts/src/__tests__/chart-click-event.contract.test.tsx`,
-  `cross-filter-wrapper-integration.test.tsx`, `cross-filter-bench.test.ts`
-- Sweep zinciri: PR #338 (kod), PR #339 (catalog metadata), PR #342
-  (BETA → stable + UX polish)
+- **ADR D-006 (cross-filter bus)** — chart-viz-engine selection decision.
+  Bu repo'da fiziksel ADR dosyası yok; karar governance orchestrator
+  repository'sinde yönetilir. In-source izi `useCrossFilterStore.tsx`
+  - `createCrossFilterStore.ts` JSDoc'larında "@see D-006".
+- **API source**: `packages/x-charts/src/cross-filter/`
+- **Tests**:
+  - `packages/x-charts/src/__tests__/chart-click-event.contract.test.tsx` (per-chart datum contract)
+  - `packages/x-charts/src/__tests__/cross-filter-wrapper-integration.test.tsx` (full chain: chart → wrapper → store)
+  - `packages/x-charts/src/__tests__/cross-filter-bench.test.ts` (perf gates)
+- **Sweep zinciri**: PR #338 (kod), PR #339 (catalog metadata), PR #342 (BETA → stable + UX polish), PR #345 (Radar v2 indicator-level)
