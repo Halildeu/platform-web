@@ -37,6 +37,13 @@ import type { EChartsOption } from './renderers/echarts-imports';
 
 export type ChartSize = 'sm' | 'md' | 'lg';
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// the canonical `ChartClickEvent` so the cross-filter wrapper sees a
+// single shape across all 13 chart adapters.
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export type TreemapNode = {
   /** Display name for the node. */
   name: string;
@@ -69,8 +76,23 @@ export interface TreemapChartProps extends AccessControlledProps {
   visibleMin?: number;
   /** Custom formatter for displayed values. */
   valueFormatter?: (v: number) => string;
-  /** Callback fired when a node is clicked. */
+  /**
+   * Legacy callback fired when a node is clicked. Receives a tight
+   * `{ name, value, data }` shape and remains the canonical surface
+   * for non-cross-filter consumers. Coexists with the new
+   * `onDataPointClick` (canonical `ChartClickEvent`); when both are
+   * supplied, `onDataPointClick` fires FIRST and `onNodeClick` fires
+   * second so cross-filter forwarding never blocks the legacy
+   * handler. Codex iter-2 thread 019e0c25 absorb.
+   */
   onNodeClick?: (params: { name: string; value: number; data: unknown }) => void;
+  /**
+   * Canonical cross-filter callback. Emits a `ChartClickEvent` with
+   * `datum: { name, label: name, value, treePathInfo, path, depth,
+   * data }`. `depth` is derived from `treePathInfo.length - 1` and
+   * defaults to `0` when ECharts doesn't surface the breadcrumb.
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /** Animate on mount. @default true */
   animate?: boolean;
   /** Additional class name. */
@@ -195,6 +217,7 @@ const TreemapChartInner = React.forwardRef<
     visibleMin = 300,
     valueFormatter,
     onNodeClick,
+    onDataPointClick,
     animate = true,
     className,
     theme: themePreference = 'auto',
@@ -344,22 +367,54 @@ const TreemapChartInner = React.forwardRef<
 
   const handleClick = useCallback(
     (params: unknown) => {
-      if (!onNodeClick) return;
-      const p = params as { name: string; value: number; data: unknown };
-      onNodeClick({
-        name: p.name,
-        value: typeof p.value === 'number' ? p.value : 0,
-        data: p.data,
-      });
+      // Coexistence — Codex iter-2 thread 019e0c25 absorb: cross-filter
+      // wrapper requires the new `ChartClickEvent` shape, but legacy
+      // consumers still rely on the tighter `{name,value,data}` callback.
+      // Fire `onDataPointClick` FIRST so the cross-filter bus sees the
+      // event before any side-effects of the legacy handler; then fire
+      // `onNodeClick` for backward compatibility.
+      const p = params as {
+        name?: string;
+        value?: number;
+        data?: unknown;
+        treePathInfo?: Array<{ name: string; value: number; dataIndex: number }>;
+      };
+      const value = typeof p.value === 'number' ? p.value : 0;
+      const name = typeof p.name === 'string' ? p.name : '';
+
+      if (onDataPointClick) {
+        const treePathInfo = Array.isArray(p.treePathInfo) ? p.treePathInfo : undefined;
+        const path = treePathInfo ? treePathInfo.map((t) => t.name).join(' > ') : undefined;
+        // depth = treePathInfo.length - 1 (root counted), 0 fallback when
+        // ECharts doesn't surface the breadcrumb.
+        const depth = treePathInfo && treePathInfo.length > 0 ? treePathInfo.length - 1 : 0;
+        onDataPointClick({
+          datum: {
+            name,
+            label: name,
+            value,
+            treePathInfo,
+            path,
+            depth,
+            data: p.data,
+          },
+          value,
+          label: name,
+        });
+      }
+
+      if (onNodeClick) {
+        onNodeClick({ name, value, data: p.data });
+      }
     },
-    [onNodeClick],
+    [onNodeClick, onDataPointClick],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onNodeClick ? handleClick : undefined,
+    onClick: onNodeClick || onDataPointClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. Treemap is hierarchical —
@@ -433,7 +488,7 @@ TreemapChartInner.displayName = 'TreemapChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
-  function TreemapChart({ access, accessReason, onNodeClick, ...rest }, ref) {
+  function TreemapChart({ access, accessReason, onNodeClick, onDataPointClick, ...rest }, ref) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -441,6 +496,7 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
           ref={ref}
           {...rest}
           onNodeClick={guardChartCallback(state, onNodeClick)}
+          onDataPointClick={guardChartCallback(state, onDataPointClick)}
         />
       </ChartAccessGate>
     );

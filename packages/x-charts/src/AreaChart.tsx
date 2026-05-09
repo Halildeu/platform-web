@@ -10,7 +10,9 @@
  */
 import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -46,6 +48,13 @@ export type ChartSeries = {
   color?: string;
 };
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export the
+// canonical `ChartClickEvent` shape so consumers and the cross-filter
+// wrapper see a single type across all 13 chart adapters.
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export interface AreaChartProps extends AccessControlledProps {
   /** Series to render as filled areas. */
   series: ChartSeries[];
@@ -75,6 +84,15 @@ export interface AreaChartProps extends AccessControlledProps {
   description?: string;
   /** Additional class name. */
   className?: string;
+  /**
+   * Callback fired when a data point is clicked. The emitted
+   * `ChartClickEvent` exposes a `datum` shape compatible with the
+   * cross-filter wrapper: `{ seriesName, label, value, dataIndex,
+   * seriesIndex }`. AreaChart is a series-based chart (no raw row
+   * supplied per data point), so the datum is constructed from the
+   * series + label axis rather than spreading any backing object.
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /**
    * Theme override.
    * @default "auto" — follows documentElement signals
@@ -169,6 +187,7 @@ const AreaChartInner = React.forwardRef<
     title,
     description,
     className,
+    onDataPointClick,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
@@ -346,10 +365,43 @@ const AreaChartInner = React.forwardRef<
     breakpoint,
   ]);
 
+  // Cross-filter adapter — Codex thread 019e0c25 absorb. Series-based
+  // charts have no raw per-row backing object, so the datum is
+  // synthesised from the series + label axis. The wrapper's
+  // `datum == null || typeof datum !== 'object'` guard then sees a
+  // structured object with the expected emit fields (label, seriesName,
+  // value).
+  const handleClick = useCallback(
+    (params: unknown) => {
+      if (!onDataPointClick) return;
+      const p = params as {
+        seriesName?: string;
+        seriesIndex?: number;
+        dataIndex?: number;
+        name?: string;
+        value?: number;
+      };
+      const value = typeof p.value === 'number' ? p.value : undefined;
+      onDataPointClick({
+        datum: {
+          seriesName: p.seriesName ?? '',
+          label: p.name ?? '',
+          value,
+          dataIndex: typeof p.dataIndex === 'number' ? p.dataIndex : undefined,
+          seriesIndex: typeof p.seriesIndex === 'number' ? p.seriesIndex : undefined,
+        },
+        value,
+        label: p.name,
+      });
+    },
+    [onDataPointClick],
+  );
+
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y (same series→flat mapping as
@@ -423,12 +475,20 @@ AreaChartInner.displayName = 'AreaChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(function AreaChart(
-  { access, accessReason, ...rest },
+  { access, accessReason, onDataPointClick, ...rest },
   ref,
 ) {
+  // Access-aware callback gating — Codex iter-2 thread 019e0c25 absorb.
+  // Without `guardChartCallback`, a chart in `disabled` access state
+  // could still emit cross-filter events when clicked.
+  const { state } = resolveAccessState(access);
   return (
     <ChartAccessGate access={access} accessReason={accessReason}>
-      <AreaChartInner ref={ref} {...rest} />
+      <AreaChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
     </ChartAccessGate>
   );
 });

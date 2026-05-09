@@ -37,6 +37,17 @@ import type { EChartsOption } from './renderers/echarts-imports';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// the canonical `ChartClickEvent`. Sankey is the only chart with two
+// click target categories: `node` and `edge`. The new
+// `onDataPointClick` covers BOTH (cross-filter wrapper can route both
+// through the bus); the legacy `onNodeClick` keeps firing on node
+// clicks only and remains the canonical surface for non-cross-filter
+// consumers (Codex iter-2: do NOT deprecate in this sweep).
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export interface SankeyNode {
   /** Unique node name (used as identifier in links). */
   name: string;
@@ -82,8 +93,25 @@ export interface SankeyChartProps extends AccessControlledProps {
   valueFormatter?: (v: number) => string;
   /** Animate on mount. @default true */
   animate?: boolean;
-  /** Callback fired when a node is clicked. */
+  /**
+   * Legacy callback fired when a NODE is clicked (not edges). Coexists
+   * with the new `onDataPointClick`; when both are supplied,
+   * `onDataPointClick` fires FIRST and `onNodeClick` fires second so
+   * cross-filter forwarding never blocks the legacy handler. Edges
+   * never trigger this callback. Codex iter-2 thread 019e0c25 absorb.
+   */
   onNodeClick?: (params: { name: string; data: unknown }) => void;
+  /**
+   * Canonical cross-filter callback. Emits a `ChartClickEvent` for
+   * BOTH node clicks and edge clicks. Datum shape varies:
+   * - node: `{ dataType: 'node', name, label: name, value: flowThrough }`
+   * - edge: `{ dataType: 'edge', source, target, value, label: 'source → target' }`
+   * `value` for nodes is ECharts' computed flow-through; for edges it
+   * is the link `value` (volume of flow). The cross-filter wrapper
+   * can pick `name` (node) or `source`/`target` (edge) as canonical
+   * filter fields.
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -166,6 +194,7 @@ const SankeyChartInner = React.forwardRef<
     valueFormatter,
     animate = true,
     onNodeClick,
+    onDataPointClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -340,20 +369,78 @@ const SankeyChartInner = React.forwardRef<
 
   const handleClick = useCallback(
     (params: unknown) => {
-      if (!onNodeClick) return;
-      const p = params as { dataType: string; name: string; data: unknown };
-      // Only fire for node clicks, not edge clicks
-      if (p.dataType !== 'node') return;
-      onNodeClick({ name: p.name, data: p.data });
+      const p = params as {
+        dataType: string;
+        name?: string;
+        value?: number;
+        data?: unknown;
+        // ECharts edge params expose these
+        sourceType?: string;
+        targetType?: string;
+        source?: string;
+        target?: string;
+      };
+
+      // Cross-filter wrapper sees BOTH node and edge clicks. Codex
+      // iter-2 thread 019e0c25 absorb: emit `onDataPointClick` first
+      // so the bus receives the event before legacy side effects.
+      if (p.dataType === 'node') {
+        if (onDataPointClick) {
+          const name = typeof p.name === 'string' ? p.name : '';
+          const value = typeof p.value === 'number' ? p.value : 0;
+          onDataPointClick({
+            datum: {
+              dataType: 'node',
+              name,
+              label: name,
+              value,
+            },
+            value,
+            label: name,
+          });
+        }
+        if (onNodeClick) {
+          onNodeClick({ name: p.name ?? '', data: p.data });
+        }
+        return;
+      }
+
+      if (p.dataType === 'edge') {
+        // Edges are surfaced ONLY through the new cross-filter
+        // callback — legacy `onNodeClick` is node-only by contract.
+        if (onDataPointClick) {
+          // ECharts edge `data` is the original SankeyLink with
+          // source/target. Some configs put source/target directly
+          // on params; prefer those.
+          const linkData =
+            typeof p.data === 'object' && p.data !== null ? (p.data as Partial<SankeyLink>) : null;
+          const source = (typeof p.source === 'string' ? p.source : linkData?.source) ?? '';
+          const target = (typeof p.target === 'string' ? p.target : linkData?.target) ?? '';
+          const value = typeof p.value === 'number' ? p.value : (linkData?.value ?? 0);
+          const label = `${source} → ${target}`;
+          onDataPointClick({
+            datum: {
+              dataType: 'edge',
+              source,
+              target,
+              value,
+              label,
+            },
+            value,
+            label,
+          });
+        }
+        return;
+      }
     },
-    [onNodeClick],
+    [onNodeClick, onDataPointClick],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onNodeClick ? handleClick : undefined,
+    onClick: onNodeClick || onDataPointClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. Sankey nodes have no value
@@ -436,13 +523,18 @@ SankeyChartInner.displayName = 'SankeyChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(function SankeyChart(
-  { access, accessReason, onNodeClick, ...rest },
+  { access, accessReason, onNodeClick, onDataPointClick, ...rest },
   ref,
 ) {
   const { state } = resolveAccessState(access);
   return (
     <ChartAccessGate access={access} accessReason={accessReason}>
-      <SankeyChartInner ref={ref} {...rest} onNodeClick={guardChartCallback(state, onNodeClick)} />
+      <SankeyChartInner
+        ref={ref}
+        {...rest}
+        onNodeClick={guardChartCallback(state, onNodeClick)}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
     </ChartAccessGate>
   );
 });

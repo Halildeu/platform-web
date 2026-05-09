@@ -726,6 +726,14 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Additional class name.',
       },
       {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          'Callback fired when a data point is clicked. The emitted\n`ChartClickEvent` exposes a `datum` shape compatible with the\ncross-filter wrapper: `{ seriesName, label, value, dataIndex,\nseriesIndex }`. AreaChart is a series-based chart (no raw row\nsupplied per data point), so the datum is constructed from the\nseries + label axis rather than spreading any backing object.',
+      },
+      {
         name: 'theme',
         type: 'ChartThemePreference',
         required: false,
@@ -903,6 +911,14 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: '"Veri yok"',
         description: 'Text shown when data is empty.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          'Callback fired when a data point is clicked. The emitted\n`ChartClickEvent` exposes a datum compatible with the cross-filter\nwrapper: `{ x, y, size, label, dataIndex }`. `value` mirrors `y`\n(the primary measure) and `label` falls back to `Point N (x, y)`\nwhen no explicit label is set.',
       },
       {
         name: 'theme',
@@ -1090,6 +1106,14 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Additional class name.',
       },
       {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          "Callback fired when the gauge dial is clicked. Emits a\n`ChartClickEvent` with `datum: { label, name, value, min, max }`\n— `target` is intentionally NOT included (it isn't a\n`GaugeChartProps` field; Codex iter-2 thread 019e0c25 blocker).",
+      },
+      {
         name: 'theme',
         type: 'ChartThemePreference',
         required: false,
@@ -1244,10 +1268,11 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       },
       {
         name: 'onDataPointClick',
-        type: '(params: unknown) => void',
+        type: '(event: ChartClickEvent) => void',
         required: false,
         default: 'undefined',
-        description: 'Callback fired when a data point is clicked.',
+        description:
+          'Callback fired when a series polygon is clicked. Emits a canonical\n`ChartClickEvent` with `datum: { seriesName, label: seriesName,\nvalues, indicators }` — polygon-level (whole series), not\nper-indicator. Indicator-level emission requires custom hit\nmapping and is tracked as v2 follow-up (Codex iter-2 blocker).',
       },
       {
         name: 'className',
@@ -1412,7 +1437,16 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         type: '(params: { name: string; value: number; data: unknown }) => void',
         required: false,
         default: 'undefined',
-        description: 'Callback fired when a node is clicked.',
+        description:
+          'Legacy callback fired when a node is clicked. Receives a tight\n`{ name, value, data }` shape and remains the canonical surface\nfor non-cross-filter consumers. Coexists with the new\n`onDataPointClick` (canonical `ChartClickEvent`); when both are\nsupplied, `onDataPointClick` fires FIRST and `onNodeClick` fires\nsecond so cross-filter forwarding never blocks the legacy\nhandler. Codex iter-2 thread 019e0c25 absorb.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          "Canonical cross-filter callback. Emits a `ChartClickEvent` with\n`datum: { name, label: name, value, treePathInfo, path, depth,\ndata }`. `depth` is derived from `treePathInfo.length - 1` and\ndefaults to `0` when ECharts doesn't surface the breadcrumb.",
       },
       {
         name: 'animate',
@@ -1607,7 +1641,16 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         type: '(params: { x: number; y: number; value: number }) => void',
         required: false,
         default: 'undefined',
-        description: 'Callback fired when a cell is clicked.',
+        description:
+          'Legacy callback fired when a cell is clicked. Receives a tight\n`{ x, y, value }` shape (numeric category indices). Coexists with\nthe new `onDataPointClick`; when both are supplied,\n`onDataPointClick` fires FIRST and `onCellClick` fires second so\ncross-filter forwarding never blocks the legacy handler. Codex\niter-2 thread 019e0c25 absorb.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          "Canonical cross-filter callback. Emits a `ChartClickEvent` with\n`datum: { x, y, xLabel, yLabel, value, label: '${xLabel}/${yLabel}' }`\n— `x`/`y` are numeric category indices; `xLabel`/`yLabel` are the\nresolved category strings (which the cross-filter wrapper would\ntypically emit as filter values).",
       },
       {
         name: 'className',
@@ -1767,10 +1810,11 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       },
       {
         name: 'onDataPointClick',
-        type: '(params: unknown) => void',
+        type: '(event: ChartClickEvent) => void',
         required: false,
         default: 'undefined',
-        description: 'Callback fired when a bar is clicked.',
+        description:
+          "Callback fired when a visible bar is clicked. Emits a canonical\n`ChartClickEvent` with `datum: { label, value: displayedValue,\nrawValue, type }` — `displayedValue` is what ECharts renders\n(cumulative for 'total' bars, signed delta for inc/dec); `rawValue`\nis the original `WaterfallDataPoint.value` from props; `type` is\nthe resolved `WaterfallItemType`. Hidden base-stack series clicks\nare filtered out (they aren't user-meaningful).",
       },
       {
         name: 'className',
@@ -1953,10 +1997,11 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       },
       {
         name: 'onDataPointClick',
-        type: '(params: unknown) => void',
+        type: '(event: ChartClickEvent) => void',
         required: false,
         default: 'undefined',
-        description: 'Callback fired when a stage is clicked.',
+        description:
+          "Callback fired when a stage is clicked. Emits a canonical\n`ChartClickEvent` with `datum: { label, value, percent,\nconversionPercent? }` — `percent` is ECharts' default total-vs-max\nratio; `conversionPercent` is the stage-vs-previous ratio and is\nonly included when `showConversion` is true (otherwise omitted to\navoid emitting a misleading filter field).",
       },
       {
         name: 'className',
@@ -2142,7 +2187,16 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         type: '(params: { name: string; data: unknown }) => void',
         required: false,
         default: 'undefined',
-        description: 'Callback fired when a node is clicked.',
+        description:
+          'Legacy callback fired when a NODE is clicked (not edges). Coexists\nwith the new `onDataPointClick`; when both are supplied,\n`onDataPointClick` fires FIRST and `onNodeClick` fires second so\ncross-filter forwarding never blocks the legacy handler. Edges\nnever trigger this callback. Codex iter-2 thread 019e0c25 absorb.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          "Canonical cross-filter callback. Emits a `ChartClickEvent` for\nBOTH node clicks and edge clicks. Datum shape varies:\n- node: `{ dataType: 'node', name, label: name, value: flowThrough }`\n- edge: `{ dataType: 'edge', source, target, value, label: 'source → target' }`\n`value` for nodes is ECharts' computed flow-through; for edges it\nis the link `value` (volume of flow). The cross-filter wrapper\ncan pick `name` (node) or `source`/`target` (edge) as canonical\nfilter fields.",
       },
       {
         name: 'className',
@@ -2311,7 +2365,16 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         type: '(params: { name: string; value: number; data: unknown }) => void',
         required: false,
         default: 'undefined',
-        description: 'Callback fired when a node is clicked.',
+        description:
+          'Legacy callback fired when a node is clicked. Receives a tight\n`{ name, value, data }` shape. Coexists with the new\n`onDataPointClick`; when both are supplied, `onDataPointClick`\nfires FIRST and `onNodeClick` fires second so cross-filter\nforwarding never blocks the legacy handler. Codex iter-2 thread\n019e0c25 absorb.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          "Canonical cross-filter callback. Emits a `ChartClickEvent` with\n`datum: { name, label: name, value, treePathInfo, path, depth,\ndata }`. `depth = treePathInfo.length - 1` (root counted), 0\nfallback when ECharts doesn't surface the breadcrumb.",
       },
       {
         name: 'className',

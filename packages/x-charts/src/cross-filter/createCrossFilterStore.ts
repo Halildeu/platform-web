@@ -43,7 +43,28 @@ export interface CreateCrossFilterStoreOptions {
 export function createCrossFilterStore(options: CreateCrossFilterStoreOptions = {}) {
   const { debounceMs = DEFAULT_DEBOUNCE_MS, historyCap = HISTORY_CAP, groupId = null } = options;
 
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Per-key debounce timers — keyed by `${sourceId}:${field}`. The previous
+  // single global timer caused multi-field setFilter calls within the same
+  // tick (or even across charts) to cancel each other, silently swallowing
+  // filter intents. Codex iter-2 (thread 019e0c25) flagged this as a
+  // correctness gate before BETA → stable promotion. With one timer per
+  // (source, field) tuple, distinct filter intents are independent and a
+  // fast successor on the SAME (source, field) still debounces the slow
+  // predecessor (preserving the original behavior for that single key).
+  const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function clearTimerFor(key: string): void {
+    const t = debounceTimers.get(key);
+    if (t !== undefined) {
+      clearTimeout(t);
+      debounceTimers.delete(key);
+    }
+  }
+
+  function clearAllTimers(): void {
+    for (const t of debounceTimers.values()) clearTimeout(t);
+    debounceTimers.clear();
+  }
 
   return createStore<CrossFilterStore>()((set, get) => ({
     // State
@@ -57,21 +78,29 @@ export function createCrossFilterStore(options: CreateCrossFilterStoreOptions = 
 
     // Actions
     setFilter: (entry: CrossFilterEntry) => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      const key = filterKey(entry);
+      clearTimerFor(key);
+      const timer = setTimeout(() => {
+        debounceTimers.delete(key);
         const state = get();
         const snapshot = makeSnapshot(state, `Filter: ${entry.field}=${String(entry.value)}`);
         const newFilters = new Map(state.filters);
-        newFilters.set(filterKey(entry), entry);
+        newFilters.set(key, entry);
         set({
           filters: newFilters,
           past: [...state.past.slice(-(historyCap - 1)), snapshot],
           future: [],
         });
       }, debounceMs);
+      debounceTimers.set(key, timer);
     },
 
     removeFilter: (key: string) => {
+      // Cancel any pending setFilter that's about to write this key.
+      // Without this, a remove followed by a delayed pending setFilter
+      // write would silently revive the filter the caller intended to
+      // drop.
+      clearTimerFor(key);
       const state = get();
       if (!state.filters.has(key)) return;
       const snapshot = makeSnapshot(state, `Remove filter: ${key}`);
@@ -85,6 +114,10 @@ export function createCrossFilterStore(options: CreateCrossFilterStoreOptions = 
     },
 
     clearAllFilters: () => {
+      // Cancel all pending setFilter writes — otherwise a clearAllFilters
+      // followed by a still-pending setFilter would re-introduce filters
+      // that the caller explicitly wiped.
+      clearAllTimers();
       const state = get();
       if (state.filters.size === 0) return;
       const snapshot = makeSnapshot(state, 'Clear all filters');
@@ -93,6 +126,20 @@ export function createCrossFilterStore(options: CreateCrossFilterStoreOptions = 
         past: [...state.past.slice(-(historyCap - 1)), snapshot],
         future: [],
       });
+    },
+
+    /**
+     * Internal teardown helper — drops every pending debounced setFilter
+     * timer. Intended for `CrossFilterProvider` unmount cleanup and test
+     * teardown so a stale store (or a torn-down provider) cannot mutate
+     * state after consumers have moved on. Not part of the public
+     * cross-filter contract; do not rely on it from chart adapters.
+     *
+     * Surfaced as a method on the returned store via the underscore prefix
+     * to keep it discoverable in the API surface but visibly internal.
+     */
+    _disposeTimers: () => {
+      clearAllTimers();
     },
 
     drillDown: (level: DrillLevel) => {

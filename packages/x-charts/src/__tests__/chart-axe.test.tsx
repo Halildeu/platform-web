@@ -238,6 +238,71 @@ const charts = [
   },
 ] as const;
 
+/* ------------------------------------------------------------------ */
+/*  Cross-filter rollout sweep — wrapper a11y gate                      */
+/*                                                                      */
+/*  Codex iter-2 (thread 019e0c25) absorb: BETA → stable promotion of   */
+/*  cross-filter requires axe coverage on the new full-suite Storybook  */
+/*  surface AND the `CrossFilterChart` wrapper itself (the component    */
+/*  that renders the "filter aktif" indicator badge + clear button).    */
+/*                                                                      */
+/*  Scope here is intentionally narrow — pre-existing chart axe debt is */
+/*  not blocked by this sweep. We assert only that:                     */
+/*   1. CrossFilterChart wrapped around any chart stays serious/critical*/
+/*      clean (showIndicator=false, default).                           */
+/*   2. CrossFilterChart with the filter indicator visible              */
+/*      (clear button) keeps button labels and ARIA live region clean.  */
+/* ------------------------------------------------------------------ */
+import { CrossFilterChart } from '../cross-filter/CrossFilterChart';
+import { CrossFilterProvider } from '../cross-filter/useCrossFilterStore';
+import { createCrossFilterStore } from '../cross-filter/createCrossFilterStore';
+
+describe('CrossFilterChart wrapper — a11y gate', () => {
+  it('wraps every chart cleanly when no filter is active (showIndicator default)', async () => {
+    const store = createCrossFilterStore({ debounceMs: 0 });
+    const { container } = render(
+      <CrossFilterProvider store={store}>
+        <CrossFilterChart chartId="axe-bar" emitFields={['label']}>
+          <BarChart data={SAMPLE_DATA} />
+        </CrossFilterChart>
+      </CrossFilterProvider>,
+    );
+    const violations = await runAxeStrict(container);
+    expect(
+      violations,
+      `CrossFilterChart(BarChart) produced violations: ${violations
+        .map((v) => `${v.id} (${v.impact})`)
+        .join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('renders the active-filter indicator with a labelled clear button (no axe regression)', async () => {
+    const store = createCrossFilterStore({ debounceMs: 0 });
+    // Pre-seed a filter so the indicator badge renders on mount.
+    store.getState().setFilter({
+      sourceId: 'axe-bar',
+      field: 'label',
+      value: 'Q1',
+      operator: 'eq',
+      createdAt: 0,
+    });
+    const { container } = render(
+      <CrossFilterProvider store={store}>
+        <CrossFilterChart chartId="axe-bar" emitFields={['label']}>
+          <BarChart data={SAMPLE_DATA} />
+        </CrossFilterChart>
+      </CrossFilterProvider>,
+    );
+    const violations = await runAxeStrict(container);
+    expect(
+      violations,
+      `CrossFilterChart with active filter produced violations: ${violations
+        .map((v) => `${v.id} (${v.impact})`)
+        .join(', ')}`,
+    ).toEqual([]);
+  });
+});
+
 describe.each(charts)(
   '$name — axe-core gate (Faz 21.5-B PR-B3a, serious+critical zero)',
   ({ name, element }) => {

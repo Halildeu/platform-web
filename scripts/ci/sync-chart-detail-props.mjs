@@ -202,8 +202,17 @@ function extractProps(chartName) {
  * @returns {string}
  */
 function quote(s) {
-  // Use single quotes; escape internal singles as \'.
-  return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  // Use single quotes; escape internal singles as \', and escape
+  // newlines so multi-line JSDoc descriptions emit a syntactically
+  // valid single-quoted string literal (prettier/typescript would
+  // otherwise see an unterminated string literal — see PR #338
+  // cross-filter rollout, which introduced multi-line descriptions
+  // for the new `onDataPointClick` props on 10 chart adapters).
+  return `'${s
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')}'`;
 }
 
 /**

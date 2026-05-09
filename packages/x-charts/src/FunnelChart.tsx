@@ -38,6 +38,16 @@ import type { EChartsOption } from './renderers/echarts-imports';
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// canonical `ChartClickEvent`. Funnel datum exposes `percent`
+// (ECharts' built-in stage-vs-max ratio) and an optional
+// `conversionPercent` (stage-vs-previous ratio) — the latter is only
+// computed when the chart was rendered with `showConversion=true`,
+// otherwise the cross-filter wrapper would emit a meaningless field.
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export interface FunnelDataPoint {
   /** Stage name displayed in labels and tooltip. */
   name: string;
@@ -74,8 +84,15 @@ export interface FunnelChartProps extends AccessControlledProps {
   valueFormatter?: (v: number) => string;
   /** Animate on mount. @default true */
   animate?: boolean;
-  /** Callback fired when a stage is clicked. */
-  onDataPointClick?: (params: unknown) => void;
+  /**
+   * Callback fired when a stage is clicked. Emits a canonical
+   * `ChartClickEvent` with `datum: { label, value, percent,
+   * conversionPercent? }` — `percent` is ECharts' default total-vs-max
+   * ratio; `conversionPercent` is the stage-vs-previous ratio and is
+   * only included when `showConversion` is true (otherwise omitted to
+   * avoid emitting a misleading filter field).
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -344,12 +361,45 @@ const FunnelChartInner = React.forwardRef<
     breakpoint,
   ]);
 
+  // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts funnel
+  // params: `{ name, value, percent, dataIndex }`. `percent` is the
+  // chart's default total-vs-max metric; conversion-vs-previous is
+  // only meaningful when `showConversion` is on, so we compute it
+  // lazily from the same `buildConversionMap` used for tooltips.
+  const conversionMapForClick = useMemo(
+    () => (showConversion ? buildConversionMap(safeData, sort) : null),
+    [showConversion, safeData, sort],
+  );
   const handleClick = useCallback(
     (params: unknown) => {
       if (!onDataPointClick) return;
-      onDataPointClick(params);
+      const p = params as {
+        name?: string;
+        value?: number;
+        percent?: number;
+        dataIndex?: number;
+      };
+      const label = typeof p.name === 'string' ? p.name : '';
+      const value = typeof p.value === 'number' ? p.value : 0;
+      const percent = typeof p.percent === 'number' ? p.percent : undefined;
+      const conversionPercent = conversionMapForClick?.get(label);
+
+      const datum: Record<string, unknown> = {
+        label,
+        value,
+        percent,
+      };
+      if (typeof conversionPercent === 'number') {
+        datum.conversionPercent = conversionPercent;
+      }
+
+      onDataPointClick({
+        datum,
+        value,
+        label,
+      });
     },
-    [onDataPointClick],
+    [onDataPointClick, conversionMapForClick],
   );
 
   const { containerRef, instance } = useEChartsRenderer({

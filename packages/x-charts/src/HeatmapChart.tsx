@@ -38,6 +38,13 @@ import type { EChartsOption } from './renderers/echarts-imports';
 
 export type ChartSize = 'sm' | 'md' | 'lg';
 
+// Cross-filter rollout sweep — Codex thread 019e0c25 absorb. Re-export
+// the canonical `ChartClickEvent` so the cross-filter wrapper sees a
+// single shape across all 13 chart adapters.
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
 export type HeatmapTupleData = [number, number, number];
 
 export type HeatmapObjectData = {
@@ -73,8 +80,23 @@ export interface HeatmapChartProps extends AccessControlledProps {
   showLegend?: boolean;
   /** Animate on mount. @default true */
   animate?: boolean;
-  /** Callback fired when a cell is clicked. */
+  /**
+   * Legacy callback fired when a cell is clicked. Receives a tight
+   * `{ x, y, value }` shape (numeric category indices). Coexists with
+   * the new `onDataPointClick`; when both are supplied,
+   * `onDataPointClick` fires FIRST and `onCellClick` fires second so
+   * cross-filter forwarding never blocks the legacy handler. Codex
+   * iter-2 thread 019e0c25 absorb.
+   */
   onCellClick?: (params: { x: number; y: number; value: number }) => void;
+  /**
+   * Canonical cross-filter callback. Emits a `ChartClickEvent` with
+   * `datum: { x, y, xLabel, yLabel, value, label: '${xLabel}/${yLabel}' }`
+   * — `x`/`y` are numeric category indices; `xLabel`/`yLabel` are the
+   * resolved category strings (which the cross-filter wrapper would
+   * typically emit as filter values).
+   */
+  onDataPointClick?: (event: ChartClickEvent) => void;
   /** Additional class name. */
   className?: string;
   /**
@@ -218,6 +240,7 @@ const HeatmapChartInner = React.forwardRef<
     showLegend = true,
     animate = true,
     onCellClick,
+    onDataPointClick,
     className,
     theme: themePreference = 'auto',
     decal: decalPreference = 'auto',
@@ -250,10 +273,25 @@ const HeatmapChartInner = React.forwardRef<
     accent: accentPreference,
   });
 
-  const option = useMemo((): EChartsOption | null => {
+  // Shared normalize — Codex iter-2 thread 019e0c25 absorb. Previously
+  // `normalizeData(...)` was called twice (option + a11yData) and the
+  // click handler had no access to category labels. Hoisting to a
+  // shared `useMemo` lets `option`, `handleClick` and `a11yData` all
+  // read from one source — and the cross-filter datum can include
+  // `xLabel`/`yLabel` resolved from `xCats`/`yCats`.
+  const normalized = useMemo(() => {
     if (isEmpty) return null;
+    try {
+      return normalizeData(data, xLabels, yLabels);
+    } catch {
+      return null;
+    }
+  }, [data, xLabels, yLabels, isEmpty]);
 
-    const { normalized, xCats, yCats, dataMin, dataMax } = normalizeData(data, xLabels, yLabels);
+  const option = useMemo((): EChartsOption | null => {
+    if (isEmpty || !normalized) return null;
+
+    const { normalized: norm, xCats, yCats, dataMin, dataMax } = normalized;
 
     const effectiveMin = minProp ?? dataMin;
     const effectiveMax = maxProp ?? dataMax;
@@ -346,7 +384,7 @@ const HeatmapChartInner = React.forwardRef<
       series: [
         {
           type: 'heatmap' as const,
-          data: normalized,
+          data: norm,
           label: {
             show: showValues,
             fontSize: scaleFontSize(10, densityFontMultiplier),
@@ -395,42 +433,59 @@ const HeatmapChartInner = React.forwardRef<
 
   const handleClick = useCallback(
     (params: unknown) => {
-      if (!onCellClick) return;
-      const p = params as { data: [number, number, number] };
-      if (Array.isArray(p.data) && p.data.length >= 3) {
-        onCellClick({
-          x: p.data[0],
-          y: p.data[1],
-          value: p.data[2],
+      // Coexistence — Codex iter-2 thread 019e0c25 absorb: cross-filter
+      // wrapper requires the canonical `ChartClickEvent` shape; legacy
+      // consumers still rely on `onCellClick` with numeric indices.
+      // Fire `onDataPointClick` FIRST so the cross-filter bus sees the
+      // event before the legacy handler's side effects, then the
+      // legacy callback for backward compatibility.
+      const p = params as { data?: [number, number, number] };
+      if (!Array.isArray(p.data) || p.data.length < 3) return;
+      const [xi, yi, v] = p.data;
+
+      if (onDataPointClick) {
+        const xLabel = normalized?.xCats[xi] ?? String(xi);
+        const yLabel = normalized?.yCats[yi] ?? String(yi);
+        onDataPointClick({
+          datum: {
+            x: xi,
+            y: yi,
+            xLabel,
+            yLabel,
+            value: v,
+            label: `${xLabel}/${yLabel}`,
+          },
+          value: v,
+          label: `${xLabel}/${yLabel}`,
         });
       }
+
+      if (onCellClick) {
+        onCellClick({ x: xi, y: yi, value: v });
+      }
     },
-    [onCellClick],
+    [onCellClick, onDataPointClick, normalized],
   );
 
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
-    onClick: onCellClick ? handleClick : undefined,
+    onClick: onCellClick || onDataPointClick ? handleClick : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. Heatmap is a 2D matrix —
   // flatten each cell to "(xCat, yCat) → value". Order preserves
   // ECharts' visualization order (left-to-right, top-to-bottom).
+  // Reads from the shared `normalized` memo (Codex iter-2 absorb).
   const a11yData = useMemo(() => {
-    if (isEmpty) return [];
-    try {
-      const norm = normalizeData(data, xLabels, yLabels);
-      const { normalized, xCats, yCats } = norm;
-      return normalized.map(([xi, yi, v]) => ({
-        label: `(${xCats[xi] ?? xi}, ${yCats[yi] ?? yi})`,
-        value: v,
-      }));
-    } catch {
-      return [];
-    }
-  }, [data, xLabels, yLabels, isEmpty]);
+    if (!normalized) return [];
+    const { normalized: cells, xCats, yCats } = normalized;
+    return cells.map(([xi, yi, v]) => ({
+      label: `(${xCats[xi] ?? xi}, ${yCats[yi] ?? yi})`,
+      value: v,
+    }));
+  }, [normalized]);
   const a11y = useChartA11y({
     chartType: 'heatmap',
     data: a11yData,
@@ -491,7 +546,7 @@ HeatmapChartInner.displayName = 'HeatmapChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
-  function HeatmapChart({ access, accessReason, onCellClick, ...rest }, ref) {
+  function HeatmapChart({ access, accessReason, onCellClick, onDataPointClick, ...rest }, ref) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -499,6 +554,7 @@ export const HeatmapChart = React.forwardRef<HTMLDivElement, HeatmapChartProps>(
           ref={ref}
           {...rest}
           onCellClick={guardChartCallback(state, onCellClick)}
+          onDataPointClick={guardChartCallback(state, onDataPointClick)}
         />
       </ChartAccessGate>
     );

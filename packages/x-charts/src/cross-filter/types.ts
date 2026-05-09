@@ -102,6 +102,14 @@ export interface CrossFilterActions {
   deleteBookmark: (id: string) => void;
   incrementPendingQuery: () => void;
   decrementPendingQuery: () => void;
+  /**
+   * Internal teardown helper — cancels every pending debounced
+   * `setFilter` write. Use from `CrossFilterProvider` unmount cleanup or
+   * test teardown to prevent stale stores from mutating state after
+   * consumers have torn down. Not part of the public chart-adapter
+   * contract.
+   */
+  _disposeTimers: () => void;
 }
 
 export type CrossFilterStore = CrossFilterState & CrossFilterActions;
