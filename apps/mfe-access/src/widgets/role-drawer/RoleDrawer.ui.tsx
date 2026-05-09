@@ -255,6 +255,32 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   const [actionGrants, setActionGrants] = React.useState<Record<string, string>>({});
   const [reportGrants, setReportGrants] = React.useState<Record<string, string>>({});
   const [dirty, setDirty] = React.useState(false);
+
+  // PR-FE-7 (Codex thread 019e0bd3 iter-1 AGREE absorb, 2026-05-09):
+  // unified drawer UX, drop manual Save/Cancel buttons, every grant
+  // change auto-saves after a 500ms debounce. State refs back the
+  // commit pipeline:
+  //   - lastSavedDraftRef: last draft the server accepted; revert
+  //     target on error so the UI snaps back to the canonical state.
+  //   - failedDraftRef: last draft that failed; retry banner sends
+  //     this exact payload back without forcing the user to redo
+  //     the keystrokes that produced it.
+  //   - debounceTimerRef: the in-flight setTimeout handle so the
+  //     scheduler can collapse rapid-fire changes into one PUT.
+  //   - saveSeqRef: monotonic counter so a stale response (slow
+  //     network, fast typing) cannot overwrite a fresher snapshot.
+  type GrantSnapshot = {
+    moduleGrants: Record<string, string>;
+    actionGrants: Record<string, string>;
+    reportGrants: Record<string, string>;
+  };
+  type AutoSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+  const [autoSaveStatus, setAutoSaveStatus] = React.useState<AutoSaveStatus>('idle');
+  const lastSavedDraftRef = React.useRef<GrantSnapshot | null>(null);
+  const failedDraftRef = React.useRef<GrantSnapshot | null>(null);
+  const debounceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveSeqRef = React.useRef(0);
+  const grantsLoadedRef = React.useRef(false);
   const [, setSelectedUser] = React.useState<AutocompleteOption | null>(null);
   const [userSearchOptions, setUserSearchOptions] = React.useState<AutocompleteOption[]>([]);
   const [userSearchLoading, setUserSearchLoading] = React.useState(false);
@@ -364,6 +390,17 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
     setActionGrants(acts);
     setReportGrants(reps);
     setDirty(false);
+    // PR-FE-7: seed the canonical snapshot once granules arrive so a
+    // subsequent error can revert here, AND open the autosave gate.
+    // Pre-load edits MUST NOT trigger a save (would persist {} to the
+    // server before the user has even seen the current state).
+    lastSavedDraftRef.current = {
+      moduleGrants: mods,
+      actionGrants: acts,
+      reportGrants: reps,
+    };
+    grantsLoadedRef.current = true;
+    setAutoSaveStatus('saved');
   }, [role?.id, roleGranulesQuery.data]);
 
   // --- User search handler ---
@@ -396,43 +433,149 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
   }, []);
 
   // --- Save granules mutation ---
+  // PR-FE-7 (Codex 019e0bd3 iter-1 AGREE absorb, 2026-05-09): mutation
+  // now takes an explicit draft snapshot parameter instead of reading
+  // closure state. Stale closures from rapid keystrokes were the
+  // out-of-order risk Codex flagged; passing the snapshot at schedule
+  // time pins the request body deterministically.
   const saveGranulesMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (draft: GrantSnapshot) => {
       if (!isPersistedRoleId(role?.id)) return;
       const granules: Granule[] = [];
-      for (const [key, grant] of Object.entries(moduleGrants)) {
+      for (const [key, grant] of Object.entries(draft.moduleGrants)) {
         if (grant !== 'NONE') granules.push({ type: 'module', key, grant });
       }
-      for (const [key, grant] of Object.entries(actionGrants)) {
+      for (const [key, grant] of Object.entries(draft.actionGrants)) {
         granules.push({ type: 'action', key, grant });
       }
-      // Codex 019dda1c iter-26: catalog'da olmayan stale rapor key'lerini
-      // payload'a koyma. Eski group keys (HR_REPORTS, FINANCE_REPORTS, vs.)
-      // catalog'dan kaldırıldı; UI'da görünmüyor ama Effect B parse'ında
-      // önceki granule fetch'ten state'e gelmiş olabilirler. Save anında
-      // backend'e geri göndermek bu legacy rows'u canlı tutar.
+      // Codex 019dda1c iter-26: skip catalog-stale report keys (e.g.
+      // legacy group keys from prior versions) so a save does not
+      // re-introduce rows the catalog has dropped.
       const validReportKeys = new Set((catalog?.reports ?? []).map((r) => r.key));
-      for (const [key, grant] of Object.entries(reportGrants)) {
+      for (const [key, grant] of Object.entries(draft.reportGrants)) {
         if (!validReportKeys.has(key)) continue;
         granules.push({ type: 'report', key, grant });
       }
       // PAGE granules removed in iter-27 — backend rejects them at
       // validateAndNormalize (PermissionType enum has no PAGE value).
+      const seq = saveSeqRef.current;
       await api.put(`/v1/roles/${role!.id}/granules`, { permissions: granules });
+      return { seq, draft };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       // Codex 019dd9d6 iter-20: drawer's own source-of-truth (role-granules
       // detail query) must also be invalidated so the next reopen pulls fresh
       // server state instead of stale cached data parsed by Effect B.
       queryClient.invalidateQueries({ queryKey: ['role-granules', role?.id] });
+      // PR-FE-7: only commit the new canonical snapshot if THIS is the
+      // most-recent save; a slow earlier response cannot regress a
+      // newer one. seq monotonicity guards out-of-order arrivals.
+      if (result && result.seq === saveSeqRef.current) {
+        lastSavedDraftRef.current = result.draft;
+        failedDraftRef.current = null;
+        setAutoSaveStatus('saved');
+      }
       setDirty(false);
-      pushToast('success', t('access.notifications.permissionSaveSuccess'));
     },
-    onError: (err: Error) => {
+    onError: (err: Error, draft: GrantSnapshot) => {
+      // PR-FE-7: revert to the last server-accepted snapshot so the UI
+      // is honest about persistence ("Kaydedilemedi, son kayıtlı duruma
+      // dönüldü"). The retry banner remembers the failed draft so the
+      // user can re-attempt the same change without retyping.
+      failedDraftRef.current = draft;
+      setAutoSaveStatus('error');
+      const snap = lastSavedDraftRef.current;
+      if (snap) {
+        setModuleGrants(snap.moduleGrants);
+        setActionGrants(snap.actionGrants);
+        setReportGrants(snap.reportGrants);
+      }
       pushToast('error', err.message || t('access.notifications.permissionSaveError'));
     },
   });
+
+  // PR-FE-7: shallow-equal helper for grant snapshots. Used as the
+  // skip guard so a state-set that mirrors the server-canonical
+  // snapshot (e.g. Effect B seeding from the granules query) does
+  // not produce a redundant PUT.
+  const grantsEqual = React.useCallback((a: Record<string, string>, b: Record<string, string>) => {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const k of aKeys) {
+      if (a[k] !== b[k]) return false;
+    }
+    return true;
+  }, []);
+
+  // PR-FE-7: debounce-and-fire scheduler. Every grant change calls
+  // this function via the useEffect below; rapid edits collapse into
+  // a single PUT 500ms after the last keystroke. The snapshot is
+  // captured at schedule time so the mutation body cannot drift if
+  // the user keeps typing while the request is in flight.
+  const scheduleAutoSave = React.useCallback(
+    (next: GrantSnapshot) => {
+      if (!grantsLoadedRef.current) return;
+      // Skip when the snapshot is identical to the last server-
+      // accepted state — Effect B (granules query seed) repeatedly
+      // calls setModuleGrants with the canonical map, and we do not
+      // want every reopen to re-PUT identical bytes.
+      const last = lastSavedDraftRef.current;
+      if (
+        last &&
+        grantsEqual(last.moduleGrants, next.moduleGrants) &&
+        grantsEqual(last.actionGrants, next.actionGrants) &&
+        grantsEqual(last.reportGrants, next.reportGrants)
+      ) {
+        return;
+      }
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      setAutoSaveStatus('saving');
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        saveSeqRef.current += 1;
+        saveGranulesMutation.mutate(next);
+      }, 500);
+    },
+    [saveGranulesMutation, grantsEqual],
+  );
+
+  // PR-FE-7: state observer. Watches the grant maps and schedules an
+  // auto-save whenever they change. Centralizing the trigger here
+  // avoids touching every individual handler (setModule,
+  // setActionLevel, setActionGroupLevel, setReportLevel,
+  // setReportGroupLevel) and guarantees that any future handler
+  // contributes to the auto-save flow without forgetting to wire it.
+  React.useEffect(() => {
+    if (!grantsLoadedRef.current) return;
+    scheduleAutoSave({ moduleGrants, actionGrants, reportGrants });
+  }, [moduleGrants, actionGrants, reportGrants, scheduleAutoSave]);
+
+  // PR-FE-7: cleanup pending debounce when the component unmounts so
+  // we never fire after the user has navigated away.
+  React.useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  // PR-FE-7: explicit retry handler for the error banner. Sends the
+  // last failed draft back without forcing the user to redo the
+  // change that produced it.
+  const handleAutoSaveRetry = React.useCallback(() => {
+    const failed = failedDraftRef.current;
+    if (!failed) return;
+    setAutoSaveStatus('saving');
+    saveSeqRef.current += 1;
+    saveGranulesMutation.mutate(failed);
+  }, [saveGranulesMutation]);
 
   // --- Add member mutation ---
   const addMemberMutation = useMutation({
@@ -1170,26 +1313,52 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
 
         <hr className="border-border-subtle" />
 
-        {/* --- FOOTER --- */}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose}>
-            {t('access.clone.cancelText')}
-          </Button>
-          <Button
-            onClick={() => saveGranulesMutation.mutate()}
-            loading={saveGranulesMutation.isPending}
-            disabled={!dirty}
-            access={editAccess}
-            accessReason={
-              editAccess !== 'full'
-                ? editReason === 'session_expired'
+        {/* --- FOOTER ---
+            PR-FE-7 (2026-05-09): Save / Cancel buttons removed. Every
+            grant change auto-saves after a 500ms debounce; the footer
+            now hosts a status indicator that reflects the autosave
+            state machine and a retry button when a save fails. The
+            access-denied surface (editAccess !== 'full') also lives
+            here so super-admins can see the gate reason without a
+            phantom Save button. */}
+        <div className="flex items-center justify-between gap-3 pt-2 text-xs text-text-subtle">
+          <div className="flex items-center gap-2">
+            {editAccess !== 'full' ? (
+              <span className="text-state-warning-text">
+                {editReason === 'session_expired'
                   ? t('auth.session.expired')
-                  : t('access.drawer.noEditPermission')
-                : undefined
-            }
-          >
-            {t('common.save')}
-          </Button>
+                  : t('access.drawer.noEditPermission')}
+              </span>
+            ) : autoSaveStatus === 'saving' ? (
+              <span aria-live="polite" className="inline-flex items-center gap-1.5">
+                <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-state-info-text" />
+                Kaydediliyor...
+              </span>
+            ) : autoSaveStatus === 'saved' ? (
+              <span
+                aria-live="polite"
+                className="inline-flex items-center gap-1.5 text-state-success-text"
+              >
+                <span className="inline-flex h-2 w-2 rounded-full bg-state-success-text" />
+                Tüm değişiklikler kaydedildi
+              </span>
+            ) : autoSaveStatus === 'error' ? (
+              <span aria-live="assertive" className="text-state-danger-text">
+                Kaydedilemedi, son kayıtlı duruma dönüldü.
+              </span>
+            ) : (
+              <span>Tüm değişiklikler otomatik kaydedilir.</span>
+            )}
+          </div>
+          {autoSaveStatus === 'error' && failedDraftRef.current ? (
+            <Button
+              variant="secondary"
+              onClick={handleAutoSaveRetry}
+              loading={saveGranulesMutation.isPending}
+            >
+              Tekrar dene
+            </Button>
+          ) : null}
         </div>
       </div>
 
