@@ -56,13 +56,21 @@ export function computeTrendOverlay(options: ComputeTrendOverlayOptions): ChartM
 
   if (!Array.isArray(data) || data.length < 2) return [];
 
-  // Codex post-impl review absorb (P1): when EVERY x is numeric,
-  // run regression on actual x values so irregular spacing /
-  // timestamps produce a correct slope. Categorical (or mixed)
-  // arrays fall back to index-based regression and the segment
-  // endpoints carry the ORIGINAL labels so ECharts resolves them
-  // via the chart's coordinate system.
-  const allNumericX = data.every((d) => typeof d.x === 'number');
+  // Codex post-impl review iter-2 absorb: defensive guards on
+  // public helper. `typeof NaN === 'number'` and `typeof Infinity ===
+  // 'number'` would otherwise pass the numeric-x detection and feed
+  // garbage into `linearRegression`. `Number.isFinite` rejects both
+  // plus null/undefined widening through the runtime boundary.
+  const dataAllFiniteY = data.every((d) => Number.isFinite(d.y));
+  if (!dataAllFiniteY) return [];
+
+  // When EVERY x is numeric AND finite, run regression on actual
+  // x values so irregular spacing / timestamps produce a correct
+  // slope. Categorical (or mixed numeric+string) arrays fall back
+  // to index-based regression and the segment endpoints carry the
+  // ORIGINAL labels so ECharts resolves them via the chart's
+  // coordinate system.
+  const allNumericX = data.every((d) => typeof d.x === 'number' && Number.isFinite(d.x));
   const xVals = allNumericX ? (data.map((d) => d.x) as number[]) : data.map((_, i) => i);
   const yVals = data.map((d) => d.y);
   const reg = linearRegression(xVals, yVals);

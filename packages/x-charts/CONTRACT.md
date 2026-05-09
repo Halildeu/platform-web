@@ -622,3 +622,55 @@ Verification (CI gate suggestion):
 rg "@mfe/design-system" packages/x-charts/src   # must be 0 hits
 npx madge --circular packages/x-charts/src      # must be 0 cycles
 ```
+
+### ChartMarkup Overlay Layer (PR #350 — Highcharts annotation parity)
+
+Every chart shim above accepts two ADDITIONAL public props on top of
+its existing surface — wired uniformly via `useMarkupAdapter` +
+`mergeMarkupPatches`:
+
+```ts
+markups?: ChartMarkup[];
+onMarkupClick?: (event: ChartMarkupClickEvent) => void;
+```
+
+`ChartMarkup` is a discriminated union (`type: 'line' | 'segment' |
+'area' | 'point' | 'label'`) re-exported from `@mfe/x-charts` root
+along with `ChartMarkupClickEvent`, `BaseMarkup`, the per-variant
+shapes (`LineMarkup`, `SegmentMarkup`, `AreaMarkup`, `PointMarkup`,
+`LabelMarkup`), the pure adapter (`adaptToEcharts`,
+`DEFAULT_SUPPORT_MATRIX`, `mergeMarkupPatches`), and the AI overlay
+helpers (`computeTrendOverlay` / `useTrendOverlay`,
+`computeAnomalyOverlay` / `useAnomalyOverlay`).
+
+Distinct from two pre-existing `Annotation` surfaces in the package
+(spec-level `ChartAnnotation` in `spec/ChartSpec.ts`; collaboration
+`Annotation` in `collaboration/chart-annotations.ts`) — Codex iter-1
+absorb (thread `019e0df1`).
+
+Support matrix (Codex iter-3 contract — 5 full + 1 partial + 7 no-op):
+
+| Chart                                                      |   line   | segment |   area   | point  | label  |
+| ---------------------------------------------------------- | :------: | :-----: | :------: | :----: | :----: |
+| BarChart, LineChart, AreaChart, ScatterChart, HeatmapChart |   full   |  full   |   full   |  full  |  full  |
+| WaterfallChart                                             | partial¹ |  full   | partial¹ |  full  |  full  |
+| PieChart, GaugeChart, RadarChart, FunnelChart              |  no-op²  | no-op²  |  no-op²  | no-op² | no-op² |
+| TreemapChart, SankeyChart, SunburstChart                   |  no-op³  | no-op³  |  no-op³  | no-op³ | no-op³ |
+
+¹ Waterfall: connector `markLine` data items now carry per-endpoint
+`silent: true`; user markups append on the SAME `markLine` and
+keep their default clickable behaviour. `__waterfall_base__`
+series stays untouched.
+² Non-cartesian (Pie/Gauge/Funnel) and polar (Radar) — adapter
+emits a dev warning and routes nothing through ECharts. Native
+series-label patches + Radar indicator anchor are v2 backlog.
+³ Hierarchical / network charts — no x/y axis semantics; markup
+layer intentionally returns no patches and surfaces a dev
+warning.
+
+`LabelMarkup.anchor` accepts either `{ x, y }` (explicit data
+coordinate) or `{ dataIndex, seriesIndex? }` (resolved against the
+chart shim's `dataContext`). The `dataIndex` shorthand is currently
+honored on Bar (single series) + Line + Area; Heatmap requires the
+explicit `{ x, y }` form (Codex iter-2 absorb — Heatmap
+`dataContext.series` enrichment is v2 backlog).

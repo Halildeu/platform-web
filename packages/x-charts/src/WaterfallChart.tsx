@@ -409,13 +409,19 @@ const WaterfallChartInner = React.forwardRef<
           ? {
               symbol: 'none',
               lineStyle: { color: '#94a3b8', type: 'dashed' as const, width: 1 },
-              // Codex post-impl review (P1): per-item `silent: true`
-              // on connector entries instead of object-level `silent`,
-              // so when `mergeMarkupPatches` appends user-supplied
-              // markup lines/segments to this same markLine they keep
-              // their default clickable behaviour and `onMarkupClick`
-              // fires.
-              data: markLineData.map((d) => ({ ...d, silent: true })),
+              // Codex post-impl review iter-2 (P1): connector entries
+              // are 2-element ARRAYS (`[{xAxis,yAxis}, {xAxis,yAxis}]`)
+              // describing segment endpoints. Spreading the pair
+              // (`{...pair, silent: true}`) would convert it to a
+              // numeric-keyed object and BREAK ECharts' segment
+              // rendering. Preserve the array shape and inject
+              // `silent: true` on EACH endpoint so the connector
+              // stays non-interactive when `mergeMarkupPatches`
+              // appends user-supplied markup line/segment entries.
+              data: markLineData.map(([endpointA, endpointB]) => [
+                { ...endpointA, silent: true },
+                { ...endpointB, silent: true },
+              ]),
               label: { show: false },
             }
           : undefined,
