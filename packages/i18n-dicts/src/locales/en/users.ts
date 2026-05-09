@@ -200,6 +200,15 @@ const users = {
   'users.detail.noRolesWarning': 'At least one role must be selected.',
   'users.detail.loadingRoles': 'Loading...',
   'users.detail.assignmentSaved': 'Role and access assignments saved.',
+  // PR-FE-8 (2026-05-09): user-detail drawer auto-save UX strings
+  // (parallel of role drawer's UX consistency directive).
+  'users.detail.autosave.saving': 'Saving...',
+  'users.detail.autosave.saved': 'All changes saved',
+  'users.detail.autosave.error': 'Save failed, reverted to last saved state.',
+  'users.detail.autosave.hint': 'All changes are saved automatically.',
+  'users.detail.autosave.retry': 'Retry',
+  'users.detail.assignmentError': 'Role and access assignments could not be saved.',
+  'users.detail.readOnly': 'You do not have permission to edit this user.',
   'users.grid.columns.roles': 'Roles',
 };
 
