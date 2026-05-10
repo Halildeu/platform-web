@@ -1057,6 +1057,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Faz 21.11 PR-A2c-wire — opt-in ECharts toolbox brush feature.\nWhen `true` the chart renders a toolbox button + enables top-level\n`option.brush` so the user can drag a rectangle (or click clear)\nover the scatter. Selections fire `onBrushSelection` with a\nnormalised `BrushSelection` (PR-A2c). Also flips the renderer\nrouter into the cross-filter-required path so big-data datasets\nnever silently route to WebGL above the cross-filter ceiling\n(where brush parity becomes unreliable).\n\nDefault `false` — backwards compat. ECharts toolbox/brush bundle\nis paid only when a shim opts in; no shim that omits this flag\ntriggers the brush UI.',
       },
       {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y — anomaly summary list. When the chart\nis rendered with anomaly markups (PR-A2b-ui via\n`useAnomalyOverlay({ labelVariant: 'pill' })`), passing the\nmatching `AnomalySummary[]` (from `useAnomalySummary()` /\n`computeAnomalySummary()`) here lets `ChartA11yShell` fire a\npolite, debounced screen-reader announcement summarising the\noutliers. Default `undefined` = no anomaly announcement\n(backwards compat).\n\nPair with `useAnomalySummary({ data, k, idPrefix })` —\nshares the same detector internals as `useAnomalyOverlay` so\nthe visual markup and the SR summary stay aligned.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.\nDefault: small EN/TR formatter ("3 outliers detected, ...").',
+      },
+      {
         name: 'onBrushSelection',
         type: '(selection: BrushSelection | null) => void',
         required: false,

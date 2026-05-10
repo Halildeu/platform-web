@@ -385,11 +385,19 @@ export {
 } from './annotations/computeTrendOverlay';
 export {
   computeAnomalyOverlay,
+  computeAnomalySummary,
   type ComputeAnomalyOverlayOptions,
+  type ComputeAnomalySummaryOptions,
   type AnomalyOverlayPoint,
+  type AnomalySummary,
+  type AnomalyDirection,
+  type AnomalySeverityBucket,
 } from './annotations/computeAnomalyOverlay';
 export { useTrendOverlay } from './annotations/useTrendOverlay';
-export { useAnomalyOverlay } from './annotations/useAnomalyOverlay';
+export { useAnomalyOverlay, useAnomalySummary } from './annotations/useAnomalyOverlay';
+// PR-A2b-a11y — anomaly announcement formatter type for consumers
+// who want to override the default EN/TR template.
+export type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
 
 /* ------------------------------------------------------------------ */
 /*  i18n locale auto-bind (Faz 21.5-A1)                                */

@@ -98,6 +98,66 @@ function quantile(sorted: number[], q: number): number {
 }
 
 /**
+ * Internal anomaly hit shape — used by both `computeAnomalyOverlay`
+ * (markup emission) and the new `computeAnomalySummary`
+ * (a11y/announcement payload). Faz 21.11 PR-A2b-a11y absorbed
+ * Codex thread `019e1027` iter-1 §1: detector logic lives in ONE
+ * place; both surfaces consume the same hits.
+ */
+interface AnomalyHit {
+  sourceIndex: number;
+  point: AnomalyOverlayPoint;
+  /** Visual glyph used by markup labels — KEPT as the original
+   * arrow chars so the legacy marker label byte-identical. */
+  direction: '↑' | '↓';
+  severity: number;
+}
+
+/**
+ * Pure detector. Walks `data`, computes the IQR fences, and
+ * returns a list of anomaly hits. No markup emission, no React,
+ * no DOM. Returns an empty array when fewer than four points
+ * (IQR is meaningless on tiny samples).
+ *
+ * Used by `computeAnomalyOverlay` (markup rendering) and
+ * `computeAnomalySummary` (a11y announcement payload). Keeps the
+ * fence math single-source so a future detector swap (zscore, MAD,
+ * etc.) only needs to change one function.
+ */
+function collectAnomalyHits(data: AnomalyOverlayPoint[] | undefined, k: number): AnomalyHit[] {
+  if (!Array.isArray(data) || data.length < 4) return [];
+  const ys = data
+    .map((d) => d.y)
+    .slice()
+    .sort((a, b) => a - b);
+  const q1 = quantile(ys, 0.25);
+  const q3 = quantile(ys, 0.75);
+  const iqr = q3 - q1;
+  const lowerFence = q1 - k * iqr;
+  const upperFence = q3 + k * iqr;
+  const hits: AnomalyHit[] = [];
+  for (let i = 0; i < data.length; i++) {
+    const point = data[i];
+    if (point.y > upperFence) {
+      hits.push({
+        sourceIndex: i,
+        point,
+        direction: '↑',
+        severity: point.y - upperFence,
+      });
+    } else if (point.y < lowerFence) {
+      hits.push({
+        sourceIndex: i,
+        point,
+        direction: '↓',
+        severity: lowerFence - point.y,
+      });
+    }
+  }
+  return hits;
+}
+
+/**
  * Find IQR-fence outliers and emit `ChartMarkup[]` for each. Returns
  * an empty array when fewer than four points (IQR is meaningless on
  * tiny samples).
@@ -129,47 +189,8 @@ export function computeAnomalyOverlay(options: ComputeAnomalyOverlayOptions): Ch
   // expose zscore once we agree on the multiplier defaults.
   void method;
 
-  if (!Array.isArray(data) || data.length < 4) return [];
-
-  const ys = data
-    .map((d) => d.y)
-    .slice()
-    .sort((a, b) => a - b);
-  const q1 = quantile(ys, 0.25);
-  const q3 = quantile(ys, 0.75);
-  const iqr = q3 - q1;
-  const lowerFence = q1 - k * iqr;
-  const upperFence = q3 + k * iqr;
   const formatValue = valueFormatter ?? ((v: number) => v.toFixed(2));
-
-  // First pass: collect every outlier with its severity so we can
-  // (a) emit a marker for each (cap-free) and (b) sort the pill
-  // candidates by severity before applying `maxPills`.
-  interface AnomalyHit {
-    sourceIndex: number;
-    point: AnomalyOverlayPoint;
-    direction: '↑' | '↓';
-    severity: number;
-  }
-  const hits: AnomalyHit[] = [];
-  for (let i = 0; i < data.length; i++) {
-    const point = data[i];
-    if (point.y > upperFence) {
-      hits.push({
-        sourceIndex: i,
-        point,
-        direction: '↑',
-        severity: point.y - upperFence,
-      });
-    } else if (point.y < lowerFence) {
-      hits.push({
-        sourceIndex: i,
-        point,
-        direction: '↓',
-        severity: lowerFence - point.y,
-      });
-    }
-  }
+  const hits = collectAnomalyHits(data, k);
 
   if (hits.length === 0) return [];
 
@@ -231,4 +252,134 @@ export function computeAnomalyOverlay(options: ComputeAnomalyOverlayOptions): Ch
     out.push(marker);
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  PR-A2b-a11y — anomaly summary for screen-reader announcements      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Semantic outlier direction. Codex iter-1 §2: the markup uses the
+ * arrow glyph `↑/↓` for visual labels, but a11y / external
+ * consumers want the semantic word. Decoupled here so SR
+ * announcements never read `up arrow` or rely on Unicode.
+ */
+export type AnomalyDirection = 'above' | 'below';
+
+/** Categorical severity bucket. Top-quartile of detected anomalies
+ * → `'high'`; everything else → `'medium'`. The continuous
+ * `severity` numeric is also exposed so consumers can build their
+ * own scale. */
+export type AnomalySeverityBucket = 'medium' | 'high';
+
+/**
+ * Renderer-agnostic anomaly payload — the contract the
+ * `ChartAriaLive` live region (and any other a11y consumer) reads
+ * to announce an anomaly summary. NOT a markup; this is the
+ * SEMANTIC view of an outlier.
+ *
+ * Stable across detector swaps (IQR, zscore, MAD, etc.). The
+ * `severity` numeric scale is detector-specific — consumers should
+ * lean on `severityBucket` for cross-detector portable UI.
+ */
+export interface AnomalySummary {
+  /** Stable id, scoped by `idPrefix`. Mirrors the marker id. */
+  id: string;
+  /** Source-row x value (string for categorical axes). */
+  x: number | string;
+  /** Source-row y value. */
+  y: number;
+  /** Pre-formatted y string using the consumer's `valueFormatter`
+   * (or the legacy `toFixed(2)` fallback). Keeps the SR
+   * announcement free of locale/precision drift. */
+  formattedY: string;
+  /** Semantic direction — `'above'` for upper-fence violation,
+   * `'below'` for lower-fence. */
+  direction: AnomalyDirection;
+  /** Continuous severity score (distance past the fence in y-space).
+   * Detector-specific — IQR returns absolute distance from the
+   * fence; zscore would return σ-distance. */
+  severity: number;
+  /** Categorical severity. Top-quartile of detected anomalies →
+   * `'high'`; else `'medium'`. Single-anomaly fixtures always get
+   * `'high'` — a single outlier IS the worst one in the set. */
+  severityBucket: AnomalySeverityBucket;
+  /** Pre-baked SR-friendly description. Consumers MAY override
+   * via `formatAnomalyAnnouncement` on `ChartAriaLive`. */
+  ariaLabel: string;
+}
+
+export interface ComputeAnomalySummaryOptions {
+  data: AnomalyOverlayPoint[];
+  /** Detection method (v1 supports 'iqr' only). */
+  method?: 'iqr' | 'zscore';
+  /** IQR fence multiplier. Default 1.5 (Tukey). */
+  k?: number;
+  /** Optional id prefix to scope multiple summaries per chart.
+   * MUST match the `idPrefix` passed to `computeAnomalyOverlay` if
+   * the consumer wants summary ids to align with markup ids. */
+  idPrefix?: string;
+  /** Same `valueFormatter` contract as `computeAnomalyOverlay` —
+   * keeps `formattedY` consistent with the inline pill text. */
+  valueFormatter?: (value: number) => string;
+  /**
+   * Severity threshold ratio for the 'high' bucket. The
+   * top-`severityHighFraction` slice of detected anomalies
+   * (sorted by descending severity) gets `severityBucket: 'high'`;
+   * the rest get `'medium'`.
+   * @default 0.25 — top quartile is "high"
+   */
+  severityHighFraction?: number;
+}
+
+/**
+ * Compute an a11y-friendly anomaly summary list. Pure: no React,
+ * no DOM, no markup emission. Built on top of `collectAnomalyHits`
+ * so the detector logic stays single-source.
+ *
+ * Codex iter-1 §1+§7 absorb. The previous PR-A2b-ui pattern was
+ * for consumers to walk `ChartMarkup[]` and synthesize a summary —
+ * but in `pill` mode that double-counts (marker + pill share an
+ * anomaly), and the markup shape doesn't carry severity/direction
+ * metadata. This helper returns the canonical semantic summary so
+ * `ChartAriaLive` (and any future a11y consumer) reads from one
+ * source.
+ */
+export function computeAnomalySummary(options: ComputeAnomalySummaryOptions): AnomalySummary[] {
+  const {
+    data,
+    method = 'iqr',
+    k = 1.5,
+    idPrefix = 'anomaly',
+    valueFormatter,
+    severityHighFraction = 0.25,
+  } = options;
+  void method; // forward compat — same as computeAnomalyOverlay
+
+  const formatValue = valueFormatter ?? ((v: number) => v.toFixed(2));
+  const hits = collectAnomalyHits(data, k);
+  if (hits.length === 0) return [];
+
+  // Severity bucketing: rank anomalies by severity descending; the
+  // top `severityHighFraction` (default 25%) get `'high'`. Single-
+  // anomaly fixtures: that one IS the highest, so it gets 'high'.
+  const sortedSeverities = hits.map((h) => h.severity).sort((a, b) => b - a);
+  const highCount = Math.max(1, Math.ceil(sortedSeverities.length * severityHighFraction));
+  const highCutoff = sortedSeverities[highCount - 1] ?? sortedSeverities[0] ?? Infinity;
+
+  return hits.map((hit) => {
+    const direction: AnomalyDirection = hit.direction === '↑' ? 'above' : 'below';
+    const formattedY = formatValue(hit.point.y);
+    const severityBucket: AnomalySeverityBucket = hit.severity >= highCutoff ? 'high' : 'medium';
+    return {
+      id: `${idPrefix}-${hit.sourceIndex}`,
+      x: hit.point.x,
+      y: hit.point.y,
+      formattedY,
+      direction,
+      severity: hit.severity,
+      severityBucket,
+      ariaLabel: `Outlier ${direction} expected at x=${String(hit.point.x)}, y=${formattedY} (${severityBucket} severity)`,
+    };
+  });
 }
