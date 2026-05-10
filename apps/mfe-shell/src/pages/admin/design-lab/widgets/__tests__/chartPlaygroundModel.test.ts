@@ -481,6 +481,16 @@ describe('chartPlaygroundModel — preset gallery', () => {
     expect(getChartPresets('globe-chart').length).toBeGreaterThanOrEqual(4);
   });
 
+  // Faz 21.11 PR-Playground-Coverage-2: heatmap / waterfall / funnel
+  // gained preset galleries so all 17 chart wrappers (12 2D + 4 3D + 1
+  // gauge) render a non-empty Examples gallery. Locks the contract that
+  // every wrapper with LIVE_PROP_SUPPORT also has CHART_PRESETS.
+  it('returns presets for heatmap / waterfall / funnel wrappers (PR-Playground-Coverage-2)', () => {
+    expect(getChartPresets('heatmap-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('waterfall-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('funnel-chart').length).toBeGreaterThanOrEqual(5);
+  });
+
   it('returns empty array for non-existent charts (no preset wired)', () => {
     expect(getChartPresets('non-existent-chart')).toEqual([]);
   });

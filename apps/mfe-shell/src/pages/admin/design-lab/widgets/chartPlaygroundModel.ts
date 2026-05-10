@@ -1985,6 +1985,178 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       statePatch: { access: 'readonly' },
     },
   ],
+  // ─────────────────────────────────────────────────────────────────
+  // Faz 21.11 PR-Playground-Coverage-2 — fill remaining 3 wrappers
+  // (heatmap / waterfall / funnel) that had LIVE_PROP_SUPPORT but no
+  // CHART_PRESETS gallery. Mirrors the bar/line/area pattern.
+  // ─────────────────────────────────────────────────────────────────
+  'heatmap-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Default 2D density matrix with auto value range.',
+      statePatch: {},
+    },
+    {
+      id: 'with-values',
+      label: 'With Values',
+      tag: 'labels',
+      description: 'Show numeric values inside each cell for precise read.',
+      statePatch: { showValues: true },
+    },
+    {
+      id: 'with-legend',
+      label: 'With Legend',
+      tag: 'legend',
+      description: 'Display the visualMap legend strip alongside the matrix.',
+      statePatch: { showLegend: true },
+    },
+    {
+      id: 'fixed-range',
+      label: 'Fixed Range (0-100)',
+      tag: 'scale',
+      description: 'Pin min/max to absolute scale instead of observed range.',
+      statePatch: { min: 0, max: 100 },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'compact',
+      label: 'Compact Density',
+      tag: 'density',
+      description: 'Tighter cell spacing + smaller value labels.',
+      statePatch: { density: 'compact' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — cell click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  'waterfall-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Vertical waterfall with connector lines + animation.',
+      statePatch: {},
+    },
+    {
+      id: 'horizontal',
+      label: 'Horizontal',
+      tag: 'orientation',
+      description: 'Switch to horizontal layout for long-label scenarios.',
+      statePatch: { orientation: 'horizontal' },
+    },
+    {
+      id: 'no-connectors',
+      label: 'No Connectors',
+      tag: 'visual',
+      description: 'Hide the connector lines between bars (cleaner stacked look).',
+      statePatch: { showConnector: false },
+    },
+    {
+      id: 'with-values',
+      label: 'With Values',
+      tag: 'labels',
+      description: 'Show numeric value labels above each bar segment.',
+      statePatch: { showValues: true },
+    },
+    {
+      id: 'with-legend',
+      label: 'With Legend',
+      tag: 'legend',
+      description: 'Display the increase/decrease/total legend below the chart.',
+      statePatch: { showLegend: true },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — bar click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  'funnel-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Vertical conversion funnel with descending sort.',
+      statePatch: {},
+    },
+    {
+      id: 'horizontal',
+      label: 'Horizontal',
+      tag: 'orientation',
+      description: 'Horizontal layout for embedded sidebar dashboards.',
+      statePatch: { orientation: 'horizontal' },
+    },
+    {
+      id: 'ascending',
+      label: 'Ascending',
+      tag: 'sort',
+      description: 'Reverse the conversion direction (smallest stage on top).',
+      statePatch: { sort: 'ascending' },
+    },
+    {
+      id: 'no-sort',
+      label: 'Original Order',
+      tag: 'sort',
+      description: 'Preserve insertion order instead of sorting by value.',
+      statePatch: { sort: 'none' },
+    },
+    {
+      id: 'with-conversion',
+      label: 'With Conversion %',
+      tag: 'labels',
+      description: 'Show stage-to-stage conversion percentage labels.',
+      statePatch: { showConversion: true },
+    },
+    {
+      id: 'labels-outside',
+      label: 'Labels Outside',
+      tag: 'labels',
+      description: 'Move labels outside the funnel for compact bodies.',
+      statePatch: { labelPosition: 'outside' },
+    },
+    {
+      id: 'left-aligned',
+      label: 'Left-Aligned',
+      tag: 'layout',
+      description: 'Align funnel to the left edge (common for kanban boards).',
+      statePatch: { funnelAlign: 'left' },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — segment click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
 };
 
 /**
