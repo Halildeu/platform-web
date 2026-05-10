@@ -211,6 +211,129 @@ export function sampleLines3DA11y(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Globe — multi-layer geo sampler (Faz 21.11 P1c)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Single ECharts globe scatter / bar layer entry as the sampler sees
+ * it. The wrapper-level public type (`GlobeScatterDataPoint`,
+ * `GlobeBarDataPoint`) is richer; this is the minimal slice the
+ * sampler needs.
+ */
+export interface GlobeSamplerScatterDatum {
+  lon: number;
+  lat: number;
+  value?: number;
+  label?: string;
+}
+
+/** Single line / arc on the globe (great-circle from→to). */
+export interface GlobeSamplerLineDatum {
+  from: readonly [number, number];
+  to: readonly [number, number];
+  value?: number;
+  label?: string;
+  /** Optional pre-resolved endpoint labels (e.g. city names). */
+  fromLabel?: string;
+  toLabel?: string;
+}
+
+/** A single Globe layer projected to its sampler shape. */
+export type GlobeSamplerLayer =
+  | { type: 'scatter3D'; name?: string; data: ReadonlyArray<GlobeSamplerScatterDatum> }
+  | { type: 'bar3D'; name?: string; data: ReadonlyArray<GlobeSamplerScatterDatum> }
+  | { type: 'lines3D'; name?: string; data: ReadonlyArray<GlobeSamplerLineDatum> };
+
+/**
+ * Sample a multi-layer Globe dataset. Each layer contributes its own
+ * row format (scatter / bar = `(lon=…, lat=…)`; lines = `from →
+ * to`); the cap is shared across layers to keep the hidden table
+ * tractable. Cap enforcement mirrors `sampleLines3DA11y` — every
+ * push site early-breaks once `samples.length === cap`.
+ *
+ * @param layers Multi-layer payload (`GlobeSamplerLayer`).
+ * @param cap    Maximum samples (default 1000). INVARIANT:
+ *   `sampledCount <= cap`.
+ */
+export function sampleGlobeLayersA11y(
+  layers: ReadonlyArray<GlobeSamplerLayer>,
+  cap: number = 1000,
+): A11ySampleResult {
+  let sourceCount = 0;
+  for (const layer of layers) sourceCount += layer.data.length;
+  if (sourceCount === 0) {
+    return { samples: [], sourceCount: 0, sampledCount: 0 };
+  }
+
+  const samples: A11ySample[] = [];
+  // Build full enumeration first when total fits under the cap. The
+  // wrapper's chart audit then doesn't need to disclose sampling.
+  if (sourceCount <= cap) {
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i];
+      const layerLabel = layer.name ?? `Layer ${i + 1}`;
+      if (layer.type === 'lines3D') {
+        for (let j = 0; j < layer.data.length; j++) {
+          const d = layer.data[j];
+          const fromTxt = d.fromLabel ?? `(lon=${d.from[0]}, lat=${d.from[1]})`;
+          const toTxt = d.toLabel ?? `(lon=${d.to[0]}, lat=${d.to[1]})`;
+          samples.push({
+            label: d.label ?? `${layerLabel}: ${fromTxt} → ${toTxt}`,
+            value: d.value ?? 0,
+          });
+        }
+      } else {
+        for (let j = 0; j < layer.data.length; j++) {
+          const d = layer.data[j];
+          samples.push({
+            label: d.label ?? `${layerLabel}: (lon=${d.lon}, lat=${d.lat})`,
+            value: d.value ?? 0,
+          });
+        }
+      }
+    }
+    return { samples, sourceCount, sampledCount: samples.length };
+  }
+
+  // Sampled mode — distribute the cap evenly across non-empty
+  // layers; each layer strides its own data.
+  let nonEmptyLayerCount = 0;
+  for (const layer of layers) {
+    if (layer.data.length > 0) nonEmptyLayerCount++;
+  }
+  const perLayer = nonEmptyLayerCount > 0 ? Math.max(1, Math.floor(cap / nonEmptyLayerCount)) : 1;
+
+  outer: for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i];
+    if (layer.data.length === 0) continue;
+    const layerLabel = layer.name ?? `Layer ${i + 1}`;
+    const stride = Math.max(1, Math.ceil(layer.data.length / perLayer));
+    if (layer.type === 'lines3D') {
+      for (let j = 0; j < layer.data.length; j += stride) {
+        if (samples.length >= cap) break outer;
+        const d = layer.data[j];
+        const fromTxt = d.fromLabel ?? `(lon=${d.from[0]}, lat=${d.from[1]})`;
+        const toTxt = d.toLabel ?? `(lon=${d.to[0]}, lat=${d.to[1]})`;
+        samples.push({
+          label: d.label ?? `${layerLabel}: ${fromTxt} → ${toTxt}`,
+          value: d.value ?? 0,
+        });
+      }
+    } else {
+      for (let j = 0; j < layer.data.length; j += stride) {
+        if (samples.length >= cap) break outer;
+        const d = layer.data[j];
+        samples.push({
+          label: d.label ?? `${layerLabel}: (lon=${d.lon}, lat=${d.lat})`,
+          value: d.value ?? 0,
+        });
+      }
+    }
+  }
+  return { samples, sourceCount, sampledCount: samples.length };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Caption builder                                                    */
 /* ------------------------------------------------------------------ */
 

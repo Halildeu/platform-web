@@ -1,0 +1,659 @@
+'use client';
+
+/**
+ * Globe — Faz 21.11 P1c (3D Extension Pack — geo sphere with layers).
+ *
+ * Renders an ECharts `globe` component (a 3D sphere) with one or
+ * more `coordinateSystem: 'globe'` series layers (scatter3D /
+ * lines3D / bar3D). The wrapper gates its render on
+ * `useRequiredEChartsGL` so a host without WebGL surfaces a
+ * graceful unsupported state.
+ *
+ * Codex thread `019e10f8` iter-1 absorbed:
+ *   - Public data API is `layers: GlobeLayer[]` ONLY. No convenience
+ *     `points?` / `lines?` / `bars?` top-level props (would create
+ *     ordering/precedence ambiguity with the layer-aware click /
+ *     a11y contract).
+ *   - No default `baseTexture`. Wrapper does not bundle world
+ *     textures or HDR environments — consumer supplies URLs / canvases.
+ *   - No wrapper-owned `echarts.registerMap('world', ...)` call.
+ *     `regions[]` is passthrough; named country styling needs
+ *     consumer-side map data registration.
+ *   - `displacementScale` is only emitted when `heightTexture` is set
+ *     (no-op otherwise).
+ *   - A11y data table goes through `sampleGlobeLayersA11y` (layer-
+ *     aware: scatter/bar `(lon=…, lat=…)`, lines `from → to`).
+ *   - Click payload routes everything through `datum.{layerIndex,
+ *     layerType, lon, lat, ...}`; top-level `value` only when a real
+ *     numeric metric exists.
+ *   - `markups` accepted but NO-OP on Globe.
+ *
+ * @see Scatter3D / Surface3D / Lines3D — peers using the same
+ *   lifecycle helper.
+ */
+import React, { useCallback, useMemo, useRef } from 'react';
+import type { AccessControlledProps } from '@mfe/shared-types';
+import { resolveAccessState } from '@mfe/shared-types';
+import { cn } from './utils/cn';
+import { ChartAccessGate } from './access/ChartAccessGate';
+import { guardChartCallback } from './access/guardChartCallback';
+import { useEChartsRenderer } from './renderers';
+import { useRequiredEChartsGL } from './renderers/gl';
+import { useChartTheme } from './theme/useChartTheme';
+import type {
+  ChartThemePreference,
+  ChartDecalPreference,
+  ChartDensityPreference,
+  ChartAccentPreference,
+} from './theme/useChartTheme';
+import { CHART_CANVAS_HEIGHT } from './chartSize';
+import { formatCompact } from './utils/formatters';
+const escapeHtml = (t: string): string =>
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
+import {
+  sampleGlobeLayersA11y,
+  buildSampledCaption,
+  type GlobeSamplerLayer,
+} from './a11y/sampling';
+import type { EChartsOption } from './renderers/echarts-imports';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+export type ChartSize = 'sm' | 'md' | 'lg';
+
+export type { ChartClickEvent } from './types';
+import type { ChartClickEvent as ChartClickEventCanonical } from './types';
+type ChartClickEvent = ChartClickEventCanonical;
+
+export type { ChartMarkup, ChartMarkupClickEvent } from './types';
+import type { ChartMarkup, ChartMarkupClickEvent } from './types';
+
+/** Single point datum on a Globe scatter or bar layer. */
+export interface GlobeScatterDatum {
+  /** Longitude (-180 to 180). */
+  lon: number;
+  /** Latitude (-90 to 90). */
+  lat: number;
+  /** Optional metric (visualMap dimension; tooltip + a11y row). */
+  value?: number;
+  /** Optional display label. */
+  label?: string;
+  /** Optional per-point colour override. */
+  color?: string;
+  /** Optional per-point symbol size (scatter) or bar height (bar). */
+  size?: number;
+}
+
+/** Single arc / great-circle path on a Globe lines layer. */
+export interface GlobeLineDatum {
+  /** Origin `[lon, lat]`. */
+  from: readonly [number, number];
+  /** Destination `[lon, lat]`. */
+  to: readonly [number, number];
+  /** Optional metric (tooltip + a11y row). */
+  value?: number;
+  /** Optional display label (e.g. flight code). */
+  label?: string;
+  /** Optional pre-resolved endpoint city / station name. */
+  fromLabel?: string;
+  /** Optional pre-resolved endpoint city / station name. */
+  toLabel?: string;
+  /** Optional per-line colour override. */
+  color?: string;
+}
+
+/** Discriminated union for Globe layer entries. */
+export type GlobeLayer =
+  | {
+      id?: string;
+      name?: string;
+      type: 'scatter3D';
+      data: GlobeScatterDatum[];
+      symbolSize?: number;
+    }
+  | {
+      id?: string;
+      name?: string;
+      type: 'bar3D';
+      data: GlobeScatterDatum[];
+      barSize?: number;
+    }
+  | {
+      id?: string;
+      name?: string;
+      type: 'lines3D';
+      data: GlobeLineDatum[];
+      lineWidth?: number;
+    };
+
+/** Country / region style override (passthrough). */
+export interface GlobeRegion {
+  name: string;
+  itemStyle?: { color?: string; opacity?: number };
+}
+
+export interface GlobeProps extends AccessControlledProps {
+  /** Multi-layer geo data (required). At least one non-empty layer to render. */
+  layers: GlobeLayer[];
+  /** Visual size variant. @default "md" */
+  size?: ChartSize;
+  /** Custom value formatter (used in tooltip + a11y data table). */
+  valueFormatter?: (value: number) => string;
+  /** Animate on mount. @default true */
+  animate?: boolean;
+  /** Chart title. */
+  title?: string;
+  /** Accessible description. */
+  description?: string;
+  /** Additional class name. */
+  className?: string;
+  /**
+   * Globe surface texture URL (or canvas). Wrapper has NO default —
+   * consumer supplies. Codex thread `019e10f8` iter-1: the wrapper
+   * must not bundle world map / HDR assets.
+   */
+  baseTexture?: string;
+  /** Optional terrain elevation texture. */
+  heightTexture?: string;
+  /**
+   * Terrain displacement multiplier (only effective when
+   * `heightTexture` is set; the helper omits the option otherwise).
+   */
+  displacementScale?: number;
+  /** Optional environment / panorama URL (HDR). */
+  environment?: string;
+  /**
+   * Country region styling (passthrough). Named country rendering
+   * requires consumer-side `echarts.registerMap('world', geoJson)` —
+   * the wrapper does NOT register maps to avoid global mutable state.
+   */
+  regions?: GlobeRegion[];
+  /** Callback fired when a data point is clicked. */
+  onDataPointClick?: (event: ChartClickEvent) => void;
+  /** Visual overlay markups — accepted but NO-OP on Globe. */
+  markups?: ChartMarkup[];
+  /** Callback fired when a markup overlay is clicked (no-op on Globe). */
+  onMarkupClick?: (event: ChartMarkupClickEvent) => void;
+  /** Theme override. @default "auto" */
+  theme?: ChartThemePreference;
+  /** Decal pattern override. @default "auto" */
+  decal?: ChartDecalPreference;
+  /** Density override. @default "auto" */
+  density?: ChartDensityPreference;
+  /** Accent palette override. @default "auto" */
+  accent?: ChartAccentPreference;
+  /** Anomaly summary forward (consumer-provided). */
+  anomalySummary?: AnomalySummary[];
+  /** Optional override of the anomaly announcement template. */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
+  /** Native ECharts `viewControl` passthrough (camera / auto-rotate). */
+  viewControl?: Record<string, unknown>;
+  /** Native ECharts `light` passthrough. */
+  light?: Record<string, unknown>;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pure option builder (Codex thread 019e10f8 iter-1 extraction)      */
+/* ------------------------------------------------------------------ */
+
+export interface BuildGlobeOptionInput {
+  layers: GlobeLayer[];
+  palette: readonly string[];
+  fmt: (value: number) => string;
+  animate: boolean;
+  baseTexture?: string;
+  heightTexture?: string;
+  displacementScale?: number;
+  environment?: string;
+  regions?: GlobeRegion[];
+  viewControl?: Record<string, unknown>;
+  light?: Record<string, unknown>;
+}
+
+export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
+  const {
+    layers,
+    palette,
+    fmt,
+    animate,
+    baseTexture,
+    heightTexture,
+    displacementScale,
+    environment,
+    regions,
+    viewControl,
+    light,
+  } = input;
+
+  // Build globe component config. `displacementScale` only emitted
+  // when `heightTexture` is set (Codex iter-1: no standalone effect).
+  const globeOption: Record<string, unknown> = {
+    viewControl: viewControl ?? { autoRotate: false, distance: 200 },
+    light: light ?? {
+      main: { intensity: 1.2, shadow: false },
+      ambient: { intensity: 0.3 },
+    },
+  };
+  if (baseTexture !== undefined) globeOption.baseTexture = baseTexture;
+  if (heightTexture !== undefined) {
+    globeOption.heightTexture = heightTexture;
+    if (displacementScale !== undefined) globeOption.displacementScale = displacementScale;
+  }
+  if (environment !== undefined) globeOption.environment = environment;
+  if (regions !== undefined) globeOption.regions = regions;
+
+  // Per-layer series. `coordinateSystem: 'globe'` is enforced by the
+  // wrapper — consumer cannot override it (would break the geo
+  // semantic and ECharts would refuse to render).
+  let valueMin = Number.POSITIVE_INFINITY;
+  let valueMax = Number.NEGATIVE_INFINITY;
+  let hasNumericLayer = false;
+
+  const series = layers.map((layer, i) => {
+    const baseColor = palette[i % Math.max(1, palette.length)];
+    const layerName = layer.name ?? `Layer ${i + 1}`;
+    if (layer.type === 'scatter3D') {
+      // ECharts globe scatter3D `data` items: [lon, lat, value, ...]
+      const data = layer.data.map((d) => {
+        const v = d.value ?? 0;
+        if (d.value !== undefined) {
+          if (v < valueMin) valueMin = v;
+          if (v > valueMax) valueMax = v;
+          hasNumericLayer = true;
+        }
+        const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
+        if (d.label !== undefined) item.name = d.label;
+        if (d.color !== undefined) item.itemStyle = { color: d.color };
+        if (d.size !== undefined) item.symbolSize = d.size;
+        return item;
+      });
+      return {
+        name: layerName,
+        type: 'scatter3D',
+        coordinateSystem: 'globe',
+        data,
+        symbolSize: layer.symbolSize ?? 8,
+        itemStyle: { color: baseColor },
+      };
+    }
+    if (layer.type === 'bar3D') {
+      const data = layer.data.map((d) => {
+        const v = d.value ?? 0;
+        if (d.value !== undefined) {
+          if (v < valueMin) valueMin = v;
+          if (v > valueMax) valueMax = v;
+          hasNumericLayer = true;
+        }
+        const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
+        if (d.label !== undefined) item.name = d.label;
+        if (d.color !== undefined) item.itemStyle = { color: d.color };
+        return item;
+      });
+      return {
+        name: layerName,
+        type: 'bar3D',
+        coordinateSystem: 'globe',
+        data,
+        barSize: layer.barSize ?? 1,
+        itemStyle: { color: baseColor },
+      };
+    }
+    // lines3D layer
+    const data = layer.data.map((d) => ({
+      coords: [
+        [d.from[0], d.from[1]],
+        [d.to[0], d.to[1]],
+      ],
+      ...(d.color ? { lineStyle: { color: d.color } } : {}),
+    }));
+    return {
+      name: layerName,
+      type: 'lines3D',
+      coordinateSystem: 'globe',
+      data,
+      lineStyle: { color: baseColor, width: layer.lineWidth ?? 1 },
+    };
+  });
+
+  // visualMap only when at least one numeric scatter / bar layer
+  // contributes values — lines-only globe should NOT show a colour
+  // scale (Codex iter-1).
+  const visualMap = hasNumericLayer
+    ? {
+        show: false,
+        // Geo data tuples are [lon, lat, value]; dimension 2 = value.
+        dimension: 2,
+        min: Number.isFinite(valueMin) ? valueMin : 0,
+        max: Number.isFinite(valueMax) ? valueMax : 1,
+        inRange: { color: [palette[0], palette[palette.length - 1] ?? palette[0]] },
+      }
+    : undefined;
+
+  const option: Record<string, unknown> = {
+    globe: globeOption,
+    tooltip: {
+      formatter: (params: { value?: number[]; name?: string; seriesIndex?: number }) => {
+        const sIdx = params.seriesIndex ?? 0;
+        const layer = layers[sIdx];
+        const layerName = escapeHtml(layer?.name ?? `Layer ${sIdx + 1}`);
+        const [a, b, c] = params.value ?? [];
+        const labelLine = params.name ? `<b>${escapeHtml(params.name)}</b><br/>` : '';
+        return `${labelLine}<i>${layerName}</i><br/>lon: ${escapeHtml(String(a))}<br/>lat: ${escapeHtml(String(b))}<br/>value: ${escapeHtml(fmt(c ?? 0))}`;
+      },
+    },
+    animation: animate,
+    series,
+  };
+  if (visualMap !== undefined) option.visualMap = visualMap;
+  return option as EChartsOption;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
+const GlobeInner = React.forwardRef<HTMLDivElement, Omit<GlobeProps, 'access' | 'accessReason'>>(
+  function GlobeInner(
+    {
+      layers,
+      size = 'md',
+      valueFormatter,
+      animate = true,
+      title,
+      description,
+      className,
+      baseTexture,
+      heightTexture,
+      displacementScale,
+      environment,
+      regions,
+      onDataPointClick,
+      markups: _markups,
+      onMarkupClick: _onMarkupClick,
+      theme: themePreference = 'auto',
+      decal: decalPreference = 'auto',
+      density: densityPreference = 'auto',
+      accent: accentPreference = 'auto',
+      anomalySummary,
+      formatAnomalyAnnouncement,
+      viewControl,
+      light,
+      ...rest
+    },
+    forwardedRef,
+  ) {
+    const height = CHART_CANVAS_HEIGHT[size];
+    // Codex iter-1 P1c: empty derivation includes total layer-data
+    // count, mirroring the Lines3D fix.
+    const totalData = useMemo(
+      () => (layers ?? []).reduce((acc, l) => acc + l.data.length, 0),
+      [layers],
+    );
+    const isEmpty = !layers || layers.length === 0 || totalData === 0;
+    const fmt = valueFormatter ?? formatCompact;
+
+    const gl = useRequiredEChartsGL({ enabled: !isEmpty });
+    const glReady = gl.status === 'ready';
+
+    const ownContainerRef = useRef<HTMLDivElement | null>(null);
+
+    const { themeObject, effectivePalette } = useChartTheme({
+      theme: themePreference,
+      decal: decalPreference,
+      density: densityPreference,
+      accent: accentPreference,
+    });
+
+    const option = useMemo((): EChartsOption | null => {
+      if (isEmpty || !glReady) return null;
+      const palette = effectivePalette ?? ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444'];
+      return buildGlobeOption({
+        layers,
+        palette,
+        fmt,
+        animate,
+        baseTexture,
+        heightTexture,
+        displacementScale,
+        environment,
+        regions,
+        viewControl,
+        light,
+      });
+    }, [
+      layers,
+      isEmpty,
+      glReady,
+      effectivePalette,
+      fmt,
+      animate,
+      baseTexture,
+      heightTexture,
+      displacementScale,
+      environment,
+      regions,
+      viewControl,
+      light,
+    ]);
+
+    const handleClick = useCallback(
+      (params: unknown) => {
+        if (!onDataPointClick) return;
+        const p = params as {
+          value?: number[];
+          name?: string;
+          seriesIndex?: number;
+          dataIndex?: number;
+        };
+        const sIdx = p.seriesIndex ?? 0;
+        const layer = layers[sIdx];
+        const layerType = layer?.type;
+        const [lon, lat, value] = p.value ?? [];
+        // Datum-only canonical click payload (Codex iter-1 P1c). Top-
+        // level `value` only when a real numeric metric exists.
+        const numericValue =
+          typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+        onDataPointClick({
+          datum: {
+            chartType: 'globe',
+            layerId: layer && 'id' in layer ? layer.id : undefined,
+            layerName: layer?.name ?? `Layer ${sIdx + 1}`,
+            layerIndex: sIdx,
+            layerType,
+            dataIndex: p.dataIndex ?? -1,
+            lon,
+            lat,
+            value: numericValue,
+            label: p.name,
+          },
+          seriesId: layer && 'id' in layer ? layer.id : undefined,
+          ...(numericValue !== undefined ? { value: numericValue } : {}),
+          label: p.name,
+        });
+      },
+      [onDataPointClick, layers],
+    );
+
+    const { containerRef, instance } = useEChartsRenderer({
+      option: option ?? ({} as EChartsOption),
+      theme: themeObject,
+      onClick: onDataPointClick ? handleClick : undefined,
+    });
+
+    // Layer-aware sample for the hidden a11y data table. Cap shared
+    // across all layers to keep the table tractable.
+    const a11ySamplerInput: GlobeSamplerLayer[] = useMemo(
+      () =>
+        (layers ?? []).map((l) => {
+          if (l.type === 'lines3D') {
+            return {
+              type: 'lines3D' as const,
+              name: l.name,
+              data: l.data.map((d) => ({
+                from: d.from,
+                to: d.to,
+                value: d.value,
+                label: d.label,
+                fromLabel: d.fromLabel,
+                toLabel: d.toLabel,
+              })),
+            };
+          }
+          return {
+            type: l.type,
+            name: l.name,
+            data: l.data.map((d) => ({ lon: d.lon, lat: d.lat, value: d.value, label: d.label })),
+          };
+        }),
+      [layers],
+    );
+    const a11ySample = useMemo(
+      () =>
+        isEmpty
+          ? { samples: [], sourceCount: 0, sampledCount: 0 }
+          : sampleGlobeLayersA11y(a11ySamplerInput, 1000),
+      [a11ySamplerInput, isEmpty],
+    );
+    const a11yTitle = useMemo(
+      () =>
+        buildSampledCaption(title, {
+          sourceCount: a11ySample.sourceCount,
+          sampledCount: a11ySample.sampledCount,
+          unit: 'points',
+        }),
+      [title, a11ySample.sourceCount, a11ySample.sampledCount],
+    );
+    const a11y = useChartA11y({
+      chartType: 'globe',
+      data: a11ySample.samples,
+      title: a11yTitle,
+      description,
+      valueFormatter: fmt,
+      echartsInstance: instance,
+    });
+
+    const setRefs = useCallback(
+      (node: HTMLDivElement | null) => {
+        ownContainerRef.current = node;
+        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        if (typeof forwardedRef === 'function') forwardedRef(node);
+        else if (forwardedRef)
+          (forwardedRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      },
+      [forwardedRef, containerRef],
+    );
+
+    if (isEmpty) {
+      return (
+        <div
+          ref={forwardedRef}
+          className={cn(
+            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+            className,
+          )}
+          style={{ height }}
+          role="img"
+          aria-label={a11y.ariaLabel}
+          data-testid="globe-chart-empty"
+          {...rest}
+        >
+          Veri yok
+        </div>
+      );
+    }
+
+    if (gl.status === 'unsupported') {
+      return (
+        <div
+          ref={forwardedRef}
+          className={cn(
+            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+            className,
+          )}
+          style={{ height }}
+          role="img"
+          aria-label={`${a11y.ariaLabel} — WebGL unavailable`}
+          data-testid="globe-chart-unsupported"
+          data-reason={gl.reason ?? 'webgl-unavailable'}
+          {...rest}
+        >
+          3D rendering requires WebGL, which is not available in this environment.
+        </div>
+      );
+    }
+
+    if (gl.status !== 'ready') {
+      return (
+        <div
+          ref={forwardedRef}
+          className={cn(
+            'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+            className,
+          )}
+          style={{ height }}
+          role="img"
+          aria-label={`${a11y.ariaLabel} — loading`}
+          data-testid="globe-chart-loading"
+          {...rest}
+        >
+          Loading 3D renderer…
+        </div>
+      );
+    }
+
+    return (
+      <ChartA11yShell
+        a11y={a11y}
+        className={className}
+        height={height}
+        testId="globe-chart"
+        setRefs={setRefs}
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
+        {...rest}
+      />
+    );
+  },
+);
+
+GlobeInner.displayName = 'GlobeInner';
+
+/**
+ * Globe — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `GlobeInner`. Faz 21.4 PR-E2 wiring.
+ */
+export const Globe = React.forwardRef<HTMLDivElement, GlobeProps>(function Globe(
+  {
+    access,
+    accessReason,
+    onDataPointClick,
+    onMarkupClick,
+    anomalySummary,
+    formatAnomalyAnnouncement,
+    ...rest
+  },
+  ref,
+) {
+  const { state } = resolveAccessState(access);
+  return (
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <GlobeInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
+      />
+    </ChartAccessGate>
+  );
+});
+Globe.displayName = 'Globe';
+
+export default Globe;

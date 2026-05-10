@@ -178,6 +178,15 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'line',
   },
+  // Faz 21.11 P1c — Globe wrapper (geo sphere with multi-layer).
+  {
+    id: 'globe-chart',
+    name: 'Globe',
+    description: 'Geo küre (multi-layer scatter/lines/bar), WebGL-required.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'sankey',
+  },
   // Interaction
   {
     id: 'chart-container',

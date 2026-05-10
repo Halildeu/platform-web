@@ -45,6 +45,14 @@ export type { Scatter3DProps, Scatter3DDataPoint } from '../Scatter3D';
 // Faz 21.11 P1b — Surface3D + Lines3D type-only public surface.
 export type { Surface3DProps, Surface3DDataPoint, Surface3DShading } from '../Surface3D';
 export type { Lines3DProps, Lines3DPath } from '../Lines3D';
+// Faz 21.11 P1c — Globe type-only surface.
+export type {
+  GlobeProps,
+  GlobeLayer,
+  GlobeScatterDatum,
+  GlobeLineDatum,
+  GlobeRegion,
+} from '../Globe';
 export type { SunburstChartProps } from '../SunburstChart';
 export type { TreemapChartProps } from '../TreemapChart';
 export type { WaterfallChartProps } from '../WaterfallChart';

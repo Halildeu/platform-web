@@ -17,7 +17,7 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  13 chart wrappers (echarts-backed)                                */
+/*  17 chart wrappers (13 2D echarts-backed + 4 3D echarts-gl-backed) */
 /* ------------------------------------------------------------------ */
 
 export { AreaChart } from '../AreaChart';
@@ -51,6 +51,16 @@ export { Surface3D } from '../Surface3D';
 export type { Surface3DProps, Surface3DDataPoint, Surface3DShading } from '../Surface3D';
 export { Lines3D } from '../Lines3D';
 export type { Lines3DProps, Lines3DPath } from '../Lines3D';
+// Faz 21.11 P1c — Globe wrapper. Multi-layer geo sphere. Codex
+// thread `019e10f8` iter-1.
+export { Globe } from '../Globe';
+export type {
+  GlobeProps,
+  GlobeLayer,
+  GlobeScatterDatum,
+  GlobeLineDatum,
+  GlobeRegion,
+} from '../Globe';
 export { SunburstChart } from '../SunburstChart';
 export type { SunburstChartProps } from '../SunburstChart';
 export { TreemapChart } from '../TreemapChart';

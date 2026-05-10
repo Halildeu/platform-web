@@ -5,7 +5,12 @@
  * contracts the 3D wrappers depend on, plus the caption builder.
  */
 import { describe, it, expect } from 'vitest';
-import { sampleSurfaceGridA11y, sampleLines3DA11y, buildSampledCaption } from '../sampling';
+import {
+  sampleSurfaceGridA11y,
+  sampleLines3DA11y,
+  sampleGlobeLayersA11y,
+  buildSampledCaption,
+} from '../sampling';
 
 describe('sampleSurfaceGridA11y', () => {
   it('throws when dataShape does not match data.length (Codex iter-2 invariant)', () => {
@@ -169,6 +174,76 @@ describe('sampleLines3DA11y', () => {
     const out = sampleLines3DA11y(paths, 1000);
     expect(out.sourceCount).toBe(1200);
     expect(out.sampledCount).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe('sampleGlobeLayersA11y', () => {
+  it('returns empty samples for empty layers', () => {
+    expect(sampleGlobeLayersA11y([], 1000)).toEqual({
+      samples: [],
+      sourceCount: 0,
+      sampledCount: 0,
+    });
+  });
+
+  it('emits per-layer rows under cap (scatter / lines / bar)', () => {
+    const layers = [
+      {
+        type: 'scatter3D' as const,
+        name: 'Cities',
+        data: [
+          { lon: -74, lat: 40, value: 8.4, label: 'NYC' },
+          { lon: 28, lat: 41, value: 15.5, label: 'IST' },
+        ],
+      },
+      {
+        type: 'lines3D' as const,
+        name: 'Flights',
+        data: [
+          {
+            from: [-74, 40] as readonly [number, number],
+            to: [28, 41] as readonly [number, number],
+            value: 8000,
+          },
+        ],
+      },
+      {
+        type: 'bar3D' as const,
+        data: [{ lon: 0, lat: 0, value: 1 }],
+      },
+    ];
+    const out = sampleGlobeLayersA11y(layers, 1000);
+    expect(out.sourceCount).toBe(4);
+    expect(out.sampledCount).toBe(4);
+    // Scatter row uses the consumer-supplied label.
+    expect(out.samples[0].label).toBe('NYC');
+    // Lines row uses default `<layerName>: from → to` when no label.
+    expect(out.samples[2].label).toMatch(/Flights:.*→/);
+    // Bar row falls back to layer index when no name.
+    expect(out.samples[3].label).toMatch(/Layer 3/);
+  });
+
+  it('enforces sampledCount <= cap on high-layer-count input', () => {
+    // 1500 single-point scatter layers, cap=1000 → must trim.
+    const layers = Array.from({ length: 1500 }, (_, i) => ({
+      type: 'scatter3D' as const,
+      data: [{ lon: i, lat: i, value: i }],
+    }));
+    const out = sampleGlobeLayersA11y(layers, 1000);
+    expect(out.sourceCount).toBe(1500);
+    expect(out.sampledCount).toBeLessThanOrEqual(1000);
+  });
+
+  it('falls back to (lon=…, lat=…) when no label present', () => {
+    const layers = [
+      {
+        type: 'scatter3D' as const,
+        name: 'Anonymous',
+        data: [{ lon: 10, lat: 20, value: 5 }],
+      },
+    ];
+    const out = sampleGlobeLayersA11y(layers, 1000);
+    expect(out.samples[0].label).toBe('Anonymous: (lon=10, lat=20)');
   });
 });
 

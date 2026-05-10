@@ -45,6 +45,12 @@ import type {
   Surface3DDataPoint,
   Lines3DProps,
   Lines3DPath,
+  // Faz 21.11 P1c — Globe type-only surface.
+  GlobeProps,
+  GlobeLayer,
+  GlobeScatterDatum,
+  GlobeLineDatum,
+  GlobeRegion,
 } from '@mfe/x-charts/ssr';
 
 // Reference each one so the imports are not pruned as unused. The
@@ -70,6 +76,11 @@ type _SSRTypeSurfaceSmoke = [
   Surface3DDataPoint,
   Lines3DProps,
   Lines3DPath,
+  GlobeProps,
+  GlobeLayer,
+  GlobeScatterDatum,
+  GlobeLineDatum,
+  GlobeRegion,
 ];
 
 describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
@@ -141,6 +152,8 @@ describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
       // `019e10d7` iter-2.
       'Surface3D',
       'Lines3D',
+      // Faz 21.11 P1c — Globe wrapper. Codex thread `019e10f8` iter-1.
+      'Globe',
     ];
     const srcDir = path.resolve(__dirname, '..');
     const missing: string[] = [];

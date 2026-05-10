@@ -62,10 +62,14 @@ const CHARTS = [
   // with the 2D wrappers.
   ['scatter-3d-chart', 'Scatter3D'],
   // Faz 21.11 P1b — Surface3D + Lines3D wrappers. Lines3D wrapper
-  // emits multi-series `'line3D'` (singular); the geo/globe
-  // `'lines3D'` family is deferred. Codex thread `019e10d7` iter-2.
+  // emits multi-series `'line3D'` (singular). Codex thread
+  // `019e10d7` iter-2.
   ['surface-3d-chart', 'Surface3D'],
   ['lines-3d-chart', 'Lines3D'],
+  // Faz 21.11 P1c — Globe wrapper. Multi-layer geo sphere; layer
+  // types scatter3D / lines3D / bar3D on coordinateSystem: 'globe'.
+  // Codex thread `019e10f8` iter-1.
+  ['globe-chart', 'Globe'],
 ];
 
 /* ------------------------------------------------------------------ */

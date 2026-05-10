@@ -224,6 +224,8 @@ const PROBE_CHART_WHITELIST = new Set([
   // `019e10d7` iter-2.
   "Surface3D",
   "Lines3D",
+  // Faz 21.11 P1c — Globe wrapper. Codex thread `019e10f8` iter-1.
+  "Globe",
 ]);
 
 /**

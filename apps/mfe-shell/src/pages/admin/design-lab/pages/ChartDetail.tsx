@@ -3426,6 +3426,237 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
 
+  'globe-chart': {
+    id: 'globe-chart',
+    name: 'Globe',
+    description:
+      '3D geo sphere wrapper rendered via lazy `echarts-gl`. Multi-layer model — each layer is a `coordinateSystem: "globe"` series (`scatter3D`, `lines3D`, or `bar3D`). `baseTexture` / `heightTexture` / `environment` are CONSUMER-supplied; the wrapper does NOT bundle world textures or register maps. Faz 21.11 P1c (Codex thread `019e10f8`).',
+    importPath: "import { Globe } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'layers',
+        type: 'GlobeLayer[]',
+        required: true,
+        default: '—',
+        description: 'Multi-layer geo data (required). At least one non-empty layer to render.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter (used in tooltip + a11y data table).',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'baseTexture',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Globe surface texture URL (or canvas). Wrapper has NO default —\nconsumer supplies. Codex thread `019e10f8` iter-1: the wrapper\nmust not bundle world map / HDR assets.',
+      },
+      {
+        name: 'heightTexture',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Optional terrain elevation texture.',
+      },
+      {
+        name: 'displacementScale',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description:
+          'Terrain displacement multiplier (only effective when\n`heightTexture` is set; the helper omits the option otherwise).',
+      },
+      {
+        name: 'environment',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Optional environment / panorama URL (HDR).',
+      },
+      {
+        name: 'regions',
+        type: 'GlobeRegion[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Country region styling (passthrough). Named country rendering\nrequires consumer-side `echarts.registerMap('world', geoJson)` —\nthe wrapper does NOT register maps to avoid global mutable state.",
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a data point is clicked.',
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — accepted but NO-OP on Globe.',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Globe).',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto"',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description: 'Anomaly summary forward (consumer-provided).',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description: 'Optional override of the anomaly announcement template.',
+      },
+      {
+        name: 'viewControl',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description: 'Native ECharts `viewControl` passthrough (camera / auto-rotate).',
+      },
+      {
+        name: 'light',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description: 'Native ECharts `light` passthrough.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<Globe
+  layers={[
+    {
+      type: 'scatter3D',
+      name: 'Major cities',
+      data: [
+        { lon: -74, lat: 40.7, value: 8.4, label: 'New York' },
+        { lon: 28.97, lat: 41.01, value: 15.5, label: 'Istanbul' },
+      ],
+    },
+    {
+      type: 'lines3D',
+      name: 'Flights',
+      data: [
+        { from: [-74, 40.7], to: [28.97, 41.01], value: 8000 },
+      ],
+    },
+  ]}
+  baseTexture="/assets/world.jpg"
+  title="Global ops"
+/>`,
+    features: [
+      'webgl-required',
+      '3d-rendering',
+      'lazy-load',
+      'multi-series',
+      'tooltip',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
+
   /* ---- Interaction & Composition (Faz 21.4-B) ---- */
 
   'kpi-card': {
