@@ -8,7 +8,7 @@
  * `AnomalySummary[]` (PR-A2b-ui detector). When the anomaly stream
  * changes the component fires a SECOND debounced announcement
  * summarising the new outliers ("3 outliers detected, 2 above
- * expected range and 1 below. Highest: y=129 at x=29."). Anomaly
+ * expected range and 1 below. Most extreme: x=Apr, y=129."). Anomaly
  * announcements deduplicate by signature so the same set of
  * outliers re-rendered between data ticks does NOT spam the SR.
  *

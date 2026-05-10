@@ -109,14 +109,17 @@ export const ChartA11yShell: React.FC<ChartA11yShellProps> = ({
       </table>
 
       {/* Faz 21.11 PR-A2b-a11y — single live-region owner. The
-          shell mounts `ChartAriaLive` ONLY when an anomaly stream
-          is supplied (otherwise the inline live region below stays
-          the only region — preserves byte-identical SR behaviour
-          for charts that don't opt into anomaly announcements).
-          When `anomalySummary` IS supplied, the shell defers the
-          base `liveMessage` to `ChartAriaLive` too so we don't
-          double-stamp the DOM with two `<div role="status">`
-          regions for the same chart. */}
+          shell mounts `ChartAriaLive` ONLY when the anomaly stream
+          is non-empty (`hasAnomalies` checks both `Array.isArray`
+          AND `length > 0` — Codex iter-2 §Q1 noted the runtime
+          gate is "non-empty" not just "supplied"). Otherwise the
+          inline live region below stays the only region —
+          preserves byte-identical SR behaviour for charts that
+          don't opt into anomaly announcements. When non-empty
+          anomalies arrive the shell defers the base `liveMessage`
+          to `ChartAriaLive` too so we don't double-stamp the DOM
+          with two `<div role="status">` regions for the same
+          chart. */}
       {hasAnomalies ? (
         <ChartAriaLive
           message={a11y.liveMessage}
