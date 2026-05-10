@@ -137,6 +137,14 @@ vi.mock('@mfe/x-charts', () => {
     useChartExport: () => ({
       exportChart: vi.fn(),
     }),
+    // Faz 21.11 PR-A2b-ui — explanation-pill anomaly overlay hook.
+    // ChartPreviewLive's ScatterAnomalyDemoChart calls
+    // `useAnomalyOverlay({...})` to feed the demo ScatterChart's
+    // `markup` prop. The routing smoke test only cares about which
+    // sentinel renders, so the mock returns an empty markup array.
+    // Real overlay shape is exercised in
+    // `packages/x-charts/src/annotations/__tests__/computeAnomalyOverlay.test.ts`.
+    useAnomalyOverlay: () => [],
     // Performance helpers — minimal stubs so PerfUtilityDemoLive can mount
     // inside the routing smoke tests. The real semantics are exercised in
     // PerfUtilityDemoLive.test.tsx with no mock.
