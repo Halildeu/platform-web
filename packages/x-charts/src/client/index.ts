@@ -40,6 +40,11 @@ export { SankeyChart } from '../SankeyChart';
 export type { SankeyChartProps } from '../SankeyChart';
 export { ScatterChart } from '../ScatterChart';
 export type { ScatterChartProps } from '../ScatterChart';
+// Faz 21.11 P1a — 3D Extension Pack. P1b adds Surface3D + Lines3D;
+// P1c adds Globe. Each wrapper ships under the same client subpath
+// so consumers don't need a separate bundle entry for 3D.
+export { Scatter3D } from '../Scatter3D';
+export type { Scatter3DProps, Scatter3DDataPoint } from '../Scatter3D';
 export { SunburstChart } from '../SunburstChart';
 export type { SunburstChartProps } from '../SunburstChart';
 export { TreemapChart } from '../TreemapChart';

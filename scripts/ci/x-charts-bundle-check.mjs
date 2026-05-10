@@ -216,6 +216,10 @@ const PROBE_CHART_WHITELIST = new Set([
   "FunnelChart",
   "SankeyChart",
   "SunburstChart",
+  // Faz 21.11 P1a — 3D Extension Pack. Each 3D wrapper goes through the
+  // single-chart probe so the lazy-`echarts-gl` boundary is verified per
+  // wrapper. P1b adds Surface3D + Lines3D; P1c adds Globe.
+  "Scatter3D",
 ]);
 
 /**

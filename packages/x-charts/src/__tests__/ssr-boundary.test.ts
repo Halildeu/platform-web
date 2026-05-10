@@ -37,6 +37,9 @@ import type {
   HistoryEntry,
   AccessLevel,
   AccessControlledProps,
+  // Faz 21.11 P1a — 3D Extension Pack public type surface.
+  Scatter3DProps,
+  Scatter3DDataPoint,
 } from '@mfe/x-charts/ssr';
 
 // Reference each one so the imports are not pruned as unused. The
@@ -56,6 +59,8 @@ type _SSRTypeSurfaceSmoke = [
   HistoryEntry,
   AccessLevel,
   AccessControlledProps,
+  Scatter3DProps,
+  Scatter3DDataPoint,
 ];
 
 describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {

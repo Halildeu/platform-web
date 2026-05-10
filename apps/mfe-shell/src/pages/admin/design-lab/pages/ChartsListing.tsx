@@ -151,6 +151,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'sunburst',
   },
+  // Faz 21.11 P1a — 3D Extension Pack. Lazy `echarts-gl` chunk loads
+  // on first 3D mount; WebGL-required.
+  {
+    id: 'scatter-3d-chart',
+    name: 'Scatter3D',
+    description: '3B nokta bulutu, WebGL-required.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'scatter',
+  },
   // Interaction
   {
     id: 'chart-container',

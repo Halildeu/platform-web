@@ -57,6 +57,11 @@ import type {
 } from './theme/useChartTheme';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
+// Tooltip strings include consumer-supplied labels — sanitize per the
+// pattern every other 2D wrapper uses (Codex thread `019e10ab` iter-2
+// caught the missing escape; consumer label could XSS otherwise).
+const escapeHtml = (t: string): string =>
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 import { ChartA11yShell, useChartA11y } from './a11y';
 import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
 import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
@@ -254,8 +259,8 @@ const Scatter3DInner = React.forwardRef<
       tooltip: {
         formatter: (params: { value?: number[]; name?: string }) => {
           const [x, y, z, v] = params.value ?? [];
-          const labelLine = params.name ? `<b>${params.name}</b><br/>` : '';
-          return `${labelLine}x: ${x}<br/>y: ${y}<br/>z: ${z}<br/>value: ${fmt(v ?? 0)}`;
+          const labelLine = params.name ? `<b>${escapeHtml(params.name)}</b><br/>` : '';
+          return `${labelLine}x: ${escapeHtml(String(x))}<br/>y: ${escapeHtml(String(y))}<br/>z: ${escapeHtml(String(z))}<br/>value: ${escapeHtml(fmt(v ?? 0))}`;
         },
       },
       visualMap: {
@@ -288,25 +293,29 @@ const Scatter3DInner = React.forwardRef<
   }, [data, isEmpty, glReady, effectivePalette, fmt, viewControl, grid3D, light, animate]);
 
   const handleClick = useCallback(
-    (params: { value?: number[]; name?: string; dataIndex?: number }) => {
+    (params: unknown) => {
       if (!onDataPointClick) return;
-      const [x, y, z, v] = params.value ?? [];
-      const point = data[params.dataIndex ?? -1];
+      const p = params as { value?: number[]; name?: string; dataIndex?: number };
+      const [x, y, z, v] = p.value ?? [];
+      const point = data[p.dataIndex ?? -1];
+      // Canonical `ChartClickEvent` shape: { datum, value?, label? }
+      // Codex thread `019e10ab` iter-2 caught the original payload's
+      // top-level `chartType`/`seriesIndex`/`dataIndex` fields which
+      // are NOT in the `ChartClickEvent` type — they belonged on
+      // `datum`. Cross-filter wrapper reads from `datum` exclusively.
       onDataPointClick({
-        type: 'datapoint',
-        chartType: 'scatter3d',
-        seriesName: 'Scatter3D',
-        seriesIndex: 0,
-        dataIndex: params.dataIndex ?? -1,
-        value: v ?? 0,
         datum: {
           x,
           y,
           z,
           value: v ?? 0,
           label: point?.label,
-          dataIndex: params.dataIndex ?? -1,
+          dataIndex: p.dataIndex ?? -1,
+          chartType: 'scatter3d',
+          seriesName: 'Scatter3D',
         },
+        value: v ?? 0,
+        label: point?.label,
       });
     },
     [onDataPointClick, data],
@@ -318,19 +327,31 @@ const Scatter3DInner = React.forwardRef<
     onClick: onDataPointClick ? handleClick : undefined,
   });
 
-  // a11y data: each row "(x=…, y=…, z=…)" → value
+  // a11y data: each row "(x=…, y=…, z=…)" → value. Capped at 1000
+  // rows because Scatter3D targets the 100K soft / 1M hard tier — a
+  // hidden table with that many <tr>s would defeat the WebGL claim
+  // (DOM teardown cost). Codex iter-2 flagged the unbounded shell
+  // table risk; the cap keeps SR navigation tractable while still
+  // exposing a representative sample. The chart title prefix tells
+  // SR users when sampling is in effect.
+  const A11Y_TABLE_CAP = 1000;
   const a11yData = useMemo(
     () =>
-      data.map((p, i) => ({
+      data.slice(0, A11Y_TABLE_CAP).map((p, i) => ({
         label: p.label ?? `Point ${i + 1} (x=${p.x}, y=${p.y}, z=${p.z})`,
         value: p.value ?? p.z,
       })),
     [data],
   );
+  const a11yTitle = useMemo(() => {
+    if (data.length <= A11Y_TABLE_CAP) return title;
+    const sampleNote = `(showing first ${A11Y_TABLE_CAP} of ${data.length} points)`;
+    return title ? `${title} ${sampleNote}` : sampleNote;
+  }, [title, data.length]);
   const a11y = useChartA11y({
     chartType: 'scatter3d',
     data: a11yData,
-    title,
+    title: a11yTitle,
     description,
     valueFormatter: fmt,
     echartsInstance: instance,

@@ -150,6 +150,9 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   funnel: 'Funnel chart',
   sankey: 'Sankey diagram',
   sunburst: 'Sunburst chart',
+  // Faz 21.11 P1a — 3D Extension Pack. P1b adds 'Surface 3D chart' +
+  // '3D line chart'; P1c adds 'Globe' (geo).
+  scatter3d: '3D scatter chart',
 };
 
 const defaultFormatter = (v: number): string =>

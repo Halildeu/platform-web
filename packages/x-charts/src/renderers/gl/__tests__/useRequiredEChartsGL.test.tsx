@@ -112,3 +112,37 @@ describe('useRequiredEChartsGL — lifecycle contract', () => {
     expect(mockedDetect).not.toHaveBeenCalled();
   });
 });
+
+// Codex thread `019e10ab` iter-2: the helper header advertises a
+// `'unsupported'/'gl-import-failed'` transition but no test was
+// asserting it. Lock the rejection path so a future regression in
+// `registerEChartsGL` (or the `echarts-gl` shipping shape) doesn't
+// silently leak past the gate.
+describe('useRequiredEChartsGL — registerEChartsGL rejection path', () => {
+  it('transitions to "unsupported" with reason "gl-import-failed" + error when the import rejects', async () => {
+    // Reset registration flag first so the helper attempts the import.
+    resetEChartsGLRegistration();
+
+    // Spy on `registerEChartsGL` and force it to reject. Using
+    // `vi.spyOn` here (vs `vi.mock`) lets the rest of the module —
+    // `isEChartsGLRegistered`, `resetEChartsGLRegistration` — keep
+    // their real implementations.
+    const registerMod = await import('../registerEChartsGL');
+    const rejection = new Error('synthetic GL import failure');
+    const spy = vi.spyOn(registerMod, 'registerEChartsGL').mockRejectedValue(rejection);
+
+    try {
+      // Re-import the helper so it picks up the spied register fn.
+      const helperMod = await import('../useRequiredEChartsGL');
+      const { result } = renderHook(() => helperMod.useRequiredEChartsGL());
+
+      await waitFor(() => {
+        expect(result.current.status).toBe('unsupported');
+      });
+      expect(result.current.reason).toBe('gl-import-failed');
+      expect(result.current.error).toBe(rejection);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
