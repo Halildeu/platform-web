@@ -30,7 +30,7 @@
       }
     },
     "correctness": {
-      "_documentation": "PR-A2a anomaly-preserving LTTB recall config. Consumed by the pure `evaluateBenchmarkCorrectness(thresholds, runCase)` helper in `scripts/ci/benchmark-1m-enforcer.mjs` — the unit suite drives every branch. Production CLI / workflow wiring is intentionally NOT shipped in PR-A2a (Codex thread `019e0f96` iter-3 de-scope: a future PR adds `tsx` runtime + workflow step to turn this into a hard CI gate). Threshold edits MUST land via PR review.",
+      "_documentation": "PR-A2a anomaly-preserving LTTB recall config + PR-A2b CLI/workflow wiring (Codex thread `019e0faa` iter-1). Consumed by `pnpm bench:correctness` (which runs `tsx scripts/ci/benchmark-1m-enforcer.mjs --check-correctness-only`) AND by the pure `evaluateBenchmarkCorrectness(thresholds, runCase)` helper for unit tests. The benchmark-1m workflow runs this gate as a pre-flight before the artifact-driven render KPI step so a recall regression fails the PR check immediately. Threshold edits MUST land via PR review.",
       "spike/million/anomaly-lttb": {
         "minRecallAt2000": 0.95,
         "maxRenderedCount": 2000,

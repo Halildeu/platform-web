@@ -206,6 +206,23 @@ export function unstable_downsampleAnomalyPreservingLTTB(
 ): AnomalyPoint[] {
   const n = data.length;
   if (n === 0) return [];
+
+  // PR-A2b sorted-x precondition (Codex thread `019e0faa` iter-1).
+  // The vanilla LTTB call this function makes downstream relies on a
+  // monotonic x; without that, the triangle-area heuristic and the
+  // first/last anchors collapse onto unrelated points and recall
+  // claims become false. Fail fast with a clear message so callers
+  // sort BEFORE entering the algorithm rather than asking the
+  // downsampler to silently rescue them.
+  for (let i = 1; i < n; i++) {
+    if (data[i].x < data[i - 1].x) {
+      throw new Error(
+        '[anomaly-lttb] input must be sorted ascending by `x`. ' +
+          `Encountered data[${i}].x=${data[i].x} < data[${i - 1}].x=${data[i - 1].x}. ` +
+          'Sort the input on the caller side; auto-sort would hide a contract violation.',
+      );
+    }
+  }
   // The vanilla LTTB skip-rule is mirrored here so callers don't
   // have to special-case `threshold >= data.length`.
   // Codex iter-3 fix: the previous fallback stamped EVERY point
