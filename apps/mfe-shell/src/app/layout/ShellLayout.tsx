@@ -12,6 +12,7 @@ import {
 } from '../../features/notifications/model/notifications.slice';
 import { Sidebar } from './Sidebar';
 import AuditSummaryStrip from './AuditSummaryStrip';
+import { ImpersonationBanner } from './ImpersonationBanner';
 import { ShellHeaderNew, BreadcrumbStrip } from './header';
 import { RouteTracker } from '../router/RouteTracker';
 import { AppRouter } from '../router/AppRouter';
@@ -47,6 +48,12 @@ const ShellChrome: React.FC = () => {
     >
       {/* Fixed header */}
       <ShellHeaderNew />
+
+      {/* User Impersonation v1 (PR-C) — sticky warning banner shown
+          whenever the active token is broker-issued (azp=impersonation-broker).
+          Self-renders as null when there is no broker token, so it's safe to
+          mount unconditionally. */}
+      <ImpersonationBanner />
 
       {/* Fixed sidebar — hidden on mobile (navigation in hamburger drawer) */}
       {showSidebar && !isMobile ? <Sidebar /> : null}

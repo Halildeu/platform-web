@@ -11,6 +11,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import HierarchicalScopePicker from './HierarchicalScopePicker';
+import { ImpersonateAction } from './ImpersonateAction';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
 // Codex 019ddd78 iter-38 P1 — primitive switch from DetailDrawer (read-only
@@ -1679,6 +1680,11 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             </button>
           </div>
         )}
+
+        {/* User Impersonation v1 (PR-C) — SuperAdmin-only impersonate trigger.
+            Component self-renders as null when the current user is not a
+            SuperAdmin, so it's safe to mount unconditionally. */}
+        <ImpersonateAction user={user} />
 
         {/* Profile Section */}
         <section>
