@@ -72,7 +72,7 @@ export const UserMenuDropdown: React.FC = () => {
     }
   }, [user?.lastLoginAt, locale, t]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     // Iter-6 P1 absorb (Codex thread `019e109c`): when impersonation
     // is still active at logout time, the broker httpOnly cookie
     // would otherwise survive the keycloak.logout() federated
@@ -81,10 +81,23 @@ export const UserMenuDropdown: React.FC = () => {
     // sync reducer runs so we still have access to the broker token
     // (which the reducer is about to wipe). The helper is best-effort
     // — any rejection here cannot block logout itself.
+    //
+    // Iter-7 P3 absorb (Codex thread `019e109c`): the previous
+    // {@code void dropBrokerCookieBestEffort(...)} fire-and-forget
+    // pattern raced with the keycloak federated redirect — the
+    // browser could navigate away before the DELETE actually hit the
+    // gateway, leaving the impersonation cookie alive. Swap to
+    // {@code await ... .catch(() => {})} so logout waits for the
+    // cookie drop (best-effort: errors swallowed since the rest of
+    // logout cleans Redux + localStorage regardless).
     const wasImpersonating = selectIsImpersonating(store.getState());
     const brokerToken = store.getState().auth.token ?? null;
     if (wasImpersonating) {
-      void dropBrokerCookieBestEffort(brokerToken);
+      await dropBrokerCookieBestEffort(brokerToken).catch(() => {
+        /* best-effort — already swallowed inside the helper, this
+         * catch only guards against a future regression where the
+         * helper accidentally re-throws. */
+      });
     }
     dispatch(logout());
     if (typeof window !== 'undefined') {
