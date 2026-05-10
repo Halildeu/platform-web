@@ -31,6 +31,7 @@ import { HeatmapChart } from '../HeatmapChart';
 import { PieChart } from '../PieChart';
 import { FunnelChart } from '../FunnelChart';
 import { WaterfallChart } from '../WaterfallChart';
+import { RadarChart } from '../RadarChart';
 import type { AnomalySummary } from '../annotations/computeAnomalyOverlay';
 import { setChartsLocale, __resetChartsLocaleStoreForTests } from '../i18n/locale-store';
 
@@ -158,6 +159,95 @@ describe.each(CHARTS)(
     });
   },
 );
+
+// PR-Radar (Codex thread `019e10a5` iter-1): Radar lives outside the
+// `CHARTS` matrix because its props shape (`indicators` + per-series
+// `data: number[]` aligned with indicator order) doesn't share base
+// props with the Line/Area/Bar/Heatmap/Pie/Funnel/Waterfall family.
+// Codex iter-1 explicitly recommended: "ayrı Radar describe daha iyi:
+// no anomaly single status, kind: 'radar' ile /1 radar indicator
+// anomaly/, custom formatter pass-through". This describe locks the
+// per-wrapper contract for Radar without polluting the generic matrix.
+//
+// `RADAR_ANOM` mirrors what `computeRadarAnomalySummary` would emit:
+// kind='radar', indicatorIndex/indicatorName/seriesName/axisUnit
+// metadata so the radar-aware default formatter ("X radar indicator
+// anomalies … Most extreme: <series>, <indicator>=<value> <unit>")
+// fires the radar branch instead of falling back to flat.
+const RADAR_INDICATORS = [
+  { name: 'Latency', max: 500, unit: 'ms' },
+  { name: 'Throughput', max: 100000 },
+  { name: 'Errors', max: 100 },
+];
+
+const RADAR_SERIES = [
+  { name: 'Q1', data: [120, 50000, 5] },
+  { name: 'Q2', data: [140, 60000, 8] },
+];
+
+const RADAR_ANOM: AnomalySummary = {
+  id: 'radar-anomaly-0-1',
+  kind: 'radar',
+  x: 'Latency',
+  y: 400,
+  formattedY: '400.00',
+  direction: 'above',
+  severity: 0.6,
+  severityBucket: 'high',
+  ariaLabel: 'Outlier above expected at Latency, Q2, value=400.00 ms (high severity)',
+  seriesName: 'Q2',
+  indicatorIndex: 0,
+  indicatorName: 'Latency',
+  axisUnit: 'ms',
+};
+
+describe('RadarChart — anomaly summary forward (PR-Radar)', () => {
+  it('keeps a single aria-live region when anomalySummary is omitted (backwards compat)', () => {
+    render(<RadarChart indicators={RADAR_INDICATORS} series={RADAR_SERIES} />);
+    const liveRegions = document.querySelectorAll('[role="status"]');
+    expect(liveRegions.length).toBe(1);
+    expect(screen.queryByTestId('chart-aria-live-anomalies')).not.toBeInTheDocument();
+  });
+
+  it('mounts the dedicated anomaly region + radar template fires on kind="radar"', () => {
+    render(
+      <RadarChart
+        indicators={RADAR_INDICATORS}
+        series={RADAR_SERIES}
+        anomalySummary={[RADAR_ANOM]}
+      />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    const region = screen.getByTestId('chart-aria-live-anomalies');
+    const text = region.textContent ?? '';
+    // Radar branch hit (NOT flat "1 outlier detected"). Single anomaly
+    // pluralisation: "anomaly" (not "anomalies"); see ChartAriaLive
+    // radar template — `total === 1 ? 'y' : 'ies'`.
+    expect(text).toMatch(/1 radar indicator anomaly/);
+    // Indicator + series + value + unit propagated through the
+    // formatter exactly as the per-indicator IQR detector emits.
+    expect(text).toMatch(/Most extreme: Q2, Latency=400\.00 ms/);
+  });
+
+  it('forwards formatAnomalyAnnouncement override unchanged (custom formatter wins over radar default)', () => {
+    const fmt = vi.fn(() => 'CUSTOM RADAR');
+    render(
+      <RadarChart
+        indicators={RADAR_INDICATORS}
+        series={RADAR_SERIES}
+        anomalySummary={[RADAR_ANOM]}
+        formatAnomalyAnnouncement={fmt}
+      />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('chart-aria-live-anomalies').textContent).toBe('CUSTOM RADAR');
+  });
+});
 
 // Codex iter-1 nice-to-have (Q in plan-time review): access gate cannot
 // strip the anomaly props because they aren't user-facing callbacks.

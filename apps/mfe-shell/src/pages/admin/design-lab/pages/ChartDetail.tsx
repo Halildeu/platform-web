@@ -1536,6 +1536,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Density override.',
       },
       {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Faz 21.11 batch3 PR-Radar — anomaly summary list. When supplied,\nforwarded to `ChartA11yShell` so screen readers receive a polite,\ndebounced outlier announcement using the radar-aware default\nformatter (`X radar indicator anomalies. Most extreme: <series>,\n<indicator>=<value> <unit>`). Pair with\n`computeRadarAnomalySummary({ indicators, series })` —\nper-indicator IQR detector with normalised severity ranking.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.',
+      },
+      {
         name: 'accent',
         type: 'ChartAccentPreference',
         required: false,
