@@ -22,7 +22,16 @@ import telemetryClient from '../telemetry/telemetry-client';
 import { broadcastAuthState } from '../auth/auth-sync';
 import { isPermitAllMode } from '../auth/auth-config';
 import { mapKeycloakProfile } from '../config/auth-helpers';
-import { setAuthPhase, setKeycloakSession } from '../../features/auth/model/auth.slice';
+import {
+  setAuthPhase,
+  setKeycloakSession,
+  selectIsImpersonating,
+} from '../../features/auth/model/auth.slice';
+import {
+  enterImpersonationOrchestration,
+  exitImpersonationOrchestration,
+  type EnterImpersonationOrchestrationPayload,
+} from './impersonation-orchestration';
 import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
 import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
@@ -132,22 +141,32 @@ configureShellServices({
     let previousToken = readAuthState().token ?? null;
     let previousExpiresAt = readAuthState().expiresAt ?? null;
     let previousProfileHash = JSON.stringify(readAuthState().user ?? null);
+    // Iter-6 P2 absorb (Codex thread `019e109c`): track epoch so an
+    // epoch-only delta (e.g. {@code markImpersonationExpired} bumps
+    // it but {@code state.token} stays the broker JWT) still
+    // forwards a notification to canonical auth listeners. The
+    // remote API at line ~432 already does this; iter-6 review
+    // surfaced the canonical surface as drifted.
+    let previousEpoch = readAuthState().authEpoch;
 
     const notify = () => {
       const nextState = readAuthState();
       const token = nextState.token ?? null;
       const expiresAt = nextState.expiresAt ?? null;
       const profileHash = JSON.stringify(nextState.user ?? null);
+      const epoch = nextState.authEpoch;
 
-      if (token !== previousToken) {
-        listener(token);
+      const tokenChanged = token !== previousToken;
+      const epochChanged = epoch !== previousEpoch;
+
+      if (tokenChanged || epochChanged) {
+        // Epoch-only deltas pass {@code force: true} so the canonical
+        // dispatcher (`emitTokenChange`) bypasses its same-token
+        // short-circuit and the fan-out reaches subscribers.
+        listener(token, tokenChanged ? undefined : { force: true });
       }
 
-      if (
-        token !== previousToken ||
-        expiresAt !== previousExpiresAt ||
-        profileHash !== previousProfileHash
-      ) {
+      if (tokenChanged || expiresAt !== previousExpiresAt || profileHash !== previousProfileHash) {
         broadcastAuthState({
           token,
           expiresAt,
@@ -156,6 +175,9 @@ configureShellServices({
         previousToken = token;
         previousExpiresAt = expiresAt;
         previousProfileHash = profileHash;
+      }
+      if (epochChanged) {
+        previousEpoch = epoch;
       }
     };
 
@@ -179,6 +201,14 @@ configureShellServices({
   isTransportReady: () => store.getState().auth.phase === 'transportReady',
   getAuthPhase: () => store.getState().auth.phase,
   getAuthEpoch: () => store.getState().auth.authEpoch,
+  // User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+  // wire orchestration into the canonical shell-services contract so
+  // {@code getShellServices().auth.enterImpersonationSession(...)} is
+  // callable from both the host shell (ImpersonationBanner) and remote
+  // MFEs (ImpersonateAction in mfe-users).
+  enterImpersonationSession: (payload) => enterImpersonationOrchestration(payload),
+  exitImpersonationSession: () => exitImpersonationOrchestration(),
+  isImpersonating: () => selectIsImpersonating(store.getState()),
 });
 
 // Phase 2 PR-HTTP-3: wire the same auth-ready bridge into
@@ -218,6 +248,16 @@ registerAuthReadyResolver(() => createAuthReadyPromise());
 registerRefreshHandler(async (): Promise<RefreshResult> => {
   if (typeof window === 'undefined') {
     return { ok: false, reason: 'no-window' };
+  }
+  // PR-C2 (Codex AGREE thread `019e109c` iter-1 + iter-4): the
+  // single-flight 401 refresh handler MUST NOT call
+  // keycloak.updateToken while an impersonation session is active.
+  // Otherwise the broker exchanged token would be overwritten with
+  // the admin token mid-session, breaking the FSM and audit chain.
+  // The broker has its own TTL and the impersonation-expired
+  // listener observes the 403 SESSION_EXPIRED event when it fires.
+  if (selectIsImpersonating(store.getState())) {
+    return { ok: false, reason: 'impersonation-active' };
   }
   const kc = (window as Record<string, unknown>).__keycloak as
     | {
@@ -326,6 +366,13 @@ registerRefreshHandler(async (): Promise<RefreshResult> => {
   }
 });
 
+/* ------------------------------------------------------------------ */
+/*  User Impersonation v1 PR-C2 — orchestration extracted to            */
+/*  ./impersonation-orchestration.ts so unit tests can exercise the    */
+/*  enter / exit logic without pulling Module Federation remote        */
+/*  imports from this wiring module.                                    */
+/* ------------------------------------------------------------------ */
+
 /* ---- Wire remote module shell-services ---- */
 
 export const wireRemoteShellServices = () => {
@@ -362,6 +409,53 @@ export const wireRemoteShellServices = () => {
       isTransportReady: () => store.getState().auth.phase === 'transportReady',
       getPhase: () => store.getState().auth.phase,
       getEpoch: () => store.getState().auth.authEpoch,
+      /**
+       * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c`
+       * iter-4): start an impersonation session against the supplied
+       * target user. Drives the FSM through {@code refreshing →
+       * transportReady} so concurrent protected requests pause until
+       * the broker token + target authz snapshot land in Redux.
+       */
+      enterImpersonationSession: (payload: EnterImpersonationOrchestrationPayload) =>
+        enterImpersonationOrchestration(payload),
+      /**
+       * PR-C2 audit-complete stop (Codex iter-3 invariant: revoke-first;
+       * on revoke failure no state mutation, banner shows retry).
+       */
+      exitImpersonationSession: () => exitImpersonationOrchestration(),
+      /** PR-C2 quick gate for ImpersonateAction nested-impersonation guard. */
+      isImpersonating: () => selectIsImpersonating(store.getState()),
+      /**
+       * PR-C2 token change subscription. SSE consumers (mfe-audit
+       * useAuditLiveStream) re-open their stream when the broker
+       * token swap arrives. Listener fires immediately with the
+       * current token (consistent with the {@code subscribeAuthToken}
+       * pattern in the legacy host bridge).
+       *
+       * <p>Codex iter-5 P2 absorb (thread `019e109c`): the listener
+       * is now epoch-aware. {@code markImpersonationExpired} bumps
+       * {@code authEpoch} but does NOT change {@code state.token}
+       * (the broker JWT stays in place until the listener restores
+       * the admin or redirects). Without epoch awareness, audit
+       * live-stream subscribers would keep their broker SSE alive
+       * for an unbounded window after expiry. Treating an epoch
+       * delta as a token-change signal forces reconnect against
+       * whatever credential is currently authoritative.
+       */
+      onTokenChange: (listener: (token: string | null) => void) => {
+        let previousToken = store.getState().auth.token ?? null;
+        let previousEpoch = store.getState().auth.authEpoch;
+        listener(previousToken);
+        return store.subscribe(() => {
+          const nextToken = store.getState().auth.token ?? null;
+          const nextEpoch = store.getState().auth.authEpoch;
+          if (nextToken !== previousToken || nextEpoch !== previousEpoch) {
+            previousToken = nextToken;
+            previousEpoch = nextEpoch;
+            listener(nextToken);
+          }
+        });
+      },
     },
   };
   const remotes: Array<{

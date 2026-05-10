@@ -4,9 +4,11 @@ import { ChevronDown, Shield, Settings, User, LogOut } from 'lucide-react';
 import { Avatar, Dropdown, Badge } from '@mfe/design-system';
 import type { DropdownEntry } from '@mfe/design-system';
 import { useAppDispatch, useAppSelector } from '../../store/store.hooks';
+import { store } from '../../store/store';
 import { usePermissions } from '@mfe/auth';
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
-import { logout } from '../../../features/auth/model/auth.slice';
+import { logout, selectIsImpersonating } from '../../../features/auth/model/auth.slice';
+import { dropBrokerCookieBestEffort } from '../../config/impersonation-orchestration';
 import { buildAppRedirectUri } from '../../auth/auth-config';
 import keycloak from '../../auth/keycloakClient';
 import { useShellCommonI18n } from '../../i18n';
@@ -70,7 +72,33 @@ export const UserMenuDropdown: React.FC = () => {
     }
   }, [user?.lastLoginAt, locale, t]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    // Iter-6 P1 absorb (Codex thread `019e109c`): when impersonation
+    // is still active at logout time, the broker httpOnly cookie
+    // would otherwise survive the keycloak.logout() federated
+    // redirect because the {@code logout} reducer can only clear
+    // localStorage + Redux. Side-effect the cookie drop BEFORE the
+    // sync reducer runs so we still have access to the broker token
+    // (which the reducer is about to wipe). The helper is best-effort
+    // — any rejection here cannot block logout itself.
+    //
+    // Iter-7 P3 absorb (Codex thread `019e109c`): the previous
+    // {@code void dropBrokerCookieBestEffort(...)} fire-and-forget
+    // pattern raced with the keycloak federated redirect — the
+    // browser could navigate away before the DELETE actually hit the
+    // gateway, leaving the impersonation cookie alive. Swap to
+    // {@code await ... .catch(() => {})} so logout waits for the
+    // cookie drop (best-effort: errors swallowed since the rest of
+    // logout cleans Redux + localStorage regardless).
+    const wasImpersonating = selectIsImpersonating(store.getState());
+    const brokerToken = store.getState().auth.token ?? null;
+    if (wasImpersonating) {
+      await dropBrokerCookieBestEffort(brokerToken).catch(() => {
+        /* best-effort — already swallowed inside the helper, this
+         * catch only guards against a future regression where the
+         * helper accidentally re-throws. */
+      });
+    }
     dispatch(logout());
     if (typeof window !== 'undefined') {
       keycloak.logout({ redirectUri: buildAppRedirectUri('/login'), federated: true }).catch(() => {

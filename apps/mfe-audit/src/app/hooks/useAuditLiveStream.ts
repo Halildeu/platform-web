@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { getGatewayBaseUrl, resolveAuthToken, resolveTraceId } from '@mfe/shared-http';
 import { AuditEvent } from '../types/audit-event';
 import { ApiAuditEvent, normaliseAuditEvent } from '../utils/normalise-audit-event';
+import { getShellServices } from '../services/shell-services';
 
 type LiveStreamHandlers = {
   onEvent?: (event: AuditEvent) => void;
@@ -193,6 +194,69 @@ export const useAuditLiveStream = (enabled: boolean, handlers: LiveStreamHandler
 
     initialiseStream();
 
+    // User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c`
+    // iter-2 + iter-4 + iter-7): when the broker token swap arrives
+    // (start / hydrate / exit), abort the current SSE stream and
+    // re-open with the fresh token. Without this, the EventSource
+    // keeps the admin identity for the duration of the long-lived
+    // connection and the backend rejects subsequent message frames
+    // once the token swap hits the gateway.
+    //
+    // iter-7 fix (P1-1): the previous implementation called
+    // {@code initialiseStream()} immediately after
+    // {@code abortController.abort()}, but {@code openStream}'s
+    // {@code finally} block runs asynchronously (microtask after the
+    // abort rejects the in-flight {@code reader.read()}). That left
+    // {@code isStreaming === true} when the new initialise ran, so
+    // the guard at line ~177 silently swallowed the reopen and the
+    // SSE stayed dead on the old broker token. Fix: synchronously
+    // clear {@code isStreaming} (and any in-flight abort handle)
+    // BEFORE calling initialiseStream, so the guard cannot eat the
+    // restart. The {@code finally} block stays defensive — it is a
+    // no-op when its controller no longer matches.
+    let unsubscribeTokenChange: (() => void) | undefined;
+    try {
+      const auth = getShellServices().auth;
+      let firstFire = true;
+      unsubscribeTokenChange = auth.onTokenChange?.((nextToken) => {
+        // The bridge fires immediately with the current value at
+        // subscribe time — skip the first invocation to avoid
+        // tearing down the just-opened stream.
+        if (firstFire) {
+          firstFire = false;
+          return;
+        }
+        // Cancel any in-flight fetch + clear fallback / reconnect
+        // timers, then let initialiseStream() re-open against the
+        // new {@link resolveAuthToken} result. The synchronous
+        // {@code isStreaming = false} below is critical: without it
+        // the initialise guard treats the still-tearing-down stream
+        // as "already streaming" and refuses to reopen.
+        abortController?.abort();
+        abortController = null;
+        isStreaming = false;
+        if (fallbackTimer) {
+          clearInterval(fallbackTimer);
+          fallbackTimer = null;
+        }
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        if (!nextToken) {
+          return;
+        }
+        initialiseStream();
+      });
+    } catch (subscribeErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          '[useAuditLiveStream] auth.onTokenChange subscribe failed; SSE will not reconnect on impersonation swap',
+          subscribeErr,
+        );
+      }
+    }
+
     return () => {
       abortController?.abort();
       abortController = null;
@@ -204,6 +268,7 @@ export const useAuditLiveStream = (enabled: boolean, handlers: LiveStreamHandler
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
+      unsubscribeTokenChange?.();
     };
   }, [enabled, handlers]);
 };

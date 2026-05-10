@@ -1,38 +1,25 @@
 /**
- * ImpersonateAction — User Impersonation v1 PR-C scaffolding (NOT MOUNTED).
+ * ImpersonateAction — User Impersonation v1 PR-C2 (Codex AGREE thread
+ * `019e109c` iter-4 absorb).
  *
- * SCOPE NOTE: this component file ships in PR-C as scaffolding only;
- * the JSX mount in UserDetailDrawer is intentionally removed until
- * PR-C2 wires the shell auth state machine integration. See PR-C
- * descope rationale in the commit message.
+ * SuperAdmin-only action mounted inside {@code UserDetailDrawer}.
+ * Captures reason (≥10 chars enforced server-side) + target Keycloak
+ * subject UUID, then delegates to
+ * {@code getShellServices().auth.enterImpersonationSession(...)}. The
+ * orchestration owns the start request, broker cookie write, target
+ * authz/me fetch, queryClient invalidation, Redux dispatch, and
+ * persisted metadata for hydrate + audit-safe stop.
  *
- * PR-C2 target behaviour (after wiring lands):
- *   1. SuperAdmin opens UserDetailDrawer → "Impersonate this user"
- *      button (rendered only when usePermissions().isSuperAdmin())
- *   2. Confirmation form captures reason (≥10 chars enforced server-side)
- *      + target Keycloak subject UUID (PR-C2 will auto-resolve via
- *      user-service so this field disappears)
- *   3. Backend POST /api/v1/impersonation/sessions returns
- *      {sessionId, exchangedToken, expiresAt}
- *   4. Frontend dispatches shellServices.auth.enterImpersonation(
- *        exchangedToken, sessionId
- *      ) so state.auth.token + tokenResolver + PermissionProvider all
- *      observe the broker identity
- *   5. window.location.assign('/') reloads — AuthBootstrapper (PR-C2)
- *      detects impersonation mode and skips Keycloak re-init so the
- *      broker token is not overwritten.
- *
- * In this PR-C scaffolding file, step 4 is approximated by
- * setTokenCookie(exchangedToken) + raw localStorage writes; this is
- * NOT prod-correct and the component is not imported anywhere. Kept in
- * the repo so PR-C2 can mount + extend it without re-doing the form
- * + start API plumbing.
+ * The PR-C scaffolding flow (raw setTokenCookie + localStorage write)
+ * is removed: this component no longer touches cookies / localStorage
+ * directly. Codex iter-31 RED (token swap doesn't reach shell auth
+ * state) is closed because the orchestration's
+ * {@code enterImpersonationSession} reducer atomically swaps
+ * {@code state.auth.token / user / authzSnapshot / impersonation}.
  */
 import React, { useCallback, useState } from 'react';
-import { startImpersonation } from '@mfe/auth';
 import { usePermissions } from '@mfe/auth';
 import { getShellServices } from '../../../app/services/shell-services';
-import { setTokenCookie } from '../../../shared/auth-cookie';
 import type { UserDetail } from '@mfe/shared-types';
 
 interface ImpersonateActionProps {
@@ -59,69 +46,33 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
       if (!Number.isFinite(numericUserId)) {
         throw new Error('User id is not a numeric platform id');
       }
-      // Wrap shell http.post to match the (url, body) -> {data, status}
-      // signature expected by @mfe/auth's startImpersonation. Per PR-HTTP-3,
-      // remote MFEs must consume the shell-injected client.
-      const http = getShellServices().http;
-      const response = await startImpersonation(
-        async (url, body) => {
-          const res = await http.post(url, body);
-          return { data: res.data, status: res.status };
-        },
-        {
-          targetUserId: numericUserId,
-          targetSubject: targetSubject.trim(),
-          targetEmail: user.email,
-          reason: reason.trim(),
-        },
-      );
-
-      if (response.errorCode || !response.exchangedToken || !response.sessionId) {
-        setError(response.errorMessage ?? 'Impersonation could not be started');
+      const auth = getShellServices().auth;
+      // PR-C2 nested-impersonation guard (UX layer; backend also
+      // rejects with NESTED_IMPERSONATION_FORBIDDEN as defence in
+      // depth). The drawer mount gate already filters this case but
+      // a race with multi-tab navigation could land us here.
+      if (auth.isImpersonating()) {
+        setError('Zaten aktif bir impersonation oturumu var.');
         setSubmitting(false);
         return;
       }
-
-      // Codex iter-30 P0 absorb: persist the original admin token + session
-      // id BEFORE swapping so the Stop continuation can call backend with
-      // the proper audit-actor identity (broker-token DELETE /current is
-      // rejected per backend contract). Keys are colocated in
-      // mfe-shell/.../impersonation-storage but written here via raw
-      // localStorage to avoid an MFE → MFE direct dependency.
-      try {
-        const adminToken = (() => {
-          if (typeof window === 'undefined') return null;
-          try {
-            return window.localStorage.getItem('token');
-          } catch {
-            return null;
-          }
-        })();
-        if (adminToken && typeof window !== 'undefined') {
-          window.localStorage.setItem('impersonation.original_token', adminToken);
-          window.localStorage.setItem('impersonation.session_id', response.sessionId);
-          window.localStorage.setItem('impersonation.mode', 'active');
-          window.localStorage.setItem('impersonation.started_at', String(Date.now()));
-        }
-      } catch {
-        // best-effort: stop continuation falls back to cookie clear if
-        // the admin token wasn't persisted.
-      }
-
-      // PR-C scaffolding only: swap the auth cookie to the broker
-      // exchanged token + reload. This path is NOT prod-correct because
-      // it does not update Redux state.auth.token / shared-http
-      // tokenResolver / PermissionProvider, and AuthBootstrapper would
-      // re-init Keycloak on reload and overwrite the cookie.
-      // PR-C2 replaces this with shellServices.auth.enterImpersonation
-      // which dispatches into the auth FSM canonically and tells
-      // AuthBootstrapper to skip KC re-init while impersonation is
-      // active. Until PR-C2 lands, this component is intentionally
-      // not mounted (UserDetailDrawer doesn't import it).
-      await setTokenCookie(response.exchangedToken);
-      window.location.assign('/');
+      await auth.enterImpersonationSession({
+        targetUserId: numericUserId,
+        targetSubject: targetSubject.trim(),
+        targetEmail: user.email,
+        reason: reason.trim(),
+      });
+      // On success the host has swapped Redux + cookie + queryClient;
+      // closing the drawer is enough — the banner mounts via the
+      // ShellLayout selector and PermissionProvider re-resolves with
+      // the target authz snapshot.
+      setOpen(false);
+      setReason('');
+      setTargetSubject('');
+      setSubmitting(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Impersonation start failed');
+      const message = e instanceof Error ? e.message : 'Impersonation start failed; please retry.';
+      setError(message);
       setSubmitting(false);
     }
   }, [reason, targetSubject, user.email, user.id]);
@@ -152,7 +103,7 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
             Impersonate {user.fullName} ({user.email})
           </p>
           <p className="mt-1 text-xs text-state-warning-text">
-            Bu işlem audit log'una kaydedilir. Devam etmek için sebep ve hedef Keycloak subject
+            Bu işlem audit log&apos;una kaydedilir. Devam etmek için sebep ve hedef Keycloak subject
             (UUID) gerekli.
           </p>
           <label className="mt-3 block">

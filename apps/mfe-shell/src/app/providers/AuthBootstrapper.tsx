@@ -8,6 +8,7 @@ import {
   setAuthInitialized,
   setAuthPhase,
   setAuthFailed,
+  selectIsImpersonating,
 } from '../../features/auth/model/auth.slice';
 import { subscribeAuthState, withSuppressedAuthBroadcast } from '../auth/auth-sync';
 import { createDevAuthSession, mapKeycloakProfile } from '../config/auth-helpers';
@@ -15,6 +16,7 @@ import { api, type SharedHttpRequestConfig } from '@mfe/shared-http';
 import { registerGridVariantsTokenResolver } from '@mfe/design-system';
 import { bootstrapAuthController, type BootstrapInitOptions } from './auth-bootstrap-controller';
 import { isAuthContractE2eEnabled } from '../observability/auth-contract-e2e-probe';
+import { tryHydrateImpersonation } from './impersonation-hydrate';
 
 /* ------------------------------------------------------------------ */
 /*  Fetch real application permissions from permission-service          */
@@ -113,13 +115,117 @@ export async function clearTokenCookie(): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/*  onAuthSuccess catch-up handler factory                              */
+/* ------------------------------------------------------------------ */
+
+export interface OnAuthSuccessHandlerDeps {
+  getMounted: () => boolean;
+  getIsImpersonating: () => boolean;
+  getKeycloakToken: () => string | undefined | null;
+  getKeycloakTokenParsed: () => { exp?: number } | undefined;
+  setTokenCookie: (token: string) => Promise<void>;
+  fetchAppPermissions: (token: string) => Promise<AuthzMeResult>;
+  mapProfile: typeof mapKeycloakProfile;
+  dispatch: (action: AnyAction) => unknown;
+}
+
+type AnyAction = { type: string; payload?: unknown };
+
+/**
+ * Iter-6 P1-3 absorb (Codex thread `019e109c`): factory wrapping the
+ * post-{@code keycloak.init} catch-up closure. Extracted for unit
+ * testing the impersonation guard and the dispatch sequence without
+ * mounting the React component. The component still owns the
+ * lifecycle decision (when to attach this to {@code keycloak.onAuthSuccess});
+ * the factory owns the closure semantics.
+ *
+ * Iter-5 P1-3 invariant preserved: when impersonation is active the
+ * handler short-circuits before any {@code /auth/cookie} write —
+ * otherwise Keycloak.js's silent SSO completion would clobber the
+ * broker session with the admin token. Same rationale as
+ * {@code keycloak.onTokenExpired}; both refresh surfaces are
+ * impersonation-guarded.
+ */
+export function createOnAuthSuccessHandler(deps: OnAuthSuccessHandlerDeps): () => Promise<void> {
+  return async () => {
+    if (!deps.getMounted()) return;
+    // Iter-5 P1-3 invariant: keycloak handlers are no-ops while
+    // impersonation is active. The hydrate path established the
+    // broker session before keycloak.init; if Keycloak.js fires
+    // {@code onAuthSuccess} after a silent SSO completion against
+    // the admin realm session, this guard prevents the catch-up
+    // closure from re-writing /auth/cookie with the admin token.
+    if (deps.getIsImpersonating()) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[AuthBootstrapper] onAuthSuccess skipped — impersonation active');
+      }
+      return;
+    }
+    const token = deps.getKeycloakToken();
+    if (!token) return;
+    if (process.env.NODE_ENV !== 'production') {
+      console.info('[AuthBootstrapper] onAuthSuccess catch-up closure');
+    }
+    try {
+      await deps.setTokenCookie(token);
+      if (!deps.getMounted()) return;
+      const profile = deps.mapProfile(token);
+      const authzResult = await deps.fetchAppPermissions(token);
+      if (!deps.getMounted()) return;
+      const mergedProfile = profile
+        ? {
+            ...profile,
+            permissions:
+              authzResult.permissions.length > 0 ? authzResult.permissions : profile.permissions,
+            role: authzResult.superAdmin
+              ? 'ADMIN'
+              : authzResult.permissions.length > 0
+                ? (authzResult.permissions.find((p) => p === 'ADMIN') ?? profile.role)
+                : profile.role,
+          }
+        : undefined;
+      const tokenParsed = deps.getKeycloakTokenParsed();
+      deps.dispatch(
+        setKeycloakSession({
+          token,
+          profile: mergedProfile,
+          expiresAt: tokenParsed?.exp ? tokenParsed.exp * 1000 : null,
+          authzSnapshot: authzResult.rawResponse,
+        }),
+      );
+      deps.dispatch(setAuthPhase('transportReady'));
+      deps.dispatch(setAuthInitialized(true));
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[AuthBootstrapper] onAuthSuccess closure failed:', err);
+      }
+      if (deps.getMounted()) {
+        deps.dispatch(
+          setAuthFailed({
+            message:
+              'Auth cookie write failed during onAuthSuccess catch-up; protected requests cannot proceed.',
+            cause: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    }
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  AuthBootstrapper — Keycloak initialization & token management      */
 /* ------------------------------------------------------------------ */
 
 export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
   const token = useAppSelector((state) => state.auth.token);
+  const isImpersonating = useAppSelector(selectIsImpersonating);
   const tokenRef = useRef<string | null>(null);
+  // PR-C2: stable ref read by Keycloak event handlers (which are
+  // attached once per mount and would otherwise close over the initial
+  // {@code isImpersonating=false}). Updated whenever the selector
+  // changes so {@code onTokenExpired} can decide whether to skip.
+  const isImpersonatingRef = useRef<boolean>(false);
   const shouldUseKeycloak = isKeycloakMode();
 
   useEffect(() => {
@@ -127,6 +233,10 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
     // Register token resolver for grid variant API calls
     registerGridVariantsTokenResolver(() => tokenRef.current);
   }, [token]);
+
+  useEffect(() => {
+    isImpersonatingRef.current = isImpersonating;
+  }, [isImpersonating]);
 
   /* Cross-window auth state subscription */
   useEffect(() => {
@@ -165,6 +275,20 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
     });
     return unsubscribe;
   }, [dispatch, shouldUseKeycloak]);
+
+  /**
+   * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4
+   * + iter-6 Approach A): page-refresh hydrate guard. Implementation
+   * extracted to {@link tryHydrateImpersonation} (./impersonation-hydrate)
+   * so the 6-condition guard + happy-path side-effects are unit-testable
+   * without mounting the whole bootstrap tree. The component owns the
+   * decision of WHEN to invoke (right before Keycloak init); the helper
+   * owns the side-effects.
+   */
+  const hydrateImpersonationFromStorage = React.useCallback(
+    () => tryHydrateImpersonation(dispatch),
+    [dispatch],
+  );
 
   /* Keycloak bootstrap */
   useEffect(() => {
@@ -220,6 +344,15 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
      */
     const bootstrap = async () => {
       try {
+        // PR-C2 (Codex AGREE thread `019e109c` iter-4): impersonation
+        // hydrate guard — must run BEFORE keycloak.init to avoid the
+        // re-init writing the admin token back over the broker token.
+        // 6-condition check is inside the helper; on success the
+        // bootstrap returns early without touching keycloak.
+        const hydrated = await hydrateImpersonationFromStorage();
+        if (hydrated) {
+          return;
+        }
         const isLoginRoute =
           typeof window !== 'undefined' && window.location?.pathname?.startsWith('/login');
         const urlHasAuthCode =
@@ -398,62 +531,31 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
     //     authz fetch returns same snapshot, dispatch is set-not-merge)
     //   - if bootstrap declared 'unauthenticated' early, this catches
     //     up and converts the FSM to transportReady.
-    keycloak.onAuthSuccess = async () => {
-      if (!mounted) return;
-      const token = keycloak.token;
-      if (!token) return;
-      console.info('[AuthBootstrapper] onAuthSuccess catch-up closure');
-      try {
-        await setTokenCookie(token);
-        if (!mounted) return;
-        const profile = mapKeycloakProfile(token);
-        const authzResult = await fetchAppPermissions(token);
-        if (!mounted) return;
-        const mergedProfile = profile
-          ? {
-              ...profile,
-              permissions:
-                authzResult.permissions.length > 0 ? authzResult.permissions : profile.permissions,
-              role: authzResult.superAdmin
-                ? 'ADMIN'
-                : authzResult.permissions.length > 0
-                  ? (authzResult.permissions.find((p) => p === 'ADMIN') ?? profile.role)
-                  : profile.role,
-            }
-          : undefined;
-        dispatch(
-          setKeycloakSession({
-            token,
-            profile: mergedProfile,
-            expiresAt: keycloak.tokenParsed?.exp ? keycloak.tokenParsed.exp * 1000 : null,
-            authzSnapshot: authzResult.rawResponse,
-          }),
-        );
-        dispatch(setAuthPhase('transportReady'));
-        dispatch(setAuthInitialized(true));
-      } catch (err) {
-        console.warn('[AuthBootstrapper] onAuthSuccess closure failed:', err);
-        // Codex 019e062b iter-0 P1 #2 absorb: catch-up path MUST own
-        // its own failure semantics. Bootstrap controller may have
-        // returned 'unauthenticated' already (the very race this
-        // handler is designed to recover from), so leaving this as
-        // a silent warn keeps the FSM stuck on unauthenticated even
-        // though we observed kc.token. setAuthFailed gives the
-        // shell a deterministic terminal state to render the
-        // degraded UI.
-        if (mounted) {
-          dispatch(
-            setAuthFailed({
-              message:
-                'Auth cookie write failed during onAuthSuccess catch-up; protected requests cannot proceed.',
-              cause: err instanceof Error ? err.message : String(err),
-            }),
-          );
-        }
-      }
-    };
+    keycloak.onAuthSuccess = createOnAuthSuccessHandler({
+      getMounted: () => mounted,
+      getIsImpersonating: () => isImpersonatingRef.current,
+      getKeycloakToken: () => keycloak.token,
+      getKeycloakTokenParsed: () => keycloak.tokenParsed,
+      setTokenCookie,
+      fetchAppPermissions,
+      mapProfile: mapKeycloakProfile,
+      dispatch,
+    });
 
     keycloak.onTokenExpired = async () => {
+      // PR-C2 (Codex AGREE thread `019e109c` iter-1 + iter-4): refresh
+      // handler MUST NOT call keycloak.updateToken while an
+      // impersonation session is active — the broker token would be
+      // overwritten with the admin token mid-session, breaking the
+      // FSM and the audit chain. Bail early; the broker token has its
+      // own TTL (managed by backend) and the impersonation-expired
+      // listener picks up the 403 SESSION_EXPIRED event when it fires.
+      if (isImpersonatingRef.current) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[AuthBootstrapper] onTokenExpired skipped — impersonation active');
+        }
+        return;
+      }
       // Phase 2 PR-Auth-1 (Codex iter-24 §Auth-1 absorb, thread 019e0119):
       // refresh path uses the same await sequence as bootstrap. Without
       // this, mid-session token refresh repeats the pre-cookie 401 race

@@ -55,6 +55,13 @@ vi.mock('@mfe/shared-http', () => ({
     delete: vi.fn(async () => ({ data: {} })),
     put: vi.fn(async () => ({ data: {} })),
   },
+  // PR-C2 (Codex AGREE thread `019e109c` iter-4): UserDetailDrawer now
+  // calls {@code getShellServices()} at render time for the impersonation
+  // mount gate, which lazily logs via {@code logExpected} when shell
+  // services are unconfigured. The test mock must therefore expose the
+  // helper so the drawer renders without an unmocked-export error.
+  logExpected: vi.fn(),
+  registerAuthTokenResolver: vi.fn(),
 }));
 
 vi.mock('../../../../features/user-management/model/use-users-query.model', () => ({

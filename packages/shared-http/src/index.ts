@@ -190,6 +190,21 @@ let refreshInFlight: Promise<RefreshResult> | null = null;
 let authMode: AuthMode = resolveAuthMode();
 let authRedirectInProgress = false;
 const PROFILE_MISSING_CODE = 'PROFILE_MISSING';
+/**
+ * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+ * stable backend lifecycle error codes that route a 403 response into
+ * the {@code app:auth:impersonation-expired} window event instead of
+ * the generic forbidden toast. Mirrored in
+ * {@code @mfe/auth} as {@link IMPERSONATION_ERROR_CODES} — kept as a
+ * local constant here so {@code @mfe/shared-http} stays a leaf package
+ * (no MFE-side imports). Shell listener owns the recovery flow.
+ */
+const IMPERSONATION_LIFECYCLE_ERROR_CODES: ReadonlySet<string> = new Set([
+  'IMPERSONATION_SESSION_EXPIRED',
+  'IMPERSONATION_SESSION_REQUIRED',
+  'EXCHANGED_TOKEN_EXPIRED',
+  'IMPERSONATION_SESSION_REVOKED',
+]);
 const GLOBAL_TOAST_DEDUPE_MS = 2_000;
 // İlk yüklemede auth init tamamlanmadan gelebilecek 401'leri yutmak için küçük tolerans
 const appStartTime = Date.now();
@@ -298,6 +313,21 @@ const handleProfileMissing = () => {
   );
 };
 
+/**
+ * Extract a free-text error code/message from a 4xx envelope. Priority
+ * order (Codex iter-5 P1-1 absorb, thread `019e109c`): {@code errorCode}
+ * comes FIRST so structured backend payloads such as
+ * {@code { errorCode: 'IMPERSONATION_SESSION_EXPIRED', message: '...' }}
+ * route through the impersonation-lifecycle path even when {@code message}
+ * is also populated. The previous order ({@code message > detail > errorCode})
+ * silently dropped the lifecycle code into the generic forbidden toast.
+ *
+ * <p>Used both by the lifecycle 403 router (which only matches against
+ * the {@link IMPERSONATION_LIFECYCLE_ERROR_CODES} set) and by the legacy
+ * profile-missing toast (which matches against {@link PROFILE_MISSING_CODE});
+ * both consumers tolerate the new priority because they only act on
+ * exact string matches.
+ */
 const extractErrorCode = (error: AxiosError): string | null => {
   const data = error.response?.data;
   if (!data) {
@@ -308,14 +338,15 @@ const extractErrorCode = (error: AxiosError): string | null => {
   }
   if (typeof data === 'object' && data !== null) {
     const structured = data as Record<string, unknown>;
+    // Codex iter-5 P1-1: errorCode FIRST (the canonical lifecycle slot).
+    if (typeof structured.errorCode === 'string') {
+      return structured.errorCode;
+    }
     if (typeof structured.message === 'string') {
       return structured.message;
     }
     if (typeof structured.detail === 'string') {
       return structured.detail;
-    }
-    if (typeof structured.errorCode === 'string') {
-      return structured.errorCode;
     }
     if (typeof structured.title === 'string') {
       return structured.title;
@@ -638,6 +669,37 @@ const installInterceptors = (client: AxiosInstance) => {
       }
       if (status === 403) {
         const errorCode = extractErrorCode(error);
+        // User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c`
+        // iter-4): backend signals an expired / revoked / missing
+        // impersonation session via 403 + a stable {@code errorCode}
+        // string. Dispatch a window event so the shell-side listener
+        // can decide between admin restore vs /login redirect, and
+        // suppress the generic forbidden toast (the listener owns
+        // the user-facing message).
+        if (errorCode && IMPERSONATION_LIFECYCLE_ERROR_CODES.has(errorCode)) {
+          if (typeof window !== 'undefined') {
+            const method = (error.config?.method ?? 'get').toUpperCase();
+            const url = typeof error.config?.url === 'string' ? error.config.url : undefined;
+            try {
+              window.dispatchEvent(
+                new CustomEvent('app:auth:impersonation-expired', {
+                  detail: {
+                    code: errorCode,
+                    status: 403,
+                    method,
+                    url,
+                    timestamp: Date.now(),
+                  },
+                }),
+              );
+            } catch {
+              if (process.env.NODE_ENV !== 'production') {
+                console.warn('[shared-http] impersonation-expired event dispatch failed');
+              }
+            }
+          }
+          return Promise.reject(error);
+        }
         if (errorCode === PROFILE_MISSING_CODE) {
           if (!requestConfig.__suppressGlobalProfileMissingToast) {
             handleProfileMissing();

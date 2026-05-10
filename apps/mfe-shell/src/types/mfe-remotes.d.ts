@@ -30,6 +30,28 @@ type RemoteShellAuthPhase =
   | 'unauthenticated'
   | 'failed';
 
+/**
+ * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+ * impersonation orchestration types. Mirrored on the remote MFE side
+ * (apps/mfe-X/src/app/services/shell-services.ts) so any MFE can
+ * invoke the host orchestration (start / stop / inspect) without
+ * poking Redux directly.
+ */
+type ShellEnterImpersonationPayload = {
+  targetUserId: number;
+  targetSubject: string;
+  targetEmail?: string;
+  reason: string;
+};
+
+type ShellExitImpersonationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: 'session-lost' | 'admin-expired' | 'revoke-failed' | 'restore-failed';
+      message?: string;
+    };
+
 type RemoteShellServices = {
   notify: { push: (entry: ShellNotificationEntry) => void };
   telemetry: { emit: (event: ShellTelemetryEvent) => void };
@@ -45,6 +67,14 @@ type RemoteShellServices = {
     isTransportReady: () => boolean;
     getPhase: () => RemoteShellAuthPhase;
     getEpoch: () => number;
+    /** PR-C2 impersonation enter orchestration. */
+    enterImpersonationSession: (payload: ShellEnterImpersonationPayload) => Promise<void>;
+    /** PR-C2 impersonation audit-complete stop. */
+    exitImpersonationSession: () => Promise<ShellExitImpersonationResult>;
+    /** PR-C2 nested-impersonation guard. */
+    isImpersonating: () => boolean;
+    /** PR-C2 token swap subscription (SSE consumers reconnect on broker swap). */
+    onTokenChange: (listener: (token: string | null) => void) => () => void;
   };
 };
 

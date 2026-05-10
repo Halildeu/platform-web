@@ -4,6 +4,21 @@ import { subscribeAuthState } from '../auth/auth-sync';
 
 type AuthListener = (token: string | null) => void;
 
+/**
+ * Iter-6 P2 absorb (Codex thread `019e109c`): wiring callback may emit
+ * an opaque "force" envelope so the dispatcher knows to bypass the
+ * same-token short-circuit when an epoch delta (not a token swap)
+ * triggered the fire. The remote API ({@code auth.onTokenChange}
+ * surfaced via {@code shell-services-wiring.ts:432}) is already
+ * epoch-aware; this brings the canonical
+ * {@code getShellServices().auth.onTokenChange} surface to parity
+ * so consumers wired through {@code init.subscribeAuthToken} —
+ * canonical shell-services or auth-sync's BroadcastChannel — also
+ * see the post-{@code markImpersonationExpired} signal.
+ */
+type AuthEmitOptions = { force?: boolean };
+type AuthListenerEnvelope = (token: string | null, options?: AuthEmitOptions) => void;
+
 export type ShellTelemetryEvent = {
   type: string;
   payload?: Record<string, unknown>;
@@ -42,6 +57,26 @@ export type ShellAuthPhase =
   | 'unauthenticated'
   | 'failed';
 
+/**
+ * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+ * start payload. The orchestration handles backend start request +
+ * cookie write + authz/me + Redux dispatch + storage persist.
+ */
+export interface ShellEnterImpersonationPayload {
+  targetUserId: number;
+  targetSubject: string;
+  targetEmail?: string;
+  reason: string;
+}
+
+export type ShellExitImpersonationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: 'session-lost' | 'admin-expired' | 'revoke-failed' | 'restore-failed';
+      message?: string;
+    };
+
 export interface ShellAuthService {
   getToken(): string | null;
   onTokenChange(listener: AuthListener): () => void;
@@ -57,6 +92,19 @@ export interface ShellAuthService {
   getPhase(): ShellAuthPhase;
   /** Bumps on logout / re-login; lets MFEs invalidate cached Promises. */
   getEpoch(): number;
+  /**
+   * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+   * start an impersonation session. Drives the FSM through
+   * {@code refreshing → transportReady} atomically so the target
+   * identity reaches PermissionProvider / SSE consumers in one swap.
+   */
+  enterImpersonationSession(payload: ShellEnterImpersonationPayload): Promise<void>;
+  /**
+   * PR-C2 audit-complete stop (Codex iter-3 invariant: revoke-first).
+   */
+  exitImpersonationSession(): Promise<ShellExitImpersonationResult>;
+  /** PR-C2 nested-impersonation guard. */
+  isImpersonating(): boolean;
 }
 
 export interface ShellTelemetryService {
@@ -83,7 +131,15 @@ export interface ShellServices {
 export type ShellServicesInit = {
   queryClient: QueryClient;
   getAuthToken: () => string | null;
-  subscribeAuthToken?: (listener: AuthListener) => () => void;
+  /**
+   * Iter-6 P2 absorb (Codex thread `019e109c`): the listener
+   * delivered by wiring may opt-in to {@code force: true} so an
+   * epoch delta with an unchanged token still propagates to
+   * {@code authListeners} (e.g. {@code markImpersonationExpired}
+   * bumps {@code authEpoch} but does not swap {@code state.token}).
+   * Plain {@link AuthListener} consumers continue to work.
+   */
+  subscribeAuthToken?: (listener: AuthListenerEnvelope) => () => void;
   notify?: (entry: ShellNotificationEntry) => void;
   telemetry?: (event: ShellTelemetryEvent) => void;
   isFeatureEnabled?: (flag: string) => boolean;
@@ -97,6 +153,12 @@ export type ShellServicesInit = {
   isTransportReady?: () => boolean;
   getAuthPhase?: () => ShellAuthPhase;
   getAuthEpoch?: () => number;
+  /** PR-C2 impersonation enter orchestration. */
+  enterImpersonationSession?: (payload: ShellEnterImpersonationPayload) => Promise<void>;
+  /** PR-C2 impersonation audit-complete stop. */
+  exitImpersonationSession?: () => Promise<ShellExitImpersonationResult>;
+  /** PR-C2 nested-impersonation guard. */
+  isImpersonating?: () => boolean;
 };
 
 const authListeners = new Set<AuthListener>();
@@ -150,10 +212,27 @@ let authReadyImpl: () => Promise<AuthReadyResult> = () =>
 let isTransportReadyImpl: () => boolean = () => false;
 let getAuthPhaseImpl: () => ShellAuthPhase = () => 'initializing';
 let getAuthEpochImpl: () => number = () => 0;
+let enterImpersonationSessionImpl: (
+  payload: ShellEnterImpersonationPayload,
+) => Promise<void> = () =>
+  Promise.reject(new Error('Shell services not configured for impersonation'));
+let exitImpersonationSessionImpl: () => Promise<ShellExitImpersonationResult> = () =>
+  Promise.resolve({
+    ok: false as const,
+    reason: 'session-lost' as const,
+    message: 'Shell services not configured for impersonation',
+  });
+let isImpersonatingImpl: () => boolean = () => false;
 
-const emitTokenChange = (token: string | null) => {
+const emitTokenChange = (token: string | null, options?: AuthEmitOptions) => {
   const normalizedToken = normalizeToken(token);
-  if (tokenCache === normalizedToken) {
+  // Iter-6 P2 absorb (Codex thread `019e109c`): {@code force: true}
+  // bypasses the same-token short-circuit so the
+  // {@code markImpersonationExpired} epoch bump still drives the
+  // canonical {@code auth.onTokenChange} fan-out — without forcing
+  // wiring would observe {@code token === tokenCache}, return early,
+  // and audit-live-stream subscribers would never see the signal.
+  if (tokenCache === normalizedToken && !options?.force) {
     return;
   }
   tokenCache = normalizedToken;
@@ -177,10 +256,20 @@ export const configureShellServices = (init: ShellServicesInit): void => {
   if (init.isTransportReady) isTransportReadyImpl = init.isTransportReady;
   if (init.getAuthPhase) getAuthPhaseImpl = init.getAuthPhase;
   if (init.getAuthEpoch) getAuthEpochImpl = init.getAuthEpoch;
+  // PR-C2 impersonation orchestration wires.
+  if (init.enterImpersonationSession)
+    enterImpersonationSessionImpl = init.enterImpersonationSession;
+  if (init.exitImpersonationSession) exitImpersonationSessionImpl = init.exitImpersonationSession;
+  if (init.isImpersonating) isImpersonatingImpl = init.isImpersonating;
 
   unsubscribeAuthSource?.();
   if (init.subscribeAuthToken) {
-    unsubscribeAuthSource = init.subscribeAuthToken((token) => emitTokenChange(token));
+    // Iter-6 P2 absorb: forward the {@code force} hint so
+    // {@code markImpersonationExpired} epoch bumps reach canonical
+    // auth listeners even when the token string is unchanged.
+    unsubscribeAuthSource = init.subscribeAuthToken((token, options) =>
+      emitTokenChange(token, options),
+    );
   } else {
     emitTokenChange(getAuthTokenImpl());
   }
@@ -224,6 +313,10 @@ function createShellServices(queryClient: QueryClient | null): ShellServices {
       isTransportReady: () => isTransportReadyImpl(),
       getPhase: () => getAuthPhaseImpl(),
       getEpoch: () => getAuthEpochImpl(),
+      // PR-C2 impersonation orchestration surface.
+      enterImpersonationSession: (payload) => enterImpersonationSessionImpl(payload),
+      exitImpersonationSession: () => exitImpersonationSessionImpl(),
+      isImpersonating: () => isImpersonatingImpl(),
     },
     query: queryClient ?? fallbackQueryClient ?? new QueryClient(),
     telemetry: {
