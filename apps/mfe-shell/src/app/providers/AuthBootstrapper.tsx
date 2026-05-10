@@ -476,13 +476,26 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
             urlCodeDiag = { diagFailed: err instanceof Error ? err.message : String(err) };
           }
         }
-        console.info('[AuthBootstrapper] init starting', {
+        // 2026-05-11 (follow-up to PR #387 — diagnostic readability):
+        // Inline-string the diagnostic payload so console capture
+        // tools that flatten object args (Chrome MCP read_console_messages,
+        // some log aggregators) can still extract the fields. The
+        // original object-arg form is preserved alongside for DevTools
+        // pretty-printing.
+        const diagPayload = {
           isLoginRoute,
           urlHasAuthCode,
           onLoad: initOptions.onLoad,
           kcUrl: authConfig.keycloak.url,
           ...urlCodeDiag,
-        });
+        };
+        let diagSerialized: string;
+        try {
+          diagSerialized = JSON.stringify(diagPayload);
+        } catch {
+          diagSerialized = '<unserializable>';
+        }
+        console.info(`[AuthBootstrapper] init starting ${diagSerialized}`, diagPayload);
 
         // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
         // GUARDED by isAuthContractE2eEnabled() — production bundles
