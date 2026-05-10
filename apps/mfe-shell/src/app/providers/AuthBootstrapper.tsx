@@ -466,9 +466,18 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
             const totalCallbacks = Object.keys(window.localStorage).filter((k) =>
               k.startsWith('kc-callback-'),
             ).length;
+            // Sanitize state prefix: only alphanumeric/dash chars
+            // accepted into the log message. Defense against CodeQL
+            // "format string depends on user-provided value"
+            // (rule js/format-string-injection); even though
+            // console.info doesn't interpret %s, sanitizing closes
+            // the static-analysis flag and is good hygiene.
+            const safeStatePrefix = stateVal
+              ? stateVal.slice(0, 8).replace(/[^a-zA-Z0-9-]/g, '_')
+              : null;
             urlCodeDiag = {
               urlStateLen: stateVal?.length ?? 0,
-              urlStatePrefix: stateVal?.slice(0, 8) ?? null,
+              urlStatePrefix: safeStatePrefix,
               callbackExists: cbExists,
               totalCallbacks,
             };
@@ -476,13 +485,35 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
             urlCodeDiag = { diagFailed: err instanceof Error ? err.message : String(err) };
           }
         }
-        console.info('[AuthBootstrapper] init starting', {
+        // 2026-05-11 (follow-up to PR #387 — diagnostic readability):
+        // Inline-string the diagnostic payload so console capture
+        // tools that flatten object args (Chrome MCP read_console_messages,
+        // some log aggregators) can still extract the fields. The
+        // original object-arg form is preserved alongside for DevTools
+        // pretty-printing.
+        const diagPayload = {
           isLoginRoute,
           urlHasAuthCode,
           onLoad: initOptions.onLoad,
           kcUrl: authConfig.keycloak.url,
           ...urlCodeDiag,
-        });
+        };
+        // CodeQL js/format-string-injection guard:
+        // The FIRST argument to console.info must be a CONSTANT string
+        // literal — never a concatenation that includes URL-derived
+        // values. Even with state-prefix sanitisation, CodeQL flags
+        // any first-arg string built from a tainted source. Solution:
+        // the constant prefix stays in arg 0; the serialised JSON
+        // (which contains the diagnostic detail Chrome MCP can capture
+        // as a flat string) goes in arg 1; the structured payload
+        // (which DevTools pretty-prints) goes in arg 2.
+        let diagSerialized: string;
+        try {
+          diagSerialized = JSON.stringify(diagPayload);
+        } catch {
+          diagSerialized = '<unserializable>';
+        }
+        console.info('[AuthBootstrapper] init starting', diagSerialized, diagPayload);
 
         // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
         // GUARDED by isAuthContractE2eEnabled() — production bundles
