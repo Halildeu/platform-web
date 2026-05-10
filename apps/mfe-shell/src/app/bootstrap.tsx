@@ -4,6 +4,13 @@
 import React from 'react';
 import { initRuntimeErrorMonitor } from './telemetry/runtime-error-monitor';
 
+// 2026-05-10 stale-bundle deploy recovery: the actual install call
+// happens in src/index.tsx BEFORE the dynamic import that loads
+// this module — see Codex 019e1372 P1 absorb in PR #383. By the
+// time bootstrap.tsx executes, listeners are already attached,
+// so failures during initRuntimeErrorMonitor / Sentry init / MFE
+// preload all benefit from the guard.
+
 // 2026-04-25 Faz 19.11: Production console.warn suppress (Codex AGREE 019dc1ee)
 // User bulgusu: tarayıcı F12'de yaratıcı console.warn spam'i (190 call site, 7 MFE).
 // Pattern: API 401/403/network/parse fallback expected akışta console.warn.
@@ -11,12 +18,11 @@ import { initRuntimeErrorMonitor } from './telemetry/runtime-error-monitor';
 // Migration path: packages/shared-http/apiLogger.ts (logExpected/logUnexpected helper).
 // Bu shell-wide guard tüm MFE'lere yansır (module federation host).
 if (typeof window !== 'undefined' && import.meta.env.PROD) {
-  // eslint-disable-next-line no-console
   console.warn = () => {
     /* prod silent — expected fallback'ler için. Unexpected error'lar console.error + Sentry. */
   };
   // console.debug debug-only, prod'da gereksiz
-  // eslint-disable-next-line no-console
+
   console.debug = () => {};
 }
 
@@ -24,8 +30,9 @@ if (typeof window !== 'undefined' && import.meta.env.PROD) {
 // design-system (separate chunk) can read them at runtime.
 // Vite's define config replaces process.env with a JSON object.
 if (typeof window !== 'undefined') {
-  (window as any).__env__ = {
-    ...(window as any).__env__,
+  const w = window as unknown as { __env__?: Record<string, unknown> };
+  w.__env__ = {
+    ...(w.__env__ ?? {}),
     ...((typeof process !== 'undefined' && process.env) || {}),
   };
 }
