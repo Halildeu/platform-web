@@ -18,6 +18,18 @@ export interface LTTBPoint {
 /**
  * Downsample a series of points using LTTB algorithm.
  *
+ * Codex thread `019e0f83` iter-2 P3 fix: when the input already
+ * carries `originalIndex` (e.g. the caller is tracking source
+ * identity for the anomaly-preserving variant's recall metric),
+ * the algorithm MUST forward that value instead of overwriting it
+ * with the sorted-array index. Without this fix the
+ * `unstable_downsampleAnomalyPreservingLTTB` would lose track of
+ * which spike points actually survived.
+ *
+ * Backwards compatible: when the input doesn't carry an
+ * `originalIndex` the old behaviour (use the sorted-array index)
+ * still applies, so existing call sites are unaffected.
+ *
  * @param data - Input data points (must be sorted by x)
  * @param threshold - Target number of output points (must be >= 2)
  * @returns Downsampled points
@@ -29,8 +41,8 @@ export function downsampleLTTB(data: LTTBPoint[], threshold: number): LTTBPoint[
   const sampled: LTTBPoint[] = [];
   const bucketSize = (data.length - 2) / (threshold - 2);
 
-  // Always keep first point
-  sampled.push({ ...data[0], originalIndex: 0 });
+  // Always keep first point — source-stable identity (Codex iter-2 P3).
+  sampled.push({ ...data[0], originalIndex: data[0].originalIndex ?? 0 });
 
   let prevSelected = 0;
 
@@ -68,8 +80,7 @@ export function downsampleLTTB(data: LTTBPoint[], threshold: number): LTTBPoint[
     for (let j = bucketStart; j < bucketEnd; j++) {
       // Triangle area = 0.5 * |x1(y2-y3) + x2(y3-y1) + x3(y1-y2)|
       const area = Math.abs(
-        (prevX - avgX) * (data[j].y - prevY) -
-        (prevX - data[j].x) * (avgY - prevY),
+        (prevX - avgX) * (data[j].y - prevY) - (prevX - data[j].x) * (avgY - prevY),
       );
       if (area > maxArea) {
         maxArea = area;
@@ -77,12 +88,14 @@ export function downsampleLTTB(data: LTTBPoint[], threshold: number): LTTBPoint[
       }
     }
 
-    sampled.push({ ...data[maxIdx], originalIndex: maxIdx });
+    // Source-stable identity (Codex iter-2 P3).
+    sampled.push({ ...data[maxIdx], originalIndex: data[maxIdx].originalIndex ?? maxIdx });
     prevSelected = maxIdx;
   }
 
-  // Always keep last point
-  sampled.push({ ...data[data.length - 1], originalIndex: data.length - 1 });
+  // Always keep last point — source-stable identity (Codex iter-2 P3).
+  const lastIdx = data.length - 1;
+  sampled.push({ ...data[lastIdx], originalIndex: data[lastIdx].originalIndex ?? lastIdx });
 
   return sampled;
 }

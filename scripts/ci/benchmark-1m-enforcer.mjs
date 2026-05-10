@@ -65,6 +65,7 @@ function parseArgs(argv) {
     mode: null,
     summaryOut: null,
     jsonOut: null,
+    correctnessOnly: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -75,6 +76,7 @@ function parseArgs(argv) {
     else if (a === '--mode') out.mode = argv[++i];
     else if (a === '--summary-out') out.summaryOut = argv[++i];
     else if (a === '--json-out') out.jsonOut = argv[++i];
+    else if (a === '--check-correctness-only') out.correctnessOnly = true;
   }
   return out;
 }
@@ -395,6 +397,103 @@ export function buildSummaryMarkdown(verdict, meta) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Correctness gate (PR-A2a)                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @typedef {object} CorrectnessCaseConfig
+ * @property {number} minRecallAt2000
+ * @property {number} maxRenderedCount
+ * @property {number} [maxPrepMs]   — advisory in v2; not yet hard
+ * @property {string} [seed]
+ * @property {number} [spikeCount]
+ * @property {number} [sourceCount]
+ *
+ * @typedef {object} CorrectnessRunResult
+ * @property {string} case
+ * @property {'pass'|'fail'|'warn'} verdict
+ * @property {number} recall
+ * @property {number} renderedCount
+ * @property {number} prepMs
+ * @property {string[]} reasons
+ * @property {string[]} notes
+ *
+ * @typedef {object} CorrectnessVerdict
+ * @property {boolean} ok
+ * @property {string} reason
+ * @property {CorrectnessRunResult[]} cases
+ */
+
+/**
+ * Evaluate the `correctness` block of the threshold config. Pure
+ * function — caller passes `runCase(caseKey, caseCfg)` so the test
+ * suite can stub out the synthetic fixture + downsampler instead of
+ * pulling the production modules in.
+ *
+ * @param {object} thresholds
+ * @param {(caseKey: string, caseCfg: CorrectnessCaseConfig) => Promise<{recall: number, renderedCount: number, prepMs: number}>} runCase
+ * @returns {Promise<CorrectnessVerdict>}
+ */
+export async function evaluateBenchmarkCorrectness(thresholds, runCase) {
+  const cfg = thresholds?.[SCHEMA_VERSION];
+  if (!cfg || typeof cfg.correctness !== 'object') {
+    return {
+      ok: false,
+      reason: `benchmark-thresholds.json is missing the "${SCHEMA_VERSION}.correctness" namespace`,
+      cases: [],
+    };
+  }
+  const cases = [];
+  const errors = [];
+  for (const [key, raw] of Object.entries(cfg.correctness)) {
+    if (key.startsWith('_')) continue; // skip _documentation et al
+    const caseCfg = /** @type {CorrectnessCaseConfig} */ (raw);
+    const reasons = [];
+    const notes = [];
+    let recall = 0;
+    let renderedCount = 0;
+    let prepMs = 0;
+    try {
+      const r = await runCase(key, caseCfg);
+      recall = r.recall;
+      renderedCount = r.renderedCount;
+      prepMs = r.prepMs;
+    } catch (err) {
+      reasons.push(`runCase threw: ${err && err.message ? err.message : String(err)}`);
+    }
+    if (recall < caseCfg.minRecallAt2000) {
+      reasons.push(`recall ${recall.toFixed(4)} < required ${caseCfg.minRecallAt2000.toFixed(4)}`);
+    }
+    if (renderedCount > caseCfg.maxRenderedCount) {
+      reasons.push(`renderedCount ${renderedCount} > maxRenderedCount ${caseCfg.maxRenderedCount}`);
+    }
+    if (caseCfg.maxPrepMs && prepMs > caseCfg.maxPrepMs) {
+      // Advisory in PR-A2a; flip to a hard fail when the self-hosted
+      // GPU runner has a stable enough prep budget. See the
+      // threshold's `_documentation` block.
+      notes.push(
+        `prepMs ${prepMs.toFixed(2)} > maxPrepMs ${caseCfg.maxPrepMs.toFixed(2)} (advisory)`,
+      );
+    }
+    cases.push({
+      case: key,
+      verdict: reasons.length > 0 ? 'fail' : notes.length > 0 ? 'warn' : 'pass',
+      recall,
+      renderedCount,
+      prepMs,
+      reasons,
+      notes,
+    });
+    if (reasons.length > 0) errors.push(`${key}: ${reasons.join('; ')}`);
+  }
+  return {
+    ok: errors.length === 0,
+    reason: errors.length === 0 ? 'all correctness cases pass' : errors.join(' | '),
+    cases,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  CLI                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -409,6 +508,26 @@ function loadJson(path, label) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+
+  // Codex iter-3 de-scope: the production CLI path for the
+  // correctness gate needs a `.ts`-aware runtime (tsx/tsm) to
+  // lazy-import the synthetic spike fixture + downsampler at run
+  // time, and wiring that into `.github/workflows/benchmark-1m.yml`
+  // is intentionally out of scope for PR-A2a. The pure
+  // `evaluateBenchmarkCorrectness(thresholds, runCase)` helper is
+  // still exported (and unit-tested) so a future PR can either
+  // (a) ship an explicit `tsx` runtime + workflow step, or
+  // (b) drive the helper from a jsdom Vitest job — without
+  // shipping a half-baked CLI that fails for ops on day one.
+  if (args.correctnessOnly) {
+    console.error(
+      '[enforcer] --check-correctness-only is not yet wired for the production CLI runtime. ' +
+        'Drive `evaluateBenchmarkCorrectness(thresholds, runCase)` from a Node test or ' +
+        'tsx-aware harness instead. PR-A2a deliberately leaves the workflow wiring out.',
+    );
+    process.exit(2);
+  }
+
   if (!args.artifactPath || !args.thresholdsPath || !args.mode) {
     console.error(
       '[enforcer] Required: --artifact <path> --thresholds <path> --mode <pr|workflow_dispatch>',
