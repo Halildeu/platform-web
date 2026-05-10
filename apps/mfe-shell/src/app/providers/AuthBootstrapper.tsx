@@ -415,28 +415,29 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           pkceMethod: 'S256',
           checkLoginIframe: false,
         };
-        // 2026-05-11 hot-fix (login completion race): when URL has an
-        // auth code in the hash/search (KC redirected back from a
-        // successful SSO), DO NOT set onLoad. keycloak-js automatically
-        // processes the URL callback (state validation + code →
-        // token exchange) regardless of onLoad, and explicitly setting
-        // {@code onLoad: 'check-sso'} WITHOUT a matching
-        // {@code silentCheckSsoRedirectUri} causes the library to
-        // attempt a silent iframe SSO check FIRST that silently fails
-        // (no redirect URI), and then the code in the URL is never
-        // exchanged for a token. Observable symptom: kc.init() resolves
-        // with {@code kc.token === null} even though a valid code was
-        // present, AuthBootstrapper dispatches 'unauthenticated', the
-        // app router bounces the user to /login, and the URL hash is
-        // dropped — the user appears stuck on /login forever.
+        // 2026-05-11 (Codex 019e13ef AGREE on semantic correctness;
+        // REVISE on hypothesis):
         //
-        // Live cluster smoke 2026-05-11 reproduced this: KC redirected
-        // to /#code=...&state=..., AuthBootstrapper logged "bootstrap
-        // completed" but no /token request fired, kc.authenticated
-        // stayed false, app bounced to /login. With this fix, omitting
-        // onLoad lets keycloak-js's default URL-callback processor run,
-        // which finds the matching kc-callback in localStorage by state
-        // and posts to /token with the pkceCodeVerifier.
+        // No `onLoad` with URL callback is semantically correct;
+        // callback handling is independent of `onLoad` in
+        // keycloak-js@26.2.4 — `#processInit()` parses URL callback
+        // FIRST (keycloak.js:803), runs `#processCallback()` and
+        // `/token` exchange when valid (keycloak.js:810), then RETURNS
+        // before the `onLoad` switch (keycloak.js:832). So setting
+        // `onLoad: 'check-sso'` for the URL-callback branch is
+        // redundant at best — the library does its callback work
+        // unconditionally when state+code are present.
+        //
+        // Live failure ("açılmıyor" — KC redirects with code, /token
+        // never fires) is not yet root-caused. Candidate hypotheses
+        // remaining to confirm via the diagnostic log below:
+        //   - kc-callback storage entry for the URL state is missing
+        //     at the moment kc.init() reads it (storage isolation,
+        //     entry consumed by a prior parse, or different origin)
+        //   - URL callback present but token exchange does not fire
+        //     (validation step beyond state lookup, e.g. nonce or
+        //     redirectUri mismatch)
+        //   - URL hash stripped by React Router before kc.init() runs
         //
         // Silent SSO (no URL code) path is unchanged.
         if (urlHasAuthCode) {
