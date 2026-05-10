@@ -418,15 +418,28 @@ export const wireRemoteShellServices = () => {
        * token swap arrives. Listener fires immediately with the
        * current token (consistent with the {@code subscribeAuthToken}
        * pattern in the legacy host bridge).
+       *
+       * <p>Codex iter-5 P2 absorb (thread `019e109c`): the listener
+       * is now epoch-aware. {@code markImpersonationExpired} bumps
+       * {@code authEpoch} but does NOT change {@code state.token}
+       * (the broker JWT stays in place until the listener restores
+       * the admin or redirects). Without epoch awareness, audit
+       * live-stream subscribers would keep their broker SSE alive
+       * for an unbounded window after expiry. Treating an epoch
+       * delta as a token-change signal forces reconnect against
+       * whatever credential is currently authoritative.
        */
       onTokenChange: (listener: (token: string | null) => void) => {
-        let previous = store.getState().auth.token ?? null;
-        listener(previous);
+        let previousToken = store.getState().auth.token ?? null;
+        let previousEpoch = store.getState().auth.authEpoch;
+        listener(previousToken);
         return store.subscribe(() => {
-          const next = store.getState().auth.token ?? null;
-          if (next !== previous) {
-            previous = next;
-            listener(next);
+          const nextToken = store.getState().auth.token ?? null;
+          const nextEpoch = store.getState().auth.authEpoch;
+          if (nextToken !== previousToken || nextEpoch !== previousEpoch) {
+            previousToken = nextToken;
+            previousEpoch = nextEpoch;
+            listener(nextToken);
           }
         });
       },

@@ -2,6 +2,10 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { isAxiosError } from 'axios';
 import { api, type SharedHttpRequestConfig } from '@mfe/shared-http';
 import { UserProfile } from '@mfe/shared-types'; // Paylaşılan UserProfile tipini import ediyoruz
+// PR-C2 iter-5 P1-2 (Codex thread `019e109c`): logout MUST also tear
+// down impersonation localStorage keys so a subsequent bootstrap pass
+// cannot re-hydrate a dead session via the 6-condition guard.
+import { clearImpersonationOnFailurePath } from '../../../app/layout/impersonation-storage';
 
 type UniversalGlobal = typeof globalThis & { Buffer?: typeof Buffer };
 
@@ -433,6 +437,15 @@ const authSlice = createSlice({
           // ignore
         }
       }
+      // Codex iter-5 P1-2 absorb (thread `019e109c`): tear down all
+      // {@code impersonation.*} localStorage keys so a stale broker
+      // exchanged token + sessionId pair cannot satisfy the
+      // AuthBootstrapper 6-condition hydrate guard on the next page
+      // load. Without this, logout left the impersonation slots
+      // intact (only generic auth keys were cleared) and a refresh
+      // could falsely re-enter impersonation mode against a
+      // disposed session.
+      clearImpersonationOnFailurePath();
     },
     // Kayıt durumunu sıfırlamak için yeni reducer
     resetRegistrationStatus: (state) => {
@@ -704,10 +717,20 @@ const authSlice = createSlice({
      * cleanup only (token / user fields stay until the listener decides
      * between admin restore vs /login redirect — see
      * impersonation-expired-listener.ts).
+     *
+     * <p>Codex iter-5 P2 absorb (thread `019e109c`): bump {@code authEpoch}
+     * so token-string-only consumers ({@code onTokenChange} subscribers
+     * such as the audit live-stream) re-evaluate and tear down the
+     * stale broker connection. Without the bump, {@code state.token}
+     * remains identical until the listener restores the admin token,
+     * leaving any open SSE/EventSource against the broker JWT alive
+     * for an unbounded window. Plan v2 contract — enter / exit /
+     * expired all bump the epoch from inside the reducer.
      */
     markImpersonationExpired: (state, action: PayloadAction<{ reason: string }>) => {
       state.impersonation.status = 'expired';
       state.impersonation.lastExpiredReason = action.payload.reason;
+      state.authEpoch = state.authEpoch + 1;
     },
   },
   // Asenkron thunk'ların durumlarını yöneten bölüm
