@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-10T00:32:30.347Z",
+  "generatedAt": "2026-05-10T00:55:56.788Z",
   "totalConsumers": 43,
   "byBucket": {
     "production": 17,
@@ -238,7 +238,9 @@
         "downsampleLTTB",
         "generateClusteredScatter",
         "generateSpikeScatter",
-        "generateUniformScatter"
+        "generateUniformScatter",
+        "isEChartsGLRegistered",
+        "registerEChartsGL"
       ],
       "kinds": [
         "ImportDeclaration"
