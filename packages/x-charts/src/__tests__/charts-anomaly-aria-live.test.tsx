@@ -32,6 +32,8 @@ import { PieChart } from '../PieChart';
 import { FunnelChart } from '../FunnelChart';
 import { WaterfallChart } from '../WaterfallChart';
 import { RadarChart } from '../RadarChart';
+import { TreemapChart } from '../TreemapChart';
+import { SunburstChart } from '../SunburstChart';
 import type { AnomalySummary } from '../annotations/computeAnomalyOverlay';
 import { setChartsLocale, __resetChartsLocaleStoreForTests } from '../i18n/locale-store';
 
@@ -248,6 +250,88 @@ describe('RadarChart — anomaly summary forward (PR-Radar)', () => {
     expect(screen.getByTestId('chart-aria-live-anomalies').textContent).toBe('CUSTOM RADAR');
   });
 });
+
+// PR-Hierarchical (Codex thread `019e1100` iter-1): Treemap + Sunburst
+// also live outside the generic `CHARTS` matrix because their data
+// shape (`{ name, value, children? }` recursive) doesn't share base
+// props with the Line/Area/Bar matrix or with Radar's per-indicator
+// shape. A separate describe locks the per-wrapper contract for both
+// hierarchical wrappers.
+//
+// `HIER_ANOM` mirrors what `computeHierarchicalAnomalySummary` would
+// emit: kind='hierarchical', path[]/depth metadata so the
+// hierarchy-aware default formatter ("X hierarchy anomalies … Most
+// extreme: <path>, value <value>") fires the hierarchy branch instead
+// of falling back to flat. Treemap + Sunburst share the same node
+// shape so the same `HIER_DATA` powers both wrappers' tests.
+const HIER_DATA = [
+  {
+    name: 'Q1',
+    children: [
+      { name: 'North', value: 100 },
+      { name: 'South', value: 200 },
+      { name: 'East', value: 150 },
+      { name: 'West', value: 180 },
+    ],
+  },
+];
+
+const HIER_ANOM: AnomalySummary = {
+  id: 'hierarchy-anomaly-Q1-South',
+  kind: 'hierarchical',
+  x: 'South',
+  y: 9999,
+  formattedY: '9999.00',
+  direction: 'above',
+  severity: 0.97,
+  severityBucket: 'high',
+  ariaLabel: 'Outlier above expected at Q1 > South, value=9999.00 (high severity)',
+  path: ['Q1', 'South'],
+  depth: 1,
+};
+
+const HIERARCHY_CHARTS = [
+  { name: 'TreemapChart', Component: TreemapChart },
+  { name: 'SunburstChart', Component: SunburstChart },
+] as const;
+
+describe.each(HIERARCHY_CHARTS)(
+  '$name — anomaly summary forward (PR-Hierarchical)',
+  ({ Component }) => {
+    it('keeps a single aria-live region when anomalySummary is omitted (backwards compat)', () => {
+      render(<Component data={HIER_DATA} />);
+      const liveRegions = document.querySelectorAll('[role="status"]');
+      expect(liveRegions.length).toBe(1);
+      expect(screen.queryByTestId('chart-aria-live-anomalies')).not.toBeInTheDocument();
+    });
+
+    it('mounts the dedicated anomaly region + hierarchy template fires on kind="hierarchical"', () => {
+      render(<Component data={HIER_DATA} anomalySummary={[HIER_ANOM]} />);
+      act(() => {
+        vi.runAllTimers();
+      });
+      const region = screen.getByTestId('chart-aria-live-anomalies');
+      const text = region.textContent ?? '';
+      // Hierarchy branch hit (NOT flat "1 outlier detected"). Single
+      // anomaly pluralisation: "anomaly" (not "anomalies").
+      expect(text).toMatch(/1 hierarchy anomaly/);
+      // Path drill-down rendered via path.join(' > ').
+      expect(text).toMatch(/Most extreme: Q1 > South, value 9999\.00/);
+    });
+
+    it('forwards formatAnomalyAnnouncement override unchanged (custom wins over hierarchy default)', () => {
+      const fmt = vi.fn(() => 'CUSTOM HIER');
+      render(
+        <Component data={HIER_DATA} anomalySummary={[HIER_ANOM]} formatAnomalyAnnouncement={fmt} />,
+      );
+      act(() => {
+        vi.runAllTimers();
+      });
+      expect(fmt).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('chart-aria-live-anomalies').textContent).toBe('CUSTOM HIER');
+    });
+  },
+);
 
 // Codex iter-1 nice-to-have (Q in plan-time review): access gate cannot
 // strip the anomaly props because they aren't user-facing callbacks.

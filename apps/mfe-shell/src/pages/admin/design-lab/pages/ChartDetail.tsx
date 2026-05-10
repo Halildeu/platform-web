@@ -1748,6 +1748,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Density override.',
       },
       {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Faz 21.11 batch3 PR-Hierarchical — anomaly summary list. When\nsupplied, forwarded to `ChartA11yShell` so screen readers receive\na polite, debounced outlier announcement using the hierarchy-aware\ndefault formatter (`X hierarchy anomalies. Most extreme: <path>,\nvalue <value>`). Pair with `computeHierarchicalAnomalySummary({\ndata })` — leaf-only IQR detector with normalised severity ranking.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.',
+      },
+      {
         name: 'accent',
         type: 'ChartAccentPreference',
         required: false,
@@ -2791,6 +2807,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: '"auto"',
         description: 'Density override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Faz 21.11 batch3 PR-Hierarchical — anomaly summary list. When\nsupplied, forwarded to `ChartA11yShell` so screen readers receive\na polite, debounced outlier announcement using the hierarchy-aware\ndefault formatter (`X hierarchy anomalies. Most extreme: <path>,\nvalue <value>`). Pair with `computeHierarchicalAnomalySummary({\ndata })` — leaf-only IQR detector with normalised severity ranking.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.',
       },
       {
         name: 'accent',

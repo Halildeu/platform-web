@@ -19,6 +19,8 @@ import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -119,6 +121,20 @@ export interface TreemapChartProps extends AccessControlledProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /**
+   * Faz 21.11 batch3 PR-Hierarchical — anomaly summary list. When
+   * supplied, forwarded to `ChartA11yShell` so screen readers receive
+   * a polite, debounced outlier announcement using the hierarchy-aware
+   * default formatter (`X hierarchy anomalies. Most extreme: <path>,
+   * value <value>`). Pair with `computeHierarchicalAnomalySummary({
+   * data })` — leaf-only IQR detector with normalised severity ranking.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
 }
@@ -236,6 +252,8 @@ const TreemapChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    anomalySummary,
+    formatAnomalyAnnouncement,
     ...rest
   },
   forwardedRef,
@@ -489,6 +507,8 @@ const TreemapChartInner = React.forwardRef<
       height={height}
       testId="treemap-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -504,7 +524,16 @@ TreemapChartInner.displayName = 'TreemapChartInner';
  */
 export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
   function TreemapChart(
-    { access, accessReason, onNodeClick, onDataPointClick, onMarkupClick, ...rest },
+    {
+      access,
+      accessReason,
+      onNodeClick,
+      onDataPointClick,
+      onMarkupClick,
+      anomalySummary,
+      formatAnomalyAnnouncement,
+      ...rest
+    },
     ref,
   ) {
     const { state } = resolveAccessState(access);
@@ -516,6 +545,12 @@ export const TreemapChart = React.forwardRef<HTMLDivElement, TreemapChartProps>(
           onNodeClick={guardChartCallback(state, onNodeClick)}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
           onMarkupClick={guardChartCallback(state, onMarkupClick)}
+          // PR-Hierarchical: anomaly summary + formatter forwarded
+          // through unchanged — these aren't user-facing callbacks
+          // the access gate would block. Codex thread `019e1100`
+          // PR-Hierarchical plan iter-1.
+          anomalySummary={anomalySummary}
+          formatAnomalyAnnouncement={formatAnomalyAnnouncement}
         />
       </ChartAccessGate>
     );

@@ -447,6 +447,16 @@ export {
   type RadarAnomalyIndicator,
   type RadarAnomalySeries,
 } from './annotations/computeRadarAnomalySummary';
+// Faz 21.11 batch3 sequential PR-Hierarchical — tree-walking IQR
+// detector for hierarchical charts (Treemap, Sunburst). Emits
+// AnomalySummary[] with kind='hierarchical' + path[] + depth metadata
+// so the ChartAriaLive hierarchy template fires. Codex thread
+// `019e1100` PR-Hierarchical plan iter-1.
+export {
+  computeHierarchicalAnomalySummary,
+  type ComputeHierarchicalAnomalySummaryOptions,
+  type HierarchicalAnomalyNode,
+} from './annotations/computeHierarchicalAnomalySummary';
 // PR-A2b-a11y — anomaly announcement formatter type for consumers
 // who want to override the default EN/TR template.
 export type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
