@@ -3,20 +3,13 @@
 
 import React from 'react';
 import { initRuntimeErrorMonitor } from './telemetry/runtime-error-monitor';
-import { installStaleBundleRecovery } from './runtime/stale-bundle-recovery';
 
-// 2026-05-10 stale-bundle deploy recovery (PR-381 follow-up):
-// install BEFORE any other side-effect import so that even early
-// lazy-import failures during shell boot trigger an automatic
-// reload. nginx already serves index.html / mf-entry-bootstrap-0.js /
-// remoteEntry.js with `Cache-Control: no-store`, but a tab open
-// across a deploy still holds in-memory references to the OLD hashed
-// asset names. Without this guard the user sees a blank page and
-// reads it as "site açılmıyor"; with the guard the page silently
-// reloads once and re-fetches fresh asset hashes. Loop-guarded
-// (max 2 reloads / 60s window) so a real persistent outage doesn't
-// thrash. See app/runtime/stale-bundle-recovery.ts for details.
-installStaleBundleRecovery();
+// 2026-05-10 stale-bundle deploy recovery: the actual install call
+// happens in src/index.tsx BEFORE the dynamic import that loads
+// this module — see Codex 019e1372 P1 absorb in PR #383. By the
+// time bootstrap.tsx executes, listeners are already attached,
+// so failures during initRuntimeErrorMonitor / Sentry init / MFE
+// preload all benefit from the guard.
 
 // 2026-04-25 Faz 19.11: Production console.warn suppress (Codex AGREE 019dc1ee)
 // User bulgusu: tarayıcı F12'de yaratıcı console.warn spam'i (190 call site, 7 MFE).

@@ -65,11 +65,12 @@ describe('stale-bundle-recovery', () => {
     expect(reloadSpy).not.toHaveBeenCalled();
   });
 
-  it('script element error on /assets/ path triggers reload', async () => {
+  it('script element error on /assets/ path triggers reload (same-origin)', () => {
     installStaleBundleRecovery();
 
     const script = document.createElement('script');
-    script.src = 'https://testai.acik.com/assets/bootstrap-OLD.js';
+    // Same-origin path — jsdom origin is http://localhost
+    script.src = '/assets/bootstrap-OLD.js';
     document.head.appendChild(script);
     const ev = new ErrorEvent('error', { message: 'load failed' });
     Object.defineProperty(ev, 'target', { value: script, configurable: true });
@@ -91,9 +92,12 @@ describe('stale-bundle-recovery', () => {
     expect(reloadSpy).not.toHaveBeenCalled();
   });
 
-  it('loop guard: 3rd reload within 60s window is suppressed', async () => {
-    installStaleBundleRecovery();
-
+  it('loop guard: 3rd cross-page-load reload within 60s window is suppressed', () => {
+    // Iter-2: in-page `reloadScheduled` flag suppresses duplicates
+    // within a single page-load lifetime; the sessionStorage history
+    // is the cross-page-load budget. To test it, we simulate the
+    // page-load boundary by uninstall+reinstall between attempts
+    // (production: each location.reload() restarts the JS).
     const fireOnce = () => {
       const reason = new TypeError('Failed to fetch dynamically imported module: /assets/x.js');
       window.dispatchEvent(
@@ -104,11 +108,23 @@ describe('stale-bundle-recovery', () => {
       );
     };
 
+    // Page load 1
+    installStaleBundleRecovery();
     fireOnce();
-    fireOnce();
-    fireOnce();
+    fireOnce(); // duplicate suppressed in-page (reloadScheduled flag)
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
 
-    expect(reloadSpy).toHaveBeenCalledTimes(2); // 3rd suppressed
+    // Page load 2 (simulate)
+    uninstallStaleBundleRecovery();
+    installStaleBundleRecovery();
+    fireOnce();
+    expect(reloadSpy).toHaveBeenCalledTimes(2);
+
+    // Page load 3 — should hit the cross-page budget (max 2 / 60s)
+    uninstallStaleBundleRecovery();
+    installStaleBundleRecovery();
+    fireOnce();
+    expect(reloadSpy).toHaveBeenCalledTimes(2); // 3rd cross-page suppressed
   });
 
   it('idempotent: calling install twice does not double-bind', () => {
@@ -125,14 +141,86 @@ describe('stale-bundle-recovery', () => {
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('Module Federation remoteEntry.js failure triggers reload', async () => {
+  it('Module Federation remoteEntry.js failure triggers reload (same-origin)', () => {
     installStaleBundleRecovery();
 
     const script = document.createElement('script');
-    script.src = 'https://testai.acik.com/remotes/audit/remoteEntry.js';
+    // Same-origin path (jsdom default origin is http://localhost)
+    script.src = '/remotes/audit/remoteEntry.js';
     document.head.appendChild(script);
     const ev = new ErrorEvent('error', { message: 'load failed' });
     Object.defineProperty(ev, 'target', { value: script, configurable: true });
+    window.dispatchEvent(ev);
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Codex P1 #4: third-party CDN URL containing "/assets/" does NOT reload (cross-origin guard)', () => {
+    // jsdom default origin is http://localhost; cdn.example.com is
+    // cross-origin → guard rejects.
+    installStaleBundleRecovery();
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.example.com/assets/foo.js';
+    document.head.appendChild(script);
+    const ev = new ErrorEvent('error', { message: 'load failed' });
+    Object.defineProperty(ev, 'target', { value: script, configurable: true });
+    window.dispatchEvent(ev);
+
+    expect(reloadSpy).not.toHaveBeenCalled();
+  });
+
+  it('Codex P1 #4: <img src="/assets/foo.png"> does NOT reload (tag-type allowlist)', () => {
+    // Even on same origin, only SCRIPT/LINK are recoverable via
+    // page reload. A broken image just stays broken.
+    installStaleBundleRecovery();
+
+    const img = document.createElement('img');
+    img.src = '/assets/broken-image.png';
+    document.body.appendChild(img);
+    const ev = new ErrorEvent('error', { message: 'load failed' });
+    Object.defineProperty(ev, 'target', { value: img, configurable: true });
+    window.dispatchEvent(ev);
+
+    expect(reloadSpy).not.toHaveBeenCalled();
+  });
+
+  it('Codex P1 #3: vite:preloadError + unhandledrejection for same cause = single reload (in-page guard)', () => {
+    // The same chunk-load failure can fire both events back-to-back.
+    // Without the in-page reloadScheduled flag, both would burn
+    // sessionStorage budget and the second event would be
+    // misclassified as a 2nd attempt.
+    installStaleBundleRecovery();
+
+    window.dispatchEvent(
+      new CustomEvent('vite:preloadError', {
+        detail: { payload: { name: 'preload', message: 'failed' } },
+      }),
+    );
+    const reason = new TypeError('Failed to fetch dynamically imported module: /assets/foo.js');
+    window.dispatchEvent(
+      new PromiseRejectionEvent('unhandledrejection', {
+        reason,
+        promise: Promise.reject(reason).catch(() => undefined),
+      }),
+    );
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    // sessionStorage history should also reflect just 1 attempt
+    const raw = sessionStorage.getItem('staleBundleReloadHistory_v1');
+    const history = raw ? JSON.parse(raw) : [];
+    expect(history).toHaveLength(1);
+  });
+
+  it('Codex P1 #4: same-origin <link href="/assets/foo.css"> failure triggers reload', () => {
+    installStaleBundleRecovery();
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/assets/index-OLD.css';
+    document.head.appendChild(link);
+    const ev = new ErrorEvent('error', { message: 'load failed' });
+    Object.defineProperty(ev, 'target', { value: link, configurable: true });
     window.dispatchEvent(ev);
 
     expect(reloadSpy).toHaveBeenCalledTimes(1);

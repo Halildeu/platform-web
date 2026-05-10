@@ -127,15 +127,31 @@ const shouldAutoReload = (): boolean => {
   return true;
 };
 
+/**
+ * In-page guard: once the FIRST stale-asset failure schedules a
+ * reload, suppress further triggers in this tick / this tab life.
+ * Prevents the same underlying chunk-load failure from burning two
+ * sessionStorage budget slots when both `vite:preloadError` AND
+ * `unhandledrejection` fire for the same root cause (Codex 019e1372
+ * P1 #3 absorb).
+ */
+let reloadScheduled = false;
+
 const triggerReload = (reason: string): void => {
   if (typeof window === 'undefined') return;
+  if (reloadScheduled) {
+    console.debug(
+      `[stale-bundle] reload already scheduled; ignoring duplicate signal. Reason: ${reason}`,
+    );
+    return;
+  }
   if (!shouldAutoReload()) {
     console.error(
       `[stale-bundle] auto-reload budget exhausted (${MAX_RELOADS_PER_WINDOW}/${RELOAD_WINDOW_MS}ms); not reloading. Reason: ${reason}. Manual hard-reload (Cmd+Shift+R / Ctrl+F5) recommended.`,
     );
     return;
   }
-
+  reloadScheduled = true;
   console.warn(
     `[stale-bundle] detected stale asset failure; reloading page once. Reason: ${reason}`,
   );
@@ -145,6 +161,30 @@ const triggerReload = (reason: string): void => {
   // preserved too) so a mid-flow user lands back at the same logical
   // place.
   window.location.reload();
+};
+
+/**
+ * Same-origin URL guard for element-error reloads (Codex 019e1372
+ * P1 #4 absorb). Returns true if {@code url} is parseable, on the
+ * current window's origin, and points at one of our hashed-asset
+ * paths. Rejects:
+ *   - cross-origin URLs (third-party CDN, analytics, ads)
+ *   - schema-relative or javascript: URLs
+ *   - non-asset paths even on same origin
+ */
+const isOwnAssetUrl = (url: string): boolean => {
+  if (typeof window === 'undefined') return false;
+  if (!url || typeof url !== 'string') return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url, window.location.href);
+  } catch {
+    return false;
+  }
+  if (parsed.origin !== window.location.origin) {
+    return false;
+  }
+  return parsed.pathname.startsWith('/assets/') || parsed.pathname.startsWith('/remotes/');
 };
 
 type ListenerSpec = {
@@ -207,25 +247,22 @@ export const installStaleBundleRecovery = (): (() => void) => {
     capture: false,
   });
 
-  // 3. Element load errors (capture phase to catch <script>, <link>,
-  //    <img> failures from any tree depth). For ESM module scripts
-  //    that fail to load, browsers fire 'error' on the <script>
-  //    element. We narrow to script/link with /assets/ src/href to
-  //    avoid reloading on every broken <img>.
+  // 3. Element load errors (capture phase to catch SCRIPT and LINK
+  //    failures from any tree depth). For ESM module scripts that
+  //    fail to load, browsers fire 'error' on the <script> element.
+  //    Iter-2 (Codex 019e1372 P1 #4 absorb): tag-type allowlist
+  //    (SCRIPT/LINK only — ignore broken <img>) AND URL is parsed +
+  //    same-origin checked before triggering reload (defends against
+  //    a third-party CDN URL that happens to contain '/assets/').
   const onElementError = (event: Event) => {
-    const target = (event as ErrorEvent).target as
-      | (HTMLScriptElement & { src: string })
-      | (HTMLLinkElement & { href: string })
-      | null;
+    const target = (event as ErrorEvent).target as Element | null;
     if (!target) return;
-    const url = (target as HTMLScriptElement).src ?? (target as HTMLLinkElement).href ?? '';
-    if (typeof url !== 'string' || url.length === 0) return;
-    // Only trigger on our own hashed-asset path; ignore third-party
-    // script failures (analytics, ads, browser extension content
-    // scripts) which we can't recover with a reload.
-    if (url.includes('/assets/') || url.includes('/remotes/')) {
-      triggerReload(`element error ${target.nodeName.toLowerCase()} ${url.slice(0, 200)}`);
-    }
+    const tag = target.nodeName;
+    if (tag !== 'SCRIPT' && tag !== 'LINK') return;
+    const url =
+      tag === 'SCRIPT' ? (target as HTMLScriptElement).src : (target as HTMLLinkElement).href;
+    if (!isOwnAssetUrl(url)) return;
+    triggerReload(`element error ${tag.toLowerCase()} ${url.slice(0, 200)}`);
   };
   window.addEventListener('error', onElementError, /* useCapture */ true);
   handlers.push({ type: 'error', handler: onElementError, capture: true });
@@ -241,9 +278,14 @@ export const installStaleBundleRecovery = (): (() => void) => {
  */
 export const uninstallStaleBundleRecovery = (): void => {
   if (typeof window === 'undefined') return;
-  if (!installedListeners) return;
-  for (const spec of installedListeners) {
-    window.removeEventListener(spec.type, spec.handler, spec.capture);
+  if (installedListeners) {
+    for (const spec of installedListeners) {
+      window.removeEventListener(spec.type, spec.handler, spec.capture);
+    }
+    installedListeners = null;
   }
-  installedListeners = null;
+  // Reset the in-page reload-scheduled flag too, so tests that
+  // simulate distinct deploy scenarios start clean. Production never
+  // calls uninstall.
+  reloadScheduled = false;
 };
