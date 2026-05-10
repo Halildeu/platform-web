@@ -11,7 +11,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import HierarchicalScopePicker from './HierarchicalScopePicker';
-import { ImpersonateAction } from './ImpersonateAction';
+// ImpersonateAction mount deferred to PR-C2 (Codex iter-31 REVISE):
+// production token swap requires shell auth state machine integration.
+// Component file lives next to this drawer; do NOT import here until
+// PR-C2 wires the shell-services.auth.enterImpersonation dispatcher.
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
 // Codex 019ddd78 iter-38 P1 — primitive switch from DetailDrawer (read-only
@@ -1681,10 +1684,8 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           </div>
         )}
 
-        {/* User Impersonation v1 (PR-C) — SuperAdmin-only impersonate trigger.
-            Component self-renders as null when the current user is not a
-            SuperAdmin, so it's safe to mount unconditionally. */}
-        <ImpersonateAction user={user} />
+        {/* User Impersonation v1 ImpersonateAction mount deferred to PR-C2.
+            See top-of-file comment near the import block. */}
 
         {/* Profile Section */}
         <section>
