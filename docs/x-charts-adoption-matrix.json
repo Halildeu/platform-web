@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-05-10T19:51:29.683Z",
-  "totalConsumers": 44,
+  "generatedAt": "2026-05-10T20:28:19.895Z",
+  "totalConsumers": 45,
   "byBucket": {
     "production": 17,
     "test": 3,
-    "demo": 10,
+    "demo": 11,
     "package": 14
   },
   "entries": [
@@ -215,6 +215,27 @@
       ],
       "symbols": [
         "setChartsLocale"
+      ],
+      "kinds": [
+        "ImportDeclaration"
+      ]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/pages/AnomalyDetectorsShowcase.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": [
+        "@mfe/x-charts"
+      ],
+      "symbols": [
+        "RadarChart",
+        "SankeyChart",
+        "ScatterChart",
+        "TreemapChart",
+        "computeAnomalySummary",
+        "computeHierarchicalAnomalySummary",
+        "computeRadarAnomalySummary",
+        "computeSankeyAnomalySummary"
       ],
       "kinds": [
         "ImportDeclaration"
