@@ -35,13 +35,9 @@ vi.mock('../renderers/detectWebGLCapability', () => ({
 
 const mockedDetect = vi.mocked(detectModule.detectWebGLCapability);
 
-import { Scatter3D } from '../Scatter3D';
+import { Scatter3D, buildScatter3DOption } from '../Scatter3D';
 import { resetEChartsGLRegistration, isEChartsGLRegistered } from '../renderers/gl';
-import {
-  allDispatchedOptions,
-  lastDispatchedOption,
-  resetEChartsMock,
-} from './fixtures/echarts-mock';
+import { allDispatchedOptions, resetEChartsMock } from './fixtures/echarts-mock';
 import { setChartsLocale, __resetChartsLocaleStoreForTests } from '../i18n/locale-store';
 
 const SAMPLE_DATA = [
@@ -152,43 +148,87 @@ describe('Scatter3D — ready (GL registered) wrapper mount', () => {
   });
 });
 
-// Codex thread `019e10ab` iter-2 Q1 — setOption shape assertion lock.
-// The wrapper's chief output is the ECharts option; without at least
-// one ready-state assertion we can't catch a regression that flips
-// `series[0].type` to something other than `'scatter3D'`.
-//
-// IMPORTANT: this test is currently `skip`ped because the jsdom +
-// hoisted ECharts mock + lazy `useRequiredEChartsGL` interaction
-// produces a race where `setOption` is dispatched on a fake instance
-// the test fixture's `lastDispatchedOption()` doesn't observe in time
-// for the assertion window. The 2D wrappers (`chart-options-shape`)
-// don't hit this because they reach `useEChartsRenderer` synchronously;
-// the 3D wrapper waits for an async GL gate, so the option dispatch
-// lands AFTER `waitFor` polls.
-//
-// The full option-shape assertion is exercised in the design-lab
-// benchmark route's Playwright spec (browser env, real ECharts), and
-// the `useChartA11y` `chartType: 'scatter3d'` constraint is locked by
-// the wrapper-mount assertion above (`getByTestId('scatter3d-chart')`
-// only mounts when GL is ready, which can only happen via the
-// scatter3D option path). A follow-up PR will either:
-//   - swap the mock fixture for a per-instance `setOption` capture, or
-//   - add a `__test_only_optionMemo()` accessor to the wrapper.
-describe.skip('Scatter3D — option shape (when GL ready)', () => {
-  it('dispatches a series.type==="scatter3D" option with grid3D + visualMap', async () => {
-    render(<Scatter3D data={SAMPLE_DATA} title="Option shape" />);
-    await waitFor(() => {
-      expect(screen.getByTestId('scatter3d-chart')).toBeInTheDocument();
+// Codex thread `019e10ab` iter-3 Q1 — option shape contract via the
+// extracted pure helper `buildScatter3DOption`. Lifting the option
+// builder out of the React component lets us assert the exact ECharts
+// option shape without dancing around the jsdom + hoisted mock + lazy
+// GL gate race that broke the previous full-mount assertion. The
+// wrapper's option memo is now a thin call-site over this helper, so
+// these assertions also lock the wrapper's runtime contract.
+describe('buildScatter3DOption — pure option builder', () => {
+  it('emits series[0].type === "scatter3D" with [x, y, z, value] data tuples', () => {
+    const opt = buildScatter3DOption({
+      data: SAMPLE_DATA,
+      palette: ['#3b82f6', '#22c55e'],
+      fmt: (v) => String(v),
+      animate: true,
     });
-    await waitFor(() => {
-      expect(allDispatchedOptions().length).toBeGreaterThan(0);
+    const series = (opt.series ?? []) as Array<{ type: string; data: unknown[] }>;
+    expect(series[0].type).toBe('scatter3D');
+    expect(series[0].data).toHaveLength(3);
+    // First point: { x: 0, y: 0, z: 0 } → value defaults to z=0.
+    expect((series[0].data[0] as { value: number[] }).value).toEqual([0, 0, 0, 0]);
+    // Third point: explicit value=9 carries through.
+    expect((series[0].data[2] as { value: number[] }).value).toEqual([2, 2, 4, 9]);
+  });
+
+  it('configures grid3D + visualMap with dimension 3 + min/max from data range', () => {
+    const opt = buildScatter3DOption({
+      data: SAMPLE_DATA,
+      palette: ['#3b82f6'],
+      fmt: (v) => String(v),
+      animate: false,
     });
-    const opt = lastDispatchedOption();
-    expect(opt).toBeTruthy();
-    const series = (opt?.series ?? []) as Array<{ type: string; data?: unknown[] }>;
-    expect(series[0]?.type).toBe('scatter3D');
-    expect(opt?.grid3D).toBeTruthy();
-    const visualMap = opt?.visualMap as { dimension: number } | undefined;
-    expect(visualMap?.dimension).toBe(3);
+    expect(opt.grid3D).toBeTruthy();
+    const visualMap = opt.visualMap as { dimension: number; min: number; max: number };
+    expect(visualMap.dimension).toBe(3);
+    // Data values: [0, 2, 9].
+    expect(visualMap.min).toBe(0);
+    expect(visualMap.max).toBe(9);
+  });
+
+  it('passes viewControl / light / grid3D overrides through unchanged', () => {
+    const opt = buildScatter3DOption({
+      data: SAMPLE_DATA,
+      palette: ['#3b82f6'],
+      fmt: (v) => String(v),
+      animate: true,
+      viewControl: { autoRotate: true, distance: 500 },
+      light: { main: { intensity: 2.0, shadow: true } },
+      grid3D: { boxWidth: 400, boxHeight: 300 },
+    });
+    const grid3D = opt.grid3D as Record<string, unknown>;
+    expect(grid3D.viewControl).toEqual({ autoRotate: true, distance: 500 });
+    expect(grid3D.light).toEqual({ main: { intensity: 2.0, shadow: true } });
+    // Codex iter-3: spread order — overrides come AFTER defaults so
+    // user-provided grid3D fields (boxWidth/boxHeight) override defaults.
+    expect(grid3D.boxWidth).toBe(400);
+    expect(grid3D.boxHeight).toBe(300);
+  });
+
+  it('escapes consumer-supplied label in the tooltip formatter (XSS guard)', () => {
+    const opt = buildScatter3DOption({
+      data: [{ x: 1, y: 2, z: 3, label: '<img src=x onerror=alert(1)>' }],
+      palette: ['#3b82f6'],
+      fmt: (v) => String(v),
+      animate: true,
+    });
+    const tooltip = opt.tooltip as {
+      formatter: (p: { value?: number[]; name?: string }) => string;
+    };
+    const out = tooltip.formatter({ value: [1, 2, 3, 3], name: '<img src=x onerror=alert(1)>' });
+    expect(out).not.toMatch(/<img/);
+    expect(out).toMatch(/&lt;img/);
   });
 });
+
+// NOTE: a wrapper-level integration assertion that observes the
+// dispatched ECharts option was attempted but the jsdom + hoisted mock
+// + lazy GL gate sequence races `lastDispatchedOption()` past the
+// poll window (the wrapper mounts, but the mocked instance's
+// `setOption` flush lands after the assertion exhausts its retries).
+// The pure-helper test above (`buildScatter3DOption`) covers the
+// strict option shape; the wrapper-mount test (`getByTestId`) covers
+// the lifecycle gate. The full end-to-end option-dispatch invariant
+// is locked in the design-lab benchmark Playwright spec (browser env,
+// real ECharts, no mock race).

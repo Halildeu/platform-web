@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-10T04:53:29.584Z",
+  "generatedAt": "2026-05-10T07:33:11.869Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 17,
@@ -744,7 +744,9 @@
         "DrillLevel",
         "HistoryEntry",
         "LineChartProps",
-        "PieChartProps"
+        "PieChartProps",
+        "Scatter3DDataPoint",
+        "Scatter3DProps"
       ],
       "kinds": [
         "ImportDeclaration",

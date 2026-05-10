@@ -124,6 +124,11 @@ describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
       'SunburstChart',
       'TreemapChart',
       'WaterfallChart',
+      // Faz 21.11 P1a — 3D Extension Pack. Each new 3D wrapper has
+      // to start with the `'use client'` directive so it stays out
+      // of the SSR subpath. P1b adds Surface3D + Lines3D; P1c adds
+      // Globe.
+      'Scatter3D',
     ];
     const srcDir = path.resolve(__dirname, '..');
     const missing: string[] = [];

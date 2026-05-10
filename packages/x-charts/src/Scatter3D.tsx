@@ -182,6 +182,98 @@ export interface Scatter3DProps extends AccessControlledProps {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Pure option builder (Codex thread 019e10ab iter-3 extraction)      */
+/*                                                                     */
+/*  Lifted out of the inner component so the option shape can be       */
+/*  unit-tested without React mount + lazy-GL gate. The wrapper's      */
+/*  option memo is now a thin call-site that supplies palette /        */
+/*  formatter / passthrough overrides.                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build the ECharts option dispatched by `Scatter3D`. Pure function:
+ * given the data + style overrides, returns the exact option object
+ * the wrapper sends to `setOption` once GL is ready. Designed for
+ * unit testing — the wrapper-level integration test that asserts
+ * "wrapper mounts" complements this with the lifecycle invariant.
+ *
+ * Codex thread `019e10ab` iter-3 — keeps the `series.type === 'scatter3D'`,
+ * `[x, y, z, value]` data shape, `visualMap.dimension === 3`, and
+ * `grid3D.viewControl` / `light` passthrough invariants in a single
+ * audit-friendly callable.
+ */
+export interface BuildScatter3DOptionInput {
+  data: Scatter3DDataPoint[];
+  palette: readonly string[];
+  fmt: (value: number) => string;
+  animate: boolean;
+  viewControl?: Record<string, unknown>;
+  grid3D?: Record<string, unknown>;
+  light?: Record<string, unknown>;
+}
+
+export function buildScatter3DOption(input: BuildScatter3DOptionInput): EChartsOption {
+  const { data, palette, fmt, animate, viewControl, grid3D, light } = input;
+  const seriesData = data.map((p) => {
+    const v = p.value ?? p.z;
+    const item: Record<string, unknown> = {
+      // ECharts scatter3D `data` items: [x, y, z, value, ...]
+      value: [p.x, p.y, p.z, v],
+    };
+    if (p.label !== undefined) item.name = p.label;
+    if (p.color !== undefined) item.itemStyle = { color: p.color };
+    if (p.size !== undefined) item.symbolSize = p.size;
+    return item;
+  });
+
+  // Single-pass min/max so 100K/1M point datasets don't blow the V8
+  // function-arg limit on `Math.min(...arr)`. Codex iter-3.
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const p of data) {
+    const v = p.value ?? p.z;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+
+  return {
+    tooltip: {
+      formatter: (params: { value?: number[]; name?: string }) => {
+        const [x, y, z, v] = params.value ?? [];
+        const labelLine = params.name ? `<b>${escapeHtml(params.name)}</b><br/>` : '';
+        return `${labelLine}x: ${escapeHtml(String(x))}<br/>y: ${escapeHtml(String(y))}<br/>z: ${escapeHtml(String(z))}<br/>value: ${escapeHtml(fmt(v ?? 0))}`;
+      },
+    },
+    visualMap: {
+      show: false,
+      dimension: 3,
+      min,
+      max,
+      inRange: { color: [palette[0], palette[palette.length - 1] ?? palette[0]] },
+    },
+    xAxis3D: { type: 'value' },
+    yAxis3D: { type: 'value' },
+    zAxis3D: { type: 'value' },
+    grid3D: {
+      viewControl: viewControl ?? { autoRotate: false, distance: 200 },
+      light: light ?? {
+        main: { intensity: 1.2, shadow: false },
+        ambient: { intensity: 0.3 },
+      },
+      ...(grid3D ?? {}),
+    },
+    animation: animate,
+    series: [
+      {
+        type: 'scatter3D',
+        data: seriesData,
+        symbolSize: 8,
+      },
+    ],
+  } as EChartsOption;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -234,62 +326,8 @@ const Scatter3DInner = React.forwardRef<
 
   const option = useMemo((): EChartsOption | null => {
     if (isEmpty || !glReady) return null;
-
     const palette = effectivePalette ?? ['#3b82f6'];
-    const seriesData = data.map((p) => {
-      const v = p.value ?? p.z;
-      const item: Record<string, unknown> = {
-        // ECharts scatter3D `data` items: [x, y, z, value, ...]
-        value: [p.x, p.y, p.z, v],
-      };
-      if (p.label !== undefined) item.name = p.label;
-      if (p.color !== undefined) item.itemStyle = { color: p.color };
-      if (p.size !== undefined) item.symbolSize = p.size;
-      return item;
-    });
-
-    // Compute z-range for the visualMap so the colour scale stays
-    // tight around the actual data (otherwise ECharts widens to
-    // [0, 1] which makes constant-z datasets render as a flat tone).
-    const values = data.map((p) => p.value ?? p.z);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-
-    return {
-      tooltip: {
-        formatter: (params: { value?: number[]; name?: string }) => {
-          const [x, y, z, v] = params.value ?? [];
-          const labelLine = params.name ? `<b>${escapeHtml(params.name)}</b><br/>` : '';
-          return `${labelLine}x: ${escapeHtml(String(x))}<br/>y: ${escapeHtml(String(y))}<br/>z: ${escapeHtml(String(z))}<br/>value: ${escapeHtml(fmt(v ?? 0))}`;
-        },
-      },
-      visualMap: {
-        show: false,
-        dimension: 3,
-        min,
-        max,
-        inRange: { color: [palette[0], palette[palette.length - 1] ?? palette[0]] },
-      },
-      xAxis3D: { type: 'value' },
-      yAxis3D: { type: 'value' },
-      zAxis3D: { type: 'value' },
-      grid3D: {
-        viewControl: viewControl ?? { autoRotate: false, distance: 200 },
-        light: light ?? {
-          main: { intensity: 1.2, shadow: false },
-          ambient: { intensity: 0.3 },
-        },
-        ...(grid3D ?? {}),
-      },
-      animation: animate,
-      series: [
-        {
-          type: 'scatter3D',
-          data: seriesData,
-          symbolSize: 8,
-        },
-      ],
-    } as EChartsOption;
+    return buildScatter3DOption({ data, palette, fmt, animate, viewControl, grid3D, light });
   }, [data, isEmpty, glReady, effectivePalette, fmt, viewControl, grid3D, light, animate]);
 
   const handleClick = useCallback(
@@ -322,7 +360,14 @@ const Scatter3DInner = React.forwardRef<
   );
 
   const { containerRef, instance } = useEChartsRenderer({
-    option,
+    // `option` is `EChartsOption | null` (null while empty / GL
+    // pending); `useEChartsRenderer` declares the prop as
+    // `EChartsOption`. ScatterChart resolves this with the same
+    // empty-fallback pattern (`option ?? ({} as EChartsOption)`)
+    // so the wrapper still mounts the canvas observer; the actual
+    // option dispatch happens once the memo recomputes with
+    // `glReady=true`. Codex iter-3 fix.
+    option: option ?? ({} as EChartsOption),
     theme: themeObject,
     onClick: onDataPointClick ? handleClick : undefined,
   });
