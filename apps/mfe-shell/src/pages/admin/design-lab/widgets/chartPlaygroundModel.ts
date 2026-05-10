@@ -440,6 +440,10 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'accent',
     'access',
     'accessReason',
+    // PR-A2b-ui — design-lab-only toggle that flips the live
+    // anomaly explanation pill overlay. Off by default; ChartPreviewLive
+    // pipes it into the `ScatterAnomalyDemoChart` child.
+    'showAnomalyPills',
   ]),
   'gauge-chart': new Set([
     'size',
@@ -769,7 +773,6 @@ export function getCallbackPreset<E>(
   switch (presetId) {
     case 'console-log':
       return (event) => {
-         
         console.log('[design-lab playground] chart click', event);
       };
     case 'alert':

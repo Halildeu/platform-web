@@ -19,6 +19,14 @@ export function useAnomalyOverlay(options: ComputeAnomalyOverlayOptions): ChartM
       options.color,
       options.size,
       options.showLabel,
+      // PR-A2b-ui pill knobs — without these in the deps a consumer
+      // toggling between marker / pill, swapping `valueFormatter` or
+      // tightening the cap would silently keep the previous overlay.
+      options.labelVariant,
+      options.valueFormatter,
+      options.maxPills,
+      options.pillBackground,
+      options.pillTextColor,
     ],
   );
 }
