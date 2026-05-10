@@ -434,7 +434,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
-            showAnomalyPills={isOn(toggles, 'showAnomalyPills', false)}
+            showAnomalyPills={isOn(toggles, 'showAnomalyPills', true)}
           />
         </PreviewBox>
       );
@@ -1079,18 +1079,50 @@ interface ScatterAnomalyDemoChartProps extends React.ComponentProps<typeof Scatt
   showAnomalyPills?: boolean;
 }
 
+/**
+ * Inject one obvious high-side outlier so the IQR fence has
+ * something to flag. The mock scatter dataset that ships with
+ * `ChartPreviewLive` is too flat (Codex iter-2 RED #3 — vanilla y
+ * series sits inside the fence) and would otherwise leave the
+ * overlay invisible. We add a single `(maxX + 1, max(y) * 4)`
+ * point so the demo shows BOTH the marker and the warning-tinted
+ * pill without changing the rest of the playground sample.
+ */
+function injectDemoOutlier<T extends { x: number; y: number; label?: string }>(data: T[]): T[] {
+  if (data.length === 0) return data;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const d of data) {
+    if (typeof d.x === 'number' && d.x > maxX) maxX = d.x;
+    if (typeof d.y === 'number' && d.y > maxY) maxY = d.y;
+  }
+  const outlier = {
+    x: Number.isFinite(maxX) ? maxX + 1 : data.length,
+    y: Number.isFinite(maxY) ? Math.max(maxY * 4, maxY + 100) : 100,
+    label: 'Anomaly demo spike',
+  } as T;
+  return [...data, outlier];
+}
+
 const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
-  showAnomalyPills = false,
+  showAnomalyPills = true,
   data,
   valueFormatter,
   ...rest
 }) => {
+  // When the demo toggle is on we extend the dataset with a guaranteed
+  // outlier so the overlay actually has something to highlight; the
+  // augmented array is what we feed BOTH the chart and the hook.
+  const augmentedData = React.useMemo(
+    () => (showAnomalyPills ? injectDemoOutlier(data) : data),
+    [data, showAnomalyPills],
+  );
   const overlayInput = React.useMemo(
     () =>
       showAnomalyPills
-        ? data.map((d) => ({ x: d.x, y: d.y }))
+        ? augmentedData.map((d) => ({ x: d.x, y: d.y }))
         : ([] as ReadonlyArray<{ x: number; y: number }>),
-    [data, showAnomalyPills],
+    [augmentedData, showAnomalyPills],
   );
   const anomalyMarkups = useAnomalyOverlay({
     data: overlayInput as { x: number; y: number }[],
@@ -1102,7 +1134,7 @@ const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
   return (
     <ScatterChart
       {...rest}
-      data={data}
+      data={augmentedData}
       valueFormatter={valueFormatter}
       markups={showAnomalyPills ? anomalyMarkups : undefined}
     />

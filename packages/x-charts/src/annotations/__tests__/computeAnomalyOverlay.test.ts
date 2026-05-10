@@ -6,6 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { computeAnomalyOverlay } from '../computeAnomalyOverlay';
+import { adaptToEcharts } from '../adaptToEcharts';
 import type { LabelMarkup, PointMarkup } from '../../types';
 
 describe('computeAnomalyOverlay — empty / tiny inputs', () => {
@@ -213,5 +214,25 @@ describe('computeAnomalyOverlay — PR-A2b-ui pill variant', () => {
     const pill = out.find((m) => m.type === 'label') as LabelMarkup;
     expect(pill.background).toBe('#ffe4e6');
     expect(pill.color).toBe('#9f1239');
+  });
+
+  it('pill output survives adaptToEcharts integration (Codex iter-2 RED #1)', () => {
+    // Codex iter-2 caught the LabelMarkup shape bug — pills used to
+    // ship `x`/`y` at the top level, which the adapter then crashed
+    // on at `'x' in m.anchor`. This test wires
+    // `computeAnomalyOverlay({ labelVariant: 'pill' })` straight
+    // into `adaptToEcharts({ chartType: 'scatter' })` so a future
+    // shape regression turns the suite red instead of waiting for
+    // Playwright to crash a real chart.
+    const data = flatBaselineWithSpikes([100]);
+    const overlay = computeAnomalyOverlay({ data, labelVariant: 'pill' });
+    expect(() => adaptToEcharts(overlay, { chartType: 'scatter' })).not.toThrow();
+    const adapted = adaptToEcharts(overlay, { chartType: 'scatter' });
+    // Adapter folds the pill into `seriesPatches[*].markPoint.data`
+    // (label markup uses the same coord-anchored markPoint primitive
+    // ECharts already supports). The contract this test guards is
+    // "the pill object is accepted and produces at least one patch
+    // entry"; the adapter internals stay implementation-detail.
+    expect(adapted.seriesPatches.length).toBeGreaterThan(0);
   });
 });

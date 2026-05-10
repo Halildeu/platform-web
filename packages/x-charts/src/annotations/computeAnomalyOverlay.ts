@@ -56,10 +56,11 @@ export interface ComputeAnomalyOverlayOptions {
    */
   labelVariant?: AnomalyLabelVariant;
   /**
-   * Pill text formatter. Only used when `labelVariant === 'pill'`.
-   * Defaults to `Outlier: y=<toFixed(2)>` so the chart's existing
-   * `valueFormatter` is honoured for free when the consumer hands
-   * one in.
+   * Value formatter used for both the legacy marker label
+   * (`↑ <value>`) and the pill text (`Outlier: y=<value>`). When
+   * absent the value falls back to `toFixed(2)` to keep the legacy
+   * marker output byte-identical for consumers that don't pass a
+   * formatter in.
    */
   valueFormatter?: (value: number) => string;
   /**
@@ -190,7 +191,11 @@ export function computeAnomalyOverlay(options: ComputeAnomalyOverlayOptions): Ch
       };
       out.push(marker);
     }
-    // Then severity-ranked pills, capped to `maxPills`.
+    // Then severity-ranked pills, capped to `maxPills`. Codex iter-2
+    // RED #1: `LabelMarkup` doesn't take top-level `x` / `y` — it
+    // wraps the position inside a discriminated `anchor`. The
+    // adapter does `'x' in m.anchor` and would throw at render time
+    // without the wrapper.
     const pillCandidates = [...hits]
       .sort((a, b) => b.severity - a.severity)
       .slice(0, Math.max(0, maxPills));
@@ -198,8 +203,7 @@ export function computeAnomalyOverlay(options: ComputeAnomalyOverlayOptions): Ch
       const pill: LabelMarkup = {
         id: `${idPrefix}-${hit.sourceIndex}-pill`,
         type: 'label',
-        x: hit.point.x,
-        y: hit.point.y,
+        anchor: { x: hit.point.x, y: hit.point.y },
         text: `Outlier: y=${formatValue(hit.point.y)}`,
         color: pillTextColor,
         background: pillBackground,
