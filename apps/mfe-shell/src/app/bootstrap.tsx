@@ -3,6 +3,20 @@
 
 import React from 'react';
 import { initRuntimeErrorMonitor } from './telemetry/runtime-error-monitor';
+import { installStaleBundleRecovery } from './runtime/stale-bundle-recovery';
+
+// 2026-05-10 stale-bundle deploy recovery (PR-381 follow-up):
+// install BEFORE any other side-effect import so that even early
+// lazy-import failures during shell boot trigger an automatic
+// reload. nginx already serves index.html / mf-entry-bootstrap-0.js /
+// remoteEntry.js with `Cache-Control: no-store`, but a tab open
+// across a deploy still holds in-memory references to the OLD hashed
+// asset names. Without this guard the user sees a blank page and
+// reads it as "site açılmıyor"; with the guard the page silently
+// reloads once and re-fetches fresh asset hashes. Loop-guarded
+// (max 2 reloads / 60s window) so a real persistent outage doesn't
+// thrash. See app/runtime/stale-bundle-recovery.ts for details.
+installStaleBundleRecovery();
 
 // 2026-04-25 Faz 19.11: Production console.warn suppress (Codex AGREE 019dc1ee)
 // User bulgusu: tarayıcı F12'de yaratıcı console.warn spam'i (190 call site, 7 MFE).
@@ -11,12 +25,11 @@ import { initRuntimeErrorMonitor } from './telemetry/runtime-error-monitor';
 // Migration path: packages/shared-http/apiLogger.ts (logExpected/logUnexpected helper).
 // Bu shell-wide guard tüm MFE'lere yansır (module federation host).
 if (typeof window !== 'undefined' && import.meta.env.PROD) {
-  // eslint-disable-next-line no-console
   console.warn = () => {
     /* prod silent — expected fallback'ler için. Unexpected error'lar console.error + Sentry. */
   };
   // console.debug debug-only, prod'da gereksiz
-  // eslint-disable-next-line no-console
+
   console.debug = () => {};
 }
 
@@ -24,8 +37,9 @@ if (typeof window !== 'undefined' && import.meta.env.PROD) {
 // design-system (separate chunk) can read them at runtime.
 // Vite's define config replaces process.env with a JSON object.
 if (typeof window !== 'undefined') {
-  (window as any).__env__ = {
-    ...(window as any).__env__,
+  const w = window as unknown as { __env__?: Record<string, unknown> };
+  w.__env__ = {
+    ...(w.__env__ ?? {}),
     ...((typeof process !== 'undefined' && process.env) || {}),
   };
 }
