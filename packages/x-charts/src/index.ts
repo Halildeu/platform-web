@@ -172,6 +172,27 @@ export {
 } from './cross-filter/selectors';
 export { useQueryCancellation } from './cross-filter/useQueryCancellation';
 export type { CrossFilterEntry, DrillLevel, HistoryEntry } from './cross-filter/types';
+// PR-A2c — Cross-filter rectangle brush parity helpers (pure;
+// no React, no ECharts runtime). Adoption inside `ScatterChart`
+// lives in PR-A2c-wire (separate PR per Codex iter-1 §8).
+export {
+  normalizeBrushSelection,
+  brushToAgGridFilterModel,
+  mergeBrushFilterModel,
+  applyBrushFilterModel,
+} from './cross-filter';
+export type {
+  BrushBound,
+  BrushPoint,
+  BrushSelection,
+  EChartsBrushArea,
+  EChartsBrushSelectedSeries,
+  EChartsBrushSelectedEvent,
+  NormalizeBrushSelectionOptions,
+  AgGridNumberFilterEntry,
+  AgGridBrushFilterModel,
+  BrushToAgGridFilterOptions,
+} from './cross-filter';
 export { useDrillDown } from './drill-down/useDrillDown';
 export { DrillDownBreadcrumb } from './drill-down/DrillDownBreadcrumb';
 export { useChartAnimation } from './animation/useChartAnimation';
