@@ -282,3 +282,43 @@ export const duplicateInitCount = (): number => mockState.duplicateInitCount;
 
 /** Snapshot of every instance ever created (alive + disposed). */
 export const allMockInstances = (): readonly MockInstance[] => mockState.allInstances;
+
+/* ------------------------------------------------------------------ */
+/*  Faz 21.11 PR-A2c-wire — generic event listener inspection         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Generic listener registration inspector. Matches every
+ * `instance.on(eventName, handler)` call recorded since the last
+ * reset. Callers can dispatch a fake event by invoking the handler
+ * directly:
+ *
+ *   const [handler] = eventListenerRegistrations('brushselected');
+ *   handler({ batch: [...] });
+ *
+ * `clickListenerRegistrations()` keeps its dedicated alias so the
+ * existing PR-E2 must-fix #1 tests continue to compile.
+ */
+export const eventListenerRegistrations = (
+  eventName: string,
+): Array<(...args: unknown[]) => void> =>
+  onMock.mock.calls
+    .filter((args) => args[0] === eventName)
+    .map((args) => args[1] as (...args: unknown[]) => void);
+
+/** Mirror of `eventListenerRegistrations` for `off()` calls. */
+export const eventListenerUnregistrations = (
+  eventName: string,
+): Array<(...args: unknown[]) => void> =>
+  offMock.mock.calls
+    .filter((args) => args[0] === eventName)
+    .map((args) => args[1] as (...args: unknown[]) => void);
+
+/**
+ * Snapshot of every `instance.dispatchAction(...)` call recorded
+ * since the last reset. Used by PR-A2c-wire tests to verify the
+ * brush programmatic clear path (`dispatchAction({ type: 'brush',
+ * areas: [] })`) when those tests land in a follow-up PR.
+ */
+export const dispatchActionCalls = (): unknown[][] =>
+  dispatchMock.mock.calls.map((call) => [...call]);
