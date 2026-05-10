@@ -36,6 +36,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScatterChart } from '@mfe/x-charts';
+import type { RendererFallbackEvent } from '@mfe/x-charts';
 import {
   downsampleLTTB,
   generateUniformScatter,
@@ -135,12 +136,52 @@ interface ScatterPreparedData {
 
 /**
  * Fail-closed: the route only mounts when the flag is explicitly
- * "true" AND the Vite mode is not "production". This protects against
- * accidental flag leaks into a production .env.
+ * "true" AND the Vite environment is NOT a production build.
+ *
+ * Three independent signals are checked because Vite has multiple
+ * "this is prod" knobs that don't always agree:
+ *
+ *   - `import.meta.env.PROD` is the canonical "production build"
+ *     boolean, set by `vite build` regardless of `--mode`.
+ *   - `import.meta.env.MODE === 'production'` matches the default
+ *     mode, but a custom `vite build --mode staging` keeps PROD=true
+ *     while MODE='staging' — so the MODE check alone is not enough.
+ *
+ * Tests stub `MODE` directly (Vitest `vi.stubEnv`) so the explicit
+ * `MODE` branch keeps the guard testable in jsdom even though
+ * `import.meta.env.PROD` is normally read-only at build time.
+ */
+/**
+ * Pure gate evaluator — exported so unit tests can pass a stubbed env
+ * directly. Vite's `import.meta.env.PROD` (and `MODE`) values are
+ * compile-time inlined, so neither `vi.stubEnv` nor mutating
+ * `import.meta.env` at runtime can flip them inside this function;
+ * accepting `env` as an argument is the only honest way to test the
+ * production fail-closed behaviour.
+ */
+export function evaluateBenchmarkGate(env: Record<string, unknown>): boolean {
+  const flagOn = env.VITE_ENABLE_DESIGN_LAB_BENCHMARK === 'true';
+  const modeIsProduction = env.MODE === 'production';
+  // Vite emits `PROD` as a literal `boolean`. Accept the string form
+  // too so future test environments that only marshal strings still
+  // hit the right branch.
+  const buildIsProduction = env.PROD === true || env.PROD === 'true';
+  return flagOn && !modeIsProduction && !buildIsProduction;
+}
+
+/**
+ * Production-facing gate that reads from `import.meta.env`. The
+ * value of `import.meta.env.PROD` is replaced at build time by Vite,
+ * so the route is open only when the corresponding `vite build` ran
+ * in a non-production mode AND the operator opted in via the env
+ * flag. See {@link evaluateBenchmarkGate} for the test seam.
  */
 export function isBenchmarkRouteEnabled(): boolean {
-  const env = import.meta.env as Record<string, string | undefined>;
-  return env.VITE_ENABLE_DESIGN_LAB_BENCHMARK === 'true' && env.MODE !== 'production';
+  // Cast `import.meta` itself before reading `.env` so the project's
+  // missing `ImportMeta.env` typing doesn't surface a TS2339 here
+  // (mfe-shell does not pull in `vite/client` types).
+  const env = (import.meta as unknown as { env: Record<string, unknown> }).env;
+  return evaluateBenchmarkGate(env);
 }
 
 /* ------------------------------------------------------------------ */
@@ -399,10 +440,24 @@ function downloadBlob(filename: string, content: string, mime: string): void {
 /*  Render slot — single chart instance, controlled by runner          */
 /* ------------------------------------------------------------------ */
 
+interface RenderSlotRenderedInfo {
+  renderMs: number;
+  rendererReason?: string;
+  /**
+   * True when the ScatterChart fired `onRendererFallback` because the
+   * requested backend (WebGL) was unavailable and the router routed
+   * to Canvas instead. The runner uses this to mark the benchmark
+   * row as `aborted` with `abortReason='webgl-unavailable'` and
+   * `webglSupported=false`, so the artifact summary doesn't blend a
+   * silently-canvas-rendered point cloud into the WebGL median.
+   */
+  webglUnavailable?: boolean;
+}
+
 interface RenderSlotProps {
   data: BenchmarkPoint2D[];
   rendererProp: 'canvas' | 'webgl';
-  onRendered: (event: { renderMs: number; rendererReason?: string }) => void;
+  onRendered: (event: RenderSlotRenderedInfo) => void;
 }
 
 /**
@@ -414,10 +469,16 @@ const RenderSlot: React.FC<RenderSlotProps> = ({ data, rendererProp, onRendered 
   const startedAtRef = useRef<number>(performance.now());
   const reportedRef = useRef<boolean>(false);
   const rendererReasonRef = useRef<string | undefined>(undefined);
+  const webglUnavailableRef = useRef<boolean>(false);
+  // Always-latest closure for `onRendered` so the mount-once effect
+  // does not capture a stale prop while still keeping `[]` deps.
+  const onRenderedRef = useRef(onRendered);
+  onRenderedRef.current = onRendered;
 
-  // Reset start mark every mount cycle.
+  // Reset measurement state on every mount cycle.
   startedAtRef.current = performance.now();
   reportedRef.current = false;
+  webglUnavailableRef.current = false;
 
   useEffect(() => {
     let frame1: number | null = null;
@@ -427,20 +488,33 @@ const RenderSlot: React.FC<RenderSlotProps> = ({ data, rendererProp, onRendered 
         if (reportedRef.current) return;
         reportedRef.current = true;
         const renderMs = performance.now() - startedAtRef.current;
-        onRendered({ renderMs, rendererReason: rendererReasonRef.current });
+        onRenderedRef.current({
+          renderMs,
+          rendererReason: rendererReasonRef.current,
+          webglUnavailable: webglUnavailableRef.current || undefined,
+        });
       });
     });
     return () => {
       if (frame1 !== null) cancelAnimationFrame(frame1);
       if (frame2 !== null) cancelAnimationFrame(frame2);
     };
-    // Mount-once measurement: onRendered is intentionally not a dep
-    // — the parent re-mounts the slot via `key={runKey}` for each new
-    // case, so a fresh closure already lands on every cycle.
+    // Mount-once measurement: parent re-mounts the slot via `key=...`
+    // for each new case, so a fresh closure lands every cycle. The
+    // ref above protects against stale `onRendered` captures within
+    // a given mount.
   }, []);
 
-  const fallbackHandler = useCallback((event: { from: string; to: string; reason: string }) => {
-    rendererReasonRef.current = `fallback:${event.from}->${event.to}:${event.reason}`;
+  const fallbackHandler = useCallback((event: RendererFallbackEvent) => {
+    rendererReasonRef.current = `fallback:${event.requested}->${event.actual}:${event.reason}`;
+    // Requested WebGL but the router downgraded to Canvas/SVG —
+    // capture this so the runner can mark the row as aborted with
+    // `abortReason='webgl-unavailable'`. Without this signal the
+    // artifact would silently report a Canvas render under the
+    // WebGL backend column.
+    if (event.requested === 'webgl' && event.actual !== 'webgl') {
+      webglUnavailableRef.current = true;
+    }
   }, []);
 
   // BenchmarkPoint2D matches the ScatterDataPoint contract (`{x, y}`)
@@ -521,7 +595,7 @@ interface RunnerHookState {
    * advance its internal cursor — exposed on the return shape so the
    * route component can forward it without an out-of-band channel.
    */
-  handleRendered: (info: { renderMs: number; rendererReason?: string }) => void;
+  handleRendered: (info: RenderSlotRenderedInfo) => void | Promise<void>;
 }
 
 function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
@@ -559,9 +633,14 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
     setPreparedData(prepared);
   }, [cursor, queue, isRunning]);
 
-  // RenderSlot's onRendered fires `handleRendered` via context below
+  // RenderSlot's onRendered fires `handleRendered`. Captures three
+  // failure / abort signals that the artifact summary (`computeSummary`)
+  // skips so they never blend into a median:
+  //   - timeout         → 250K canvas-raw exceeded soft budget
+  //   - webgl-unavailable → router downgraded WebGL → Canvas
+  //   - manual-skip      → reserved for the `?danger=true` path in PR-A1.6b
   const handleRendered = useCallback(
-    async (info: { renderMs: number; rendererReason?: string }) => {
+    async (info: RenderSlotRenderedInfo) => {
       if (!isRunning || cursor < 0 || cursor >= queue.length || !preparedData) return;
       const c = queue[cursor];
       const heapBefore = snapshotMemoryMB();
@@ -573,6 +652,17 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
         c.tier === 'large' &&
         c.backend === 'canvas-raw' &&
         info.renderMs > CANVAS_RAW_LARGE_SOFT_TIMEOUT_MS;
+
+      // WebGL fallback: requested='webgl' but router downgraded.
+      const isWebglUnavailable = c.backend === 'webgl' && info.webglUnavailable === true;
+
+      const aborted = isOverBudget || isWebglUnavailable;
+      const abortReason: BenchmarkAbortReason | undefined = isOverBudget
+        ? 'timeout'
+        : isWebglUnavailable
+          ? 'webgl-unavailable'
+          : undefined;
+      const webglSupported = c.backend === 'webgl' ? !isWebglUnavailable : undefined;
 
       if (!c.isWarmup) {
         const env = snapshotEnvironment();
@@ -594,20 +684,26 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
           browser: env.browser,
           viewport: env.viewport,
           timestamp: new Date().toISOString(),
-          aborted: isOverBudget || undefined,
-          abortReason: isOverBudget ? 'timeout' : undefined,
+          aborted: aborted || undefined,
+          abortReason,
           gcSuspected: fps.gcSuspected || undefined,
           rendererReason: info.rendererReason,
+          webglSupported,
           sampleStrategy: preparedData.sampleStrategy,
           lttbCaveat: preparedData.lttbCaveat,
         };
         setResults((prev) => [...prev, result]);
       }
 
-      // Advance cursor
+      // Advance cursor. On the final case mark `cursor=queue.length`
+      // explicitly so `progress.done` reads `total/total` and the
+      // route's `currentCase` becomes `null` — without this the UI
+      // appears stuck at the last measured run and exporters that
+      // gate on `!isRunning` need an extra tick to settle.
       const next = cursor + 1;
       if (next >= queue.length) {
         setIsRunning(false);
+        setCursor(queue.length);
         setPreparedData(null);
       } else {
         setCursor(next);
@@ -749,20 +845,30 @@ const BenchmarkResultsTable: React.FC<ResultsTableProps> = ({ results }) => {
   return (
     <div data-testid="benchmark-results-table" style={{ overflowX: 'auto', padding: 16 }}>
       <table style={{ borderCollapse: 'collapse', minWidth: 1200 }}>
+        <caption style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600 }}>
+          Scatter benchmark results — Chromium-measured. One row per measured run (warmup excluded).
+          Aborted rows are skipped from the artifact summary medians.
+        </caption>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left' }}>fixture</th>
-            <th style={{ textAlign: 'left' }}>tier</th>
-            <th style={{ textAlign: 'left' }}>backend</th>
-            <th>run</th>
-            <th>renderMs</th>
-            <th>prepMs</th>
-            <th>fpsAvg</th>
-            <th>p95Drop%</th>
-            <th>sourceCount</th>
-            <th>renderedCount</th>
-            <th>heapΔ MB</th>
-            <th>aborted</th>
+            <th scope="col" style={{ textAlign: 'left' }}>
+              fixture
+            </th>
+            <th scope="col" style={{ textAlign: 'left' }}>
+              tier
+            </th>
+            <th scope="col" style={{ textAlign: 'left' }}>
+              backend
+            </th>
+            <th scope="col">run</th>
+            <th scope="col">renderMs</th>
+            <th scope="col">prepMs</th>
+            <th scope="col">fpsAvg</th>
+            <th scope="col">p95Drop%</th>
+            <th scope="col">sourceCount</th>
+            <th scope="col">renderedCount</th>
+            <th scope="col">heapΔ MB</th>
+            <th scope="col">aborted</th>
           </tr>
         </thead>
         <tbody>
@@ -797,15 +903,19 @@ const BenchmarkResultsTable: React.FC<ResultsTableProps> = ({ results }) => {
 interface ExportBarProps {
   results: BenchmarkResult[];
   artifact: BenchmarkArtifact | null;
+  isRunning: boolean;
 }
 
-const BenchmarkExportBar: React.FC<ExportBarProps> = ({ results, artifact }) => {
+const BenchmarkExportBar: React.FC<ExportBarProps> = ({ results, artifact, isRunning }) => {
   const filenameStub = useMemo(() => `benchmark-${Date.now()}`, []);
+  // Disable exports while a run is in flight so neither the CSV row
+  // count nor the JSON artifact summary captures a partial matrix.
+  const exportLocked = isRunning || results.length === 0;
   return (
     <div style={{ display: 'flex', gap: 8, padding: 16 }} data-testid="benchmark-export-bar">
       <button
         type="button"
-        disabled={results.length === 0}
+        disabled={exportLocked}
         onClick={() => downloadBlob(`${filenameStub}.csv`, resultsToCsv(results), 'text/csv')}
         data-testid="benchmark-export-csv"
       >
@@ -813,7 +923,7 @@ const BenchmarkExportBar: React.FC<ExportBarProps> = ({ results, artifact }) => 
       </button>
       <button
         type="button"
-        disabled={!artifact}
+        disabled={exportLocked || !artifact}
         onClick={() => {
           if (!artifact) return;
           downloadBlob(
@@ -883,6 +993,14 @@ const BenchmarkRoute: React.FC = () => {
           rAF). PR-A1.6b will add the 1M tier + Playwright artifact + the ECharts{' '}
           <code>finished</code> hook for sub-frame precision.
         </p>
+        <p
+          style={{ color: 'var(--color-text-secondary)', fontSize: 13, fontStyle: 'italic' }}
+          data-testid="benchmark-default-preset-note"
+        >
+          Default = smoke preset (uniform / medium / canvas-raw, ~4 runs in seconds). Toggle the
+          multiselects below to expand the matrix; the full 3 × 2 × 3 grid is 18 cases × (1 warmup +
+          3 measured) = 72 runs and takes 30–90s on a modern laptop.
+        </p>
       </header>
 
       <BenchmarkConfigPanel
@@ -929,7 +1047,11 @@ const BenchmarkRoute: React.FC = () => {
       </section>
 
       <BenchmarkResultsTable results={runner.results} />
-      <BenchmarkExportBar results={runner.results} artifact={artifact} />
+      <BenchmarkExportBar
+        results={runner.results}
+        artifact={artifact}
+        isRunning={runner.isRunning}
+      />
     </main>
   );
 };

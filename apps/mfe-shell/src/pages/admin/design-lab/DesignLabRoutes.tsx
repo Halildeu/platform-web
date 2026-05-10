@@ -96,19 +96,59 @@ const XSuiteRuntimePreview = lazy(() => import('./XSuiteRuntimePreview'));
 /* ------------------------------------------------------------------ */
 /*  Benchmark Route — Faz 21.11 PR-A1.6a (flag-gated, dev-only)        */
 /*                                                                     */
-/*  Fail-closed: only mounted when                                     */
-/*    VITE_ENABLE_DESIGN_LAB_BENCHMARK === "true" AND                 */
-/*    import.meta.env.MODE !== "production"                            */
+/*  Fail-closed gate. ALL THREE signals must agree before the chunk    */
+/*  is loaded:                                                         */
+/*    - VITE_ENABLE_DESIGN_LAB_BENCHMARK === "true"                    */
+/*    - import.meta.env.MODE !== "production"                          */
+/*    - import.meta.env.PROD !== true   (catches `vite build --mode    */
+/*      staging` where MODE=staging but PROD=true)                     */
+/*                                                                     */
+/*  When the gate is open the lazy chunk loads on first navigation.    */
+/*  When the gate is closed the chunk is NEVER imported — the route    */
+/*  still resolves via `BenchmarkDisabledRoute` (inline component, no  */
+/*  chunk cost, same `data-testid="benchmark-disabled"` sentinel as    */
+/*  the BenchmarkRoute's defensive banner so the Playwright smoke     */
+/*  asserts the same node either way).                                 */
 /*                                                                     */
 /*  Sidebar entry intentionally NOT registered — deep-link only        */
 /*  (`/admin/design-lab/benchmark`). Internal harness, not a public    */
 /*  user surface. The 1M tier + Playwright artifact lands in PR-A1.6b. */
 /* ------------------------------------------------------------------ */
-const benchmarkRouteEnabled: boolean =
-  import.meta.env.VITE_ENABLE_DESIGN_LAB_BENCHMARK === 'true' &&
-  import.meta.env.MODE !== 'production';
+// `import.meta.env` is not declared on the project's `ImportMeta`
+// interface (mfe-shell does not pull `vite/client` types into the
+// strict build), so cast `import.meta` itself before reading `.env`
+// rather than casting the property access expression — TS evaluates
+// the property access type before honouring the trailing `as`.
+const __benchmarkEnv = (import.meta as unknown as { env: Record<string, unknown> }).env;
+const benchmarkRouteAllowed: boolean =
+  __benchmarkEnv.VITE_ENABLE_DESIGN_LAB_BENCHMARK === 'true' &&
+  __benchmarkEnv.MODE !== 'production' &&
+  __benchmarkEnv.PROD !== true &&
+  __benchmarkEnv.PROD !== 'true';
 
-const BenchmarkRoute = benchmarkRouteEnabled ? lazy(() => import('./pages/BenchmarkRoute')) : null;
+const BenchmarkRouteLazy = benchmarkRouteAllowed
+  ? lazy(() => import('./pages/BenchmarkRoute'))
+  : null;
+
+/**
+ * Inline replacement for the benchmark route when the feature flag is
+ * off. Renders the same disabled banner the BenchmarkRoute itself
+ * would render — sharing the `benchmark-disabled` testid keeps the
+ * Playwright smoke spec single-pathed.
+ *
+ * No lazy chunk is loaded for this branch.
+ */
+function BenchmarkDisabledRoute() {
+  return (
+    <main data-testid="benchmark-disabled" style={{ padding: 24, fontFamily: 'monospace' }}>
+      <h1>Benchmark route disabled</h1>
+      <p>
+        Set <code>VITE_ENABLE_DESIGN_LAB_BENCHMARK=true</code> in a non-production Vite environment
+        to enable the scatter performance harness.
+      </p>
+    </main>
+  );
+}
 
 /* Legacy redirect targets — `FoundationsListing` and `FoundationDetail`
  * were retired when Design Tokens absorbed the layer. The remaining
@@ -291,10 +331,23 @@ export const DesignLabRoutes: React.FC = () => (
         <Route path="charts" element={<ChartsListing />} />
         <Route path="charts/:chartId" element={<ChartDetail />} />
 
-        {/* Benchmark harness (PR-A1.6a — flag-gated, deep-link only) */}
-        {benchmarkRouteEnabled && BenchmarkRoute && (
-          <Route path="benchmark" element={<BenchmarkRoute />} />
-        )}
+        {/* Benchmark harness (PR-A1.6a — flag-gated, deep-link only).
+            Route is ALWAYS registered; the lazy chunk is only loaded
+            when `benchmarkRouteAllowed` is true. Otherwise the inline
+            `BenchmarkDisabledRoute` renders a banner. This guarantees
+            the Playwright smoke spec sees a stable `benchmark-disabled`
+            node either way and the route never falls through to the
+            legacy `LegacyUrlRedirect` catch-all. */}
+        <Route
+          path="benchmark"
+          element={
+            benchmarkRouteAllowed && BenchmarkRouteLazy ? (
+              <BenchmarkRouteLazy />
+            ) : (
+              <BenchmarkDisabledRoute />
+            )
+          }
+        />
 
         {/* ---- Backward-compat redirects ---- */}
         <Route path="foundations" element={<Navigate to="/admin/design-lab/design" replace />} />

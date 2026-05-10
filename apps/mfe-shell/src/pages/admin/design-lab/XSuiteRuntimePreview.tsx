@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Text } from "@mfe/design-system";
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Text } from '@mfe/design-system';
 
 /* ------------------------------------------------------------------ */
 /*  XSuiteRuntimePreview                                                */
@@ -19,91 +19,132 @@ import { Text } from "@mfe/design-system";
 
 /* ---- Types ---- */
 
+// Components are resolved dynamically from federated packages; the
+// prop shapes vary per component, so a permissive `unknown`-prop
+// `ComponentType` keeps the indexing usable without spraying `any`.
+type AnyComponent = React.ComponentType<Record<string, unknown>>;
+
 interface RuntimeState {
-  components: Record<string, React.ComponentType<any>>;
+  components: Record<string, AnyComponent>;
   loadErrors: string[];
   loading: boolean;
 }
 
 /* ---- Async package loader ---- */
 
-async function loadRuntimePackages(): Promise<Omit<RuntimeState, "loading">> {
-  const components: Record<string, React.ComponentType<any>> = {};
+async function loadRuntimePackages(): Promise<Omit<RuntimeState, 'loading'>> {
+  const components: Record<string, AnyComponent> = {};
   const loadErrors: string[] = [];
 
   try {
-    const xCharts = await import("@mfe/x-charts");
+    // The barrel mixes value exports (chart components) and type-only
+    // exports (renderer router types added in PR-A1). Cast to a
+    // string-indexable record so the runtime lookup compiles even
+    // though `typeof` of the module no longer has an index signature.
+    const xCharts = (await import('@mfe/x-charts')) as unknown as Record<string, AnyComponent>;
     for (const key of [
-      "KPICard", "SparklineChart", "MiniChart", "ChartDashboard",
-      "StatWidget", "ChartLegend", "ChartContainer", "GaugeChart",
-      "RadarChart", "ScatterChart", "TreemapChart", "HeatmapChart",
-      "WaterfallChart",
+      'KPICard',
+      'SparklineChart',
+      'MiniChart',
+      'ChartDashboard',
+      'StatWidget',
+      'ChartLegend',
+      'ChartContainer',
+      'GaugeChart',
+      'RadarChart',
+      'ScatterChart',
+      'TreemapChart',
+      'HeatmapChart',
+      'WaterfallChart',
     ]) {
       if (xCharts[key]) components[key] = xCharts[key];
     }
   } catch {
-    loadErrors.push("@mfe/x-charts");
+    loadErrors.push('@mfe/x-charts');
   }
 
   try {
-    const xGrid = await import("@mfe/x-data-grid");
+    const xGrid = await import('@mfe/x-data-grid');
     for (const key of [
-      "DataGridFilterChips", "DataGridSelectionBar", "MasterDetailGrid",
-      "TreeDataGrid", "PivotGrid", "EditableGrid", "RowGroupingGrid",
+      'DataGridFilterChips',
+      'DataGridSelectionBar',
+      'MasterDetailGrid',
+      'TreeDataGrid',
+      'PivotGrid',
+      'EditableGrid',
+      'RowGroupingGrid',
     ]) {
       if (xGrid[key]) components[key] = xGrid[key];
     }
   } catch {
-    loadErrors.push("@mfe/x-data-grid");
+    loadErrors.push('@mfe/x-data-grid');
   }
 
   try {
-    const xEditor = await import("@mfe/x-editor");
+    const xEditor = await import('@mfe/x-editor');
     for (const key of [
-      "RichTextEditor", "EditorToolbar", "SlashCommandMenu",
-      "MentionList", "EditorTableMenu", "EditorLinkDialog",
-      "EditorImageUpload", "EditorMenuBubble",
+      'RichTextEditor',
+      'EditorToolbar',
+      'SlashCommandMenu',
+      'MentionList',
+      'EditorTableMenu',
+      'EditorLinkDialog',
+      'EditorImageUpload',
+      'EditorMenuBubble',
     ]) {
       if (xEditor[key]) components[key] = xEditor[key];
     }
   } catch {
-    loadErrors.push("@mfe/x-editor");
+    loadErrors.push('@mfe/x-editor');
   }
 
   try {
-    const xForm = await import("@mfe/x-form-builder");
+    const xForm = await import('@mfe/x-form-builder');
     for (const key of [
-      "FormRenderer", "FieldRenderer", "FormPreview", "FormSummary",
-      "MultiStepForm", "RepeatableFieldGroup",
+      'FormRenderer',
+      'FieldRenderer',
+      'FormPreview',
+      'FormSummary',
+      'MultiStepForm',
+      'RepeatableFieldGroup',
     ]) {
       if (xForm[key]) components[key] = xForm[key];
     }
   } catch {
-    loadErrors.push("@mfe/x-form-builder");
+    loadErrors.push('@mfe/x-form-builder');
   }
 
   try {
-    const xKanban = await import("@mfe/x-kanban");
+    const xKanban = await import('@mfe/x-kanban');
     for (const key of [
-      "KanbanBoard", "KanbanColumn", "KanbanCard", "KanbanToolbar",
-      "KanbanSwimlane", "KanbanCardDetail", "KanbanMetrics",
+      'KanbanBoard',
+      'KanbanColumn',
+      'KanbanCard',
+      'KanbanToolbar',
+      'KanbanSwimlane',
+      'KanbanCardDetail',
+      'KanbanMetrics',
     ]) {
       if (xKanban[key]) components[key] = xKanban[key];
     }
   } catch {
-    loadErrors.push("@mfe/x-kanban");
+    loadErrors.push('@mfe/x-kanban');
   }
 
   try {
-    const xScheduler = await import("@mfe/x-scheduler");
+    const xScheduler = await import('@mfe/x-scheduler');
     for (const key of [
-      "Scheduler", "SchedulerToolbar", "AgendaView", "EventForm",
-      "SchedulerEvent", "ResourceView",
+      'Scheduler',
+      'SchedulerToolbar',
+      'AgendaView',
+      'EventForm',
+      'SchedulerEvent',
+      'ResourceView',
     ]) {
       if (xScheduler[key]) components[key] = xScheduler[key];
     }
   } catch {
-    loadErrors.push("@mfe/x-scheduler");
+    loadErrors.push('@mfe/x-scheduler');
   }
 
   return { components, loadErrors };
@@ -111,30 +152,96 @@ async function loadRuntimePackages(): Promise<Omit<RuntimeState, "loading">> {
 
 /* ---- Default props (same as PlaygroundPreview) ---- */
 
-const RUNTIME_DEFAULT_PROPS: Record<string, Record<string, any>> = {
-  KPICard: { title: "Toplam Kullanici", value: "12,847", trend: { direction: "up", value: "+12.5%", positive: true } },
-  StatWidget: { label: "API Cagrilari", value: 45230, previousValue: 42100, format: "number" },
-  SparklineChart: { data: [10, 12, 8, 15, 13, 17, 20, 18, 22], type: "area" },
-  MiniChart: { data: [{ label: "Oca", value: 45 }, { label: "Sub", value: 52 }, { label: "Mar", value: 48 }], type: "bar" },
-  ChartContainer: { title: "Grafik Basligi", description: "Aciklama metni", height: 200 },
-  ChartLegend: { items: [{ label: "Web", color: "var(--action-primary)", value: "45%" }, { label: "Mobile", color: "var(--state-success-text)", value: "30%" }], direction: "horizontal" },
-  ChartDashboard: { columns: 3, gap: "md" },
-  GaugeChart: { value: 72, min: 0, max: 100, label: "Performans" },
-  RadarChart: { data: [{ label: "Hiz", value: 80 }, { label: "Guvenilirlik", value: 90 }, { label: "Olceklenebilirlik", value: 70 }, { label: "Kullanilabilirlik", value: 85 }, { label: "Guvenlik", value: 75 }] },
-  DataGridFilterChips: { filters: [{ id: "1", field: "status", label: "Durum", value: "Aktif" }, { id: "2", field: "role", label: "Rol", value: "Admin" }], onRemove: () => {}, onClearAll: () => {} },
+const RUNTIME_DEFAULT_PROPS: Record<string, Record<string, unknown>> = {
+  KPICard: {
+    title: 'Toplam Kullanici',
+    value: '12,847',
+    trend: { direction: 'up', value: '+12.5%', positive: true },
+  },
+  StatWidget: { label: 'API Cagrilari', value: 45230, previousValue: 42100, format: 'number' },
+  SparklineChart: { data: [10, 12, 8, 15, 13, 17, 20, 18, 22], type: 'area' },
+  MiniChart: {
+    data: [
+      { label: 'Oca', value: 45 },
+      { label: 'Sub', value: 52 },
+      { label: 'Mar', value: 48 },
+    ],
+    type: 'bar',
+  },
+  ChartContainer: { title: 'Grafik Basligi', description: 'Aciklama metni', height: 200 },
+  ChartLegend: {
+    items: [
+      { label: 'Web', color: 'var(--action-primary)', value: '45%' },
+      { label: 'Mobile', color: 'var(--state-success-text)', value: '30%' },
+    ],
+    direction: 'horizontal',
+  },
+  ChartDashboard: { columns: 3, gap: 'md' },
+  GaugeChart: { value: 72, min: 0, max: 100, label: 'Performans' },
+  RadarChart: {
+    data: [
+      { label: 'Hiz', value: 80 },
+      { label: 'Guvenilirlik', value: 90 },
+      { label: 'Olceklenebilirlik', value: 70 },
+      { label: 'Kullanilabilirlik', value: 85 },
+      { label: 'Guvenlik', value: 75 },
+    ],
+  },
+  DataGridFilterChips: {
+    filters: [
+      { id: '1', field: 'status', label: 'Durum', value: 'Aktif' },
+      { id: '2', field: 'role', label: 'Rol', value: 'Admin' },
+    ],
+    onRemove: () => {},
+    onClearAll: () => {},
+  },
   DataGridSelectionBar: { selectedCount: 3, onClearSelection: () => {} },
-  RichTextEditor: { placeholder: "Icerik yazin...", minHeight: 200 },
-  KanbanBoard: { columns: [{ id: "todo", title: "Yapilacak" }, { id: "doing", title: "Yapiliyor" }, { id: "done", title: "Tamamlandi" }], cards: [{ id: "1", columnId: "todo", title: "API entegrasyonu", priority: "high", tags: ["backend"] }, { id: "2", columnId: "doing", title: "Test yazimi", priority: "low", tags: ["qa"] }] },
-  Scheduler: { events: [{ id: "1", title: "Toplanti", start: new Date(2025, 2, 21, 10, 0), end: new Date(2025, 2, 21, 11, 30), color: "var(--action-primary)" }], view: "day", date: new Date(2025, 2, 21) },
-  FormRenderer: { schema: { id: "demo", title: "Kullanici Bilgileri", columns: 2, fields: [{ id: "name", type: "text", name: "name", label: "Ad Soyad", required: true }, { id: "email", type: "email", name: "email", label: "E-posta", required: true }], submitLabel: "Kaydet" }, onSubmit: () => {} },
+  RichTextEditor: { placeholder: 'Icerik yazin...', minHeight: 200 },
+  KanbanBoard: {
+    columns: [
+      { id: 'todo', title: 'Yapilacak' },
+      { id: 'doing', title: 'Yapiliyor' },
+      { id: 'done', title: 'Tamamlandi' },
+    ],
+    cards: [
+      { id: '1', columnId: 'todo', title: 'API entegrasyonu', priority: 'high', tags: ['backend'] },
+      { id: '2', columnId: 'doing', title: 'Test yazimi', priority: 'low', tags: ['qa'] },
+    ],
+  },
+  Scheduler: {
+    events: [
+      {
+        id: '1',
+        title: 'Toplanti',
+        start: new Date(2025, 2, 21, 10, 0),
+        end: new Date(2025, 2, 21, 11, 30),
+        color: 'var(--action-primary)',
+      },
+    ],
+    view: 'day',
+    date: new Date(2025, 2, 21),
+  },
+  FormRenderer: {
+    schema: {
+      id: 'demo',
+      title: 'Kullanici Bilgileri',
+      columns: 2,
+      fields: [
+        { id: 'name', type: 'text', name: 'name', label: 'Ad Soyad', required: true },
+        { id: 'email', type: 'email', name: 'email', label: 'E-posta', required: true },
+      ],
+      submitLabel: 'Kaydet',
+    },
+    onSubmit: () => {},
+  },
 };
 
 /* ---- Page component ---- */
 
 export default function XSuiteRuntimePreview() {
   const [params] = useSearchParams();
-  const componentName = params.get("component") || "";
-  const _variant = params.get("variant") || "default";
+  const componentName = params.get('component') || '';
+  const _variant = params.get('variant') || 'default';
 
   const [state, setState] = useState<RuntimeState>({
     components: {},
@@ -149,7 +256,9 @@ export default function XSuiteRuntimePreview() {
         setState({ ...result, loading: false });
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const { Component, defaultProps } = useMemo(() => {
@@ -161,7 +270,9 @@ export default function XSuiteRuntimePreview() {
   if (state.loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-8">
-        <Text variant="secondary" className="text-sm">Loading X Suite packages…</Text>
+        <Text variant="secondary" className="text-sm">
+          Loading X Suite packages…
+        </Text>
       </div>
     );
   }
@@ -178,7 +289,7 @@ export default function XSuiteRuntimePreview() {
           </Text>
           {state.loadErrors.length > 0 && (
             <Text variant="secondary" className="mt-3 text-xs">
-              Unavailable packages: {state.loadErrors.join(", ")}
+              Unavailable packages: {state.loadErrors.join(', ')}
             </Text>
           )}
         </div>
@@ -194,13 +305,12 @@ export default function XSuiteRuntimePreview() {
             {componentName}
           </Text>
           <Text variant="secondary" className="mt-2 text-xs leading-relaxed">
-            Component &ldquo;{componentName}&rdquo; is not available in the
-            runtime context. The package may not be installed or the component
-            is not exported.
+            Component &ldquo;{componentName}&rdquo; is not available in the runtime context. The
+            package may not be installed or the component is not exported.
           </Text>
           {state.loadErrors.length > 0 && (
             <Text variant="secondary" className="mt-3 text-xs">
-              Failed packages: {state.loadErrors.join(", ")}
+              Failed packages: {state.loadErrors.join(', ')}
             </Text>
           )}
         </div>

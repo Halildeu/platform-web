@@ -70,6 +70,14 @@ test.describe('Design Lab benchmark route smoke (PR-A1.6a)', () => {
       timeout: 60_000,
     });
 
+    // Wait for the run to actually complete. The runner re-enables
+    // the "Run benchmark" button (with the original "Run benchmark"
+    // label) when `isRunning` flips back to false. Waiting for this
+    // signal is what guarantees the JSON export captures the FULL
+    // matrix, not a partial snapshot mid-run.
+    await expect(runButton).toBeEnabled({ timeout: 60_000 });
+    await expect(runButton).toHaveText(/Run benchmark/, { timeout: 5_000 });
+
     // Trigger the JSON export and capture the downloaded blob.
     const downloadPromise = page.waitForEvent('download', { timeout: 15_000 });
     await page.getByTestId('benchmark-export-json').click();
