@@ -457,6 +457,18 @@ export {
   type ComputeHierarchicalAnomalySummaryOptions,
   type HierarchicalAnomalyNode,
 } from './annotations/computeHierarchicalAnomalySummary';
+// Faz 21.11 batch3 sequential PR-Sankey — dual-mode IQR detector for
+// Sankey flow charts. Emits AnomalySummary[] with kind='sankey-edge'
+// (default; per-link flow outliers) or kind='sankey-node' (per-node
+// throughput outliers) + source/target/edgeId/nodeId/flowValue
+// metadata so the ChartAriaLive sankey templates fire. Codex thread
+// `019e1110` PR-Sankey plan iter-1.
+export {
+  computeSankeyAnomalySummary,
+  type ComputeSankeyAnomalySummaryOptions,
+  type SankeyAnomalyNode,
+  type SankeyAnomalyLink,
+} from './annotations/computeSankeyAnomalySummary';
 // PR-A2b-a11y — anomaly announcement formatter type for consumers
 // who want to override the default EN/TR template.
 export type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
