@@ -161,7 +161,8 @@ export {
   useCrossFilterStoreApi,
 } from './cross-filter/useCrossFilterStore';
 export { useChartCrossFilter } from './cross-filter/useChartCrossFilter';
-export { useGridCrossFilter } from './cross-filter/useGridCrossFilter';
+export { useGridCrossFilter, brushFilterKey } from './cross-filter/useGridCrossFilter';
+export type { BrushFilterValue } from './cross-filter/useGridCrossFilter';
 export { createEventBridge } from './cross-filter/eventBridge';
 export {
   filtersByGroup,

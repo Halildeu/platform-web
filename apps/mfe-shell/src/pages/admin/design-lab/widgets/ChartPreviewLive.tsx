@@ -39,6 +39,11 @@ import {
 } from '@mfe/x-charts';
 import CrossFilterDemoLive from './CrossFilterDemoLive';
 import CrossFilterGridDemoLive from './CrossFilterGridDemoLive';
+// Faz 21.11 PR-A2c-adopt — scatter brush + AG Grid mock filter
+// model demo. Lives next to the existing bar→grid wiring so the
+// design-lab tester can compare click-driven vs brush-driven
+// cross-filter pipelines side by side under the same chart-id.
+import ScatterBrushGridDemoLive from './ScatterBrushGridDemoLive';
 import DrillDownDemoLive from './DrillDownDemoLive';
 import FeatureDemoLive, { type FeatureId } from './FeatureDemoLive';
 import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
@@ -928,12 +933,28 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
 
     case 'cross-filter-grid':
       // Faz 21.4 PR-B: chart → grid cross-filter bridge demo.
+      // Faz 21.11 PR-A2c-adopt: stacked the new scatter brush
+      // demo underneath so both adoption paths share a single
+      // chart-id without duplicating navigation. The bar/grid
+      // demo proves click-driven cross-filter (legacy); the
+      // scatter/grid demo proves brush-driven cross-filter
+      // (PR-A2c helper layer + PR-A2c-wire ScatterChart prop +
+      // PR-A2c-adopt useGridCrossFilter brush merge).
       return (
         <div
           data-testid={testId}
           style={{ width: '100%', maxWidth: 720, background: 'var(--surface-canvas, #ffffff)' }}
         >
           <CrossFilterGridDemoLive />
+          <div
+            style={{
+              marginTop: 24,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border-subtle, #e5e7eb)',
+            }}
+          >
+            <ScatterBrushGridDemoLive />
+          </div>
         </div>
       );
 

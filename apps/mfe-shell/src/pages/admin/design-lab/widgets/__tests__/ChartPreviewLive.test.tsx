@@ -99,8 +99,20 @@ vi.mock('@mfe/x-charts', () => {
       clearOwnFilter: vi.fn(),
     }),
     useCrossFilterStoreApi: () => ({
-      getState: () => ({ clearAllFilters: vi.fn() }),
+      getState: () => ({
+        clearAllFilters: vi.fn(),
+        // Faz 21.11 PR-A2c-adopt: ScatterBrushGridDemoLive calls
+        // these inside its `onBrushSelection` handler. Smoke
+        // tests don't drag the brush so the handler never fires,
+        // but stubbing them keeps the mock surface honest.
+        setFilter: vi.fn(),
+        removeFilter: vi.fn(),
+      }),
     }),
+    // Faz 21.11 PR-A2c-adopt: stable brush filter key helper.
+    // The smoke test renders the demo but never drags a brush,
+    // so this only needs to exist as a callable.
+    brushFilterKey: (x: string, y: string) => `__brush__:${x}:${y}`,
     useGridCrossFilter: () => ({
       activeFilters: [],
       pushGridFilters: vi.fn(),
@@ -247,9 +259,13 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
 
   /* Faz 21.4 PR-B — drill-down + chart-to-grid cross-filter demos */
 
-  it('chart-id "cross-filter-grid" mounts CrossFilterGridDemoLive', () => {
+  it('chart-id "cross-filter-grid" mounts CrossFilterGridDemoLive AND ScatterBrushGridDemoLive (PR-A2c-adopt stack)', () => {
     render(<ChartPreviewLive chartId="cross-filter-grid" chartName="cross-filter-grid preview" />);
     expect(screen.getByTestId('cross-filter-grid-demo')).toBeInTheDocument();
+    // PR-A2c-adopt: brush demo stacks under the legacy bar/grid
+    // demo so both adoption paths share one chart-id.
+    expect(screen.getByTestId('scatter-brush-grid-demo')).toBeInTheDocument();
+    expect(screen.getByTestId('scatter-brush-grid-mock-panel')).toBeInTheDocument();
     expect(screen.getByTestId('design-lab-chart-preview-cross-filter-grid')).toBeInTheDocument();
   });
 
