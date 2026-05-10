@@ -13,7 +13,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateBenchmarkArtifact, buildSummaryMarkdown } from '../benchmark-1m-enforcer.mjs';
+import {
+  evaluateBenchmarkArtifact,
+  buildSummaryMarkdown,
+  evaluateBenchmarkCorrectness,
+} from '../benchmark-1m-enforcer.mjs';
 
 const SCHEMA_VERSION = 'design-lab-scatter-benchmark.v2';
 
@@ -382,6 +386,86 @@ test('evaluateBenchmarkArtifact: workflow_dispatch keeps running with unusable b
   const webgl = v.cases.find((c) => c.case === 'uniform/million/webgl');
   assert.equal(webgl.verdict, 'warn');
   assert.match(webgl.notes.join(' '), /baseline ignored.*schemaVersion/);
+});
+
+/* ------------------------------------------------------------------ */
+/*  PR-A2a — correctness gate fixtures                                 */
+/* ------------------------------------------------------------------ */
+
+const CORRECTNESS_THRESHOLDS = {
+  [SCHEMA_VERSION]: {
+    correctness: {
+      _documentation: 'fixture comment',
+      'spike/million/anomaly-lttb': {
+        minRecallAt2000: 0.95,
+        maxRenderedCount: 2000,
+        maxPrepMs: 350,
+        seed: '0x5eedc1f',
+        spikeCount: 64,
+        sourceCount: 1_000_000,
+      },
+    },
+  },
+};
+
+test('evaluateBenchmarkCorrectness: pass when recall + renderedCount + prepMs all within budget', async () => {
+  const v = await evaluateBenchmarkCorrectness(CORRECTNESS_THRESHOLDS, async (key, caseCfg) => {
+    assert.equal(key, 'spike/million/anomaly-lttb');
+    assert.equal(caseCfg.minRecallAt2000, 0.95);
+    return { recall: 1.0, renderedCount: 1500, prepMs: 120 };
+  });
+  assert.equal(v.ok, true);
+  assert.equal(v.cases.length, 1);
+  assert.equal(v.cases[0].verdict, 'pass');
+});
+
+test('evaluateBenchmarkCorrectness: fail when recall is below the configured minimum', async () => {
+  const v = await evaluateBenchmarkCorrectness(CORRECTNESS_THRESHOLDS, async () => ({
+    recall: 0.5,
+    renderedCount: 1500,
+    prepMs: 120,
+  }));
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /recall .* < required/);
+});
+
+test('evaluateBenchmarkCorrectness: fail when output blows the rendered-count cap', async () => {
+  const v = await evaluateBenchmarkCorrectness(CORRECTNESS_THRESHOLDS, async () => ({
+    recall: 1.0,
+    renderedCount: 5000,
+    prepMs: 120,
+  }));
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /renderedCount/);
+});
+
+test('evaluateBenchmarkCorrectness: warn (not fail) when prep time blows the advisory budget only', async () => {
+  const v = await evaluateBenchmarkCorrectness(CORRECTNESS_THRESHOLDS, async () => ({
+    recall: 1.0,
+    renderedCount: 1500,
+    prepMs: 500, // > 350 advisory
+  }));
+  assert.equal(v.ok, true); // advisory only
+  assert.equal(v.cases[0].verdict, 'warn');
+  assert.match(v.cases[0].notes.join(' '), /advisory/);
+});
+
+test('evaluateBenchmarkCorrectness: hard fail when the namespace is missing the correctness block', async () => {
+  const v = await evaluateBenchmarkCorrectness({ [SCHEMA_VERSION]: { cases: {} } }, async () => ({
+    recall: 1.0,
+    renderedCount: 0,
+    prepMs: 0,
+  }));
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /missing the .*correctness/);
+});
+
+test('evaluateBenchmarkCorrectness: fail when runCase throws', async () => {
+  const v = await evaluateBenchmarkCorrectness(CORRECTNESS_THRESHOLDS, async () => {
+    throw new Error('synthetic runCase failure');
+  });
+  assert.equal(v.ok, false);
+  assert.match(v.reason, /runCase threw/);
 });
 
 test('buildSummaryMarkdown: produces sticky-comment markers + verdict cell', () => {

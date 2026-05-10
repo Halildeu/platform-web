@@ -290,6 +290,16 @@ export { useOfflineCache } from './collaboration/offline-cache';
 /* ------------------------------------------------------------------ */
 
 export { downsampleLTTB } from './performance/lttb';
+// PR-A2a — anomaly-preserving LTTB. `unstable_*` prefix + JSDoc
+// `@internal` advertise that production code should not depend on
+// the symbol or its option shape; the design-lab benchmark route
+// and the correctness enforcer are the only sanctioned consumers.
+export { unstable_downsampleAnomalyPreservingLTTB } from './performance/anomaly-lttb';
+export type {
+  AnomalyPoint,
+  AnomalyDownsampleOptions,
+  AnomalyDetector,
+} from './performance/anomaly-lttb';
 export { createWorkerBridge } from './performance/worker-bridge';
 export type { WorkerBridge, WorkerTask } from './performance/worker-bridge';
 export { useProgressiveRender } from './performance/progressive-render';

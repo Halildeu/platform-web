@@ -65,6 +65,7 @@ function parseArgs(argv) {
     mode: null,
     summaryOut: null,
     jsonOut: null,
+    correctnessOnly: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -75,6 +76,7 @@ function parseArgs(argv) {
     else if (a === '--mode') out.mode = argv[++i];
     else if (a === '--summary-out') out.summaryOut = argv[++i];
     else if (a === '--json-out') out.jsonOut = argv[++i];
+    else if (a === '--check-correctness-only') out.correctnessOnly = true;
   }
   return out;
 }
@@ -395,6 +397,103 @@ export function buildSummaryMarkdown(verdict, meta) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Correctness gate (PR-A2a)                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @typedef {object} CorrectnessCaseConfig
+ * @property {number} minRecallAt2000
+ * @property {number} maxRenderedCount
+ * @property {number} [maxPrepMs]   — advisory in v2; not yet hard
+ * @property {string} [seed]
+ * @property {number} [spikeCount]
+ * @property {number} [sourceCount]
+ *
+ * @typedef {object} CorrectnessRunResult
+ * @property {string} case
+ * @property {'pass'|'fail'|'warn'} verdict
+ * @property {number} recall
+ * @property {number} renderedCount
+ * @property {number} prepMs
+ * @property {string[]} reasons
+ * @property {string[]} notes
+ *
+ * @typedef {object} CorrectnessVerdict
+ * @property {boolean} ok
+ * @property {string} reason
+ * @property {CorrectnessRunResult[]} cases
+ */
+
+/**
+ * Evaluate the `correctness` block of the threshold config. Pure
+ * function — caller passes `runCase(caseKey, caseCfg)` so the test
+ * suite can stub out the synthetic fixture + downsampler instead of
+ * pulling the production modules in.
+ *
+ * @param {object} thresholds
+ * @param {(caseKey: string, caseCfg: CorrectnessCaseConfig) => Promise<{recall: number, renderedCount: number, prepMs: number}>} runCase
+ * @returns {Promise<CorrectnessVerdict>}
+ */
+export async function evaluateBenchmarkCorrectness(thresholds, runCase) {
+  const cfg = thresholds?.[SCHEMA_VERSION];
+  if (!cfg || typeof cfg.correctness !== 'object') {
+    return {
+      ok: false,
+      reason: `benchmark-thresholds.json is missing the "${SCHEMA_VERSION}.correctness" namespace`,
+      cases: [],
+    };
+  }
+  const cases = [];
+  const errors = [];
+  for (const [key, raw] of Object.entries(cfg.correctness)) {
+    if (key.startsWith('_')) continue; // skip _documentation et al
+    const caseCfg = /** @type {CorrectnessCaseConfig} */ (raw);
+    const reasons = [];
+    const notes = [];
+    let recall = 0;
+    let renderedCount = 0;
+    let prepMs = 0;
+    try {
+      const r = await runCase(key, caseCfg);
+      recall = r.recall;
+      renderedCount = r.renderedCount;
+      prepMs = r.prepMs;
+    } catch (err) {
+      reasons.push(`runCase threw: ${err && err.message ? err.message : String(err)}`);
+    }
+    if (recall < caseCfg.minRecallAt2000) {
+      reasons.push(`recall ${recall.toFixed(4)} < required ${caseCfg.minRecallAt2000.toFixed(4)}`);
+    }
+    if (renderedCount > caseCfg.maxRenderedCount) {
+      reasons.push(`renderedCount ${renderedCount} > maxRenderedCount ${caseCfg.maxRenderedCount}`);
+    }
+    if (caseCfg.maxPrepMs && prepMs > caseCfg.maxPrepMs) {
+      // Advisory in PR-A2a; flip to a hard fail when the self-hosted
+      // GPU runner has a stable enough prep budget. See the
+      // threshold's `_documentation` block.
+      notes.push(
+        `prepMs ${prepMs.toFixed(2)} > maxPrepMs ${caseCfg.maxPrepMs.toFixed(2)} (advisory)`,
+      );
+    }
+    cases.push({
+      case: key,
+      verdict: reasons.length > 0 ? 'fail' : notes.length > 0 ? 'warn' : 'pass',
+      recall,
+      renderedCount,
+      prepMs,
+      reasons,
+      notes,
+    });
+    if (reasons.length > 0) errors.push(`${key}: ${reasons.join('; ')}`);
+  }
+  return {
+    ok: errors.length === 0,
+    reason: errors.length === 0 ? 'all correctness cases pass' : errors.join(' | '),
+    cases,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  CLI                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -409,14 +508,64 @@ function loadJson(path, label) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.artifactPath || !args.thresholdsPath || !args.mode) {
+  if (!args.thresholdsPath) {
+    console.error('[enforcer] Required: --thresholds <path>');
+    process.exit(2);
+  }
+  const thresholds = loadJson(args.thresholdsPath, 'thresholds');
+
+  // PR-A2a correctness gate path. Doesn't need an artifact — runs
+  // the synthetic spike fixture in-process and checks recall / row
+  // count against the `correctness` block of the threshold config.
+  if (args.correctnessOnly) {
+    // Lazy-load the package source so the heavy 1M fixture isn't
+    // pulled in for the artifact-driven path.
+    const { generateSpikeScatter } =
+      await import('../../packages/x-charts/src/performance/benchmark/fixtures.ts').catch(
+        async () => {
+          // node CLI cannot import .ts directly; fall back to the same
+          // path under the build output if the consumer ran a build
+          // first. Tests stub `runCase` directly so this is only the
+          // production path.
+          throw new Error(
+            '[enforcer] --check-correctness-only requires a runtime that resolves the .ts source (tsx/vitest), or a pre-built bundle. Use the test seam `evaluateBenchmarkCorrectness` directly when wiring CI.',
+          );
+        },
+      );
+    const { unstable_downsampleAnomalyPreservingLTTB, computeAnomalyRecall } =
+      await import('../../packages/x-charts/src/performance/anomaly-lttb.ts');
+    const verdict = await evaluateBenchmarkCorrectness(thresholds, async (_key, caseCfg) => {
+      const seedNum =
+        typeof caseCfg.seed === 'string' && caseCfg.seed.startsWith('0x')
+          ? Number.parseInt(caseCfg.seed.slice(2), 16)
+          : Number(caseCfg.seed ?? 0);
+      const { points, spikeIndices } = generateSpikeScatter(
+        caseCfg.sourceCount ?? 1_000_000,
+        caseCfg.spikeCount ?? 64,
+        seedNum,
+      );
+      const data = points.map((p, i) => ({ x: p.x, y: p.y, originalIndex: i }));
+      const t0 = performance.now();
+      const out = unstable_downsampleAnomalyPreservingLTTB(data, caseCfg.maxRenderedCount);
+      const prepMs = performance.now() - t0;
+      const recall = computeAnomalyRecall(out, spikeIndices);
+      return { recall, renderedCount: out.length, prepMs };
+    });
+    if (args.summaryOut) {
+      writeFileSync(args.summaryOut, JSON.stringify(verdict, null, 2), 'utf-8');
+    } else {
+      console.log(JSON.stringify(verdict, null, 2));
+    }
+    process.exit(verdict.ok ? 0 : 1);
+  }
+
+  if (!args.artifactPath || !args.mode) {
     console.error(
-      '[enforcer] Required: --artifact <path> --thresholds <path> --mode <pr|workflow_dispatch>',
+      '[enforcer] Required for artifact mode: --artifact <path> --mode <pr|workflow_dispatch>',
     );
     process.exit(2);
   }
   const artifact = loadJson(args.artifactPath, 'artifact');
-  const thresholds = loadJson(args.thresholdsPath, 'thresholds');
   const baseline =
     args.noBaseline || !args.baselinePath ? null : loadJson(args.baselinePath, 'baseline');
 

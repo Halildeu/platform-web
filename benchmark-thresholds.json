@@ -28,6 +28,18 @@
         "requiredRunnerProfile": "self-hosted-gpu",
         "description": "Reference rail. Canvas + LTTB downsample (target 2K points). Held lower than the WebGL gate so the artifact comparison shows the size of the WebGL win."
       }
+    },
+    "correctness": {
+      "_documentation": "PR-A2a anomaly-preserving LTTB recall gate. Consumed by `evaluateBenchmarkCorrectness` in `scripts/ci/benchmark-1m-enforcer.mjs` (CLI flag `--check-correctness-only`). Unlike the artifact-driven `cases` block, correctness gates run a deterministic synthetic fixture in-process — no benchmark artifact required. Threshold edits MUST land via PR review.",
+      "spike/million/anomaly-lttb": {
+        "minRecallAt2000": 0.95,
+        "maxRenderedCount": 2000,
+        "maxPrepMs": 350,
+        "seed": "0x5eedc1f",
+        "spikeCount": 64,
+        "sourceCount": 1000000,
+        "description": "Anomaly-preserving LTTB MUST keep ≥95% of the 64 injected spikes when collapsing a 1M-point fixture down to 2000 points. `maxPrepMs` is advisory in the v2 introduction (CI runner variance); flip to fail-closed once the self-hosted GPU runner profile is stable."
+      }
     }
   }
 }
