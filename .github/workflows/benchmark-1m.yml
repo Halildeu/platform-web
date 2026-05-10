@@ -1,18 +1,32 @@
-name: Design Lab Benchmark — 1M Artifact (PR-A1.6b)
+name: Design Lab Benchmark — 1M Artifact (PR-A1.6b + PR-A1.6c gate)
 
-# Manual-only workflow that produces the 1M scatter benchmark
-# artifact and uploads it as a GHA artifact for trend review.
+# Produces the 1M scatter benchmark artifact and runs the hard KPI
+# gate enforcer (PR-A1.6c) on a self-hosted GPU runner. Two trigger
+# modes:
 #
-# - workflow_dispatch only — no PR / push trigger. Codex iter
-#   thread `019e0f36` agreed: GitHub-hosted runners can't carry a
-#   hard 1M WebGL gate (SwiftShader vs real GPU jitter). PR-A1.6c
-#   adds the self-hosted profile + threshold enforcement.
-# - Boots `vite dev` so the `/admin/design-lab/benchmark` route's
-#   fail-closed gate (PROD must be false) opens.
-# - Plays the dedicated spec at
-#   tests/playwright/design-lab.benchmark-1m-artifact.spec.ts via
-#   the env switch `RUN_DESIGN_LAB_BENCHMARK=1`. Default `pw:ci`
-#   runs do NOT load this spec (the spec auto-skips otherwise).
+#   workflow_dispatch — manual run on any branch / SHA. Used to
+#     bootstrap the `main` baseline artifact and to debug locally.
+#     Falls back to absolute-only thresholds when the baseline is
+#     missing.
+#
+#   pull_request labeled `bench-1m-gate` — turns the gate red on the
+#     PR check when the artifact regresses past the configured
+#     thresholds (`benchmark-thresholds.json :: design-lab-scatter-
+#     benchmark.v2`). Triggered only on same-repo PRs (fork PRs
+#     never touch the GPU runner).
+#
+# The runner identity is `[self-hosted, linux, x64, gpu, platform-
+# web-benchmark-1m]` — the runbook at
+# `docs/operations/benchmark-self-hosted-runner.md` documents the
+# provisioning steps an operator follows to register a runner with
+# that label set. Until at least one operator-provisioned runner is
+# online the workflow stays queued; this is intentional — Codex
+# thread `019e0f63` iter-1 made the explicit call that GitHub-hosted
+# SwiftShader can't carry a hard 1M WebGL gate.
+#
+# The hard KPI threshold itself lives in `benchmark-thresholds.json`
+# under the `design-lab-scatter-benchmark.v2` namespace; threshold
+# edits land via PR review like any other config.
 
 on:
   workflow_dispatch:
@@ -20,10 +34,17 @@ on:
       ref:
         description: 'Branch / SHA to benchmark (defaults to the workflow ref).'
         required: false
+  pull_request:
+    types: [labeled, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
   actions: read
+  # Sticky comment + (optional) status update needs both. Keep them
+  # narrow — no `write` on `contents` so the runner can't push a
+  # commit.
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: benchmark-1m-${{ github.event.inputs.ref || github.ref }}
@@ -31,9 +52,28 @@ concurrency:
 
 jobs:
   benchmark-1m:
-    name: 1M scatter benchmark (Chromium, GHA-hosted, trend artifact)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    name: 1M scatter benchmark + hard KPI gate
+    # SECURITY: never run a fork PR on the self-hosted GPU runner.
+    # The label gate is maintainer-controlled, but a fork PR can
+    # synchronise after a maintainer adds the label and re-trigger
+    # the workflow with attacker-controlled code in `head.repo`.
+    # The `head.repo.full_name == github.repository` check pins the
+    # job to same-repo branches only.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'bench-1m-gate')
+      )
+    runs-on: [self-hosted, linux, x64, gpu, platform-web-benchmark-1m]
+    timeout-minutes: 35
+
+    env:
+      # `pull_request` events surface as `pr` to the enforcer (fail-
+      # closed on missing baseline); everything else is treated as
+      # `workflow_dispatch` (absolute-only fallback).
+      ENFORCER_MODE: ${{ github.event_name == 'pull_request' && 'pr' || 'workflow_dispatch' }}
 
     steps:
       - name: Checkout
@@ -95,6 +135,7 @@ jobs:
           PW_FAKE_AUTH: '1'
           PLAYWRIGHT_VERSION: ${{ steps.chromium.outputs.version }}
           CHROMIUM_VERSION: ${{ steps.chromium.outputs.version }}
+          BENCHMARK_RUNNER_PROFILE: self-hosted-gpu
         run: |
           npx playwright test \
             tests/playwright/design-lab.benchmark-1m-artifact.spec.ts \
@@ -109,6 +150,105 @@ jobs:
             kill "$VITE_PID" || true
           fi
 
+      - name: Locate artifact JSON
+        id: artifact
+        if: always()
+        run: |
+          path=$(find test-results -name 'benchmark-1m-artifact.json' -type f | head -1)
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          if [ -z "$path" ]; then
+            echo "::warning::benchmark-1m-artifact.json not produced"
+          fi
+
+      - name: Download main baseline artifact (best effort)
+        id: baseline
+        if: steps.artifact.outputs.path != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p baseline
+          # Fetch the most recent benchmark-1m artifact uploaded by
+          # the same workflow run on `main`. Codex iter-2: do NOT
+          # use actions/cache as the baseline source — the cache key
+          # would be branch-bound and is mutable.
+          set +e
+          run_id=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/benchmark-1m.yml/runs?branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0].id')
+          set -e
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            echo "no main baseline run found — enforcer will see --no-baseline"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh run download "$run_id" \
+            --repo "${{ github.repository }}" \
+            --dir baseline \
+            --name "benchmark-1m-${run_id}-*" || true
+          baseline_path=$(find baseline -name 'benchmark-1m-artifact.json' -type f | head -1)
+          if [ -n "$baseline_path" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "path=$baseline_path" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run benchmark-1m enforcer
+        id: enforce
+        if: steps.artifact.outputs.path != ''
+        run: |
+          flags=""
+          if [ "${{ steps.baseline.outputs.found }}" = "true" ]; then
+            flags="--baseline ${{ steps.baseline.outputs.path }}"
+          else
+            flags="--no-baseline"
+          fi
+          mkdir -p enforcer-out
+          set +e
+          node scripts/ci/benchmark-1m-enforcer.mjs \
+            --artifact "${{ steps.artifact.outputs.path }}" \
+            --thresholds benchmark-thresholds.json \
+            --mode "$ENFORCER_MODE" \
+            $flags \
+            --summary-out enforcer-out/summary.md \
+            --json-out enforcer-out/verdict.json
+          enforcer_exit=$?
+          set -e
+          echo "exit=$enforcer_exit" >> "$GITHUB_OUTPUT"
+          # Append the markdown summary to the GHA job summary panel
+          # so the operator can see the verdict without downloading
+          # any artifact.
+          cat enforcer-out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update sticky PR comment
+        if: github.event_name == 'pull_request' && steps.artifact.outputs.path != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        # Comment update is non-fatal: even if GitHub API blips the
+        # benchmark verdict from the enforcer step has already
+        # decided pass/fail.
+        continue-on-error: true
+        run: |
+          # Find the existing sticky comment by marker.
+          marker='<!-- benchmark-1m:start -->'
+          existing=$(gh api \
+            "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$marker\")) | .id" \
+            | head -1)
+          body_path=enforcer-out/summary.md
+          if [ -n "$existing" ]; then
+            gh api \
+              -X PATCH \
+              "repos/${{ github.repository }}/issues/comments/$existing" \
+              -f body="$(cat $body_path)"
+          else
+            gh api \
+              -X POST \
+              "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+              -f body="$(cat $body_path)"
+          fi
+
       - name: Upload benchmark artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -116,6 +256,13 @@ jobs:
           name: benchmark-1m-${{ github.run_id }}-${{ github.sha }}
           path: |
             test-results/**/benchmark-1m-artifact.json
+            enforcer-out/**
             vite-dev.log
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Fail job on enforcer verdict
+        if: steps.artifact.outputs.path != '' && steps.enforce.outputs.exit != '0'
+        run: |
+          echo "::error::benchmark-1m enforcer failed (exit ${{ steps.enforce.outputs.exit }})"
+          exit 1
