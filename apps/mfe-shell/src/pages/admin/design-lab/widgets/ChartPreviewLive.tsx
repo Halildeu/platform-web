@@ -31,6 +31,7 @@ import {
   ChartContainer,
   ChartToolbar,
   useChartInteractions,
+  useAnomalyOverlay,
   useResponsiveBreakpoint,
   // Faz 21.9 PR3a: shared chart-size contract — replaces the local
   // CHART_CANVAS_HEIGHT mirror that used to live in this file.
@@ -397,6 +398,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'scatter-chart': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      // PR-A2b-ui (Codex thread `019e0fbf` iter-1): the anomaly
+      // overlay hook MUST live in its own component, not inside this
+      // switch case — calling `useAnomalyOverlay` directly here
+      // would conditionally fire a hook depending on the chart id
+      // and trip React's "Rules of Hooks". The child component
+      // `ScatterAnomalyDemoChart` (defined below the switch) takes
+      // every existing prop and the new `showAnomalyPills` toggle.
       return (
         <PreviewBox
           ref={containerRef}
@@ -404,7 +412,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           height={finalHeight}
           surfaceStyle={surfaceStyle}
         >
-          <ScatterChart
+          <ScatterAnomalyDemoChart
             data={values1.map((v, i) => ({ x: v, y: values2[i], label: categories[i] }))}
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
@@ -426,6 +434,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            showAnomalyPills={isOn(toggles, 'showAnomalyPills', true)}
           />
         </PreviewBox>
       );
@@ -1046,6 +1055,91 @@ const ChartToolbarShowcase: React.FC<{ chartName: string }> = ({ chartName }) =>
         )}
       </div>
     </div>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  PR-A2b-ui — Scatter explanation pill demo child                    */
+/*                                                                     */
+/*  Codex thread `019e0fbf` iter-1 explicitly required hoisting the    */
+/*  hook out of the switch case so React's "Rules of Hooks" stays      */
+/*  honoured (the switch picks a chart per render, calling the hook    */
+/*  conditionally would split between renders).                        */
+/*                                                                     */
+/*  `showAnomalyPills` defaults to ON so the design-lab scatter        */
+/*  route surfaces the new anomaly explanation pill on first load —    */
+/*  Codex thread `019e0fcb` iter-2 RED #2/#3 caught that the demo      */
+/*  was previously invisible (no toggle wiring + flat sample data).    */
+/*  When the flag is on, the IQR-detected anomalies surface as         */
+/*  warning-tinted "Outlier: y=…" pills on top of the existing         */
+/*  scatter data points; click flows through the chart's standard      */
+/*  `onMarkupClick` (still wired by the switch above) so consumers     */
+/*  decide whether to open a modal, a sidebar, or just log.            */
+/* ------------------------------------------------------------------ */
+
+interface ScatterAnomalyDemoChartProps extends React.ComponentProps<typeof ScatterChart> {
+  showAnomalyPills?: boolean;
+}
+
+/**
+ * Inject one obvious high-side outlier so the IQR fence has
+ * something to flag. The mock scatter dataset that ships with
+ * `ChartPreviewLive` is too flat (Codex iter-2 RED #3 — vanilla y
+ * series sits inside the fence) and would otherwise leave the
+ * overlay invisible. We add a single `(maxX + 1, max(y) * 4)`
+ * point so the demo shows BOTH the marker and the warning-tinted
+ * pill without changing the rest of the playground sample.
+ */
+function injectDemoOutlier<T extends { x: number; y: number; label?: string }>(data: T[]): T[] {
+  if (data.length === 0) return data;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const d of data) {
+    if (typeof d.x === 'number' && d.x > maxX) maxX = d.x;
+    if (typeof d.y === 'number' && d.y > maxY) maxY = d.y;
+  }
+  const outlier = {
+    x: Number.isFinite(maxX) ? maxX + 1 : data.length,
+    y: Number.isFinite(maxY) ? Math.max(maxY * 4, maxY + 100) : 100,
+    label: 'Anomaly demo spike',
+  } as T;
+  return [...data, outlier];
+}
+
+const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
+  showAnomalyPills = true,
+  data,
+  valueFormatter,
+  ...rest
+}) => {
+  // When the demo toggle is on we extend the dataset with a guaranteed
+  // outlier so the overlay actually has something to highlight; the
+  // augmented array is what we feed BOTH the chart and the hook.
+  const augmentedData = React.useMemo(
+    () => (showAnomalyPills ? injectDemoOutlier(data) : data),
+    [data, showAnomalyPills],
+  );
+  const overlayInput = React.useMemo(
+    () =>
+      showAnomalyPills
+        ? augmentedData.map((d) => ({ x: d.x, y: d.y }))
+        : ([] as ReadonlyArray<{ x: number; y: number }>),
+    [augmentedData, showAnomalyPills],
+  );
+  const anomalyMarkups = useAnomalyOverlay({
+    data: overlayInput as { x: number; y: number }[],
+    labelVariant: 'pill',
+    maxPills: 20,
+    idPrefix: 'scatter-demo-anomaly',
+    valueFormatter,
+  });
+  return (
+    <ScatterChart
+      {...rest}
+      data={augmentedData}
+      valueFormatter={valueFormatter}
+      markups={showAnomalyPills ? anomalyMarkups : undefined}
+    />
   );
 };
 

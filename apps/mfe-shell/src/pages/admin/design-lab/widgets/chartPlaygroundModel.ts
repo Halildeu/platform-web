@@ -440,6 +440,14 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'accent',
     'access',
     'accessReason',
+    // PR-A2b-ui note: `showAnomalyPills` is intentionally NOT
+    // listed here. It isn't a real `ScatterChart` public prop —
+    // counting it under LIVE_PROP_SUPPORT would inflate the
+    // playground coverage stats AND drift the count contract this
+    // file's unit tests pin (Codex thread `019e0fcb` iter-3 H#1).
+    // The demo defaults to ON inside `ScatterAnomalyDemoChart`;
+    // a future PR can ship a real playground-only descriptor knob
+    // if an explicit on/off control is wanted.
   ]),
   'gauge-chart': new Set([
     'size',
@@ -769,7 +777,6 @@ export function getCallbackPreset<E>(
   switch (presetId) {
     case 'console-log':
       return (event) => {
-         
         console.log('[design-lab playground] chart click', event);
       };
     case 'alert':
