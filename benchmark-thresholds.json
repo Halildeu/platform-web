@@ -12,5 +12,22 @@
   },
   "x-kanban": {
     "render-50-cards": { "max_ms": 30, "description": "Board with 50 cards across 5 columns" }
+  },
+  "design-lab-scatter-benchmark.v2": {
+    "_documentation": "PR-A1.6c hard KPI gate config. Consumed by `scripts/ci/benchmark-1m-enforcer.mjs` against the artifact produced by `.github/workflows/benchmark-1m.yml`. Each case key matches the artifact `summary.medianRenderMsByCase` key (`fixture/tier/backend`). `medianRenderMsMax` is the absolute ceiling (the 1.5s public claim for WebGL); `baselineRegressionMaxPct` caps drift vs the latest `main` artifact at `gh api repos/.../actions/artifacts`; `requiredRunnerProfile` blocks GitHub-hosted SwiftShader runs from claiming the gate. Threshold edits MUST land via PR review.",
+    "cases": {
+      "uniform/million/webgl": {
+        "medianRenderMsMax": 1500,
+        "baselineRegressionMaxPct": 10,
+        "requiredRunnerProfile": "self-hosted-gpu",
+        "description": "Faz 21.11 PR-A1 leadership claim: 1M scatter WebGL warm render <1.5s, Chromium, animation disabled, fixture pre-generated, measured from setOption start mark to ECharts finished + 2 rAF, median of 5 runs."
+      },
+      "uniform/million/canvas-lttb": {
+        "medianRenderMsMax": 800,
+        "baselineRegressionMaxPct": 15,
+        "requiredRunnerProfile": "self-hosted-gpu",
+        "description": "Reference rail. Canvas + LTTB downsample (target 2K points). Held lower than the WebGL gate so the artifact comparison shows the size of the WebGL win."
+      }
+    }
   }
 }

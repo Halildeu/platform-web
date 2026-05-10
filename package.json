@@ -52,6 +52,7 @@
     "tokens:build:theme": "node ./scripts/theme/generate-theme-css.mjs",
     "tokens:test": "node --test scripts/tokens/__tests__/",
     "tokens:validate": "node ./scripts/tokens/validate-tokens.mjs",
+    "bench:enforcer:test": "node --test scripts/ci/__tests__/benchmark-1m-enforcer.test.mjs",
     "tokens:diff": "node scripts/ci/token-diff-report.mjs",
     "changelog": "node scripts/ci/generate-changelog.mjs",
     "migration-guide": "node scripts/ci/generate-migration-guide.mjs",

@@ -46,15 +46,54 @@ test.describe('Design Lab benchmark 1M artifact (PR-A1.6b workflow_dispatch only
     // Inject the runner metadata before the route mounts so it lands
     // in the artifact's `environment.runner` block. Mirror what the
     // benchmark-1m.yml workflow plumbs through env.
+    // Codex iter-2 P4: enrich runner metadata with the actual GPU
+    // string Chrome reports via `WEBGL_debug_renderer_info` so the
+    // enforcer can refuse to compare two artifacts produced on
+    // different GPU profiles. The init script reads it client-side
+    // BEFORE the React bundle loads and merges it into the runner
+    // env that BenchmarkRoute snapshots in `start()`.
+    //
+    // `BENCHMARK_RUNNER_PROFILE` is set by the workflow:
+    //   self-hosted GPU runner → 'self-hosted-gpu'
+    //   workflow_dispatch on GHA-hosted (bootstrap)  → 'github-hosted-trend'
+    const profile =
+      (process.env.BENCHMARK_RUNNER_PROFILE as
+        | 'github-hosted-trend'
+        | 'self-hosted-gpu'
+        | undefined) ?? 'github-hosted-trend';
     await page.addInitScript(
       ({ runnerEnv }) => {
+        function readGpu(): { vendor: string | null; renderer: string | null } {
+          try {
+            const canvas = document.createElement('canvas');
+            const gl =
+              (canvas.getContext('webgl2') as WebGLRenderingContext | null) ??
+              (canvas.getContext('webgl') as WebGLRenderingContext | null) ??
+              (canvas.getContext('experimental-webgl') as WebGLRenderingContext | null);
+            if (!gl) return { vendor: null, renderer: null };
+            const ext = gl.getExtension('WEBGL_debug_renderer_info');
+            if (!ext) return { vendor: null, renderer: null };
+            return {
+              vendor: gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) ?? null,
+              renderer: gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) ?? null,
+            };
+          } catch {
+            return { vendor: null, renderer: null };
+          }
+        }
+        const gpu = readGpu();
         (
           window as unknown as { __designLabBenchmarkRunner?: Record<string, unknown> }
-        ).__designLabBenchmarkRunner = runnerEnv;
+        ).__designLabBenchmarkRunner = {
+          ...runnerEnv,
+          gpuVendor: gpu.vendor ?? undefined,
+          gpuRenderer: gpu.renderer ?? undefined,
+          webglSupported: gpu.renderer !== null || undefined,
+        };
       },
       {
         runnerEnv: {
-          profile: 'github-hosted-trend',
+          profile,
           githubRunId: process.env.GITHUB_RUN_ID,
           sha: process.env.GITHUB_SHA,
           ref: process.env.GITHUB_REF,
@@ -139,7 +178,12 @@ test.describe('Design Lab benchmark 1M artifact (PR-A1.6b workflow_dispatch only
 
     expect(typed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(typed.environment.measurementMode).toBe('echarts-finished-2raf');
-    expect(typed.environment.runner?.profile).toBe('github-hosted-trend');
+    // Profile is whatever the workflow injected — `self-hosted-gpu`
+    // when the gate is live, `github-hosted-trend` during the
+    // bootstrap workflow_dispatch run before any operator runner is
+    // online. Either is a legitimate artifact; the enforcer is the
+    // layer that refuses to compare across profiles.
+    expect(typed.environment.runner?.profile).toMatch(/self-hosted-gpu|github-hosted-trend/);
     expect(typed.results.length).toBeGreaterThan(0);
     // 1M uniform / canvas-lttb is the safe reference — it must show up.
     expect(typed.summary.medianRenderMsByCase['uniform/million/canvas-lttb']).toBeGreaterThan(0);
