@@ -60,6 +60,8 @@ export {
   revokeImpersonation,
   isImpersonationToken,
   decodeJwtPayload,
+  IMPERSONATION_ERROR_CODES,
+  isImpersonationErrorCode,
 } from './impersonation';
 export type {
   StartImpersonationRequest,
@@ -67,4 +69,5 @@ export type {
   ImpersonationSessionResource,
   RevokeImpersonationRequest,
   ImpersonationErrorCode,
+  ImpersonationLifecycleErrorCode,
 } from './impersonation';

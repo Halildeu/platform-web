@@ -78,6 +78,42 @@ export type ImpersonationErrorCode =
   | 'STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED';
 
 /**
+ * Frontend-side impersonation lifecycle error codes (PR-C2 Codex iter-4
+ * AGREE absorb, thread `019e109c`). The shared-http response interceptor
+ * dispatches an {@code app:auth:impersonation-expired} window event when
+ * a 403 response carries one of these codes; the impersonation-expired
+ * listener then either restores the original admin identity (if the
+ * cached admin token is still valid) or redirects to the login page
+ * with a {@code reason=impersonation_expired} query parameter.
+ *
+ * <p>Values intentionally match the backend's {@code errorCode} string
+ * payload so the listener can branch on the same constant the API
+ * returns. {@link isImpersonationErrorCode} is the canonical type guard.
+ */
+export const IMPERSONATION_ERROR_CODES = {
+  SESSION_EXPIRED: 'IMPERSONATION_SESSION_EXPIRED',
+  SESSION_REQUIRED: 'IMPERSONATION_SESSION_REQUIRED',
+  EXCHANGED_TOKEN_EXPIRED: 'EXCHANGED_TOKEN_EXPIRED',
+  SESSION_REVOKED: 'IMPERSONATION_SESSION_REVOKED',
+} as const;
+
+export type ImpersonationLifecycleErrorCode =
+  (typeof IMPERSONATION_ERROR_CODES)[keyof typeof IMPERSONATION_ERROR_CODES];
+
+const IMPERSONATION_ERROR_CODE_VALUES: ReadonlySet<string> = new Set(
+  Object.values(IMPERSONATION_ERROR_CODES) as readonly string[],
+);
+
+/**
+ * Type guard for {@link IMPERSONATION_ERROR_CODES} values. Used by the
+ * shared-http response interceptor so 403 payloads with a lifecycle
+ * error code can be routed to the impersonation-expired listener while
+ * unrelated 403s flow through the existing generic-forbidden toast.
+ */
+export const isImpersonationErrorCode = (code: unknown): code is ImpersonationLifecycleErrorCode =>
+  typeof code === 'string' && IMPERSONATION_ERROR_CODE_VALUES.has(code);
+
+/**
  * Start an impersonation session.
  *
  * @returns Exchanged token + sessionId on success. If the response is a

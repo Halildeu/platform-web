@@ -99,6 +99,67 @@ export interface AuthError {
   cause?: string;
 }
 
+/**
+ * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+ * impersonation FSM substate. Lives inside {@code AuthState} so the
+ * effective subject (target during impersonation, admin otherwise) and
+ * the saved admin restoration material are in one place — selectors
+ * {@link selectIsImpersonating} / {@link selectImpersonationOriginalAdmin}
+ * derive everything else.
+ *
+ * <p>Status semantics:
+ * <ul>
+ *   <li>{@code inactive} — no active session; default.</li>
+ *   <li>{@code entering} — orchestration in flight (start request +
+ *       cookie write + authz/me); banner not yet rendered.</li>
+ *   <li>{@code active} — broker token swapped; banner mounted.</li>
+ *   <li>{@code exiting} — revoke + admin restore in flight.</li>
+ *   <li>{@code expired} — backend signalled the broker token died
+ *       (TTL hit or admin force-revoked); listener will either restore
+ *       the cached admin token or redirect to /login.</li>
+ * </ul>
+ */
+export type ImpersonationStatus = 'inactive' | 'entering' | 'active' | 'exiting' | 'expired';
+
+/**
+ * PR-C2 impersonation substate. {@code originalAdmin*} fields snapshot
+ * the admin identity at Start so {@code exitImpersonationSession} can
+ * restore the cookie / Redux user / authz snapshot without an extra
+ * Keycloak round-trip. {@code originalAdminAuthzSnapshot} is held in
+ * Redux only — never persisted to localStorage (security smell minimize:
+ * keep the broker-token + session metadata persisted, but the admin's
+ * permission profile stays in the running tab).
+ */
+export interface ImpersonationSubstate {
+  status: ImpersonationStatus;
+  sessionId: string | null;
+  startedAt: number | null;
+  /** Broker token expiry (ms epoch). */
+  expiresAt: number | null;
+  originalAdminToken: string | null;
+  originalAdminUser: UserProfile | null;
+  originalAdminAuthzSnapshot: Record<string, unknown> | null;
+  originalAdminExpiresAt: number | null;
+  targetUser: UserProfile | null;
+  targetAuthzSnapshot: Record<string, unknown> | null;
+  /** Codex iter-3 absorb: last expiry/exit reason for diagnostics. */
+  lastExpiredReason: string | null;
+}
+
+const INITIAL_IMPERSONATION_SUBSTATE: ImpersonationSubstate = {
+  status: 'inactive',
+  sessionId: null,
+  startedAt: null,
+  expiresAt: null,
+  originalAdminToken: null,
+  originalAdminUser: null,
+  originalAdminAuthzSnapshot: null,
+  originalAdminExpiresAt: null,
+  targetUser: null,
+  targetAuthzSnapshot: null,
+  lastExpiredReason: null,
+};
+
 // State'imizin yapısını tanımlayan arayüz
 interface AuthState {
   user: UserProfile | null;
@@ -131,6 +192,8 @@ interface AuthState {
   transportReadyAt: number | null;
   /** Cached /v1/authz/me response — shared with PermissionProvider to avoid double fetch. */
   authzSnapshot: Record<string, unknown> | null;
+  /** PR-C2 impersonation FSM substate. */
+  impersonation: ImpersonationSubstate;
 }
 
 type KeycloakSessionPayload = {
@@ -219,6 +282,7 @@ const initialState: AuthState = {
   authEpoch: 0,
   transportReadyAt: null,
   authzSnapshot: null,
+  impersonation: { ...INITIAL_IMPERSONATION_SUBSTATE },
 };
 
 /**
@@ -351,6 +415,11 @@ const authSlice = createSlice({
       state.lastRegisteredEmail = null;
       state.expiresAt = null;
       state.authzSnapshot = null;
+      // PR-C2: logout also tears down any active impersonation substate
+      // so a subsequent re-login starts clean (no leaked broker token /
+      // sessionId metadata in Redux even if localStorage was already
+      // cleared by the listener).
+      state.impersonation = { ...INITIAL_IMPERSONATION_SUBSTATE };
       // Codex iter-23 absorb: bump epoch so any cached
       // {@code hostServices.auth.ready()} Promises are invalidated.
       state.authEpoch = state.authEpoch + 1;
@@ -485,6 +554,161 @@ const authSlice = createSlice({
     bumpAuthEpoch: (state) => {
       state.authEpoch = state.authEpoch + 1;
     },
+    /**
+     * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+     * enter an impersonation session. Atomically swaps:
+     * <ul>
+     *   <li>{@code state.auth.token}     → exchanged broker token</li>
+     *   <li>{@code state.auth.user}      → target user (effective subject)</li>
+     *   <li>{@code state.auth.expiresAt} → broker token expiry</li>
+     *   <li>{@code state.auth.authzSnapshot} → target authz snapshot</li>
+     *   <li>{@code state.auth.impersonation.status} → 'active'</li>
+     * </ul>
+     * The {@code originalAdmin*} fields snapshot the admin identity so
+     * {@link exitImpersonationSession} can restore it without an extra
+     * Keycloak round-trip. {@code authEpoch} is bumped exactly once
+     * inside the reducer (Codex iter-2 invariant: callers MUST NOT bump
+     * separately) so cached {@code auth.ready()} Promises and listeners
+     * observe a single identity-switch event.
+     */
+    enterImpersonationSession: (
+      state,
+      action: PayloadAction<{
+        sessionId: string;
+        exchangedToken: string;
+        expiresAt: number | null;
+        targetUser: UserProfile | null;
+        targetAuthzSnapshot: Record<string, unknown> | null;
+        originalAdminToken: string;
+        originalAdminUser: UserProfile | null;
+        originalAdminAuthzSnapshot: Record<string, unknown> | null;
+        originalAdminExpiresAt: number | null;
+      }>,
+    ) => {
+      const {
+        sessionId,
+        exchangedToken,
+        expiresAt,
+        targetUser,
+        targetAuthzSnapshot,
+        originalAdminToken,
+        originalAdminUser,
+        originalAdminAuthzSnapshot,
+        originalAdminExpiresAt,
+      } = action.payload;
+
+      state.impersonation = {
+        status: 'active',
+        sessionId,
+        startedAt: Date.now(),
+        expiresAt,
+        originalAdminToken,
+        originalAdminUser,
+        originalAdminAuthzSnapshot,
+        originalAdminExpiresAt,
+        targetUser,
+        targetAuthzSnapshot,
+        lastExpiredReason: null,
+      };
+      // Effective subject swap. {@code state.auth.user} returns the
+      // target user during impersonation so PermissionProvider /
+      // ImpersonationBanner / consumers see the broker identity.
+      state.token = normalizeAuthToken(exchangedToken);
+      state.user = targetUser;
+      state.expiresAt = expiresAt;
+      state.authzSnapshot = targetAuthzSnapshot;
+      state.status = 'succeeded';
+      state.authEpoch = state.authEpoch + 1;
+    },
+    /**
+     * PR-C2 hydrate path: page refresh during an active impersonation
+     * session. Restores the substate from persisted metadata + the
+     * freshly-fetched target authz snapshot so the banner mounts
+     * without a full enter orchestration. Caller (AuthBootstrapper
+     * impersonation guard branch) is responsible for verifying the
+     * 6-condition guard before dispatching.
+     */
+    hydrateImpersonationSession: (
+      state,
+      action: PayloadAction<{
+        sessionId: string;
+        exchangedToken: string;
+        expiresAt: number | null;
+        startedAt: number | null;
+        targetUser: UserProfile | null;
+        targetAuthzSnapshot: Record<string, unknown> | null;
+        originalAdminToken: string;
+        originalAdminExpiresAt: number | null;
+      }>,
+    ) => {
+      const {
+        sessionId,
+        exchangedToken,
+        expiresAt,
+        startedAt,
+        targetUser,
+        targetAuthzSnapshot,
+        originalAdminToken,
+        originalAdminExpiresAt,
+      } = action.payload;
+
+      state.impersonation = {
+        status: 'active',
+        sessionId,
+        startedAt: startedAt ?? Date.now(),
+        expiresAt,
+        originalAdminToken,
+        // {@code originalAdminUser} / {@code originalAdminAuthzSnapshot}
+        // are not persisted (security smell); after a hydrate the
+        // listener / exit path falls back to a fresh authz/me fetch.
+        originalAdminUser: null,
+        originalAdminAuthzSnapshot: null,
+        originalAdminExpiresAt,
+        targetUser,
+        targetAuthzSnapshot,
+        lastExpiredReason: null,
+      };
+      state.token = normalizeAuthToken(exchangedToken);
+      state.user = targetUser;
+      state.expiresAt = expiresAt;
+      state.authzSnapshot = targetAuthzSnapshot;
+      state.status = 'succeeded';
+      state.authEpoch = state.authEpoch + 1;
+    },
+    /**
+     * PR-C2 exit reducer: restore the cached admin identity. Called by
+     * {@code exitImpersonationSession} orchestration AFTER the backend
+     * revoke succeeded (Codex iter-3 invariant: revoke-first; on
+     * revoke failure no state mutation, banner shows retry).
+     */
+    exitImpersonationSession: (
+      state,
+      action: PayloadAction<{
+        adminToken: string;
+        adminUser: UserProfile | null;
+        adminAuthzSnapshot: Record<string, unknown> | null;
+        adminExpiresAt: number | null;
+      }>,
+    ) => {
+      const { adminToken, adminUser, adminAuthzSnapshot, adminExpiresAt } = action.payload;
+      state.impersonation = { ...INITIAL_IMPERSONATION_SUBSTATE };
+      state.token = normalizeAuthToken(adminToken);
+      state.user = adminUser;
+      state.expiresAt = adminExpiresAt;
+      state.authzSnapshot = adminAuthzSnapshot;
+      state.status = 'succeeded';
+      state.authEpoch = state.authEpoch + 1;
+    },
+    /**
+     * PR-C2: backend signalled the broker token died. Reducer-side
+     * cleanup only (token / user fields stay until the listener decides
+     * between admin restore vs /login redirect — see
+     * impersonation-expired-listener.ts).
+     */
+    markImpersonationExpired: (state, action: PayloadAction<{ reason: string }>) => {
+      state.impersonation.status = 'expired';
+      state.impersonation.lastExpiredReason = action.payload.reason;
+    },
   },
   // Asenkron thunk'ların durumlarını yöneten bölüm
   extraReducers: (builder) => {
@@ -615,6 +839,10 @@ export const {
   setAuthPhase,
   setAuthFailed,
   bumpAuthEpoch,
+  enterImpersonationSession,
+  hydrateImpersonationSession,
+  exitImpersonationSession,
+  markImpersonationExpired,
 } = authSlice.actions;
 
 /**
@@ -628,5 +856,32 @@ export const selectIsTransportReady = (state: { auth: AuthState }): boolean =>
 export const selectAuthError = (state: { auth: AuthState }): AuthError | null =>
   state.auth.authError;
 export const selectAuthEpoch = (state: { auth: AuthState }): number => state.auth.authEpoch;
+
+/**
+ * User Impersonation v1 PR-C2 selectors (Codex AGREE thread `019e109c`
+ * iter-4). {@link selectIsImpersonating} is the boolean gate consulted
+ * by ImpersonationBanner / ImpersonateAction / refresh handler guard;
+ * the rest expose the original-admin restoration material so the
+ * orchestration / listener layers can reach it without poking the
+ * substate directly.
+ */
+export const selectImpersonationStatus = (state: { auth: AuthState }): ImpersonationStatus =>
+  state.auth.impersonation.status;
+export const selectIsImpersonating = (state: { auth: AuthState }): boolean =>
+  state.auth.impersonation.status === 'active';
+export const selectImpersonationOriginalAdmin = (state: { auth: AuthState }): UserProfile | null =>
+  state.auth.impersonation.originalAdminUser;
+export const selectImpersonationOriginalAuthzSnapshot = (state: {
+  auth: AuthState;
+}): Record<string, unknown> | null => state.auth.impersonation.originalAdminAuthzSnapshot;
+export const selectImpersonationSessionId = (state: { auth: AuthState }): string | null =>
+  state.auth.impersonation.sessionId;
+export const selectImpersonationOriginalAdminToken = (state: { auth: AuthState }): string | null =>
+  state.auth.impersonation.originalAdminToken;
+export const selectImpersonationOriginalAdminExpiresAt = (state: {
+  auth: AuthState;
+}): number | null => state.auth.impersonation.originalAdminExpiresAt;
+export const selectImpersonationExpiresAt = (state: { auth: AuthState }): number | null =>
+  state.auth.impersonation.expiresAt;
 
 export default authSlice.reducer;
