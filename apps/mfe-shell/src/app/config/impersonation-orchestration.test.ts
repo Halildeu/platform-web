@@ -515,6 +515,139 @@ describe('impersonation-orchestration (PR-C2)', () => {
     expect(phaseTransitions[phaseTransitions.length - 1]?.payload).toBe('transportReady');
   });
 
+  /**
+   * Codex iter-7 P1-2 absorb (thread `019e109c`): if the broker
+   * httpOnly cookie has been written but a downstream step (authz/me,
+   * dispatch, cache reset) throws, the catch block MUST roll the
+   * gateway back to the admin identity. Without rollback, the gateway
+   * holds a broker cookie tied to the target user while Redux still
+   * shows the admin → split-brain that defeats PR-C2's FSM-first
+   * guarantee. The previous catch only cleared metadata + flipped
+   * the auth phase, so the cookie leaked.
+   */
+  it('enterImpersonationOrchestration rolls broker cookie back to admin when authz/me throws', async () => {
+    const initial = buildState();
+    const { dispatched, apiPost, apiGet, apiDelete } = setupMocks(initial);
+
+    // 1) start endpoint succeeds (broker token + sessionId returned).
+    apiPost
+      .mockResolvedValueOnce({
+        data: {
+          sessionId: '00000000-0000-0000-0000-000000000001',
+          exchangedToken: 'broker-token',
+          expiresAt: new Date(Date.now() + 30_000).toISOString(),
+          errorCode: null,
+          errorMessage: null,
+        },
+        status: 201,
+      })
+      // 2) broker cookie write succeeds (this is where the iter-7
+      // bug surfaced — without rollback the cookie leaks).
+      .mockResolvedValueOnce({ data: null, status: 200 })
+      // 3) admin cookie restore must run inside the catch block.
+      .mockResolvedValueOnce({ data: null, status: 200 });
+
+    // 4) /v1/authz/me throws → triggers the catch block.
+    apiGet.mockRejectedValueOnce(new Error('authz/me 502 bad gateway'));
+    // 5) broker cookie drop inside the catch block (best-effort).
+    apiDelete.mockResolvedValueOnce({ data: null, status: 204 });
+
+    const orch = await import('./impersonation-orchestration');
+    await expect(
+      orch.enterImpersonationOrchestration({
+        targetUserId: 42,
+        targetSubject: '11111111-1111-1111-1111-111111111111',
+        targetEmail: 'target@example.com',
+        reason: 'audit smoke test',
+      }),
+    ).rejects.toThrowError('authz/me 502 bad gateway');
+
+    // Rollback assertion 1: broker cookie drop fired with the
+    // broker token (so the gateway can match the cookie).
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiDelete).toHaveBeenCalledWith(
+      '/auth/cookie',
+      expect.objectContaining({
+        __skipAuthReadyGate: true,
+        __skipRefreshOn401: true,
+        headers: { Authorization: 'Bearer broker-token' },
+      }),
+    );
+
+    // Rollback assertion 2: admin cookie restore fired with the
+    // admin token. Order matters: this is the third POST call
+    // (start, broker-cookie, admin-cookie).
+    expect(apiPost).toHaveBeenCalledTimes(3);
+    const adminRestoreCall = apiPost.mock.calls[2];
+    expect(adminRestoreCall[0]).toBe('/auth/cookie');
+    expect(adminRestoreCall[1]).toBeNull();
+    expect(adminRestoreCall[2]).toEqual(
+      expect.objectContaining({
+        __skipAuthReadyGate: true,
+        __skipRefreshOn401: true,
+        headers: { Authorization: 'Bearer admin-token' },
+      }),
+    );
+
+    // Rollback assertion 3: Redux is preserved as admin —
+    // enterImpersonationSession MUST NOT have dispatched.
+    const enterAction = dispatched.find((a) => a.type === 'auth/enterImpersonationSession');
+    expect(enterAction).toBeUndefined();
+
+    // Phase rolls back to transportReady so subsequent requests
+    // resume on the admin identity.
+    const phaseTransitions = dispatched.filter((a) => a.type === 'auth/setAuthPhase');
+    expect(phaseTransitions[phaseTransitions.length - 1]?.payload).toBe('transportReady');
+  });
+
+  /**
+   * Iter-7 P1-2 absorb continued: the rollback path itself must
+   * tolerate failures (broker drop 401, admin restore 502) without
+   * masking the original error. The caller's responsibility is to
+   * re-throw the original {@code authz/me} failure so the UI shows
+   * the right toast.
+   */
+  it('enterImpersonationOrchestration re-throws original error even when rollback rejects', async () => {
+    const initial = buildState();
+    const { dispatched, apiPost, apiGet, apiDelete } = setupMocks(initial);
+
+    apiPost
+      .mockResolvedValueOnce({
+        data: {
+          sessionId: '00000000-0000-0000-0000-000000000001',
+          exchangedToken: 'broker-token',
+          expiresAt: new Date(Date.now() + 30_000).toISOString(),
+          errorCode: null,
+          errorMessage: null,
+        },
+        status: 201,
+      })
+      .mockResolvedValueOnce({ data: null, status: 200 })
+      // Admin cookie restore fails too.
+      .mockRejectedValueOnce(new Error('admin restore 503'));
+
+    apiGet.mockRejectedValueOnce(new Error('authz/me original error'));
+    // Broker cookie drop fails.
+    apiDelete.mockRejectedValueOnce(new Error('broker drop 401'));
+
+    const orch = await import('./impersonation-orchestration');
+    // The original error MUST surface — not the broker drop or
+    // admin restore failure. Rollback path swallows its own
+    // exceptions (best-effort contract).
+    await expect(
+      orch.enterImpersonationOrchestration({
+        targetUserId: 42,
+        targetSubject: '11111111-1111-1111-1111-111111111111',
+        reason: 'audit smoke test',
+      }),
+    ).rejects.toThrowError('authz/me original error');
+
+    // Both rollback attempts ran despite their failures.
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiPost).toHaveBeenCalledTimes(3);
+    expect(dispatched.find((a) => a.type === 'auth/enterImpersonationSession')).toBeUndefined();
+  });
+
   it('exitImpersonationOrchestration restores admin identity on revoke success', async () => {
     const initial = buildState({
       token: 'broker-token',

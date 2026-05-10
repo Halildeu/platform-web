@@ -206,6 +206,16 @@ export async function enterImpersonationOrchestration(
     ? new Date(response.expiresAt).getTime()
     : decodeTokenExpiry(exchangedToken);
 
+  // Iter-7 P1-2 absorb (Codex thread `019e109c`): track whether the
+  // broker httpOnly cookie has actually been written so the catch
+  // block can roll the gateway back to the admin identity if any
+  // subsequent step (authz/me, dispatch, cache reset) throws.
+  // Without this rollback, a partial failure leaves the gateway with
+  // a broker cookie pointed at the target user while Redux still
+  // shows the admin — a split-brain that defeats the FSM-first
+  // guarantee PR-C2 is built around (no localStorage / cookie state
+  // outside the FSM).
+  let brokerCookieWritten = false;
   try {
     const cookieCfg: SharedHttpRequestConfig = {
       headers: { Authorization: `Bearer ${exchangedToken}` },
@@ -213,6 +223,7 @@ export async function enterImpersonationOrchestration(
       __skipRefreshOn401: true,
     };
     await api.post('/auth/cookie', null, cookieCfg);
+    brokerCookieWritten = true;
 
     const authzCfg: SharedHttpRequestConfig = {
       headers: { Authorization: `Bearer ${exchangedToken}` },
@@ -254,6 +265,38 @@ export async function enterImpersonationOrchestration(
 
     store.dispatch(setAuthPhase('transportReady'));
   } catch (err) {
+    // Iter-7 P1-2 absorb (Codex thread `019e109c`): if the broker
+    // cookie was already written, roll the gateway back so the
+    // admin's cookie matches Redux (which still holds the admin
+    // identity — none of the impersonation dispatches ran). Both
+    // requests are best-effort: the broker cookie may already be
+    // gone, and the admin restore may collide with an unrelated
+    // session, but the outer caller still re-throws so the UI shows
+    // a toast and the user can retry.
+    if (brokerCookieWritten) {
+      try {
+        await dropBrokerCookieBestEffort(exchangedToken);
+      } catch (dropErr) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[shell] broker cookie rollback drop failed (non-fatal)', dropErr);
+        }
+      }
+      try {
+        const restoreCfg: SharedHttpRequestConfig = {
+          headers: { Authorization: `Bearer ${adminToken}` },
+          __skipAuthReadyGate: true,
+          __skipRefreshOn401: true,
+        };
+        await api.post('/auth/cookie', null, restoreCfg);
+      } catch (restoreErr) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug(
+            '[shell] admin cookie restore after broker rollback failed (non-fatal)',
+            restoreErr,
+          );
+        }
+      }
+    }
     clearImpersonationOnFailurePath();
     store.dispatch(setAuthPhase('transportReady'));
     throw err;
