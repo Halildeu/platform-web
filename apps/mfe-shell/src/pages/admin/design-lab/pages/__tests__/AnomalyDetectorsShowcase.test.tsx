@@ -18,19 +18,33 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-// Stub heavy chart wrappers — this test is about the showcase page
-// shell, not echarts rendering. The detector helpers are real (pure
-// functions) so the toggle counts are honest.
-vi.mock('@mfe/x-charts', async () => {
-  const actual = await vi.importActual<typeof import('@mfe/x-charts')>('@mfe/x-charts');
-  return {
-    ...actual,
-    ScatterChart: () => <div data-testid="stub-ScatterChart" />,
-    RadarChart: () => <div data-testid="stub-RadarChart" />,
-    TreemapChart: () => <div data-testid="stub-TreemapChart" />,
-    SankeyChart: () => <div data-testid="stub-SankeyChart" />,
-  };
-});
+// Stub heavy chart wrappers + detector helpers — this test is about
+// the showcase page shell, not echarts rendering or detector math.
+// Earlier iter used `vi.importActual` to keep the detectors real, but
+// importing the full `@mfe/x-charts` barrel side-loads ECharts +
+// echarts-gl + treemap/sankey visual transforms, which leak into the
+// vitest-workspace shared globals and trigger unrelated unhandled
+// errors elsewhere in the suite (`TypeError: Cannot set properties of
+// undefined` in zrender modifyHSL when another test renders a Treemap
+// in jsdom with a 0×0 container; `ReferenceError: window is not
+// defined` in VariantIntegration.tsx setState during teardown). Pure
+// stubs avoid the side-load entirely and the toggle counts stay honest
+// because the stub detector returns a fixed-length array.
+vi.mock('@mfe/x-charts', () => ({
+  ScatterChart: () => <div data-testid="stub-ScatterChart" />,
+  RadarChart: () => <div data-testid="stub-RadarChart" />,
+  TreemapChart: () => <div data-testid="stub-TreemapChart" />,
+  SankeyChart: () => <div data-testid="stub-SankeyChart" />,
+  // Each detector returns a non-empty array so the toggle label
+  // "Show anomalies (N)" matches the `[1-9]\d*` assertion. The
+  // page-shell test doesn't verify detector math — that's exhaustively
+  // covered by the per-helper unit tests in
+  // packages/x-charts/src/annotations/__tests__/.
+  computeAnomalySummary: () => [{ id: 'stub-flat' }],
+  computeRadarAnomalySummary: () => [{ id: 'stub-radar' }],
+  computeHierarchicalAnomalySummary: () => [{ id: 'stub-hier' }],
+  computeSankeyAnomalySummary: () => [{ id: 'stub-sankey' }],
+}));
 
 import AnomalyDetectorsShowcase from '../AnomalyDetectorsShowcase';
 
