@@ -3485,18 +3485,18 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       },
       {
         name: 'baseTexture',
-        type: 'string',
+        type: 'string | HTMLCanvasElement',
         required: false,
         default: 'undefined',
         description:
-          'Globe surface texture URL (or canvas). Wrapper has NO default —\nconsumer supplies. Codex thread `019e10f8` iter-1: the wrapper\nmust not bundle world map / HDR assets.',
+          'Globe surface texture URL or canvas. Wrapper has NO default —\nconsumer supplies. Codex thread `019e10f8` iter-1/iter-2: the\nwrapper must not bundle world map / HDR assets. Type widened\nto accept HTMLCanvasElement so consumers can render their own\ntexture (e.g. dynamically composed map) without round-tripping\nthrough a data URL.',
       },
       {
         name: 'heightTexture',
-        type: 'string',
+        type: 'string | HTMLCanvasElement',
         required: false,
         default: 'undefined',
-        description: 'Optional terrain elevation texture.',
+        description: 'Optional terrain elevation texture (URL or canvas).',
       },
       {
         name: 'displacementScale',

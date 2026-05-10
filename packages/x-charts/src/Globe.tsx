@@ -209,8 +209,11 @@ export interface BuildGlobeOptionInput {
   palette: readonly string[];
   fmt: (value: number) => string;
   animate: boolean;
-  baseTexture?: string;
-  heightTexture?: string;
+  // Codex thread `019e10f8` iter-3: helper input must mirror
+  // `GlobeProps.baseTexture` / `heightTexture` (string | canvas)
+  // so typecheck doesn't fail at the wrapper call site.
+  baseTexture?: string | HTMLCanvasElement;
+  heightTexture?: string | HTMLCanvasElement;
   displacementScale?: number;
   environment?: string;
   regions?: GlobeRegion[];
@@ -320,9 +323,10 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         itemStyle: { color: baseColor },
       };
     }
-    // lines3D layer — carry source-datum metadata onto each item so
-    // tooltip / click can read it back via params.dataIndex without
-    // re-resolving against `layers[i].data` (Codex iter-2).
+    // lines3D layer — Codex iter-3 cleanup: `__source` field
+    // dropped (was unused — tooltip/click resolve metadata via
+    // `layers[sIdx].data[dataIndex]` directly, so the echo was
+    // dead weight in the dispatched option payload).
     const data = layer.data.map((d) => {
       const item: Record<string, unknown> = {
         coords: [
@@ -332,17 +336,6 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
       };
       if (d.color !== undefined) item.lineStyle = { color: d.color };
       if (d.label !== undefined) item.name = d.label;
-      // Echo source metadata so consumers can read it via `params.data`
-      // (ECharts surfaces the original item object). Not consumed by
-      // ECharts itself; safe extra fields.
-      item.__source = {
-        from: d.from,
-        to: d.to,
-        value: d.value,
-        label: d.label,
-        fromLabel: d.fromLabel,
-        toLabel: d.toLabel,
-      };
       return item;
     });
     return {
@@ -549,7 +542,7 @@ const GlobeInner = React.forwardRef<HTMLDivElement, Omit<GlobeProps, 'access' | 
         onDataPointClick({
           datum: {
             chartType: 'globe',
-            layerId: layer && 'id' in layer ? layer.id : undefined,
+            layerId: layer?.id,
             layerName: layer?.name ?? `Layer ${sIdx + 1}`,
             layerIndex: sIdx,
             layerType,
@@ -560,7 +553,7 @@ const GlobeInner = React.forwardRef<HTMLDivElement, Omit<GlobeProps, 'access' | 
             label: sourceLabel ?? p.name,
             ...extra,
           },
-          seriesId: layer && 'id' in layer ? layer.id : undefined,
+          seriesId: layer?.id,
           ...(hasNumericMetric ? { value: sourceValue } : {}),
           label: sourceLabel ?? p.name,
         });
