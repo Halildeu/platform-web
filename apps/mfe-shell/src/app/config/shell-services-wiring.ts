@@ -141,22 +141,32 @@ configureShellServices({
     let previousToken = readAuthState().token ?? null;
     let previousExpiresAt = readAuthState().expiresAt ?? null;
     let previousProfileHash = JSON.stringify(readAuthState().user ?? null);
+    // Iter-6 P2 absorb (Codex thread `019e109c`): track epoch so an
+    // epoch-only delta (e.g. {@code markImpersonationExpired} bumps
+    // it but {@code state.token} stays the broker JWT) still
+    // forwards a notification to canonical auth listeners. The
+    // remote API at line ~432 already does this; iter-6 review
+    // surfaced the canonical surface as drifted.
+    let previousEpoch = readAuthState().authEpoch;
 
     const notify = () => {
       const nextState = readAuthState();
       const token = nextState.token ?? null;
       const expiresAt = nextState.expiresAt ?? null;
       const profileHash = JSON.stringify(nextState.user ?? null);
+      const epoch = nextState.authEpoch;
 
-      if (token !== previousToken) {
-        listener(token);
+      const tokenChanged = token !== previousToken;
+      const epochChanged = epoch !== previousEpoch;
+
+      if (tokenChanged || epochChanged) {
+        // Epoch-only deltas pass {@code force: true} so the canonical
+        // dispatcher (`emitTokenChange`) bypasses its same-token
+        // short-circuit and the fan-out reaches subscribers.
+        listener(token, tokenChanged ? undefined : { force: true });
       }
 
-      if (
-        token !== previousToken ||
-        expiresAt !== previousExpiresAt ||
-        profileHash !== previousProfileHash
-      ) {
+      if (tokenChanged || expiresAt !== previousExpiresAt || profileHash !== previousProfileHash) {
         broadcastAuthState({
           token,
           expiresAt,
@@ -165,6 +175,9 @@ configureShellServices({
         previousToken = token;
         previousExpiresAt = expiresAt;
         previousProfileHash = profileHash;
+      }
+      if (epochChanged) {
+        previousEpoch = epoch;
       }
     };
 

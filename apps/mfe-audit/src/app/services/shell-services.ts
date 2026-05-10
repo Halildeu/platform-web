@@ -27,6 +27,27 @@ export type ShellExitImpersonationResult =
       message?: string;
     };
 
+/**
+ * Iter-6 P2 absorb (Codex thread `019e109c`): mirror the MFE Auth
+ * Transport Contract result types so audit-side callers can branch
+ * on {@code auth.ready()} outcomes (the contract is owned by
+ * {@code mfe-shell/src/app/services/shell-services.ts}; this is a
+ * structural copy kept narrow to avoid cycles).
+ */
+export type RemoteShellAuthReadyResult =
+  | { ok: true }
+  | { ok: false; reason: 'unauthenticated' | 'failed'; error?: string };
+
+export type RemoteShellAuthPhase =
+  | 'initializing'
+  | 'keycloakReady'
+  | 'cookieReady'
+  | 'authzReady'
+  | 'transportReady'
+  | 'refreshing'
+  | 'unauthenticated'
+  | 'failed';
+
 export type RemoteShellServices = {
   notify: { push: (entry: ShellNotificationEntry) => void };
   telemetry: { emit: (event: ShellTelemetryEvent) => void };
@@ -36,6 +57,17 @@ export type RemoteShellServices = {
     getUser: () => unknown;
     /** PR-C2 token swap subscription — SSE consumers reconnect on broker swap. */
     onTokenChange?: (listener: (token: string | null) => void) => () => void;
+    /**
+     * Iter-6 P2 absorb (Codex thread `019e109c`): MFE Auth Transport
+     * Contract surface. Optional fields keep the audit MFE backward
+     * compatible with shells that do not yet wire them (graceful
+     * degradation — callers must null-guard like the existing
+     * {@code onTokenChange} hook does).
+     */
+    ready?: () => Promise<RemoteShellAuthReadyResult>;
+    isTransportReady?: () => boolean;
+    getPhase?: () => RemoteShellAuthPhase;
+    getEpoch?: () => number;
     /** PR-C2 impersonation enter orchestration (optional in the audit MFE). */
     enterImpersonationSession?: (payload: ShellEnterImpersonationPayload) => Promise<void>;
     /** PR-C2 impersonation audit-complete stop (optional in the audit MFE). */
