@@ -34,6 +34,7 @@ import { WaterfallChart } from '../WaterfallChart';
 import { RadarChart } from '../RadarChart';
 import { TreemapChart } from '../TreemapChart';
 import { SunburstChart } from '../SunburstChart';
+import { SankeyChart } from '../SankeyChart';
 import type { AnomalySummary } from '../annotations/computeAnomalyOverlay';
 import { setChartsLocale, __resetChartsLocaleStoreForTests } from '../i18n/locale-store';
 
@@ -332,6 +333,76 @@ describe.each(HIERARCHY_CHARTS)(
     });
   },
 );
+
+// PR-Sankey (Codex thread `019e1110` iter-1): SankeyChart also lives
+// outside the generic CHARTS matrix because its data shape (`nodes` +
+// `links` with `source/target/value`) doesn't share base props with
+// any other family. Sankey's anomaly detector is dual-mode (edges +
+// nodes) — this describe locks the EDGE template path (most common
+// consumer surface). Node mode is exercised in the helper unit test.
+const SANKEY_NODES = [{ name: 'A' }, { name: 'B' }, { name: 'X' }, { name: 'Y' }];
+
+const SANKEY_LINKS = [
+  { source: 'A', target: 'X', value: 100 },
+  { source: 'A', target: 'Y', value: 200 },
+  { source: 'B', target: 'X', value: 150 },
+  { source: 'B', target: 'Y', value: 180 },
+];
+
+const SANKEY_EDGE_ANOM: AnomalySummary = {
+  id: 'sankey-anomaly-A->X',
+  kind: 'sankey-edge',
+  x: 'A → X',
+  y: 9999,
+  formattedY: '9999.00',
+  direction: 'above',
+  severity: 0.97,
+  severityBucket: 'high',
+  ariaLabel: 'Outlier above expected flow from A to X, value=9999.00 (high severity)',
+  source: 'A',
+  target: 'X',
+  edgeId: 'A->X',
+  flowValue: 9999,
+};
+
+describe('SankeyChart — anomaly summary forward (PR-Sankey edge mode)', () => {
+  it('keeps a single aria-live region when anomalySummary is omitted (backwards compat)', () => {
+    render(<SankeyChart nodes={SANKEY_NODES} links={SANKEY_LINKS} />);
+    const liveRegions = document.querySelectorAll('[role="status"]');
+    expect(liveRegions.length).toBe(1);
+    expect(screen.queryByTestId('chart-aria-live-anomalies')).not.toBeInTheDocument();
+  });
+
+  it('mounts the dedicated anomaly region + sankey-edge template fires', () => {
+    render(
+      <SankeyChart nodes={SANKEY_NODES} links={SANKEY_LINKS} anomalySummary={[SANKEY_EDGE_ANOM]} />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    const region = screen.getByTestId('chart-aria-live-anomalies');
+    const text = region.textContent ?? '';
+    expect(text).toMatch(/1 flow anomaly/);
+    expect(text).toMatch(/Most extreme: A → X, flow 9999\.00/);
+  });
+
+  it('forwards formatAnomalyAnnouncement override unchanged (custom wins)', () => {
+    const fmt = vi.fn(() => 'CUSTOM SANKEY');
+    render(
+      <SankeyChart
+        nodes={SANKEY_NODES}
+        links={SANKEY_LINKS}
+        anomalySummary={[SANKEY_EDGE_ANOM]}
+        formatAnomalyAnnouncement={fmt}
+      />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('chart-aria-live-anomalies').textContent).toBe('CUSTOM SANKEY');
+  });
+});
 
 // Codex iter-1 nice-to-have (Q in plan-time review): access gate cannot
 // strip the anomaly props because they aren't user-facing callbacks.

@@ -2616,6 +2616,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Density override.',
       },
       {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Faz 21.11 batch3 PR-Sankey — anomaly summary list. When supplied,\nforwarded to `ChartA11yShell` so screen readers receive a polite,\ndebounced outlier announcement using the sankey-aware default\nformatter (`X flow anomalies. Most extreme: source → target,\nflow value` for edges; `X node flow anomalies. Most extreme:\nnodeId, flow-through value` for nodes). Pair with\n`computeSankeyAnomalySummary({ links, nodes, mode })` —\nTukey IQR with normalised severity ranking.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.',
+      },
+      {
         name: 'accent',
         type: 'ChartAccentPreference',
         required: false,

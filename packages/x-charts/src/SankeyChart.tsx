@@ -21,6 +21,8 @@ import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -136,6 +138,22 @@ export interface SankeyChartProps extends AccessControlledProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /**
+   * Faz 21.11 batch3 PR-Sankey — anomaly summary list. When supplied,
+   * forwarded to `ChartA11yShell` so screen readers receive a polite,
+   * debounced outlier announcement using the sankey-aware default
+   * formatter (`X flow anomalies. Most extreme: source → target,
+   * flow value` for edges; `X node flow anomalies. Most extreme:
+   * nodeId, flow-through value` for nodes). Pair with
+   * `computeSankeyAnomalySummary({ links, nodes, mode })` —
+   * Tukey IQR with normalised severity ranking.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
 }
@@ -212,6 +230,8 @@ const SankeyChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    anomalySummary,
+    formatAnomalyAnnouncement,
     ...rest
   },
   forwardedRef,
@@ -529,6 +549,8 @@ const SankeyChartInner = React.forwardRef<
       height={height}
       testId="sankey-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -543,7 +565,16 @@ SankeyChartInner.displayName = 'SankeyChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(function SankeyChart(
-  { access, accessReason, onNodeClick, onDataPointClick, onMarkupClick, ...rest },
+  {
+    access,
+    accessReason,
+    onNodeClick,
+    onDataPointClick,
+    onMarkupClick,
+    anomalySummary,
+    formatAnomalyAnnouncement,
+    ...rest
+  },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -555,6 +586,11 @@ export const SankeyChart = React.forwardRef<HTMLDivElement, SankeyChartProps>(fu
         onNodeClick={guardChartCallback(state, onNodeClick)}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
         onMarkupClick={guardChartCallback(state, onMarkupClick)}
+        // PR-Sankey: anomaly summary + formatter forwarded through
+        // unchanged — these aren't user-facing callbacks the access
+        // gate would block. Codex thread `019e1110` PR-Sankey iter-1.
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       />
     </ChartAccessGate>
   );
