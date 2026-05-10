@@ -19,6 +19,8 @@ import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -61,6 +63,14 @@ export type RadarIndicator = {
   name: string;
   /** Maximum value for this axis. */
   max: number;
+  /**
+   * Optional unit suffix for SR / tooltip text (e.g. `'ms'`, `'%'`).
+   * Forwarded into `AnomalySummary.axisUnit` when paired with
+   * `computeRadarAnomalySummary` so the announcement template can
+   * print `Latency=240 ms` instead of bare `Latency=240`. Codex
+   * thread `019e10a5` PR-Radar plan iter-1.
+   */
+  unit?: string;
 };
 
 export type RadarSeriesItem = {
@@ -141,6 +151,21 @@ export interface RadarChartProps extends AccessControlledProps {
   decal?: ChartDecalPreference;
   /** Density override. @default "auto" */
   density?: ChartDensityPreference;
+  /**
+   * Faz 21.11 batch3 PR-Radar — anomaly summary list. When supplied,
+   * forwarded to `ChartA11yShell` so screen readers receive a polite,
+   * debounced outlier announcement using the radar-aware default
+   * formatter (`X radar indicator anomalies. Most extreme: <series>,
+   * <indicator>=<value> <unit>`). Pair with
+   * `computeRadarAnomalySummary({ indicators, series })` —
+   * per-indicator IQR detector with normalised severity ranking.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
 }
@@ -264,6 +289,8 @@ const RadarChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    anomalySummary,
+    formatAnomalyAnnouncement,
     ...rest
   },
   forwardedRef,
@@ -576,6 +603,8 @@ const RadarChartInner = React.forwardRef<
       height={height}
       testId="radar-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -590,7 +619,15 @@ RadarChartInner.displayName = 'RadarChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(function RadarChart(
-  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
+  {
+    access,
+    accessReason,
+    onDataPointClick,
+    onMarkupClick,
+    anomalySummary,
+    formatAnomalyAnnouncement,
+    ...rest
+  },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -601,6 +638,11 @@ export const RadarChart = React.forwardRef<HTMLDivElement, RadarChartProps>(func
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
         onMarkupClick={guardChartCallback(state, onMarkupClick)}
+        // PR-Radar: anomaly summary + formatter forwarded through
+        // unchanged — these aren't user-facing callbacks the access
+        // gate would block. Codex thread `019e10a5` PR-Radar plan iter-1.
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       />
     </ChartAccessGate>
   );

@@ -437,6 +437,16 @@ export {
 } from './annotations/computeAnomalyOverlay';
 export { useTrendOverlay } from './annotations/useTrendOverlay';
 export { useAnomalyOverlay, useAnomalySummary } from './annotations/useAnomalyOverlay';
+// Faz 21.11 batch3 sequential PR-Radar — per-indicator IQR detector
+// for multi-series radar charts. Emits AnomalySummary[] with kind='radar'
+// + per-indicator metadata so the ChartAriaLive radar template fires.
+// Codex thread `019e10a5` PR-Radar plan iter-1.
+export {
+  computeRadarAnomalySummary,
+  type ComputeRadarAnomalySummaryOptions,
+  type RadarAnomalyIndicator,
+  type RadarAnomalySeries,
+} from './annotations/computeRadarAnomalySummary';
 // PR-A2b-a11y — anomaly announcement formatter type for consumers
 // who want to override the default EN/TR template.
 export type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
