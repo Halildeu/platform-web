@@ -415,8 +415,33 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           pkceMethod: 'S256',
           checkLoginIframe: false,
         };
+        // 2026-05-11 hot-fix (login completion race): when URL has an
+        // auth code in the hash/search (KC redirected back from a
+        // successful SSO), DO NOT set onLoad. keycloak-js automatically
+        // processes the URL callback (state validation + code →
+        // token exchange) regardless of onLoad, and explicitly setting
+        // {@code onLoad: 'check-sso'} WITHOUT a matching
+        // {@code silentCheckSsoRedirectUri} causes the library to
+        // attempt a silent iframe SSO check FIRST that silently fails
+        // (no redirect URI), and then the code in the URL is never
+        // exchanged for a token. Observable symptom: kc.init() resolves
+        // with {@code kc.token === null} even though a valid code was
+        // present, AuthBootstrapper dispatches 'unauthenticated', the
+        // app router bounces the user to /login, and the URL hash is
+        // dropped — the user appears stuck on /login forever.
+        //
+        // Live cluster smoke 2026-05-11 reproduced this: KC redirected
+        // to /#code=...&state=..., AuthBootstrapper logged "bootstrap
+        // completed" but no /token request fired, kc.authenticated
+        // stayed false, app bounced to /login. With this fix, omitting
+        // onLoad lets keycloak-js's default URL-callback processor run,
+        // which finds the matching kc-callback in localStorage by state
+        // and posts to /token with the pkceCodeVerifier.
+        //
+        // Silent SSO (no URL code) path is unchanged.
         if (urlHasAuthCode) {
-          initOptions.onLoad = 'check-sso';
+          // Intentional: no onLoad. keycloak-js processes URL callback
+          // unconditionally when state+code present.
         } else if (!isLoginRoute && authConfig.keycloak.enableSilentCheckSso) {
           initOptions.onLoad = 'check-sso';
           initOptions.silentCheckSsoRedirectUri = authConfig.keycloak.silentCheckSsoRedirectUri;
