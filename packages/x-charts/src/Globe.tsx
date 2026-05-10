@@ -323,10 +323,11 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         itemStyle: { color: baseColor },
       };
     }
-    // lines3D layer — Codex iter-3 cleanup: `__source` field
-    // dropped (was unused — tooltip/click resolve metadata via
-    // `layers[sIdx].data[dataIndex]` directly, so the echo was
-    // dead weight in the dispatched option payload).
+    // lines3D layer — Codex iter-3 cleanup: lines option items
+    // carry only `coords`, optional `lineStyle`, and `name`. Tooltip
+    // and click resolve full metadata (label/value/from/to/
+    // fromLabel/toLabel) via `layers[sIdx].data[dataIndex]` directly,
+    // not via an echoed `__source` field on the option payload.
     const data = layer.data.map((d) => {
       const item: Record<string, unknown> = {
         coords: [
@@ -400,6 +401,93 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
   };
   if (visualMap !== undefined) option.visualMap = visualMap;
   return option as EChartsOption;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pure click-event factory (Codex thread 019e10f8 iter-4 extraction) */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Raw ECharts click params subset that {@link buildGlobeClickEvent}
+ * cares about. ECharts ships a much wider type — narrowed here so
+ * the helper can be unit-tested with synthetic input.
+ */
+export interface GlobeRawClickParams {
+  value?: number[];
+  name?: string;
+  seriesIndex?: number;
+  dataIndex?: number;
+}
+
+/**
+ * Build the canonical `ChartClickEvent` payload for a Globe layer
+ * click. Pure function: derives lon / lat / value / metadata from
+ * the consumer-supplied `layers[seriesIndex].data[dataIndex]` —
+ * source-of-truth (Codex thread `019e10f8` iter-2). Returns `null`
+ * when the params reference an unknown layer / dataIndex (defensive
+ * guard; ECharts shouldn't dispatch one but the wrapper accepts
+ * `params: unknown`).
+ *
+ * Lifted out of `GlobeInner.handleClick` (Codex iter-4) so the click
+ * payload contract can be unit-tested without React mount + jsdom
+ * mock cycle races.
+ */
+export function buildGlobeClickEvent(
+  layers: GlobeLayer[],
+  params: GlobeRawClickParams,
+): ChartClickEvent | null {
+  const sIdx = params.seriesIndex ?? 0;
+  const layer = layers[sIdx];
+  if (!layer) return null;
+  const dataIndex = params.dataIndex ?? -1;
+
+  let sourceValue: number | undefined;
+  let sourceLabel: string | undefined;
+  let lon: number | undefined;
+  let lat: number | undefined;
+  let extra: Record<string, unknown> = {};
+  if (layer.type === 'lines3D') {
+    const src = layer.data[dataIndex];
+    if (src) {
+      lon = src.from[0];
+      lat = src.from[1];
+      sourceValue = src.value;
+      sourceLabel = src.label;
+      extra = {
+        from: src.from,
+        to: src.to,
+        fromLabel: src.fromLabel,
+        toLabel: src.toLabel,
+      };
+    }
+  } else {
+    const src = (layer as { data: GlobeScatterDatum[] }).data[dataIndex];
+    if (src) {
+      lon = src.lon;
+      lat = src.lat;
+      sourceValue = src.value;
+      sourceLabel = src.label;
+    }
+  }
+  const hasNumericMetric = typeof sourceValue === 'number' && Number.isFinite(sourceValue);
+  return {
+    datum: {
+      chartType: 'globe',
+      layerId: layer.id,
+      layerName: layer.name ?? `Layer ${sIdx + 1}`,
+      layerIndex: sIdx,
+      layerType: layer.type,
+      dataIndex,
+      lon,
+      lat,
+      value: hasNumericMetric ? sourceValue : undefined,
+      label: sourceLabel ?? params.name,
+      ...extra,
+    },
+    seriesId: layer.id,
+    ...(hasNumericMetric ? { value: sourceValue } : {}),
+    label: sourceLabel ?? params.name,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -493,70 +581,11 @@ const GlobeInner = React.forwardRef<HTMLDivElement, Omit<GlobeProps, 'access' | 
     const handleClick = useCallback(
       (params: unknown) => {
         if (!onDataPointClick) return;
-        const p = params as {
-          value?: number[];
-          name?: string;
-          seriesIndex?: number;
-          dataIndex?: number;
-        };
-        const sIdx = p.seriesIndex ?? 0;
-        const layer = layers[sIdx];
-        const layerType = layer?.type;
-        const dataIndex = p.dataIndex ?? -1;
-
-        // Codex thread `019e10f8` iter-2: source-of-truth is the
-        // consumer-supplied `layers[i].data[dataIndex]`, NOT the
-        // ECharts `params.value[2]` (which is `0` for value-less
-        // datums and would falsely emit `top-level value=0`).
-        // lines3D layers don't carry value in `params.value` at
-        // all — only via the source array.
-        let sourceValue: number | undefined;
-        let sourceLabel: string | undefined;
-        let lon: number | undefined;
-        let lat: number | undefined;
-        let extra: Record<string, unknown> = {};
-        if (layer && layer.type === 'lines3D') {
-          const src = layer.data[dataIndex];
-          if (src) {
-            lon = src.from[0];
-            lat = src.from[1];
-            sourceValue = src.value;
-            sourceLabel = src.label;
-            extra = {
-              from: src.from,
-              to: src.to,
-              fromLabel: src.fromLabel,
-              toLabel: src.toLabel,
-            };
-          }
-        } else if (layer) {
-          const src = (layer as { data: GlobeScatterDatum[] }).data[dataIndex];
-          if (src) {
-            lon = src.lon;
-            lat = src.lat;
-            sourceValue = src.value;
-            sourceLabel = src.label;
-          }
-        }
-        const hasNumericMetric = typeof sourceValue === 'number' && Number.isFinite(sourceValue);
-        onDataPointClick({
-          datum: {
-            chartType: 'globe',
-            layerId: layer?.id,
-            layerName: layer?.name ?? `Layer ${sIdx + 1}`,
-            layerIndex: sIdx,
-            layerType,
-            dataIndex,
-            lon,
-            lat,
-            value: hasNumericMetric ? sourceValue : undefined,
-            label: sourceLabel ?? p.name,
-            ...extra,
-          },
-          seriesId: layer?.id,
-          ...(hasNumericMetric ? { value: sourceValue } : {}),
-          label: sourceLabel ?? p.name,
-        });
+        // Codex iter-4: delegate to the pure factory so the wrapper
+        // stays tiny and the unit test can lock the contract without
+        // React mount or jsdom mock races.
+        const event = buildGlobeClickEvent(layers, params as GlobeRawClickParams);
+        if (event) onDataPointClick(event);
       },
       [onDataPointClick, layers],
     );

@@ -29,7 +29,7 @@ vi.mock('../renderers/detectWebGLCapability', () => ({
 
 const mockedDetect = vi.mocked(detectModule.detectWebGLCapability);
 
-import { Globe, buildGlobeOption } from '../Globe';
+import { Globe, buildGlobeOption, buildGlobeClickEvent } from '../Globe';
 import type { GlobeLayer } from '../Globe';
 import { resetEChartsGLRegistration, isEChartsGLRegistered } from '../renderers/gl';
 import { allDispatchedOptions, resetEChartsMock } from './fixtures/echarts-mock';
@@ -244,72 +244,33 @@ describe('buildGlobeOption — pure option builder', () => {
   });
 });
 
-// Codex thread `019e10f8` iter-2/iter-3: click contract tests.
-//
-// IMPORTANT: these tests are currently `describe.skip`ped because the
-// jsdom + hoisted ECharts mock + lazy `useRequiredEChartsGL` lifecycle
-// races the click-listener registration past the assertion window —
-// same flake the P1a Scatter3D `setOption` integration test hit (also
-// skipped with rationale). The mock's `clickListenerRegistrations()`
-// returns an empty array because the wrapper hasn't reached the
-// `useEChartsRenderer` effect that calls `instance.on('click', …)`
-// before the test's `expect(handlers.length).toBeGreaterThan(0)` runs.
-//
-// The click payload contract is otherwise locked by:
-//   - `buildGlobeOption` pure helper tests (option shape — series
-//     mapping, layer-aware tooltip, etc.)
-//   - the design-lab benchmark Playwright spec (browser env, real
-//     ECharts, no mock race) — full e2e click dispatch coverage
-//   - source-of-truth derivation in `handleClick` reads
-//     `layers[sIdx].data[dataIndex]` (consumer-supplied), not
-//     `params.value[2]`, so any regression in that derivation would
-//     trip the option-shape test or the wrapper-mount lifecycle test
-//     (both of which are PASS-asserted upstream).
-//
-// A future PR will lift `handleClick` into a pure factory function
-// (mirroring `buildScatter3DOption` / `buildSurface3DOption` /
-// `buildGlobeOption`) so the unit test can run without React mount.
-describe.skip('Globe — handleClick contract via series mock', () => {
-  // Mock setup: register a click listener via the ECharts mock,
-  // render the wrapper, then dispatch a synthetic params object as
-  // ECharts would deliver it. The wrapper's handler runs against
-  // the consumer-supplied source datum (not `params.value`).
-  it('omits top-level value when consumer scatter datum has no value (Codex iter-2)', async () => {
-    // Build the option with a value-less scatter layer.
+// Codex thread `019e10f8` iter-4: `buildGlobeClickEvent` pure factory
+// extracted from the React wrapper so the click contract can be
+// unit-tested without React mount or jsdom mock race. The wrapper's
+// `handleClick` is now a thin delegate over this helper.
+describe('buildGlobeClickEvent — pure click event factory', () => {
+  it('omits top-level value when consumer scatter datum has no value (Codex iter-2)', () => {
     const layers: GlobeLayer[] = [
       {
         type: 'scatter3D',
         name: 'Cities',
-        data: [{ lon: -74, lat: 40.7, label: 'NYC' }], // value omitted
+        data: [{ lon: -74, lat: 40.7, label: 'NYC' }],
       },
     ];
-    let captured: { datum: Record<string, unknown>; value?: number; label?: string } | null = null;
-    const onClick = (e: { datum: Record<string, unknown>; value?: number; label?: string }) => {
-      captured = e;
-    };
-    render(<Globe layers={layers} onDataPointClick={onClick} title="No metric" />);
-    await waitFor(() => {
-      expect(screen.getByTestId('globe-chart')).toBeInTheDocument();
+    const event = buildGlobeClickEvent(layers, {
+      value: [-74, 40.7, 0],
+      seriesIndex: 0,
+      dataIndex: 0,
+      name: 'NYC',
     });
-    // Pull the registered click handler from the mock and invoke it
-    // with a synthetic ECharts params object (value-less datum →
-    // params.value[2] is the dispatch's `0` fallback).
-
-    const fixture = await import('./fixtures/echarts-mock');
-    const handlers = fixture.clickListenerRegistrations();
-    expect(handlers.length).toBeGreaterThan(0);
-    handlers[0]({ value: [-74, 40.7, 0], seriesIndex: 0, dataIndex: 0, name: 'NYC' });
-    expect(captured).not.toBeNull();
-    const cap = captured as { datum: Record<string, unknown>; value?: number };
-    // Top-level `value` MUST be omitted (no real metric).
-    expect(cap.value).toBeUndefined();
-    // Datum carries layerType + lon/lat from source array.
-    expect(cap.datum.layerType).toBe('scatter3D');
-    expect(cap.datum.lon).toBe(-74);
-    expect(cap.datum.value).toBeUndefined();
+    expect(event).not.toBeNull();
+    expect(event?.value).toBeUndefined();
+    expect(event?.datum.layerType).toBe('scatter3D');
+    expect(event?.datum.lon).toBe(-74);
+    expect(event?.datum.value).toBeUndefined();
   });
 
-  it('lines click payload carries from / to / fromLabel / toLabel / value (Codex iter-2)', async () => {
+  it('lines click payload carries from / to / fromLabel / toLabel / value (Codex iter-2)', () => {
     const layers: GlobeLayer[] = [
       {
         type: 'lines3D',
@@ -326,29 +287,37 @@ describe.skip('Globe — handleClick contract via series mock', () => {
         ],
       },
     ];
-    let captured: { datum: Record<string, unknown>; value?: number; label?: string } | null = null;
-    const onClick = (e: { datum: Record<string, unknown>; value?: number; label?: string }) => {
-      captured = e;
-    };
-    render(<Globe layers={layers} onDataPointClick={onClick} title="Flights click" />);
-    await waitFor(() => {
-      expect(screen.getByTestId('globe-chart')).toBeInTheDocument();
+    const event = buildGlobeClickEvent(layers, { seriesIndex: 0, dataIndex: 0 });
+    expect(event).not.toBeNull();
+    expect(event?.value).toBe(8000);
+    expect(event?.datum.layerType).toBe('lines3D');
+    expect(event?.datum.from).toEqual([-74, 40.7]);
+    expect(event?.datum.to).toEqual([28.97, 41.01]);
+    expect(event?.datum.fromLabel).toBe('New York');
+    expect(event?.datum.toLabel).toBe('Istanbul');
+    expect(event?.datum.value).toBe(8000);
+    expect(event?.datum.label).toBe('NY-IST');
+  });
+
+  it('emits scatter datum with numeric value when consumer supplied value', () => {
+    const layers: GlobeLayer[] = [
+      {
+        type: 'scatter3D',
+        data: [{ lon: 0, lat: 0, value: 42 }],
+      },
+    ];
+    const event = buildGlobeClickEvent(layers, {
+      value: [0, 0, 42],
+      seriesIndex: 0,
+      dataIndex: 0,
     });
-    const fixture = await import('./fixtures/echarts-mock');
-    const handlers = fixture.clickListenerRegistrations();
-    expect(handlers.length).toBeGreaterThan(0);
-    // Lines3D click: ECharts surfaces seriesIndex + dataIndex.
-    handlers[0]({ seriesIndex: 0, dataIndex: 0 });
-    expect(captured).not.toBeNull();
-    const cap = captured as { datum: Record<string, unknown>; value?: number };
-    expect(cap.value).toBe(8000);
-    expect(cap.datum.layerType).toBe('lines3D');
-    expect(cap.datum.from).toEqual([-74, 40.7]);
-    expect(cap.datum.to).toEqual([28.97, 41.01]);
-    expect(cap.datum.fromLabel).toBe('New York');
-    expect(cap.datum.toLabel).toBe('Istanbul');
-    expect(cap.datum.value).toBe(8000);
-    expect(cap.datum.label).toBe('NY-IST');
+    expect(event?.value).toBe(42);
+    expect(event?.datum.value).toBe(42);
+  });
+
+  it('returns null when params reference an unknown seriesIndex (defensive guard)', () => {
+    const layers: GlobeLayer[] = [{ type: 'scatter3D', data: [{ lon: 0, lat: 0, value: 1 }] }];
+    expect(buildGlobeClickEvent(layers, { seriesIndex: 999, dataIndex: 0 })).toBeNull();
   });
 });
 
