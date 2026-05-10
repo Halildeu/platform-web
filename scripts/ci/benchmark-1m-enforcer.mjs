@@ -181,6 +181,32 @@ export function evaluateBenchmarkArtifact(input) {
   const baselineMissing = !baseline;
   const baselineMissingFatal = baselineMissing && mode === 'pr';
 
+  // Codex iter-3 P2: validate the baseline itself — a baseline with
+  // a different schemaVersion or runner profile would silently
+  // produce a wrong regression diff. Treat as "no usable baseline":
+  // fail-closed on PR, warn on workflow_dispatch.
+  let baselineUnusable = false;
+  let baselineUnusableReason = null;
+  if (baseline && baseline.schemaVersion !== SCHEMA_VERSION) {
+    baselineUnusable = true;
+    baselineUnusableReason = `baseline schemaVersion=${baseline.schemaVersion} (expected=${SCHEMA_VERSION})`;
+  }
+  if (
+    !baselineUnusable &&
+    baseline &&
+    artifact.environment?.runner?.profile &&
+    baseline.environment?.runner?.profile &&
+    baseline.environment.runner.profile !== artifact.environment.runner.profile
+  ) {
+    baselineUnusable = true;
+    baselineUnusableReason = `baseline runner profile=${baseline.environment.runner.profile} (artifact=${artifact.environment.runner.profile}) — cross-profile diff would lie`;
+  }
+  // When the baseline is present-but-unusable we surface the same
+  // semantics as `baselineMissing` does for the rest of the function.
+  const effectiveBaseline = baselineUnusable ? null : baseline;
+  const effectiveBaselineMissing = !effectiveBaseline;
+  const effectiveBaselineMissingFatal = effectiveBaselineMissing && mode === 'pr';
+
   for (const [key, caseCfg] of Object.entries(cfg.cases)) {
     const rows = rowsForCase(artifact, key);
     const reasons = [];
@@ -237,7 +263,7 @@ export function evaluateBenchmarkArtifact(input) {
     // Effective threshold: min(absolute cap, baseline * (1 + maxPct/100)).
     // `min` (not `max`) because a faster `main` baseline should TIGHTEN
     // the gate, not relax it. Without baseline the cap stands alone.
-    const baselineMedianMs = baseline?.summary?.medianRenderMsByCase?.[key] ?? null;
+    const baselineMedianMs = effectiveBaseline?.summary?.medianRenderMsByCase?.[key] ?? null;
     let regressionPct = null;
     let regressionThresholdMs = null;
     if (baselineMedianMs !== null && baselineMedianMs > 0) {
@@ -257,18 +283,25 @@ export function evaluateBenchmarkArtifact(input) {
       reasons.push(detail);
     }
 
-    if (baselineMissing) {
-      if (baselineMissingFatal) {
-        reasons.push('baseline artifact missing on `main` (PR mode is fail-closed)');
+    if (effectiveBaselineMissing) {
+      if (effectiveBaselineMissingFatal) {
+        const reason = baselineUnusable
+          ? `baseline present but unusable: ${baselineUnusableReason} (PR mode is fail-closed)`
+          : 'baseline artifact missing on `main` (PR mode is fail-closed)';
+        reasons.push(reason);
+      } else if (baselineUnusable) {
+        notes.push(`baseline ignored — ${baselineUnusableReason} (absolute-only)`);
       } else {
         notes.push('baseline missing — running in absolute-only mode (workflow_dispatch)');
       }
     }
 
-    // GPU renderer / Chrome drift (advisory)
-    if (baseline?.environment?.runner) {
+    // GPU renderer / Chrome drift (advisory). Only meaningful when
+    // the baseline is usable; otherwise we already surfaced the
+    // bigger problem above.
+    if (effectiveBaseline?.environment?.runner) {
       const a = artifact.environment?.runner ?? {};
-      const b = baseline.environment.runner;
+      const b = effectiveBaseline.environment.runner;
       if (a.gpuRenderer && b.gpuRenderer && a.gpuRenderer !== b.gpuRenderer) {
         notes.push(
           `gpuRenderer drift (artifact=${a.gpuRenderer}, baseline=${b.gpuRenderer}) — diff may be noisy`,

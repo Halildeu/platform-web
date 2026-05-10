@@ -307,6 +307,83 @@ test('evaluateBenchmarkArtifact: warn (not fail) on gpuRenderer drift vs baselin
   assert.match(webgl.notes.join(' '), /gpuRenderer drift|chromeVersion drift/);
 });
 
+test('evaluateBenchmarkArtifact: PR mode fail-closes when baseline schemaVersion is wrong (baseline unusable)', () => {
+  const rows = [];
+  fillCase(rows, { renderMs: 1200 });
+  fillCase(rows, { backend: 'canvas-lttb', renderMs: 600 });
+  const artifact = makeArtifact(rows);
+  const baseline = {
+    schemaVersion: 'design-lab-scatter-benchmark.v1', // wrong
+    summary: {
+      medianRenderMsByCase: {
+        'uniform/million/webgl': 1100,
+        'uniform/million/canvas-lttb': 600,
+      },
+    },
+    environment: artifact.environment,
+  };
+  const v = evaluateBenchmarkArtifact({
+    artifact,
+    baseline,
+    thresholds: THRESHOLDS,
+    mode: 'pr',
+  });
+  assert.equal(v.ok, false);
+  const webgl = v.cases.find((c) => c.case === 'uniform/million/webgl');
+  assert.match(webgl.reasons.join(' '), /baseline.*schemaVersion/);
+});
+
+test('evaluateBenchmarkArtifact: PR mode fail-closes when baseline runner profile mismatches', () => {
+  const rows = [];
+  fillCase(rows, { renderMs: 1200 });
+  fillCase(rows, { backend: 'canvas-lttb', renderMs: 600 });
+  const artifact = makeArtifact(rows);
+  const baseline = {
+    schemaVersion: SCHEMA_VERSION,
+    summary: {
+      medianRenderMsByCase: {
+        'uniform/million/webgl': 1100,
+        'uniform/million/canvas-lttb': 600,
+      },
+    },
+    environment: {
+      ...artifact.environment,
+      runner: { profile: 'github-hosted-trend', gpuRenderer: 'SwiftShader', chromeVersion: '125' },
+    },
+  };
+  const v = evaluateBenchmarkArtifact({
+    artifact,
+    baseline,
+    thresholds: THRESHOLDS,
+    mode: 'pr',
+  });
+  assert.equal(v.ok, false);
+  const webgl = v.cases.find((c) => c.case === 'uniform/million/webgl');
+  assert.match(webgl.reasons.join(' '), /cross-profile diff/);
+});
+
+test('evaluateBenchmarkArtifact: workflow_dispatch keeps running with unusable baseline (absolute-only warn)', () => {
+  const rows = [];
+  fillCase(rows, { renderMs: 1400 });
+  fillCase(rows, { backend: 'canvas-lttb', renderMs: 600 });
+  const artifact = makeArtifact(rows);
+  const baseline = {
+    schemaVersion: 'design-lab-scatter-benchmark.v1',
+    summary: { medianRenderMsByCase: {} },
+    environment: artifact.environment,
+  };
+  const v = evaluateBenchmarkArtifact({
+    artifact,
+    baseline,
+    thresholds: THRESHOLDS,
+    mode: 'workflow_dispatch',
+  });
+  assert.equal(v.ok, true);
+  const webgl = v.cases.find((c) => c.case === 'uniform/million/webgl');
+  assert.equal(webgl.verdict, 'warn');
+  assert.match(webgl.notes.join(' '), /baseline ignored.*schemaVersion/);
+});
+
 test('buildSummaryMarkdown: produces sticky-comment markers + verdict cell', () => {
   const verdict = {
     ok: false,

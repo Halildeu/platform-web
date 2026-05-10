@@ -87,7 +87,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Codex iter-3 P2: pin to the repo's `.nvmrc` so the
+          # benchmark runtime matches every other CI workflow
+          # (`engines.node >=22.12`). Hard-coding `20` would use a
+          # different V8 / GC tuning than production builds.
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -137,8 +141,14 @@ jobs:
           CHROMIUM_VERSION: ${{ steps.chromium.outputs.version }}
           BENCHMARK_RUNNER_PROFILE: self-hosted-gpu
         run: |
+          # Codex iter-3 P1: the `chromium` project lives in the
+          # tests/playwright config, not the root one (root projects
+          # are desktop-light/dark/mobile/tablet). Without --config
+          # the project filter resolves to nothing and the spec
+          # never runs.
           npx playwright test \
             tests/playwright/design-lab.benchmark-1m-artifact.spec.ts \
+            --config tests/playwright/playwright.config.ts \
             --project=chromium \
             --workers=1 \
             --reporter=list
@@ -181,10 +191,14 @@ jobs:
             echo "found=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Codex iter-3 P1: `gh run download --name` is exact-match;
+          # the glob form needs `--pattern`. Without this the
+          # download silently produces no artifact and PR mode
+          # always fail-closes on missing baseline.
           gh run download "$run_id" \
             --repo "${{ github.repository }}" \
             --dir baseline \
-            --name "benchmark-1m-${run_id}-*" || true
+            --pattern "benchmark-1m-${run_id}-*" || true
           baseline_path=$(find baseline -name 'benchmark-1m-artifact.json' -type f | head -1)
           if [ -n "$baseline_path" ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
