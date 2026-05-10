@@ -1,20 +1,32 @@
 /**
- * ImpersonateAction — User Impersonation v1 PR-C frontend.
+ * ImpersonateAction — User Impersonation v1 PR-C scaffolding (NOT MOUNTED).
  *
- * Renders an "Impersonate this user" button (SuperAdmin gated) inside
- * UserDetailDrawer. On click, opens a confirmation form that asks for
- * the impersonation reason (server enforces ≥10 chars) and the
- * target Keycloak subject (UUID) — the latter is required because
- * platform user_id (numeric) does not embed the KC sub claim. A
- * follow-up PR-C2 will auto-resolve the subject from user-service so
- * this dialog reduces to a single "reason" field.
+ * SCOPE NOTE: this component file ships in PR-C as scaffolding only;
+ * the JSX mount in UserDetailDrawer is intentionally removed until
+ * PR-C2 wires the shell auth state machine integration. See PR-C
+ * descope rationale in the commit message.
  *
- * On successful POST /api/v1/impersonation/sessions:
- *   1. Backend returns {sessionId, exchangedToken, expiresAt}
- *   2. Frontend swaps the auth cookie via setTokenCookie(exchangedToken)
- *   3. window.location.assign('/') reloads with the broker token —
- *      ImpersonationBanner appears, all data fetches use the exchanged
- *      token's identity, React Query cache is dropped.
+ * PR-C2 target behaviour (after wiring lands):
+ *   1. SuperAdmin opens UserDetailDrawer → "Impersonate this user"
+ *      button (rendered only when usePermissions().isSuperAdmin())
+ *   2. Confirmation form captures reason (≥10 chars enforced server-side)
+ *      + target Keycloak subject UUID (PR-C2 will auto-resolve via
+ *      user-service so this field disappears)
+ *   3. Backend POST /api/v1/impersonation/sessions returns
+ *      {sessionId, exchangedToken, expiresAt}
+ *   4. Frontend dispatches shellServices.auth.enterImpersonation(
+ *        exchangedToken, sessionId
+ *      ) so state.auth.token + tokenResolver + PermissionProvider all
+ *      observe the broker identity
+ *   5. window.location.assign('/') reloads — AuthBootstrapper (PR-C2)
+ *      detects impersonation mode and skips Keycloak re-init so the
+ *      broker token is not overwritten.
+ *
+ * In this PR-C scaffolding file, step 4 is approximated by
+ * setTokenCookie(exchangedToken) + raw localStorage writes; this is
+ * NOT prod-correct and the component is not imported anywhere. Kept in
+ * the repo so PR-C2 can mount + extend it without re-doing the form
+ * + start API plumbing.
  */
 import React, { useCallback, useState } from 'react';
 import { startImpersonation } from '@mfe/auth';

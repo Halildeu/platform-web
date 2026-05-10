@@ -1,22 +1,31 @@
 /**
- * localStorage state machine for User Impersonation v1 (Codex iter-30 P0 absorb).
+ * localStorage state machine for User Impersonation v1 (Codex iter-30
+ * P0 absorb groundwork — PR-C scaffolding).
  *
- * The naive "swap cookie + reload" path was broken: after reload,
- * AuthBootstrapper re-runs Keycloak init and re-writes the cookie back
- * to the original admin token. The broker token is lost. AuthBootstrapper
- * must instead detect impersonation mode and skip the KC re-init.
+ * SCOPE NOTE: this module ships in PR-C as scaffolding. The Stop path
+ * inside ImpersonationBanner is the only current consumer. PR-C2 will
+ * add AuthBootstrapper as a second consumer (skip Keycloak re-init when
+ * IMPERSONATION_MODE_KEY === 'active').
  *
- * The keys here are read by both ImpersonationBanner (Stop continuation)
- * and AuthBootstrapper (impersonation mode detection); colocating the
- * names in one module avoids drift.
+ * The naive "swap cookie + reload" path is broken in production: after
+ * reload, AuthBootstrapper re-runs Keycloak init and re-writes the
+ * cookie back to the original admin token. The broker token is lost.
+ * AuthBootstrapper must instead detect impersonation mode and skip
+ * the KC re-init (PR-C2).
+ *
+ * The keys here are intended for both ImpersonationBanner (Stop
+ * continuation) and AuthBootstrapper (impersonation mode detection,
+ * PR-C2); colocating the names in one module avoids drift.
  *
  * Stop UX contract (audit-safe):
  *   1. Read IMPERSONATION_ORIGINAL_TOKEN_KEY (saved at Start)
- *   2. POST /api/v1/impersonation/sessions/<id>/revoke OR
- *      DELETE /api/v1/impersonation/sessions/current with the ORIGINAL
- *      admin token in Authorization header (broker token would be
- *      rejected by backend per Codex iter-29)
- *   3. Backend writes IMPERSONATION_STOPPED audit row
+ *   2. POST /api/v1/impersonation/sessions/<id>/revoke with the
+ *      ORIGINAL admin token in Authorization header (broker token
+ *      would be rejected by backend per Codex iter-29's
+ *      STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED contract)
+ *   3. Backend writes IMPERSONATION_REVOKED audit row with operator
+ *      identity = the starting admin (PR-B Codex iter-29 P1-6 contract:
+ *      writeRevokedByOperator)
  *   4. Frontend exits impersonation: clear keys, restore admin token,
  *      reload home
  */

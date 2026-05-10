@@ -1,20 +1,29 @@
 /**
- * ImpersonationBanner — User Impersonation v1 PR-C frontend.
+ * ImpersonationBanner — User Impersonation v1 PR-C scaffolding (NOT MOUNTED).
  *
- * Renders a sticky warning banner at the top of every page when the
- * active session token is a broker-issued (azp=impersonation-broker)
- * exchanged token. Provides a "Stop impersonating" action that:
- *   1. Calls DELETE /api/v1/impersonation/sessions/current
- *   2. Clears the auth cookie
- *   3. Redirects the user to the login page so they re-authenticate
- *      with their original admin credentials
+ * SCOPE NOTE: this component file ships in PR-C as scaffolding only;
+ * the JSX mount in ShellLayout is intentionally removed until PR-C2
+ * wires the shell auth state machine integration. See PR-C descope
+ * rationale in the commit message.
  *
- * UX rationale (Codex PR-B contract): the broker-issued token has no
- * impersonator_user_id claim, so we cannot silently swap back. A
- * forced re-login keeps the audit trail clean and matches PR-B
- * controller's STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED rejection on the
- * backend — the impersonator must call /current with their ORIGINAL
- * token. From the broker-token side, we logout and re-login.
+ * PR-C2 target behaviour (after wiring lands):
+ *   - Render a sticky warning banner whenever
+ *     state.auth.token's azp claim is the broker client id
+ *     (set by enterImpersonationSession in PR-C2 auth.slice).
+ *   - Stop button POSTs /api/v1/impersonation/sessions/<id>/revoke
+ *     with Authorization: Bearer <originalAdminToken> (read from
+ *     localStorage saved at Start). Backend writes IMPERSONATION_REVOKED
+ *     audit row with operator identity = the starting admin (PR-B
+ *     iter-29 P1-6 contract: writeRevokedByOperator).
+ *   - On success: dispatch exitImpersonationSession (PR-C2), clear cookie,
+ *     redirect to /login?reason=impersonation_stop.
+ *   - On revoke failure: surface to banner UI, do NOT silently cleanup
+ *     (Codex iter-31 audit completeness contract).
+ *
+ * The current PR-C skeleton wires Stop revoke + cookie clear + login
+ * redirect, but visibility relies on state.auth.token which PR-C does
+ * NOT update — so in production this banner would not render even
+ * when an active impersonation session exists. PR-C2 closes that gap.
  *
  * Banner visibility is purely a UX hint based on JWT azp claim;
  * permission-service's ImpersonationContextFilter (PR-B Step 2e
@@ -28,7 +37,7 @@ import { clearTokenCookie } from '../providers/AuthBootstrapper';
 import {
   IMPERSONATION_ORIGINAL_TOKEN_KEY,
   IMPERSONATION_SESSION_ID_KEY,
-  IMPERSONATION_MODE_KEY,
+  exitImpersonationMode,
 } from './impersonation-storage';
 
 interface ImpersonationContextHints {
@@ -89,7 +98,6 @@ export const ImpersonationBanner: React.FC = () => {
             { reason: 'USER_STOP_FROM_BANNER' },
             {
               headers: { Authorization: `Bearer ${originalAdminToken}` },
-               
               __skipAuthReadyGate: true,
             } as Parameters<typeof api.post>[2],
           );
@@ -115,15 +123,10 @@ export const ImpersonationBanner: React.FC = () => {
 
       // Clear all impersonation state machine keys + cookie + reload home.
       // AuthBootstrapper will re-init Keycloak with admin identity.
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.removeItem(IMPERSONATION_ORIGINAL_TOKEN_KEY);
-          window.localStorage.removeItem(IMPERSONATION_SESSION_ID_KEY);
-          window.localStorage.removeItem(IMPERSONATION_MODE_KEY);
-        } catch {
-          // best-effort
-        }
-      }
+      // Use the colocated exitImpersonationMode helper so the cleanup
+      // always covers every key that enterImpersonationMode wrote
+      // (prevents drift between writer + reader).
+      exitImpersonationMode();
       await clearTokenCookie();
       window.location.assign('/login?reason=impersonation_stop');
     } catch (e) {
