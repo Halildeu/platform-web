@@ -108,10 +108,16 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
         // the admin token wasn't persisted.
       }
 
-      // Swap auth cookie to the broker-issued exchanged token, then full
-      // page reload so React Query cache + Redux state restart against
-      // the new identity. ImpersonationBanner detects azp=broker on
-      // mount and renders the warning strip.
+      // PR-C scaffolding only: swap the auth cookie to the broker
+      // exchanged token + reload. This path is NOT prod-correct because
+      // it does not update Redux state.auth.token / shared-http
+      // tokenResolver / PermissionProvider, and AuthBootstrapper would
+      // re-init Keycloak on reload and overwrite the cookie.
+      // PR-C2 replaces this with shellServices.auth.enterImpersonation
+      // which dispatches into the auth FSM canonically and tells
+      // AuthBootstrapper to skip KC re-init while impersonation is
+      // active. Until PR-C2 lands, this component is intentionally
+      // not mounted (UserDetailDrawer doesn't import it).
       await setTokenCookie(response.exchangedToken);
       window.location.assign('/');
     } catch (e) {

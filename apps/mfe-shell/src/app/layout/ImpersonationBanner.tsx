@@ -75,10 +75,10 @@ export const ImpersonationBanner: React.FC = () => {
     try {
       // Codex iter-30 P0 absorb: audit-complete stop. Backend rejects
       // broker-token DELETE /current (STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED).
-      // We call the backend with the ORIGINAL admin token saved at Start —
-      // either DELETE /current (if same admin who started) or
-      // POST /{id}/revoke (any path). This guarantees an
-      // IMPERSONATION_STOPPED audit row is written.
+      // We call the backend with the ORIGINAL admin token saved at Start
+      // and POST /{id}/revoke; backend writes an IMPERSONATION_REVOKED
+      // audit row with operator identity = the starting admin (PR-B
+      // Codex iter-29 P1-6 contract: writeRevokedByOperator).
       const sessionId =
         typeof window !== 'undefined'
           ? window.localStorage.getItem(IMPERSONATION_SESSION_ID_KEY)
@@ -92,6 +92,9 @@ export const ImpersonationBanner: React.FC = () => {
         // Use original admin token to revoke the active session — produces
         // IMPERSONATION_REVOKED audit with operator identity = the admin
         // who started impersonation.
+        // Codex iter-32 P1 absorb: revoke failure must NOT silently
+        // cleanup. Surface on banner + halt; user can retry. This
+        // protects audit completeness (no Stop without an audit row).
         try {
           await api.post(
             `/v1/impersonation/sessions/${sessionId}/revoke`,
@@ -102,22 +105,31 @@ export const ImpersonationBanner: React.FC = () => {
             } as Parameters<typeof api.post>[2],
           );
         } catch (revokeErr) {
-          // Continue to cleanup even if revoke fails — surfacing on
-          // banner avoids users stuck in impersonation mode.
-          console.warn(
-            '[ImpersonationBanner] revoke with original admin token failed; continuing cleanup',
-            revokeErr,
-          );
+          const message =
+            revokeErr instanceof Error
+              ? revokeErr.message
+              : 'Backend reddetti, audit kaydı oluşturulamadı.';
+          setError(`Impersonation kapatılamadı: ${message}. Tekrar deneyin.`);
+          setStopping(false);
+          return;
         }
       } else {
         // No saved original token (cross-tab/manual cookie/refresh
-        // bypassed Start). Try DELETE /current with current cookie —
-        // backend will reject if broker-token. Fall through to cookie
-        // clear + login.
+        // bypassed Start). Fallback: try DELETE /current with current
+        // cookie — backend rejects if broker-token (expected). On
+        // rejection we still must not silently cleanup; surface +
+        // halt so the user re-authenticates with admin credentials
+        // and can complete an audit-safe stop.
         try {
           await api.delete('/v1/impersonation/sessions/current');
-        } catch {
-          // STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED expected here.
+        } catch (fallbackErr) {
+          const message =
+            fallbackErr instanceof Error
+              ? fallbackErr.message
+              : 'STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED — orijinal admin oturumu ile çıkın.';
+          setError(`Impersonation kapatılamadı: ${message}.`);
+          setStopping(false);
+          return;
         }
       }
 
@@ -125,7 +137,8 @@ export const ImpersonationBanner: React.FC = () => {
       // AuthBootstrapper will re-init Keycloak with admin identity.
       // Use the colocated exitImpersonationMode helper so the cleanup
       // always covers every key that enterImpersonationMode wrote
-      // (prevents drift between writer + reader).
+      // (prevents drift between writer + reader). Reached only after
+      // the backend audit row was successfully produced.
       exitImpersonationMode();
       await clearTokenCookie();
       window.location.assign('/login?reason=impersonation_stop');
