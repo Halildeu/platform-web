@@ -33,11 +33,12 @@ export { useChartCrossFilter } from './useChartCrossFilter';
 export type { UseChartCrossFilterOptions, UseChartCrossFilterReturn } from './useChartCrossFilter';
 
 // Grid Cross-Filter Hook
-export { useGridCrossFilter } from './useGridCrossFilter';
+export { useGridCrossFilter, brushFilterKey } from './useGridCrossFilter';
 export type {
   UseGridCrossFilterOptions,
   UseGridCrossFilterReturn,
   GridApi,
+  BrushFilterValue,
 } from './useGridCrossFilter';
 
 // Query Cancellation
