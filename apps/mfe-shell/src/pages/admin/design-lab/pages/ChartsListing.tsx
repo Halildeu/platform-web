@@ -161,6 +161,23 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'scatter',
   },
+  // Faz 21.11 P1b — Surface + multi-path Lines (line3D series).
+  {
+    id: 'surface-3d-chart',
+    name: 'Surface3D',
+    description: '3B yüzey grafiği (rectangular grid), WebGL-required.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'heatmap',
+  },
+  {
+    id: 'lines-3d-chart',
+    name: 'Lines3D',
+    description: '3B çoklu xyz path (line3D series), WebGL-required.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'line',
+  },
   // Interaction
   {
     id: 'chart-container',

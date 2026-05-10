@@ -57,10 +57,15 @@ const CHARTS = [
   ['sankey-chart', 'SankeyChart'],
   ['sunburst-chart', 'SunburstChart'],
   // Faz 21.11 P1a — 3D Extension Pack. Scatter3D ships with the
-  // foundation PR; P1b adds Surface3D + Lines3D; P1c adds Globe.
-  // The slug uses the same dash-cased pattern so the design-lab
-  // listing/detail route stays consistent with the 2D wrappers.
+  // foundation PR; P1c adds Globe. The slug uses the same dash-cased
+  // pattern so the design-lab listing/detail route stays consistent
+  // with the 2D wrappers.
   ['scatter-3d-chart', 'Scatter3D'],
+  // Faz 21.11 P1b — Surface3D + Lines3D wrappers. Lines3D wrapper
+  // emits multi-series `'line3D'` (singular); the geo/globe
+  // `'lines3D'` family is deferred. Codex thread `019e10d7` iter-2.
+  ['surface-3d-chart', 'Surface3D'],
+  ['lines-3d-chart', 'Lines3D'],
 ];
 
 /* ------------------------------------------------------------------ */

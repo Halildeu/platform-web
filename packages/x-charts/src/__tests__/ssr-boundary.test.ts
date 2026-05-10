@@ -40,6 +40,11 @@ import type {
   // Faz 21.11 P1a — 3D Extension Pack public type surface.
   Scatter3DProps,
   Scatter3DDataPoint,
+  // Faz 21.11 P1b — Surface3D + Lines3D type-only surface.
+  Surface3DProps,
+  Surface3DDataPoint,
+  Lines3DProps,
+  Lines3DPath,
 } from '@mfe/x-charts/ssr';
 
 // Reference each one so the imports are not pruned as unused. The
@@ -61,6 +66,10 @@ type _SSRTypeSurfaceSmoke = [
   AccessControlledProps,
   Scatter3DProps,
   Scatter3DDataPoint,
+  Surface3DProps,
+  Surface3DDataPoint,
+  Lines3DProps,
+  Lines3DPath,
 ];
 
 describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
@@ -126,9 +135,12 @@ describe('@mfe/x-charts package boundary (Faz 21.8 PR-X2)', () => {
       'WaterfallChart',
       // Faz 21.11 P1a — 3D Extension Pack. Each new 3D wrapper has
       // to start with the `'use client'` directive so it stays out
-      // of the SSR subpath. P1b adds Surface3D + Lines3D; P1c adds
-      // Globe.
+      // of the SSR subpath. P1c adds Globe.
       'Scatter3D',
+      // Faz 21.11 P1b — Surface3D + Lines3D wrappers. Codex thread
+      // `019e10d7` iter-2.
+      'Surface3D',
+      'Lines3D',
     ];
     const srcDir = path.resolve(__dirname, '..');
     const missing: string[] = [];

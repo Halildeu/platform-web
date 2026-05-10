@@ -40,8 +40,11 @@ export type { RadarChartProps } from '../RadarChart';
 export type { SankeyChartProps } from '../SankeyChart';
 export type { ScatterChartProps } from '../ScatterChart';
 // Faz 21.11 P1a — 3D Extension Pack public type surface (no runtime).
-// P1b adds Surface3DProps + Lines3DProps; P1c adds GlobeProps.
+// P1c adds GlobeProps.
 export type { Scatter3DProps, Scatter3DDataPoint } from '../Scatter3D';
+// Faz 21.11 P1b — Surface3D + Lines3D type-only public surface.
+export type { Surface3DProps, Surface3DDataPoint, Surface3DShading } from '../Surface3D';
+export type { Lines3DProps, Lines3DPath } from '../Lines3D';
 export type { SunburstChartProps } from '../SunburstChart';
 export type { TreemapChartProps } from '../TreemapChart';
 export type { WaterfallChartProps } from '../WaterfallChart';

@@ -40,11 +40,17 @@ export { SankeyChart } from '../SankeyChart';
 export type { SankeyChartProps } from '../SankeyChart';
 export { ScatterChart } from '../ScatterChart';
 export type { ScatterChartProps } from '../ScatterChart';
-// Faz 21.11 P1a — 3D Extension Pack. P1b adds Surface3D + Lines3D;
-// P1c adds Globe. Each wrapper ships under the same client subpath
-// so consumers don't need a separate bundle entry for 3D.
+// Faz 21.11 P1a — 3D Extension Pack. P1c adds Globe. Each wrapper
+// ships under the same client subpath so consumers don't need a
+// separate bundle entry for 3D.
 export { Scatter3D } from '../Scatter3D';
 export type { Scatter3DProps, Scatter3DDataPoint } from '../Scatter3D';
+// Faz 21.11 P1b — Surface3D + Lines3D wrappers. Codex thread
+// `019e10d7` iter-2.
+export { Surface3D } from '../Surface3D';
+export type { Surface3DProps, Surface3DDataPoint, Surface3DShading } from '../Surface3D';
+export { Lines3D } from '../Lines3D';
+export type { Lines3DProps, Lines3DPath } from '../Lines3D';
 export { SunburstChart } from '../SunburstChart';
 export type { SunburstChartProps } from '../SunburstChart';
 export { TreemapChart } from '../TreemapChart';
