@@ -32,7 +32,7 @@ vi.mock('@mfe/x-charts/benchmark', () => ({
     points: Array.from({ length: n }, (_, i) => ({ x: i, y: i })),
     spikeIndices: [],
   }),
-  BENCHMARK_TIERS: { medium: 100, large: 200 },
+  BENCHMARK_TIERS: { medium: 100, large: 200, million: 1000 },
 }));
 
 /**
@@ -88,7 +88,7 @@ describe('BenchmarkRoute', () => {
   // to flip the gate inside Vitest at runtime, so the gate is unit-
   // tested via the pure {@link evaluateBenchmarkGate} surface below.
 
-  it('exposes resultsToCsv with the correct header schema', async () => {
+  it('exposes resultsToCsv with the schema-v2 header columns', async () => {
     const { resultsToCsv } = await import('../BenchmarkRoute');
     const csv = resultsToCsv([
       {
@@ -101,6 +101,10 @@ describe('BenchmarkRoute', () => {
         renderedCount: 100,
         prepMs: 1.5,
         renderMs: 5.0,
+        routeRenderMs: 6.2,
+        settledSource: 'finished',
+        fixtureGenerateMs: 0.4,
+        fixtureCacheHit: false,
         fpsAvg: 60,
         fpsP95DropPct: 0,
         heapBeforeMB: null,
@@ -112,32 +116,44 @@ describe('BenchmarkRoute', () => {
       },
     ]);
     const lines = csv.split('\n');
+    // v1 columns kept for parity
     expect(lines[0]).toContain('runId');
     expect(lines[0]).toContain('runIndex');
     expect(lines[0]).toContain('fixture');
     expect(lines[0]).toContain('renderMs');
     expect(lines[0]).toContain('lttbCaveat');
+    // v2 additions (PR-A1.6b)
+    expect(lines[0]).toContain('routeRenderMs');
+    expect(lines[0]).toContain('settledSource');
+    expect(lines[0]).toContain('fixtureGenerateMs');
+    expect(lines[0]).toContain('fixtureCacheHit');
+    expect(lines[0]).toContain('glImportStatus');
+    expect(lines[0]).toContain('unsafe');
+    // body row
     expect(lines[1]).toContain('r1');
     expect(lines[1]).toContain('uniform');
     expect(lines[1]).toContain('canvas-raw');
+    expect(lines[1]).toContain('finished');
   });
 
-  it('buildArtifact wraps results with schemaVersion + summary', async () => {
-    const { buildArtifact, BENCHMARK_SCHEMA_VERSION } = await import('../BenchmarkRoute');
+  it('buildArtifact wraps results with schema-v2 header + summary', async () => {
+    const { buildArtifact, BENCHMARK_SCHEMA_VERSION, RUN_COUNTS_BY_TIER } =
+      await import('../BenchmarkRoute');
+    expect(BENCHMARK_SCHEMA_VERSION).toBe('design-lab-scatter-benchmark.v2');
     const env = {
       browser: 'chrome',
       userAgent: 'mock',
       viewport: '800x600',
       memoryApi: 'unavailable',
       route: '/admin/design-lab/benchmark',
-      warmupRuns: 1,
-      measuredRuns: 3,
+      measurementMode: 'echarts-finished-2raf' as const,
+      runCounts: RUN_COUNTS_BY_TIER,
       notes: [],
     };
     const fakeResults = [
       {
         runId: 'r1',
-        runIndex: 1 as 1 | 2 | 3,
+        runIndex: 1,
         fixture: 'uniform' as const,
         tier: 'medium' as const,
         backend: 'canvas-raw' as const,
@@ -156,7 +172,7 @@ describe('BenchmarkRoute', () => {
       },
       {
         runId: 'r1',
-        runIndex: 2 as 1 | 2 | 3,
+        runIndex: 2,
         fixture: 'uniform' as const,
         tier: 'medium' as const,
         backend: 'canvas-raw' as const,
@@ -176,6 +192,8 @@ describe('BenchmarkRoute', () => {
     ];
     const artifact = buildArtifact('r1', env, fakeResults);
     expect(artifact.schemaVersion).toBe(BENCHMARK_SCHEMA_VERSION);
+    expect(artifact.environment.measurementMode).toBe('echarts-finished-2raf');
+    expect(artifact.environment.runCounts.million.measured).toBe(5);
     expect(artifact.results).toHaveLength(2);
     expect(artifact.summary.medianRenderMsByCase['uniform/medium/canvas-raw']).toBe(5);
     expect(artifact.summary.bestRenderMsByCase['uniform/medium/canvas-raw']).toBe(4);

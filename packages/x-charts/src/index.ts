@@ -90,7 +90,11 @@ export type { ChartSize } from './chartSize';
 
 export { registerECharts, echarts } from './renderers/echarts-imports';
 export { useEChartsRenderer } from './renderers/echarts-renderer';
-export type { EChartsRendererOptions, EChartsRendererState } from './renderers/echarts-renderer';
+export type {
+  EChartsRendererOptions,
+  EChartsRendererState,
+  EChartsRenderSettledEvent,
+} from './renderers/echarts-renderer';
 
 /* Big-data renderer router — Faz 21.11 PR-A0 / PR-A1 / PR-A1.5.
  * Surface the router types here so chart consumers (and the

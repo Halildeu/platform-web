@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-10T00:14:19.405Z",
+  "generatedAt": "2026-05-10T00:32:30.347Z",
   "totalConsumers": 43,
   "byBucket": {
     "production": 17,
@@ -232,6 +232,7 @@
         "BENCHMARK_TIERS",
         "BenchmarkPoint2D",
         "BenchmarkTier",
+        "EChartsRenderSettledEvent",
         "RendererFallbackEvent",
         "ScatterChart",
         "downsampleLTTB",
