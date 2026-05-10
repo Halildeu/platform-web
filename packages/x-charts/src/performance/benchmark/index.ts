@@ -40,3 +40,12 @@ export { mulberry32, gaussian, uniform } from './seeded-rng';
 // module.
 export type { LTTBPoint } from '../lttb';
 export { downsampleLTTB } from '../lttb';
+
+// PR-A1.6b — surface the lazy GL registration + idempotent predicate
+// so the benchmark route can measure the cold `echarts-gl` chunk
+// import directly (Codex thread `019e0f50` iter-3 P1: the prior
+// `glImportMs = renderMs` proxy went undetected because the first
+// WebGL run was a warmup and got dropped). Production consumers
+// continue to ignore these — `ScatterChart` itself also calls
+// `registerEChartsGL` internally on first use.
+export { registerEChartsGL, isEChartsGLRegistered } from '../../renderers/gl/registerEChartsGL';

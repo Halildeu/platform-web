@@ -81,6 +81,8 @@ import {
   generateClusteredScatter,
   generateSpikeScatter,
   BENCHMARK_TIERS,
+  isEChartsGLRegistered,
+  registerEChartsGL,
   type BenchmarkPoint2D,
   type BenchmarkTier,
 } from '@mfe/x-charts/benchmark';
@@ -864,6 +866,25 @@ interface RunnerHookState {
    * route component can forward it without an out-of-band channel.
    */
   handleRendered: (info: RenderSlotRenderedInfo) => void | Promise<void>;
+  /**
+   * Snapshot of the run config that produced the current `results`.
+   * Frozen at `start()` time so the artifact env in the UI doesn't
+   * drift if the user toggles the danger checkbox after a run
+   * completes — Codex iter-3 P3.
+   */
+  lastRunSnapshot: RunSnapshot | null;
+}
+
+interface RunSnapshot {
+  dangerMode: boolean;
+  runner?: BenchmarkRunnerEnvironment;
+}
+
+interface ColdGlImportObservation {
+  /** Cold chunk import duration in milliseconds (0 when already registered). */
+  ms: number;
+  /** Distinguishes a fresh chunk from a cached one. */
+  status: 'cold' | 'already-registered';
 }
 
 function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
@@ -878,27 +899,40 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
   // on `reset()` and after the final case settles so the 1M heap can
   // free between Run clicks.
   const fixtureCacheRef = useRef<FixtureCache>(new FixtureCache());
-  // Tracks whether a `cold` echarts-gl chunk import has been recorded
-  // for the current run yet. The first WebGL case in a fresh run gets
-  // `glImportStatus: 'cold'` + measured `glImportMs`; subsequent ones
-  // report `'already-registered'`.
-  const glImportRecordedRef = useRef<boolean>(false);
+  /**
+   * Direct cold-import observation populated by the prepare effect on
+   * the first WebGL case of a run (warmup or measured — Codex iter-3
+   * P1 fix: the previous implementation set the `cold` flag during
+   * the first warmup but `!c.isWarmup` filtered the row out, so the
+   * artifact never carried the cold timing).
+   */
+  const coldGlImportRef = useRef<ColdGlImportObservation | null>(null);
+  /**
+   * Snapshot of the run config taken inside `start()`. The artifact
+   * UI can reuse this to render `environment.dangerMode` /
+   * `environment.runner` from the configuration that produced the
+   * results, not from whatever the user has set in the live UI
+   * after the run finished — Codex iter-3 P3.
+   */
+  const runSnapshotRef = useRef<RunSnapshot | null>(null);
 
   const start = useCallback(() => {
     const newQueue = buildCaseQueue(opts.fixtures, opts.tiers, opts.backends, opts.dangerMode);
     runIdRef.current = `bench-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     fixtureCacheRef.current.clear();
-    glImportRecordedRef.current = false;
+    coldGlImportRef.current = null;
+    runSnapshotRef.current = { dangerMode: opts.dangerMode, runner: opts.runnerEnv };
     setQueue(newQueue);
     setCursor(0);
     setResults([]);
     setPreparedData(null);
     setIsRunning(true);
-  }, [opts.fixtures, opts.tiers, opts.backends, opts.dangerMode]);
+  }, [opts.fixtures, opts.tiers, opts.backends, opts.dangerMode, opts.runnerEnv]);
 
   const reset = useCallback(() => {
     fixtureCacheRef.current.clear();
-    glImportRecordedRef.current = false;
+    coldGlImportRef.current = null;
+    runSnapshotRef.current = null;
     setQueue([]);
     setCursor(-1);
     setResults([]);
@@ -906,12 +940,45 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
     setIsRunning(false);
   }, []);
 
-  // When cursor changes, prepare data for the next case
+  // When cursor changes, prepare data for the next case. Async so we
+  // can pre-flight the cold `echarts-gl` chunk import on the first
+  // WebGL case (warmup or measured) and surface the actual chunk
+  // duration in the artifact via `coldGlImportRef` rather than the
+  // earlier proxy that conflated it with `renderMs`.
   useEffect(() => {
     if (!isRunning || cursor < 0 || cursor >= queue.length) return;
+    let cancelled = false;
     const c = queue[cursor];
-    const prepared = preparePoints(c.fixture, c.tier, c.backend, fixtureCacheRef.current);
-    setPreparedData(prepared);
+    void (async () => {
+      if (c.backend === 'webgl' && coldGlImportRef.current === null) {
+        if (isEChartsGLRegistered()) {
+          coldGlImportRef.current = { ms: 0, status: 'already-registered' };
+        } else {
+          const t0 = performance.now();
+          try {
+            await registerEChartsGL();
+            coldGlImportRef.current = {
+              ms: performance.now() - t0,
+              status: 'cold',
+            };
+          } catch {
+            // Registration failure surfaces later as the WebGL
+            // fallback path (`webglUnavailable`); leave the cold
+            // observation `null` so the runner reports neither
+            // status — the artifact row already documents the
+            // failure mode.
+            coldGlImportRef.current = null;
+          }
+        }
+      }
+      if (cancelled) return;
+      const prepared = preparePoints(c.fixture, c.tier, c.backend, fixtureCacheRef.current);
+      if (cancelled) return;
+      setPreparedData(prepared);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [cursor, queue, isRunning]);
 
   // RenderSlot's onRendered fires `handleRendered`. Captures four
@@ -946,7 +1013,12 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
       // accept the route-level proxy.
       const isSettledTimeout = info.settledSource === 'route-level';
 
-      const aborted = isOverBudget || isWebglUnavailable;
+      // Codex iter-3 P1: settled-timeout rows MUST be excluded from the
+      // artifact summary, otherwise route-level fallback measurements
+      // leak into the official `echarts-finished-2raf` median. We bundle
+      // it into `aborted` here so `computeSummary` (which gates on
+      // `r.aborted`) drops the row.
+      const aborted = isOverBudget || isWebglUnavailable || isSettledTimeout;
       const abortReason: BenchmarkAbortReason | undefined = isOverBudget
         ? 'timeout'
         : isWebglUnavailable
@@ -956,27 +1028,24 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
             : undefined;
       const webglSupported = c.backend === 'webgl' ? !isWebglUnavailable : undefined;
 
-      // Cold echarts-gl import accounting (PR-A1.6b acceptance #4).
-      // Only meaningful for WebGL cases. The first WebGL case in a
-      // fresh run pays the chunk cost; subsequent ones reuse the
-      // singleton.
+      // Cold echarts-gl import accounting (PR-A1.6b acceptance #4 +
+      // Codex iter-3 P1 fix). The prepare effect measured the actual
+      // chunk import time — we just stamp the result row with what it
+      // observed. The first WebGL case (warmup or measured) seeds the
+      // ref; subsequent WebGL cases see `'already-registered'`.
       let glImportStatus: 'cold' | 'already-registered' | undefined;
       let glImportMs: number | undefined;
-      if (c.backend === 'webgl' && webglSupported !== false) {
-        if (!glImportRecordedRef.current) {
-          glImportStatus = 'cold';
-          glImportMs = info.renderMs; // proxy: chunk import is part of renderMs window
-          glImportRecordedRef.current = true;
-        } else {
-          glImportStatus = 'already-registered';
-        }
+      if (c.backend === 'webgl' && webglSupported !== false && coldGlImportRef.current) {
+        glImportStatus = coldGlImportRef.current.status;
+        glImportMs = coldGlImportRef.current.ms;
       }
 
       if (!c.isWarmup) {
-        const env = snapshotEnvironment({
+        const snap = runSnapshotRef.current ?? {
           dangerMode: opts.dangerMode,
           runner: opts.runnerEnv,
-        });
+        };
+        const env = snapshotEnvironment(snap);
         const result: BenchmarkResult = {
           runId: runIdRef.current,
           runIndex: c.runIndex,
@@ -1044,6 +1113,10 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
       start,
       reset,
       handleRendered,
+      // Surface the run snapshot so the artifact useMemo upstream can
+      // build `environment` from the configuration that produced the
+      // results, not from whatever the user has clicked on since.
+      lastRunSnapshot: runSnapshotRef.current,
     }),
     [results, isRunning, cursor, queue, preparedData, start, reset, handleRendered],
   );
@@ -1354,10 +1427,15 @@ const BenchmarkRoute: React.FC = () => {
     runnerEnv,
   });
 
-  const env = useMemo(
-    () => snapshotEnvironment({ dangerMode, runner: runnerEnv }),
-    [dangerMode, runnerEnv],
-  );
+  // Codex iter-3 P3: build the artifact `environment` from the run
+  // snapshot the runner froze inside `start()`, NOT from the live
+  // dangerMode/runnerEnv state. Otherwise toggling the unsafe
+  // checkbox AFTER a run completes would silently rewrite history
+  // in the displayed artifact.
+  const env = useMemo(() => {
+    const snap = runner.lastRunSnapshot ?? { dangerMode, runner: runnerEnv };
+    return snapshotEnvironment(snap);
+  }, [runner.lastRunSnapshot, dangerMode, runnerEnv]);
   const artifact = useMemo<BenchmarkArtifact | null>(() => {
     if (runner.results.length === 0) return null;
     return buildArtifact(runner.results[0].runId, env, runner.results);

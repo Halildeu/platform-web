@@ -21,9 +21,12 @@ import { authenticateAndNavigate } from './utils/auth';
  */
 
 const ROUTE = '/admin/design-lab/benchmark';
-const SCHEMA_VERSION = 'design-lab-scatter-benchmark.v1';
+// Schema bumped to v2 in PR-A1.6b. v1 producers stopped emitting once
+// that PR landed; the only artifact this spec sees today is v2 (or
+// no artifact at all when the gate is closed).
+const SCHEMA_VERSION = 'design-lab-scatter-benchmark.v2';
 
-test.describe('Design Lab benchmark route smoke (PR-A1.6a)', () => {
+test.describe('Design Lab benchmark route smoke (PR-A1.6a + PR-A1.6b)', () => {
   test('benchmark route either mounts and produces an artifact, or shows the disabled banner', async ({
     page,
     baseURL,

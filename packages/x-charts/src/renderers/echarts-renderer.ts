@@ -331,7 +331,14 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
       });
     };
 
-    if (onRenderSettledRef.current) {
+    // Capture the subscription state at bind time so the cleanup
+    // path detaches the listener it actually attached. Reading
+    // `onRenderSettledRef.current` again inside the cleanup races
+    // against a benchmark consumer that swaps its callback between
+    // `setOption` calls — Codex thread `019e0f50` iter-3 P2.
+    const subscribed = Boolean(onRenderSettledRef.current);
+
+    if (subscribed) {
       // Only attach the listener when a benchmark consumer is
       // subscribed — keeps the ECharts event bus quiet for production
       // chart instances.
@@ -342,7 +349,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
 
     return () => {
       cancelled = true;
-      if (onRenderSettledRef.current) {
+      if (subscribed) {
         instance.off('finished', finishedHandler);
       }
       if (raf1 !== null) cancelAnimationFrame(raf1);
