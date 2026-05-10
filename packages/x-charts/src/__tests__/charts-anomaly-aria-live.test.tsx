@@ -28,6 +28,9 @@ import { LineChart } from '../LineChart';
 import { AreaChart } from '../AreaChart';
 import { BarChart } from '../BarChart';
 import { HeatmapChart } from '../HeatmapChart';
+import { PieChart } from '../PieChart';
+import { FunnelChart } from '../FunnelChart';
+import { WaterfallChart } from '../WaterfallChart';
 import type { AnomalySummary } from '../annotations/computeAnomalyOverlay';
 import { setChartsLocale, __resetChartsLocaleStoreForTests } from '../i18n/locale-store';
 
@@ -61,12 +64,36 @@ const HEATMAP_DATA = [
   { x: 'x1', y: 'y1', value: 20 },
 ];
 
+// PR-A2b-a11y-other-batch2 (Codex thread 019e1096): per-wrapper data
+// shapes verified against each chart's `Props` interface — Pie + Waterfall
+// use `{ label, value }`, Funnel uses `{ name, value }`. Codex iter-1
+// flagged that mixing these up in the original plan would pass typescript
+// but produce wrong axis labels at runtime.
+const PIE_DATA = [
+  { label: 'Jan', value: 10 },
+  { label: 'Feb', value: 20 },
+  { label: 'Mar', value: 30 },
+];
+
+const FUNNEL_DATA = [
+  { name: 'Visit', value: 100 },
+  { name: 'Signup', value: 60 },
+  { name: 'Purchase', value: 20 },
+];
+
+const WATERFALL_DATA = [
+  { label: 'Start', value: 100 },
+  { label: 'Q1', value: 30 },
+  { label: 'Q2', value: -20 },
+  { label: 'Q3', value: 50 },
+];
+
 type ChartCase = {
   name: string;
   // Each chart wrapper has its own `Props` shape — the matrix only
   // shares the anomaly props, so `Record<string, unknown>` is the
   // narrowest type that lets us spread base props of all four shapes.
-   
+
   Component: React.ComponentType<any>;
   baseProps: Record<string, unknown>;
 };
@@ -76,6 +103,14 @@ const CHARTS: ChartCase[] = [
   { name: 'AreaChart', Component: AreaChart, baseProps: { series: SERIES, labels: LABELS } },
   { name: 'BarChart', Component: BarChart, baseProps: { data: BAR_DATA } },
   { name: 'HeatmapChart', Component: HeatmapChart, baseProps: { data: HEATMAP_DATA } },
+  // PR-A2b-a11y-other-batch2 (Codex thread 019e1096): semantic-aligned
+  // wrappers added — PieChart/FunnelChart markup overlay is a NO-OP, so
+  // the SR announcement is the consumer's primary anomaly channel.
+  // WaterfallChart `useChartA11y({ chartType: 'waterfall' })` already
+  // emits ECharts type union, so the forward is mechanical.
+  { name: 'PieChart', Component: PieChart, baseProps: { data: PIE_DATA } },
+  { name: 'FunnelChart', Component: FunnelChart, baseProps: { data: FUNNEL_DATA } },
+  { name: 'WaterfallChart', Component: WaterfallChart, baseProps: { data: WATERFALL_DATA } },
 ];
 
 beforeEach(() => {

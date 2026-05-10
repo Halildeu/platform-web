@@ -21,6 +21,8 @@ import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -118,6 +120,23 @@ export interface FunnelChartProps extends AccessControlledProps {
   density?: ChartDensityPreference;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
+  /**
+   * Faz 21.11 PR-A2b-a11y-other-batch2 — anomaly summary list. When
+   * supplied, the wrapper forwards the consumer-provided summary to
+   * `ChartA11yShell` so screen readers receive a polite, debounced
+   * outlier announcement summarising unusual stages (e.g. a stage
+   * with an unexpectedly large drop). FunnelChart's `ChartMarkup`
+   * overlay is currently a NO-OP, so the SR announcement is the
+   * consumer's primary anomaly channel — pair it with whichever
+   * detector you trust at the dashboard layer; no built-in recipe
+   * is implied for funnel-stage distributions.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,6 +224,8 @@ const FunnelChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    anomalySummary,
+    formatAnomalyAnnouncement,
     ...rest
   },
   forwardedRef,
@@ -475,6 +496,8 @@ const FunnelChartInner = React.forwardRef<
       height={height}
       testId="funnel-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -489,7 +512,15 @@ FunnelChartInner.displayName = 'FunnelChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(function FunnelChart(
-  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
+  {
+    access,
+    accessReason,
+    onDataPointClick,
+    onMarkupClick,
+    anomalySummary,
+    formatAnomalyAnnouncement,
+    ...rest
+  },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -500,6 +531,11 @@ export const FunnelChart = React.forwardRef<HTMLDivElement, FunnelChartProps>(fu
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
         onMarkupClick={guardChartCallback(state, onMarkupClick)}
+        // PR-A2b-a11y-other-batch2: anomaly summary + formatter
+        // forwarded through unchanged — these aren't user-facing
+        // callbacks that the access gate would block.
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       />
     </ChartAccessGate>
   );
