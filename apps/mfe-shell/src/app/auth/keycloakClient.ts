@@ -42,6 +42,37 @@ const navigateToLoginUrl = (loginUrl: string): void => {
   }, 250);
 };
 
+/**
+ * 2026-05-10 hotfix (login flow P0 #3): poll until keycloak-js has
+ * populated the internal {@code adapter} field, indicating that
+ * {@code init()} has progressed far enough for {@code createLoginUrl}
+ * to be safe to call.
+ *
+ * <p>keycloak-js exposes the adapter at {@code keycloak.adapter} only
+ * after init() resolves the OIDC discovery document and constructs
+ * the chosen flow adapter (default/cordova/cordova-native). Calling
+ * {@code createLoginUrl} before this point throws inside the library
+ * with {@code TypeError: Cannot read properties of undefined (reading
+ * 'redirectUri')} because the internal options object is still
+ * unresolved.
+ *
+ * <p>Returns true if adapter ready within timeoutMs, false otherwise.
+ * Caller may proceed even on timeout — keycloak-js will fall back to
+ * its internal "no-adapter" path which throws but the wrapper here
+ * catches it cleanly. The wait is best-effort, not blocking.
+ */
+const waitForKcAdapter = async (timeoutMs: number): Promise<boolean> => {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const kc = keycloak as unknown as { adapter?: unknown };
+    if (kc.adapter) {
+      return true;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+  }
+  return false;
+};
+
 const readBrowserAuthRuntime = () => {
   if (typeof window === 'undefined') {
     return {
@@ -85,14 +116,30 @@ export const resolveKeycloakLoginUrl = async ({
     }
 
     try {
+      // 2026-05-10 hotfix (login flow P0 #3): wait for kc.adapter to
+      // populate before invoking createLoginUrl. keycloak-js sets
+      // `keycloak.adapter` inside init(), but the Redux `initialized`
+      // flag can fire BEFORE adapter is wired (race observed on testai:
+      // `[Auth] keycloak.createLoginUrl() failed: TypeError: Cannot
+      // read properties of undefined (reading 'redirectUri')` thrown
+      // from inside vo.createLoginUrl on bootstrap-DXLrVsh1.js:10:5908).
+      // The error originates inside KC because options or adapter is
+      // undefined; spinning briefly until adapter is ready avoids the
+      // race without changing observable behavior on the happy path.
+      // Cross-AI Codex review (thread 019e1336) flagged this as part
+      // of the auth bootstrap FSM gap.
+      const adapterReady = await waitForKcAdapter(800);
+      if (!adapterReady) {
+        console.warn(
+          `[Auth] keycloak.createLoginUrl() invoked before adapter ready (timed out ${800}ms). Falling through; KC may still resolve via adapter:'default'.`,
+        );
+      }
       const loginUrl = await Promise.race<string>([
         keycloak.createLoginUrl({ redirectUri }),
         new Promise<string>((_, reject) => {
           window.setTimeout(() => {
             reject(
-              new Error(
-                `keycloak.createLoginUrl() timed out after ${LOGIN_URL_TIMEOUT_MS}ms`,
-              ),
+              new Error(`keycloak.createLoginUrl() timed out after ${LOGIN_URL_TIMEOUT_MS}ms`),
             );
           }, LOGIN_URL_TIMEOUT_MS);
         }),

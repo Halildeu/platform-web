@@ -108,7 +108,16 @@ describe('LoginPage', () => {
     });
   });
 
-  it('keycloak init tamamlanmadan login butonunu devre disi birakir', () => {
+  it('keycloak init tamamlanmadan login butonu enabled kalir ve startKeycloakLogin fallback calistirir', async () => {
+    // 2026-05-10 hotfix (login flow P0 #1): the button used to be
+    // `disabled={!loginHrefReady}`, which meant a user clicking
+    // "Güvenli Kurumsal Giriş" while kc.init() was still resolving
+    // saw a no-op (with only a tiny "hazırlanıyor..." note as
+    // feedback). The new contract: button is always clickable;
+    // handleLogin falls back to startKeycloakLogin() (which awaits
+    // kc.init internally) when loginHref is null. Cross-AI Codex
+    // review (thread 019e1336) flagged this as the primary
+    // first-click usability bug.
     authStateMock.initialized = false;
 
     render(
@@ -118,11 +127,74 @@ describe('LoginPage', () => {
     );
 
     const button = screen.getByTestId('corporate-login-button');
-    expect(button).toBeDisabled();
+    expect(button).not.toBeDisabled();
     expect(screen.getByTestId('corporate-login-pending')).toBeInTheDocument();
 
     fireEvent.click(button);
-    expect(startKeycloakLogin).not.toHaveBeenCalled();
+    await waitFor(() => expect(startKeycloakLogin).toHaveBeenCalledTimes(1));
+    expect(startKeycloakLogin).toHaveBeenCalledWith({
+      redirectUri: 'http://localhost:3000/access/roles',
+    });
+  });
+
+  it('redirect=/login query parametresini filtreler ve / kokune yonlendirir (loop guard)', async () => {
+    // 2026-05-10 hotfix (login flow P0 #2): when user lands on
+    // /login?redirect=/login (e.g. stale bookmark, browser back
+    // navigation post-SSO) the previous logic returned '/login' as
+    // post-SSO target → KC sent browser BACK to /login → onAuthSuccess
+    // catch-up handler eventually recovered but with extra round-trip.
+    // Contract: any /login* redirect param falls through to '/'.
+    // Cross-AI Codex review (thread 019e1336) flagged this as P0
+    // redirect-loop class bug.
+    authStateMock.initialized = true;
+
+    render(
+      <MemoryRouter initialEntries={['/login?redirect=/login']}>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    // The redirectUri passed to resolveKeycloakLoginUrl proves the
+    // filter worked — we see '/' instead of '/login'.
+    await waitFor(() => expect(resolveKeycloakLoginUrlMock).toHaveBeenCalled());
+    expect(resolveKeycloakLoginUrlMock).toHaveBeenCalledWith({
+      redirectUri: 'http://localhost:3000/',
+    });
+  });
+
+  it('redirect=/login/foo nested path icin de loop guard calisir', async () => {
+    // Defense-in-depth: nested /login/* paths (e.g. /login/help, hypothetical
+    // future sub-routes) should also be treated as login-namespace and
+    // fall through to '/'.
+    authStateMock.initialized = true;
+
+    render(
+      <MemoryRouter initialEntries={['/login?redirect=/login/help']}>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(resolveKeycloakLoginUrlMock).toHaveBeenCalled());
+    expect(resolveKeycloakLoginUrlMock).toHaveBeenCalledWith({
+      redirectUri: 'http://localhost:3000/',
+    });
+  });
+
+  it('non-login redirect path olduğu gibi korunur (regression guard)', async () => {
+    // Regression guard: legitimate redirect targets like /access/roles
+    // must still be honored; the loop guard only filters /login*.
+    authStateMock.initialized = true;
+
+    render(
+      <MemoryRouter initialEntries={['/login?redirect=/access/roles']}>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(resolveKeycloakLoginUrlMock).toHaveBeenCalled());
+    expect(resolveKeycloakLoginUrlMock).toHaveBeenCalledWith({
+      redirectUri: 'http://localhost:3000/access/roles',
+    });
   });
 
   it('shows permitAll mode with Devam Et button', () => {

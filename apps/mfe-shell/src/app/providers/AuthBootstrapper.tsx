@@ -344,6 +344,46 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
      */
     const bootstrap = async () => {
       try {
+        // 2026-05-10 hotfix (login flow P1): GC stale `kc-callback-*`
+        // localStorage entries left by aborted PKCE flows. keycloak-js
+        // writes one entry per createLoginUrl invocation (carrying
+        // PKCE state + nonce + code_verifier) and clears it on
+        // successful callback consumption. Aborted flows (user closes
+        // tab, network error, server-side reload during KC redirect)
+        // leak entries indefinitely. Live cluster smoke observed 21+
+        // stale entries; over months this both bloats localStorage
+        // quota AND leaks PKCE material to any XSS landing on the
+        // origin. Cross-AI Codex review (thread 019e1336) flagged as P1.
+        //
+        // Keep entries fresher than 1 hour (login flow normally
+        // completes in seconds; 1h is a generous safety window for
+        // mid-flow tab/network interruptions) — older entries are
+        // certainly abandoned. Skip if storage unavailable (SSR/
+        // privacy mode).
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const now = Date.now();
+          const KC_CALLBACK_TTL_MS = 60 * 60 * 1000;
+          const stale: string[] = [];
+          for (let i = 0; i < window.localStorage.length; i++) {
+            const key = window.localStorage.key(i);
+            if (!key || !key.startsWith('kc-callback-')) continue;
+            try {
+              const raw = window.localStorage.getItem(key);
+              const parsed = raw ? JSON.parse(raw) : null;
+              const expires = typeof parsed?.expires === 'number' ? parsed.expires : null;
+              if (expires === null || now - expires > KC_CALLBACK_TTL_MS) {
+                stale.push(key);
+              }
+            } catch {
+              stale.push(key);
+            }
+          }
+          if (stale.length > 0) {
+            stale.forEach((k) => window.localStorage.removeItem(k));
+            console.info(`[AuthBootstrapper] cleaned ${stale.length} stale kc-callback entries`);
+          }
+        }
+
         // PR-C2 (Codex AGREE thread `019e109c` iter-4): impersonation
         // hydrate guard — must run BEFORE keycloak.init to avoid the
         // re-init writing the admin token back over the broker token.

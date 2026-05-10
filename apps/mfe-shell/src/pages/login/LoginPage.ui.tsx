@@ -32,7 +32,26 @@ const LoginPage = () => {
   const redirectPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const redirect = params.get('redirect');
-    return redirect || '/';
+    // 2026-05-10 hotfix (login flow P0 #2): when user lands on
+    // /login?redirect=/login (e.g. after a stale bookmark or after the
+    // browser history navigates back to /login post-SSO), the previous
+    // logic returned '/login' as the post-SSO target. KC then sent the
+    // browser BACK to /login with the auth code in the fragment — the
+    // onAuthSuccess catch-up handler in AuthBootstrapper recovered, but
+    // the user paid an extra round-trip + saw a brief blank page.
+    //
+    // Filter out '/login' (and any nested /login* path) so the user
+    // always lands at '/' after successful SSO. Cross-AI Codex review
+    // (thread 019e1336) flagged this as a P0 redirect-loop class bug.
+    if (
+      !redirect ||
+      redirect === '/login' ||
+      redirect.startsWith('/login?') ||
+      redirect.startsWith('/login/')
+    ) {
+      return '/';
+    }
+    return redirect;
   }, [location.search]);
 
   const redirectUri = useMemo(() => buildAppRedirectUri(redirectPath), [redirectPath]);
@@ -189,7 +208,17 @@ const LoginPage = () => {
                   className={loginButtonClassName}
                   onClick={handleLogin}
                   data-testid="corporate-login-button"
-                  disabled={!loginHrefReady}
+                  // 2026-05-10 hotfix (login flow P0 #1): button no longer
+                  // disabled while loginHref resolves. Previously users saw
+                  // a no-op "first click" because the button was disabled
+                  // during the kc.init() race; the only feedback was tiny
+                  // "hazırlanıyor..." text below. handleLogin already falls
+                  // back to startKeycloakLogin() (which awaits init
+                  // internally) when loginHref is null, so the click is
+                  // safe even before bootstrap completes.
+                  // Cross-AI Codex review (thread 019e1336) flagged this
+                  // as the primary "first-click açılmıyor" bug.
+                  disabled={false}
                 >
                   <svg
                     className="h-4 w-4"
