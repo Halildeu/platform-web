@@ -27,7 +27,7 @@ vi.mock('../renderers/detectWebGLCapability', () => ({
 
 const mockedDetect = vi.mocked(detectModule.detectWebGLCapability);
 
-import { Surface3D, buildSurface3DOption } from '../Surface3D';
+import { Surface3D, buildSurface3DOption, buildSurface3DClickEvent } from '../Surface3D';
 import { resetEChartsGLRegistration, isEChartsGLRegistered } from '../renderers/gl';
 import { allDispatchedOptions, resetEChartsMock } from './fixtures/echarts-mock';
 import { setChartsLocale, __resetChartsLocaleStoreForTests } from '../i18n/locale-store';
@@ -185,5 +185,37 @@ describe('buildSurface3DOption — pure option builder', () => {
     const out = tooltip.formatter({ value: [0, 0, 1] });
     expect(out).not.toMatch(/<img/);
     expect(out).toMatch(/&lt;img/);
+  });
+});
+
+// Faz 21.11 P1d — pure click-event factory unit tests.
+describe('buildSurface3DClickEvent — pure click event factory', () => {
+  it('emits canonical event with z as value', () => {
+    const event = buildSurface3DClickEvent([{ x: 1, y: 2, z: 9 }], {
+      value: [1, 2, 9],
+      dataIndex: 0,
+    });
+    expect(event?.value).toBe(9);
+    expect(event?.datum.x).toBe(1);
+    expect(event?.datum.y).toBe(2);
+    expect(event?.datum.z).toBe(9);
+    expect(event?.datum.chartType).toBe('surface3d');
+  });
+
+  it('uses source data[dataIndex] (not params.value) for x/y/z', () => {
+    // Even if params.value carries different numbers (shouldn't in
+    // practice), source-of-truth wins.
+    const event = buildSurface3DClickEvent([{ x: 100, y: 200, z: 300 }], {
+      value: [99, 99, 99],
+      dataIndex: 0,
+    });
+    expect(event?.datum.x).toBe(100);
+    expect(event?.datum.y).toBe(200);
+    expect(event?.datum.z).toBe(300);
+    expect(event?.value).toBe(300);
+  });
+
+  it('returns null when dataIndex is out-of-bounds (defensive guard)', () => {
+    expect(buildSurface3DClickEvent([{ x: 0, y: 0, z: 0 }], { dataIndex: 999 })).toBeNull();
   });
 });

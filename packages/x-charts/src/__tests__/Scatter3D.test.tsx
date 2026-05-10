@@ -35,7 +35,7 @@ vi.mock('../renderers/detectWebGLCapability', () => ({
 
 const mockedDetect = vi.mocked(detectModule.detectWebGLCapability);
 
-import { Scatter3D, buildScatter3DOption } from '../Scatter3D';
+import { Scatter3D, buildScatter3DOption, buildScatter3DClickEvent } from '../Scatter3D';
 import { resetEChartsGLRegistration, isEChartsGLRegistered } from '../renderers/gl';
 import { allDispatchedOptions, resetEChartsMock } from './fixtures/echarts-mock';
 import { setChartsLocale, __resetChartsLocaleStoreForTests } from '../i18n/locale-store';
@@ -232,3 +232,33 @@ describe('buildScatter3DOption — pure option builder', () => {
 // the lifecycle gate. The full end-to-end option-dispatch invariant
 // is locked in the design-lab benchmark Playwright spec (browser env,
 // real ECharts, no mock race).
+
+// Faz 21.11 P1d — pure click-event factory unit tests (mirror of
+// Globe.buildGlobeClickEvent pattern from P1c iter-4).
+describe('buildScatter3DClickEvent — pure click event factory', () => {
+  it('emits canonical event with source-of-truth value (point.value over point.z)', () => {
+    const event = buildScatter3DClickEvent([{ x: 1, y: 2, z: 3, value: 42, label: 'Foo' }], {
+      value: [1, 2, 3, 42],
+      dataIndex: 0,
+    });
+    expect(event).not.toBeNull();
+    expect(event?.value).toBe(42);
+    expect(event?.datum.value).toBe(42);
+    expect(event?.datum.label).toBe('Foo');
+    expect(event?.datum.chartType).toBe('scatter3d');
+  });
+
+  it('falls back to point.z when point.value is undefined', () => {
+    const event = buildScatter3DClickEvent([{ x: 0, y: 0, z: 99 }], {
+      value: [0, 0, 99],
+      dataIndex: 0,
+    });
+    expect(event?.value).toBe(99);
+    expect(event?.datum.value).toBe(99);
+  });
+
+  it('returns null when dataIndex is out-of-bounds (defensive guard)', () => {
+    expect(buildScatter3DClickEvent([{ x: 0, y: 0, z: 0 }], { dataIndex: 5 })).toBeNull();
+    expect(buildScatter3DClickEvent([], { dataIndex: 0 })).toBeNull();
+  });
+});

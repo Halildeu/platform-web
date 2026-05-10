@@ -207,6 +207,47 @@ export function buildSurface3DOption(input: BuildSurface3DOptionInput): EChartsO
 }
 
 /* ------------------------------------------------------------------ */
+/*  Pure click-event factory (Faz 21.11 P1d unification)               */
+/* ------------------------------------------------------------------ */
+
+/** Raw ECharts click params subset for {@link buildSurface3DClickEvent}. */
+export interface Surface3DRawClickParams {
+  value?: number[];
+  dataIndex?: number;
+}
+
+/**
+ * Build the canonical `ChartClickEvent` for a Surface3D click. Pure
+ * function: derives `value` (z-axis) from `data[dataIndex]` —
+ * source-of-truth (avoids the ECharts `params.value[2]` zero-fallback
+ * regression Globe iter-2 hit). Returns `null` when `dataIndex` is
+ * out-of-bounds (defensive).
+ *
+ * Lifted out of `Surface3DInner.handleClick` (P1d) so the click
+ * contract can be unit-tested without React mount.
+ */
+export function buildSurface3DClickEvent(
+  data: Surface3DDataPoint[],
+  params: Surface3DRawClickParams,
+): ChartClickEvent | null {
+  const dataIndex = params.dataIndex ?? -1;
+  if (dataIndex < 0 || dataIndex >= data.length) return null;
+  const point = data[dataIndex];
+  return {
+    datum: {
+      x: point.x,
+      y: point.y,
+      z: point.z,
+      value: point.z,
+      dataIndex,
+      chartType: 'surface3d',
+      seriesName: 'Surface3D',
+    },
+    value: point.z,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -287,22 +328,12 @@ const Surface3DInner = React.forwardRef<
   const handleClick = useCallback(
     (params: unknown) => {
       if (!onDataPointClick) return;
-      const p = params as { value?: number[]; dataIndex?: number };
-      const [x, y, z] = p.value ?? [];
-      onDataPointClick({
-        datum: {
-          x,
-          y,
-          z,
-          value: z ?? 0,
-          dataIndex: p.dataIndex ?? -1,
-          chartType: 'surface3d',
-          seriesName: 'Surface3D',
-        },
-        value: z ?? 0,
-      });
+      // P1d: delegate to the pure factory (Globe iter-4 / Scatter3D
+      // P1d precedent — thin React adapter over the factory).
+      const event = buildSurface3DClickEvent(data, params as Surface3DRawClickParams);
+      if (event) onDataPointClick(event);
     },
-    [onDataPointClick],
+    [onDataPointClick, data],
   );
 
   const { containerRef, instance } = useEChartsRenderer({

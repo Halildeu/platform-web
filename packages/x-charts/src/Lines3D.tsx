@@ -213,6 +213,53 @@ export function buildLines3DOption(input: BuildLines3DOptionInput): EChartsOptio
 }
 
 /* ------------------------------------------------------------------ */
+/*  Pure click-event factory (Faz 21.11 P1d unification)               */
+/* ------------------------------------------------------------------ */
+
+/** Raw ECharts click params subset for {@link buildLines3DClickEvent}. */
+export interface Lines3DRawClickParams {
+  value?: number[];
+  seriesIndex?: number;
+  dataIndex?: number;
+}
+
+/**
+ * Build the canonical `ChartClickEvent` for a Lines3D click. Pure
+ * function: resolves the path via `paths[seriesIndex]` and the
+ * coord via `path.coords[dataIndex]` — source-of-truth. Returns
+ * `null` when either index is out-of-bounds (defensive).
+ *
+ * Lifted out of `Lines3DInner.handleClick` (P1d) so the click
+ * contract can be unit-tested without React mount.
+ */
+export function buildLines3DClickEvent(
+  paths: Lines3DPath[],
+  params: Lines3DRawClickParams,
+): ChartClickEvent | null {
+  const sIdx = params.seriesIndex ?? 0;
+  const path = paths[sIdx];
+  if (!path) return null;
+  const dataIndex = params.dataIndex ?? -1;
+  if (dataIndex < 0 || dataIndex >= path.coords.length) return null;
+  const [x, y, z] = path.coords[dataIndex];
+  return {
+    datum: {
+      x,
+      y,
+      z,
+      value: z,
+      pathIndex: sIdx,
+      pathLabel: path.label,
+      dataIndex,
+      chartType: 'lines3d',
+      seriesName: path.label ?? `Path ${sIdx + 1}`,
+    },
+    value: z,
+    label: path.label,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -299,25 +346,9 @@ const Lines3DInner = React.forwardRef<
   const handleClick = useCallback(
     (params: unknown) => {
       if (!onDataPointClick) return;
-      const p = params as { value?: number[]; seriesIndex?: number; dataIndex?: number };
-      const sIdx = p.seriesIndex ?? 0;
-      const path = data[sIdx];
-      const [x, y, z] = p.value ?? [];
-      onDataPointClick({
-        datum: {
-          x,
-          y,
-          z,
-          value: z ?? 0,
-          pathIndex: sIdx,
-          pathLabel: path?.label,
-          dataIndex: p.dataIndex ?? -1,
-          chartType: 'lines3d',
-          seriesName: path?.label ?? `Path ${sIdx + 1}`,
-        },
-        value: z ?? 0,
-        label: path?.label,
-      });
+      // P1d: delegate to the pure factory (Globe iter-4 precedent).
+      const event = buildLines3DClickEvent(data, params as Lines3DRawClickParams);
+      if (event) onDataPointClick(event);
     },
     [onDataPointClick, data],
   );
