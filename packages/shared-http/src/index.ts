@@ -190,6 +190,21 @@ let refreshInFlight: Promise<RefreshResult> | null = null;
 let authMode: AuthMode = resolveAuthMode();
 let authRedirectInProgress = false;
 const PROFILE_MISSING_CODE = 'PROFILE_MISSING';
+/**
+ * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+ * stable backend lifecycle error codes that route a 403 response into
+ * the {@code app:auth:impersonation-expired} window event instead of
+ * the generic forbidden toast. Mirrored in
+ * {@code @mfe/auth} as {@link IMPERSONATION_ERROR_CODES} — kept as a
+ * local constant here so {@code @mfe/shared-http} stays a leaf package
+ * (no MFE-side imports). Shell listener owns the recovery flow.
+ */
+const IMPERSONATION_LIFECYCLE_ERROR_CODES: ReadonlySet<string> = new Set([
+  'IMPERSONATION_SESSION_EXPIRED',
+  'IMPERSONATION_SESSION_REQUIRED',
+  'EXCHANGED_TOKEN_EXPIRED',
+  'IMPERSONATION_SESSION_REVOKED',
+]);
 const GLOBAL_TOAST_DEDUPE_MS = 2_000;
 // İlk yüklemede auth init tamamlanmadan gelebilecek 401'leri yutmak için küçük tolerans
 const appStartTime = Date.now();
@@ -638,6 +653,37 @@ const installInterceptors = (client: AxiosInstance) => {
       }
       if (status === 403) {
         const errorCode = extractErrorCode(error);
+        // User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c`
+        // iter-4): backend signals an expired / revoked / missing
+        // impersonation session via 403 + a stable {@code errorCode}
+        // string. Dispatch a window event so the shell-side listener
+        // can decide between admin restore vs /login redirect, and
+        // suppress the generic forbidden toast (the listener owns
+        // the user-facing message).
+        if (errorCode && IMPERSONATION_LIFECYCLE_ERROR_CODES.has(errorCode)) {
+          if (typeof window !== 'undefined') {
+            const method = (error.config?.method ?? 'get').toUpperCase();
+            const url = typeof error.config?.url === 'string' ? error.config.url : undefined;
+            try {
+              window.dispatchEvent(
+                new CustomEvent('app:auth:impersonation-expired', {
+                  detail: {
+                    code: errorCode,
+                    status: 403,
+                    method,
+                    url,
+                    timestamp: Date.now(),
+                  },
+                }),
+              );
+            } catch {
+              if (process.env.NODE_ENV !== 'production') {
+                console.warn('[shared-http] impersonation-expired event dispatch failed');
+              }
+            }
+          }
+          return Promise.reject(error);
+        }
         if (errorCode === PROFILE_MISSING_CODE) {
           if (!requestConfig.__suppressGlobalProfileMissingToast) {
             handleProfileMissing();

@@ -11,6 +11,7 @@ import { I18nProvider, i18n } from '../i18n';
 import { queryClient, shouldShowQueryDevtools } from '../config/query-config';
 import { AuthBootstrapper } from './AuthBootstrapper';
 import { DownloadProgressListener } from './DownloadProgressListener';
+import { ImpersonationExpiredListener } from './ImpersonationExpiredListener';
 import { AuthFsmObserver } from '../observability/AuthFsmObserver';
 import { AuthDegradedBanner } from '../observability/AuthDegradedBanner';
 import { installAuthContractE2eProbe } from '../observability/auth-contract-e2e-probe';
@@ -65,6 +66,7 @@ export const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children
           <QueryClientProvider client={queryClient}>
             <ToastProvider position="top-right" duration={4500} maxVisible={4}>
               <DownloadProgressListener />
+              <ImpersonationExpiredListener />
               <AuthFsmObserver />
               <AuthBootstrapper>
                 <PermissionProviderWrapper>

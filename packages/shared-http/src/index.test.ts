@@ -148,6 +148,59 @@ describe('shared-http interceptors', () => {
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
+  it('dispatches app:auth:impersonation-expired and suppresses forbidden toast on lifecycle 403', async () => {
+    // User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c`
+    // iter-4): backend signals an expired / revoked / missing
+    // impersonation session via 403 + a stable {@code errorCode}.
+    // The interceptor MUST emit the lifecycle event and skip the
+    // generic forbidden toast so the listener owns the user-facing
+    // recovery flow.
+    const { mod, dispatchEvent } = await loadModule();
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: {
+        status: 403,
+        data: { errorCode: 'IMPERSONATION_SESSION_EXPIRED' },
+      },
+      config: { method: 'get', url: '/v1/some-protected-endpoint' },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    const event = dispatchEvent.mock.calls[0][0];
+    expect(event.type).toBe('app:auth:impersonation-expired');
+    expect(event.detail.code).toBe('IMPERSONATION_SESSION_EXPIRED');
+    expect(event.detail.status).toBe(403);
+    expect(event.detail.method).toBe('GET');
+    expect(event.detail.url).toBe('/v1/some-protected-endpoint');
+    // Generic forbidden toast (app:toast) MUST NOT fire when the
+    // lifecycle event is dispatched.
+    const toastCalls = dispatchEvent.mock.calls.filter(
+      ([dispatched]) => (dispatched as Event).type === 'app:toast',
+    );
+    expect(toastCalls).toHaveLength(0);
+  });
+
+  it.each([
+    'IMPERSONATION_SESSION_EXPIRED',
+    'IMPERSONATION_SESSION_REQUIRED',
+    'EXCHANGED_TOKEN_EXPIRED',
+    'IMPERSONATION_SESSION_REVOKED',
+  ])('routes 403 %s through the impersonation-expired event', async (errorCode) => {
+    const { mod, dispatchEvent } = await loadModule();
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: { status: 403, data: { errorCode } },
+      config: { method: 'post', url: '/v1/x' },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(dispatchEvent.mock.calls[0][0].type).toBe('app:auth:impersonation-expired');
+  });
+
   it('shows profile missing toast without redirect on 403 PROFILE_MISSING', async () => {
     const { mod, locationReplace, dispatchEvent } = await loadModule();
     const unauthorizedHandler = vi.fn();
