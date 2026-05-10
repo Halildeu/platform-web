@@ -498,19 +498,22 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           kcUrl: authConfig.keycloak.url,
           ...urlCodeDiag,
         };
-        // Pre-build the message as a constant prefix + sanitized
-        // diagnostic JSON. Static format string + interpolated data
-        // satisfies CodeQL js/format-string-injection (the format
-        // string portion is constant; only sanitized fields are
-        // interpolated).
+        // CodeQL js/format-string-injection guard:
+        // The FIRST argument to console.info must be a CONSTANT string
+        // literal — never a concatenation that includes URL-derived
+        // values. Even with state-prefix sanitisation, CodeQL flags
+        // any first-arg string built from a tainted source. Solution:
+        // the constant prefix stays in arg 0; the serialised JSON
+        // (which contains the diagnostic detail Chrome MCP can capture
+        // as a flat string) goes in arg 1; the structured payload
+        // (which DevTools pretty-prints) goes in arg 2.
         let diagSerialized: string;
         try {
           diagSerialized = JSON.stringify(diagPayload);
         } catch {
           diagSerialized = '<unserializable>';
         }
-        const initMsg = '[AuthBootstrapper] init starting ' + diagSerialized;
-        console.info(initMsg, diagPayload);
+        console.info('[AuthBootstrapper] init starting', diagSerialized, diagPayload);
 
         // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
         // GUARDED by isAuthContractE2eEnabled() — production bundles
