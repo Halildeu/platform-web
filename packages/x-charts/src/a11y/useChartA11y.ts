@@ -54,7 +54,11 @@ export type ChartA11yKind =
   // multi-series `'line3D'` (one per path) on shared cartesian3D /
   // grid3D. Codex thread `019e10d7` iter-2.
   | 'surface3d'
-  | 'lines3d';
+  | 'lines3d'
+  // Faz 21.11 P1c — Globe wrapper (geo sphere with multi-layer
+  // scatter3D / lines3D / bar3D on `coordinateSystem: 'globe'`).
+  // Codex thread `019e10f8` iter-1.
+  | 'globe';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */

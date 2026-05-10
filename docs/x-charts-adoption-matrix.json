@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-10T08:03:14.892Z",
+  "generatedAt": "2026-05-10T08:37:33.075Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 17,
@@ -742,6 +742,11 @@
         "CrossFilterEntry",
         "DrillDownLevel",
         "DrillLevel",
+        "GlobeLayer",
+        "GlobeLineDatum",
+        "GlobeProps",
+        "GlobeRegion",
+        "GlobeScatterDatum",
         "HistoryEntry",
         "LineChartProps",
         "Lines3DPath",

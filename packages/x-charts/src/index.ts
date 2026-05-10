@@ -26,6 +26,18 @@ export { Surface3D } from './Surface3D';
 export type { Surface3DProps, Surface3DDataPoint, Surface3DShading } from './Surface3D';
 export { Lines3D } from './Lines3D';
 export type { Lines3DProps, Lines3DPath } from './Lines3D';
+// Faz 21.11 P1c — Globe wrapper. Multi-layer geo sphere; layer types
+// are scatter3D / lines3D / bar3D on `coordinateSystem: 'globe'`.
+// `baseTexture` / `heightTexture` / `environment` are CONSUMER-supplied
+// (no defaults bundled). Codex thread `019e10f8` iter-1.
+export { Globe } from './Globe';
+export type {
+  GlobeProps,
+  GlobeLayer,
+  GlobeScatterDatum,
+  GlobeLineDatum,
+  GlobeRegion,
+} from './Globe';
 // Note: `buildScatter3DOption` / `buildSurface3DOption` /
 // `buildLines3DOption` (and their `Build*Input` types) are intentionally
 // NOT re-exported here — they're internal test seams (option builders
