@@ -452,9 +452,14 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     // PR-A2c-wire: `enableBrush` IS a real public prop on
     // `ScatterChart` (Faz 21.11 toolbox brush opt-in). Listed so
     // the playground can toggle the toolbox/brush UI live and
-    // wire the status pill demo. `onBrushSelection` is a callback
-    // — those are forwarded via `getCallbackPreset` infra and
-    // don't need a playground entry.
+    // wire the status pill demo. `onBrushSelection` is NOT
+    // exposed as a playground knob in this PR — the design-lab
+    // demo uses its own internal handler (`ScatterAnomalyDemoChart`
+    // owns the status pill state). Wiring it through the
+    // `getCallbackPreset` infra would need a
+    // `COMPLEX_PROP_PRESETS['scatter-chart.onBrushSelection']`
+    // entry + route forwarding; that's a separate PR-A2c-adopt
+    // follow-up.
     'enableBrush',
   ]),
   'gauge-chart': new Set([
