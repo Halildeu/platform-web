@@ -319,3 +319,135 @@ export async function exitImpersonationOrchestration(): Promise<ExitImpersonatio
     return { ok: false, reason: 'restore-failed', message };
   }
 }
+
+/**
+ * PR-C2 lifecycle-expired recovery path (Codex iter-5 P1-4 absorb,
+ * thread `019e109c`). Distinct from {@link exitImpersonationOrchestration}
+ * because the backend already considers the session inactive when this
+ * runs — calling {@code POST /sessions/<id>/revoke} would 4xx and the
+ * banner-stop revoke-first sequence would never reach admin restore.
+ *
+ * <p>Flow:
+ * <ol>
+ *   <li>Drop the broker httpOnly cookie (best-effort {@code DELETE /auth/cookie}
+ *       with the broker token; ignored if it fails since the new admin
+ *       cookie below will overwrite it anyway).</li>
+ *   <li>Re-write {@code /auth/cookie} with the cached admin token so the
+ *       gateway swaps back to the admin session.</li>
+ *   <li>Refresh the admin authz snapshot if it is not already in memory.</li>
+ *   <li>Reset the React-Query cache so any in-flight target queries die.</li>
+ *   <li>Dispatch {@link exitImpersonationSession} to atomically restore
+ *       the admin identity in Redux + clear the impersonation substate.</li>
+ *   <li>Clear the impersonation localStorage keys.</li>
+ * </ol>
+ *
+ * <p>Pre-conditions: the listener verified the cached admin token is
+ * still valid (TTL not exceeded). When the admin token is gone or
+ * already expired the listener takes the {@code clearImpersonationOnFailurePath}
+ * + {@code /login?reason=impersonation_expired} branch and never calls
+ * this helper.
+ */
+export async function recoverFromLifecycleExpiry(): Promise<ExitImpersonationResult> {
+  const state = store.getState().auth;
+  const sessionId = selectImpersonationSessionId(store.getState()) ?? state.impersonation.sessionId;
+  const originalAdminToken =
+    selectImpersonationOriginalAdminToken(store.getState()) ??
+    state.impersonation.originalAdminToken;
+  const originalAdminExpiresAt =
+    selectImpersonationOriginalAdminExpiresAt(store.getState()) ??
+    state.impersonation.originalAdminExpiresAt;
+  const brokerToken = state.token;
+
+  if (!sessionId) {
+    store.dispatch(markImpersonationExpired({ reason: 'session_lost' }));
+    clearImpersonationOnFailurePath();
+    return { ok: false, reason: 'session-lost' };
+  }
+  if (
+    !originalAdminToken ||
+    typeof originalAdminExpiresAt !== 'number' ||
+    originalAdminExpiresAt <= Date.now()
+  ) {
+    store.dispatch(markImpersonationExpired({ reason: 'admin_expired' }));
+    clearImpersonationOnFailurePath();
+    return { ok: false, reason: 'admin-expired' };
+  }
+
+  store.dispatch(setAuthPhase('refreshing'));
+
+  // Best-effort broker cookie drop. The DELETE may fail (already revoked,
+  // network blip); the admin cookie write below overwrites it either way.
+  if (brokerToken) {
+    try {
+      const dropCfg: SharedHttpRequestConfig = {
+        headers: { Authorization: `Bearer ${brokerToken}` },
+        __skipAuthReadyGate: true,
+        __skipRefreshOn401: true,
+      };
+      await api.delete('/auth/cookie', dropCfg);
+    } catch (dropErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[shell] broker cookie drop ignored during lifecycle recovery', dropErr);
+      }
+    }
+  }
+
+  let adminAuthzSnapshot: Record<string, unknown> | null =
+    store.getState().auth.impersonation.originalAdminAuthzSnapshot;
+  let adminUser = store.getState().auth.impersonation.originalAdminUser;
+
+  try {
+    const cookieCfg: SharedHttpRequestConfig = {
+      headers: { Authorization: `Bearer ${originalAdminToken}` },
+      __skipAuthReadyGate: true,
+      __skipRefreshOn401: true,
+    };
+    await api.post('/auth/cookie', null, cookieCfg);
+
+    if (!adminAuthzSnapshot) {
+      try {
+        const authzCfg: SharedHttpRequestConfig = {
+          headers: { Authorization: `Bearer ${originalAdminToken}` },
+          __skipAuthReadyGate: true,
+          __skipRefreshOn401: true,
+        };
+        const authzRes = await api.get('/v1/authz/me', authzCfg);
+        adminAuthzSnapshot = (authzRes.data ?? null) as Record<string, unknown> | null;
+      } catch (authzErr) {
+        console.warn(
+          '[shell] admin authz/me fetch failed during lifecycle recovery; continuing with empty snapshot',
+          authzErr,
+        );
+      }
+    }
+    if (!adminUser) {
+      adminUser = buildTargetUser(originalAdminToken, adminAuthzSnapshot);
+    }
+
+    try {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+    } catch (cacheErr) {
+      console.warn('[shell] queryClient.clear failed during lifecycle recovery', cacheErr);
+    }
+
+    store.dispatch(
+      exitImpersonationSessionAction({
+        adminToken: originalAdminToken,
+        adminUser,
+        adminAuthzSnapshot,
+        adminExpiresAt: originalAdminExpiresAt,
+      }),
+    );
+    store.dispatch(setAuthPhase('transportReady'));
+    exitImpersonationMode();
+    return { ok: true };
+  } catch (restoreErr) {
+    store.dispatch(setAuthPhase('transportReady'));
+    const message =
+      restoreErr instanceof Error
+        ? restoreErr.message
+        : 'Admin restore failed during lifecycle recovery';
+    return { ok: false, reason: 'restore-failed', message };
+  }
+}

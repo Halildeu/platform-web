@@ -109,6 +109,7 @@ const setupMocks = (initialAuth: FakeAuthState) => {
   });
   const apiPost = vi.fn();
   const apiGet = vi.fn();
+  const apiDelete = vi.fn();
   const cancelQueries = vi.fn(async () => undefined);
   const clear = vi.fn();
 
@@ -120,7 +121,7 @@ const setupMocks = (initialAuth: FakeAuthState) => {
     },
   }));
   vi.doMock('@mfe/shared-http', () => ({
-    api: { post: apiPost, get: apiGet, delete: vi.fn(), defaults: { baseURL: '/api' } },
+    api: { post: apiPost, get: apiGet, delete: apiDelete, defaults: { baseURL: '/api' } },
     registerAuthReadyResolver: vi.fn(),
     registerRefreshHandler: vi.fn(),
   }));
@@ -166,7 +167,16 @@ const setupMocks = (initialAuth: FakeAuthState) => {
     clearImpersonationOnFailurePath: vi.fn(),
   }));
 
-  return { dispatch, dispatched, apiPost, apiGet, cancelQueries, clear, getState: () => state };
+  return {
+    dispatch,
+    dispatched,
+    apiPost,
+    apiGet,
+    apiDelete,
+    cancelQueries,
+    clear,
+    getState: () => state,
+  };
 };
 
 describe('impersonation-orchestration (PR-C2)', () => {
@@ -284,6 +294,142 @@ describe('impersonation-orchestration (PR-C2)', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('admin-expired');
     expect(dispatched.find((a) => a.type === 'auth/markImpersonationExpired')).toBeDefined();
+  });
+
+  /**
+   * Codex iter-5 P1-4 absorb (thread `019e109c`): lifecycle-expired
+   * recovery path is distinct from banner-stop. Backend already
+   * considers the session inactive — calling /sessions/<id>/revoke
+   * would 4xx and the banner-stop revoke-first sequence would never
+   * reach admin restore. recoverFromLifecycleExpiry skips revoke,
+   * drops the broker cookie best-effort, writes the admin cookie,
+   * fetches admin authz/me when needed, and dispatches
+   * exitImpersonationSession with the cached admin payload.
+   */
+  it('recoverFromLifecycleExpiry skips revoke and restores admin identity', async () => {
+    const initial = buildState({
+      token: 'broker-token',
+      impersonation: {
+        status: 'expired',
+        sessionId: '00000000-0000-0000-0000-000000000001',
+        originalAdminToken: 'admin-token',
+        originalAdminUser: { id: '1', email: 'admin@example.com' },
+        originalAdminAuthzSnapshot: { permissions: ['ADMIN'], superAdmin: true },
+        originalAdminExpiresAt: Date.now() + 60_000,
+      },
+    });
+    const { dispatched, apiPost, apiDelete } = setupMocks(initial);
+
+    apiDelete.mockResolvedValueOnce({ data: null, status: 204 });
+    // Single POST = /auth/cookie admin write (revoke MUST NOT be called).
+    apiPost.mockResolvedValueOnce({ data: null, status: 200 });
+
+    const orch = await import('./impersonation-orchestration');
+    const result = await orch.recoverFromLifecycleExpiry();
+
+    expect(result.ok).toBe(true);
+    // Revoke endpoint MUST NOT be called.
+    const revokeCalls = apiPost.mock.calls.filter(([url]) =>
+      String(url).includes('/impersonation/sessions/'),
+    );
+    expect(revokeCalls).toHaveLength(0);
+    // Broker cookie was dropped first (best-effort).
+    expect(apiDelete).toHaveBeenCalledWith(
+      '/auth/cookie',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer broker-token' },
+      }),
+    );
+    // Admin cookie was re-written.
+    expect(apiPost).toHaveBeenCalledWith(
+      '/auth/cookie',
+      null,
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer admin-token' },
+      }),
+    );
+    const exitAction = dispatched.find((a) => a.type === 'auth/exitImpersonationSession');
+    expect(exitAction).toBeDefined();
+    expect((exitAction!.payload as { adminToken: string }).adminToken).toBe('admin-token');
+  });
+
+  it('recoverFromLifecycleExpiry tolerates broker cookie drop failure', async () => {
+    // The broker DELETE may legitimately 4xx (already revoked); the
+    // admin POST below must still run and the recovery must succeed.
+    const initial = buildState({
+      token: 'broker-token',
+      impersonation: {
+        status: 'expired',
+        sessionId: '00000000-0000-0000-0000-000000000001',
+        originalAdminToken: 'admin-token',
+        originalAdminUser: { id: '1', email: 'admin@example.com' },
+        originalAdminAuthzSnapshot: { permissions: ['ADMIN'], superAdmin: true },
+        originalAdminExpiresAt: Date.now() + 60_000,
+      },
+    });
+    const { dispatched, apiPost, apiDelete } = setupMocks(initial);
+
+    apiDelete.mockRejectedValueOnce(new Error('broker session already revoked'));
+    apiPost.mockResolvedValueOnce({ data: null, status: 200 });
+
+    const orch = await import('./impersonation-orchestration');
+    const result = await orch.recoverFromLifecycleExpiry();
+
+    expect(result.ok).toBe(true);
+    expect(dispatched.find((a) => a.type === 'auth/exitImpersonationSession')).toBeDefined();
+  });
+
+  it('recoverFromLifecycleExpiry returns admin-expired when cached admin token is stale', async () => {
+    const initial = buildState({
+      token: 'broker-token',
+      impersonation: {
+        status: 'expired',
+        sessionId: '00000000-0000-0000-0000-000000000001',
+        originalAdminToken: 'admin-token',
+        originalAdminUser: null,
+        originalAdminAuthzSnapshot: null,
+        originalAdminExpiresAt: Date.now() - 1_000,
+      },
+    });
+    const { dispatched, apiPost, apiDelete } = setupMocks(initial);
+
+    const orch = await import('./impersonation-orchestration');
+    const result = await orch.recoverFromLifecycleExpiry();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('admin-expired');
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(apiDelete).not.toHaveBeenCalled();
+    expect(dispatched.find((a) => a.type === 'auth/markImpersonationExpired')).toBeDefined();
+  });
+
+  it('recoverFromLifecycleExpiry returns restore-failed when admin cookie write rejects', async () => {
+    const initial = buildState({
+      token: 'broker-token',
+      impersonation: {
+        status: 'expired',
+        sessionId: '00000000-0000-0000-0000-000000000001',
+        originalAdminToken: 'admin-token',
+        originalAdminUser: { id: '1', email: 'admin@example.com' },
+        originalAdminAuthzSnapshot: { permissions: ['ADMIN'], superAdmin: true },
+        originalAdminExpiresAt: Date.now() + 60_000,
+      },
+    });
+    const { dispatched, apiPost, apiDelete } = setupMocks(initial);
+
+    apiDelete.mockResolvedValueOnce({ data: null, status: 204 });
+    apiPost.mockRejectedValueOnce(new Error('gateway 502'));
+
+    const orch = await import('./impersonation-orchestration');
+    const result = await orch.recoverFromLifecycleExpiry();
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('restore-failed');
+    // No admin restore occurred.
+    expect(dispatched.find((a) => a.type === 'auth/exitImpersonationSession')).toBeUndefined();
+    // Phase rolls back to transportReady so subsequent requests resume.
+    const phaseTransitions = dispatched.filter((a) => a.type === 'auth/setAuthPhase');
+    expect(phaseTransitions[phaseTransitions.length - 1]?.payload).toBe('transportReady');
   });
 
   it('exitImpersonationOrchestration restores admin identity on revoke success', async () => {

@@ -1,16 +1,19 @@
 /**
  * ImpersonationExpiredListener — User Impersonation v1 PR-C2 (Codex AGREE
- * thread `019e109c` iter-4 absorb).
+ * thread `019e109c` iter-4 + iter-5 P1-2/P1-4 absorb).
  *
  * Listens for the {@code app:auth:impersonation-expired} window event
  * dispatched by {@code @mfe/shared-http}'s response interceptor when a
  * 403 carries one of the {@link IMPERSONATION_ERROR_CODES} values.
  *
- * Recovery flow:
+ * Recovery flow (Codex iter-5 P1-4 — distinct from banner-stop):
  *   1. Mark the substate {@code expired} so SSE / banner consumers
  *      stop reading the broker token.
  *   2. If the cached original admin token + expiry are still valid,
- *      run the exit orchestration to restore the admin identity.
+ *      run {@link recoverFromLifecycleExpiry} — admin restore WITHOUT
+ *      a {@code /sessions/<id>/revoke} call. The session is already
+ *      inactive backend-side; banner-stop revoke-first orchestration
+ *      would 4xx and never reach admin restore.
  *   3. Otherwise (token gone, expired, or restore failed): clear all
  *      impersonation metadata and redirect to /login with a
  *      {@code reason=impersonation_expired} query parameter so the
@@ -30,7 +33,8 @@ import {
   readImpersonationOriginalAdminExpiresAt,
   readImpersonationOriginalToken,
 } from '../layout/impersonation-storage';
-import { exitImpersonationOrchestration } from '../config/impersonation-orchestration';
+import { recoverFromLifecycleExpiry } from '../config/impersonation-orchestration';
+import { queryClient } from '../config/query-config';
 
 const INSTALL_FLAG = '__impersonationExpiredListenerInstalled__';
 
@@ -54,6 +58,26 @@ const redirectToLoginExpired = () => {
   }
 };
 
+/**
+ * Best-effort React-Query cache reset on the failure-redirect path.
+ * The lifecycle-recovery branch already calls {@code queryClient.clear()}
+ * inside {@link recoverFromLifecycleExpiry}; this helper covers the
+ * branches where we do NOT run the recovery (admin token missing /
+ * expired / recovery threw). Without it, target-scoped queries cached
+ * during impersonation could rehydrate against the admin identity on
+ * the next page load.
+ */
+const safeClearQueryCache = async (): Promise<void> => {
+  try {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[shell] queryClient.clear failed during impersonation-expired cleanup', err);
+    }
+  }
+};
+
 const handleExpired = async (
   detail: ImpersonationExpiredEventDetail | undefined,
 ): Promise<void> => {
@@ -61,9 +85,9 @@ const handleExpired = async (
   store.dispatch(markImpersonationExpired({ reason }));
 
   // Prefer the in-memory original admin material (Redux substate) so
-  // the orchestration short-circuits the authz/me re-fetch when
-  // possible. Fall back to the persisted token if the listener fires
-  // after a hydrate-only path (no in-memory snapshot).
+  // the recovery short-circuits the authz/me re-fetch when possible.
+  // Fall back to the persisted token if the listener fires after a
+  // hydrate-only path (no in-memory snapshot).
   const reduxOriginalToken = store.getState().auth.impersonation.originalAdminToken;
   const reduxOriginalExpiresAt = store.getState().auth.impersonation.originalAdminExpiresAt;
   const persistedOriginalToken = readImpersonationOriginalToken();
@@ -76,25 +100,36 @@ const handleExpired = async (
     !!adminToken && typeof adminExpiresAt === 'number' && adminExpiresAt > Date.now();
 
   if (!adminTokenValid) {
+    // Admin token gone or already expired — recovery cannot restore the
+    // admin session. Drop every cached target query so the post-redirect
+    // login screen does not flash stale impersonated data, then clear
+    // metadata and redirect.
+    await safeClearQueryCache();
     clearImpersonationOnFailurePath();
     redirectToLoginExpired();
     return;
   }
 
   try {
-    const result = await exitImpersonationOrchestration();
+    // Codex iter-5 P1-4: lifecycle-expired uses a dedicated recovery
+    // helper (NOT exitImpersonationOrchestration). The session is
+    // already inactive backend-side; banner-stop's revoke-first
+    // orchestration would 4xx and never reach admin restore.
+    const result = await recoverFromLifecycleExpiry();
     if (!result.ok) {
-      // Revoke endpoint may legitimately reject the cleanup attempt
-      // (e.g. session was already revoked by another admin). Either
-      // way the broker token is gone — push the user to /login so
-      // they can re-authenticate cleanly.
+      // Recovery legitimately rejected (admin cookie write failed,
+      // /authz/me 5xx, etc.). The broker session is already dead
+      // either way — push the user to /login so they can
+      // re-authenticate cleanly.
+      await safeClearQueryCache();
       clearImpersonationOnFailurePath();
       redirectToLoginExpired();
     }
   } catch (err) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('[shell] impersonation-expired listener exit failed', err);
+      console.warn('[shell] impersonation-expired listener recovery failed', err);
     }
+    await safeClearQueryCache();
     clearImpersonationOnFailurePath();
     redirectToLoginExpired();
   }
