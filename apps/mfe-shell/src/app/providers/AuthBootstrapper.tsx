@@ -446,11 +446,41 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           initOptions.onLoad = 'check-sso';
           initOptions.silentCheckSsoRedirectUri = authConfig.keycloak.silentCheckSsoRedirectUri;
         }
+        // 2026-05-11 diagnostic: log kc-callback storage state when URL
+        // has auth code, to surface "callback storage missing/mismatch"
+        // bugs in production. Real-user "açılmıyor" symptom on testai
+        // shows kc.init() finishing without firing /token exchange —
+        // this log helps prove whether the kc-callback entry for the
+        // URL state exists at the moment kc.init() is about to run.
+        let urlCodeDiag: Record<string, unknown> = {};
+        if (urlHasAuthCode && typeof window !== 'undefined') {
+          try {
+            const hashStr = (window.location?.hash ?? '').replace(/^#/, '');
+            const params = new URLSearchParams(
+              hashStr || (window.location?.search ?? '').replace(/^\?/, ''),
+            );
+            const stateVal = params.get('state');
+            const callbackKey = stateVal ? `kc-callback-${stateVal}` : null;
+            const cbExists = callbackKey ? !!window.localStorage.getItem(callbackKey) : false;
+            const totalCallbacks = Object.keys(window.localStorage).filter((k) =>
+              k.startsWith('kc-callback-'),
+            ).length;
+            urlCodeDiag = {
+              urlStateLen: stateVal?.length ?? 0,
+              urlStatePrefix: stateVal?.slice(0, 8) ?? null,
+              callbackExists: cbExists,
+              totalCallbacks,
+            };
+          } catch (err) {
+            urlCodeDiag = { diagFailed: err instanceof Error ? err.message : String(err) };
+          }
+        }
         console.info('[AuthBootstrapper] init starting', {
           isLoginRoute,
           urlHasAuthCode,
           onLoad: initOptions.onLoad,
           kcUrl: authConfig.keycloak.url,
+          ...urlCodeDiag,
         });
 
         // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
