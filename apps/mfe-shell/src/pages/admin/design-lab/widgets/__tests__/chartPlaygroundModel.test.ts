@@ -465,8 +465,23 @@ describe('chartPlaygroundModel — preset gallery', () => {
     expect(getChartPresets('gauge-chart').length).toBeGreaterThanOrEqual(4);
   });
 
-  it('returns empty array for charts without presets', () => {
-    expect(getChartPresets('treemap-chart')).toEqual([]);
+  // Faz 21.11 PR-Playground-Coverage: 8 hierarchical / flow / 3D
+  // wrappers (radar, treemap, sankey, sunburst + scatter3d, surface3d,
+  // lines3d, globe) gained preset galleries so the Examples tab renders
+  // a non-empty grid for every chart wrapper added in PR-A2 batch3 +
+  // P1 3D pack.
+  it('returns presets for hierarchical / flow / 3D wrappers (PR-Playground-Coverage)', () => {
+    expect(getChartPresets('radar-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('treemap-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('sankey-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('sunburst-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('scatter-3d-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('surface-3d-chart').length).toBeGreaterThanOrEqual(4);
+    expect(getChartPresets('lines-3d-chart').length).toBeGreaterThanOrEqual(5);
+    expect(getChartPresets('globe-chart').length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('returns empty array for non-existent charts (no preset wired)', () => {
     expect(getChartPresets('non-existent-chart')).toEqual([]);
   });
 
