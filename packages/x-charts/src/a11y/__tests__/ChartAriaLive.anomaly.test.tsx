@@ -377,6 +377,38 @@ describe('ChartAriaLive — domain-aware default formatter (batch3)', () => {
 // payloads that differ only in `seriesName` / `path` / `nodeId` are
 // semantically distinct events and the SR should hear both.
 describe('ChartAriaLive — anomalySignature extension (batch3)', () => {
+  // Codex thread `019e10a5` PR-Radar plan iter-1 — axisUnit signature
+  // gap fix. Formatter announces "<value> <unit>"; if axisUnit changes
+  // (e.g. ms → s migration), the SR text changes but old signature
+  // would dedupe it away. Signature must include axisUnit.
+  it('different axisUnit on radar anomalies re-announces (signature ext)', () => {
+    const fmt = vi.fn(() => 'X');
+    const a1: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'radar',
+      indicatorName: 'Latency',
+      axisUnit: 'ms',
+    };
+    const a2: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'radar',
+      indicatorName: 'Latency',
+      axisUnit: 's',
+    };
+    const { rerender } = render(
+      <ChartAriaLive message="" anomalies={[a1]} formatAnomalyAnnouncement={fmt} />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(1);
+    rerender(<ChartAriaLive message="" anomalies={[a2]} formatAnomalyAnnouncement={fmt} />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(2);
+  });
+
   it('different seriesName on radar anomalies re-announces', () => {
     const fmt = vi.fn(() => 'X');
     const a1: AnomalySummary = { ...ANOM_A, kind: 'radar', seriesName: 'Q1' };

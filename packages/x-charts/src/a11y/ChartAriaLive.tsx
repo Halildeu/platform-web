@@ -156,7 +156,7 @@ function anomalySignature(anomalies: AnomalySummary[] | undefined): string {
     .map((a) => {
       const base = `${a.id}|${a.direction}|${a.formattedY}|${a.severity.toFixed(4)}`;
       const kindKey = `|${a.kind ?? 'flat'}`;
-      const radarKey = `|${a.seriesName ?? ''}|${a.indicatorIndex ?? ''}|${a.indicatorName ?? ''}`;
+      const radarKey = `|${a.seriesName ?? ''}|${a.indicatorIndex ?? ''}|${a.indicatorName ?? ''}|${a.axisUnit ?? ''}`;
       const hierKey = `|${(a.path ?? []).join('>')}`;
       const sankeyKey = `|${a.nodeId ?? ''}|${a.edgeId ?? ''}|${a.source ?? ''}|${a.target ?? ''}|${a.flowValue ?? ''}`;
       return `${base}${kindKey}${radarKey}${hierKey}${sankeyKey}`;
