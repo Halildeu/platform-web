@@ -85,7 +85,7 @@ describe('ChartAriaLive — anomaly announcement (PR-A2b-a11y)', () => {
     expect(screen.getByTestId('chart-aria-live-anomalies').textContent).toMatch(/1 outlier/);
   });
 
-  it('default EN formatter announces count + direction breakdown + highest', () => {
+  it('default EN formatter announces count + direction breakdown + most extreme', () => {
     render(<ChartAriaLive message="" anomalies={[ANOM_A, ANOM_B]} locale="en" />);
     act(() => {
       vi.runAllTimers();
@@ -93,7 +93,34 @@ describe('ChartAriaLive — anomaly announcement (PR-A2b-a11y)', () => {
     const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
     expect(text).toMatch(/2 outliers/);
     expect(text).toMatch(/1 above and 1 below/);
-    expect(text).toMatch(/Highest:.*y=100\.00/);
+    // Codex iter-2 §P2: "Most extreme" (severity-ranked), NOT
+    // "Highest" (y-ranked). ANOM_A.severity=50 > ANOM_B.severity=10
+    // so ANOM_A wins.
+    expect(text).toMatch(/Most extreme:.*y=100\.00/);
+    expect(text).not.toMatch(/Highest/);
+  });
+
+  it('Codex iter-2 P2 — low-fence outlier with highest severity is announced as "Most extreme" (not "Highest")', () => {
+    // Below-fence outlier with much higher severity than the
+    // above-fence one. The previous "Highest" copy would have
+    // factually mis-announced y=1 as the highest value.
+    const lowSevereAnom: AnomalySummary = {
+      id: 'low-1',
+      x: 'Mar',
+      y: 1,
+      formattedY: '1.00',
+      direction: 'below',
+      severity: 999, // bigger than ANOM_A.severity = 50
+      severityBucket: 'high',
+      ariaLabel: 'Outlier below expected at x=Mar, y=1.00 (high severity)',
+    };
+    render(<ChartAriaLive message="" anomalies={[ANOM_A, lowSevereAnom]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/Most extreme:.*y=1\.00/); // low-fence wins on severity
+    expect(text).not.toMatch(/Highest/);
   });
 
   it('default TR formatter announces in Turkish for tr-TR locale', () => {

@@ -49,7 +49,12 @@ const defaultFormatAnomalyAnnouncement: AnomalyAnnouncementFormatter = (anomalie
       : above === 0
         ? `${below} below expected range`
         : `${above} above and ${below} below expected range`;
-  return `${total} outlier${total === 1 ? '' : 's'} detected (${dirText}). Highest: x=${String(highest.x)}, y=${highest.formattedY}.`;
+  // Codex iter-2 §P2: "Most extreme" ranks by severity (correct
+  // for SR attention signal), not by y-value. Previous "Highest"
+  // copy was factually wrong when the most-severe anomaly was a
+  // lower-fence outlier (e.g. y=5 reported as "Highest"). TR copy
+  // already says "En uç" which matches severity ranking.
+  return `${total} outlier${total === 1 ? '' : 's'} detected (${dirText}). Most extreme: x=${String(highest.x)}, y=${highest.formattedY}.`;
 };
 
 function anomalySignature(anomalies: AnomalySummary[] | undefined): string {
