@@ -56,6 +56,11 @@ const CHARTS = [
   ['funnel-chart', 'FunnelChart'],
   ['sankey-chart', 'SankeyChart'],
   ['sunburst-chart', 'SunburstChart'],
+  // Faz 21.11 P1a — 3D Extension Pack. Scatter3D ships with the
+  // foundation PR; P1b adds Surface3D + Lines3D; P1c adds Globe.
+  // The slug uses the same dash-cased pattern so the design-lab
+  // listing/detail route stays consistent with the 2D wrappers.
+  ['scatter-3d-chart', 'Scatter3D'],
 ];
 
 /* ------------------------------------------------------------------ */

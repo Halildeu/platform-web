@@ -2788,6 +2788,200 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
 
+  /* ---- 3D Extension Pack (Faz 21.11 P1 — lazy `echarts-gl`) ---- */
+
+  'scatter-3d-chart': {
+    id: 'scatter-3d-chart',
+    name: 'Scatter3D',
+    description:
+      '3D point cloud visualization rendered via lazy-loaded `echarts-gl`. Requires WebGL — unsupported environments surface a graceful "WebGL unavailable" state instead of falling back to canvas (Faz 21.11 P1a).',
+    importPath: "import { Scatter3D } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'data',
+        type: 'Scatter3DDataPoint[]',
+        required: true,
+        default: '—',
+        description: '3D point cloud data.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter (used in tooltip + a11y data table).',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a data point is clicked.',
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Visual overlay markups. Accepted for API parity with the 2D\nwrappers but currently a NO-OP on Scatter3D — surfacing fake\n3D markups would be worse than none. A 3D markup adapter is\ntracked as a follow-up PR.',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked (no-op on Scatter3D).',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y — anomaly summary list. The wrapper forwards\nthe consumer-provided summary to `ChartA11yShell` so screen\nreaders receive a polite, debounced outlier announcement. No\nbuilt-in 3D detector ships with this PR; consumers should pair\nwith their own Mahalanobis-style detector or wait for the\nbatch3 contract evolution (Codex thread `019e10a5`) which adds\n`kind?: '3d'` discriminator to `AnomalySummary`.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.',
+      },
+      {
+        name: 'viewControl',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Native ECharts `viewControl` override (camera position, auto-rotate,\netc.). Accepted as a passthrough — wrapper does not pre-process it.',
+      },
+      {
+        name: 'grid3D',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Native ECharts `grid3D` override (axis ticks, label colours,\nenvironment lighting). Passthrough — wrapper merges it into the\ndefault grid3D base shape.',
+      },
+      {
+        name: 'light',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Native ECharts `light` override (main / ambient / direction).\nPassthrough — wrapper merges it into the default light base shape.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<Scatter3D
+  data={[
+    { x: 0, y: 0, z: 0, value: 1 },
+    { x: 1, y: 1, z: 2, value: 5 },
+    { x: 2, y: 2, z: 4, value: 9 },
+  ]}
+  title="3D Point Cloud"
+/>`,
+    features: [
+      'webgl-required',
+      '3d-rendering',
+      'lazy-load',
+      'tooltip',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
+
   /* ---- Interaction & Composition (Faz 21.4-B) ---- */
 
   'kpi-card': {

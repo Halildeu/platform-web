@@ -11,3 +11,10 @@ export {
   isEChartsGLRegistered,
   resetEChartsGLRegistration,
 } from './registerEChartsGL';
+export {
+  useRequiredEChartsGL,
+  type EChartsGLStatus,
+  type EChartsGLUnsupportedReason,
+  type UseRequiredEChartsGLOptions,
+  type UseRequiredEChartsGLResult,
+} from './useRequiredEChartsGL';

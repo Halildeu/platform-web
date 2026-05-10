@@ -15,6 +15,17 @@ export type { PieChartProps } from './PieChart';
 export { ScatterChart } from './ScatterChart';
 export type { ScatterChartProps } from './ScatterChart';
 
+/* 3D Extension Pack (Faz 21.11 P1 — lazy `echarts-gl`) */
+export { Scatter3D } from './Scatter3D';
+export type { Scatter3DProps, Scatter3DDataPoint } from './Scatter3D';
+export {
+  useRequiredEChartsGL,
+  type EChartsGLStatus,
+  type EChartsGLUnsupportedReason,
+  type UseRequiredEChartsGLOptions,
+  type UseRequiredEChartsGLResult,
+} from './renderers/gl';
+
 /* Enterprise charts (ECharts native — P3-A) */
 export { RadarChart } from './RadarChart';
 export type { RadarChartProps } from './RadarChart';
