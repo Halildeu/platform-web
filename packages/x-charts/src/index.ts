@@ -431,6 +431,9 @@ export {
   type AnomalySummary,
   type AnomalyDirection,
   type AnomalySeverityBucket,
+  // Faz 21.11 batch3 contract — kind discriminator for domain-
+  // specific a11y announcements (Codex thread `019e10a5` iter-2).
+  type AnomalySummaryKind,
 } from './annotations/computeAnomalyOverlay';
 export { useTrendOverlay } from './annotations/useTrendOverlay';
 export { useAnomalyOverlay, useAnomalySummary } from './annotations/useAnomalyOverlay';

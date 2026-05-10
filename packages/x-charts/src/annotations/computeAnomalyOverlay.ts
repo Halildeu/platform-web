@@ -273,6 +273,29 @@ export type AnomalyDirection = 'above' | 'below';
 export type AnomalySeverityBucket = 'medium' | 'high';
 
 /**
+ * Faz 21.11 batch3 contract — discriminated kind for domain-specific
+ * a11y announcements (Codex thread `019e10a5` iter-2). Default `'flat'`
+ * preserves the legacy 1D series semantics (Bar / Line / Area / Pie /
+ * Funnel / Waterfall / Heatmap / Scatter / 3D wrappers). Future
+ * sequential PRs (Radar, Treemap+Sunburst, Sankey) ship their own
+ * detectors and emit the matching `kind` so the default formatter
+ * picks the right template.
+ *
+ * `'3d'` is reserved for future Mahalanobis-style 3D detectors —
+ * Scatter3D / Surface3D / Lines3D / Globe wrappers don't ship a
+ * built-in 3D detector in P1, but consumer-supplied summaries can
+ * already tag themselves so the formatter knows not to fall back to
+ * the flat x/y template.
+ */
+export type AnomalySummaryKind =
+  | 'flat'
+  | 'radar'
+  | 'hierarchical'
+  | 'sankey-node'
+  | 'sankey-edge'
+  | '3d';
+
+/**
  * Renderer-agnostic anomaly payload — the contract the
  * `ChartAriaLive` live region (and any other a11y consumer) reads
  * to announce an anomaly summary. NOT a markup; this is the
@@ -281,6 +304,13 @@ export type AnomalySeverityBucket = 'medium' | 'high';
  * Stable across detector swaps (IQR, zscore, MAD, etc.). The
  * `severity` numeric scale is detector-specific — consumers should
  * lean on `severityBucket` for cross-detector portable UI.
+ *
+ * Faz 21.11 batch3 contract (Codex thread `019e10a5` iter-2): the
+ * optional `kind` discriminator + per-domain metadata fields let
+ * the default formatter announce Radar / hierarchical (Treemap +
+ * Sunburst) / Sankey anomalies with the correct semantic copy
+ * without breaking the legacy flat x/y consumers (which omit `kind`
+ * and continue to receive the existing announcement template).
  */
 export interface AnomalySummary {
   /** Stable id, scoped by `idPrefix`. Mirrors the marker id. */
@@ -307,6 +337,39 @@ export interface AnomalySummary {
   /** Pre-baked SR-friendly description. Consumers MAY override
    * via `formatAnomalyAnnouncement` on `ChartAriaLive`. */
   ariaLabel: string;
+  /**
+   * Domain discriminator (Faz 21.11 batch3). Default `'flat'` when
+   * omitted — preserves backwards-compatible 1D series semantics.
+   */
+  kind?: AnomalySummaryKind;
+
+  /* ---- Radar (Faz 21.11 batch3 — `kind: 'radar'`) ---- */
+  /** Series this anomaly belongs to (multi-series radar). */
+  seriesName?: string;
+  /** Numeric indicator index in the chart's `indicators` array. */
+  indicatorIndex?: number;
+  /** Indicator's display name (e.g. `"Latency"`). */
+  indicatorName?: string;
+  /** Indicator unit string (e.g. `"ms"`, `"%"`). */
+  axisUnit?: string;
+
+  /* ---- Hierarchical: Treemap / Sunburst (`kind: 'hierarchical'`) ---- */
+  /** Ancestor → leaf path (e.g. `["Region", "Team", "Segment"]`). */
+  path?: string[];
+  /** Depth in the hierarchy (root = 0). */
+  depth?: number;
+
+  /* ---- Sankey (`kind: 'sankey-node' | 'sankey-edge'`) ---- */
+  /** Sankey node identifier (when `kind === 'sankey-node'`). */
+  nodeId?: string;
+  /** Sankey edge identifier (when `kind === 'sankey-edge'`). */
+  edgeId?: string;
+  /** Sankey source-node display name (edge anomalies). */
+  source?: string;
+  /** Sankey target-node display name (edge anomalies). */
+  target?: string;
+  /** Sankey flow value through this node / edge. */
+  flowValue?: number;
 }
 
 export interface ComputeAnomalySummaryOptions {
