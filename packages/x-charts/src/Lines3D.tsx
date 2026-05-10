@@ -15,7 +15,9 @@
  *     singular `'line3D'`. Globe / geo `'lines3D'` is deferred.
  *   - A11y data table goes through `sampleLines3DA11y` +
  *     `buildSampledCaption` so screen-reader users get a per-path
- *     stride sample (first + last preserved per path).
+ *     stride sample (first + last preserved per path while the cap
+ *     budget allows; high-path-count cases prioritise the cap to
+ *     keep the hidden table under the contract — Codex iter-3/iter-4).
  *   - Tooltip formatter resolves the path through `params.seriesIndex
  *     -> data[seriesIndex]` so the consumer-provided label survives.
  *   - `markups` accepted but currently a NO-OP.

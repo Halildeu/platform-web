@@ -132,12 +132,16 @@ export interface Lines3DSamplerPath {
 
 /**
  * Sample a multi-path Lines3D dataset. Each path's first and last
- * coordinates are always preserved; middle samples are taken at a
- * stride sized so the total respects the cap. Empty paths are
- * skipped. Caption / sample count is the union across paths.
+ * coordinates are preserved per path while the cap budget allows;
+ * high-path-count cases (e.g. 1001 paths × 1 coord, cap = 1000)
+ * prioritise the cap and degrade by trimming later paths. Middle
+ * samples are taken at a stride sized so the per-path budget stays
+ * under `perPath`. Empty paths are skipped. Caption / sample count
+ * is the union across paths. Codex iter-3/iter-4 hardening.
  *
- * @param paths Multi-path xyz payload.
- * @param cap   Maximum samples (default 1000).
+ * @param paths Multi-path xyz payload (`Lines3DSamplerPath`).
+ * @param cap   Maximum samples (default 1000). INVARIANT: result
+ *   `sampledCount <= cap`.
  */
 export function sampleLines3DA11y(
   paths: ReadonlyArray<Lines3DSamplerPath>,
