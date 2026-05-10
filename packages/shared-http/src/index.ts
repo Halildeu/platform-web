@@ -313,6 +313,21 @@ const handleProfileMissing = () => {
   );
 };
 
+/**
+ * Extract a free-text error code/message from a 4xx envelope. Priority
+ * order (Codex iter-5 P1-1 absorb, thread `019e109c`): {@code errorCode}
+ * comes FIRST so structured backend payloads such as
+ * {@code { errorCode: 'IMPERSONATION_SESSION_EXPIRED', message: '...' }}
+ * route through the impersonation-lifecycle path even when {@code message}
+ * is also populated. The previous order ({@code message > detail > errorCode})
+ * silently dropped the lifecycle code into the generic forbidden toast.
+ *
+ * <p>Used both by the lifecycle 403 router (which only matches against
+ * the {@link IMPERSONATION_LIFECYCLE_ERROR_CODES} set) and by the legacy
+ * profile-missing toast (which matches against {@link PROFILE_MISSING_CODE});
+ * both consumers tolerate the new priority because they only act on
+ * exact string matches.
+ */
 const extractErrorCode = (error: AxiosError): string | null => {
   const data = error.response?.data;
   if (!data) {
@@ -323,14 +338,15 @@ const extractErrorCode = (error: AxiosError): string | null => {
   }
   if (typeof data === 'object' && data !== null) {
     const structured = data as Record<string, unknown>;
+    // Codex iter-5 P1-1: errorCode FIRST (the canonical lifecycle slot).
+    if (typeof structured.errorCode === 'string') {
+      return structured.errorCode;
+    }
     if (typeof structured.message === 'string') {
       return structured.message;
     }
     if (typeof structured.detail === 'string') {
       return structured.detail;
-    }
-    if (typeof structured.errorCode === 'string') {
-      return structured.errorCode;
     }
     if (typeof structured.title === 'string') {
       return structured.title;

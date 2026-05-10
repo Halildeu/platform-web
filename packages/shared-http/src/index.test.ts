@@ -201,6 +201,40 @@ describe('shared-http interceptors', () => {
     expect(dispatchEvent.mock.calls[0][0].type).toBe('app:auth:impersonation-expired');
   });
 
+  it('Codex iter-5 P1-1: lifecycle envelope with both errorCode AND message routes via lifecycle event', async () => {
+    // Regression test for Codex iter-5 P1-1 (thread `019e109c`):
+    // backend lifecycle 403 typically returns BOTH a stable {@code errorCode}
+    // and a human-readable {@code message}. The previous extractor read
+    // {@code message} first and silently dropped the lifecycle path into
+    // the generic forbidden toast. With errorCode-first priority the
+    // lifecycle event must fire even when message is populated.
+    const { mod, dispatchEvent } = await loadModule();
+    const rejected = getResponseInterceptor(mod.api);
+    const error = {
+      response: {
+        status: 403,
+        data: {
+          errorCode: 'IMPERSONATION_SESSION_EXPIRED',
+          message: 'Impersonation broker token expired; please restart the session.',
+        },
+      },
+      config: { method: 'get', url: '/v1/protected' },
+    } as AxiosError;
+
+    await expect(rejected?.(error)).rejects.toBe(error);
+
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    const event = dispatchEvent.mock.calls[0][0];
+    expect(event.type).toBe('app:auth:impersonation-expired');
+    expect(event.detail.code).toBe('IMPERSONATION_SESSION_EXPIRED');
+    // Generic forbidden toast must NOT fire — lifecycle listener owns
+    // user-facing messaging.
+    const toastCalls = dispatchEvent.mock.calls.filter(
+      ([dispatched]) => (dispatched as Event).type === 'app:toast',
+    );
+    expect(toastCalls).toHaveLength(0);
+  });
+
   it('shows profile missing toast without redirect on 403 PROFILE_MISSING', async () => {
     const { mod, locationReplace, dispatchEvent } = await loadModule();
     const unauthorizedHandler = vi.fn();
