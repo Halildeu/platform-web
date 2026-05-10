@@ -59,6 +59,7 @@ export {
   getActiveImpersonation,
   revokeImpersonation,
   isImpersonationToken,
+  decodeJwtPayload,
 } from './impersonation';
 export type {
   StartImpersonationRequest,
