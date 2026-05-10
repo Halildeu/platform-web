@@ -41,7 +41,12 @@ export interface A11ySampleResult {
   samples: A11ySample[];
   /** Total number of source points before sampling. */
   sourceCount: number;
-  /** Actual number of samples produced (≤ cap, often < cap). */
+  /**
+   * Actual number of samples produced. INVARIANT: `sampledCount <=
+   * cap` for every input — Codex thread `019e10d7` iter-3/iter-4
+   * hardening (lopsided Surface grids, high-path-count Lines, etc.).
+   * The samplers actively trim or stride up to keep this true.
+   */
   sampledCount: number;
 }
 
@@ -89,7 +94,16 @@ export function sampleSurfaceGridA11y(
   }
 
   // Stride such that (rows/stride) × (cols/stride) ≈ cap.
-  const stride = Math.max(1, Math.ceil(Math.sqrt(sourceCount / cap)));
+  //
+  // Codex thread `019e10d7` iter-4: the `sqrt` heuristic alone can
+  // overshoot the cap on lopsided rectangles (e.g. 999×1002 → stride
+  // 32 → ceil(999/32)*ceil(1002/32) = 32*32 = 1024 > 1000). Promote
+  // the stride until both dimensions actually fit under the cap so
+  // the helper's `sampledCount <= cap` contract holds for every shape.
+  let stride = Math.max(1, Math.ceil(Math.sqrt(sourceCount / cap)));
+  while (Math.ceil(rows / stride) * Math.ceil(cols / stride) > cap) {
+    stride++;
+  }
   const samples: A11ySample[] = [];
   for (let r = 0; r < rows; r += stride) {
     for (let c = 0; c < cols; c += stride) {

@@ -47,6 +47,20 @@ describe('sampleSurfaceGridA11y', () => {
     expect(out.sampledCount).toBe(4);
   });
 
+  // Codex thread `019e10d7` iter-4 — lopsided rectangle cap invariant.
+  // 999x1002 with cap=1000 used to overshoot (stride=32 → 1024 cells).
+  // The helper now strides up until the cap actually holds.
+  it('enforces sampledCount <= cap on a lopsided 999x1002 grid (iter-4)', () => {
+    const data = Array.from({ length: 999 * 1002 }, (_, i) => ({
+      x: i % 1002,
+      y: Math.floor(i / 1002),
+      z: i,
+    }));
+    const out = sampleSurfaceGridA11y(data, [999, 1002], 1000);
+    expect(out.sourceCount).toBe(999 * 1002);
+    expect(out.sampledCount).toBeLessThanOrEqual(1000);
+  });
+
   it('strides a 200x200 grid down to <= cap (Codex iter-2: real count, not the cap)', () => {
     const data = Array.from({ length: 200 * 200 }, (_, i) => ({
       x: i % 200,
