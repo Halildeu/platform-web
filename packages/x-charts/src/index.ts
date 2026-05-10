@@ -18,13 +18,22 @@ export type { ScatterChartProps } from './ScatterChart';
 /* 3D Extension Pack (Faz 21.11 P1 — lazy `echarts-gl`) */
 export { Scatter3D } from './Scatter3D';
 export type { Scatter3DProps, Scatter3DDataPoint } from './Scatter3D';
-// Note: `buildScatter3DOption` + `BuildScatter3DOptionInput` are
-// intentionally NOT re-exported here — they're an internal test seam
-// (the wrapper's option builder, lifted out so Vitest can lock the
-// `series.type === 'scatter3D'` contract without React mount + lazy
-// GL gate races). Promoting them to the public API would commit us
-// to a stable contract for `palette` / `fmt` / ECharts-shape inputs
-// that aren't ready for consumer use. Codex thread `019e10ab` iter-4.
+// Faz 21.11 P1b — Surface3D + Lines3D wrappers. Lines3D internally
+// emits one ECharts `'line3D'` (singular) series per path on shared
+// cartesian3D/grid3D; the official `'lines3D'` (geo/globe) family
+// is deferred. Codex thread `019e10d7` iter-2.
+export { Surface3D } from './Surface3D';
+export type { Surface3DProps, Surface3DDataPoint, Surface3DShading } from './Surface3D';
+export { Lines3D } from './Lines3D';
+export type { Lines3DProps, Lines3DPath } from './Lines3D';
+// Note: `buildScatter3DOption` / `buildSurface3DOption` /
+// `buildLines3DOption` (and their `Build*Input` types) are intentionally
+// NOT re-exported here — they're internal test seams (option builders
+// lifted out so Vitest can lock the `series.type` contract without
+// React mount + lazy GL gate races). Promoting them to the public API
+// would commit us to a stable contract for `palette` / `fmt` / ECharts-
+// shape inputs that aren't ready for consumer use. Codex thread
+// `019e10ab` iter-4 disipline (P1a precedent).
 export {
   useRequiredEChartsGL,
   type EChartsGLStatus,
