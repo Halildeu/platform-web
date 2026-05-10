@@ -122,9 +122,20 @@ function buildFence(values: number[], opts: AnomalyDownsampleOptions): Fence {
       lower,
       upper,
       centre: med,
+      // Codex iter-3 fix: previous version returned `abs(y-med)/sigma`
+      // for every non-median value, which made every non-median point
+      // a "candidate" regardless of `robustZThreshold`. AND it
+      // returned `0` when `sigma === 0`, dropping spikes against a
+      // perfectly flat baseline entirely. New shape:
+      //   - sigma > 0 → excess over the z-threshold (positive when
+      //                 the point is outside the [med ± z*sigma] band)
+      //   - sigma === 0 → fall back to raw distance (any deviation is
+      //                   an outlier when the rest of the series is
+      //                   constant)
       scoreFn: (y) => {
-        if (sigma === 0) return 0;
-        return Math.abs(y - med) / sigma;
+        if (sigma === 0) return Math.abs(y - med);
+        const excess = Math.abs(y - med) / sigma - z;
+        return excess > 0 ? excess : 0;
       },
     };
   }
@@ -197,18 +208,28 @@ export function unstable_downsampleAnomalyPreservingLTTB(
   if (n === 0) return [];
   // The vanilla LTTB skip-rule is mirrored here so callers don't
   // have to special-case `threshold >= data.length`.
+  // Codex iter-3 fix: the previous fallback stamped EVERY point
+  // with `originalIndex: n - 1`, which broke recall accounting on
+  // any caller that didn't pre-populate `originalIndex` (only the
+  // last point would look survived).
   if (threshold >= n) {
-    return data.map((p) => ({ ...p, originalIndex: p.originalIndex ?? n - 1 }));
+    return data.map((p, i) => ({ ...p, originalIndex: p.originalIndex ?? i }));
   }
   if (threshold < 2) {
     // `< 2` is a degenerate ask. Return whatever vanilla LTTB
     // returns (full copy). Anomaly preservation is meaningless
     // when the budget can't even hold first/last + 1 anomaly.
-    return data.map((p) => ({ ...p, originalIndex: p.originalIndex ?? n - 1 }));
+    return data.map((p, i) => ({ ...p, originalIndex: p.originalIndex ?? i }));
   }
 
-  const maxAnomalyFraction = options.maxAnomalyFraction ?? 0.25;
-  const anomalyCap = Math.max(0, Math.floor(threshold * maxAnomalyFraction));
+  // Codex iter-3 fix: clamp `maxAnomalyFraction` so a misconfigured
+  // value (1, >1, or even subtly above the chart budget) can't push
+  // `mandatorySet.size > threshold` and silently break the
+  // "first/last preserved" invariant via the truncation step.
+  const rawFraction = options.maxAnomalyFraction ?? 0.25;
+  const cappedByFraction = Math.max(0, Math.floor(threshold * rawFraction));
+  const cappedByBudget = Math.max(0, threshold - 2); // leave room for first + last
+  const anomalyCap = Math.min(cappedByFraction, cappedByBudget);
 
   // 1) Build the fence.
   const ys = data.map((p) => p.y);

@@ -182,6 +182,85 @@ describe('unstable_downsampleAnomalyPreservingLTTB — algorithm invariants', ()
   });
 });
 
+describe('unstable_downsampleAnomalyPreservingLTTB — Codex iter-3 absorb tests', () => {
+  it('zscore-robust honours `robustZThreshold` and ignores in-band points', () => {
+    // Flat baseline 0, sparse spikes at +5. With robustZThreshold=3
+    // the spikes (deviation = 5) should fire even when MAD is small.
+    const data: AnomalyPoint[] = [];
+    for (let i = 0; i < 200; i++) data.push({ x: i, y: 0, originalIndex: i });
+    data[42].y = 5;
+    data[150].y = -5;
+    const out = unstable_downsampleAnomalyPreservingLTTB(data, 30, {
+      detector: 'zscore-robust',
+      robustZThreshold: 3,
+    });
+    const indices = out.map((p) => p.originalIndex);
+    expect(indices).toContain(42);
+    expect(indices).toContain(150);
+  });
+
+  it('zscore-robust falls back to raw distance when MAD is zero (perfectly flat baseline)', () => {
+    // Without the iter-3 fix this case hit `sigma === 0 → score = 0`
+    // and dropped every spike.
+    const data: AnomalyPoint[] = [];
+    for (let i = 0; i < 100; i++) data.push({ x: i, y: 0, originalIndex: i });
+    data[50].y = 100;
+    const out = unstable_downsampleAnomalyPreservingLTTB(data, 20, {
+      detector: 'zscore-robust',
+    });
+    expect(out.find((p) => p.originalIndex === 50)).toBeDefined();
+  });
+
+  it('maxAnomalyFraction is clamped so first/last anchors always survive', () => {
+    // A misconfigured `1.0` would let the candidate cap eat the
+    // whole budget, blocking first/last from the merge step.
+    const data: AnomalyPoint[] = [];
+    for (let i = 0; i < 500; i++) data.push({ x: i, y: 0, originalIndex: i });
+    for (let s = 0; s < 100; s++) data[s * 4].y = 100 + s;
+    const threshold = 50;
+    const out = unstable_downsampleAnomalyPreservingLTTB(data, threshold, {
+      maxAnomalyFraction: 1.0,
+    });
+    // first / last MUST still be there.
+    expect(out.find((p) => p.originalIndex === 0)).toBeDefined();
+    expect(out.find((p) => p.originalIndex === 499)).toBeDefined();
+    // Length cap respected.
+    expect(out.length).toBeLessThanOrEqual(threshold);
+  });
+
+  it('remainingBudget === 1 picks the highest-residual non-mandatory point', () => {
+    // 5 points, threshold 4. After first/last + 1 mandatory anomaly
+    // there's exactly 1 slot left. The fallback branch should pick
+    // the point furthest from the median to fill it.
+    const data: AnomalyPoint[] = [
+      { x: 0, y: 0, originalIndex: 0 },
+      { x: 1, y: 1, originalIndex: 1 },
+      { x: 2, y: 0, originalIndex: 2 },
+      { x: 3, y: 100, originalIndex: 3 }, // mandatory (high anomaly)
+      { x: 4, y: 0, originalIndex: 4 },
+    ];
+    const out = unstable_downsampleAnomalyPreservingLTTB(data, 4);
+    expect(out.length).toBeLessThanOrEqual(4);
+    expect(out.find((p) => p.originalIndex === 0)).toBeDefined();
+    expect(out.find((p) => p.originalIndex === 4)).toBeDefined();
+    expect(out.find((p) => p.originalIndex === 3)).toBeDefined();
+  });
+
+  it('full-copy fallback (threshold >= n) preserves source-distinct originalIndex (iter-3 bug fix)', () => {
+    // Without the iter-3 fix this returned `originalIndex: n - 1`
+    // for every point — the previous behaviour would have collapsed
+    // the recall calculation to 1/N or 0.
+    const raw = [
+      { x: 0, y: 0 },
+      { x: 1, y: 5 },
+      { x: 2, y: 10 },
+    ];
+    const data = raw.map((p, i) => ({ ...p, originalIndex: i }));
+    const out = unstable_downsampleAnomalyPreservingLTTB(data, 10);
+    expect(out.map((p) => p.originalIndex)).toEqual([0, 1, 2]);
+  });
+});
+
 describe('unstable_downsampleAnomalyPreservingLTTB — multi-seed stability (250K)', () => {
   const seeds = [0x5eedc1f, 0xc001d00d, 0xbadcafe];
   it.each(seeds)('recall ≥ 0.95 at 250K source / 2K target with seed 0x%s', (seed) => {

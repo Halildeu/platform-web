@@ -30,7 +30,7 @@
       }
     },
     "correctness": {
-      "_documentation": "PR-A2a anomaly-preserving LTTB recall gate. Consumed by `evaluateBenchmarkCorrectness` in `scripts/ci/benchmark-1m-enforcer.mjs` (CLI flag `--check-correctness-only`). Unlike the artifact-driven `cases` block, correctness gates run a deterministic synthetic fixture in-process — no benchmark artifact required. Threshold edits MUST land via PR review.",
+      "_documentation": "PR-A2a anomaly-preserving LTTB recall config. Consumed by the pure `evaluateBenchmarkCorrectness(thresholds, runCase)` helper in `scripts/ci/benchmark-1m-enforcer.mjs` — the unit suite drives every branch. Production CLI / workflow wiring is intentionally NOT shipped in PR-A2a (Codex thread `019e0f96` iter-3 de-scope: a future PR adds `tsx` runtime + workflow step to turn this into a hard CI gate). Threshold edits MUST land via PR review.",
       "spike/million/anomaly-lttb": {
         "minRecallAt2000": 0.95,
         "maxRenderedCount": 2000,

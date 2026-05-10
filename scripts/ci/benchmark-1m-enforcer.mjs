@@ -508,64 +508,34 @@ function loadJson(path, label) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args.thresholdsPath) {
-    console.error('[enforcer] Required: --thresholds <path>');
+
+  // Codex iter-3 de-scope: the production CLI path for the
+  // correctness gate needs a `.ts`-aware runtime (tsx/tsm) to
+  // lazy-import the synthetic spike fixture + downsampler at run
+  // time, and wiring that into `.github/workflows/benchmark-1m.yml`
+  // is intentionally out of scope for PR-A2a. The pure
+  // `evaluateBenchmarkCorrectness(thresholds, runCase)` helper is
+  // still exported (and unit-tested) so a future PR can either
+  // (a) ship an explicit `tsx` runtime + workflow step, or
+  // (b) drive the helper from a jsdom Vitest job — without
+  // shipping a half-baked CLI that fails for ops on day one.
+  if (args.correctnessOnly) {
+    console.error(
+      '[enforcer] --check-correctness-only is not yet wired for the production CLI runtime. ' +
+        'Drive `evaluateBenchmarkCorrectness(thresholds, runCase)` from a Node test or ' +
+        'tsx-aware harness instead. PR-A2a deliberately leaves the workflow wiring out.',
+    );
     process.exit(2);
   }
-  const thresholds = loadJson(args.thresholdsPath, 'thresholds');
 
-  // PR-A2a correctness gate path. Doesn't need an artifact — runs
-  // the synthetic spike fixture in-process and checks recall / row
-  // count against the `correctness` block of the threshold config.
-  if (args.correctnessOnly) {
-    // Lazy-load the package source so the heavy 1M fixture isn't
-    // pulled in for the artifact-driven path.
-    const { generateSpikeScatter } =
-      await import('../../packages/x-charts/src/performance/benchmark/fixtures.ts').catch(
-        async () => {
-          // node CLI cannot import .ts directly; fall back to the same
-          // path under the build output if the consumer ran a build
-          // first. Tests stub `runCase` directly so this is only the
-          // production path.
-          throw new Error(
-            '[enforcer] --check-correctness-only requires a runtime that resolves the .ts source (tsx/vitest), or a pre-built bundle. Use the test seam `evaluateBenchmarkCorrectness` directly when wiring CI.',
-          );
-        },
-      );
-    const { unstable_downsampleAnomalyPreservingLTTB, computeAnomalyRecall } =
-      await import('../../packages/x-charts/src/performance/anomaly-lttb.ts');
-    const verdict = await evaluateBenchmarkCorrectness(thresholds, async (_key, caseCfg) => {
-      const seedNum =
-        typeof caseCfg.seed === 'string' && caseCfg.seed.startsWith('0x')
-          ? Number.parseInt(caseCfg.seed.slice(2), 16)
-          : Number(caseCfg.seed ?? 0);
-      const { points, spikeIndices } = generateSpikeScatter(
-        caseCfg.sourceCount ?? 1_000_000,
-        caseCfg.spikeCount ?? 64,
-        seedNum,
-      );
-      const data = points.map((p, i) => ({ x: p.x, y: p.y, originalIndex: i }));
-      const t0 = performance.now();
-      const out = unstable_downsampleAnomalyPreservingLTTB(data, caseCfg.maxRenderedCount);
-      const prepMs = performance.now() - t0;
-      const recall = computeAnomalyRecall(out, spikeIndices);
-      return { recall, renderedCount: out.length, prepMs };
-    });
-    if (args.summaryOut) {
-      writeFileSync(args.summaryOut, JSON.stringify(verdict, null, 2), 'utf-8');
-    } else {
-      console.log(JSON.stringify(verdict, null, 2));
-    }
-    process.exit(verdict.ok ? 0 : 1);
-  }
-
-  if (!args.artifactPath || !args.mode) {
+  if (!args.artifactPath || !args.thresholdsPath || !args.mode) {
     console.error(
-      '[enforcer] Required for artifact mode: --artifact <path> --mode <pr|workflow_dispatch>',
+      '[enforcer] Required: --artifact <path> --thresholds <path> --mode <pr|workflow_dispatch>',
     );
     process.exit(2);
   }
   const artifact = loadJson(args.artifactPath, 'artifact');
+  const thresholds = loadJson(args.thresholdsPath, 'thresholds');
   const baseline =
     args.noBaseline || !args.baselinePath ? null : loadJson(args.baselinePath, 'baseline');
 
