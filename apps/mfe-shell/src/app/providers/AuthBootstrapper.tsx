@@ -415,17 +415,73 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           pkceMethod: 'S256',
           checkLoginIframe: false,
         };
+        // 2026-05-11 (Codex 019e13ef AGREE on semantic correctness;
+        // REVISE on hypothesis):
+        //
+        // No `onLoad` with URL callback is semantically correct;
+        // callback handling is independent of `onLoad` in
+        // keycloak-js@26.2.4 — `#processInit()` parses URL callback
+        // FIRST (keycloak.js:803), runs `#processCallback()` and
+        // `/token` exchange when valid (keycloak.js:810), then RETURNS
+        // before the `onLoad` switch (keycloak.js:832). So setting
+        // `onLoad: 'check-sso'` for the URL-callback branch is
+        // redundant at best — the library does its callback work
+        // unconditionally when state+code are present.
+        //
+        // Live failure ("açılmıyor" — KC redirects with code, /token
+        // never fires) is not yet root-caused. Candidate hypotheses
+        // remaining to confirm via the diagnostic log below:
+        //   - kc-callback storage entry for the URL state is missing
+        //     at the moment kc.init() reads it (storage isolation,
+        //     entry consumed by a prior parse, or different origin)
+        //   - URL callback present but token exchange does not fire
+        //     (validation step beyond state lookup, e.g. nonce or
+        //     redirectUri mismatch)
+        //   - URL hash stripped by React Router before kc.init() runs
+        //
+        // Silent SSO (no URL code) path is unchanged.
         if (urlHasAuthCode) {
-          initOptions.onLoad = 'check-sso';
+          // Intentional: no onLoad. keycloak-js processes URL callback
+          // unconditionally when state+code present.
         } else if (!isLoginRoute && authConfig.keycloak.enableSilentCheckSso) {
           initOptions.onLoad = 'check-sso';
           initOptions.silentCheckSsoRedirectUri = authConfig.keycloak.silentCheckSsoRedirectUri;
+        }
+        // 2026-05-11 diagnostic: log kc-callback storage state when URL
+        // has auth code, to surface "callback storage missing/mismatch"
+        // bugs in production. Real-user "açılmıyor" symptom on testai
+        // shows kc.init() finishing without firing /token exchange —
+        // this log helps prove whether the kc-callback entry for the
+        // URL state exists at the moment kc.init() is about to run.
+        let urlCodeDiag: Record<string, unknown> = {};
+        if (urlHasAuthCode && typeof window !== 'undefined') {
+          try {
+            const hashStr = (window.location?.hash ?? '').replace(/^#/, '');
+            const params = new URLSearchParams(
+              hashStr || (window.location?.search ?? '').replace(/^\?/, ''),
+            );
+            const stateVal = params.get('state');
+            const callbackKey = stateVal ? `kc-callback-${stateVal}` : null;
+            const cbExists = callbackKey ? !!window.localStorage.getItem(callbackKey) : false;
+            const totalCallbacks = Object.keys(window.localStorage).filter((k) =>
+              k.startsWith('kc-callback-'),
+            ).length;
+            urlCodeDiag = {
+              urlStateLen: stateVal?.length ?? 0,
+              urlStatePrefix: stateVal?.slice(0, 8) ?? null,
+              callbackExists: cbExists,
+              totalCallbacks,
+            };
+          } catch (err) {
+            urlCodeDiag = { diagFailed: err instanceof Error ? err.message : String(err) };
+          }
         }
         console.info('[AuthBootstrapper] init starting', {
           isLoginRoute,
           urlHasAuthCode,
           onLoad: initOptions.onLoad,
           kcUrl: authConfig.keycloak.url,
+          ...urlCodeDiag,
         });
 
         // Phase 2 PR-E2E-6: test-only Keycloak bootstrap bypass.
