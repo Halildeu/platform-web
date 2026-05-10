@@ -48,6 +48,10 @@ const ExtensionDetail = lazy(() => import('./pages/ExtensionDetail'));
 /* Charts */
 const ChartsListing = lazy(() => import('./pages/ChartsListing'));
 const ChartDetail = lazy(() => import('./pages/ChartDetail'));
+// Faz 21.11 batch3 follow-up: 4-detector showcase route (Flat / Radar /
+// Hierarchical / Sankey). Lazy-loaded so the page chunk only ships when
+// the route is opened.
+const AnomalyDetectorsShowcase = lazy(() => import('./pages/AnomalyDetectorsShowcase'));
 
 /* Developer Experience */
 const DependencyGraphPage = lazy(() => import('./pages/DependencyGraphPage'));
@@ -330,6 +334,11 @@ export const DesignLabRoutes: React.FC = () => (
         {/* Charts layer */}
         <Route path="charts" element={<ChartsListing />} />
         <Route path="charts/:chartId" element={<ChartDetail />} />
+        {/* Faz 21.11 batch3 follow-up — 4-detector showcase route. Routes
+            outside `charts/:chartId` because it composes 4 wrappers
+            (Scatter+Radar+Treemap+Sankey) on a single page rather than
+            drilling into one wrapper's catalog. */}
+        <Route path="charts-anomaly-detectors" element={<AnomalyDetectorsShowcase />} />
 
         {/* Benchmark harness (PR-A1.6a — flag-gated, deep-link only).
             Route is ALWAYS registered; the lazy chunk is only loaded

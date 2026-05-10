@@ -431,6 +431,20 @@ const ChartsListing: React.FC = () => {
         </div>
       </div>
 
+      {/* Faz 21.11 batch3 follow-up — anomaly detector showcase entry. */}
+      <button
+        type="button"
+        onClick={() => navigate('/admin/design-lab/charts-anomaly-detectors')}
+        data-testid="charts-listing-anomaly-showcase-cta"
+        className="block w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-elevated)] p-4 text-left transition hover:border-[var(--color-border-strong)]"
+      >
+        <h3 className="text-sm font-semibold text-text-primary">Anomaly Detectors Showcase →</h3>
+        <p className="mt-1 text-xs text-text-secondary">
+          Faz 21.11 batch3 — 4 detector (Flat IQR, per-indicator IQR, tree-walking IQR, dual-mode
+          Sankey IQR) live on a single page with toggleable announcements.
+        </p>
+      </button>
+
       {/* Groups */}
       {CHART_GROUPS.map((group) => {
         const items = CHART_ITEMS.filter((i) => i.group === group.id);
