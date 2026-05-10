@@ -298,4 +298,167 @@ describe('useGridCrossFilter', () => {
       tenure: { filterType: 'number', type: 'inRange', filter: 1, filterTo: 5 },
     });
   });
+
+  /* ---------------------------------------------------------------- */
+  /*  Codex iter-2 — clear sequencing + stricter guard + multi-brush  */
+  /* ---------------------------------------------------------------- */
+
+  it('clearing the brush does NOT erase a sibling chart range filter on the same column (P1 sequencing)', () => {
+    const store = createCrossFilterStore({ debounceMs: 0 });
+    let currentGridModel: Record<string, unknown> = {
+      status: { filterType: 'set', values: ['ACTIVE'] },
+    };
+    const gridApi: GridApi = {
+      setFilterModel: vi.fn((model: Record<string, unknown>) => {
+        currentGridModel = model;
+      }),
+      refreshServerSide: vi.fn(),
+      getFilterModel: vi.fn(() => currentGridModel),
+    };
+    renderHook(() => useGridCrossFilter({ gridId: 'grid-1', gridApi }), {
+      wrapper: createWrapper(store),
+    });
+
+    // Step 1: brush salary/tenure.
+    act(() => {
+      store.getState().setFilter({
+        sourceId: 'chart-1',
+        field: '__brush__:salary:tenure',
+        operator: 'brush',
+        value: {
+          selection: {
+            from: { x: 30000, y: 1 },
+            to: { x: 80000, y: 5 },
+            indices: [],
+            kind: 'rect' as const,
+          },
+          xColId: 'salary',
+          yColId: 'tenure',
+        },
+        createdAt: Date.now(),
+      });
+      vi.advanceTimersByTime(0);
+    });
+    expect(currentGridModel).toHaveProperty('salary');
+
+    // Step 2: sibling chart pushes a `range` on `salary` (different
+    // sourceId so it isn't dropped by the per-grid filter).
+    act(() => {
+      store.getState().setFilter({
+        sourceId: 'chart-2',
+        field: 'salary',
+        operator: 'range',
+        value: { min: 50000, max: 90000 },
+        createdAt: Date.now(),
+      });
+      vi.advanceTimersByTime(0);
+    });
+    // Sibling range took effect — overlay overrides brush bound on
+    // shared `salary` column. Brush also re-emitted on top, which
+    // owns `salary` last (per applyBrushEntries iteration order).
+    // The key point for THIS test is that `salary` ENTRY EXISTS;
+    // the next step asserts the strip behaviour.
+
+    // Step 3: brush cleared. Sibling `salary range` MUST survive.
+    act(() => {
+      store.getState().removeFilter('chart-1:__brush__:salary:tenure');
+      vi.advanceTimersByTime(0);
+    });
+    expect(currentGridModel).toEqual({
+      status: { filterType: 'set', values: ['ACTIVE'] },
+      salary: { filterType: 'number', type: 'inRange', filter: 50000, filterTo: 90000 },
+    });
+    // Tenure stripped (was brush-only); status preserved (grid-local);
+    // salary range preserved (sibling overlay).
+  });
+
+  it('rejects a malformed brush selection shape (no from/to/indices/kind) without throwing (P2 stricter guard)', () => {
+    const store = createCrossFilterStore({ debounceMs: 0 });
+    const gridApi: GridApi = {
+      setFilterModel: vi.fn(),
+      refreshServerSide: vi.fn(),
+      getFilterModel: vi.fn(() => ({})),
+    };
+    renderHook(() => useGridCrossFilter({ gridId: 'grid-1', gridApi }), {
+      wrapper: createWrapper(store),
+    });
+
+    // `selection: {}` slipped through the previous loose guard and
+    // crashed the downstream `brushToAgGridFilterModel` when it
+    // dereferenced `selection.from.x`.
+    act(() => {
+      store.getState().setFilter({
+        sourceId: 'chart-1',
+        field: '__brush__:salary:tenure',
+        operator: 'brush',
+        value: {
+          xColId: 'salary',
+          yColId: 'tenure',
+          selection: {} as unknown,
+        },
+        createdAt: Date.now(),
+      });
+      vi.advanceTimersByTime(0);
+    });
+
+    expect(gridApi.setFilterModel).toHaveBeenCalledTimes(1);
+    const lastModel = (gridApi.setFilterModel as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0];
+    expect(lastModel).toEqual({}); // no inRange leaked
+  });
+
+  it('two brush entries on the same (xColId, yColId) pair: last writer wins (multi-brush note)', () => {
+    const store = createCrossFilterStore({ debounceMs: 0 });
+    const gridApi: GridApi = {
+      setFilterModel: vi.fn(),
+      refreshServerSide: vi.fn(),
+      getFilterModel: vi.fn(() => ({})),
+    };
+    renderHook(() => useGridCrossFilter({ gridId: 'grid-1', gridApi }), {
+      wrapper: createWrapper(store),
+    });
+
+    act(() => {
+      const state = store.getState();
+      state.setFilter({
+        sourceId: 'chart-A',
+        field: '__brush__:salary:tenure',
+        operator: 'brush',
+        value: {
+          selection: {
+            from: { x: 0, y: 0 },
+            to: { x: 100, y: 1 },
+            indices: [],
+            kind: 'rect' as const,
+          },
+          xColId: 'salary',
+          yColId: 'tenure',
+        },
+        createdAt: Date.now(),
+      });
+      state.setFilter({
+        sourceId: 'chart-B',
+        field: '__brush__:salary:tenure',
+        operator: 'brush',
+        value: {
+          selection: {
+            from: { x: 200, y: 2 },
+            to: { x: 300, y: 4 },
+            indices: [],
+            kind: 'rect' as const,
+          },
+          xColId: 'salary',
+          yColId: 'tenure',
+        },
+        createdAt: Date.now(),
+      });
+      vi.advanceTimersByTime(0);
+    });
+
+    const lastModel = (gridApi.setFilterModel as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0];
+    // Iteration order folds B after A — B's bounds win on the shared pair.
+    expect(lastModel).toEqual({
+      salary: { filterType: 'number', type: 'inRange', filter: 200, filterTo: 300 },
+      tenure: { filterType: 'number', type: 'inRange', filter: 2, filterTo: 4 },
+    });
+  });
 });

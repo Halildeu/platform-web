@@ -50,15 +50,38 @@ export function brushFilterKey(xColId: string, yColId: string): string {
   return `__brush__:${xColId}:${yColId}`;
 }
 
+function isBrushPoint(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  const xOk = candidate.x === null || typeof candidate.x === 'number';
+  const yOk = candidate.y === null || typeof candidate.y === 'number';
+  return xOk && yOk;
+}
+
+/**
+ * Strict shape guard. Codex iter-2 §P2: a thin `{ selection: {} }`
+ * value used to slip through the loose previous guard and crash
+ * the downstream `brushToAgGridFilterModel` when it dereferenced
+ * `selection.from.x`. Now we walk the full `BrushSelection`
+ * surface so a malformed entry is rejected at the boundary, not
+ * inside the helper.
+ */
 function isBrushFilterValue(value: unknown): value is BrushFilterValue {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.xColId === 'string' &&
-    typeof candidate.yColId === 'string' &&
-    typeof candidate.selection === 'object' &&
-    candidate.selection !== null
-  );
+  if (
+    typeof candidate.xColId !== 'string' ||
+    typeof candidate.yColId !== 'string' ||
+    !candidate.selection ||
+    typeof candidate.selection !== 'object'
+  ) {
+    return false;
+  }
+  const sel = candidate.selection as Record<string, unknown>;
+  if (!isBrushPoint(sel.from) || !isBrushPoint(sel.to)) return false;
+  if (!Array.isArray(sel.indices)) return false;
+  if (sel.kind !== 'rect' && sel.kind !== 'polygon-bbox') return false;
+  return true;
 }
 
 export interface GridApi {
@@ -126,11 +149,16 @@ function toGridFilterModel(filters: CrossFilterEntry[]): Record<string, unknown>
  * brush axes ref still has them → strip via merge with
  * `null` brushModel).
  *
- * Why a single helper: layering each brush entry one-by-one
- * with `mergeBrushFilterModel(model, brushModel, opts)` would
- * thrash the same x/y keys across iterations. We collect ALL
- * brush bounds first, then apply once per (xColId, yColId)
- * pair so the caller sees a single coherent model.
+ * Multi-brush semantics — Codex iter-2 Q3 note. When the same
+ * `(xColId, yColId)` pair appears in two brush entries, **last
+ * writer wins** (entries are folded in iteration order; the
+ * later entry's `mergeBrushFilterModel` strips and re-layers
+ * the same x/y keys). When two brushes share only ONE column
+ * (e.g. A owns salary/tenure, B owns salary/age), the shared
+ * column gets the later writer's bounds while the earlier
+ * writer's unique column (tenure) survives. Multi-brush
+ * rejection / overlap-conflict surfacing is out of scope for
+ * PR-A2c-adopt; the demo wires a single brush.
  */
 function applyBrushEntries(
   baseModel: Record<string, unknown>,
@@ -199,31 +227,56 @@ export function useGridCrossFilter(options: UseGridCrossFilterOptions): UseGridC
           return;
         }
 
-        // Brush-aware path: seed from the CURRENT grid model so
-        // grid-local filters (set-filters the user toggled in the
-        // toolbar, text searches, etc.) survive a brush update.
-        // `mergeBrushFilterModel` then strips the old brush axes
-        // and layers the new ones on top. Cross-filter entries from
-        // OTHER charts (eq/in/range from clicks) are also folded
-        // in as their own per-column entries — they overwrite any
-        // existing grid-local filter on those columns, matching
-        // the legacy replace semantics for non-brush operators.
-        const grid = gridApi.getFilterModel() ?? {};
+        // Brush-aware path. Codex iter-2 §P1 sequencing:
+        //   1. Seed from the CURRENT grid model (preserves
+        //      grid-local entries the user toggled directly).
+        //   2. Strip previously-owned brush axis pairs that ARE NOT
+        //      present in the current `applicable` stream — a
+        //      `mergeBrushFilterModel(model, null, opts)` call
+        //      deletes only `xColId` + `yColId`. Doing the strip
+        //      BEFORE layering the cross-filter overlay means a
+        //      sibling chart's `range` on the same column survives
+        //      a brush clear (the previous-iter sequencing dropped
+        //      those non-brush overlays alongside the brush
+        //      vacate).
+        //   3. Layer the non-brush cross-filter overlay (eq/in/range
+        //      from sibling charts) — overwrites any grid-local
+        //      entry on the same column to keep legacy replace
+        //      semantics.
+        //   4. Layer the active brush entries — `applyBrushEntries`
+        //      runs `mergeBrushFilterModel(model, brushModel, opts)`
+        //      per (xColId, yColId) pair so a fresh brush
+        //      overwrites stale brush bounds without leaking.
+        let nextModel: Record<string, unknown> = gridApi.getFilterModel() ?? {};
+
+        // Step 2 — collect current brush pair keys + strip vanished.
+        // We dedupe on `xColId::yColId` so the same pair re-asserted
+        // by the new stream is NOT stripped here (it'll be re-applied
+        // in step 4 fresh).
+        const currentBrushPairKeys = new Set<string>();
+        if (hasBrush) {
+          for (const f of applicable) {
+            if (f.operator !== 'brush') continue;
+            if (!isBrushFilterValue(f.value)) continue;
+            currentBrushPairKeys.add(`${f.value.xColId}::${f.value.yColId}`);
+          }
+        }
+        for (const prev of previousAxes) {
+          if (currentBrushPairKeys.has(`${prev.xColId}::${prev.yColId}`)) continue;
+          const stripped = mergeBrushFilterModel(nextModel, null, prev);
+          nextModel = stripped ?? {};
+        }
+
+        // Step 3 — non-brush cross-filter overlay.
         const overlay = toGridFilterModel(applicable);
-        let nextModel: Record<string, unknown> = { ...grid, ...overlay };
+        nextModel = { ...nextModel, ...overlay };
+
+        // Step 4 — active brush entries.
         if (hasBrush) {
           const { model: mergedModel, ownedAxes } = applyBrushEntries(nextModel, applicable);
           nextModel = mergedModel;
           previousBrushAxesRef.current = ownedAxes;
         } else {
-          // Brush cleared — strip every previously-owned x/y pair.
-          for (const { xColId, yColId } of previousAxes) {
-            const stripped = mergeBrushFilterModel(nextModel, null, {
-              xColId,
-              yColId,
-            });
-            nextModel = stripped ?? {};
-          }
           previousBrushAxesRef.current = [];
         }
 

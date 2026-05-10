@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-05-10T03:40:44.242Z",
-  "totalConsumers": 43,
+  "generatedAt": "2026-05-10T04:53:29.584Z",
+  "totalConsumers": 44,
   "byBucket": {
     "production": 17,
     "test": 3,
-    "demo": 9,
+    "demo": 10,
     "package": 14
   },
   "entries": [
@@ -385,6 +385,25 @@
         "lazyChartImport",
         "useLazyChart",
         "useProgressiveRender"
+      ],
+      "kinds": [
+        "ImportDeclaration"
+      ]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/ScatterBrushGridDemoLive.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": [
+        "@mfe/x-charts"
+      ],
+      "symbols": [
+        "BrushSelection",
+        "CrossFilterProvider",
+        "ScatterChart",
+        "brushFilterKey",
+        "useCrossFilterStoreApi",
+        "useGridCrossFilter"
       ],
       "kinds": [
         "ImportDeclaration"
