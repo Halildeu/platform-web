@@ -16,6 +16,8 @@ import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -120,6 +122,27 @@ export interface AreaChartProps extends AccessControlledProps {
   density?: ChartDensityPreference;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
+  /**
+   * Faz 21.11 PR-A2b-a11y-other — anomaly summary list. When the chart
+   * is rendered with anomaly markups (PR-A2b-ui via
+   * `useAnomalyOverlay({ labelVariant: 'pill' })`), passing the
+   * matching `AnomalySummary[]` (from `useAnomalySummary()` /
+   * `computeAnomalySummary()`) here lets `ChartA11yShell` fire a
+   * polite, debounced screen-reader announcement summarising the
+   * outliers. Default `undefined` = no anomaly announcement
+   * (backwards compat).
+   *
+   * Pair with `useAnomalySummary({ data, k, idPrefix })` —
+   * shares the same detector internals as `useAnomalyOverlay` so
+   * the visual markup and the SR summary stay aligned.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   * Default: small EN/TR formatter ("3 outliers detected, ...").
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
 }
 
 /* ------------------------------------------------------------------ */
@@ -204,6 +227,8 @@ const AreaChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    anomalySummary,
+    formatAnomalyAnnouncement,
     ...rest
   },
   forwardedRef,
@@ -506,6 +531,8 @@ const AreaChartInner = React.forwardRef<
       height={height}
       testId="area-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -520,7 +547,15 @@ AreaChartInner.displayName = 'AreaChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(function AreaChart(
-  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
+  {
+    access,
+    accessReason,
+    onDataPointClick,
+    onMarkupClick,
+    anomalySummary,
+    formatAnomalyAnnouncement,
+    ...rest
+  },
   ref,
 ) {
   // Access-aware callback gating — Codex iter-2 thread 019e0c25 absorb.
@@ -534,6 +569,11 @@ export const AreaChart = React.forwardRef<HTMLDivElement, AreaChartProps>(functi
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
         onMarkupClick={guardChartCallback(state, onMarkupClick)}
+        // PR-A2b-a11y-other: anomaly summary + formatter forwarded
+        // through unchanged — these aren't user-facing callbacks
+        // that the access gate would block.
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       />
     </ChartAccessGate>
   );

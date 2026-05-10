@@ -27,6 +27,8 @@ import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeSeries } from './utils/data-validation';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import type { EChartsOption } from './renderers/echarts-imports';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import {
@@ -115,6 +117,27 @@ export interface LineChartProps extends AccessControlledProps {
   density?: ChartDensityPreference;
   /** Accent palette override. @default "auto" */
   accent?: ChartAccentPreference;
+  /**
+   * Faz 21.11 PR-A2b-a11y-other — anomaly summary list. When the chart
+   * is rendered with anomaly markups (PR-A2b-ui via
+   * `useAnomalyOverlay({ labelVariant: 'pill' })`), passing the
+   * matching `AnomalySummary[]` (from `useAnomalySummary()` /
+   * `computeAnomalySummary()`) here lets `ChartA11yShell` fire a
+   * polite, debounced screen-reader announcement summarising the
+   * outliers. Default `undefined` = no anomaly announcement
+   * (backwards compat).
+   *
+   * Pair with `useAnomalySummary({ data, k, idPrefix })` —
+   * shares the same detector internals as `useAnomalyOverlay` so
+   * the visual markup and the SR summary stay aligned.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   * Default: small EN/TR formatter ("3 outliers detected, ...").
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
 }
 
 /* ------------------------------------------------------------------ */
@@ -177,6 +200,8 @@ const LineChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    anomalySummary,
+    formatAnomalyAnnouncement,
     ...rest
   },
   forwardedRef,
@@ -490,6 +515,8 @@ const LineChartInner = React.forwardRef<
       height={height}
       testId="line-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -504,7 +531,15 @@ LineChartInner.displayName = 'LineChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(function LineChart(
-  { access, accessReason, onDataPointClick, onMarkupClick, ...rest },
+  {
+    access,
+    accessReason,
+    onDataPointClick,
+    onMarkupClick,
+    anomalySummary,
+    formatAnomalyAnnouncement,
+    ...rest
+  },
   ref,
 ) {
   const { state } = resolveAccessState(access);
@@ -515,6 +550,11 @@ export const LineChart = React.forwardRef<HTMLDivElement, LineChartProps>(functi
         {...rest}
         onDataPointClick={guardChartCallback(state, onDataPointClick)}
         onMarkupClick={guardChartCallback(state, onMarkupClick)}
+        // PR-A2b-a11y-other: anomaly summary + formatter forwarded
+        // through unchanged — these aren't user-facing callbacks
+        // that the access gate would block.
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       />
     </ChartAccessGate>
   );

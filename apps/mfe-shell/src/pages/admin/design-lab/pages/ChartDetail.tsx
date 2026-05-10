@@ -234,6 +234,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Accent palette override (light/emerald/ocean/violet/sunset/graphite/dark).',
       },
       {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y-other — anomaly summary list. When the chart\nis rendered with anomaly markups (PR-A2b-ui via\n`useAnomalyOverlay({ labelVariant: 'pill' })`), passing the\nmatching `AnomalySummary[]` (from `useAnomalySummary()` /\n`computeAnomalySummary()`) here lets `ChartA11yShell` fire a\npolite, debounced screen-reader announcement summarising the\noutliers. Default `undefined` = no anomaly announcement\n(backwards compat).\n\nPair with `useAnomalySummary({ data, k, idPrefix })` —\nshares the same detector internals as `useAnomalyOverlay` so\nthe visual markup and the SR summary stay aligned.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.\nDefault: small EN/TR formatter ("3 outliers detected, ...").',
+      },
+      {
         name: 'access',
         type: '"full" | "readonly" | "disabled" | "hidden"',
         required: false,
@@ -429,6 +445,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: '"auto"',
         description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y-other — anomaly summary list. When the chart\nis rendered with anomaly markups (PR-A2b-ui via\n`useAnomalyOverlay({ labelVariant: 'pill' })`), passing the\nmatching `AnomalySummary[]` (from `useAnomalySummary()` /\n`computeAnomalySummary()`) here lets `ChartA11yShell` fire a\npolite, debounced screen-reader announcement summarising the\noutliers. Default `undefined` = no anomaly announcement\n(backwards compat).\n\nPair with `useAnomalySummary({ data, k, idPrefix })` —\nshares the same detector internals as `useAnomalyOverlay` so\nthe visual markup and the SR summary stay aligned.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.\nDefault: small EN/TR formatter ("3 outliers detected, ...").',
       },
       {
         name: 'access',
@@ -821,6 +853,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: '"auto"',
         description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y-other — anomaly summary list. When the chart\nis rendered with anomaly markups (PR-A2b-ui via\n`useAnomalyOverlay({ labelVariant: 'pill' })`), passing the\nmatching `AnomalySummary[]` (from `useAnomalySummary()` /\n`computeAnomalySummary()`) here lets `ChartA11yShell` fire a\npolite, debounced screen-reader announcement summarising the\noutliers. Default `undefined` = no anomaly announcement\n(backwards compat).\n\nPair with `useAnomalySummary({ data, k, idPrefix })` —\nshares the same detector internals as `useAnomalyOverlay` so\nthe visual markup and the SR summary stay aligned.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.\nDefault: small EN/TR formatter ("3 outliers detected, ...").',
       },
       {
         name: 'access',
@@ -1885,6 +1933,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: '"auto"',
         description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y-other — anomaly summary list. When the chart\nis rendered with anomaly markups (PR-A2b-ui via\n`useAnomalyOverlay({ labelVariant: 'pill' })`), passing the\nmatching `AnomalySummary[]` (from `useAnomalySummary()` /\n`computeAnomalySummary()`) here lets `ChartA11yShell` fire a\npolite, debounced screen-reader announcement summarising the\noutliers. Default `undefined` = no anomaly announcement\n(backwards compat).\n\nPair with `useAnomalySummary({ data, k, idPrefix })` —\nshares the same detector internals as `useAnomalyOverlay` so\nthe visual markup and the SR summary stay aligned.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.\nDefault: small EN/TR formatter ("3 outliers detected, ...").',
       },
       {
         name: 'access',
