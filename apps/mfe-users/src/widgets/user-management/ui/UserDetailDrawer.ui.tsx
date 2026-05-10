@@ -11,6 +11,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import HierarchicalScopePicker from './HierarchicalScopePicker';
+// ImpersonateAction mount deferred to PR-C2 (Codex iter-31 REVISE):
+// production token swap requires shell auth state machine integration.
+// Component file lives next to this drawer; do NOT import here until
+// PR-C2 wires the shell-services.auth.enterImpersonation dispatcher.
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
 // Codex 019ddd78 iter-38 P1 — primitive switch from DetailDrawer (read-only
@@ -1679,6 +1683,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             </button>
           </div>
         )}
+
+        {/* User Impersonation v1 ImpersonateAction mount deferred to PR-C2.
+            See top-of-file comment near the import block. */}
 
         {/* Profile Section */}
         <section>

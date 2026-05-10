@@ -12,6 +12,10 @@ import {
 } from '../../features/notifications/model/notifications.slice';
 import { Sidebar } from './Sidebar';
 import AuditSummaryStrip from './AuditSummaryStrip';
+// ImpersonationBanner mount deferred to PR-C2 (Codex iter-31 REVISE):
+// production token swap requires shell auth state machine integration.
+// Component file lives in this directory; do NOT import here until
+// PR-C2 wires enterImpersonationSession into auth.slice.
 import { ShellHeaderNew, BreadcrumbStrip } from './header';
 import { RouteTracker } from '../router/RouteTracker';
 import { AppRouter } from '../router/AppRouter';

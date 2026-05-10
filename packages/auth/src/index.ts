@@ -51,3 +51,20 @@ export type {
 // Object-level permission cache (authzVersion-driven)
 export { createZanzibarCache } from './zanzibar-cache';
 export type { ZanzibarCache, ZanzibarCacheConfig, ZanzibarCacheEntry } from './zanzibar-cache';
+
+// User Impersonation v1 (PR-C) — typed API client + helpers
+export {
+  startImpersonation,
+  stopImpersonation,
+  getActiveImpersonation,
+  revokeImpersonation,
+  isImpersonationToken,
+  decodeJwtPayload,
+} from './impersonation';
+export type {
+  StartImpersonationRequest,
+  StartImpersonationResponse,
+  ImpersonationSessionResource,
+  RevokeImpersonationRequest,
+  ImpersonationErrorCode,
+} from './impersonation';
