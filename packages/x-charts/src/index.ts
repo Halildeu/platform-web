@@ -15,6 +15,24 @@ export type { PieChartProps } from './PieChart';
 export { ScatterChart } from './ScatterChart';
 export type { ScatterChartProps } from './ScatterChart';
 
+/* 3D Extension Pack (Faz 21.11 P1 — lazy `echarts-gl`) */
+export { Scatter3D } from './Scatter3D';
+export type { Scatter3DProps, Scatter3DDataPoint } from './Scatter3D';
+// Note: `buildScatter3DOption` + `BuildScatter3DOptionInput` are
+// intentionally NOT re-exported here — they're an internal test seam
+// (the wrapper's option builder, lifted out so Vitest can lock the
+// `series.type === 'scatter3D'` contract without React mount + lazy
+// GL gate races). Promoting them to the public API would commit us
+// to a stable contract for `palette` / `fmt` / ECharts-shape inputs
+// that aren't ready for consumer use. Codex thread `019e10ab` iter-4.
+export {
+  useRequiredEChartsGL,
+  type EChartsGLStatus,
+  type EChartsGLUnsupportedReason,
+  type UseRequiredEChartsGLOptions,
+  type UseRequiredEChartsGLResult,
+} from './renderers/gl';
+
 /* Enterprise charts (ECharts native — P3-A) */
 export { RadarChart } from './RadarChart';
 export type { RadarChartProps } from './RadarChart';

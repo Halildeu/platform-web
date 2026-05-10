@@ -44,7 +44,12 @@ export type ChartA11yKind =
   | 'waterfall'
   | 'funnel'
   | 'sankey'
-  | 'sunburst';
+  | 'sunburst'
+  // Faz 21.11 P1a — 3D Extension Pack. Each 3D wrapper feeds the
+  // shell its own kind so the default aria-label fallback can name
+  // the chart correctly ("scatter3d chart with 1024 data points").
+  // P1b adds 'surface3d' and 'lines3d'; P1c adds 'globe'.
+  | 'scatter3d';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -145,6 +150,9 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   funnel: 'Funnel chart',
   sankey: 'Sankey diagram',
   sunburst: 'Sunburst chart',
+  // Faz 21.11 P1a — 3D Extension Pack. P1b adds 'Surface 3D chart' +
+  // '3D line chart'; P1c adds 'Globe' (geo).
+  scatter3d: '3D scatter chart',
 };
 
 const defaultFormatter = (v: number): string =>
