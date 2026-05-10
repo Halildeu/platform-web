@@ -25,6 +25,9 @@
 import React from 'react';
 import { cn } from '../utils/cn';
 import type { UseChartA11yResult } from './useChartA11y';
+import { ChartAriaLive, type AnomalyAnnouncementFormatter } from './ChartAriaLive';
+import type { AnomalySummary } from '../annotations/computeAnomalyOverlay';
+import { useChartsLocale } from '../i18n/locale-store';
 
 const VISUALLY_HIDDEN_STYLE: React.CSSProperties = {
   position: 'absolute',
@@ -55,6 +58,20 @@ export interface ChartA11yShellProps extends Omit<
    * donut innerLabel overlay). Default: empty.
    */
   children?: React.ReactNode;
+  /**
+   * Faz 21.11 PR-A2b-a11y — anomaly summary list. When supplied,
+   * the shell forwards it to `ChartAriaLive` which fires a
+   * polite, debounced SR announcement summarising the outliers
+   * ("3 outliers detected, ..."). Codex iter-1 §C: ChartA11yShell
+   * is the single live-region owner; chart wrappers shouldn't
+   * mount a second `ChartAriaLive`.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded as-is to `ChartAriaLive.formatAnomalyAnnouncement`.
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
 }
 
 export const ChartA11yShell: React.FC<ChartA11yShellProps> = ({
@@ -64,9 +81,13 @@ export const ChartA11yShell: React.FC<ChartA11yShellProps> = ({
   testId,
   setRefs,
   children,
+  anomalySummary,
+  formatAnomalyAnnouncement,
   ...rest
 }) => {
   const tablePayload = a11y.renderHiddenDataTable();
+  const locale = useChartsLocale();
+  const hasAnomalies = Array.isArray(anomalySummary) && anomalySummary.length > 0;
   return (
     <div className={cn('relative w-full', className)} {...rest}>
       <table id={tablePayload.id} style={VISUALLY_HIDDEN_STYLE}>
@@ -87,15 +108,33 @@ export const ChartA11yShell: React.FC<ChartA11yShellProps> = ({
         </tbody>
       </table>
 
-      <div
-        id={a11y.liveRegionId}
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        style={VISUALLY_HIDDEN_STYLE}
-      >
-        {a11y.liveMessage}
-      </div>
+      {/* Faz 21.11 PR-A2b-a11y — single live-region owner. The
+          shell mounts `ChartAriaLive` ONLY when an anomaly stream
+          is supplied (otherwise the inline live region below stays
+          the only region — preserves byte-identical SR behaviour
+          for charts that don't opt into anomaly announcements).
+          When `anomalySummary` IS supplied, the shell defers the
+          base `liveMessage` to `ChartAriaLive` too so we don't
+          double-stamp the DOM with two `<div role="status">`
+          regions for the same chart. */}
+      {hasAnomalies ? (
+        <ChartAriaLive
+          message={a11y.liveMessage}
+          anomalies={anomalySummary}
+          formatAnomalyAnnouncement={formatAnomalyAnnouncement}
+          locale={locale}
+        />
+      ) : (
+        <div
+          id={a11y.liveRegionId}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          style={VISUALLY_HIDDEN_STYLE}
+        >
+          {a11y.liveMessage}
+        </div>
+      )}
 
       <div
         ref={setRefs}

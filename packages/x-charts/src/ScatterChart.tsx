@@ -73,6 +73,15 @@ import { normalizeBrushSelection } from './cross-filter/brushSelection';
 import type { BrushSelection } from './cross-filter/brushSelection';
 export type { BrushSelection } from './cross-filter/brushSelection';
 
+// PR-A2b-a11y — anomaly summary for SR announcements. Codex
+// thread `019e1027` iter-1 §7: scatter accepts an EXPLICIT
+// `anomalySummary` prop instead of walking `markups` (markup
+// shape doesn't carry severity/direction; pill mode would
+// double-count). The summary list is forwarded to
+// `ChartA11yShell` which mounts the live region.
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+
 export interface ScatterChartProps extends AccessControlledProps {
   /** Data points for the scatter plot. */
   data: ScatterDataPoint[];
@@ -169,6 +178,27 @@ export interface ScatterChartProps extends AccessControlledProps {
    * @default false
    */
   enableBrush?: boolean;
+  /**
+   * Faz 21.11 PR-A2b-a11y — anomaly summary list. When the chart
+   * is rendered with anomaly markups (PR-A2b-ui via
+   * `useAnomalyOverlay({ labelVariant: 'pill' })`), passing the
+   * matching `AnomalySummary[]` (from `useAnomalySummary()` /
+   * `computeAnomalySummary()`) here lets `ChartA11yShell` fire a
+   * polite, debounced screen-reader announcement summarising the
+   * outliers. Default `undefined` = no anomaly announcement
+   * (backwards compat).
+   *
+   * Pair with `useAnomalySummary({ data, k, idPrefix })` —
+   * shares the same detector internals as `useAnomalyOverlay` so
+   * the visual markup and the SR summary stay aligned.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   * Default: small EN/TR formatter ("3 outliers detected, ...").
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
   /**
    * Faz 21.11 PR-A2c-wire — fires when the user drags a rectangle on
    * the chart (or clears one). Receives a normalised `BrushSelection`
@@ -272,6 +302,8 @@ const ScatterChartInner = React.forwardRef<
     crossFilterRequired = false,
     enableBrush = false,
     onBrushSelection,
+    anomalySummary,
+    formatAnomalyAnnouncement,
     unstable_onRenderSettled,
     ...rest
   },
@@ -852,6 +884,8 @@ const ScatterChartInner = React.forwardRef<
       height={height}
       testId="scatter-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -867,7 +901,16 @@ ScatterChartInner.displayName = 'ScatterChartInner';
  */
 export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
   function ScatterChart(
-    { access, accessReason, onDataPointClick, onMarkupClick, onBrushSelection, ...rest },
+    {
+      access,
+      accessReason,
+      onDataPointClick,
+      onMarkupClick,
+      onBrushSelection,
+      anomalySummary,
+      formatAnomalyAnnouncement,
+      ...rest
+    },
     ref,
   ) {
     // Access-aware callback gating — Codex iter-2 absorb.
@@ -888,6 +931,11 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           // `ScatterChartInner`, so a stripped callback also
           // detaches the ECharts event listener — no leak.
           onBrushSelection={guardChartCallback(state, onBrushSelection)}
+          // PR-A2b-a11y: anomaly summary + formatter forwarded
+          // through unchanged — these aren't user-facing
+          // callbacks that the access gate would block.
+          anomalySummary={anomalySummary}
+          formatAnomalyAnnouncement={formatAnomalyAnnouncement}
         />
       </ChartAccessGate>
     );
