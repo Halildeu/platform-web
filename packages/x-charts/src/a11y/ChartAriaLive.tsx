@@ -27,6 +27,19 @@ export type AnomalyAnnouncementFormatter = (anomalies: AnomalySummary[], locale:
 
 const DEFAULT_TURKISH_LOCALES = new Set(['tr', 'tr-TR', 'TR']);
 
+/**
+ * Resolve the dominant `kind` for a batch of anomalies. Charts
+ * normally produce a single domain per detection cycle; mixed-kind
+ * batches fall back to the flat template (which can announce by
+ * `ariaLabel` for any individual entry).
+ */
+function resolveDominantKind(anomalies: AnomalySummary[]): AnomalySummary['kind'] {
+  for (const a of anomalies) {
+    if (a.kind && a.kind !== 'flat') return a.kind;
+  }
+  return 'flat';
+}
+
 const defaultFormatAnomalyAnnouncement: AnomalyAnnouncementFormatter = (anomalies, locale) => {
   if (!Array.isArray(anomalies) || anomalies.length === 0) return '';
   const total = anomalies.length;
@@ -34,27 +47,86 @@ const defaultFormatAnomalyAnnouncement: AnomalyAnnouncementFormatter = (anomalie
   const below = total - above;
   const highest = [...anomalies].sort((a, b) => b.severity - a.severity)[0];
   const isTr = DEFAULT_TURKISH_LOCALES.has(locale);
-  if (isTr) {
-    const dirText =
-      below === 0
-        ? `${above} tanesi beklenenin üzerinde`
-        : above === 0
-          ? `${below} tanesi beklenenin altında`
-          : `${above} üstte ve ${below} altta`;
-    return `${total} aykırı değer tespit edildi (${dirText}). En uç: x=${String(highest.x)}, y=${highest.formattedY}.`;
-  }
-  const dirText =
+  // Faz 21.11 batch3 (Codex thread `019e10a5` iter-2): domain-aware
+  // template selection via `resolveDominantKind`. Legacy `'flat'` (or
+  // omitted) consumers see byte-identical output to the pre-batch3
+  // formatter — Bar / Line / Area / Pie / Funnel / Waterfall /
+  // Heatmap / Scatter / 3D wrappers all keep working unchanged.
+  const kind = resolveDominantKind(anomalies);
+  const dirTextEn =
     below === 0
       ? `${above} above expected range`
       : above === 0
         ? `${below} below expected range`
         : `${above} above and ${below} below expected range`;
+  const dirTextTr =
+    below === 0
+      ? `${above} tanesi beklenenin üzerinde`
+      : above === 0
+        ? `${below} tanesi beklenenin altında`
+        : `${above} üstte ve ${below} altta`;
+
+  if (kind === 'radar') {
+    const seriesPart = highest.seriesName ? `${highest.seriesName}, ` : '';
+    const indicatorPart = highest.indicatorName ?? `indicator ${highest.indicatorIndex ?? '?'}`;
+    const unitPart = highest.axisUnit ? ` ${highest.axisUnit}` : '';
+    if (isTr) {
+      return `${total} radar gösterge anomalisi tespit edildi (${dirTextTr}). En uç: ${seriesPart}${indicatorPart}=${highest.formattedY}${unitPart}.`;
+    }
+    return `${total} radar indicator anomal${total === 1 ? 'y' : 'ies'} detected (${dirTextEn}). Most extreme: ${seriesPart}${indicatorPart}=${highest.formattedY}${unitPart}.`;
+  }
+
+  if (kind === 'hierarchical') {
+    const pathPart =
+      highest.path && highest.path.length > 0 ? highest.path.join(' > ') : String(highest.x);
+    if (isTr) {
+      return `${total} hiyerarşi anomalisi tespit edildi (${dirTextTr}). En uç: ${pathPart}, değer ${highest.formattedY}.`;
+    }
+    return `${total} hierarchy anomal${total === 1 ? 'y' : 'ies'} detected (${dirTextEn}). Most extreme: ${pathPart}, value ${highest.formattedY}.`;
+  }
+
+  if (kind === 'sankey-edge') {
+    const edgePart =
+      highest.source && highest.target
+        ? `${highest.source} → ${highest.target}`
+        : (highest.edgeId ?? String(highest.x));
+    if (isTr) {
+      return `${total} akış anomalisi tespit edildi (${dirTextTr}). En uç: ${edgePart}, akış ${highest.formattedY}.`;
+    }
+    return `${total} flow anomal${total === 1 ? 'y' : 'ies'} detected (${dirTextEn}). Most extreme: ${edgePart}, flow ${highest.formattedY}.`;
+  }
+
+  if (kind === 'sankey-node') {
+    const nodePart = highest.nodeId ?? String(highest.x);
+    if (isTr) {
+      return `${total} düğüm akışı anomalisi tespit edildi (${dirTextTr}). En uç: ${nodePart}, geçiş akışı ${highest.formattedY}.`;
+    }
+    return `${total} node flow anomal${total === 1 ? 'y' : 'ies'} detected (${dirTextEn}). Most extreme: ${nodePart}, flow-through ${highest.formattedY}.`;
+  }
+
+  if (kind === '3d') {
+    // Reserved kind — wrappers don't ship a built-in 3D detector in
+    // P1; consumer-supplied summaries hit this branch. Default copy
+    // honours the `ariaLabel` of the most-extreme entry when present
+    // (richer than the flat x/y template for 3D coords).
+    const detail = highest.ariaLabel ?? `x=${String(highest.x)}, y=${highest.formattedY}`;
+    if (isTr) {
+      return `${total} 3B anomali tespit edildi (${dirTextTr}). En uç: ${detail}.`;
+    }
+    return `${total} 3D anomal${total === 1 ? 'y' : 'ies'} detected (${dirTextEn}). Most extreme: ${detail}.`;
+  }
+
+  // Default 'flat' branch — legacy template (byte-identical to the
+  // pre-batch3 output for backwards compat).
+  if (isTr) {
+    return `${total} aykırı değer tespit edildi (${dirTextTr}). En uç: x=${String(highest.x)}, y=${highest.formattedY}.`;
+  }
   // Codex iter-2 §P2: "Most extreme" ranks by severity (correct
   // for SR attention signal), not by y-value. Previous "Highest"
   // copy was factually wrong when the most-severe anomaly was a
   // lower-fence outlier (e.g. y=5 reported as "Highest"). TR copy
   // already says "En uç" which matches severity ranking.
-  return `${total} outlier${total === 1 ? '' : 's'} detected (${dirText}). Most extreme: x=${String(highest.x)}, y=${highest.formattedY}.`;
+  return `${total} outlier${total === 1 ? '' : 's'} detected (${dirTextEn}). Most extreme: x=${String(highest.x)}, y=${highest.formattedY}.`;
 };
 
 function anomalySignature(anomalies: AnomalySummary[] | undefined): string {
@@ -63,8 +135,22 @@ function anomalySignature(anomalies: AnomalySummary[] | undefined): string {
   // a different incoming order still dedupes. `severity` is
   // detector-specific but stable per (point, fence) so it makes
   // a good identity proxy.
+  //
+  // Faz 21.11 batch3 (Codex iter-2): signature includes `kind` +
+  // domain metadata so a Radar series rename / hierarchical depth
+  // change / Sankey edge swap re-announces. Legacy flat anomalies
+  // (kind omitted → `kind ?? 'flat'`) keep the same signature shape;
+  // optional metadata fields default to empty strings so they don't
+  // perturb dedupe for consumers that never set them.
   return [...anomalies]
-    .map((a) => `${a.id}|${a.direction}|${a.formattedY}|${a.severity.toFixed(4)}`)
+    .map((a) => {
+      const base = `${a.id}|${a.direction}|${a.formattedY}|${a.severity.toFixed(4)}`;
+      const kindKey = `|${a.kind ?? 'flat'}`;
+      const radarKey = `|${a.seriesName ?? ''}|${a.indicatorIndex ?? ''}|${a.indicatorName ?? ''}`;
+      const hierKey = `|${(a.path ?? []).join('>')}`;
+      const sankeyKey = `|${a.nodeId ?? ''}|${a.edgeId ?? ''}|${a.source ?? ''}|${a.target ?? ''}|${a.flowValue ?? ''}`;
+      return `${base}${kindKey}${radarKey}${hierKey}${sankeyKey}`;
+    })
     .sort()
     .join('\n');
 }

@@ -198,3 +198,190 @@ describe('ChartAriaLive — anomaly announcement (PR-A2b-a11y)', () => {
     }
   });
 });
+
+// Faz 21.11 batch3 contract — domain-aware default formatter tests
+// (Codex thread `019e10a5` iter-2). Each new `kind` selects a
+// dedicated EN/TR template; legacy flat consumers (tests above)
+// continue to receive the byte-identical pre-batch3 output.
+describe('ChartAriaLive — domain-aware default formatter (batch3)', () => {
+  it('legacy flat (no kind) — EN backwards-compat byte-identical output', () => {
+    render(<ChartAriaLive message="" anomalies={[ANOM_A]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    // Pre-batch3 template: "1 outlier detected (1 above expected range). Most extreme: x=May, y=100.00."
+    expect(text).toMatch(/1 outlier detected/);
+    expect(text).toMatch(/Most extreme: x=May/);
+  });
+
+  it('explicit kind: "flat" produces the same template as omitted kind', () => {
+    const flatExplicit: AnomalySummary = { ...ANOM_A, kind: 'flat' };
+    render(<ChartAriaLive message="" anomalies={[flatExplicit]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/1 outlier detected/);
+    expect(text).toMatch(/Most extreme: x=May/);
+  });
+
+  it('kind: "radar" — EN announces indicator + series + axisUnit', () => {
+    const radarAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'radar',
+      seriesName: 'Q1 Performance',
+      indicatorName: 'Latency',
+      indicatorIndex: 2,
+      axisUnit: 'ms',
+    };
+    render(<ChartAriaLive message="" anomalies={[radarAnom]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/radar indicator/);
+    expect(text).toMatch(/Q1 Performance/);
+    expect(text).toMatch(/Latency=100\.00 ms/);
+  });
+
+  it('kind: "radar" — TR localised', () => {
+    const radarAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'radar',
+      seriesName: 'Q1',
+      indicatorName: 'Gecikme',
+      axisUnit: 'ms',
+    };
+    render(<ChartAriaLive message="" anomalies={[radarAnom]} locale="tr-TR" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/radar gösterge anomalisi/);
+    expect(text).toMatch(/Gecikme=100\.00/);
+  });
+
+  it('kind: "hierarchical" — EN announces breadcrumb path', () => {
+    const hierAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'hierarchical',
+      path: ['Region', 'Team', 'Segment'],
+      depth: 3,
+    };
+    render(<ChartAriaLive message="" anomalies={[hierAnom]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/hierarchy anomaly/);
+    expect(text).toMatch(/Region > Team > Segment/);
+    expect(text).toMatch(/value 100\.00/);
+  });
+
+  it('kind: "hierarchical" — TR localised', () => {
+    const hierAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'hierarchical',
+      path: ['Bölge', 'Takım'],
+    };
+    render(<ChartAriaLive message="" anomalies={[hierAnom]} locale="tr-TR" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/hiyerarşi anomalisi/);
+    expect(text).toMatch(/Bölge > Takım/);
+  });
+
+  it('kind: "sankey-edge" — EN announces source → target', () => {
+    const edgeAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'sankey-edge',
+      source: 'Visit',
+      target: 'Purchase',
+      flowValue: 100,
+    };
+    render(<ChartAriaLive message="" anomalies={[edgeAnom]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/flow anomaly/);
+    expect(text).toMatch(/Visit → Purchase/);
+    expect(text).toMatch(/flow 100\.00/);
+  });
+
+  it('kind: "sankey-node" — EN announces nodeId', () => {
+    const nodeAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'sankey-node',
+      nodeId: 'Node-X',
+    };
+    render(<ChartAriaLive message="" anomalies={[nodeAnom]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/node flow anomaly/);
+    expect(text).toMatch(/Node-X/);
+    expect(text).toMatch(/flow-through 100\.00/);
+  });
+
+  it('kind: "3d" reserved — EN uses ariaLabel as the most-extreme detail', () => {
+    const threeDAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: '3d',
+      ariaLabel: 'Outlier at (x=10, y=20, z=30)',
+    };
+    render(<ChartAriaLive message="" anomalies={[threeDAnom]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    expect(text).toMatch(/3D anomaly/);
+    expect(text).toMatch(/Outlier at \(x=10, y=20, z=30\)/);
+  });
+});
+
+// Codex iter-2 hardening — anomalySignature extension regression: a
+// metadata-only change MUST trigger re-announcement. Two anomaly
+// payloads that differ only in `seriesName` / `path` / `nodeId` are
+// semantically distinct events and the SR should hear both.
+describe('ChartAriaLive — anomalySignature extension (batch3)', () => {
+  it('different seriesName on radar anomalies re-announces', () => {
+    const fmt = vi.fn(() => 'X');
+    const a1: AnomalySummary = { ...ANOM_A, kind: 'radar', seriesName: 'Q1' };
+    const a2: AnomalySummary = { ...ANOM_A, kind: 'radar', seriesName: 'Q2' };
+    const { rerender } = render(
+      <ChartAriaLive message="" anomalies={[a1]} formatAnomalyAnnouncement={fmt} />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(1);
+    rerender(<ChartAriaLive message="" anomalies={[a2]} formatAnomalyAnnouncement={fmt} />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(2);
+  });
+
+  it('legacy flat anomaly (no metadata) preserves dedupe — same id+severity does NOT re-announce', () => {
+    const fmt = vi.fn(() => 'X');
+    const { rerender } = render(
+      <ChartAriaLive message="" anomalies={[ANOM_A]} formatAnomalyAnnouncement={fmt} />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(1);
+    rerender(
+      <ChartAriaLive message="" anomalies={[{ ...ANOM_A }]} formatAnomalyAnnouncement={fmt} />,
+    );
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(fmt).toHaveBeenCalledTimes(1); // still 1 — backwards compat
+  });
+});
