@@ -43,29 +43,35 @@ const navigateToLoginUrl = (loginUrl: string): void => {
 };
 
 /**
- * 2026-05-10 hotfix (login flow P0 #3): poll until keycloak-js has
- * populated the internal {@code adapter} field, indicating that
- * {@code init()} has progressed far enough for {@code createLoginUrl}
- * to be safe to call.
+ * 2026-05-10 hotfix (login flow P0 #3) iter-2: poll until keycloak-js
+ * has populated public readiness signals indicating the OIDC discovery
+ * document is loaded and {@code createLoginUrl} can safely build a URL.
  *
- * <p>keycloak-js exposes the adapter at {@code keycloak.adapter} only
- * after init() resolves the OIDC discovery document and constructs
- * the chosen flow adapter (default/cordova/cordova-native). Calling
- * {@code createLoginUrl} before this point throws inside the library
- * with {@code TypeError: Cannot read properties of undefined (reading
- * 'redirectUri')} because the internal options object is still
- * unresolved.
+ * <p>Iter-1 erroneously polled {@code keycloak.adapter} — that field is
+ * a PRIVATE class field ({@code #adapter}) in keycloak-js@26.2.4 and is
+ * NOT accessible from outside the library. Cross-AI Codex review
+ * (thread 019e1341) caught this; the iter-1 wait silently always timed
+ * out, adding 800ms latency without actual safety.
  *
- * <p>Returns true if adapter ready within timeoutMs, false otherwise.
- * Caller may proceed even on timeout — keycloak-js will fall back to
- * its internal "no-adapter" path which throws but the wrapper here
- * catches it cleanly. The wait is best-effort, not blocking.
+ * <p>Iter-2 watches the PUBLIC {@code endpoints.authorize} closure
+ * which keycloak-js installs at {@code lib/keycloak.js:672} after the
+ * realm config has been fetched and parsed (this is also exactly what
+ * {@code createLoginUrl} calls internally — the same readiness signal
+ * the library uses). Plus {@code authServerUrl} as a redundant check.
+ *
+ * <p>Returns true if endpoints ready within timeoutMs, false otherwise.
+ * On timeout the caller proceeds and the existing try/catch around
+ * {@code createLoginUrl} catches the inevitable internal throw, so
+ * this remains best-effort.
  */
-const waitForKcAdapter = async (timeoutMs: number): Promise<boolean> => {
+const waitForKcEndpoints = async (timeoutMs: number): Promise<boolean> => {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const kc = keycloak as unknown as { adapter?: unknown };
-    if (kc.adapter) {
+    const kc = keycloak as unknown as {
+      endpoints?: { authorize?: () => string };
+      authServerUrl?: string;
+    };
+    if (kc.endpoints && typeof kc.endpoints.authorize === 'function' && kc.authServerUrl) {
       return true;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 25));
@@ -116,22 +122,22 @@ export const resolveKeycloakLoginUrl = async ({
     }
 
     try {
-      // 2026-05-10 hotfix (login flow P0 #3): wait for kc.adapter to
-      // populate before invoking createLoginUrl. keycloak-js sets
-      // `keycloak.adapter` inside init(), but the Redux `initialized`
-      // flag can fire BEFORE adapter is wired (race observed on testai:
+      // 2026-05-10 hotfix (login flow P0 #3) iter-2: wait for kc
+      // OIDC discovery to populate public {@code endpoints.authorize}
+      // before invoking createLoginUrl. The Redux `initialized` flag
+      // can fire BEFORE the discovery document is fetched and parsed
+      // (race observed on testai:
       // `[Auth] keycloak.createLoginUrl() failed: TypeError: Cannot
       // read properties of undefined (reading 'redirectUri')` thrown
-      // from inside vo.createLoginUrl on bootstrap-DXLrVsh1.js:10:5908).
-      // The error originates inside KC because options or adapter is
-      // undefined; spinning briefly until adapter is ready avoids the
-      // race without changing observable behavior on the happy path.
-      // Cross-AI Codex review (thread 019e1336) flagged this as part
-      // of the auth bootstrap FSM gap.
-      const adapterReady = await waitForKcAdapter(800);
-      if (!adapterReady) {
+      // from inside vo.createLoginUrl). Cross-AI Codex review (thread
+      // 019e1341) iter-1 flagged that polling kc.adapter is wrong
+      // (private #adapter field in keycloak-js@26.2.4); iter-2 polls
+      // the public endpoints.authorize signal which is set after
+      // realm config fetch — exactly what createLoginUrl needs.
+      const endpointsReady = await waitForKcEndpoints(800);
+      if (!endpointsReady) {
         console.warn(
-          `[Auth] keycloak.createLoginUrl() invoked before adapter ready (timed out ${800}ms). Falling through; KC may still resolve via adapter:'default'.`,
+          `[Auth] keycloak.createLoginUrl() invoked before endpoints ready (timed out 800ms). Falling through; existing try/catch handles internal KC throw.`,
         );
       }
       const loginUrl = await Promise.race<string>([

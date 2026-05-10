@@ -32,7 +32,7 @@ const LoginPage = () => {
   const redirectPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const redirect = params.get('redirect');
-    // 2026-05-10 hotfix (login flow P0 #2): when user lands on
+    // 2026-05-10 hotfix (login flow P0 #2) iter-2: when user lands on
     // /login?redirect=/login (e.g. after a stale bookmark or after the
     // browser history navigates back to /login post-SSO), the previous
     // logic returned '/login' as the post-SSO target. KC then sent the
@@ -40,17 +40,34 @@ const LoginPage = () => {
     // onAuthSuccess catch-up handler in AuthBootstrapper recovered, but
     // the user paid an extra round-trip + saw a brief blank page.
     //
-    // Filter out '/login' (and any nested /login* path) so the user
-    // always lands at '/' after successful SSO. Cross-AI Codex review
-    // (thread 019e1336) flagged this as a P0 redirect-loop class bug.
-    if (
-      !redirect ||
-      redirect === '/login' ||
-      redirect.startsWith('/login?') ||
-      redirect.startsWith('/login/')
-    ) {
+    // Iter-1 (literal string match) missed: `/LOGIN`, `//login`,
+    // `/login#hash`. Cross-AI Codex review (thread 019e1341) flagged
+    // these edges. Iter-2 normalizes:
+    //   1. Strip query+hash before path comparison (#hash bypass guard)
+    //   2. Lowercase compare (LOGIN bypass guard)
+    //   3. Collapse leading double-slashes (open-redirect guard;
+    //      `//evil.com/foo` would otherwise pass through as a path)
+    //   4. Match exactly `/login` OR any `/login/*` nested route
+    if (!redirect) {
       return '/';
     }
+    // Strip query/hash for path-level comparison
+    const pathOnly = redirect.split(/[?#]/)[0];
+    // Open-redirect guard FIRST (before collapse): a path like
+    // `//evil.com/foo` is a schema-relative URL that browsers treat as
+    // cross-origin. Reject anything that doesn't start with a single
+    // `/` followed by something other than another `/`.
+    if (!pathOnly.startsWith('/') || pathOnly.startsWith('//')) {
+      return '/';
+    }
+    // Now safe to lowercase for case-insensitive /login* match.
+    const lower = pathOnly.toLowerCase();
+    if (lower === '/login' || lower.startsWith('/login/')) {
+      return '/';
+    }
+    // javascript:, data:, mailto: schemes contain no `/` prefix and
+    // were already rejected above. http(s):// has `//` after scheme
+    // and was also rejected. We're left with same-origin paths.
     return redirect;
   }, [location.search]);
 

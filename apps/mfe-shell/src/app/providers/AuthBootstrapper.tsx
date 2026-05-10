@@ -344,44 +344,57 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
      */
     const bootstrap = async () => {
       try {
-        // 2026-05-10 hotfix (login flow P1): GC stale `kc-callback-*`
-        // localStorage entries left by aborted PKCE flows. keycloak-js
-        // writes one entry per createLoginUrl invocation (carrying
-        // PKCE state + nonce + code_verifier) and clears it on
-        // successful callback consumption. Aborted flows (user closes
-        // tab, network error, server-side reload during KC redirect)
-        // leak entries indefinitely. Live cluster smoke observed 21+
-        // stale entries; over months this both bloats localStorage
-        // quota AND leaks PKCE material to any XSS landing on the
-        // origin. Cross-AI Codex review (thread 019e1336) flagged as P1.
+        // 2026-05-10 hotfix (login flow P1) iter-2: GC stale
+        // `kc-callback-*` localStorage entries left by aborted PKCE
+        // flows. keycloak-js writes one entry per createLoginUrl
+        // invocation (carrying PKCE state + nonce + code_verifier) at
+        // {@code lib/keycloak.js:1783}: {@code expires = Date.now() +
+        // 60*60*1000}. Aborted flows (user closes tab, network error,
+        // server-side reload during KC redirect) leak entries
+        // indefinitely. Live cluster smoke observed 21+ stale entries;
+        // over months this both bloats localStorage quota AND leaks
+        // PKCE material to any XSS landing on the origin. Cross-AI
+        // Codex review (thread 019e1336) flagged as P1.
         //
-        // Keep entries fresher than 1 hour (login flow normally
-        // completes in seconds; 1h is a generous safety window for
-        // mid-flow tab/network interruptions) — older entries are
-        // certainly abandoned. Skip if storage unavailable (SSR/
-        // privacy mode).
-        if (typeof window !== 'undefined' && window.localStorage) {
-          const now = Date.now();
-          const KC_CALLBACK_TTL_MS = 60 * 60 * 1000;
-          const stale: string[] = [];
-          for (let i = 0; i < window.localStorage.length; i++) {
-            const key = window.localStorage.key(i);
-            if (!key || !key.startsWith('kc-callback-')) continue;
-            try {
-              const raw = window.localStorage.getItem(key);
-              const parsed = raw ? JSON.parse(raw) : null;
-              const expires = typeof parsed?.expires === 'number' ? parsed.expires : null;
-              if (expires === null || now - expires > KC_CALLBACK_TTL_MS) {
+        // Iter-1 used {@code now - expires > 1h} which is wrong: that
+        // condition only fires once the entry has been expired for
+        // 1h — i.e. ~2h after creation. Iter-2 (Codex thread 019e1341
+        // P1 #3 absorb) uses {@code expires <= now} which matches the
+        // semantics keycloak-js itself uses in clearInvalidValues. An
+        // active in-flight callback (with future expires) is preserved.
+        //
+        // Wrapped in its own try/catch (Codex P2 absorb) so a privacy-
+        // mode {@code window.localStorage} access throw doesn't break
+        // the whole bootstrap.
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            const now = Date.now();
+            const stale: string[] = [];
+            for (let i = 0; i < window.localStorage.length; i++) {
+              const key = window.localStorage.key(i);
+              if (!key || !key.startsWith('kc-callback-')) continue;
+              try {
+                const raw = window.localStorage.getItem(key);
+                const parsed = raw ? JSON.parse(raw) : null;
+                const expires = typeof parsed?.expires === 'number' ? parsed.expires : null;
+                // Active flow: future expires (kept). Stale: missing,
+                // malformed, or already-expired entries (cleaned).
+                if (expires === null || expires <= now) {
+                  stale.push(key);
+                }
+              } catch {
                 stale.push(key);
               }
-            } catch {
-              stale.push(key);
+            }
+            if (stale.length > 0) {
+              stale.forEach((k) => window.localStorage.removeItem(k));
+              console.info(`[AuthBootstrapper] cleaned ${stale.length} stale kc-callback entries`);
             }
           }
-          if (stale.length > 0) {
-            stale.forEach((k) => window.localStorage.removeItem(k));
-            console.info(`[AuthBootstrapper] cleaned ${stale.length} stale kc-callback entries`);
-          }
+        } catch (err) {
+          // Privacy mode / disabled storage — skip cleanup, don't
+          // break bootstrap.
+          console.warn('[AuthBootstrapper] kc-callback cleanup skipped:', err);
         }
 
         // PR-C2 (Codex AGREE thread `019e109c` iter-4): impersonation

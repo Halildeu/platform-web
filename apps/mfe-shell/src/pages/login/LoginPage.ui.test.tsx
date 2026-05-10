@@ -180,6 +180,35 @@ describe('LoginPage', () => {
     });
   });
 
+  it.each([
+    ['/login#hash', 'http://localhost:3000/'],
+    ['/LOGIN', 'http://localhost:3000/'],
+    ['/Login/help', 'http://localhost:3000/'],
+    ['//evil.com/foo', 'http://localhost:3000/'],
+    ['///login', 'http://localhost:3000/'],
+    ['javascript:alert(1)', 'http://localhost:3000/'],
+    ['http://evil.com/', 'http://localhost:3000/'],
+  ])(
+    'redirect=%p loop guard / open-redirect koruma calisir → %p',
+    async (redirect, expectedRedirectUri) => {
+      // 2026-05-10 hotfix iter-2 (Codex thread 019e1341 P1 #1 absorb):
+      // tighten redirect filter to catch case-insensitive matches,
+      // hash bypass, schema-relative URLs, and javascript: scheme.
+      authStateMock.initialized = true;
+
+      render(
+        <MemoryRouter initialEntries={[`/login?redirect=${encodeURIComponent(redirect)}`]}>
+          <LoginPage />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(resolveKeycloakLoginUrlMock).toHaveBeenCalled());
+      expect(resolveKeycloakLoginUrlMock).toHaveBeenCalledWith({
+        redirectUri: expectedRedirectUri,
+      });
+    },
+  );
+
   it('non-login redirect path olduğu gibi korunur (regression guard)', async () => {
     // Regression guard: legitimate redirect targets like /access/roles
     // must still be honored; the loop guard only filters /login*.
