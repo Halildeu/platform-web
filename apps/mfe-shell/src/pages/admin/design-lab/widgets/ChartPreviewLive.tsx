@@ -1066,11 +1066,13 @@ const ChartToolbarShowcase: React.FC<{ chartName: string }> = ({ chartName }) =>
 /*  honoured (the switch picks a chart per render, calling the hook    */
 /*  conditionally would split between renders).                        */
 /*                                                                     */
-/*  Default `showAnomalyPills=false` keeps the legacy scatter preview  */
-/*  byte-identical for every consumer that doesn't toggle the new     */
-/*  knob. When it's on, the IQR-detected anomalies surface as          */
-/*  warning-tinted "Outlier: y=…" pills on top of the existing scatter */
-/*  data points; click flows through the chart's standard              */
+/*  `showAnomalyPills` defaults to ON so the design-lab scatter        */
+/*  route surfaces the new anomaly explanation pill on first load —    */
+/*  Codex thread `019e0fcb` iter-2 RED #2/#3 caught that the demo      */
+/*  was previously invisible (no toggle wiring + flat sample data).    */
+/*  When the flag is on, the IQR-detected anomalies surface as         */
+/*  warning-tinted "Outlier: y=…" pills on top of the existing         */
+/*  scatter data points; click flows through the chart's standard      */
 /*  `onMarkupClick` (still wired by the switch above) so consumers     */
 /*  decide whether to open a modal, a sidebar, or just log.            */
 /* ------------------------------------------------------------------ */
