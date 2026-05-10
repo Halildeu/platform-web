@@ -571,6 +571,23 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
     //     up and converts the FSM to transportReady.
     keycloak.onAuthSuccess = async () => {
       if (!mounted) return;
+      // PR-C2 iter-5 P1-3 absorb (Codex thread `019e109c`): hydrate
+      // path establishes the broker session BEFORE keycloak.init runs,
+      // but Keycloak.js can still fire {@code onAuthSuccess} later
+      // (e.g. silent SSO completes against the admin realm session
+      // even though we never asked for the token). Without this
+      // guard, the handler would re-write {@code /auth/cookie} with
+      // the admin token and clobber the active broker session — the
+      // V3 plan invariant is "Keycloak handlers are no-ops while
+      // impersonation is active". Same rationale as
+      // {@code onTokenExpired} below; mirrored here so both refresh
+      // surfaces are protected.
+      if (isImpersonatingRef.current) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[AuthBootstrapper] onAuthSuccess skipped — impersonation active');
+        }
+        return;
+      }
       const token = keycloak.token;
       if (!token) return;
       console.info('[AuthBootstrapper] onAuthSuccess catch-up closure');
