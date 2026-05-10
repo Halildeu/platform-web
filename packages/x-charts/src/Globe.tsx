@@ -257,15 +257,15 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
   // wrapper — consumer cannot override it (would break the geo
   // semantic and ECharts would refuse to render).
   //
-  // Codex thread `019e10f8` iter-2 hardening:
+  // Codex thread `019e10f8` iter-2/iter-3 hardening:
   //   - `numericSeriesIndexes` tracks layers that actually
   //     contribute a `value` field, so visualMap can scope itself
   //     to those series only (mixed globe must NOT spill the colour
   //     ramp onto lines / value-less bar series).
-  //   - lines3D data items now carry the full source datum (label /
-  //     value / from / to / fromLabel / toLabel) so the tooltip and
-  //     click handler can read them back without re-resolving
-  //     against the original layer array.
+  //   - lines3D option items carry only `coords` / optional
+  //     `lineStyle` / optional `name`. Tooltip + click resolve full
+  //     metadata via `layers[sIdx].data[dataIndex]` directly (the
+  //     earlier `__source` echo was dropped — iter-3 cleanup).
   let valueMin = Number.POSITIVE_INFINITY;
   let valueMax = Number.NEGATIVE_INFINITY;
   const numericSeriesIndexes: number[] = [];
@@ -424,9 +424,9 @@ export interface GlobeRawClickParams {
  * click. Pure function: derives lon / lat / value / metadata from
  * the consumer-supplied `layers[seriesIndex].data[dataIndex]` —
  * source-of-truth (Codex thread `019e10f8` iter-2). Returns `null`
- * when the params reference an unknown layer / dataIndex (defensive
- * guard; ECharts shouldn't dispatch one but the wrapper accepts
- * `params: unknown`).
+ * when the params reference an unknown layer OR an out-of-bounds
+ * `dataIndex` (defensive guard; ECharts shouldn't dispatch one but
+ * the wrapper accepts `params: unknown`).
  *
  * Lifted out of `GlobeInner.handleClick` (Codex iter-4) so the click
  * payload contract can be unit-tested without React mount + jsdom
@@ -440,6 +440,9 @@ export function buildGlobeClickEvent(
   const layer = layers[sIdx];
   if (!layer) return null;
   const dataIndex = params.dataIndex ?? -1;
+  // Codex iter-5 nit: also null-guard on missing data row so the
+  // helper docstring's "unknown layer / dataIndex" claim holds.
+  if (dataIndex < 0 || dataIndex >= layer.data.length) return null;
 
   let sourceValue: number | undefined;
   let sourceLabel: string | undefined;
