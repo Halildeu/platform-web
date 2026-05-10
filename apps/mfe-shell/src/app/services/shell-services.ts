@@ -42,6 +42,26 @@ export type ShellAuthPhase =
   | 'unauthenticated'
   | 'failed';
 
+/**
+ * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+ * start payload. The orchestration handles backend start request +
+ * cookie write + authz/me + Redux dispatch + storage persist.
+ */
+export interface ShellEnterImpersonationPayload {
+  targetUserId: number;
+  targetSubject: string;
+  targetEmail?: string;
+  reason: string;
+}
+
+export type ShellExitImpersonationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: 'session-lost' | 'admin-expired' | 'revoke-failed' | 'restore-failed';
+      message?: string;
+    };
+
 export interface ShellAuthService {
   getToken(): string | null;
   onTokenChange(listener: AuthListener): () => void;
@@ -57,6 +77,19 @@ export interface ShellAuthService {
   getPhase(): ShellAuthPhase;
   /** Bumps on logout / re-login; lets MFEs invalidate cached Promises. */
   getEpoch(): number;
+  /**
+   * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+   * start an impersonation session. Drives the FSM through
+   * {@code refreshing → transportReady} atomically so the target
+   * identity reaches PermissionProvider / SSE consumers in one swap.
+   */
+  enterImpersonationSession(payload: ShellEnterImpersonationPayload): Promise<void>;
+  /**
+   * PR-C2 audit-complete stop (Codex iter-3 invariant: revoke-first).
+   */
+  exitImpersonationSession(): Promise<ShellExitImpersonationResult>;
+  /** PR-C2 nested-impersonation guard. */
+  isImpersonating(): boolean;
 }
 
 export interface ShellTelemetryService {
@@ -97,6 +130,12 @@ export type ShellServicesInit = {
   isTransportReady?: () => boolean;
   getAuthPhase?: () => ShellAuthPhase;
   getAuthEpoch?: () => number;
+  /** PR-C2 impersonation enter orchestration. */
+  enterImpersonationSession?: (payload: ShellEnterImpersonationPayload) => Promise<void>;
+  /** PR-C2 impersonation audit-complete stop. */
+  exitImpersonationSession?: () => Promise<ShellExitImpersonationResult>;
+  /** PR-C2 nested-impersonation guard. */
+  isImpersonating?: () => boolean;
 };
 
 const authListeners = new Set<AuthListener>();
@@ -150,6 +189,17 @@ let authReadyImpl: () => Promise<AuthReadyResult> = () =>
 let isTransportReadyImpl: () => boolean = () => false;
 let getAuthPhaseImpl: () => ShellAuthPhase = () => 'initializing';
 let getAuthEpochImpl: () => number = () => 0;
+let enterImpersonationSessionImpl: (
+  payload: ShellEnterImpersonationPayload,
+) => Promise<void> = () =>
+  Promise.reject(new Error('Shell services not configured for impersonation'));
+let exitImpersonationSessionImpl: () => Promise<ShellExitImpersonationResult> = () =>
+  Promise.resolve({
+    ok: false as const,
+    reason: 'session-lost' as const,
+    message: 'Shell services not configured for impersonation',
+  });
+let isImpersonatingImpl: () => boolean = () => false;
 
 const emitTokenChange = (token: string | null) => {
   const normalizedToken = normalizeToken(token);
@@ -177,6 +227,11 @@ export const configureShellServices = (init: ShellServicesInit): void => {
   if (init.isTransportReady) isTransportReadyImpl = init.isTransportReady;
   if (init.getAuthPhase) getAuthPhaseImpl = init.getAuthPhase;
   if (init.getAuthEpoch) getAuthEpochImpl = init.getAuthEpoch;
+  // PR-C2 impersonation orchestration wires.
+  if (init.enterImpersonationSession)
+    enterImpersonationSessionImpl = init.enterImpersonationSession;
+  if (init.exitImpersonationSession) exitImpersonationSessionImpl = init.exitImpersonationSession;
+  if (init.isImpersonating) isImpersonatingImpl = init.isImpersonating;
 
   unsubscribeAuthSource?.();
   if (init.subscribeAuthToken) {
@@ -224,6 +279,10 @@ function createShellServices(queryClient: QueryClient | null): ShellServices {
       isTransportReady: () => isTransportReadyImpl(),
       getPhase: () => getAuthPhaseImpl(),
       getEpoch: () => getAuthEpochImpl(),
+      // PR-C2 impersonation orchestration surface.
+      enterImpersonationSession: (payload) => enterImpersonationSessionImpl(payload),
+      exitImpersonationSession: () => exitImpersonationSessionImpl(),
+      isImpersonating: () => isImpersonatingImpl(),
     },
     query: queryClient ?? fallbackQueryClient ?? new QueryClient(),
     telemetry: {

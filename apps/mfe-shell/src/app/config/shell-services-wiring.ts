@@ -22,7 +22,16 @@ import telemetryClient from '../telemetry/telemetry-client';
 import { broadcastAuthState } from '../auth/auth-sync';
 import { isPermitAllMode } from '../auth/auth-config';
 import { mapKeycloakProfile } from '../config/auth-helpers';
-import { setAuthPhase, setKeycloakSession } from '../../features/auth/model/auth.slice';
+import {
+  setAuthPhase,
+  setKeycloakSession,
+  selectIsImpersonating,
+} from '../../features/auth/model/auth.slice';
+import {
+  enterImpersonationOrchestration,
+  exitImpersonationOrchestration,
+  type EnterImpersonationOrchestrationPayload,
+} from './impersonation-orchestration';
 import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
 import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
@@ -179,6 +188,14 @@ configureShellServices({
   isTransportReady: () => store.getState().auth.phase === 'transportReady',
   getAuthPhase: () => store.getState().auth.phase,
   getAuthEpoch: () => store.getState().auth.authEpoch,
+  // User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+  // wire orchestration into the canonical shell-services contract so
+  // {@code getShellServices().auth.enterImpersonationSession(...)} is
+  // callable from both the host shell (ImpersonationBanner) and remote
+  // MFEs (ImpersonateAction in mfe-users).
+  enterImpersonationSession: (payload) => enterImpersonationOrchestration(payload),
+  exitImpersonationSession: () => exitImpersonationOrchestration(),
+  isImpersonating: () => selectIsImpersonating(store.getState()),
 });
 
 // Phase 2 PR-HTTP-3: wire the same auth-ready bridge into
@@ -218,6 +235,16 @@ registerAuthReadyResolver(() => createAuthReadyPromise());
 registerRefreshHandler(async (): Promise<RefreshResult> => {
   if (typeof window === 'undefined') {
     return { ok: false, reason: 'no-window' };
+  }
+  // PR-C2 (Codex AGREE thread `019e109c` iter-1 + iter-4): the
+  // single-flight 401 refresh handler MUST NOT call
+  // keycloak.updateToken while an impersonation session is active.
+  // Otherwise the broker exchanged token would be overwritten with
+  // the admin token mid-session, breaking the FSM and audit chain.
+  // The broker has its own TTL and the impersonation-expired
+  // listener observes the 403 SESSION_EXPIRED event when it fires.
+  if (selectIsImpersonating(store.getState())) {
+    return { ok: false, reason: 'impersonation-active' };
   }
   const kc = (window as Record<string, unknown>).__keycloak as
     | {
@@ -326,6 +353,13 @@ registerRefreshHandler(async (): Promise<RefreshResult> => {
   }
 });
 
+/* ------------------------------------------------------------------ */
+/*  User Impersonation v1 PR-C2 — orchestration extracted to            */
+/*  ./impersonation-orchestration.ts so unit tests can exercise the    */
+/*  enter / exit logic without pulling Module Federation remote        */
+/*  imports from this wiring module.                                    */
+/* ------------------------------------------------------------------ */
+
 /* ---- Wire remote module shell-services ---- */
 
 export const wireRemoteShellServices = () => {
@@ -362,6 +396,40 @@ export const wireRemoteShellServices = () => {
       isTransportReady: () => store.getState().auth.phase === 'transportReady',
       getPhase: () => store.getState().auth.phase,
       getEpoch: () => store.getState().auth.authEpoch,
+      /**
+       * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c`
+       * iter-4): start an impersonation session against the supplied
+       * target user. Drives the FSM through {@code refreshing →
+       * transportReady} so concurrent protected requests pause until
+       * the broker token + target authz snapshot land in Redux.
+       */
+      enterImpersonationSession: (payload: EnterImpersonationOrchestrationPayload) =>
+        enterImpersonationOrchestration(payload),
+      /**
+       * PR-C2 audit-complete stop (Codex iter-3 invariant: revoke-first;
+       * on revoke failure no state mutation, banner shows retry).
+       */
+      exitImpersonationSession: () => exitImpersonationOrchestration(),
+      /** PR-C2 quick gate for ImpersonateAction nested-impersonation guard. */
+      isImpersonating: () => selectIsImpersonating(store.getState()),
+      /**
+       * PR-C2 token change subscription. SSE consumers (mfe-audit
+       * useAuditLiveStream) re-open their stream when the broker
+       * token swap arrives. Listener fires immediately with the
+       * current token (consistent with the {@code subscribeAuthToken}
+       * pattern in the legacy host bridge).
+       */
+      onTokenChange: (listener: (token: string | null) => void) => {
+        let previous = store.getState().auth.token ?? null;
+        listener(previous);
+        return store.subscribe(() => {
+          const next = store.getState().auth.token ?? null;
+          if (next !== previous) {
+            previous = next;
+            listener(next);
+          }
+        });
+      },
     },
   };
   const remotes: Array<{

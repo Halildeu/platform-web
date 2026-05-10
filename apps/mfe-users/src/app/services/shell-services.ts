@@ -35,6 +35,27 @@ export type RemoteShellAuthPhase =
   | 'unauthenticated'
   | 'failed';
 
+/**
+ * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+ * orchestration types mirrored from the shell so this MFE can call
+ * {@code getShellServices().auth.enterImpersonationSession(...)} with
+ * full type safety from {@code ImpersonateAction.tsx}.
+ */
+export interface ShellEnterImpersonationPayload {
+  targetUserId: number;
+  targetSubject: string;
+  targetEmail?: string;
+  reason: string;
+}
+
+export type ShellExitImpersonationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: 'session-lost' | 'admin-expired' | 'revoke-failed' | 'restore-failed';
+      message?: string;
+    };
+
 export type RemoteShellServices = {
   notify: { push: (entry: ShellNotificationEntry) => void };
   telemetry: { emit: (event: ShellTelemetryEvent) => void };
@@ -53,6 +74,14 @@ export type RemoteShellServices = {
     isTransportReady: () => boolean;
     getPhase: () => RemoteShellAuthPhase;
     getEpoch: () => number;
+    /** PR-C2 impersonation enter orchestration. */
+    enterImpersonationSession: (payload: ShellEnterImpersonationPayload) => Promise<void>;
+    /** PR-C2 impersonation audit-complete stop. */
+    exitImpersonationSession: () => Promise<ShellExitImpersonationResult>;
+    /** PR-C2 nested-impersonation guard. */
+    isImpersonating: () => boolean;
+    /** PR-C2 token swap subscription (SSE consumers reconnect on broker swap). */
+    onTokenChange: (listener: (token: string | null) => void) => () => void;
   };
 };
 
@@ -87,6 +116,19 @@ const createNoopServices = (): RemoteShellServices => ({
     isTransportReady: () => false,
     getPhase: () => 'initializing' as const,
     getEpoch: () => 0,
+    // PR-C2 fallback: standalone-dev mode rejects impersonation
+    // start so the form surfaces an actionable error rather than
+    // hanging on a no-op promise.
+    enterImpersonationSession: () =>
+      Promise.reject(new Error('Shell services not yet configured (impersonation)')),
+    exitImpersonationSession: () =>
+      Promise.resolve<ShellExitImpersonationResult>({
+        ok: false,
+        reason: 'session-lost',
+        message: 'Shell services not yet configured (impersonation)',
+      }),
+    isImpersonating: () => false,
+    onTokenChange: () => () => undefined,
   },
 });
 
