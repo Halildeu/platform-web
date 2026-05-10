@@ -313,7 +313,18 @@ const Surface3DInner = React.forwardRef<
 
   // Stratified row × column sample for the hidden a11y data table
   // (40K vertex grid would defeat the WebGL claim with 40K <tr>s).
-  const a11ySample = useMemo(() => sampleSurfaceGridA11y(data, dataShape, 1000), [data, dataShape]);
+  // Codex thread `019e10d7` iter-3: gate the sampler on `isEmpty`
+  // because `sampleSurfaceGridA11y` enforces the
+  // `rows * cols === data.length` invariant — a stale `dataShape`
+  // (e.g. `[2, 2]` left over after `data` cleared) would throw
+  // before the empty-state branch could render.
+  const a11ySample = useMemo(
+    () =>
+      isEmpty
+        ? { samples: [], sourceCount: 0, sampledCount: 0 }
+        : sampleSurfaceGridA11y(data, dataShape, 1000),
+    [data, dataShape, isEmpty],
+  );
   const a11yTitle = useMemo(
     () =>
       buildSampledCaption(title, {

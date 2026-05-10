@@ -64,6 +64,16 @@ describe('Surface3D — empty / unsupported lifecycle', () => {
     expect(isEChartsGLRegistered()).toBe(false);
   });
 
+  // Codex thread `019e10d7` iter-3: stale `dataShape` (left over after
+  // the consumer cleared `data`) used to throw inside the sampler
+  // before the empty-state branch could render. Wrapper now gates
+  // the sampler on `isEmpty`.
+  it('empty data with stale non-zero dataShape still renders the empty state', () => {
+    render(<Surface3D data={[]} dataShape={[2, 2]} title="Empty + stale shape" />);
+    expect(screen.getByTestId('surface3d-chart-empty')).toBeInTheDocument();
+    expect(allDispatchedOptions()).toHaveLength(0);
+  });
+
   it('WebGL unsupported renders the unsupported div with data-reason', async () => {
     mockedDetect.mockReturnValue({
       supported: false,

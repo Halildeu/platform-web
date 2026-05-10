@@ -80,6 +80,17 @@ describe('Lines3D — empty / unsupported lifecycle', () => {
     expect(isEChartsGLRegistered()).toBe(false);
   });
 
+  // Codex thread `019e10d7` iter-3: a single path with zero coords
+  // used to slip past the gate (data.length > 0) and reach the
+  // option builder, leaving min/max at Infinity / -Infinity. Wrapper
+  // now derives emptiness from the total coord count.
+  it('paths with zero coords are treated as empty (no GL load, no series dispatch)', () => {
+    render(<Lines3D data={[{ coords: [] }]} title="All-empty path" />);
+    expect(screen.getByTestId('lines3d-chart-empty')).toBeInTheDocument();
+    expect(allDispatchedOptions()).toHaveLength(0);
+    expect(isEChartsGLRegistered()).toBe(false);
+  });
+
   it('WebGL unsupported renders the unsupported div with data-reason', async () => {
     mockedDetect.mockReturnValue({
       supported: false,

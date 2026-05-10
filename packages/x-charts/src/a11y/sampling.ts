@@ -109,7 +109,11 @@ export function sampleSurfaceGridA11y(
 export interface Lines3DSamplerPath {
   coords: ReadonlyArray<readonly [number, number, number]>;
   label?: string;
-  value?: number;
+  // NOTE: a per-path `value` field was considered but rejected for
+  // P1b (Codex thread `019e10d7` iter-3): wiring it through the
+  // sampler without also encoding it in the option / tooltip /
+  // click payload would be an inconsistent half-API. Per-coord
+  // metrics flow through z.
 }
 
 /**
@@ -144,22 +148,29 @@ export function sampleLines3DA11y(
     return { samples, sourceCount, sampledCount: samples.length };
   }
 
-  // Distribute the cap roughly evenly across paths; per-path budget
-  // includes the mandatory first + last samples, so middle stride is
-  // computed from the remainder.
-  const perPath = Math.max(2, Math.floor(cap / paths.length));
+  // Distribute the cap roughly evenly across non-empty paths;
+  // per-path budget includes the mandatory first + last samples, so
+  // middle stride is computed from the remainder.
+  //
+  // Codex iter-3 hardening: when the non-empty path count exceeds
+  // the cap (1001 paths × 1 coord, cap 1000), the start-marker push
+  // alone would breach the contract — every push site early-breaks
+  // once `samples.length === cap`. Comprehensive cap enforcement
+  // matters because the wrapper comment promises `sampledCount <= cap`.
+  let nonEmptyPathCount = 0;
+  for (const p of paths) {
+    if (p.coords.length > 0) nonEmptyPathCount++;
+  }
+  const perPath = nonEmptyPathCount > 0 ? Math.max(2, Math.floor(cap / nonEmptyPathCount)) : 2;
   const samples: A11ySample[] = [];
-  for (let i = 0; i < paths.length; i++) {
+  outer: for (let i = 0; i < paths.length; i++) {
     const p = paths[i];
     const cs = p.coords;
     if (cs.length === 0) continue;
     const baseLabel = p.label ?? `Path ${i + 1}`;
-    const fallbackZ = (idx: number): number => p.value ?? cs[idx][2];
-    // First (always preserved).
-    samples.push({
-      label: `${baseLabel} start`,
-      value: fallbackZ(0),
-    });
+    // First (always attempted; cap may already be exhausted).
+    if (samples.length >= cap) break outer;
+    samples.push({ label: `${baseLabel} start`, value: cs[0][2] });
     if (cs.length === 1) continue;
     // Middle stride if budget permits. Use `ceil` for the divisor so
     // the resulting sample count stays under `perPath`; otherwise a
@@ -169,15 +180,14 @@ export function sampleLines3DA11y(
       const middleBudget = perPath - 2;
       const stride = Math.max(1, Math.ceil((cs.length - 2) / middleBudget));
       for (let j = stride; j < cs.length - 1; j += stride) {
+        if (samples.length >= cap) break outer;
         const [x, y, z] = cs[j];
         samples.push({ label: `${baseLabel} #${j} (x=${x}, y=${y})`, value: z });
       }
     }
-    // Last (always preserved when path has >1 coord).
-    samples.push({
-      label: `${baseLabel} end`,
-      value: fallbackZ(cs.length - 1),
-    });
+    // Last (always preserved when budget allows; path has >1 coord).
+    if (samples.length >= cap) break outer;
+    samples.push({ label: `${baseLabel} end`, value: cs[cs.length - 1][2] });
   }
   return { samples, sourceCount, sampledCount: samples.length };
 }

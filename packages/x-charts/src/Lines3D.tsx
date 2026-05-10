@@ -70,10 +70,16 @@ export interface Lines3DPath {
   coords: ReadonlyArray<readonly [number, number, number]>;
   /** Optional path label (used in tooltip + a11y data table). */
   label?: string;
-  /** Optional path metric (overrides per-row z fallback in a11y). */
-  value?: number;
   /** Optional per-path colour override. Falls through to the palette otherwise. */
   color?: string;
+  // NOTE: a `value?: number` field was considered for "path-level
+  // metric" semantics but rejected for P1b — Codex thread
+  // `019e10d7` iter-3 flagged the inconsistency (used only by the
+  // a11y sampler's start/end rows; ignored by middle rows, the
+  // tooltip, and the click payload). A future PR can introduce it
+  // with end-to-end wiring (a11y row + tooltip + click datum +
+  // option metadata). For now Lines3D consumers route per-coord
+  // metrics through the z dimension.
 }
 
 export interface Lines3DProps extends AccessControlledProps {
@@ -238,7 +244,16 @@ const Lines3DInner = React.forwardRef<
   forwardedRef,
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
-  const isEmpty = !data || data.length === 0;
+  // Codex thread `019e10d7` iter-3: emptiness must include total
+  // coord count, not just `paths.length`. Otherwise `data=[{coords:
+  // []}]` slips past the gate, the option builder runs, and
+  // `min/max` end up `Infinity / -Infinity` — invalid visualMap
+  // bounds.
+  const totalCoords = useMemo(
+    () => (data ?? []).reduce((acc, p) => acc + p.coords.length, 0),
+    [data],
+  );
+  const isEmpty = !data || data.length === 0 || totalCoords === 0;
   const fmt = valueFormatter ?? formatCompact;
 
   const gl = useRequiredEChartsGL({ enabled: !isEmpty });
@@ -314,11 +329,21 @@ const Lines3DInner = React.forwardRef<
   // Per-path stride sample for the hidden a11y data table (first /
   // last preserved per path; cap shared across all paths). Codex
   // iter-2: caption reports the real sample count, not the cap.
+  // Codex iter-3: drop the `value` per-path field — `Lines3DPath.value`
+  // was an inconsistent half-wired API and has been removed for P1b.
   const a11ySamplerInput = useMemo(
-    () => data.map((p) => ({ coords: p.coords, label: p.label, value: p.value })),
+    () => (data ?? []).map((p) => ({ coords: p.coords, label: p.label })),
     [data],
   );
-  const a11ySample = useMemo(() => sampleLines3DA11y(a11ySamplerInput, 1000), [a11ySamplerInput]);
+  // Gate the sampler on `isEmpty` so a `data=[{coords: []}]` payload
+  // doesn't reach the option builder with a degenerate distribution.
+  const a11ySample = useMemo(
+    () =>
+      isEmpty
+        ? { samples: [], sourceCount: 0, sampledCount: 0 }
+        : sampleLines3DA11y(a11ySamplerInput, 1000),
+    [a11ySamplerInput, isEmpty],
+  );
   const a11yTitle = useMemo(
     () =>
       buildSampledCaption(title, {

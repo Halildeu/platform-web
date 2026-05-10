@@ -131,6 +131,31 @@ describe('sampleLines3DA11y', () => {
     expect(out.samples).toHaveLength(1);
     expect(out.samples[0].label).toMatch(/Beta/);
   });
+
+  // Codex thread `019e10d7` iter-3 hardening — high-path-count cap
+  // pressure: 1001 single-point paths must NOT exceed the 1000 cap.
+  it('enforces sampledCount <= cap when path count exceeds cap (1001 x 1)', () => {
+    const paths = Array.from({ length: 1001 }, (_, i) => ({
+      coords: [[i, 0, 0]] as ReadonlyArray<readonly [number, number, number]>,
+    }));
+    const out = sampleLines3DA11y(paths, 1000);
+    expect(out.sourceCount).toBe(1001);
+    expect(out.sampledCount).toBeLessThanOrEqual(1000);
+  });
+
+  // 600 paths × 2 coords → naive impl would push 1200 (start + end
+  // per path); cap enforcement must trim to 1000.
+  it('enforces sampledCount <= cap when paths*2 exceeds cap (600 x 2)', () => {
+    const paths = Array.from({ length: 600 }, (_, i) => ({
+      coords: [
+        [i, 0, 0],
+        [i, 1, 1],
+      ] as ReadonlyArray<readonly [number, number, number]>,
+    }));
+    const out = sampleLines3DA11y(paths, 1000);
+    expect(out.sourceCount).toBe(1200);
+    expect(out.sampledCount).toBeLessThanOrEqual(1000);
+  });
 });
 
 describe('buildSampledCaption', () => {
