@@ -274,6 +274,60 @@ export function buildScatter3DOption(input: BuildScatter3DOptionInput): EChartsO
 }
 
 /* ------------------------------------------------------------------ */
+/*  Pure click-event factory (Codex thread 019e10f8 P1d unification)   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Raw ECharts click params subset that {@link buildScatter3DClickEvent}
+ * cares about. Narrowed for unit testability.
+ */
+export interface Scatter3DRawClickParams {
+  value?: number[];
+  name?: string;
+  dataIndex?: number;
+}
+
+/**
+ * Build the canonical `ChartClickEvent` payload for a Scatter3D
+ * data-point click. Pure function: derives `value` / `label` from the
+ * consumer-supplied `data[dataIndex]` (source-of-truth — same Codex
+ * iter-2 P1c lesson: `params.value[2]` is `0` for value-less datums
+ * and would falsely emit `value=0` top-level).
+ *
+ * Returns `null` when the params reference an unknown / out-of-bounds
+ * `dataIndex` (defensive guard; matches Globe.buildGlobeClickEvent
+ * pattern from P1c iter-4/iter-5).
+ *
+ * Lifted out of `Scatter3DInner.handleClick` (Faz 21.11 P1d) so the
+ * click contract can be unit-tested without React mount.
+ */
+export function buildScatter3DClickEvent(
+  data: Scatter3DDataPoint[],
+  params: Scatter3DRawClickParams,
+): ChartClickEvent | null {
+  const dataIndex = params.dataIndex ?? -1;
+  if (dataIndex < 0 || dataIndex >= data.length) return null;
+  const point = data[dataIndex];
+  // Source-of-truth: prefer `point.value`, fall back to `point.z`
+  // (matches the visualMap dimension + a11y data table behaviour).
+  const sourceValue = point.value ?? point.z;
+  return {
+    datum: {
+      x: point.x,
+      y: point.y,
+      z: point.z,
+      value: sourceValue,
+      label: point.label,
+      dataIndex,
+      chartType: 'scatter3d',
+      seriesName: 'Scatter3D',
+    },
+    value: sourceValue,
+    label: point.label,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -333,28 +387,10 @@ const Scatter3DInner = React.forwardRef<
   const handleClick = useCallback(
     (params: unknown) => {
       if (!onDataPointClick) return;
-      const p = params as { value?: number[]; name?: string; dataIndex?: number };
-      const [x, y, z, v] = p.value ?? [];
-      const point = data[p.dataIndex ?? -1];
-      // Canonical `ChartClickEvent` shape: { datum, value?, label? }
-      // Codex thread `019e10ab` iter-2 caught the original payload's
-      // top-level `chartType`/`seriesIndex`/`dataIndex` fields which
-      // are NOT in the `ChartClickEvent` type — they belonged on
-      // `datum`. Cross-filter wrapper reads from `datum` exclusively.
-      onDataPointClick({
-        datum: {
-          x,
-          y,
-          z,
-          value: v ?? 0,
-          label: point?.label,
-          dataIndex: p.dataIndex ?? -1,
-          chartType: 'scatter3d',
-          seriesName: 'Scatter3D',
-        },
-        value: v ?? 0,
-        label: point?.label,
-      });
+      // Faz 21.11 P1d — delegate to the pure factory. Same pattern
+      // Globe.handleClick (P1c iter-4) follows; thin React adapter.
+      const event = buildScatter3DClickEvent(data, params as Scatter3DRawClickParams);
+      if (event) onDataPointClick(event);
     },
     [onDataPointClick, data],
   );

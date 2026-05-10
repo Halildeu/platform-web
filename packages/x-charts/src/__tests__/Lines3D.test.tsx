@@ -30,7 +30,7 @@ vi.mock('../renderers/detectWebGLCapability', () => ({
 
 const mockedDetect = vi.mocked(detectModule.detectWebGLCapability);
 
-import { Lines3D, buildLines3DOption } from '../Lines3D';
+import { Lines3D, buildLines3DOption, buildLines3DClickEvent } from '../Lines3D';
 import type { Lines3DPath } from '../Lines3D';
 import { resetEChartsGLRegistration, isEChartsGLRegistered } from '../renderers/gl';
 import { allDispatchedOptions, resetEChartsMock } from './fixtures/echarts-mock';
@@ -192,5 +192,52 @@ describe('buildLines3DOption — pure option builder', () => {
     const out = tooltip.formatter({ value: [0, 0, 0], seriesIndex: 0 });
     expect(out).not.toMatch(/<img/);
     expect(out).toMatch(/&lt;img/);
+  });
+});
+
+// Faz 21.11 P1d — pure click-event factory unit tests.
+describe('buildLines3DClickEvent — pure click event factory', () => {
+  const paths: Lines3DPath[] = [
+    {
+      coords: [
+        [0, 0, 0],
+        [1, 1, 1],
+        [2, 2, 4],
+      ],
+      label: 'Alpha',
+    },
+    {
+      coords: [
+        [0, 0, 0],
+        [1, 0, 2],
+      ],
+      label: 'Beta',
+    },
+  ];
+
+  it('emits canonical event with z as value + path label', () => {
+    const event = buildLines3DClickEvent(paths, { seriesIndex: 0, dataIndex: 2 });
+    expect(event?.value).toBe(4);
+    expect(event?.datum.x).toBe(2);
+    expect(event?.datum.y).toBe(2);
+    expect(event?.datum.z).toBe(4);
+    expect(event?.datum.pathLabel).toBe('Alpha');
+    expect(event?.datum.pathIndex).toBe(0);
+    expect(event?.datum.seriesName).toBe('Alpha');
+    expect(event?.datum.chartType).toBe('lines3d');
+    expect(event?.label).toBe('Alpha');
+  });
+
+  it('falls back to "Path N" label when path.label undefined', () => {
+    const noLabel: Lines3DPath[] = [{ coords: [[0, 0, 5]] }];
+    const event = buildLines3DClickEvent(noLabel, { seriesIndex: 0, dataIndex: 0 });
+    expect(event?.datum.seriesName).toBe('Path 1');
+    expect(event?.datum.pathLabel).toBeUndefined();
+    expect(event?.label).toBeUndefined();
+  });
+
+  it('returns null when seriesIndex / dataIndex are out-of-bounds (defensive)', () => {
+    expect(buildLines3DClickEvent(paths, { seriesIndex: 999 })).toBeNull();
+    expect(buildLines3DClickEvent(paths, { seriesIndex: 0, dataIndex: 999 })).toBeNull();
   });
 });
