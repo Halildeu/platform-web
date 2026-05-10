@@ -178,8 +178,11 @@ export function evaluateBenchmarkArtifact(input) {
   // PR mode = fail-closed (we have nothing to regression-compare against).
   // workflow_dispatch mode = absolute-only — let the run continue but
   // tag every case so the comment is honest about the missing diff.
-  const baselineMissing = !baseline;
-  const baselineMissingFatal = baselineMissing && mode === 'pr';
+  //
+  // The `effectiveBaseline*` block below subsumes both the "no
+  // baseline at all" and "present-but-unusable" paths, so we no
+  // longer need separate `baselineMissing` / `baselineMissingFatal`
+  // locals; they were dropped in iter-4 cleanup.
 
   // Codex iter-3 P2: validate the baseline itself — a baseline with
   // a different schemaVersion or runner profile would silently
