@@ -36,6 +36,19 @@ vi.mock('../../../../features/auth/lib/permissions.constants', () => ({
 
 vi.mock('../../../../features/auth/model/auth.slice', () => ({
   logout: vi.fn(() => ({ type: 'auth/logout' })),
+  selectIsImpersonating: vi.fn(() => false),
+}));
+
+vi.mock('../../../store/store', () => ({
+  store: {
+    getState: () => ({ auth: { token: null, impersonation: { status: 'inactive' } } }),
+    dispatch: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  },
+}));
+
+vi.mock('../../../config/impersonation-orchestration', () => ({
+  dropBrokerCookieBestEffort: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('../../../auth/auth-config', () => ({

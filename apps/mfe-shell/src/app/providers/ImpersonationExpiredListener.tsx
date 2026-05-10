@@ -30,10 +30,14 @@ import { store } from '../store/store';
 import { markImpersonationExpired } from '../../features/auth/model/auth.slice';
 import {
   clearImpersonationOnFailurePath,
+  readImpersonationExchangedToken,
   readImpersonationOriginalAdminExpiresAt,
   readImpersonationOriginalToken,
 } from '../layout/impersonation-storage';
-import { recoverFromLifecycleExpiry } from '../config/impersonation-orchestration';
+import {
+  dropBrokerCookieBestEffort,
+  recoverFromLifecycleExpiry,
+} from '../config/impersonation-orchestration';
 import { queryClient } from '../config/query-config';
 
 const INSTALL_FLAG = '__impersonationExpiredListenerInstalled__';
@@ -104,6 +108,18 @@ const handleExpired = async (
     // admin session. Drop every cached target query so the post-redirect
     // login screen does not flash stale impersonated data, then clear
     // metadata and redirect.
+    //
+    // Iter-6 P1 absorb (Codex thread `019e109c`): also drop the broker
+    // httpOnly cookie before clearing metadata. Without this DELETE the
+    // gateway keeps an impersonation cookie alive past the /login
+    // redirect and the next request after re-auth would still pin
+    // the target identity until the cookie expired naturally. Prefer
+    // the in-memory broker token (Redux state.token) and fall back to
+    // the persisted exchanged token captured at start.
+    const reduxBrokerToken = store.getState().auth.token ?? null;
+    const persistedBrokerToken = readImpersonationExchangedToken();
+    const brokerToken = reduxBrokerToken ?? persistedBrokerToken ?? null;
+    await dropBrokerCookieBestEffort(brokerToken);
     await safeClearQueryCache();
     clearImpersonationOnFailurePath();
     redirectToLoginExpired();
@@ -121,6 +137,17 @@ const handleExpired = async (
       // /authz/me 5xx, etc.). The broker session is already dead
       // either way — push the user to /login so they can
       // re-authenticate cleanly.
+      //
+      // Iter-6 P1 absorb: drop the broker cookie defensively here
+      // too. {@code recoverFromLifecycleExpiry} already attempts the
+      // drop in its happy path, but a restore failure may leave the
+      // gateway holding the impersonation cookie when the admin
+      // restore /auth/cookie write rejected. Best-effort retry from
+      // the listener catches that residue.
+      const reduxBrokerToken = store.getState().auth.token ?? null;
+      const persistedBrokerToken = readImpersonationExchangedToken();
+      const brokerToken = reduxBrokerToken ?? persistedBrokerToken ?? null;
+      await dropBrokerCookieBestEffort(brokerToken);
       await safeClearQueryCache();
       clearImpersonationOnFailurePath();
       redirectToLoginExpired();
@@ -129,6 +156,11 @@ const handleExpired = async (
     if (process.env.NODE_ENV !== 'production') {
       console.warn('[shell] impersonation-expired listener recovery failed', err);
     }
+    // Iter-6 P1 absorb: same broker cookie drop on the catch path.
+    const reduxBrokerToken = store.getState().auth.token ?? null;
+    const persistedBrokerToken = readImpersonationExchangedToken();
+    const brokerToken = reduxBrokerToken ?? persistedBrokerToken ?? null;
+    await dropBrokerCookieBestEffort(brokerToken);
     await safeClearQueryCache();
     clearImpersonationOnFailurePath();
     redirectToLoginExpired();

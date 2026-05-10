@@ -264,13 +264,28 @@ describe('impersonation-orchestration (PR-C2)', () => {
         originalAdminExpiresAt: Date.now() + 60_000,
       },
     });
-    const { dispatched } = setupMocks(initial);
+    const { dispatched, apiDelete } = setupMocks(initial);
+    apiDelete.mockResolvedValueOnce({ data: null, status: 204 });
 
     const orch = await import('./impersonation-orchestration');
     const result = await orch.exitImpersonationOrchestration();
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('session-lost');
+    // Iter-6 P1 absorb (Codex thread `019e109c`): broker cookie
+    // drop fires before metadata teardown on the session-lost
+    // early exit. Without it the gateway would keep an
+    // impersonation cookie after exit while {@code sessionId} is
+    // gone and we cannot revoke server-side.
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiDelete).toHaveBeenCalledWith(
+      '/auth/cookie',
+      expect.objectContaining({
+        __skipAuthReadyGate: true,
+        __skipRefreshOn401: true,
+        headers: { Authorization: 'Bearer broker-token' },
+      }),
+    );
     expect(dispatched.find((a) => a.type === 'auth/markImpersonationExpired')).toBeDefined();
   });
 
@@ -286,14 +301,69 @@ describe('impersonation-orchestration (PR-C2)', () => {
         originalAdminExpiresAt: Date.now() - 1_000,
       },
     });
-    const { dispatched } = setupMocks(initial);
+    const { dispatched, apiDelete } = setupMocks(initial);
+    apiDelete.mockResolvedValueOnce({ data: null, status: 204 });
 
     const orch = await import('./impersonation-orchestration');
     const result = await orch.exitImpersonationOrchestration();
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('admin-expired');
+    // Iter-6 P1 absorb: same broker-cookie-drop contract on the
+    // admin-expired branch. Restore is impossible (admin token
+    // already past expiry), but the gateway must still drop the
+    // impersonation cookie so the next non-impersonation request
+    // does not authenticate as the target identity.
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiDelete).toHaveBeenCalledWith(
+      '/auth/cookie',
+      expect.objectContaining({
+        __skipAuthReadyGate: true,
+        __skipRefreshOn401: true,
+        headers: { Authorization: 'Bearer broker-token' },
+      }),
+    );
     expect(dispatched.find((a) => a.type === 'auth/markImpersonationExpired')).toBeDefined();
+  });
+
+  it('dropBrokerCookieBestEffort swallows network rejections (Codex iter-6 P1)', async () => {
+    const initial = buildState({ token: 'broker-token' });
+    const { apiDelete } = setupMocks(initial);
+    apiDelete.mockRejectedValueOnce(new Error('network down'));
+
+    const orch = await import('./impersonation-orchestration');
+    // No-throw assertion — the helper is best-effort and must not
+    // bubble exceptions to caller. Without the swallow, every
+    // failure path that uses the helper (logout, listener,
+    // exit-orchestration session-lost / admin-expired) would crash
+    // mid-cleanup.
+    await expect(orch.dropBrokerCookieBestEffort('broker-token')).resolves.toBeUndefined();
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiDelete).toHaveBeenCalledWith(
+      '/auth/cookie',
+      expect.objectContaining({
+        __skipAuthReadyGate: true,
+        __skipRefreshOn401: true,
+        headers: { Authorization: 'Bearer broker-token' },
+      }),
+    );
+  });
+
+  it('dropBrokerCookieBestEffort omits Authorization header when broker token absent (logout path)', async () => {
+    const initial = buildState({ token: null });
+    const { apiDelete } = setupMocks(initial);
+    apiDelete.mockResolvedValueOnce({ data: null, status: 204 });
+
+    const orch = await import('./impersonation-orchestration');
+    await orch.dropBrokerCookieBestEffort(null);
+
+    // Logout calls the helper with no broker token in hand; the
+    // implicit cookie credential is enough for the gateway to
+    // identify and drop the impersonation cookie. The contract:
+    // never attach a phantom {@code Bearer null} header.
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    const cfg = apiDelete.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined;
+    expect(cfg?.headers).toBeUndefined();
   });
 
   /**
@@ -392,6 +462,7 @@ describe('impersonation-orchestration (PR-C2)', () => {
       },
     });
     const { dispatched, apiPost, apiDelete } = setupMocks(initial);
+    apiDelete.mockResolvedValueOnce({ data: null, status: 204 });
 
     const orch = await import('./impersonation-orchestration');
     const result = await orch.recoverFromLifecycleExpiry();
@@ -399,7 +470,19 @@ describe('impersonation-orchestration (PR-C2)', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('admin-expired');
     expect(apiPost).not.toHaveBeenCalled();
-    expect(apiDelete).not.toHaveBeenCalled();
+    // Iter-6 P1 absorb (Codex thread `019e109c`): broker cookie
+    // drop now fires on the admin-expired early exit too — gateway
+    // must not retain an impersonation cookie after metadata
+    // teardown even when restore is impossible.
+    expect(apiDelete).toHaveBeenCalledTimes(1);
+    expect(apiDelete).toHaveBeenCalledWith(
+      '/auth/cookie',
+      expect.objectContaining({
+        __skipAuthReadyGate: true,
+        __skipRefreshOn401: true,
+        headers: { Authorization: 'Bearer broker-token' },
+      }),
+    );
     expect(dispatched.find((a) => a.type === 'auth/markImpersonationExpired')).toBeDefined();
   });
 

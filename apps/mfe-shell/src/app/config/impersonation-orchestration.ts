@@ -64,6 +64,54 @@ export type ExitImpersonationResult =
       message?: string;
     };
 
+/**
+ * PR-C2 iter-6 P1 absorb (Codex thread `019e109c`): broker httpOnly
+ * cookie drop helper, callable on every failure / logout path that
+ * tears down impersonation metadata. Iter-5 added the cookie drop
+ * inside {@link recoverFromLifecycleExpiry} only; iter-6 review
+ * surfaced 4 additional paths where the broker cookie was leaking:
+ *
+ * <ol>
+ *   <li>{@code ImpersonationExpiredListener} admin-invalid branch
+ *       (cached admin token gone or expired — recovery cannot run,
+ *       /login redirect fires).</li>
+ *   <li>{@code exitImpersonationOrchestration} {@code session-lost}
+ *       branch (sessionId missing in store + persisted).</li>
+ *   <li>{@code exitImpersonationOrchestration} {@code admin-expired}
+ *       branch (cached admin token + expiry already past).</li>
+ *   <li>{@code UserMenuDropdown} logout handler when impersonation is
+ *       still active at logout time.</li>
+ * </ol>
+ *
+ * <p>Best-effort semantics: any rejection is swallowed because the
+ * cookie may already be gone (404), the network may be flaky, or the
+ * broker token itself may be expired (401 from the gateway). The
+ * caller's primary task — clear metadata + redirect — must continue
+ * regardless. Errors are only logged in non-production builds for
+ * forensic visibility.
+ *
+ * <p>The optional {@code brokerToken} argument lets callers attach an
+ * {@code Authorization: Bearer <broker>} header when they still hold
+ * the broker JWT in memory; on the logout path the helper is invoked
+ * without a broker token because Redux has already been torn down,
+ * but the gateway will still drop the cookie via the implicit cookie
+ * credential.
+ */
+export async function dropBrokerCookieBestEffort(brokerToken?: string | null): Promise<void> {
+  try {
+    const cfg: SharedHttpRequestConfig = {
+      __skipAuthReadyGate: true,
+      __skipRefreshOn401: true,
+      ...(brokerToken ? { headers: { Authorization: `Bearer ${brokerToken}` } } : {}),
+    };
+    await api.delete('/auth/cookie', cfg);
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[shell] broker cookie drop best-effort failed (non-fatal)', err);
+    }
+  }
+}
+
 const buildTargetUser = (
   exchangedToken: string,
   authzSnapshot: Record<string, unknown> | null,
@@ -227,6 +275,13 @@ export async function exitImpersonationOrchestration(): Promise<ExitImpersonatio
     state.impersonation.originalAdminExpiresAt;
 
   if (!sessionId) {
+    // Iter-6 P1 absorb (Codex thread `019e109c`): drop the broker
+    // httpOnly cookie before metadata teardown so the gateway no
+    // longer holds an impersonation cookie pointing at a session id
+    // we cannot revoke. {@code state.token} is the broker JWT at
+    // this point (Redux still carries it because exit was triggered
+    // from the banner while impersonation was active).
+    await dropBrokerCookieBestEffort(state.token);
     store.dispatch(markImpersonationExpired({ reason: 'session_lost' }));
     clearImpersonationOnFailurePath();
     return { ok: false, reason: 'session-lost' };
@@ -236,6 +291,12 @@ export async function exitImpersonationOrchestration(): Promise<ExitImpersonatio
     typeof originalAdminExpiresAt !== 'number' ||
     originalAdminExpiresAt <= Date.now()
   ) {
+    // Iter-6 P1 absorb: same broker cookie drop on the admin-expired
+    // branch — restore cannot run, banner will redirect to /login,
+    // but the cookie must still be invalidated server-side so the
+    // next non-impersonation request does not authenticate as the
+    // target user.
+    await dropBrokerCookieBestEffort(state.token);
     store.dispatch(markImpersonationExpired({ reason: 'admin_expired' }));
     clearImpersonationOnFailurePath();
     return { ok: false, reason: 'admin-expired' };
@@ -359,6 +420,11 @@ export async function recoverFromLifecycleExpiry(): Promise<ExitImpersonationRes
   const brokerToken = state.token;
 
   if (!sessionId) {
+    // Iter-6 P1 absorb (Codex thread `019e109c`): drop broker cookie
+    // even on the early-exit fail-closed branches so the gateway
+    // does not retain an impersonation credential after metadata
+    // teardown.
+    await dropBrokerCookieBestEffort(brokerToken);
     store.dispatch(markImpersonationExpired({ reason: 'session_lost' }));
     clearImpersonationOnFailurePath();
     return { ok: false, reason: 'session-lost' };
@@ -368,6 +434,11 @@ export async function recoverFromLifecycleExpiry(): Promise<ExitImpersonationRes
     typeof originalAdminExpiresAt !== 'number' ||
     originalAdminExpiresAt <= Date.now()
   ) {
+    // Iter-6 P1 absorb: same — admin token gone or expired, broker
+    // cookie still has to drop before clearImpersonationOnFailurePath
+    // so the next page load does not see a stale impersonation
+    // cookie tied to a session we can no longer prove ownership of.
+    await dropBrokerCookieBestEffort(brokerToken);
     store.dispatch(markImpersonationExpired({ reason: 'admin_expired' }));
     clearImpersonationOnFailurePath();
     return { ok: false, reason: 'admin-expired' };
@@ -377,19 +448,11 @@ export async function recoverFromLifecycleExpiry(): Promise<ExitImpersonationRes
 
   // Best-effort broker cookie drop. The DELETE may fail (already revoked,
   // network blip); the admin cookie write below overwrites it either way.
+  // Iter-6 P1 absorb: route through the shared helper so every cleanup
+  // path emits the same telemetry shape and shares the swallow-error
+  // contract.
   if (brokerToken) {
-    try {
-      const dropCfg: SharedHttpRequestConfig = {
-        headers: { Authorization: `Bearer ${brokerToken}` },
-        __skipAuthReadyGate: true,
-        __skipRefreshOn401: true,
-      };
-      await api.delete('/auth/cookie', dropCfg);
-    } catch (dropErr) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.debug('[shell] broker cookie drop ignored during lifecycle recovery', dropErr);
-      }
-    }
+    await dropBrokerCookieBestEffort(brokerToken);
   }
 
   let adminAuthzSnapshot: Record<string, unknown> | null =
