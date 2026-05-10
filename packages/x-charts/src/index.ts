@@ -91,6 +91,20 @@ export type { ChartSize } from './chartSize';
 export { registerECharts, echarts } from './renderers/echarts-imports';
 export { useEChartsRenderer } from './renderers/echarts-renderer';
 export type { EChartsRendererOptions, EChartsRendererState } from './renderers/echarts-renderer';
+
+/* Big-data renderer router — Faz 21.11 PR-A0 / PR-A1 / PR-A1.5.
+ * Surface the router types here so chart consumers (and the
+ * design-lab benchmark route) can wire `onRendererFallback` without
+ * deep-importing from `@mfe/x-charts/renderers/types`. */
+export type {
+  RendererMode,
+  RendererBackend,
+  RendererDecision,
+  RendererFallbackEvent,
+  WebGLCapability,
+  CrossFilterCapability,
+  CrossFilterCapabilityEvent,
+} from './renderers/types';
 export { chartSpecToEChartsOption } from './spec/chartSpecToEChartsOption';
 export { validateChartSpec } from './spec/validateChartSpec';
 export type { ChartSpec, ChartType, ChartChannel, ChartEncoding } from './spec/ChartSpec';
@@ -354,3 +368,18 @@ export {
   __getChartsLocaleListenerCountForTests,
 } from './i18n/locale-store';
 export type { NumberFormatOptions, DateFormatOptions } from './i18n/formatters';
+
+/* ------------------------------------------------------------------ */
+/*  Benchmark harness exports — Faz 21.11 PR-A1.6a                     */
+/*                                                                     */
+/*  Benchmark fixtures + the deterministic mulberry32 RNG are exposed  */
+/*  via the dedicated `@mfe/x-charts/benchmark` subpath, NOT via this  */
+/*  main barrel. Importing `<ScatterChart>` from the main barrel must  */
+/*  not drag the fixture generators into the wrapper bundle (CONTRACT  */
+/*  §7 / PR-F2 wrapperOnly observability).                             */
+/*                                                                     */
+/*  Consumers (e.g. design-lab benchmark route):                       */
+/*    import {                                                         */
+/*      generateUniformScatter, BENCHMARK_TIERS                        */
+/*    } from '@mfe/x-charts/benchmark';                                */
+/* ------------------------------------------------------------------ */

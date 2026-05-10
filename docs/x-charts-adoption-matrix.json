@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-05-07T16:15:49.752Z",
-  "totalConsumers": 42,
+  "generatedAt": "2026-05-10T00:14:19.405Z",
+  "totalConsumers": 43,
   "byBucket": {
     "production": 17,
     "test": 3,
-    "demo": 8,
+    "demo": 9,
     "package": 14
   },
   "entries": [
@@ -215,6 +215,29 @@
       ],
       "symbols": [
         "setChartsLocale"
+      ],
+      "kinds": [
+        "ImportDeclaration"
+      ]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/pages/BenchmarkRoute.tsx",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": [
+        "@mfe/x-charts",
+        "@mfe/x-charts/benchmark"
+      ],
+      "symbols": [
+        "BENCHMARK_TIERS",
+        "BenchmarkPoint2D",
+        "BenchmarkTier",
+        "RendererFallbackEvent",
+        "ScatterChart",
+        "downsampleLTTB",
+        "generateClusteredScatter",
+        "generateSpikeScatter",
+        "generateUniformScatter"
       ],
       "kinds": [
         "ImportDeclaration"

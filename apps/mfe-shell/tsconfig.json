@@ -18,7 +18,8 @@
     "paths": {
       "@mfe/i18n-dicts": ["../../packages/i18n-dicts/src"],
       "@mfe/design-system": ["../../packages/design-system/src"],
-      "@mfe/design-system/*": ["../../packages/design-system/src/*"]
+      "@mfe/design-system/*": ["../../packages/design-system/src/*"],
+      "@mfe/x-charts/benchmark": ["../../packages/x-charts/src/performance/benchmark"]
     }
   },
   "include": ["src"]
