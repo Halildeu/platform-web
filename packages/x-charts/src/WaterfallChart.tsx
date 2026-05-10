@@ -26,6 +26,8 @@ import {
   buildResponsiveDataZoom,
 } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
+import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
+import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -143,6 +145,22 @@ export interface WaterfallChartProps extends AccessControlledProps {
    *   color binds to accent[0] (primary tint) when not overridden via `colors.total`.
    */
   accent?: ChartAccentPreference;
+  /**
+   * Faz 21.11 PR-A2b-a11y-other-batch2 — anomaly summary list. When
+   * the chart is rendered with anomaly markers (pair with
+   * `useAnomalySummary({ data })` at the consumer layer), forwards
+   * the summary to `ChartA11yShell` for a polite, debounced
+   * screen-reader announcement summarising the unusual steps.
+   * `anomalySummary.x` is typically the step label (e.g. "Q1
+   * expense"); `formattedY` the raw step value.
+   */
+  anomalySummary?: AnomalySummary[];
+  /**
+   * Optional override of the anomaly announcement template.
+   * Forwarded to `ChartAriaLive.formatAnomalyAnnouncement`.
+   * Default: small EN/TR formatter ("3 outliers detected, ...").
+   */
+  formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
 }
 
 /* ------------------------------------------------------------------ */
@@ -207,6 +225,8 @@ const WaterfallChartInner = React.forwardRef<
     decal: decalPreference = 'auto',
     density: densityPreference = 'auto',
     accent: accentPreference = 'auto',
+    anomalySummary,
+    formatAnomalyAnnouncement,
     ...rest
   },
   forwardedRef,
@@ -639,6 +659,8 @@ const WaterfallChartInner = React.forwardRef<
       height={height}
       testId="waterfall-chart"
       setRefs={setRefs}
+      anomalySummary={anomalySummary}
+      formatAnomalyAnnouncement={formatAnomalyAnnouncement}
       {...rest}
     />
   );
@@ -653,7 +675,18 @@ WaterfallChartInner.displayName = 'WaterfallChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartProps>(
-  function WaterfallChart({ access, accessReason, onDataPointClick, onMarkupClick, ...rest }, ref) {
+  function WaterfallChart(
+    {
+      access,
+      accessReason,
+      onDataPointClick,
+      onMarkupClick,
+      anomalySummary,
+      formatAnomalyAnnouncement,
+      ...rest
+    },
+    ref,
+  ) {
     const { state } = resolveAccessState(access);
     return (
       <ChartAccessGate access={access} accessReason={accessReason}>
@@ -662,6 +695,11 @@ export const WaterfallChart = React.forwardRef<HTMLDivElement, WaterfallChartPro
           {...rest}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
           onMarkupClick={guardChartCallback(state, onMarkupClick)}
+          // PR-A2b-a11y-other-batch2: anomaly summary + formatter
+          // forwarded through unchanged — these aren't user-facing
+          // callbacks that the access gate would block.
+          anomalySummary={anomalySummary}
+          formatAnomalyAnnouncement={formatAnomalyAnnouncement}
         />
       </ChartAccessGate>
     );

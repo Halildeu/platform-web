@@ -652,6 +652,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Accent palette override.',
       },
       {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y-other-batch2 — anomaly summary list. When\nsupplied, the wrapper forwards the consumer-provided summary to\n`ChartA11yShell` so screen readers receive a polite, debounced\noutlier announcement. PieChart's `ChartMarkup` overlay is\ncurrently a NO-OP, so the SR announcement is the consumer's\nprimary anomaly channel — pair it with whichever detector\n(e.g. `useAnomalySummary` from `@mfe/x-charts`) you trust at\nthe dashboard layer; no built-in recipe is implied for slice\ndistributions.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.',
+      },
+      {
         name: 'access',
         type: '"full" | "readonly" | "disabled" | "hidden"',
         required: false,
@@ -2131,6 +2147,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Accent palette override.',
       },
       {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Faz 21.11 PR-A2b-a11y-other-batch2 — anomaly summary list. When\nthe chart is rendered with anomaly markers (pair with\n`useAnomalySummary({ data })` at the consumer layer), forwards\nthe summary to `ChartA11yShell` for a polite, debounced\nscreen-reader announcement summarising the unusual steps.\n`anomalySummary.x` is typically the step label (e.g. "Q1\nexpense"); `formattedY` the raw step value.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.\nDefault: small EN/TR formatter ("3 outliers detected, ...").',
+      },
+      {
         name: 'access',
         type: '"full" | "readonly" | "disabled" | "hidden"',
         required: false,
@@ -2331,6 +2363,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: '"auto"',
         description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2b-a11y-other-batch2 — anomaly summary list. When\nsupplied, the wrapper forwards the consumer-provided summary to\n`ChartA11yShell` so screen readers receive a polite, debounced\noutlier announcement summarising unusual stages (e.g. a stage\nwith an unexpectedly large drop). FunnelChart's `ChartMarkup`\noverlay is currently a NO-OP, so the SR announcement is the\nconsumer's primary anomaly channel — pair it with whichever\ndetector you trust at the dashboard layer; no built-in recipe\nis implied for funnel-stage distributions.",
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional override of the anomaly announcement template.\nForwarded to `ChartAriaLive.formatAnomalyAnnouncement`.',
       },
       {
         name: 'access',
