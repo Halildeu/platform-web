@@ -1049,6 +1049,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Hard cross-filter requirement — when true the router will NEVER\nupgrade to WebGL above the cross-filter ceiling (default 500K).\nUse for trading dashboards where losing click → drilldown is\nunacceptable.',
       },
       {
+        name: 'unstable_onRenderSettled',
+        type: "EChartsRendererOptions['unstable_onRenderSettled']",
+        required: false,
+        default: 'undefined',
+        description: 'unstable_onRenderSettled.',
+      },
+      {
         name: 'access',
         type: '"full" | "readonly" | "disabled" | "hidden"',
         required: false,

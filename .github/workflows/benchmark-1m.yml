@@ -1,0 +1,121 @@
+name: Design Lab Benchmark — 1M Artifact (PR-A1.6b)
+
+# Manual-only workflow that produces the 1M scatter benchmark
+# artifact and uploads it as a GHA artifact for trend review.
+#
+# - workflow_dispatch only — no PR / push trigger. Codex iter
+#   thread `019e0f36` agreed: GitHub-hosted runners can't carry a
+#   hard 1M WebGL gate (SwiftShader vs real GPU jitter). PR-A1.6c
+#   adds the self-hosted profile + threshold enforcement.
+# - Boots `vite dev` so the `/admin/design-lab/benchmark` route's
+#   fail-closed gate (PROD must be false) opens.
+# - Plays the dedicated spec at
+#   tests/playwright/design-lab.benchmark-1m-artifact.spec.ts via
+#   the env switch `RUN_DESIGN_LAB_BENCHMARK=1`. Default `pw:ci`
+#   runs do NOT load this spec (the spec auto-skips otherwise).
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch / SHA to benchmark (defaults to the workflow ref).'
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: benchmark-1m-${{ github.event.inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark-1m:
+    name: 1M scatter benchmark (Chromium, GHA-hosted, trend artifact)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Capture Chromium version
+        id: chromium
+        run: |
+          version=$(pnpm exec playwright --version | tr -d '\n')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Start Vite dev server (flag-on, fake-auth)
+        env:
+          VITE_ENABLE_DESIGN_LAB_BENCHMARK: 'true'
+          VITE_AUTH_MODE: permitAll
+          VITE_ENABLE_FAKE_AUTH: 'true'
+          WEB_RUNTIME_REQUIRE_BACKEND_GUARD: '0'
+        run: |
+          pnpm --filter mfe-shell exec vite \
+            --host 127.0.0.1 \
+            --port 3000 \
+            --logLevel warn \
+            > vite-dev.log 2>&1 &
+          echo "VITE_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for dev server readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sSf http://127.0.0.1:3000 > /dev/null; then
+              echo "Vite dev server ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::vite dev server failed to come up"
+          tail -200 vite-dev.log || true
+          exit 1
+
+      - name: Run benchmark-1m Playwright spec
+        env:
+          RUN_DESIGN_LAB_BENCHMARK: '1'
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          PW_FAKE_AUTH: '1'
+          PLAYWRIGHT_VERSION: ${{ steps.chromium.outputs.version }}
+          CHROMIUM_VERSION: ${{ steps.chromium.outputs.version }}
+        run: |
+          npx playwright test \
+            tests/playwright/design-lab.benchmark-1m-artifact.spec.ts \
+            --project=chromium \
+            --workers=1 \
+            --reporter=list
+
+      - name: Stop Vite dev server
+        if: always()
+        run: |
+          if [ -n "${VITE_PID:-}" ]; then
+            kill "$VITE_PID" || true
+          fi
+
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-1m-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            test-results/**/benchmark-1m-artifact.json
+            vite-dev.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -35,6 +35,7 @@ import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { sanitizeNumber } from './utils/data-validation';
 import type { EChartsOption } from './renderers/echarts-imports';
+import type { EChartsRendererOptions } from './renderers/echarts-renderer';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend, buildResponsiveGrid } from './responsive';
 
@@ -144,6 +145,20 @@ export interface ScatterChartProps extends AccessControlledProps {
    * unacceptable. @default false
    */
   crossFilterRequired?: boolean;
+  /**
+   * @internal benchmark telemetry — passthrough for the
+   * `unstable_onRenderSettled` callback exposed by
+   * {@link useEChartsRenderer}. Fires once a `setOption` has been
+   * acknowledged by ECharts' `finished` event AND committed to a
+   * paint (two `requestAnimationFrame` ticks later). The callback
+   * identity is captured via a ref inside the hook so this prop can
+   * change without re-running `setOption`.
+   *
+   * NOT a stable consumer API — only the design-lab benchmark route
+   * (`/admin/design-lab/benchmark`) consumes this. Production code
+   * should ignore this surface.
+   */
+  unstable_onRenderSettled?: EChartsRendererOptions['unstable_onRenderSettled'];
 }
 
 /* ------------------------------------------------------------------ */
@@ -215,6 +230,7 @@ const ScatterChartInner = React.forwardRef<
     renderer: rendererMode = 'auto',
     onRendererFallback,
     crossFilterRequired = false,
+    unstable_onRenderSettled,
     ...rest
   },
   forwardedRef,
@@ -640,6 +656,7 @@ const ScatterChartInner = React.forwardRef<
     theme: themeObject,
     respectReducedMotion: true,
     onClick: onDataPointClick || onMarkupClick ? handleClick : undefined,
+    unstable_onRenderSettled,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. ScatterChart is 2D — flatten
