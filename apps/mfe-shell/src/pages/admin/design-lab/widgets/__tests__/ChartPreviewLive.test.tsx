@@ -220,6 +220,31 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     expect(screen.getByTestId('design-lab-chart-preview-cross-filter')).toBeInTheDocument();
   });
 
+  /* Faz 21.11 PR-A2c-wire — scatter brush demo */
+
+  it('chart-id "scatter-chart" with `enableBrush=true` shows the brush status pill', () => {
+    render(
+      <ChartPreviewLive
+        chartId="scatter-chart"
+        chartName="scatter-chart preview"
+        toggles={{ enableBrush: true }}
+      />,
+    );
+    // Routing still hits the scatter sentinel.
+    expect(screen.getByTestId('mock-scatter')).toBeInTheDocument();
+    // The demo wrapper (`ScatterAnomalyDemoChart`) shows a status
+    // pill when `enableBrush` is forwarded — proves the toggle
+    // actually reached the inner component.
+    expect(screen.getByTestId('scatter-anomaly-demo-brush-status')).toBeInTheDocument();
+    expect(screen.getByTestId('scatter-anomaly-demo-brush-status').textContent).toMatch(/Brush:/);
+  });
+
+  it('chart-id "scatter-chart" with `enableBrush=false` (default) hides the brush status pill', () => {
+    render(<ChartPreviewLive chartId="scatter-chart" chartName="scatter-chart preview" />);
+    expect(screen.getByTestId('mock-scatter')).toBeInTheDocument();
+    expect(screen.queryByTestId('scatter-anomaly-demo-brush-status')).not.toBeInTheDocument();
+  });
+
   /* Faz 21.4 PR-B — drill-down + chart-to-grid cross-filter demos */
 
   it('chart-id "cross-filter-grid" mounts CrossFilterGridDemoLive', () => {

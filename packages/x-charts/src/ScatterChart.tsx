@@ -66,6 +66,13 @@ import type { ChartMarkup, ChartMarkupClickEvent } from './types';
 import { useMarkupAdapter } from './annotations/useMarkupAdapter';
 import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
 
+// PR-A2c-wire: brush selection wiring. Helper contracts live in
+// `cross-filter/`; this component just forwards the normalised
+// payload to the consumer's `onBrushSelection`.
+import { normalizeBrushSelection } from './cross-filter/brushSelection';
+import type { BrushSelection } from './cross-filter/brushSelection';
+export type { BrushSelection } from './cross-filter/brushSelection';
+
 export interface ScatterChartProps extends AccessControlledProps {
   /** Data points for the scatter plot. */
   data: ScatterDataPoint[];
@@ -145,6 +152,39 @@ export interface ScatterChartProps extends AccessControlledProps {
    * unacceptable. @default false
    */
   crossFilterRequired?: boolean;
+  /**
+   * Faz 21.11 PR-A2c-wire — opt-in ECharts toolbox brush feature.
+   * When `true` the chart renders a toolbox button + enables top-level
+   * `option.brush` so the user can drag a rectangle (or click clear)
+   * over the scatter. Selections fire `onBrushSelection` with a
+   * normalised `BrushSelection` (PR-A2c). Also flips the renderer
+   * router into the cross-filter-required path so big-data datasets
+   * never silently route to WebGL above the cross-filter ceiling
+   * (where brush parity becomes unreliable).
+   *
+   * Default `false` — backwards compat. ECharts toolbox/brush bundle
+   * is paid only when a shim opts in; no shim that omits this flag
+   * triggers the brush UI.
+   *
+   * @default false
+   */
+  enableBrush?: boolean;
+  /**
+   * Faz 21.11 PR-A2c-wire — fires when the user drags a rectangle on
+   * the chart (or clears one). Receives a normalised `BrushSelection`
+   * with `from`/`to` in data-space coordinates and source-row
+   * `indices` (resolved via `originalIndex` when the chart was drawn
+   * from PR-A2a downsampled data). `null` means the user cleared the
+   * brush. Pair with `brushToAgGridFilterModel` +
+   * `mergeBrushFilterModel` (both from `@mfe/x-charts`) to wire into
+   * an AG Grid SSRM datasource without losing existing column
+   * filters.
+   *
+   * Renderer-agnostic — works the same in canvas / lttb / webgl
+   * router branches because the helper normalises ECharts'
+   * `brushselected` payload upstream of the renderer pipeline.
+   */
+  onBrushSelection?: (selection: BrushSelection | null) => void;
   /**
    * @internal benchmark telemetry — passthrough for the
    * `unstable_onRenderSettled` callback exposed by
@@ -230,6 +270,8 @@ const ScatterChartInner = React.forwardRef<
     renderer: rendererMode = 'auto',
     onRendererFallback,
     crossFilterRequired = false,
+    enableBrush = false,
+    onBrushSelection,
     unstable_onRenderSettled,
     ...rest
   },
@@ -250,10 +292,14 @@ const ScatterChartInner = React.forwardRef<
         requestedMode: rendererMode,
         pointCount: data?.length ?? 0,
         webgl: detectWebGLCapability(),
-        crossFilterRequired,
-        hasInteraction: !!onDataPointClick,
+        // PR-A2c-wire: brush parity needs the cross-filter ceiling
+        // honoured. WebGL above the ceiling silently drops brush
+        // event support, so opting into `enableBrush` should also
+        // promote the cross-filter requirement.
+        crossFilterRequired: crossFilterRequired || enableBrush,
+        hasInteraction: !!onDataPointClick || enableBrush,
       }),
-    [rendererMode, data?.length, crossFilterRequired, onDataPointClick],
+    [rendererMode, data?.length, crossFilterRequired, onDataPointClick, enableBrush],
   );
 
   // Lazy-load `echarts-gl` the first time the router picks the WebGL
@@ -551,6 +597,34 @@ const ScatterChartInner = React.forwardRef<
         },
         ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
       },
+      // PR-A2c-wire: opt-in brush UI. Codex iter-1 said both
+      // top-level `brush` config AND `toolbox.feature.brush` are
+      // required — the former gates the brush primitives ECharts
+      // accepts, the latter renders the visible toolbox button.
+      // We restrict to `rect` + `clear` for PR-A2c parity (polygon
+      // / lineX / lineY are out of scope); the helper rejects them
+      // even if a future toolbox addition lets them slip through.
+      ...(enableBrush
+        ? {
+            toolbox: {
+              right: scaleSpacing(12, densitySpacingMultiplier),
+              top: scaleSpacing(8, densitySpacingMultiplier),
+              feature: {
+                brush: {
+                  type: ['rect', 'clear'],
+                },
+              },
+            },
+            brush: {
+              brushMode: 'single',
+              xAxisIndex: 0,
+              yAxisIndex: 0,
+              toolbox: ['rect', 'clear'],
+              throttleType: 'debounce',
+              throttleDelay: 50,
+            },
+          }
+        : {}),
     } as EChartsOption;
   }, [
     data,
@@ -585,7 +659,51 @@ const ScatterChartInner = React.forwardRef<
     // Codex iter-A1.5b — `webGLPending` short-circuits the option to
     // null while `echarts-gl` is still loading.
     webGLPending,
+    // PR-A2c-wire: toolbox/brush block changes shape when the
+    // consumer toggles `enableBrush`. Dep is required so the option
+    // memo recomputes (and `useEChartsRenderer.setOption` re-applies
+    // the toolbox/brush config) when the prop flips.
+    enableBrush,
   ]);
+
+  // PR-A2c-wire: brush index data — what the chart actually rendered
+  // in `safeData` order, with `originalIndex` preserved when the
+  // upstream supplied PR-A2a downsampled output. The
+  // `normalizeBrushSelection` helper walks this array using ECharts'
+  // rendered `dataIndex` to lift it back to source rows. We MUST
+  // build this off `safeData` (not the raw `data` prop) so guard
+  // ordering matches what ECharts saw.
+  const brushIndexData = useMemo(() => {
+    return safeData.map((d, i) => {
+      const candidate = (d as ScatterDataPoint & { originalIndex?: number }).originalIndex;
+      return {
+        x: d.x,
+        y: d.y,
+        originalIndex: typeof candidate === 'number' ? candidate : i,
+      };
+    });
+  }, [safeData]);
+
+  // PR-A2c-wire: persistent brush listener — fires each rectangle
+  // drag and each toolbox-clear. The renderer hook owns the
+  // ECharts subscription lifecycle; we just normalise the payload
+  // and forward to the consumer. `null` is forwarded when ECharts
+  // emits a clear (`batch[0].areas` empty / `selected.dataIndex`
+  // empty AND no usable bounds — the helper handles the
+  // discrimination).
+  const handleBrushSelected = useCallback(
+    (event: unknown) => {
+      if (!onBrushSelection) return;
+      // The renderer already typed this as `EChartsBrushSelectedRawEvent`
+      // structurally, but our normaliser owns the canonical shape.
+      const selection = normalizeBrushSelection(
+        event as Parameters<typeof normalizeBrushSelection>[0],
+        { data: brushIndexData },
+      );
+      onBrushSelection(selection);
+    },
+    [onBrushSelection, brushIndexData],
+  );
 
   // Cross-filter adapter — Codex thread 019e0c25 absorb. ECharts scatter
   // emits `params.value = [x, y]` or `[x, y, size]` (bubble). Some
@@ -657,6 +775,11 @@ const ScatterChartInner = React.forwardRef<
     respectReducedMotion: true,
     onClick: onDataPointClick || onMarkupClick ? handleClick : undefined,
     unstable_onRenderSettled,
+    // PR-A2c-wire: brush listener subscription is gated on
+    // BOTH `enableBrush=true` AND a consumer callback being
+    // supplied. Either flag missing → no subscription, no
+    // ECharts event-bus traffic.
+    unstable_onBrushSelected: enableBrush && onBrushSelection ? handleBrushSelected : undefined,
   });
 
   // Faz 21.5-B PR-B2: default-on a11y. ScatterChart is 2D — flatten
@@ -743,7 +866,10 @@ ScatterChartInner.displayName = 'ScatterChartInner';
  * follows the identity-transform path through `ChartAccessGate`.
  */
 export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
-  function ScatterChart({ access, accessReason, onDataPointClick, onMarkupClick, ...rest }, ref) {
+  function ScatterChart(
+    { access, accessReason, onDataPointClick, onMarkupClick, onBrushSelection, ...rest },
+    ref,
+  ) {
     // Access-aware callback gating — Codex iter-2 absorb.
     const { state } = resolveAccessState(access);
     return (
@@ -753,6 +879,15 @@ export const ScatterChart = React.forwardRef<HTMLDivElement, ScatterChartProps>(
           {...rest}
           onDataPointClick={guardChartCallback(state, onDataPointClick)}
           onMarkupClick={guardChartCallback(state, onMarkupClick)}
+          // PR-A2c-wire: brush selection follows the same access
+          // gate. `readonly` / `disabled` strips the callback so
+          // the toolbox button still appears (option contains
+          // toolbox config) but the dispatch never reaches the
+          // consumer. The renderer's `unstable_onBrushSelected`
+          // subscription is gated on the callback presence inside
+          // `ScatterChartInner`, so a stripped callback also
+          // detaches the ECharts event listener — no leak.
+          onBrushSelection={guardChartCallback(state, onBrushSelection)}
         />
       </ChartAccessGate>
     );

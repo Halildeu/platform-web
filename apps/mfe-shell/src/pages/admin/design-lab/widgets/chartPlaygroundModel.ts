@@ -448,6 +448,19 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     // The demo defaults to ON inside `ScatterAnomalyDemoChart`;
     // a future PR can ship a real playground-only descriptor knob
     // if an explicit on/off control is wanted.
+    //
+    // PR-A2c-wire: `enableBrush` IS a real public prop on
+    // `ScatterChart` (Faz 21.11 toolbox brush opt-in). Listed so
+    // the playground can toggle the toolbox/brush UI live and
+    // wire the status pill demo. `onBrushSelection` is NOT
+    // exposed as a playground knob in this PR — the design-lab
+    // demo uses its own internal handler (`ScatterAnomalyDemoChart`
+    // owns the status pill state). Wiring it through the
+    // `getCallbackPreset` infra would need a
+    // `COMPLEX_PROP_PRESETS['scatter-chart.onBrushSelection']`
+    // entry + route forwarding; that's a separate PR-A2c-adopt
+    // follow-up.
+    'enableBrush',
   ]),
   'gauge-chart': new Set([
     'size',
@@ -630,7 +643,9 @@ export interface ComplexPreset {
  *
  * Coverage uplift achieved (PR-FE-Playground-3 scope): 34 preset entries
  * across 13 charts (callbacks + valueFormatter + colors + gauge thresholds)
- * lift system-wide coverage from PR-A's %79.5 baseline to **244/264 ≈ %92.4**.
+ * lift system-wide coverage from PR-A's %79.5 baseline to **245/266 ≈ %92.1**
+ * after PR-A2c-wire added `enableBrush` (live primitive) + the
+ * `onBrushSelection` callback to the catalog.
  * Sample data presets (data/series/indicators/nodes/links/labels) are
  * intentionally deferred to PR-FE-Playground-4 — they would push coverage
  * to ~%98 but require chart-specific resolver wiring that is out of scope

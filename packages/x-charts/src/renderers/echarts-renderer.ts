@@ -69,6 +69,30 @@ import { registerEChartsLocale } from '../i18n/echarts-locale';
  *                  Lets consumers correlate a measurement with the
  *                  specific option payload that produced it.
  */
+/**
+ * Raw payload shape that ECharts emits via the `brushselected`
+ * event. We export the structural minimum the renderer relays
+ * to consumers — `normalizeBrushSelection` (PR-A2c) takes this
+ * shape and produces a renderer-agnostic `BrushSelection`.
+ *
+ * Faz 21.11 PR-A2c-wire surface — kept ultra-minimal so the
+ * renderer never claims to interpret brush events; it just
+ * forwards them.
+ */
+export type EChartsBrushSelectedRawEvent = {
+  type?: 'brushselected' | string;
+  batch?: Array<{
+    areas?: Array<{
+      brushType?: string;
+      coordRange?: number[] | number[][];
+    }>;
+    selected?: Array<{
+      seriesIndex?: number;
+      dataIndex?: number[];
+    }>;
+  }>;
+};
+
 export type EChartsRenderSettledEvent = {
   startedAt: number;
   finishedAt: number;
@@ -108,6 +132,22 @@ export interface EChartsRendererOptions {
    * code should ignore this surface.
    */
   unstable_onRenderSettled?: (event: EChartsRenderSettledEvent) => void;
+  /**
+   * @internal Faz 21.11 PR-A2c-wire — persistent listener for the
+   * ECharts `brushselected` event. Fires every time the user drags
+   * a rectangle (or clears one), NOT one-shot. The callback identity
+   * is read through a `useRef` so a changing closure NEVER re-runs
+   * `setOption` and never re-binds the underlying ECharts listener
+   * (Codex iter-1 PR-A2c-wire delta — would otherwise leak listeners
+   * across renders). Subscription itself flips when the callback
+   * transitions undefined ↔ defined or when the instance is replaced.
+   *
+   * Consumers should pair this with PR-A2c's `normalizeBrushSelection`
+   * to get a renderer-agnostic `BrushSelection`. The renderer
+   * intentionally does NOT normalise — it just forwards the raw
+   * event so the helper contract stays pure.
+   */
+  unstable_onBrushSelected?: (event: EChartsBrushSelectedRawEvent) => void;
 }
 
 export interface EChartsRendererState {
@@ -177,6 +217,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     onClick,
     respectReducedMotion = true,
     unstable_onRenderSettled,
+    unstable_onBrushSelected,
   } = options;
 
   // Always-latest closure for the benchmark telemetry callback so a
@@ -185,6 +226,16 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
   // on its 2x rAF tail.
   const onRenderSettledRef = useRef(unstable_onRenderSettled);
   onRenderSettledRef.current = unstable_onRenderSettled;
+  // PR-A2c-wire: same latest-closure pattern for the brush listener
+  // so consumers can swap their handler without re-binding ECharts'
+  // event bus.
+  const onBrushSelectedRef = useRef(unstable_onBrushSelected);
+  onBrushSelectedRef.current = unstable_onBrushSelected;
+  // Boolean transition flag — only the undefined↔defined edge
+  // matters for subscription. We DON'T want callback identity
+  // changes to re-bind, but we DO want toggling the prop on/off to
+  // attach/detach correctly.
+  const hasBrushHandler = unstable_onBrushSelected !== undefined;
   // Bumped per `setOption` call so the `finished` listener can be
   // matched against a specific revision and ignore stale events.
   const optionRevisionRef = useRef(0);
@@ -273,6 +324,33 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
       instance.off('click', onClick);
     };
   }, [onClick, instanceVersion]);
+
+  // PR-A2c-wire: persistent `brushselected` listener. Subscription
+  // toggles only on undefined↔defined transitions of the consumer
+  // callback (and on instance replacement). Inside the handler we
+  // dereference `onBrushSelectedRef.current`, so a changed callback
+  // identity reaches the next event without a re-bind. The cleanup
+  // captures the bound handler so the off() call detaches the same
+  // function reference attached in this effect — important because
+  // ECharts' event bus matches by function identity.
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance || !hasBrushHandler) return;
+    // ECharts' `on(...)` expects a `(...args: unknown[]) => void`
+    // shape (its event payload union is too wide for a strict
+    // narrow type). We accept the raw payload as the first arg
+    // and forward it through our typed callback after a structural
+    // cast — the helper layer (`normalizeBrushSelection`) does the
+    // discriminated parsing.
+    const handler = (...args: unknown[]) => {
+      const cb = onBrushSelectedRef.current;
+      if (cb) cb(args[0] as EChartsBrushSelectedRawEvent);
+    };
+    instance.on('brushselected', handler);
+    return () => {
+      instance.off('brushselected', handler);
+    };
+  }, [hasBrushHandler, instanceVersion]);
 
   // Option update
   useEffect(() => {

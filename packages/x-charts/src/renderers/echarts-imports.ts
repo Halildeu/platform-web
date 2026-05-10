@@ -79,8 +79,19 @@ import { TransformComponent } from 'echarts/components';
 // caught the slider runtime requirement (would have crashed
 // `Component dataZoom.slider is used but not imported.`).
 import { DataZoomInsideComponent, DataZoomSliderComponent } from 'echarts/components';
-// ToolboxComponent removed Faz A — `ChartToolbar` + `useChartExport`
-// handle export/zoom UX DOM-side. No chart shim emits `option.toolbox`.
+// Faz 21.11 PR-A2c-wire: Toolbox + Brush re-added for `ScatterChart`'s
+// new `enableBrush` opt-in path. The Faz A removal note explained these
+// were dropped because no shim emitted `option.toolbox`. Now `ScatterChart`
+// emits `option.toolbox.feature.brush` + top-level `option.brush` when
+// `enableBrush=true` so the user can drag a rectangle and our adapter
+// (PR-A2c `normalizeBrushSelection` / `brushToAgGridFilterModel`)
+// translates the event to an AG Grid filter model. Both components stay
+// pay-for-what-you-render — no shim that omits `enableBrush` triggers
+// the brush UI. Codex iter-1 PR-A2c-wire surface fix (BrushComponent
+// was the missing piece that would have crashed at runtime with
+// "Component brush is used but not imported.").
+import { ToolboxComponent } from 'echarts/components';
+import { BrushComponent } from 'echarts/components';
 import { AriaComponent } from 'echarts/components';
 import { MarkLineComponent } from 'echarts/components';
 import { MarkPointComponent } from 'echarts/components';
@@ -121,7 +132,8 @@ export function registerECharts(): void {
     TransformComponent,
     DataZoomInsideComponent, // Faz A: was DataZoomComponent (full installer)
     DataZoomSliderComponent, // ChartSpec zoom_pan transformer needs slider
-    // ToolboxComponent: Faz A removed (DOM-side ChartToolbar / useChartExport)
+    ToolboxComponent, // Faz 21.11 PR-A2c-wire: hosts brush feature button
+    BrushComponent, // Faz 21.11 PR-A2c-wire: ScatterChart enableBrush opt-in
     AriaComponent,
     MarkLineComponent,
     MarkPointComponent,
