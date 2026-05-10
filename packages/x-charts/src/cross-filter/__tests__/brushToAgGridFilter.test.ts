@@ -22,6 +22,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   brushToAgGridFilterModel,
+  mergeBrushFilterModel,
   applyBrushFilterModel,
   type AgGridBrushFilterModel,
 } from '../brushToAgGridFilter';
@@ -128,6 +129,93 @@ describe('brushToAgGridFilterModel — axis variants', () => {
     expect(model).not.toHaveProperty('filterType');
     expect(model).not.toHaveProperty('conditions');
     expect(model).not.toHaveProperty('operator');
+  });
+});
+
+describe('mergeBrushFilterModel — preserve non-brush column filters (Codex iter-2 §P1.2)', () => {
+  it('overlays brush x/y onto an existing model that has another column filter', () => {
+    const existing = {
+      status: { filterType: 'set', values: ['ACTIVE'] },
+      x: { filterType: 'number', type: 'inRange', filter: 0, filterTo: 5 }, // stale brush
+    };
+    const brush: AgGridBrushFilterModel = {
+      x: { filterType: 'number', type: 'inRange', filter: 10, filterTo: 30 },
+      y: { filterType: 'number', type: 'inRange', filter: 5, filterTo: 50 },
+    };
+    expect(mergeBrushFilterModel(existing, brush, OPTS)).toEqual({
+      status: { filterType: 'set', values: ['ACTIVE'] },
+      x: { filterType: 'number', type: 'inRange', filter: 10, filterTo: 30 },
+      y: { filterType: 'number', type: 'inRange', filter: 5, filterTo: 50 },
+    });
+  });
+
+  it('strips brush columns only when brushModel is null (clear) — preserves the rest', () => {
+    const existing = {
+      status: { filterType: 'set', values: ['ACTIVE'] },
+      x: { filterType: 'number', type: 'inRange', filter: 0, filterTo: 5 },
+      y: { filterType: 'number', type: 'inRange', filter: 0, filterTo: 5 },
+    };
+    expect(mergeBrushFilterModel(existing, null, OPTS)).toEqual({
+      status: { filterType: 'set', values: ['ACTIVE'] },
+    });
+  });
+
+  it('strips brush columns when brushModel is empty {} (both axes open)', () => {
+    const existing = {
+      status: { filterType: 'set', values: ['ACTIVE'] },
+      x: { filterType: 'number', type: 'inRange', filter: 0, filterTo: 5 },
+    };
+    expect(mergeBrushFilterModel(existing, {}, OPTS)).toEqual({
+      status: { filterType: 'set', values: ['ACTIVE'] },
+    });
+  });
+
+  it('returns null when nothing remains in the merged model', () => {
+    expect(mergeBrushFilterModel(null, null, OPTS)).toBeNull();
+    expect(mergeBrushFilterModel({}, null, OPTS)).toBeNull();
+    expect(mergeBrushFilterModel({}, {}, OPTS)).toBeNull();
+    expect(
+      mergeBrushFilterModel(
+        { x: { filterType: 'number', type: 'inRange', filter: 0 } },
+        null,
+        OPTS,
+      ),
+    ).toBeNull();
+  });
+
+  it('handles existing === null by treating it as an empty model', () => {
+    const brush: AgGridBrushFilterModel = {
+      x: { filterType: 'number', type: 'inRange', filter: 10, filterTo: 30 },
+      y: { filterType: 'number', type: 'inRange', filter: 5, filterTo: 50 },
+    };
+    expect(mergeBrushFilterModel(null, brush, OPTS)).toEqual({
+      x: { filterType: 'number', type: 'inRange', filter: 10, filterTo: 30 },
+      y: { filterType: 'number', type: 'inRange', filter: 5, filterTo: 50 },
+    });
+  });
+
+  it('strips a stale x entry even when the brush only emits a y bound (open-ended brush)', () => {
+    const existing = {
+      x: { filterType: 'number', type: 'inRange', filter: 0, filterTo: 5 }, // stale brush
+      status: { filterType: 'set', values: ['ACTIVE'] },
+    };
+    const brush: AgGridBrushFilterModel = {
+      // Only y bounded (x axis was fully open in the new brush).
+      y: { filterType: 'number', type: 'inRange', filter: 5, filterTo: 50 },
+    };
+    expect(mergeBrushFilterModel(existing, brush, OPTS)).toEqual({
+      status: { filterType: 'set', values: ['ACTIVE'] },
+      y: { filterType: 'number', type: 'inRange', filter: 5, filterTo: 50 },
+    });
+  });
+
+  it('does not leak prototype keys when brushModel is a plain object', () => {
+    // Defensive: `for...in` would walk the prototype; we use
+    // `Object.prototype.hasOwnProperty.call` so injected
+    // proto keys never reach the merged model.
+    const proto = { x: { filterType: 'number', type: 'inRange', filter: 999 } };
+    const brush = Object.create(proto) as AgGridBrushFilterModel;
+    expect(mergeBrushFilterModel({}, brush, OPTS)).toBeNull();
   });
 });
 

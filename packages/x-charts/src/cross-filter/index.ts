@@ -59,7 +59,11 @@ export type {
   EChartsBrushSelectedEvent,
   NormalizeBrushSelectionOptions,
 } from './brushSelection';
-export { brushToAgGridFilterModel, applyBrushFilterModel } from './brushToAgGridFilter';
+export {
+  brushToAgGridFilterModel,
+  mergeBrushFilterModel,
+  applyBrushFilterModel,
+} from './brushToAgGridFilter';
 export type {
   AgGridNumberFilterEntry,
   AgGridBrushFilterModel,

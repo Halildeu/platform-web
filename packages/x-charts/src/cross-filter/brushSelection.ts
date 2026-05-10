@@ -127,6 +127,18 @@ export interface NormalizeBrushSelectionOptions {
    * rendered index (consumer wants to filter unmappable rows
    * out). */
   resolveIndex?: (renderedIndex: number) => number | undefined;
+  /**
+   * Fail-closed `originalIndex` resolution. When `true` and a
+   * `data` array is supplied, rendered indices whose entry is
+   * missing the `originalIndexField` are DROPPED instead of
+   * falling back to the rendered index. Recommended whenever
+   * the chart was rendered from a downsampled source (PR-A2a)
+   * and the consumer needs strict source-row mapping. Default
+   * `false` keeps the legacy backwards-compatible "best-effort"
+   * behaviour.
+   * Codex iter-2 PR-A2c §P2.
+   */
+  strictOriginalIndex?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -149,12 +161,23 @@ function maxBound(a: BrushBound, b: BrushBound): BrushBound {
   return Math.max(a, b);
 }
 
-/** Pull the first cartesian brush area out of the event batch.
+/** Pull the single cartesian brush area out of the event batch.
  * Returns `null` when the event was a clear / no-area / pixel-
- * only brush. */
+ * only brush — OR when the event carries multiple batches /
+ * multiple areas (Codex iter-2 §P2.1: PR-A2c locks single
+ * rectangle scope; multi-area would need disjoint range
+ * support that simple per-column `inRange` cannot represent).
+ */
 function readArea(event: EChartsBrushSelectedEvent | null | undefined): EChartsBrushArea | null {
-  const batch = event?.batch?.[0];
-  const area = batch?.areas?.[0];
+  const batch = event?.batch;
+  // Fail-closed on multi-batch — ECharts toolbox brush operations
+  // can emit batched events whose union we cannot faithfully
+  // express as a single `inRange` filter.
+  if (!Array.isArray(batch) || batch.length !== 1) return null;
+  const areas = batch[0]?.areas;
+  // Fail-closed on multi-area selections for the same reason.
+  if (!Array.isArray(areas) || areas.length !== 1) return null;
+  const area = areas[0];
   if (!area) return null;
   const coordRange = area.coordRange;
   if (!Array.isArray(coordRange) || coordRange.length === 0) return null;
@@ -216,7 +239,18 @@ function readBoundsForArea(area: EChartsBrushArea): {
   if (brushType === 'polygon') {
     const coordRange = area.coordRange as unknown[];
     if (!Array.isArray(coordRange) || coordRange.length === 0) return null;
-    const valid = coordRange.every((p) => Array.isArray(p) && p.length >= 2);
+    // Codex iter-2 §misc: every vertex must be a 2-tuple of
+    // finite numbers. A single NaN/Infinity vertex used to slip
+    // through and produce a partial bbox.
+    const valid = coordRange.every(
+      (p) =>
+        Array.isArray(p) &&
+        p.length >= 2 &&
+        typeof p[0] === 'number' &&
+        Number.isFinite(p[0]) &&
+        typeof p[1] === 'number' &&
+        Number.isFinite(p[1]),
+    );
     if (!valid) return null;
     const { from, to } = readPolygonBoundingBox(area);
     return { from, to, kind: 'polygon-bbox' };
@@ -238,12 +272,20 @@ function buildResolver(
     return (renderedIndex) => renderedIndex;
   }
   const field = options.originalIndexField ?? 'originalIndex';
+  // Codex iter-2 §P2.2: with `data` supplied AND
+  // `strictOriginalIndex=true`, drop unmappable indices
+  // (entry missing / field missing / non-finite) instead of
+  // falling back to the rendered index. This preserves the
+  // PR-A2a coupling guarantee that returned indices ARE source
+  // rows. Default `false` keeps backwards-compatible best-
+  // effort behaviour.
+  const strict = options.strictOriginalIndex === true;
   return (renderedIndex) => {
     const entry = data[renderedIndex];
-    if (!entry || typeof entry !== 'object') return renderedIndex;
+    if (!entry || typeof entry !== 'object') return strict ? undefined : renderedIndex;
     const raw = (entry as Record<string, unknown>)[field];
     if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
-    return renderedIndex;
+    return strict ? undefined : renderedIndex;
   };
 }
 
@@ -255,7 +297,12 @@ function readSelectedIndices(
   const batch = event?.batch?.[0];
   const selected = batch?.selected;
   if (!Array.isArray(selected)) return [];
-  const series = selected.find((s) => (s.seriesIndex ?? 0) === seriesIndex) ?? selected[0] ?? null;
+  // Codex iter-2 §P1.1: NO fallback to `selected[0]`. If the
+  // requested series isn't present in the event, the helper
+  // returns an empty index list. The previous fallback could
+  // silently surface another series' rendered indices as
+  // source rows in multi-series scatter or stale-event races.
+  const series = selected.find((s) => (s.seriesIndex ?? 0) === seriesIndex);
   if (!series || !Array.isArray(series.dataIndex)) return [];
   const out: number[] = [];
   const seen = new Set<number>();

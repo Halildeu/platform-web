@@ -178,6 +178,7 @@ export type { CrossFilterEntry, DrillLevel, HistoryEntry } from './cross-filter/
 export {
   normalizeBrushSelection,
   brushToAgGridFilterModel,
+  mergeBrushFilterModel,
   applyBrushFilterModel,
 } from './cross-filter';
 export type {

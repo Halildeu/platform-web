@@ -33,6 +33,67 @@ describe('normalizeBrushSelection — clear / no-area cases', () => {
     expect(normalizeBrushSelection({ batch: [] })).toBeNull();
   });
 
+  it('returns null for multi-batch event (Codex iter-2 §P2.1: PR-A2c locks single rectangle scope)', () => {
+    expect(
+      normalizeBrushSelection({
+        batch: [
+          {
+            areas: [
+              {
+                brushType: 'rect',
+                coordRange: [
+                  [0, 10],
+                  [0, 10],
+                ],
+              },
+            ],
+            selected: [{ seriesIndex: 0, dataIndex: [0] }],
+          },
+          {
+            areas: [
+              {
+                brushType: 'rect',
+                coordRange: [
+                  [50, 60],
+                  [50, 60],
+                ],
+              },
+            ],
+            selected: [{ seriesIndex: 0, dataIndex: [1] }],
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  it('returns null for multi-area event (disjoint rectangles cannot be expressed as inRange)', () => {
+    expect(
+      normalizeBrushSelection({
+        batch: [
+          {
+            areas: [
+              {
+                brushType: 'rect',
+                coordRange: [
+                  [0, 10],
+                  [0, 10],
+                ],
+              },
+              {
+                brushType: 'rect',
+                coordRange: [
+                  [50, 60],
+                  [50, 60],
+                ],
+              },
+            ],
+            selected: [{ seriesIndex: 0, dataIndex: [0, 1] }],
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
+
   it('returns null when batch[0] has no areas', () => {
     expect(
       normalizeBrushSelection({ batch: [{ selected: [{ seriesIndex: 0, dataIndex: [] }] }] }),
@@ -170,6 +231,27 @@ describe('normalizeBrushSelection — polygon → bounding-box fallback', () => 
     expect(out?.from).toEqual({ x: 10, y: 5 });
     expect(out?.to).toEqual({ x: 30, y: 50 });
     expect(out?.kind).toBe('polygon-bbox');
+  });
+
+  it('drops polygon when any vertex contains a non-finite number (Codex iter-2 §misc strict reject)', () => {
+    const event: EChartsBrushSelectedEvent = {
+      batch: [
+        {
+          areas: [
+            {
+              brushType: 'polygon',
+              coordRange: [
+                [10, 5],
+                [Number.NaN, 50],
+                [30, 50],
+              ],
+            },
+          ],
+          selected: [],
+        },
+      ],
+    };
+    expect(normalizeBrushSelection(event)).toBeNull();
   });
 
   it('drops malformed polygon points (non-array members) instead of crashing', () => {
@@ -345,6 +427,62 @@ describe('normalizeBrushSelection — index resolution', () => {
     };
     const out = normalizeBrushSelection(event, { seriesIndex: 2 });
     expect(out?.indices).toEqual([99]);
+  });
+
+  it('returns indices [] when requested seriesIndex is missing (Codex iter-2 §P1.1: no fallback to selected[0])', () => {
+    const event: EChartsBrushSelectedEvent = {
+      batch: [
+        {
+          areas: [
+            {
+              brushType: 'rect',
+              coordRange: [
+                [0, 100],
+                [0, 100],
+              ],
+            },
+          ],
+          // Only seriesIndex 0 present.
+          selected: [{ seriesIndex: 0, dataIndex: [0, 1, 2] }],
+        },
+      ],
+    };
+    const out = normalizeBrushSelection(event, { seriesIndex: 5 });
+    expect(out).not.toBeNull();
+    // CRITICAL: previously the helper fell back to `selected[0]`
+    // and surfaced series-0 indices as if they belonged to the
+    // requested series 5. That silent mis-routing is now gone.
+    expect(out?.indices).toEqual([]);
+    expect(out?.from).toEqual({ x: 0, y: 0 });
+    expect(out?.to).toEqual({ x: 100, y: 100 });
+  });
+
+  it('drops unmappable indices when strictOriginalIndex=true and entry/field is missing (Codex iter-2 §P2.2)', () => {
+    const data = [
+      { x: 1, y: 1, originalIndex: 120 },
+      { x: 2, y: 2 }, // no originalIndex
+      { x: 3, y: 3, originalIndex: 390 },
+    ];
+    const event: EChartsBrushSelectedEvent = {
+      batch: [
+        {
+          areas: [
+            {
+              brushType: 'rect',
+              coordRange: [
+                [0, 100],
+                [0, 100],
+              ],
+            },
+          ],
+          selected: [{ seriesIndex: 0, dataIndex: [0, 1, 2] }],
+        },
+      ],
+    };
+    const lenient = normalizeBrushSelection(event, { data });
+    expect(lenient?.indices).toEqual([120, 1, 390]); // legacy fallback
+    const strict = normalizeBrushSelection(event, { data, strictOriginalIndex: true });
+    expect(strict?.indices).toEqual([120, 390]); // unmappable row dropped
   });
 
   it('emits indices: [] when selected[].dataIndex is empty (valid-empty selection)', () => {

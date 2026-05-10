@@ -67,14 +67,10 @@ function buildAxisEntry(
   from: BrushPoint['x'],
   to: BrushPoint['x'],
 ): AgGridNumberFilterEntry | null {
-  // Both bounds present → standard `inRange`.
+  // Both bounds present → `inRange` (covers `from === to` as
+  // an equals match — Codex iter-2 noted the dead duplicate
+  // branch from iter-1; collapsed into a single return).
   if (typeof from === 'number' && typeof to === 'number') {
-    // `BrushSelection` already normalises so `from <= to`, but
-    // be defensive: guard against degenerate equal-bound rects
-    // (still valid AG Grid filter — matches a single value).
-    if (from === to) {
-      return { filterType: 'number', type: 'inRange', filter: from, filterTo: to };
-    }
     return { filterType: 'number', type: 'inRange', filter: from, filterTo: to };
   }
   // Only upper bound → "≤ to".
@@ -116,6 +112,54 @@ export function brushToAgGridFilterModel(
   const yEntry = buildAxisEntry(selection.from.y, selection.to.y);
   if (yEntry !== null) model[options.yColId] = yEntry;
   return model;
+}
+
+/**
+ * Merge a brush filter model into an existing AG Grid filter
+ * model so non-brush column filters survive a brush update.
+ *
+ * Why this exists (Codex iter-2 §P1.2)
+ *   - `brushToAgGridFilterModel(...)` returns a FRAGMENT —
+ *     only the x/y columns the brush owns. If a consumer
+ *     pushes that fragment straight through
+ *     `gridApi.setFilterModel(...)`, AG Grid REPLACES the
+ *     whole model and silently drops every other column
+ *     filter the user had set (status set-filter, text search,
+ *     etc.).
+ *   - This helper keeps every entry in `existing` that the
+ *     brush does NOT own (`xColId` / `yColId`), then layers
+ *     the brush fragment on top. A null brush fragment (clear)
+ *     strips ONLY the brush columns and leaves the rest
+ *     intact.
+ *
+ * Returns `null` when the merged model has zero entries —
+ * callers can pass that straight to `gridApi.setFilterModel(null)`
+ * to clear without confusing AG Grid.
+ *
+ * `existing` is intentionally typed `Record<string, unknown>`
+ * because AG Grid filter models mix simple per-column entries
+ * (number/text/date) with set/advanced shapes; this helper
+ * does not pry into those.
+ */
+export function mergeBrushFilterModel(
+  existing: Record<string, unknown> | null | undefined,
+  brushModel: AgGridBrushFilterModel | null,
+  options: BrushToAgGridFilterOptions,
+): Record<string, unknown> | null {
+  const next: Record<string, unknown> = { ...(existing ?? {}) };
+  // Brush owns these two columns only — drop any prior brush
+  // entries before layering the new fragment.
+  delete next[options.xColId];
+  delete next[options.yColId];
+  if (brushModel !== null) {
+    if (Object.prototype.hasOwnProperty.call(brushModel, options.xColId)) {
+      next[options.xColId] = brushModel[options.xColId];
+    }
+    if (Object.prototype.hasOwnProperty.call(brushModel, options.yColId)) {
+      next[options.yColId] = brushModel[options.yColId];
+    }
+  }
+  return Object.keys(next).length === 0 ? null : next;
 }
 
 /**
