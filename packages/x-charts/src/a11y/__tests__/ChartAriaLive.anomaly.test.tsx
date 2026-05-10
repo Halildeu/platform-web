@@ -328,6 +328,34 @@ describe('ChartAriaLive — domain-aware default formatter (batch3)', () => {
     expect(text).toMatch(/flow-through 100\.00/);
   });
 
+  // Codex thread `019e10a5` iter-3 — mixed-kind fallback. Tek chart
+  // tek kind üretir varsayımı; mixed batch (radar + hierarchical) flat
+  // template'ine düşer ki yanlış domain announcement çıkmasın.
+  it('mixed kind batch — falls back to flat template (Codex iter-3)', () => {
+    const radarAnom: AnomalySummary = {
+      ...ANOM_A,
+      kind: 'radar',
+      seriesName: 'Q1',
+      indicatorName: 'Latency',
+    };
+    const hierAnom: AnomalySummary = {
+      ...ANOM_B,
+      kind: 'hierarchical',
+      path: ['Region', 'Team'],
+    };
+    render(<ChartAriaLive message="" anomalies={[radarAnom, hierAnom]} locale="en" />);
+    act(() => {
+      vi.runAllTimers();
+    });
+    const text = screen.getByTestId('chart-aria-live-anomalies').textContent ?? '';
+    // Should NOT pick the radar branch (would say "indicator anomalies").
+    expect(text).not.toMatch(/radar indicator/);
+    expect(text).not.toMatch(/hierarchy anomaly/);
+    // Should use the flat template ("X outliers detected ...").
+    expect(text).toMatch(/2 outliers detected/);
+    expect(text).toMatch(/Most extreme: x=May/);
+  });
+
   it('kind: "3d" reserved — EN uses ariaLabel as the most-extreme detail', () => {
     const threeDAnom: AnomalySummary = {
       ...ANOM_A,

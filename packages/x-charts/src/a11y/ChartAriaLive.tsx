@@ -32,10 +32,20 @@ const DEFAULT_TURKISH_LOCALES = new Set(['tr', 'tr-TR', 'TR']);
  * normally produce a single domain per detection cycle; mixed-kind
  * batches fall back to the flat template (which can announce by
  * `ariaLabel` for any individual entry).
+ *
+ * Codex thread `019e10a5` iter-3 fix: previous "first non-flat"
+ * impl could pick a domain that doesn't match the most-extreme
+ * anomaly (e.g. mixed `radar + hierarchical` batch with `radar`
+ * first → formatter took the radar branch but `highest` was
+ * hierarchical → wrong domain announcement). Now strictly
+ * homogeneous: same kind for every entry → that kind; otherwise
+ * flat fallback. Public union unchanged.
  */
 function resolveDominantKind(anomalies: AnomalySummary[]): AnomalySummary['kind'] {
-  for (const a of anomalies) {
-    if (a.kind && a.kind !== 'flat') return a.kind;
+  const kinds = new Set(anomalies.map((a) => a.kind ?? 'flat'));
+  if (kinds.size === 1) {
+    const [only] = kinds;
+    return only;
   }
   return 'flat';
 }
