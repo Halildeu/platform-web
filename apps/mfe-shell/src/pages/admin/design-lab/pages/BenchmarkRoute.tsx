@@ -15,18 +15,28 @@
  *                    the first WebGL run's renderMs)
  *
  * A1.6a scope (Codex thread `019e0efb` iter-2 AGREE):
- *   - Default tiers: medium (50K) + large (250K). 1M is PR-A1.6b.
+ *   - Available tiers: medium (50K) + large (250K). 1M is PR-A1.6b.
  *   - Fixtures: uniform / clustered / spike (timeseries deferred).
  *   - 1 warmup run + 3 measured runs per (fixture, tier, backend).
  *   - 250K canvas-raw soft timeout (5s). 1M canvas-raw `?danger=true`
- *     unlock — left as a stub here; not in default matrix.
+ *     unlock — left as a stub here; not in the default matrix.
  *   - Render-time = double-rAF after mount (route-level proxy; ECharts
  *     `finished` callback hook deferred to PR-A1.6b).
- *   - Result schema: see {@link BenchmarkResult}.
+ *   - Result schema: see {@link BenchmarkResult} (`heapBeforeMB` /
+ *     `heapAfterMB` are JS-heap MB; `environment.notes` surfaces the
+ *     "GPU buffers not included" caveat).
+ *   - Default startup config = "smoke preset"
+ *     (`uniform / medium / canvas-raw`) so the route opens in seconds;
+ *     multiselect to expand to the full 18 cases × 4 runs.
  *
- * Route is gated behind `VITE_ENABLE_DESIGN_LAB_BENCHMARK=true` AND
- * `MODE !== 'production'`. Sidebar entry deliberately not registered
- * — deep-link `/admin/design-lab/benchmark` only.
+ * Route is gated behind ALL THREE of:
+ *   - `VITE_ENABLE_DESIGN_LAB_BENCHMARK === 'true'`
+ *   - `MODE !== 'production'`
+ *   - `import.meta.env.PROD !== true` (catches `vite build --mode
+ *     staging` where MODE='staging' but PROD=true)
+ *
+ * Sidebar entry deliberately not registered — deep-link
+ * `/admin/design-lab/benchmark` only.
  *
  * Acceptance (A1.6a):
  *   - Flag-on route mounts; flag-off route renders guard banner.
