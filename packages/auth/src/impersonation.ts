@@ -176,15 +176,42 @@ export function isImpersonationToken(
   brokerClientId = 'impersonation-broker',
 ): boolean {
   if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  return payload?.azp === brokerClientId;
+}
+
+/**
+ * Codex iter-30 P1/P2 absorb: base64url → base64 normalize + padding
+ * before atob. Without padding some valid JWTs surface as decode
+ * failures and the UX hint disappears even though the token is
+ * legitimately broker-issued. Mirrors the helper in
+ * mfe-shell auth.slice.ts (kept inline here so @mfe/auth has zero
+ * dependency on apps/*).
+ */
+export function decodeJwtPayload(
+  token: string,
+): { azp?: string; sub?: string; email?: string; exp?: number; [k: string]: unknown } | null {
   try {
-    const parts = token.split('.');
-    if (parts.length < 2) return false;
-    const payload = JSON.parse(
-      // base64url → base64 → utf8
-      atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')),
+    const segments = token.split('.');
+    if (segments.length < 2) return null;
+    const normalized = segments[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4 || 4)) % 4),
+      '=',
     );
-    return payload?.azp === brokerClientId;
+    const globalScope = (typeof window !== 'undefined' ? window : (globalThis as unknown)) as {
+      atob?: (s: string) => string;
+      Buffer?: { from: (s: string, e: string) => { toString: (e: string) => string } };
+    };
+    let decoded: string | null = null;
+    if (globalScope?.atob) {
+      decoded = globalScope.atob(padded);
+    } else if (globalScope?.Buffer) {
+      decoded = globalScope.Buffer.from(padded, 'base64').toString('utf-8');
+    }
+    if (!decoded) return null;
+    return JSON.parse(decoded);
   } catch {
-    return false;
+    return null;
   }
 }

@@ -64,10 +64,36 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
         },
       );
 
-      if (response.errorCode || !response.exchangedToken) {
+      if (response.errorCode || !response.exchangedToken || !response.sessionId) {
         setError(response.errorMessage ?? 'Impersonation could not be started');
         setSubmitting(false);
         return;
+      }
+
+      // Codex iter-30 P0 absorb: persist the original admin token + session
+      // id BEFORE swapping so the Stop continuation can call backend with
+      // the proper audit-actor identity (broker-token DELETE /current is
+      // rejected per backend contract). Keys are colocated in
+      // mfe-shell/.../impersonation-storage but written here via raw
+      // localStorage to avoid an MFE → MFE direct dependency.
+      try {
+        const adminToken = (() => {
+          if (typeof window === 'undefined') return null;
+          try {
+            return window.localStorage.getItem('token');
+          } catch {
+            return null;
+          }
+        })();
+        if (adminToken && typeof window !== 'undefined') {
+          window.localStorage.setItem('impersonation.original_token', adminToken);
+          window.localStorage.setItem('impersonation.session_id', response.sessionId);
+          window.localStorage.setItem('impersonation.mode', 'active');
+          window.localStorage.setItem('impersonation.started_at', String(Date.now()));
+        }
+      } catch {
+        // best-effort: stop continuation falls back to cookie clear if
+        // the admin token wasn't persisted.
       }
 
       // Swap auth cookie to the broker-issued exchanged token, then full
@@ -82,7 +108,12 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
     }
   }, [reason, targetSubject, user.email, user.id]);
 
-  if (!isSuperAdmin) {
+  // Codex iter-30 P1: isSuperAdmin is a function () => boolean from
+  // PermissionProvider, not a boolean. Earlier `if (!isSuperAdmin)`
+  // always evaluated truthy → all users saw the action. The backend
+  // /authz/me gate was the only authoritative defence; UX gate now
+  // matches.
+  if (!isSuperAdmin()) {
     return null;
   }
 

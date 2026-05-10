@@ -22,9 +22,14 @@
  */
 import React, { useCallback, useMemo, useState } from 'react';
 import { useAppSelector } from '../store/store.hooks';
-import { isImpersonationToken } from '@mfe/auth';
+import { decodeJwtPayload, isImpersonationToken } from '@mfe/auth';
 import { api } from '@mfe/shared-http';
 import { clearTokenCookie } from '../providers/AuthBootstrapper';
+import {
+  IMPERSONATION_ORIGINAL_TOKEN_KEY,
+  IMPERSONATION_SESSION_ID_KEY,
+  IMPERSONATION_MODE_KEY,
+} from './impersonation-storage';
 
 interface ImpersonationContextHints {
   targetSubject: string | null;
@@ -36,20 +41,15 @@ function decodeBrokerHints(token: string | null | undefined): ImpersonationConte
   if (!token) {
     return { targetSubject: null, targetEmail: null, expEpoch: null };
   }
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) {
-      return { targetSubject: null, targetEmail: null, expEpoch: null };
-    }
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return {
-      targetSubject: typeof payload?.sub === 'string' ? payload.sub : null,
-      targetEmail: typeof payload?.email === 'string' ? payload.email : null,
-      expEpoch: typeof payload?.exp === 'number' ? payload.exp : null,
-    };
-  } catch {
+  const payload = decodeJwtPayload(token);
+  if (!payload) {
     return { targetSubject: null, targetEmail: null, expEpoch: null };
   }
+  return {
+    targetSubject: typeof payload.sub === 'string' ? payload.sub : null,
+    targetEmail: typeof payload.email === 'string' ? payload.email : null,
+    expEpoch: typeof payload.exp === 'number' ? payload.exp : null,
+  };
 }
 
 export const ImpersonationBanner: React.FC = () => {
@@ -64,17 +64,65 @@ export const ImpersonationBanner: React.FC = () => {
     setStopping(true);
     setError(null);
     try {
-      // Backend contract: broker-token holders cannot stop /current
-      // (STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED). Best path is to clear
-      // cookie and redirect to login so the user re-authenticates
-      // with their original admin credentials. The session row will
-      // be marked EXPIRED by the TTL sweeper or remains ACTIVE until
-      // manually revoked by another SuperAdmin.
-      try {
-        await api.delete('/v1/impersonation/sessions/current');
-      } catch {
-        // 400 STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED is expected here.
-        // Continue to cookie clear regardless.
+      // Codex iter-30 P0 absorb: audit-complete stop. Backend rejects
+      // broker-token DELETE /current (STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED).
+      // We call the backend with the ORIGINAL admin token saved at Start —
+      // either DELETE /current (if same admin who started) or
+      // POST /{id}/revoke (any path). This guarantees an
+      // IMPERSONATION_STOPPED audit row is written.
+      const sessionId =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(IMPERSONATION_SESSION_ID_KEY)
+          : null;
+      const originalAdminToken =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(IMPERSONATION_ORIGINAL_TOKEN_KEY)
+          : null;
+
+      if (originalAdminToken && sessionId) {
+        // Use original admin token to revoke the active session — produces
+        // IMPERSONATION_REVOKED audit with operator identity = the admin
+        // who started impersonation.
+        try {
+          await api.post(
+            `/v1/impersonation/sessions/${sessionId}/revoke`,
+            { reason: 'USER_STOP_FROM_BANNER' },
+            {
+              headers: { Authorization: `Bearer ${originalAdminToken}` },
+               
+              __skipAuthReadyGate: true,
+            } as Parameters<typeof api.post>[2],
+          );
+        } catch (revokeErr) {
+          // Continue to cleanup even if revoke fails — surfacing on
+          // banner avoids users stuck in impersonation mode.
+          console.warn(
+            '[ImpersonationBanner] revoke with original admin token failed; continuing cleanup',
+            revokeErr,
+          );
+        }
+      } else {
+        // No saved original token (cross-tab/manual cookie/refresh
+        // bypassed Start). Try DELETE /current with current cookie —
+        // backend will reject if broker-token. Fall through to cookie
+        // clear + login.
+        try {
+          await api.delete('/v1/impersonation/sessions/current');
+        } catch {
+          // STOP_FROM_BROKER_TOKEN_NOT_SUPPORTED expected here.
+        }
+      }
+
+      // Clear all impersonation state machine keys + cookie + reload home.
+      // AuthBootstrapper will re-init Keycloak with admin identity.
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.removeItem(IMPERSONATION_ORIGINAL_TOKEN_KEY);
+          window.localStorage.removeItem(IMPERSONATION_SESSION_ID_KEY);
+          window.localStorage.removeItem(IMPERSONATION_MODE_KEY);
+        } catch {
+          // best-effort
+        }
       }
       await clearTokenCookie();
       window.location.assign('/login?reason=impersonation_stop');
