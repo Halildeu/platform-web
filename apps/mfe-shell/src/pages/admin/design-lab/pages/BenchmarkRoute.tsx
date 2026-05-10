@@ -260,6 +260,16 @@ interface BenchmarkCase {
 }
 
 interface ScatterPreparedData {
+  /**
+   * Identifier of the case this prepared data belongs to. Codex
+   * iter-4 P1: the runner advances `cursor` synchronously but the
+   * prepare effect is async (it pre-flights the cold echarts-gl
+   * chunk). Without a `caseId` stamp the route could mount a new
+   * case with stale `points` from the previous case during that
+   * gap, and `handleRendered` could file a row tagged with the new
+   * case but the previous case's `sourceCount` / `prepMs`.
+   */
+  caseId: string;
   points: BenchmarkPoint2D[];
   prepMs: number;
   renderedCount: number;
@@ -453,6 +463,7 @@ class FixtureCache {
 }
 
 function preparePoints(
+  caseId: string,
   fixture: BenchmarkFixtureName,
   tier: BenchmarkTierName,
   backend: BenchmarkBackend,
@@ -473,6 +484,7 @@ function preparePoints(
   }
   const prepMs = performance.now() - prepStart;
   return {
+    caseId,
     points: rendered,
     prepMs,
     renderedCount: rendered.length,
@@ -908,6 +920,16 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
    */
   const coldGlImportRef = useRef<ColdGlImportObservation | null>(null);
   /**
+   * Codex iter-4 P2: the cold observation must be reported on
+   * exactly ONE artifact row. Without this guard every measured
+   * WebGL row would copy the same `cold + ms` pair, contradicting
+   * the schema's "subsequent runs report `already-registered`".
+   * Set true once any measured WebGL row consumes the cold
+   * observation; later WebGL rows then report
+   * `glImportStatus='already-registered' / glImportMs=0`.
+   */
+  const coldGlImportConsumedRef = useRef<boolean>(false);
+  /**
    * Snapshot of the run config taken inside `start()`. The artifact
    * UI can reuse this to render `environment.dangerMode` /
    * `environment.runner` from the configuration that produced the
@@ -918,9 +940,25 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
 
   const start = useCallback(() => {
     const newQueue = buildCaseQueue(opts.fixtures, opts.tiers, opts.backends, opts.dangerMode);
+    // Codex iter-4 P3: refuse to enter `running` state with an
+    // empty queue. Without this guard, picking only `million +
+    // canvas-raw` while danger-mode is off (the matrix builder
+    // drops that pair silently) would leave the runner stuck in
+    // `isRunning=true` with nothing to do.
+    if (newQueue.length === 0) {
+      runIdRef.current = '';
+      runSnapshotRef.current = null;
+      setQueue([]);
+      setCursor(-1);
+      setResults([]);
+      setPreparedData(null);
+      setIsRunning(false);
+      return;
+    }
     runIdRef.current = `bench-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     fixtureCacheRef.current.clear();
     coldGlImportRef.current = null;
+    coldGlImportConsumedRef.current = false;
     runSnapshotRef.current = { dangerMode: opts.dangerMode, runner: opts.runnerEnv };
     setQueue(newQueue);
     setCursor(0);
@@ -932,6 +970,7 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
   const reset = useCallback(() => {
     fixtureCacheRef.current.clear();
     coldGlImportRef.current = null;
+    coldGlImportConsumedRef.current = false;
     runSnapshotRef.current = null;
     setQueue([]);
     setCursor(-1);
@@ -945,10 +984,18 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
   // WebGL case (warmup or measured) and surface the actual chunk
   // duration in the artifact via `coldGlImportRef` rather than the
   // earlier proxy that conflated it with `renderMs`.
+  //
+  // Codex iter-4 P1: clear `preparedData` to `null` BEFORE the
+  // async preflight so the route doesn't keep mounting the
+  // previous case's points while the GL chunk loads. The
+  // `caseId` stamp on the next prepared payload guards the
+  // post-await write so a race between two cursor advances can't
+  // file the wrong case's data.
   useEffect(() => {
     if (!isRunning || cursor < 0 || cursor >= queue.length) return;
     let cancelled = false;
     const c = queue[cursor];
+    setPreparedData(null);
     void (async () => {
       if (c.backend === 'webgl' && coldGlImportRef.current === null) {
         if (isEChartsGLRegistered()) {
@@ -972,7 +1019,7 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
         }
       }
       if (cancelled) return;
-      const prepared = preparePoints(c.fixture, c.tier, c.backend, fixtureCacheRef.current);
+      const prepared = preparePoints(c.id, c.fixture, c.tier, c.backend, fixtureCacheRef.current);
       if (cancelled) return;
       setPreparedData(prepared);
     })();
@@ -992,6 +1039,13 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
     async (info: RenderSlotRenderedInfo) => {
       if (!isRunning || cursor < 0 || cursor >= queue.length || !preparedData) return;
       const c = queue[cursor];
+      // Codex iter-4 P1: refuse to file a result row when the
+      // prepared payload was generated for a different case (the
+      // race window between async GL preflight and a cursor
+      // advance). The route's mount guard normally prevents
+      // RenderSlot from booting against stale data, but defending
+      // here keeps the artifact strictly correct.
+      if (preparedData.caseId !== c.id) return;
       const heapBefore = snapshotMemoryMB();
       const fps = await measureFn(FPS_WINDOW_MS);
       const heapAfter = snapshotMemoryMB();
@@ -1029,15 +1083,25 @@ function useScatterBenchmarkRunner(opts: RunnerHookOptions): RunnerHookState {
       const webglSupported = c.backend === 'webgl' ? !isWebglUnavailable : undefined;
 
       // Cold echarts-gl import accounting (PR-A1.6b acceptance #4 +
-      // Codex iter-3 P1 fix). The prepare effect measured the actual
-      // chunk import time — we just stamp the result row with what it
-      // observed. The first WebGL case (warmup or measured) seeds the
-      // ref; subsequent WebGL cases see `'already-registered'`.
+      // Codex iter-3 P1 + iter-4 P2). The prepare effect measured
+      // the actual chunk import time on the first WebGL case
+      // (warmup or measured) and stored it on `coldGlImportRef`.
+      // We "consume" that observation on EXACTLY ONE result row so
+      // the artifact matches the schema's "subsequent runs report
+      // already-registered" contract. Warmup cases skip the
+      // result-write below entirely, so the cold observation lands
+      // on the first WebGL row that actually ships.
       let glImportStatus: 'cold' | 'already-registered' | undefined;
       let glImportMs: number | undefined;
-      if (c.backend === 'webgl' && webglSupported !== false && coldGlImportRef.current) {
-        glImportStatus = coldGlImportRef.current.status;
-        glImportMs = coldGlImportRef.current.ms;
+      if (c.backend === 'webgl' && webglSupported !== false && !c.isWarmup) {
+        if (!coldGlImportConsumedRef.current && coldGlImportRef.current) {
+          glImportStatus = coldGlImportRef.current.status;
+          glImportMs = coldGlImportRef.current.ms;
+          coldGlImportConsumedRef.current = true;
+        } else {
+          glImportStatus = 'already-registered';
+          glImportMs = 0;
+        }
       }
 
       if (!c.isWarmup) {
@@ -1535,14 +1599,21 @@ const BenchmarkRoute: React.FC = () => {
         style={{ padding: 16 }}
         data-testid="benchmark-render-host"
       >
-        {currentCase && runner.preparedData && (
-          <RenderSlot
-            key={renderSlotKey}
-            data={runner.preparedData.points}
-            rendererProp={currentCase.backend === 'webgl' ? 'webgl' : 'canvas'}
-            onRendered={runner.handleRendered}
-          />
-        )}
+        {currentCase &&
+          runner.preparedData &&
+          // Codex iter-4 P1 mount guard: only render once the
+          // prepared payload matches the current case. Without this
+          // the route would mount the previous case's points with
+          // the new case's renderer prop during the async
+          // preflight window.
+          runner.preparedData.caseId === currentCase.id && (
+            <RenderSlot
+              key={renderSlotKey}
+              data={runner.preparedData.points}
+              rendererProp={currentCase.backend === 'webgl' ? 'webgl' : 'canvas'}
+              onRendered={runner.handleRendered}
+            />
+          )}
       </section>
 
       <BenchmarkResultsTable results={runner.results} />
