@@ -99,8 +99,12 @@ describe('unstable_downsampleAnomalyPreservingLTTB — algorithm invariants', ()
   });
 
   it('output is x-sorted with originalIndex tie-break', () => {
+    // Build the input ALREADY x-sorted (PR-A2b precondition) but
+    // with duplicated x values so the tie-break path is exercised.
+    // Pattern: x = floor(i / 10) — every 10 source points share an
+    // x value, originalIndex strictly increases across the run.
     const data: AnomalyPoint[] = [];
-    for (let i = 0; i < 500; i++) data.push({ x: i % 50, y: i, originalIndex: i });
+    for (let i = 0; i < 500; i++) data.push({ x: Math.floor(i / 10), y: i, originalIndex: i });
     const out = unstable_downsampleAnomalyPreservingLTTB(data, 60);
     for (let i = 1; i < out.length; i++) {
       const prev = out[i - 1];
@@ -265,7 +269,12 @@ describe('unstable_downsampleAnomalyPreservingLTTB — multi-seed stability (250
   const seeds = [0x5eedc1f, 0xc001d00d, 0xbadcafe];
   it.each(seeds)('recall ≥ 0.95 at 250K source / 2K target with seed 0x%s', (seed) => {
     const { points, spikeIndices } = generateSpikeScatter(250_000, 64, seed);
-    const data: AnomalyPoint[] = points.map((p, i) => ({ x: p.x, y: p.y, originalIndex: i }));
+    // PR-A2b strict precondition: sort by x then originalIndex
+    // BEFORE entering the algorithm. `originalIndex` keeps the
+    // recall metric stable across the sort.
+    const data: AnomalyPoint[] = points
+      .map((p, i) => ({ x: p.x, y: p.y, originalIndex: i }))
+      .sort((a, b) => a.x - b.x || a.originalIndex - b.originalIndex);
     const out = unstable_downsampleAnomalyPreservingLTTB(data, 2000);
     const recall = computeAnomalyRecall(out, spikeIndices);
     expect(recall).toBeGreaterThanOrEqual(0.95);
@@ -281,11 +290,51 @@ describe('unstable_downsampleAnomalyPreservingLTTB — 1M canonical recall', () 
     'recall ≥ 0.95 at 1M source / 2K target (canonical seed 0x5eedc1f)',
     () => {
       const { points, spikeIndices } = generateSpikeScatter(1_000_000, 64, 0x5eedc1f);
-      const data: AnomalyPoint[] = points.map((p, i) => ({ x: p.x, y: p.y, originalIndex: i }));
+      const data: AnomalyPoint[] = points
+        .map((p, i) => ({ x: p.x, y: p.y, originalIndex: i }))
+        .sort((a, b) => a.x - b.x || a.originalIndex - b.originalIndex);
       const out = unstable_downsampleAnomalyPreservingLTTB(data, 2000);
       const recall = computeAnomalyRecall(out, spikeIndices);
       expect(recall).toBeGreaterThanOrEqual(0.95);
       expect(out.length).toBeLessThanOrEqual(2000);
     },
   );
+});
+
+describe('unstable_downsampleAnomalyPreservingLTTB — PR-A2b sorted-x precondition', () => {
+  it('throws a clear error when input is not sorted ascending by x', () => {
+    const data: AnomalyPoint[] = [
+      { x: 0, y: 0, originalIndex: 0 },
+      { x: 2, y: 1, originalIndex: 1 },
+      { x: 1, y: 2, originalIndex: 2 }, // out of order
+    ];
+    expect(() => unstable_downsampleAnomalyPreservingLTTB(data, 2)).toThrow(
+      /input must be sorted ascending by `x`/,
+    );
+  });
+
+  it('accepts a stably sorted input (with originalIndex tie-break)', () => {
+    const data: AnomalyPoint[] = [];
+    for (let i = 0; i < 100; i++) data.push({ x: i, y: 0, originalIndex: i });
+    expect(() => unstable_downsampleAnomalyPreservingLTTB(data, 20)).not.toThrow();
+  });
+});
+
+describe('unstable_downsampleAnomalyPreservingLTTB — remainingBudget direct assert (Codex iter-4)', () => {
+  it('picks the highest-residual non-mandatory point when only 1 slot is left after first/last+anomaly', () => {
+    // 5 points, threshold 4. Mandatory = first(0) + last(4) +
+    // 1 anomaly (idx=3, y=100). remainingBudget = 4 - 3 = 1.
+    // Among non-mandatory {1, 2}, idx=1 is the highest-residual
+    // (y=1 vs y=0). The branch must pick idx=1, not idx=2.
+    const data: AnomalyPoint[] = [
+      { x: 0, y: 0, originalIndex: 0 },
+      { x: 1, y: 1, originalIndex: 1 },
+      { x: 2, y: 0, originalIndex: 2 },
+      { x: 3, y: 100, originalIndex: 3 },
+      { x: 4, y: 0, originalIndex: 4 },
+    ];
+    const out = unstable_downsampleAnomalyPreservingLTTB(data, 4);
+    const indices = out.map((p) => p.originalIndex).sort((a, b) => a - b);
+    expect(indices).toEqual([0, 1, 3, 4]);
+  });
 });

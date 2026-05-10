@@ -509,23 +509,52 @@ function loadJson(path, label) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  // Codex iter-3 de-scope: the production CLI path for the
-  // correctness gate needs a `.ts`-aware runtime (tsx/tsm) to
-  // lazy-import the synthetic spike fixture + downsampler at run
-  // time, and wiring that into `.github/workflows/benchmark-1m.yml`
-  // is intentionally out of scope for PR-A2a. The pure
-  // `evaluateBenchmarkCorrectness(thresholds, runCase)` helper is
-  // still exported (and unit-tested) so a future PR can either
-  // (a) ship an explicit `tsx` runtime + workflow step, or
-  // (b) drive the helper from a jsdom Vitest job — without
-  // shipping a half-baked CLI that fails for ops on day one.
+  // PR-A2b CLI revert (Codex thread `019e0faa` iter-1): wire the
+  // correctness gate to a real `runCase` so `pnpm bench:correctness`
+  // (which runs `tsx scripts/ci/benchmark-1m-enforcer.mjs --check-
+  // correctness-only --thresholds benchmark-thresholds.json`) can
+  // exercise the synthetic spike fixture + anomaly-aware downsample
+  // in CI. The pure helper test seam from PR-A2a stays exported.
   if (args.correctnessOnly) {
-    console.error(
-      '[enforcer] --check-correctness-only is not yet wired for the production CLI runtime. ' +
-        'Drive `evaluateBenchmarkCorrectness(thresholds, runCase)` from a Node test or ' +
-        'tsx-aware harness instead. PR-A2a deliberately leaves the workflow wiring out.',
-    );
-    process.exit(2);
+    if (!args.thresholdsPath) {
+      console.error('[enforcer] --check-correctness-only requires --thresholds <path>');
+      process.exit(2);
+    }
+    const thresholds = loadJson(args.thresholdsPath, 'thresholds');
+    const { generateSpikeScatter } =
+      await import('../../packages/x-charts/src/performance/benchmark/fixtures.ts');
+    const { unstable_downsampleAnomalyPreservingLTTB, computeAnomalyRecall } =
+      await import('../../packages/x-charts/src/performance/anomaly-lttb.ts');
+    const verdict = await evaluateBenchmarkCorrectness(thresholds, async (_key, caseCfg) => {
+      const seedNum =
+        typeof caseCfg.seed === 'string' && caseCfg.seed.startsWith('0x')
+          ? Number.parseInt(caseCfg.seed.slice(2), 16)
+          : Number(caseCfg.seed ?? 0);
+      const { points, spikeIndices } = generateSpikeScatter(
+        caseCfg.sourceCount ?? 1_000_000,
+        caseCfg.spikeCount ?? 64,
+        seedNum,
+      );
+      // Sorted-x precondition (PR-A2b): sort BEFORE entering the
+      // algorithm so the strict check inside
+      // `unstable_downsampleAnomalyPreservingLTTB` doesn't throw.
+      // Stable sort with `originalIndex` tie-break preserves recall
+      // accounting across the rearrangement.
+      const data = points
+        .map((p, i) => ({ x: p.x, y: p.y, originalIndex: i }))
+        .sort((a, b) => a.x - b.x || a.originalIndex - b.originalIndex);
+      const t0 = performance.now();
+      const out = unstable_downsampleAnomalyPreservingLTTB(data, caseCfg.maxRenderedCount);
+      const prepMs = performance.now() - t0;
+      const recall = computeAnomalyRecall(out, spikeIndices);
+      return { recall, renderedCount: out.length, prepMs };
+    });
+    if (args.summaryOut) {
+      writeFileSync(args.summaryOut, JSON.stringify(verdict, null, 2), 'utf-8');
+    } else {
+      console.log(JSON.stringify(verdict, null, 2));
+    }
+    process.exit(verdict.ok ? 0 : 1);
   }
 
   if (!args.artifactPath || !args.thresholdsPath || !args.mode) {

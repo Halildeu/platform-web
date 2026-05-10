@@ -97,6 +97,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # PR-A2b correctness pre-flight (Codex thread `019e0faa` iter-1).
+      # Runs the synthetic spike fixture + anomaly-preserving LTTB
+      # downsampler against the `correctness` block of
+      # `benchmark-thresholds.json` BEFORE the heavy Chromium /
+      # Vite / Playwright artifact run. A recall regression here
+      # turns the PR check red without paying for the full benchmark
+      # round, and proves the algorithm contract independently of
+      # GPU jitter.
+      - name: Run benchmark correctness pre-flight
+        # `pnpm -w` targets the workspace-root scripts namespace
+        # (where `bench:correctness` lives). Without `-w` pnpm
+        # tries to find the script inside one of the workspace
+        # packages and errors out.
+        run: pnpm -w run bench:correctness
+
       - name: Install Chromium for Playwright
         run: pnpm exec playwright install --with-deps chromium
 
