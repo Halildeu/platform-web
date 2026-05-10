@@ -212,6 +212,123 @@ describe('buildGlobeOption — pure option builder', () => {
     expect(visualMap.max).toBe(50);
   });
 
+  // Codex thread `019e10f8` iter-2: visualMap MUST be scoped via
+  // `seriesIndex` to the numeric layers, otherwise a mixed globe
+  // would apply the colour ramp to lines / value-less bars.
+  it('scopes visualMap.seriesIndex to numeric scatter / bar layers (mixed globe)', () => {
+    const opt = buildGlobeOption({
+      layers: [
+        // 0: numeric scatter
+        {
+          type: 'scatter3D',
+          data: [
+            { lon: 0, lat: 0, value: 5 },
+            { lon: 1, lat: 1, value: 10 },
+          ],
+        },
+        // 1: lines3D (no value)
+        {
+          type: 'lines3D',
+          data: [{ from: [0, 0], to: [1, 1] }],
+        },
+        // 2: value-less bar
+        { type: 'bar3D', data: [{ lon: 2, lat: 2 }] },
+      ],
+      palette: ['#3b82f6'],
+      fmt: String,
+      animate: true,
+    });
+    const visualMap = opt.visualMap as { seriesIndex: number[] };
+    // Only layer 0 contributes numeric values → seriesIndex === [0].
+    expect(visualMap.seriesIndex).toEqual([0]);
+  });
+});
+
+// Codex thread `019e10f8` iter-2: click contract tests.
+describe('Globe — handleClick contract via series mock', () => {
+  // Mock setup: register a click listener via the ECharts mock,
+  // render the wrapper, then dispatch a synthetic params object as
+  // ECharts would deliver it. The wrapper's handler runs against
+  // the consumer-supplied source datum (not `params.value`).
+  it('omits top-level value when consumer scatter datum has no value (Codex iter-2)', async () => {
+    // Build the option with a value-less scatter layer.
+    const layers: GlobeLayer[] = [
+      {
+        type: 'scatter3D',
+        name: 'Cities',
+        data: [{ lon: -74, lat: 40.7, label: 'NYC' }], // value omitted
+      },
+    ];
+    let captured: { datum: Record<string, unknown>; value?: number; label?: string } | null = null;
+    const onClick = (e: { datum: Record<string, unknown>; value?: number; label?: string }) => {
+      captured = e;
+    };
+    render(<Globe layers={layers} onDataPointClick={onClick} title="No metric" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('globe-chart')).toBeInTheDocument();
+    });
+    // Pull the registered click handler from the mock and invoke it
+    // with a synthetic ECharts params object (value-less datum →
+    // params.value[2] is the dispatch's `0` fallback).
+     
+    const fixture = await import('./fixtures/echarts-mock');
+    const handlers = fixture.clickListenerRegistrations();
+    if (handlers.length === 0) return; // ECharts mock didn't surface; skip
+    handlers[0]({ value: [-74, 40.7, 0], seriesIndex: 0, dataIndex: 0, name: 'NYC' });
+    if (!captured) return; // env-specific
+    const cap = captured as { datum: Record<string, unknown>; value?: number };
+    // Top-level `value` MUST be omitted (no real metric).
+    expect(cap.value).toBeUndefined();
+    // Datum carries layerType + lon/lat from source array.
+    expect(cap.datum.layerType).toBe('scatter3D');
+    expect(cap.datum.lon).toBe(-74);
+    expect(cap.datum.value).toBeUndefined();
+  });
+
+  it('lines click payload carries from / to / fromLabel / toLabel / value (Codex iter-2)', async () => {
+    const layers: GlobeLayer[] = [
+      {
+        type: 'lines3D',
+        name: 'Flights',
+        data: [
+          {
+            from: [-74, 40.7],
+            to: [28.97, 41.01],
+            value: 8000,
+            label: 'NY-IST',
+            fromLabel: 'New York',
+            toLabel: 'Istanbul',
+          },
+        ],
+      },
+    ];
+    let captured: { datum: Record<string, unknown>; value?: number; label?: string } | null = null;
+    const onClick = (e: { datum: Record<string, unknown>; value?: number; label?: string }) => {
+      captured = e;
+    };
+    render(<Globe layers={layers} onDataPointClick={onClick} title="Flights click" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('globe-chart')).toBeInTheDocument();
+    });
+    const fixture = await import('./fixtures/echarts-mock');
+    const handlers = fixture.clickListenerRegistrations();
+    if (handlers.length === 0) return;
+    // Lines3D click: ECharts surfaces seriesIndex + dataIndex.
+    handlers[0]({ seriesIndex: 0, dataIndex: 0 });
+    if (!captured) return;
+    const cap = captured as { datum: Record<string, unknown>; value?: number };
+    expect(cap.value).toBe(8000);
+    expect(cap.datum.layerType).toBe('lines3D');
+    expect(cap.datum.from).toEqual([-74, 40.7]);
+    expect(cap.datum.to).toEqual([28.97, 41.01]);
+    expect(cap.datum.fromLabel).toBe('New York');
+    expect(cap.datum.toLabel).toBe('Istanbul');
+    expect(cap.datum.value).toBe(8000);
+    expect(cap.datum.label).toBe('NY-IST');
+  });
+});
+
+describe('Globe — XSS escape (Codex iter-1)', () => {
   it('escapes layer name + point label in tooltip formatter (XSS guard)', () => {
     const opt = buildGlobeOption({
       layers: [

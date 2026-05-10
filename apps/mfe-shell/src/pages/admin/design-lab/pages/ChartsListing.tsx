@@ -419,7 +419,8 @@ const ChartsListing: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Charts</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          @mfe/x-charts — 13 chart tipi, cross-filter, AI, performance. ECharts engine.
+          @mfe/x-charts — 17 chart tipi (13 2D + 4 3D), cross-filter, AI, performance. ECharts +
+          echarts-gl engine.
         </p>
         <div className="mt-3 flex gap-2 text-xs text-text-tertiary">
           <span>{CHART_ITEMS.length} component/hook</span>

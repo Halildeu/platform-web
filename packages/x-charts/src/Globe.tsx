@@ -153,13 +153,16 @@ export interface GlobeProps extends AccessControlledProps {
   /** Additional class name. */
   className?: string;
   /**
-   * Globe surface texture URL (or canvas). Wrapper has NO default —
-   * consumer supplies. Codex thread `019e10f8` iter-1: the wrapper
-   * must not bundle world map / HDR assets.
+   * Globe surface texture URL or canvas. Wrapper has NO default —
+   * consumer supplies. Codex thread `019e10f8` iter-1/iter-2: the
+   * wrapper must not bundle world map / HDR assets. Type widened
+   * to accept HTMLCanvasElement so consumers can render their own
+   * texture (e.g. dynamically composed map) without round-tripping
+   * through a data URL.
    */
-  baseTexture?: string;
-  /** Optional terrain elevation texture. */
-  heightTexture?: string;
+  baseTexture?: string | HTMLCanvasElement;
+  /** Optional terrain elevation texture (URL or canvas). */
+  heightTexture?: string | HTMLCanvasElement;
   /**
    * Terrain displacement multiplier (only effective when
    * `heightTexture` is set; the helper omits the option otherwise).
@@ -250,21 +253,32 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
   // Per-layer series. `coordinateSystem: 'globe'` is enforced by the
   // wrapper — consumer cannot override it (would break the geo
   // semantic and ECharts would refuse to render).
+  //
+  // Codex thread `019e10f8` iter-2 hardening:
+  //   - `numericSeriesIndexes` tracks layers that actually
+  //     contribute a `value` field, so visualMap can scope itself
+  //     to those series only (mixed globe must NOT spill the colour
+  //     ramp onto lines / value-less bar series).
+  //   - lines3D data items now carry the full source datum (label /
+  //     value / from / to / fromLabel / toLabel) so the tooltip and
+  //     click handler can read them back without re-resolving
+  //     against the original layer array.
   let valueMin = Number.POSITIVE_INFINITY;
   let valueMax = Number.NEGATIVE_INFINITY;
-  let hasNumericLayer = false;
+  const numericSeriesIndexes: number[] = [];
 
   const series = layers.map((layer, i) => {
     const baseColor = palette[i % Math.max(1, palette.length)];
     const layerName = layer.name ?? `Layer ${i + 1}`;
     if (layer.type === 'scatter3D') {
       // ECharts globe scatter3D `data` items: [lon, lat, value, ...]
+      let layerHasValue = false;
       const data = layer.data.map((d) => {
         const v = d.value ?? 0;
         if (d.value !== undefined) {
           if (v < valueMin) valueMin = v;
           if (v > valueMax) valueMax = v;
-          hasNumericLayer = true;
+          layerHasValue = true;
         }
         const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
         if (d.label !== undefined) item.name = d.label;
@@ -272,6 +286,7 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         if (d.size !== undefined) item.symbolSize = d.size;
         return item;
       });
+      if (layerHasValue) numericSeriesIndexes.push(i);
       return {
         name: layerName,
         type: 'scatter3D',
@@ -282,18 +297,20 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
       };
     }
     if (layer.type === 'bar3D') {
+      let layerHasValue = false;
       const data = layer.data.map((d) => {
         const v = d.value ?? 0;
         if (d.value !== undefined) {
           if (v < valueMin) valueMin = v;
           if (v > valueMax) valueMax = v;
-          hasNumericLayer = true;
+          layerHasValue = true;
         }
         const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
         if (d.label !== undefined) item.name = d.label;
         if (d.color !== undefined) item.itemStyle = { color: d.color };
         return item;
       });
+      if (layerHasValue) numericSeriesIndexes.push(i);
       return {
         name: layerName,
         type: 'bar3D',
@@ -303,14 +320,31 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         itemStyle: { color: baseColor },
       };
     }
-    // lines3D layer
-    const data = layer.data.map((d) => ({
-      coords: [
-        [d.from[0], d.from[1]],
-        [d.to[0], d.to[1]],
-      ],
-      ...(d.color ? { lineStyle: { color: d.color } } : {}),
-    }));
+    // lines3D layer — carry source-datum metadata onto each item so
+    // tooltip / click can read it back via params.dataIndex without
+    // re-resolving against `layers[i].data` (Codex iter-2).
+    const data = layer.data.map((d) => {
+      const item: Record<string, unknown> = {
+        coords: [
+          [d.from[0], d.from[1]],
+          [d.to[0], d.to[1]],
+        ],
+      };
+      if (d.color !== undefined) item.lineStyle = { color: d.color };
+      if (d.label !== undefined) item.name = d.label;
+      // Echo source metadata so consumers can read it via `params.data`
+      // (ECharts surfaces the original item object). Not consumed by
+      // ECharts itself; safe extra fields.
+      item.__source = {
+        from: d.from,
+        to: d.to,
+        value: d.value,
+        label: d.label,
+        fromLabel: d.fromLabel,
+        toLabel: d.toLabel,
+      };
+      return item;
+    });
     return {
       name: layerName,
       type: 'lines3D',
@@ -322,25 +356,47 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
 
   // visualMap only when at least one numeric scatter / bar layer
   // contributes values — lines-only globe should NOT show a colour
-  // scale (Codex iter-1).
-  const visualMap = hasNumericLayer
-    ? {
-        show: false,
-        // Geo data tuples are [lon, lat, value]; dimension 2 = value.
-        dimension: 2,
-        min: Number.isFinite(valueMin) ? valueMin : 0,
-        max: Number.isFinite(valueMax) ? valueMax : 1,
-        inRange: { color: [palette[0], palette[palette.length - 1] ?? palette[0]] },
-      }
-    : undefined;
+  // scale (Codex iter-1). Scoped via `seriesIndex` so mixed globes
+  // don't apply the colour ramp to non-numeric layers (Codex iter-2).
+  const visualMap =
+    numericSeriesIndexes.length > 0
+      ? {
+          show: false,
+          // Geo data tuples are [lon, lat, value]; dimension 2 = value.
+          dimension: 2,
+          min: Number.isFinite(valueMin) ? valueMin : 0,
+          max: Number.isFinite(valueMax) ? valueMax : 1,
+          seriesIndex: numericSeriesIndexes,
+          inRange: { color: [palette[0], palette[palette.length - 1] ?? palette[0]] },
+        }
+      : undefined;
 
   const option: Record<string, unknown> = {
     globe: globeOption,
     tooltip: {
-      formatter: (params: { value?: number[]; name?: string; seriesIndex?: number }) => {
+      formatter: (params: {
+        value?: number[];
+        name?: string;
+        seriesIndex?: number;
+        dataIndex?: number;
+      }) => {
         const sIdx = params.seriesIndex ?? 0;
         const layer = layers[sIdx];
         const layerName = escapeHtml(layer?.name ?? `Layer ${sIdx + 1}`);
+        // Codex iter-2: lines3D should resolve from the source datum
+        // so the tooltip shows `from → to` (with optional labels)
+        // instead of `lon: undefined / lat: undefined / value: 0`.
+        if (layer && layer.type === 'lines3D') {
+          const src = layer.data[params.dataIndex ?? -1];
+          if (src) {
+            const fromTxt = escapeHtml(src.fromLabel ?? `(lon=${src.from[0]}, lat=${src.from[1]})`);
+            const toTxt = escapeHtml(src.toLabel ?? `(lon=${src.to[0]}, lat=${src.to[1]})`);
+            const labelLine = src.label ? `<b>${escapeHtml(src.label)}</b><br/>` : '';
+            const valueLine =
+              src.value !== undefined ? `<br/>value: ${escapeHtml(fmt(src.value))}` : '';
+            return `${labelLine}<i>${layerName}</i><br/>${fromTxt} → ${toTxt}${valueLine}`;
+          }
+        }
         const [a, b, c] = params.value ?? [];
         const labelLine = params.name ? `<b>${escapeHtml(params.name)}</b><br/>` : '';
         return `${labelLine}<i>${layerName}</i><br/>lon: ${escapeHtml(String(a))}<br/>lat: ${escapeHtml(String(b))}<br/>value: ${escapeHtml(fmt(c ?? 0))}`;
@@ -453,11 +509,43 @@ const GlobeInner = React.forwardRef<HTMLDivElement, Omit<GlobeProps, 'access' | 
         const sIdx = p.seriesIndex ?? 0;
         const layer = layers[sIdx];
         const layerType = layer?.type;
-        const [lon, lat, value] = p.value ?? [];
-        // Datum-only canonical click payload (Codex iter-1 P1c). Top-
-        // level `value` only when a real numeric metric exists.
-        const numericValue =
-          typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+        const dataIndex = p.dataIndex ?? -1;
+
+        // Codex thread `019e10f8` iter-2: source-of-truth is the
+        // consumer-supplied `layers[i].data[dataIndex]`, NOT the
+        // ECharts `params.value[2]` (which is `0` for value-less
+        // datums and would falsely emit `top-level value=0`).
+        // lines3D layers don't carry value in `params.value` at
+        // all — only via the source array.
+        let sourceValue: number | undefined;
+        let sourceLabel: string | undefined;
+        let lon: number | undefined;
+        let lat: number | undefined;
+        let extra: Record<string, unknown> = {};
+        if (layer && layer.type === 'lines3D') {
+          const src = layer.data[dataIndex];
+          if (src) {
+            lon = src.from[0];
+            lat = src.from[1];
+            sourceValue = src.value;
+            sourceLabel = src.label;
+            extra = {
+              from: src.from,
+              to: src.to,
+              fromLabel: src.fromLabel,
+              toLabel: src.toLabel,
+            };
+          }
+        } else if (layer) {
+          const src = (layer as { data: GlobeScatterDatum[] }).data[dataIndex];
+          if (src) {
+            lon = src.lon;
+            lat = src.lat;
+            sourceValue = src.value;
+            sourceLabel = src.label;
+          }
+        }
+        const hasNumericMetric = typeof sourceValue === 'number' && Number.isFinite(sourceValue);
         onDataPointClick({
           datum: {
             chartType: 'globe',
@@ -465,15 +553,16 @@ const GlobeInner = React.forwardRef<HTMLDivElement, Omit<GlobeProps, 'access' | 
             layerName: layer?.name ?? `Layer ${sIdx + 1}`,
             layerIndex: sIdx,
             layerType,
-            dataIndex: p.dataIndex ?? -1,
+            dataIndex,
             lon,
             lat,
-            value: numericValue,
-            label: p.name,
+            value: hasNumericMetric ? sourceValue : undefined,
+            label: sourceLabel ?? p.name,
+            ...extra,
           },
           seriesId: layer && 'id' in layer ? layer.id : undefined,
-          ...(numericValue !== undefined ? { value: numericValue } : {}),
-          label: p.name,
+          ...(hasNumericMetric ? { value: sourceValue } : {}),
+          label: sourceLabel ?? p.name,
         });
       },
       [onDataPointClick, layers],
