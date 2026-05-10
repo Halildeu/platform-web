@@ -51,6 +51,10 @@ vi.mock('@mfe/shared-http', () => ({
     delete: vi.fn(async () => ({ data: {} })),
     put: vi.fn(async () => ({ data: {} })),
   },
+  // PR-C2: see canEdit.spec.tsx mock note — getShellServices is now
+  // invoked at render time for the impersonation mount gate.
+  logExpected: vi.fn(),
+  registerAuthTokenResolver: vi.fn(),
 }));
 
 vi.mock('../../../../features/user-management/model/use-users-query.model', () => ({

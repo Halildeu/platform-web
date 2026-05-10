@@ -12,10 +12,10 @@ import {
 } from '../../features/notifications/model/notifications.slice';
 import { Sidebar } from './Sidebar';
 import AuditSummaryStrip from './AuditSummaryStrip';
-// ImpersonationBanner mount deferred to PR-C2 (Codex iter-31 REVISE):
-// production token swap requires shell auth state machine integration.
-// Component file lives in this directory; do NOT import here until
-// PR-C2 wires enterImpersonationSession into auth.slice.
+// User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+// banner is mounted unconditionally; visibility is gated inside the
+// component via {@link selectIsImpersonating}.
+import { ImpersonationBanner } from './ImpersonationBanner';
 import { ShellHeaderNew, BreadcrumbStrip } from './header';
 import { RouteTracker } from '../router/RouteTracker';
 import { AppRouter } from '../router/AppRouter';
@@ -49,6 +49,11 @@ const ShellChrome: React.FC = () => {
       }}
       className="flex min-h-screen flex-col"
     >
+      {/* User Impersonation v1 PR-C2 sticky banner — visibility owned
+          by the component (selectIsImpersonating). Lives ABOVE the
+          header so the banner is always at the top of viewport. */}
+      <ImpersonationBanner />
+
       {/* Fixed header */}
       <ShellHeaderNew />
 

@@ -11,10 +11,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserDetail } from '@mfe/shared-types';
 import HierarchicalScopePicker from './HierarchicalScopePicker';
-// ImpersonateAction mount deferred to PR-C2 (Codex iter-31 REVISE):
-// production token swap requires shell auth state machine integration.
-// Component file lives next to this drawer; do NOT import here until
-// PR-C2 wires the shell-services.auth.enterImpersonation dispatcher.
+// User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
+// ImpersonateAction now mounts conditionally below the load-error
+// block. Visibility gate combines isSuperAdmin (UX) + !isImpersonating
+// (nested-impersonation forbidden — backend also enforces).
+import { ImpersonateAction } from './ImpersonateAction';
+import { getShellServices } from '../../../app/services/shell-services';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
 import { usePermissions } from '@mfe/auth';
 // Codex 019ddd78 iter-38 P1 — primitive switch from DetailDrawer (read-only
@@ -1684,8 +1686,23 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           </div>
         )}
 
-        {/* User Impersonation v1 ImpersonateAction mount deferred to PR-C2.
-            See top-of-file comment near the import block. */}
+        {/* User Impersonation v1 PR-C2 (Codex AGREE `019e109c` iter-4):
+            mount conditionally — SuperAdmin only, no nested impersonation.
+            The action component itself renders null if !isSuperAdmin();
+            we ALSO check isImpersonating() so the row hides while a
+            session is already active (defence in depth — backend
+            rejects with NESTED_IMPERSONATION_FORBIDDEN regardless). */}
+        {isAdmin && !getShellServices().auth.isImpersonating() && user.id ? (
+          <section className="mt-4">
+            <ImpersonateAction
+              user={{
+                id: user.id,
+                email: user.email,
+                fullName: user.fullName,
+              }}
+            />
+          </section>
+        ) : null}
 
         {/* Profile Section */}
         <section>
