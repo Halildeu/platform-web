@@ -448,6 +448,14 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     // The demo defaults to ON inside `ScatterAnomalyDemoChart`;
     // a future PR can ship a real playground-only descriptor knob
     // if an explicit on/off control is wanted.
+    //
+    // PR-A2c-wire: `enableBrush` IS a real public prop on
+    // `ScatterChart` (Faz 21.11 toolbox brush opt-in). Listed so
+    // the playground can toggle the toolbox/brush UI live and
+    // wire the status pill demo. `onBrushSelection` is a callback
+    // — those are forwarded via `getCallbackPreset` infra and
+    // don't need a playground entry.
+    'enableBrush',
   ]),
   'gauge-chart': new Set([
     'size',

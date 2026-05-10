@@ -825,7 +825,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'line-chart': 16,
     'area-chart': 17,
     'pie-chart': 15,
-    'scatter-chart': 17,
+    'scatter-chart': 18, // PR-A2c-wire: + enableBrush
     'gauge-chart': 19,
     'radar-chart': 16,
     'treemap-chart': 15,

@@ -435,6 +435,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
             showAnomalyPills={isOn(toggles, 'showAnomalyPills', true)}
+            enableBrush={isOn(toggles, 'enableBrush', false)}
           />
         </PreviewBox>
       );
@@ -1108,8 +1109,10 @@ function injectDemoOutlier<T extends { x: number; y: number; label?: string }>(d
 
 const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
   showAnomalyPills = true,
+  enableBrush = false,
   data,
   valueFormatter,
+  onBrushSelection,
   ...rest
 }) => {
   // When the demo toggle is on we extend the dataset with a guaranteed
@@ -1133,13 +1136,63 @@ const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
     idPrefix: 'scatter-demo-anomaly',
     valueFormatter,
   });
+
+  // PR-A2c-wire demo: status pill that reflects the most recent brush
+  // selection. Lets the design-lab tester SEE that the brush wiring
+  // is alive without an AG Grid mounted on top (that lands in
+  // PR-A2c-adopt). Falls back to a neutral hint when brush is off.
+  const [brushStatus, setBrushStatus] = React.useState<string>(
+    enableBrush ? 'Henüz seçim yok' : 'Brush kapalı',
+  );
+  React.useEffect(() => {
+    setBrushStatus(enableBrush ? 'Henüz seçim yok' : 'Brush kapalı');
+  }, [enableBrush]);
+
+  const handleBrushSelection = React.useCallback<NonNullable<typeof onBrushSelection>>(
+    (selection) => {
+      if (selection === null) {
+        setBrushStatus('Seçim temizlendi');
+      } else {
+        const fromX = selection.from.x ?? '·';
+        const fromY = selection.from.y ?? '·';
+        const toX = selection.to.x ?? '·';
+        const toY = selection.to.y ?? '·';
+        setBrushStatus(
+          `${selection.indices.length} satır · x:[${fromX}, ${toX}] · y:[${fromY}, ${toY}]`,
+        );
+      }
+      onBrushSelection?.(selection);
+    },
+    [onBrushSelection],
+  );
+
   return (
-    <ScatterChart
-      {...rest}
-      data={augmentedData}
-      valueFormatter={valueFormatter}
-      markups={showAnomalyPills ? anomalyMarkups : undefined}
-    />
+    <div data-testid="scatter-anomaly-demo-shell">
+      <ScatterChart
+        {...rest}
+        data={augmentedData}
+        valueFormatter={valueFormatter}
+        markups={showAnomalyPills ? anomalyMarkups : undefined}
+        enableBrush={enableBrush}
+        onBrushSelection={enableBrush ? handleBrushSelection : undefined}
+      />
+      {enableBrush && (
+        <div
+          data-testid="scatter-anomaly-demo-brush-status"
+          style={{
+            marginTop: 8,
+            padding: '4px 8px',
+            borderRadius: 4,
+            background: 'var(--surface-muted, #f3f4f6)',
+            color: 'var(--text-primary, #111827)',
+            fontSize: 12,
+            fontFamily: 'var(--font-family-mono, ui-monospace, monospace)',
+          }}
+        >
+          Brush: {brushStatus}
+        </div>
+      )}
+    </div>
   );
 };
 

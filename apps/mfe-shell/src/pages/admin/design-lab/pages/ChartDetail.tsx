@@ -1049,6 +1049,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Hard cross-filter requirement — when true the router will NEVER\nupgrade to WebGL above the cross-filter ceiling (default 500K).\nUse for trading dashboards where losing click → drilldown is\nunacceptable.',
       },
       {
+        name: 'enableBrush',
+        type: 'boolean',
+        required: false,
+        default: 'undefined',
+        description:
+          'Faz 21.11 PR-A2c-wire — opt-in ECharts toolbox brush feature.\nWhen `true` the chart renders a toolbox button + enables top-level\n`option.brush` so the user can drag a rectangle (or click clear)\nover the scatter. Selections fire `onBrushSelection` with a\nnormalised `BrushSelection` (PR-A2c). Also flips the renderer\nrouter into the cross-filter-required path so big-data datasets\nnever silently route to WebGL above the cross-filter ceiling\n(where brush parity becomes unreliable).\n\nDefault `false` — backwards compat. ECharts toolbox/brush bundle\nis paid only when a shim opts in; no shim that omits this flag\ntriggers the brush UI.',
+      },
+      {
+        name: 'onBrushSelection',
+        type: '(selection: BrushSelection | null) => void',
+        required: false,
+        default: 'undefined',
+        description:
+          "Faz 21.11 PR-A2c-wire — fires when the user drags a rectangle on\nthe chart (or clears one). Receives a normalised `BrushSelection`\nwith `from`/`to` in data-space coordinates and source-row\n`indices` (resolved via `originalIndex` when the chart was drawn\nfrom PR-A2a downsampled data). `null` means the user cleared the\nbrush. Pair with `brushToAgGridFilterModel` +\n`mergeBrushFilterModel` (both from `@mfe/x-charts`) to wire into\nan AG Grid SSRM datasource without losing existing column\nfilters.\n\nRenderer-agnostic — works the same in canvas / lttb / webgl\nrouter branches because the helper normalises ECharts'\n`brushselected` payload upstream of the renderer pipeline.",
+      },
+      {
         name: 'unstable_onRenderSettled',
         type: "EChartsRendererOptions['unstable_onRenderSettled']",
         required: false,
