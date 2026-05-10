@@ -1052,7 +1052,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         name: 'enableBrush',
         type: 'boolean',
         required: false,
-        default: 'undefined',
+        default: 'false',
         description:
           'Faz 21.11 PR-A2c-wire — opt-in ECharts toolbox brush feature.\nWhen `true` the chart renders a toolbox button + enables top-level\n`option.brush` so the user can drag a rectangle (or click clear)\nover the scatter. Selections fire `onBrushSelection` with a\nnormalised `BrushSelection` (PR-A2c). Also flips the renderer\nrouter into the cross-filter-required path so big-data datasets\nnever silently route to WebGL above the cross-filter ceiling\n(where brush parity becomes unreliable).\n\nDefault `false` — backwards compat. ECharts toolbox/brush bundle\nis paid only when a shim opts in; no shim that omits this flag\ntriggers the brush UI.',
       },

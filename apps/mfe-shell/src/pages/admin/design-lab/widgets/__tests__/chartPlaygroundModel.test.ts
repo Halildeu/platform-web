@@ -853,8 +853,11 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'sunburst-chart': 3, // + onNodeClick
   };
 
-  // Total = 210 (primitives) + 34 (presets) = 244, coverage = 244 / 264 ≈ %92.4
-  const TOTAL_CATALOG_PROPS = 264;
+  // PR-A2c-wire bumped scatter-chart primitives 17 → 18 (`enableBrush`)
+  // and added 2 public ScatterChart props (`enableBrush`,
+  // `onBrushSelection`) to the catalog → 264 → 266. Coverage:
+  // 211 (primitives) + 34 (presets) = 245 / 266 ≈ %92.1.
+  const TOTAL_CATALOG_PROPS = 266;
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
   const PRESET_TOTAL = Object.values(PRESET_COUNTS).reduce((a, b) => a + b, 0);
   const EXPECTED_TOTAL = PRIMITIVE_TOTAL + PRESET_TOTAL;

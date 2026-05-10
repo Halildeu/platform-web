@@ -165,6 +165,8 @@ export interface ScatterChartProps extends AccessControlledProps {
    * Default `false` — backwards compat. ECharts toolbox/brush bundle
    * is paid only when a shim opts in; no shim that omits this flag
    * triggers the brush UI.
+   *
+   * @default false
    */
   enableBrush?: boolean;
   /**

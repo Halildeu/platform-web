@@ -638,7 +638,9 @@ export interface ComplexPreset {
  *
  * Coverage uplift achieved (PR-FE-Playground-3 scope): 34 preset entries
  * across 13 charts (callbacks + valueFormatter + colors + gauge thresholds)
- * lift system-wide coverage from PR-A's %79.5 baseline to **244/264 ≈ %92.4**.
+ * lift system-wide coverage from PR-A's %79.5 baseline to **245/266 ≈ %92.1**
+ * after PR-A2c-wire added `enableBrush` (live primitive) + the
+ * `onBrushSelection` callback to the catalog.
  * Sample data presets (data/series/indicators/nodes/links/labels) are
  * intentionally deferred to PR-FE-Playground-4 — they would push coverage
  * to ~%98 but require chart-specific resolver wiring that is out of scope

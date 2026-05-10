@@ -1167,7 +1167,10 @@ const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
   );
 
   return (
-    <div data-testid="scatter-anomaly-demo-shell">
+    <div
+      data-testid="scatter-anomaly-demo-shell"
+      style={enableBrush ? { position: 'relative', height: '100%' } : undefined}
+    >
       <ScatterChart
         {...rest}
         data={augmentedData}
@@ -1177,16 +1180,31 @@ const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
         onBrushSelection={enableBrush ? handleBrushSelection : undefined}
       />
       {enableBrush && (
+        // Codex iter-3 PR-A2c-wire §1: PreviewBox is `overflow:
+        // hidden` with a fixed height, so a normal-flow status pill
+        // below the chart gets clipped. Render as an absolute
+        // overlay anchored to the lower-right corner with a low
+        // z-index so the brush rectangle stays interactive over
+        // the chart canvas.
         <div
           data-testid="scatter-anomaly-demo-brush-status"
           style={{
-            marginTop: 8,
+            position: 'absolute',
+            right: 8,
+            bottom: 8,
+            zIndex: 1,
             padding: '4px 8px',
             borderRadius: 4,
             background: 'var(--surface-muted, #f3f4f6)',
             color: 'var(--text-primary, #111827)',
             fontSize: 12,
             fontFamily: 'var(--font-family-mono, ui-monospace, monospace)',
+            pointerEvents: 'none',
+            maxWidth: 'calc(100% - 16px)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            boxShadow: 'var(--shadow-sm, 0 1px 2px var(--shadow-color, transparent))',
           }}
         >
           Brush: {brushStatus}
