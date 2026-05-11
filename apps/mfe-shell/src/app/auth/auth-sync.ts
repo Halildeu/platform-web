@@ -46,11 +46,11 @@ const notifyListeners = (payload: AuthSyncPayload) => {
   listeners.forEach((listener) => {
     try {
       listener(payload);
-        } catch (error: unknown) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.warn('[auth-sync] listener error', error);
-          }
-        }
+    } catch (error: unknown) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[auth-sync] listener error', error);
+      }
+    }
   });
 };
 
@@ -63,11 +63,12 @@ const tryParsePayload = (data: unknown): AuthSyncPayload | null => {
   const profile = (payload.profile as Partial<UserProfile> | null | undefined) ?? null;
   const expiresAt =
     typeof payload.expiresAt === 'number' || payload.expiresAt === null
-      ? (payload.expiresAt as number | null | undefined) ?? null
+      ? ((payload.expiresAt as number | null | undefined) ?? null)
       : null;
   const sourceId = typeof payload.sourceId === 'string' ? payload.sourceId : undefined;
   const event =
-    typeof payload.event === 'string' && (['LOGIN', 'LOGOUT', 'REFRESH'] as string[]).includes(payload.event)
+    typeof payload.event === 'string' &&
+    (['LOGIN', 'LOGOUT', 'REFRESH'] as string[]).includes(payload.event)
       ? (payload.event as AuthSyncEvent)
       : undefined;
   return { token, profile, expiresAt, sourceId, event };
@@ -195,6 +196,11 @@ export const broadcastAuthState = (payload: AuthSyncPayload): void => {
     sourceId: tabId,
     event: determineEvent(payload),
   };
+  // lastPayload is still written here so determineEvent on the *next*
+  // self-broadcast can correctly distinguish LOGIN vs REFRESH vs LOGOUT
+  // against the previous local transition. The cross-tab semantics are
+  // preserved by subscribeAuthState's sourceId guard below — late
+  // subscribers will NOT be hit with our own initial seed payload.
   lastPayload = enriched;
   persistSnapshot(enriched);
   if (channel) {
@@ -206,14 +212,33 @@ export const broadcastAuthState = (payload: AuthSyncPayload): void => {
 
 export const subscribeAuthState = (listener: AuthSyncListener): (() => void) => {
   listeners.add(listener);
-  if (lastPayload) {
+  // 2026-05-11 hotfix (login açılmıyor real root cause):
+  // Only fire the cached payload on subscribe when it originated from a
+  // PEER tab. Self-originated payloads (sourceId === tabId) are a local
+  // book-keeping artefact of broadcastAuthState — they must not be
+  // replayed to listeners as if they were external cross-tab events.
+  //
+  // Previously, configureShellServices' initial broadcastAuthState(
+  // {token: null}) at boot wrote lastPayload = {token: null, sourceId:
+  // tabId}. The next subscriber (AuthBootstrapper) then attached and
+  // was immediately handed that null-token snapshot, fired its
+  // dispatch(logout()) + dispatch(setAuthInitialized(true)) path BEFORE
+  // kc.init() had a chance to process the auth-code URL fragment.
+  // AppRouter's / route then saw initialized=true && !token, did
+  // <Navigate to="/login" replace>, the URL fragment was stripped, and
+  // kc.init() saw /login with no code → declared unauthenticated. End-
+  // user read it as "açılmıyor".
+  //
+  // The sourceId === tabId guard closes the self-pollution path
+  // without changing legitimate cross-tab replay behaviour.
+  if (lastPayload && lastPayload.sourceId !== tabId) {
     try {
       listener(lastPayload);
-      } catch (error: unknown) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[auth-sync] immediate listener error', error);
-        }
+    } catch (error: unknown) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[auth-sync] immediate listener error', error);
       }
+    }
   }
   return () => listeners.delete(listener);
 };
