@@ -212,25 +212,27 @@ export const broadcastAuthState = (payload: AuthSyncPayload): void => {
 
 export const subscribeAuthState = (listener: AuthSyncListener): (() => void) => {
   listeners.add(listener);
-  // 2026-05-11 hotfix (login açılmıyor real root cause):
-  // Only fire the cached payload on subscribe when it originated from a
-  // PEER tab. Self-originated payloads (sourceId === tabId) are a local
-  // book-keeping artefact of broadcastAuthState — they must not be
+  // 2026-05-11 hotfix (login flow real root cause — PR #390):
+  // Only replay the cached payload on subscribe when it originated from
+  // a PEER tab. Self-originated payloads (sourceId === tabId) are a
+  // local book-keeping artefact of broadcastAuthState and must NOT be
   // replayed to listeners as if they were external cross-tab events.
   //
-  // Previously, configureShellServices' initial broadcastAuthState(
-  // {token: null}) at boot wrote lastPayload = {token: null, sourceId:
-  // tabId}. The next subscriber (AuthBootstrapper) then attached and
-  // was immediately handed that null-token snapshot, fired its
-  // dispatch(logout()) + dispatch(setAuthInitialized(true)) path BEFORE
-  // kc.init() had a chance to process the auth-code URL fragment.
-  // AppRouter's / route then saw initialized=true && !token, did
-  // <Navigate to="/login" replace>, the URL fragment was stripped, and
-  // kc.init() saw /login with no code → declared unauthenticated. End-
-  // user read it as "açılmıyor".
+  // Previously, configureShellServices' boot-time
+  // broadcastAuthState({token: null}) wrote lastPayload =
+  // {token: null, sourceId: tabId}. The next subscriber
+  // (AuthBootstrapper) then attached and was immediately handed that
+  // null-token snapshot, dispatching logout() + setAuthInitialized
+  // (true) BEFORE kc.init() processed the auth-code URL fragment.
+  // AppRouter's / route then saw initialized=true && !token and did
+  // <Navigate to="/login" replace>, throwing away the URL fragment.
+  // kc.init() then saw /login with no code and declared unauthenticated
+  // — the end-user-visible "login won't open" symptom.
   //
-  // The sourceId === tabId guard closes the self-pollution path
-  // without changing legitimate cross-tab replay behaviour.
+  // The sourceId === tabId guard closes that self-pollution path
+  // without changing legitimate cross-tab replay behaviour: peer
+  // payloads arrive through notifyListeners (channel / storage /
+  // custom-event paths) with a different sourceId and still replay.
   if (lastPayload && lastPayload.sourceId !== tabId) {
     try {
       listener(lastPayload);
