@@ -146,7 +146,7 @@ describe('auth-sync — subscribeAuthState sourceId guard (PR #390 regression)',
     expect(replayed.sourceId).toBe('peer-tab-id');
   });
 
-  it('replays peer payload even after a later self-broadcast (peer state preserved as last cross-tab signal)', async () => {
+  it('self-broadcast wins the cached replay slot over an older peer payload', async () => {
     const { broadcastAuthState, subscribeAuthState } = await importAuthSync();
 
     const channel = FakeBroadcastChannel.instances[0];
