@@ -10,6 +10,10 @@ import { serviceHealthApi } from './vite-plugins/service-health-api';
 // modulepreload helper inside design-system loadShare instead of importing
 // it from auth loadShare.
 import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
+// PERF-INIT-V2 PR-A0: optional bundle analyzer. Activates only when
+// ANALYZE_BUNDLE=1 env is set; outputs treemap + raw stats JSON under
+// tests/perf/bundle-stats/mfe-shell/. See docs/performance/bundle-taxonomy.md.
+import { bundleVisualizer } from '../../scripts/vite-plugins/bundle-visualizer';
 
 /* ------------------------------------------------------------------ */
 /*  Env helpers — replaces webpack's DefinePlugin + InjectRuntimeEnv   */
@@ -300,6 +304,8 @@ export default defineConfig(({ mode }) => {
     publicDir: 'public',
 
     plugins: [
+      // PERF-INIT-V2 PR-A0: bundle analyzer (env-gated, returns [] when off)
+      ...bundleVisualizer({ mfeName: 'mfe-shell' }),
       /* Live service health API — serves /api/services without backend */
       serviceHealthApi(),
       /* Inject runtime env into HTML */
