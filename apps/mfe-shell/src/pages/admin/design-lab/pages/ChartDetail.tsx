@@ -603,6 +603,30 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Donut mode (ring instead of filled).',
       },
       {
+        name: 'radius',
+        type: '[number | string, number | string]',
+        required: false,
+        default: 'undefined (legacy donut/breakpoint heuristic kept)',
+        description:
+          "Explicit radius envelope `[innerRadius, outerRadius]` for fine-grained\ndonut hole control. Each value can be a CSS-like percentage (e.g.\n`'45%'`) or a pixel number. When set, this OVERRIDES the implicit\nradius driven by `donut` + size + breakpoint.\n\nUse cases:\n - Tighter donut ring (`['72%', '88%']`)\n - Big-number-inside-pie KPI (`['62%', '100%']`)\n - Nightingale rose mode (`[0, '90%']` plus `roseType=\"area\"`)\n\nMaps directly to ECharts `series.radius`.",
+      },
+      {
+        name: 'roseType',
+        type: "'radius' | 'area'",
+        required: false,
+        default: 'undefined (regular pie / donut)',
+        description:
+          "Nightingale rose chart mode — slices grow outward from the center\nproportional to their value instead of using equal-arc widths.\n- `'radius'`: slice arc width follows value; outer radius is the\n  per-slice variable\n- `'area'`: slice area is proportional to value (perceptually fairer)\n\nMaps to ECharts `series.roseType`.",
+      },
+      {
+        name: 'selectedMode',
+        type: "'single' | 'multiple' | false",
+        required: false,
+        default: 'undefined (no selection — slices are visual-only)',
+        description:
+          "Allow slice selection. ECharts pulls the selected slice slightly\noutward from the center (controlled by `selectedOffset`, default 10px).\n\n- `'single'`: only one slice may be selected at a time\n- `'multiple'`: any subset may be selected\n- `false`: selection disabled (default — matches legacy behavior)\n\nUse case: drill-down dashboards where the legend / detail panel\nmirrors the pulled slice. Pair with `onDataPointClick` for state.\n\nMaps to ECharts `series.selectedMode`.",
+      },
+      {
         name: 'showLabels',
         type: 'boolean',
         required: false,

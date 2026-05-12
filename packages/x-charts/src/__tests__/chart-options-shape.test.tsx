@@ -496,6 +496,68 @@ describe('PieChart option shape', () => {
   it('handles empty data without throwing', () => {
     expect(() => render(<PieChart data={[]} animate={false} />)).not.toThrow();
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-X3 wrapper extensions: radius / roseType / selectedMode
+  // (Codex thread 019e1e30 AGREE).
+  // ────────────────────────────────────────────────────────────────────
+
+  it('radius override replaces the breakpoint+donut heuristic', () => {
+    render(<PieChart data={[{ label: 'A', value: 1 }]} radius={['62%', '100%']} animate={false} />);
+    expect(series()[0].radius).toEqual(['62%', '100%']);
+  });
+
+  it('radius override wins even when donut=true is also passed', () => {
+    render(
+      <PieChart data={[{ label: 'A', value: 1 }]} donut radius={['72%', '88%']} animate={false} />,
+    );
+    expect(series()[0].radius).toEqual(['72%', '88%']);
+  });
+
+  it('roseType undefined (default) does NOT add the key to series', () => {
+    render(<PieChart data={[{ label: 'A', value: 1 }]} animate={false} />);
+    expect(series()[0].roseType).toBeUndefined();
+  });
+
+  it('roseType="radius" passes through to ECharts series', () => {
+    render(
+      <PieChart
+        data={[
+          { label: 'A', value: 1 },
+          { label: 'B', value: 4 },
+          { label: 'C', value: 9 },
+        ]}
+        roseType="radius"
+        animate={false}
+      />,
+    );
+    expect(series()[0].roseType).toBe('radius');
+  });
+
+  it('roseType="area" passes through to ECharts series', () => {
+    render(<PieChart data={[{ label: 'A', value: 1 }]} roseType="area" animate={false} />);
+    expect(series()[0].roseType).toBe('area');
+  });
+
+  it('selectedMode undefined (default) does NOT add the key', () => {
+    render(<PieChart data={[{ label: 'A', value: 1 }]} animate={false} />);
+    expect(series()[0].selectedMode).toBeUndefined();
+  });
+
+  it('selectedMode="single" enables single-slice selection', () => {
+    render(<PieChart data={[{ label: 'A', value: 1 }]} selectedMode="single" animate={false} />);
+    expect(series()[0].selectedMode).toBe('single');
+  });
+
+  it('selectedMode="multiple" enables multi-slice selection', () => {
+    render(<PieChart data={[{ label: 'A', value: 1 }]} selectedMode="multiple" animate={false} />);
+    expect(series()[0].selectedMode).toBe('multiple');
+  });
+
+  it('selectedMode=false explicitly disables selection (truthy-passes through)', () => {
+    render(<PieChart data={[{ label: 'A', value: 1 }]} selectedMode={false} animate={false} />);
+    expect(series()[0].selectedMode).toBe(false);
+  });
 });
 
 /* ================================================================== */

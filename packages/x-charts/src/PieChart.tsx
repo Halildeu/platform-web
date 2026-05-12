@@ -66,6 +66,50 @@ export interface PieChartProps extends AccessControlledProps {
   size?: ChartSize;
   /** Donut mode (ring instead of filled). @default false */
   donut?: boolean;
+  /**
+   * Explicit radius envelope `[innerRadius, outerRadius]` for fine-grained
+   * donut hole control. Each value can be a CSS-like percentage (e.g.
+   * `'45%'`) or a pixel number. When set, this OVERRIDES the implicit
+   * radius driven by `donut` + size + breakpoint.
+   *
+   * Use cases:
+   *  - Tighter donut ring (`['72%', '88%']`)
+   *  - Big-number-inside-pie KPI (`['62%', '100%']`)
+   *  - Nightingale rose mode (`[0, '90%']` plus `roseType="area"`)
+   *
+   * Maps directly to ECharts `series.radius`.
+   *
+   * @default undefined (legacy donut/breakpoint heuristic kept)
+   */
+  radius?: [number | string, number | string];
+  /**
+   * Nightingale rose chart mode — slices grow outward from the center
+   * proportional to their value instead of using equal-arc widths.
+   * - `'radius'`: slice arc width follows value; outer radius is the
+   *   per-slice variable
+   * - `'area'`: slice area is proportional to value (perceptually fairer)
+   *
+   * Maps to ECharts `series.roseType`.
+   *
+   * @default undefined (regular pie / donut)
+   */
+  roseType?: 'radius' | 'area';
+  /**
+   * Allow slice selection. ECharts pulls the selected slice slightly
+   * outward from the center (controlled by `selectedOffset`, default 10px).
+   *
+   * - `'single'`: only one slice may be selected at a time
+   * - `'multiple'`: any subset may be selected
+   * - `false`: selection disabled (default — matches legacy behavior)
+   *
+   * Use case: drill-down dashboards where the legend / detail panel
+   * mirrors the pulled slice. Pair with `onDataPointClick` for state.
+   *
+   * Maps to ECharts `series.selectedMode`.
+   *
+   * @default undefined (no selection — slices are visual-only)
+   */
+  selectedMode?: 'single' | 'multiple' | false;
   /** Show labels beside slices. @default false */
   showLabels?: boolean;
   /** Show legend below the chart. @default false */
@@ -171,6 +215,9 @@ const PieChartInner = React.forwardRef<
     data,
     size = 'md',
     donut = false,
+    radius: radiusOverride,
+    roseType,
+    selectedMode,
     showLabels = false,
     showLegend = false,
     showPercentage = false,
@@ -284,17 +331,30 @@ const PieChartInner = React.forwardRef<
       series: [
         {
           type: 'pie',
+          // PR-X3: explicit `radius` prop overrides the breakpoint+donut
+          // heuristic. When the caller supplies a radius tuple, they take
+          // responsibility for sizing across breakpoints. When omitted we
+          // keep the legacy behavior so existing call sites stay pixel-
+          // identical.
           // Mobile shrinks the radius envelope so the legend strip on the
           // bottom (or vertical right when slice-count > 5) has room
           // without forcing the pie body to render outside the canvas.
           radius:
-            breakpoint === 'mobile'
+            radiusOverride ??
+            (breakpoint === 'mobile'
               ? donut
                 ? ['38%', '60%']
                 : ['0%', '60%']
               : donut
                 ? ['45%', '70%']
-                : ['0%', '70%'],
+                : ['0%', '70%']),
+          // PR-X3: opt-in rose / nightingale mode (slices grow outward
+          // proportional to value instead of using equal arc widths).
+          ...(roseType ? { roseType } : {}),
+          // PR-X3: opt-in slice selection — ECharts pulls the selected
+          // slice slightly outward (default offset 10px). Useful for
+          // drill-down dashboards.
+          ...(selectedMode !== undefined ? { selectedMode } : {}),
           center: ['50%', title ? '55%' : '50%'],
           data: pieData,
           label: {
@@ -345,6 +405,12 @@ const PieChartInner = React.forwardRef<
   }, [
     validData,
     donut,
+    // PR-X3 (Codex thread 019e1e30): explicit radius envelope, rose /
+    // nightingale mode, and opt-in slice selection. Defaults preserve
+    // legacy behavior; new state-doc work flag this as a v2 API surface.
+    radiusOverride,
+    roseType,
+    selectedMode,
     showLabels,
     showLegend,
     showPercentage,
