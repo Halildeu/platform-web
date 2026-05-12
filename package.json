@@ -358,6 +358,19 @@
       "name": "mfe-audit standalone entry",
       "path": "apps/mfe-audit/dist-quality/assets/index-*.js",
       "limit": "550 KB"
+    },
+    {
+      "name": "mfe-shell entry (PR-G1 baseline)",
+      "_doc": "PERF-INIT-V2 PMD section 2.1 0-3 ay warn target = 2 MB. Adjusted after baseline ratification.",
+      "path": "apps/mfe-shell/dist/assets/index-*.js",
+      "limit": "2 MB",
+      "gzip": false
+    },
+    {
+      "name": "design-system advanced (PR-G1 regression watch)",
+      "_doc": "AG Grid + ECharts payload bucket. Lazy-split target after PR-B1a/b.",
+      "path": "apps/mfe-shell/dist/assets/__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_design_*.js",
+      "limit": "7 MB"
     }
   ],
   "packageManager": "pnpm@10.12.4+sha512.5ea8b0deed94ed68691c9bad4c955492705c5eeb8a87ef86bc62c74a26b037b08ff9570f108b2e4dbd1dd1a9186fea925e527f141c648e85af45631074680184"

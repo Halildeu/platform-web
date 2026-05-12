@@ -1,17 +1,35 @@
 {
+  "_doc": "PERF-INIT-V2 PR-G1: Lighthouse CI config. Production preview build target (Codex thread 019e1de0 — dev server measurement was unreliable). Hard fail on accessibility/best-practices; performance advisory during PR-G1 warmup.",
   "ci": {
     "collect": {
-      "url": ["http://localhost:3000/login"],
-      "startServerCommand": "cd apps/mfe-shell && AUTH_MODE=permitAll npx vite --port 3000",
-      "startServerReadyPattern": "ready in",
-      "numberOfRuns": 1
+      "_doc": "Build mfe-shell prod bundle locally then serve dist via npx serve. Anonymous /login route only (authenticated routes require PR-S1.b storage state fixture, deferred). PMD section 2.1 mode=cold-anonymous.",
+      "url": ["http://localhost:5174/login"],
+      "startServerCommand": "pnpm --filter mfe-shell build && npx serve apps/mfe-shell/dist -l 5174",
+      "startServerReadyPattern": "Accepting connections",
+      "numberOfRuns": 3,
+      "settings": {
+        "preset": "desktop",
+        "throttlingMethod": "simulate",
+        "onlyCategories": ["performance", "accessibility", "best-practices", "seo"]
+      }
     },
     "assert": {
+      "_doc": "PMD section 2.1 0-3 ay gate values. Performance advisory until baseline + 5%-regression ratchet stable (PR-G1 warmup 2 weeks).",
       "assertions": {
-        "categories:performance": ["warn", { "minScore": 0.7 }],
+        "categories:performance": ["warn", { "minScore": 0.5 }],
         "categories:accessibility": ["error", { "minScore": 0.9 }],
-        "categories:best-practices": ["warn", { "minScore": 0.8 }]
+        "categories:best-practices": ["error", { "minScore": 0.85 }],
+        "categories:seo": ["warn", { "minScore": 0.85 }],
+        "first-contentful-paint": ["warn", { "maxNumericValue": 1800 }],
+        "largest-contentful-paint": ["warn", { "maxNumericValue": 2500 }],
+        "cumulative-layout-shift": ["warn", { "maxNumericValue": 0.1 }],
+        "total-blocking-time": ["warn", { "maxNumericValue": 600 }],
+        "interactive": ["warn", { "maxNumericValue": 3800 }]
       }
+    },
+    "upload": {
+      "_doc": "Temporary public storage; replace with private LHCI server when infrastructure available.",
+      "target": "temporary-public-storage"
     }
   }
 }

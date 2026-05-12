@@ -1,0 +1,8 @@
+{
+  "_doc": "PERF-INIT-V2 PR-G1: route performance baseline. Updated via `npm run perf:budget:update-baseline` (PR-M1 runner). Regression check fails when current run exceeds baseline by `_regressionPolicy.hardFailRegressionPercent` (5%) in performance-budgets.json.",
+  "_acceptance": "Codex thread 019e1de0 AGREE — warmup 2 weeks warn-only, then 5% hard fail.",
+  "_methodology": "median of 5 runs, foreground only, fixed bundled Chrome version, hidden-page invalid. See scripts/ci/route-performance-budget.mjs.",
+  "_phase": "INITIAL EMPTY — first PR-M1/PR-G1 run on main will populate this file. Subsequent regression checks compare against committed values.",
+  "timestamp": 0,
+  "routes": {}
+}

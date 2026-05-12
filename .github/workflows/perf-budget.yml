@@ -1,0 +1,173 @@
+# PERF-INIT-V2 PR-G1: Route Performance Budget CI gate.
+#
+# Runs the PR-M1 PerformanceObserver harness via the PR-A0 bundle-attribution
+# runner against a local production preview build. Outputs:
+#   - tests/perf/last-run.json      (route budget artifact)
+#   - tests/perf/bundle-stats/      (taxonomy + Playwright traces)
+#
+# Acceptance phases (PMD section 2.1 + Codex thread 019e1de0):
+#   - First 2 weeks after baseline merge: warn-only, artifact upload
+#   - After warmup: %5 regression fail (transfer + decoded + main-thread + TBT)
+#
+# Phase is controlled by `PERF_WARN_ONLY` env (default: 1 = warn-only).
+# Flip to 0 after the warmup period ratifies the baseline.
+#
+# Hard fails:
+#   - Lighthouse accessibility < 0.9
+#   - Lighthouse best-practices < 0.85
+#   - Bundle build error
+#   - Auth-fail when targeting authenticated routes without storage state
+
+name: PR Performance Budget (PR-G1)
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mfe-shell/**'
+      - 'packages/design-system/**'
+      - 'performance-budgets.json'
+      - 'scripts/ci/route-performance-budget.mjs'
+      - 'scripts/ci/bundle-taxonomy.mjs'
+      - 'scripts/ci/duplicate-package-detector.mjs'
+      - 'scripts/vite-plugins/bundle-visualizer.ts'
+      - 'tests/perf/baseline.json'
+      - 'tests/perf/route-budget.spec.ts'
+      - '.lighthouserc.json'
+      - '.github/workflows/perf-budget.yml'
+  workflow_dispatch:
+    inputs:
+      warn_only:
+        description: 'Warn-only mode (no hard fail on budget regression)'
+        required: false
+        default: '1'
+
+env:
+  # Default to warn-only during the PR-G1 warmup. After 2 weeks + baseline
+  # ratification, flip this to '0' to enable %5 regression hard fail.
+  PERF_WARN_ONLY: ${{ inputs.warn_only || '1' }}
+  PERF_TARGET: local
+  PERF_RUNS: '3'
+
+jobs:
+  perf-budget:
+    name: route budget + bundle taxonomy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Build mfe-shell (production preview)
+        run: pnpm --filter mfe-shell build
+
+      - name: Serve production preview
+        run: |
+          npx serve apps/mfe-shell/dist -l 5174 &
+          # Wait for the server to be reachable
+          until curl -fs http://localhost:5174/login >/dev/null 2>&1; do
+            sleep 1
+          done
+        shell: bash
+
+      - name: Route budget (warn-only during warmup)
+        run: |
+          if [ "$PERF_WARN_ONLY" = "1" ]; then
+            node scripts/ci/route-performance-budget.mjs --target local --runs ${PERF_RUNS} --warn-only --routes /login || true
+          else
+            node scripts/ci/route-performance-budget.mjs --target local --runs ${PERF_RUNS} --routes /login
+          fi
+        env:
+          PERF_WARN_ONLY: ${{ env.PERF_WARN_ONLY }}
+          PERF_RUNS: ${{ env.PERF_RUNS }}
+
+      - name: Bundle taxonomy (anonymous /login smoke)
+        run: |
+          node scripts/ci/bundle-taxonomy.mjs --target local --routes /login --runs 1 || true
+        continue-on-error: true
+
+      - name: Duplicate package detector
+        run: |
+          ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
+          node scripts/ci/duplicate-package-detector.mjs || true
+        continue-on-error: true
+
+      - name: Upload route budget artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-budget-${{ github.run_id }}
+          path: |
+            tests/perf/last-run.json
+            tests/perf/bundle-stats/
+          retention-days: 30
+
+  size-limit:
+    name: size-limit (entry regression)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build mfe-shell for size-limit
+        run: pnpm --filter mfe-shell build
+
+      - name: Run size-limit
+        run: pnpm test:bundle
+
+  lighthouse-ci:
+    name: lighthouse-ci (production preview, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build mfe-shell (production preview)
+        run: pnpm --filter mfe-shell build
+
+      - name: Install Chrome for Lighthouse
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Run Lighthouse CI
+        run: pnpm lighthouse:ci
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN || '' }}
