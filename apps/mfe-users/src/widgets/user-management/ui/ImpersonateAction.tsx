@@ -18,7 +18,14 @@
  * {@code state.auth.token / user / authzSnapshot / impersonation}.
  */
 import React, { useCallback, useState } from 'react';
-import { usePermissions } from '@mfe/auth';
+// Codex 019e1bed C-prime AGREE — `usePermissions` from `@mfe/auth` was
+// removed from this component's render gate. mfe-users' Vite alias
+// bypasses MF shared registration, so the local `@mfe/auth`
+// `PermissionContext` defaults to `isSuperAdmin: () => false` even
+// when shell-side authz reports `superAdmin = true`. The shell auth
+// singleton (`getShellServices().auth.isSuperAdmin()`) is now the
+// canonical source for this component's guard, matching the parent
+// `UserDetailDrawer` mount gate.
 import { getShellServices } from '../../../app/services/shell-services';
 import type { UserDetail } from '@mfe/shared-types';
 
@@ -27,7 +34,6 @@ interface ImpersonateActionProps {
 }
 
 export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) => {
-  const { isSuperAdmin } = usePermissions();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [targetSubject, setTargetSubject] = useState('');
@@ -77,12 +83,21 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
     }
   }, [reason, targetSubject, user.email, user.id]);
 
-  // Codex iter-30 P1: isSuperAdmin is a function () => boolean from
-  // PermissionProvider, not a boolean. Earlier `if (!isSuperAdmin)`
-  // always evaluated truthy → all users saw the action. The backend
-  // /authz/me gate was the only authoritative defence; UX gate now
-  // matches.
-  if (!isSuperAdmin()) {
+  // Codex 019e1bed C-prime AGREE — guard reads through shell auth
+  // singleton instead of the previous `usePermissions().isSuperAdmin()`
+  // call, which resolved against a duplicated `PermissionContext` when
+  // mfe-users' Vite alias bypassed Module Federation shared
+  // registration. The shell-level `authzSnapshot.superAdmin` is the
+  // canonical source; fail-closed if shell-services is not yet
+  // configured (matches the parent `UserDetailDrawer` mount gate).
+  const canImpersonate = (() => {
+    try {
+      return getShellServices().auth.isSuperAdmin();
+    } catch {
+      return false;
+    }
+  })();
+  if (!canImpersonate) {
     return null;
   }
 

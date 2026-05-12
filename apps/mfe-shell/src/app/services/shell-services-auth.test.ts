@@ -98,6 +98,35 @@ describe('canonical shell-services — auth transport contract', () => {
     expect(typeof services.auth.isTransportReady).toBe('function');
     expect(typeof services.auth.getPhase).toBe('function');
     expect(typeof services.auth.getEpoch).toBe('function');
+    // Codex 019e1bed C-prime — shell-level superAdmin gate must be a
+    // first-class method on ShellAuthService so remote consumers can
+    // call it as a defensive replacement for `usePermissions()` when
+    // their local `@mfe/auth` context is split via Vite alias drift.
+    expect(typeof services.auth.isSuperAdmin).toBe('function');
+  });
+
+  it('Codex 019e1bed C-prime: isSuperAdmin routes to wired callback (no caching)', () => {
+    let currentSuperAdmin = false;
+    configureShellServices({
+      queryClient,
+      getAuthToken: () => null,
+      isSuperAdmin: () => currentSuperAdmin,
+    });
+
+    const services = getShellServices();
+    expect(services.auth.isSuperAdmin()).toBe(false);
+    currentSuperAdmin = true;
+    expect(services.auth.isSuperAdmin()).toBe(true);
+    currentSuperAdmin = false;
+    expect(services.auth.isSuperAdmin()).toBe(false);
+  });
+
+  it('Codex 019e1bed C-prime: isSuperAdmin defaults to false when wiring omits the getter', () => {
+    configureShellServices({ queryClient, getAuthToken: () => null });
+    const services = getShellServices();
+    // Fail-closed: remotes cannot leak `superAdmin: true` simply by
+    // calling getShellServices() before shell finishes hydrating authz.
+    expect(services.auth.isSuperAdmin()).toBe(false);
   });
 
   it('phase getter routes to wired callback (no caching)', () => {
