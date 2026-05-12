@@ -107,6 +107,16 @@ const sharedProdOnly = {
   '@mfe/design-system': singleton('@mfe/design-system', '@mfe/design-system', false),
   '@mfe/shared-http': singleton('@mfe/shared-http', '@mfe/shared-http', false),
   '@mfe/i18n-dicts': singleton('@mfe/i18n-dicts', '@mfe/i18n-dicts', false),
+  // Codex 019e1bed AGREE: @mfe/auth MF singleton — mfe-users PR-C2 ImpersonateAction
+  // render gate `isAdmin = isSuperAdmin()` shell PermissionProvider'ın authz state'ine
+  // erişebilsin. Önceki yapıda mfe-users `@mfe/auth`'ı share etmiyordu → duplicate
+  // PermissionContext default'u (`isSuperAdmin: () => false`) → drawer'da Impersonate
+  // section render edilmiyordu. Live federation diagnostic 2026-05-12 13:55 (testai):
+  // `__mfe_internal__mfe_users.sharedKeys` listesinde `@mfe/auth` eksikti; bu PR
+  // ekliyor. raw `{ singleton: true, requiredVersion: false }` pattern (mfe-access
+  // PR E ile aynı) çünkü workspace package için `strictVersion: true` (helper
+  // default) gereksiz risk.
+  '@mfe/auth': { singleton: true, requiredVersion: false as const },
 };
 
 const isTest = !!process.env['VITEST'];
