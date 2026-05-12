@@ -93,6 +93,60 @@ export interface BarChartProps extends AccessControlledProps {
   className?: string;
   /** Multi-series: grouped bars by field. */
   series?: { field: string; name: string; color?: string }[];
+  /**
+   * Stack multi-series bars on top of each other (or side-by-side when
+   * `orientation="horizontal"`). When `true` and `series` has 2+ entries,
+   * all series share a single stack identifier so ECharts paints them as
+   * a contiguous bar instead of grouped bars. For single-series data
+   * (no `series` prop) this option is a no-op.
+   *
+   * Mirrors the existing `stacked` prop on `AreaChart` and the
+   * `stack: 'waterfall'` pattern in `WaterfallChart`. Required for
+   * stacked-distribution widgets like the HR Nesil Dağılımı top stripe.
+   *
+   * @default false
+   */
+  stacked?: boolean;
+  /**
+   * Show a faint "track" background bar behind each data point — useful
+   * for progress / KPI-style widgets where the empty portion of the bar
+   * should still be visually represented. Maps directly to ECharts
+   * `series.showBackground`.
+   *
+   * @default false
+   */
+  showBackground?: boolean;
+  /**
+   * Style overrides for the background track when `showBackground` is
+   * `true`. Forwarded verbatim to ECharts `series.backgroundStyle`
+   * (color, borderRadius, borderColor, borderWidth, shadow*, opacity).
+   * Defaults to a translucent surface-muted fill when omitted.
+   */
+  backgroundStyle?: {
+    color?: string;
+    borderRadius?: number | number[];
+    borderColor?: string;
+    borderWidth?: number;
+    opacity?: number;
+  };
+  /**
+   * Fixed bar width in pixels (overrides ECharts auto-sizing). Useful
+   * for keeping bullet/progress bars visually thin. Maps to
+   * ECharts `series.barWidth`.
+   */
+  barWidth?: number | string;
+  /**
+   * Gap between bars within the same category (multi-series only).
+   * Accepts a CSS-like percentage string (e.g. `"30%"`) or `'-100%'`
+   * to overlap bars completely (used for the "background track" hack
+   * when `showBackground` isn't enough). Maps to ECharts `series.barGap`.
+   */
+  barGap?: string;
+  /**
+   * Gap between categories (% of category width). Smaller values
+   * pack bars tighter. Maps to ECharts `series.barCategoryGap`.
+   */
+  barCategoryGap?: string;
   /** Callback fired when a data point (bar) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
   /**
@@ -199,6 +253,12 @@ const BarChartInner = React.forwardRef<
     description,
     className,
     series: seriesDef,
+    stacked = false,
+    showBackground = false,
+    backgroundStyle,
+    barWidth,
+    barGap,
+    barCategoryGap,
     onDataPointClick,
     markups,
     onMarkupClick,
@@ -334,10 +394,38 @@ const BarChartInner = React.forwardRef<
       horizontal: isHorizontal,
     });
 
+    // ECharts series shared fields — stacked, showBackground, and bar-sizing
+    // options apply uniformly to every series in the chart. Only stacking
+    // is gated on the multi-series path: single-series stacking is a no-op
+    // (one bar can't stack on itself), so we keep the `stack` field
+    // unconditional in single-series mode but force it `undefined` to
+    // avoid leaking the prop into ECharts' option diff.
+    const stackKey = stacked && hasMultiSeries ? 'bar-stack' : undefined;
+    const backgroundOptions = showBackground
+      ? {
+          showBackground: true,
+          backgroundStyle: {
+            color: backgroundStyle?.color ?? 'rgba(180, 180, 180, 0.12)',
+            borderRadius: backgroundStyle?.borderRadius ?? 4,
+            borderColor: backgroundStyle?.borderColor,
+            borderWidth: backgroundStyle?.borderWidth,
+            opacity: backgroundStyle?.opacity,
+          },
+        }
+      : {};
+    const barSizeOptions = {
+      ...(barWidth !== undefined ? { barWidth } : {}),
+      ...(barGap !== undefined ? { barGap } : {}),
+      ...(barCategoryGap !== undefined ? { barCategoryGap } : {}),
+    };
+
     const echartsSeriesList = hasMultiSeries
       ? seriesDef!.map((s, i) => ({
           type: 'bar' as const,
           name: s.name,
+          stack: stackKey,
+          ...backgroundOptions,
+          ...barSizeOptions,
           data: safeData.map((d) => ((d as Record<string, unknown>)[s.field] as number) ?? 0),
           itemStyle: { color: s.color ?? palette[i % palette.length] },
           label: showValues
@@ -354,6 +442,8 @@ const BarChartInner = React.forwardRef<
           {
             type: 'bar' as const,
             name: title ?? 'Value',
+            ...backgroundOptions,
+            ...barSizeOptions,
             data: safeData.map((d, i) => ({
               value: d.value,
               itemStyle: { color: d.color ?? palette[i % palette.length] },
@@ -422,6 +512,14 @@ const BarChartInner = React.forwardRef<
     title,
     description,
     seriesDef,
+    // PR-X1 BarChart wrapper extensions (Codex thread 019e1e30 AGREE):
+    // stacked + showBackground + backgroundStyle + bar sizing options.
+    stacked,
+    showBackground,
+    backgroundStyle,
+    barWidth,
+    barGap,
+    barCategoryGap,
     onDataPointClick,
     isEmpty,
     isHorizontal,
