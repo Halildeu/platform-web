@@ -44,11 +44,13 @@ export type ChartSize = 'sm' | 'md' | 'lg';
 
 /**
  * Box-plot data point. EITHER provide `values` (raw array — the wrapper
- * computes Q1/median/Q3/min/max via ECharts' transform) OR provide a
- * `quartiles` tuple `[min, Q1, median, Q3, max]` (skip the transform).
+ * computes Q1/median/Q3/min/max via R-7 linear interpolation) OR provide
+ * a `quartiles` tuple `[min, Q1, median, Q3, max]` (skip the transform
+ * when the caller already aggregated server-side).
  *
- * Mixing raw and pre-computed entries in the same `data` array is NOT
- * supported — the wrapper picks one path based on the first entry.
+ * Mixed-mode arrays are supported: the wrapper dispatches per-entry, so
+ * a series can have some categories with raw values and others with
+ * pre-computed quartiles in the same `data` array.
  */
 export type BoxPlotDataPoint =
   | { category: string; values: number[]; quartiles?: undefined }
