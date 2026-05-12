@@ -72,6 +72,9 @@ export { SankeyChart } from './SankeyChart';
 export type { SankeyChartProps } from './SankeyChart';
 export { SunburstChart } from './SunburstChart';
 export type { SunburstChartProps } from './SunburstChart';
+// PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
+export { BoxPlotChart } from './BoxPlotChart';
+export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';
 
 /* Composition */
 export { ChartContainer } from './ChartContainer';

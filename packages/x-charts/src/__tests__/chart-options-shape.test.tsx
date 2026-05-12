@@ -50,6 +50,8 @@ import { WaterfallChart } from '../WaterfallChart';
 import { FunnelChart } from '../FunnelChart';
 import { SankeyChart } from '../SankeyChart';
 import { SunburstChart } from '../SunburstChart';
+// PR-X6: new BoxPlotChart wrapper.
+import { BoxPlotChart } from '../BoxPlotChart';
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -988,6 +990,92 @@ describe('SunburstChart option shape', () => {
 
   it('handles empty data without throwing', () => {
     expect(() => render(<SunburstChart data={[]} />)).not.toThrow();
+  });
+});
+
+/* ================================================================== */
+/*  BoxPlotChart                                                       */
+/* ================================================================== */
+
+describe('BoxPlotChart option shape', () => {
+  it('series.type === boxplot for raw values input', () => {
+    render(
+      <BoxPlotChart
+        data={[
+          { category: 'A', values: [1, 2, 3, 4, 5] },
+          { category: 'B', values: [2, 3, 4, 5, 6] },
+        ]}
+        animate={false}
+      />,
+    );
+    expect(series()[0].type).toBe('boxplot');
+  });
+
+  it('computes 5-number summary from raw values (Q2=median)', () => {
+    render(<BoxPlotChart data={[{ category: 'A', values: [1, 2, 3, 4, 5] }]} animate={false} />);
+    const data = series()[0].data as number[][];
+    // Linear-interpolated quartiles for [1,2,3,4,5]:
+    // min=1, Q1=2, median=3, Q3=4, max=5
+    expect(data[0]).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('passes pre-computed quartiles through unchanged', () => {
+    render(
+      <BoxPlotChart data={[{ category: 'A', quartiles: [10, 20, 30, 40, 50] }]} animate={false} />,
+    );
+    const data = series()[0].data as number[][];
+    expect(data[0]).toEqual([10, 20, 30, 40, 50]);
+  });
+
+  it('emits scatter outlier series when showOutliers=true (default)', () => {
+    render(
+      <BoxPlotChart
+        data={[{ category: 'A', values: [1, 2, 3, 4, 5, 100] }]} // 100 = outlier
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    expect(allSeries.length).toBeGreaterThanOrEqual(2);
+    expect(allSeries[1].type).toBe('scatter');
+    expect(allSeries[1].name).toBe('Outliers');
+  });
+
+  it('does NOT emit outlier series when showOutliers=false', () => {
+    render(
+      <BoxPlotChart
+        data={[{ category: 'A', values: [1, 2, 3, 4, 5, 100] }]}
+        showOutliers={false}
+        animate={false}
+      />,
+    );
+    expect(series()).toHaveLength(1);
+  });
+
+  it('orientation:horizontal swaps xAxis (value) and yAxis (category)', () => {
+    render(
+      <BoxPlotChart
+        data={[{ category: 'A', values: [1, 2, 3] }]}
+        orientation="horizontal"
+        animate={false}
+      />,
+    );
+    expect(axis('xAxis')?.type).toBe('value');
+    expect(axis('yAxis')?.type).toBe('category');
+  });
+
+  it('handles empty data without throwing', () => {
+    expect(() => render(<BoxPlotChart data={[]} animate={false} />)).not.toThrow();
+  });
+
+  it('boxWidth tuple passes through to series', () => {
+    render(
+      <BoxPlotChart
+        data={[{ category: 'A', values: [1, 2, 3] }]}
+        boxWidth={['7%', '50%']}
+        animate={false}
+      />,
+    );
+    expect(series()[0].boxWidth).toEqual(['7%', '50%']);
   });
 });
 
