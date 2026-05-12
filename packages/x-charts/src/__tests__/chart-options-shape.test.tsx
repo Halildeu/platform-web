@@ -146,6 +146,138 @@ describe('BarChart option shape', () => {
   it('handles empty data without throwing', () => {
     expect(() => render(<BarChart data={[]} animate={false} />)).not.toThrow();
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-X1 wrapper extensions (Codex thread 019e1e30 AGREE)
+  // Codex hidden-risk note: each new prop must be locked at the
+  // option-shape boundary so future refactors don't silently drop the
+  // ECharts surface area (stacking + track + bar sizing).
+  // ────────────────────────────────────────────────────────────────────
+
+  it('stacked=false (default) leaves multi-series series[].stack undefined', () => {
+    render(
+      <BarChart
+        data={
+          [
+            { label: 'Q1', a: 1, b: 2 },
+            { label: 'Q2', a: 3, b: 4 },
+          ] as unknown as Array<{ label: string; value: number }>
+        }
+        series={[
+          { field: 'a', name: 'A' },
+          { field: 'b', name: 'B' },
+        ]}
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s).toHaveLength(2);
+    expect(s[0].stack).toBeUndefined();
+    expect(s[1].stack).toBeUndefined();
+  });
+
+  it('stacked=true + multi-series → shared stack key (single contiguous bar)', () => {
+    render(
+      <BarChart
+        data={
+          [
+            { label: 'Q1', a: 1, b: 2 },
+            { label: 'Q2', a: 3, b: 4 },
+          ] as unknown as Array<{ label: string; value: number }>
+        }
+        series={[
+          { field: 'a', name: 'A' },
+          { field: 'b', name: 'B' },
+        ]}
+        stacked
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s).toHaveLength(2);
+    expect(s[0].stack).toBe('bar-stack');
+    expect(s[1].stack).toBe('bar-stack');
+  });
+
+  it('stacked=true + single-series is a no-op (no stack key leaks)', () => {
+    render(<BarChart data={[{ label: 'A', value: 1 }]} stacked animate={false} />);
+    const s = series();
+    expect(s[0].stack).toBeUndefined();
+  });
+
+  it('showBackground=true sets series.showBackground + default backgroundStyle', () => {
+    render(<BarChart data={[{ label: 'A', value: 1 }]} showBackground animate={false} />);
+    const s = series();
+    expect(s[0].showBackground).toBe(true);
+    const bg = s[0].backgroundStyle as Record<string, unknown>;
+    expect(bg).toBeDefined();
+    // Default fill is a translucent grey to avoid stealing the eye away
+    // from the actual bar.
+    expect(bg.color).toEqual(expect.stringContaining('rgba'));
+    expect(bg.borderRadius).toBe(4);
+  });
+
+  it('showBackground=false (default) does NOT add showBackground/backgroundStyle keys', () => {
+    render(<BarChart data={[{ label: 'A', value: 1 }]} animate={false} />);
+    const s = series();
+    expect(s[0].showBackground).toBeUndefined();
+    expect(s[0].backgroundStyle).toBeUndefined();
+  });
+
+  it('backgroundStyle override merges into the default fill', () => {
+    render(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        showBackground
+        backgroundStyle={{ color: 'var(--accent-muted)', borderRadius: 8 }}
+        animate={false}
+      />,
+    );
+    const bg = series()[0].backgroundStyle as Record<string, unknown>;
+    expect(bg.color).toBe('var(--accent-muted)');
+    expect(bg.borderRadius).toBe(8);
+  });
+
+  it('barWidth / barGap / barCategoryGap pass through verbatim', () => {
+    render(
+      <BarChart
+        data={[{ label: 'A', value: 1 }]}
+        barWidth={12}
+        barGap="-100%"
+        barCategoryGap="30%"
+        animate={false}
+      />,
+    );
+    const s = series()[0];
+    expect(s.barWidth).toBe(12);
+    expect(s.barGap).toBe('-100%');
+    expect(s.barCategoryGap).toBe('30%');
+  });
+
+  it('negative values pass through unmodified (back-to-back pyramid contract)', () => {
+    render(
+      <BarChart
+        data={
+          [
+            { label: '20-24', male: -240, female: 18 },
+            { label: '25-29', male: -362, female: 82 },
+          ] as unknown as Array<{ label: string; value: number }>
+        }
+        series={[
+          { field: 'male', name: 'Erkek' },
+          { field: 'female', name: 'Kadin' },
+        ]}
+        orientation="horizontal"
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s).toHaveLength(2);
+    const maleData = s[0].data as number[];
+    const femaleData = s[1].data as number[];
+    expect(maleData).toEqual([-240, -362]);
+    expect(femaleData).toEqual([18, 82]);
+  });
 });
 
 /* ================================================================== */
