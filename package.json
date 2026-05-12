@@ -361,22 +361,19 @@
       "limit": "550 KB"
     },
     {
-      "name": "mfe-shell entry (PR-G1 baseline)",
-      "_doc": "PERF-INIT-V2 PMD section 2.1 0-3 ay warn target = 2 MB. Adjusted after baseline ratification.",
+      "name": "mfe-shell entry (PR-G1 baseline; PMD 2.1 0-3ay warn 2MB)",
       "path": "apps/mfe-shell/dist/assets/index-*.js",
       "limit": "2 MB",
       "gzip": false
     },
     {
-      "name": "mfe-shell full JS aggregate (PR-G1 regression watch)",
-      "_doc": "Codex thread 019e1e5d critical 6: entry-only ölçüm tek file glob ile sınırlı; bootstrap dynamic-import nedeniyle gerçek shell payload bu aggregate. PMD 2.1 cold-auth fail limit < 3 MB; warm watch 12 MB.",
+      "name": "mfe-shell full JS aggregate (PR-G1 regression watch; warn 12MB)",
       "path": "apps/mfe-shell/dist/assets/*.js",
       "limit": "12 MB",
       "gzip": false
     },
     {
-      "name": "design-system advanced (PR-G1 regression watch)",
-      "_doc": "AG Grid + ECharts payload bucket. Lazy-split target after PR-B1a/b.",
+      "name": "design-system advanced (AG Grid + ECharts; lazy-split target PR-B1a/b)",
       "path": "apps/mfe-shell/dist/assets/__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_design_*.js",
       "limit": "7 MB"
     }

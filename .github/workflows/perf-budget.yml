@@ -98,9 +98,9 @@ jobs:
         # (runner import error, Playwright launch fail) surface as red.
         run: |
           if [ "${PERF_WARN_ONLY}" = "1" ]; then
-            node scripts/ci/route-performance-budget.mjs --target local --runs "${PERF_RUNS}" --warn-only --routes /login
+            pnpm exec node scripts/ci/route-performance-budget.mjs --target local --runs "${PERF_RUNS}" --warn-only --routes /login
           else
-            node scripts/ci/route-performance-budget.mjs --target local --runs "${PERF_RUNS}" --require-baseline --routes /login
+            pnpm exec node scripts/ci/route-performance-budget.mjs --target local --runs "${PERF_RUNS}" --require-baseline --routes /login
           fi
 
       - name: Bundle taxonomy (anonymous /login smoke, advisory)
@@ -108,13 +108,13 @@ jobs:
         # in red but do not block the PR.
         continue-on-error: true
         run: |
-          node scripts/ci/bundle-taxonomy.mjs --target local --routes /login --runs 1
+          pnpm exec node scripts/ci/bundle-taxonomy.mjs --target local --routes /login --runs 1
 
       - name: Duplicate package detector (advisory)
         continue-on-error: true
         run: |
           ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
-          node scripts/ci/duplicate-package-detector.mjs
+          pnpm exec node scripts/ci/duplicate-package-detector.mjs
 
       - name: Upload route budget artifact
         if: always()
