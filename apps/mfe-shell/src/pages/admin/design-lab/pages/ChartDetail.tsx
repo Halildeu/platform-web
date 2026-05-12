@@ -184,6 +184,54 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Multi-series: grouped bars by field.',
       },
       {
+        name: 'stacked',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description:
+          'Stack multi-series bars on top of each other (or side-by-side when\n`orientation="horizontal"`). When `true` and `series` has 2+ entries,\nall series share a single stack identifier so ECharts paints them as\na contiguous bar instead of grouped bars. For single-series data\n(no `series` prop) this option is a no-op.\n\nMirrors the existing `stacked` prop on `AreaChart` and the\n`stack: \'waterfall\'` pattern in `WaterfallChart`. Required for\nstacked-distribution widgets like the HR Nesil Dağılımı top stripe.',
+      },
+      {
+        name: 'showBackground',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description:
+          'Show a faint "track" background bar behind each data point — useful\nfor progress / KPI-style widgets where the empty portion of the bar\nshould still be visually represented. Maps directly to ECharts\n`series.showBackground`.',
+      },
+      {
+        name: 'backgroundStyle',
+        type: '{ color?: string; borderRadius?: number | number[]; borderColor?: string; borderWidth?: number; opacity?: number; }',
+        required: false,
+        default: 'undefined',
+        description:
+          'Style overrides for the background track when `showBackground` is\n`true`. Forwarded verbatim to ECharts `series.backgroundStyle`\n(color, borderRadius, borderColor, borderWidth, shadow*, opacity).\nDefaults to a translucent surface-muted fill when omitted.',
+      },
+      {
+        name: 'barWidth',
+        type: 'number | string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Fixed bar width in pixels (overrides ECharts auto-sizing). Useful\nfor keeping bullet/progress bars visually thin. Maps to\nECharts `series.barWidth`.',
+      },
+      {
+        name: 'barGap',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Gap between bars within the same category (multi-series only).\nAccepts a CSS-like percentage string (e.g. `"30%"`) or `\'-100%\'`\nto overlap bars completely (used for the "background track" hack\nwhen `showBackground` isn\'t enough). Maps to ECharts `series.barGap`.',
+      },
+      {
+        name: 'barCategoryGap',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Gap between categories (% of category width). Smaller values\npack bars tighter. Maps to ECharts `series.barCategoryGap`.',
+      },
+      {
         name: 'onDataPointClick',
         type: '(event: ChartClickEvent) => void',
         required: false,
