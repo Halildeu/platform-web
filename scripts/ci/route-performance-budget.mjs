@@ -92,9 +92,24 @@ function median(values) {
 }
 
 /** Take a single measurement of one route. */
-async function measureOnce(browser, route, mode) {
+async function measureOnce(browser, routeBudget) {
+  const { route, mode, auth } = routeBudget;
+
+  // Auth field semantic enforcement (Codex critical finding 2):
+  //  - `anonymous` mode: never apply storageState
+  //  - `authenticated` mode: storageState required from --auth-storage
+  //  - `anonymous-to-authenticated` (sso-return): skipped (PR-G1 territory)
+  const wantsAuth = auth === 'authenticated';
+  const storageState = wantsAuth ? (opt.authStorageState ?? undefined) : undefined;
+
+  if (wantsAuth && !storageState) {
+    return {
+      error: `route ${route} requires auth (auth=${auth}) but --auth-storage not provided. Use --auth-storage PATH or generate via PR-S1.b test persona fixture.`,
+    };
+  }
+
   const context = await browser.newContext({
-    storageState: opt.authStorageState ?? undefined,
+    storageState,
     viewport: { width: 1440, height: 900 },
   });
   const page = await context.newPage();
@@ -102,9 +117,16 @@ async function measureOnce(browser, route, mode) {
   const url = route.startsWith('http') ? route : `${BASE_URL}${route}`;
 
   try {
-    // Skip soft-nav/sso-return for now (separate harness needed)
+    // soft-navigation and sso-return harness implementations live in PR-G1.
+    // Marking them here so the matrix is honest about scope.
     if (mode === 'soft-navigation' || mode === 'sso-return') {
-      return { skipped: true, reason: `mode=${mode} not yet implemented` };
+      return { skipped: true, reason: `mode=${mode} not yet implemented (PR-G1 scope)` };
+    }
+
+    // warm-fresh mode requires cache priming across two same-context runs —
+    // also PR-G1 territory. For now, mark advisory + skip.
+    if (mode === 'warm-fresh') {
+      return { skipped: true, reason: `mode=warm-fresh not yet implemented (PR-G1 cache priming scope)` };
     }
 
     // Hard navigate; bringToFront ensures we are not hidden
@@ -136,7 +158,7 @@ async function measureRoute(browser, routeBudget) {
   let invalidCount = 0;
 
   for (let i = 0; i < opt.runs; i += 1) {
-    const res = await measureOnce(browser, route, mode);
+    const res = await measureOnce(browser, routeBudget);
     if (res.skipped) {
       console.log(`  -> skipped: ${res.reason}`);
       return { skipped: true };
@@ -242,12 +264,24 @@ async function main() {
 
   for (const routeBudget of budgets.routes) {
     const summary = await measureRoute(browser, routeBudget);
+
+    // Critical-finding fix (Codex thread 019e1e1b): measurement errors must
+    // surface as failures, not silently swallowed. Skipped routes that are
+    // not explicitly marked advisory also count as failures (otherwise an
+    // empty matrix would always "pass").
     if (summary.error) {
       console.log(`  -> ERROR: ${summary.error}`);
       results.push({ ...routeBudget, ...summary });
+      anyFail = true;
       continue;
     }
     if (summary.skipped) {
+      if (routeBudget._acceptance === 'advisory') {
+        console.log(`  -> skipped (advisory, no fail)`);
+      } else {
+        console.log(`  -> skipped (FAIL — runner does not implement mode=${routeBudget.mode} yet)`);
+        anyFail = true;
+      }
       results.push({ ...routeBudget, skipped: true });
       continue;
     }

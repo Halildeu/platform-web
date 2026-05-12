@@ -217,17 +217,34 @@ export function setupPerformanceObservers(sinks: Sink[] = []): () => void {
     }
   });
 
-  // INP — max event duration (modern; replaces FID)
-  tryObserve('event', (list) => {
-    if (!_state) return;
-    for (const entry of list.getEntries() as PerformanceEventTiming[]) {
-      const duration = entry.duration;
-      if (duration > _state.inpValue) {
-        _state.inpValue = duration;
-        dispatchVital(makeEntry('INP', duration));
-      }
+  // INP — max event duration proxy. NOTE: Web Vitals INP spec requires
+  // interactionId grouping + P98 across all interactions; this implementation
+  // is a simpler max-duration approximation. Synthetic runners that do NOT
+  // generate user interactions (e.g. PR-M1 default) will produce undefined
+  // INP. Real INP requires interaction injection in PR-G1.
+  // durationThreshold filters out trivial events to reduce noise.
+  try {
+    if (_state) {
+      const obs = new PerformanceObserver((list) => {
+        if (!_state) return;
+        for (const entry of list.getEntries() as PerformanceEventTiming[]) {
+          const duration = entry.duration;
+          if (duration > _state.inpValue) {
+            _state.inpValue = duration;
+            dispatchVital(makeEntry('INP', duration));
+          }
+        }
+      });
+      obs.observe({
+        type: 'event',
+        buffered: true,
+        durationThreshold: 16,
+      } as PerformanceObserverInit);
+      _state.observers.push(obs);
     }
-  });
+  } catch {
+    if (_state) _state.unsupported.push('event');
+  }
 
   // FID — legacy, kept for backward compatibility
   tryObserve('first-input', (list) => {
@@ -237,16 +254,39 @@ export function setupPerformanceObservers(sinks: Sink[] = []): () => void {
     }
   });
 
-  // CLS — cumulative
+  // CLS — Web Vitals session window algorithm
+  // Spec: session window = 5 seconds total OR 1 second between shifts.
+  // Reported value = max session window sum across all sessions.
+  // Implementation tracks current window + best window seen so far.
+  let sessionValue = 0;
+  let sessionEntries: { startTime: number; value: number }[] = [];
   tryObserve('layout-shift', (list) => {
     if (!_state) return;
-    for (const entry of list.getEntries() as PerformanceEntry[] &
-      { value: number; hadRecentInput: boolean }[]) {
-      if (!entry.hadRecentInput) {
-        _state.clsValue += entry.value;
+    for (const e of list.getEntries() as (PerformanceEntry & {
+      value: number;
+      hadRecentInput: boolean;
+    })[]) {
+      if (e.hadRecentInput) continue;
+      const firstEntry = sessionEntries[0];
+      const lastEntry = sessionEntries[sessionEntries.length - 1];
+      // Continue session if within 1s of last entry AND within 5s of first.
+      if (
+        sessionEntries.length === 0 ||
+        (e.startTime - (lastEntry?.startTime ?? 0) < 1000 &&
+          e.startTime - (firstEntry?.startTime ?? e.startTime) < 5000)
+      ) {
+        sessionValue += e.value;
+        sessionEntries.push({ startTime: e.startTime, value: e.value });
+      } else {
+        // Start a new window
+        sessionValue = e.value;
+        sessionEntries = [{ startTime: e.startTime, value: e.value }];
+      }
+      if (sessionValue > _state.clsValue) {
+        _state.clsValue = sessionValue;
+        dispatchVital({ ...makeEntry('CLS', _state.clsValue, 'unitless') });
       }
     }
-    dispatchVital({ ...makeEntry('CLS', _state.clsValue, 'unitless') });
   });
 
   // Long tasks — TBT proxy (sum of duration > 50ms)
@@ -393,8 +433,29 @@ export function captureSnapshot(): PerfSnapshot {
   };
 }
 
-// Expose to window for Playwright/browser-side capture
-if (typeof window !== 'undefined') {
+// Expose to window for Playwright/browser-side capture. Production builds
+// disable the global by default; opt-in via window.__PERF_OBSERVER_ENABLE=1
+// (set by Playwright/synthetic harnesses before bootstrap) or by setting
+// the build-time VITE_PERF_OBSERVER_EXPOSE env to '1'.
+//
+// Security note (Codex thread 019e1e1b finding 6): exposing this global
+// in production lowers the bar for same-origin XSS to exfiltrate timing
+// metadata, custom mark detail payloads, and resource URL lists. Raw
+// PerformanceAPI is already same-origin readable; this just normalises
+// it. Off-by-default in prod is the conservative choice.
+function shouldExposeGlobal(): boolean {
+  if (typeof window === 'undefined') return false;
+  // Runtime opt-in: synthetic harness sets this flag before bootstrap.
+  const opted = (window as unknown as { __PERF_OBSERVER_ENABLE?: unknown }).__PERF_OBSERVER_ENABLE;
+  if (opted === 1 || opted === '1' || opted === true) return true;
+  // In dev (Vite serves NODE_ENV=development), expose by default for DX.
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+  return false;
+}
+
+if (shouldExposeGlobal()) {
   (window as unknown as { __perfSnapshot?: () => PerfSnapshot }).__perfSnapshot = captureSnapshot;
   (window as unknown as { __perfMark?: (name: string, detail?: unknown) => void }).__perfMark =
     recordMark;

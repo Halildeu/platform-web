@@ -57,7 +57,8 @@
       "longTaskCountFail": 1,
       "leaderTransferKB": 300,
       "leaderDecodedKB": 2000,
-      "_note": "Warm reload fresh fetch budget. Current baseline: 8231 KB warm fresh (above warn but below fail)."
+      "_acceptance": "advisory",
+      "_note": "Warm reload fresh fetch budget. Runner cache-priming implementation is PR-G1 scope; advisory until then. Current baseline: 8231 KB warm fresh."
     },
     {
       "route": "/admin/users",
@@ -119,7 +120,8 @@
       "resourceFailCount": 100,
       "tbtFailMs": 600,
       "longTaskMaxFailMs": 300,
-      "_note": "MFE route-change navigation budget. Soft-nav is the dominant user pattern; reload is rare."
+      "_acceptance": "advisory",
+      "_note": "MFE route-change navigation budget. Soft-nav harness implementation is PR-G1 scope; advisory until then. Soft-nav is the dominant user pattern; reload is rare."
     },
     {
       "route": "/login -> KC -> /home",
