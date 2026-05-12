@@ -47,7 +47,7 @@ import { cn } from './utils/cn';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
-import { useRequiredEChartsGL } from './renderers/gl';
+import { useRequiredEChartsGL, describeEChartsGLReason } from './renderers/gl';
 import { useChartTheme } from './theme/useChartTheme';
 import type {
   ChartThemePreference,
@@ -470,21 +470,22 @@ const Scatter3DInner = React.forwardRef<
   }
 
   if (gl.status === 'unsupported') {
+    const banner = describeEChartsGLReason(gl.reason);
     return (
       <div
         ref={forwardedRef}
         className={cn(
-          'inline-flex items-center justify-center text-sm text-[var(--text-secondary)]',
+          'flex items-center justify-center px-4 text-center text-sm text-[var(--text-secondary)]',
           className,
         )}
         style={{ height }}
         role="img"
-        aria-label={`${a11y.ariaLabel} — WebGL unavailable`}
+        aria-label={`${a11y.ariaLabel} — ${banner}`}
         data-testid="scatter3d-chart-unsupported"
         data-reason={gl.reason ?? 'webgl-unavailable'}
         {...rest}
       >
-        3D rendering requires WebGL, which is not available in this environment.
+        {banner}
       </div>
     );
   }

@@ -13,6 +13,7 @@ export {
 } from './registerEChartsGL';
 export {
   useRequiredEChartsGL,
+  describeEChartsGLReason,
   type EChartsGLStatus,
   type EChartsGLUnsupportedReason,
   type UseRequiredEChartsGLOptions,

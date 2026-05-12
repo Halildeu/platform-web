@@ -98,7 +98,16 @@ describe('Scatter3D — empty / unsupported lifecycle', () => {
       expect(screen.getByTestId('scatter3d-chart-unsupported')).toBeInTheDocument();
     });
     const node = screen.getByTestId('scatter3d-chart-unsupported');
-    expect(node.getAttribute('aria-label')).toMatch(/WebGL unavailable/);
+    // PR-WebGL2-gate (2026-05-12): banner copy moved into the centralised
+    // `describeEChartsGLReason` helper. For `reason: 'webgl-unavailable'`
+    // (the test's mock) the helper emits "requires WebGL, which is not
+    // available in this environment." → aria-label still contains the
+    // word "WebGL" but no longer literally "unavailable" — the new copy
+    // says "not available". Match on the durable "WebGL" + "not available"
+    // tokens instead of the legacy single-string.
+    const ariaLabel = node.getAttribute('aria-label') ?? '';
+    expect(ariaLabel).toMatch(/WebGL/);
+    expect(ariaLabel).toMatch(/not available/);
   });
 });
 
