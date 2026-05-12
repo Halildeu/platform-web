@@ -216,11 +216,45 @@ export async function enterImpersonationOrchestration(
       const body = axiosBody as {
         error?: string;
         message?: string;
-        fieldErrors?: Array<{ field?: string; message?: string }>;
+        fieldErrors?: unknown;
       };
       if (body.error === 'VALIDATION_ERROR') {
-        const fieldMsg = body.fieldErrors?.find((fe) => fe?.message)?.message;
-        const wrappedMsg = fieldMsg ?? body.message ?? 'Validation failed';
+        // Codex 019e1e66 REVISE-1 absorb: defensive guards. `fieldErrors`
+        // may be undefined / non-array / contain non-string messages
+        // depending on Spring's serialization path; fall through to
+        // body.message (and ultimately a static fallback) rather than
+        // crashing with a secondary TypeError or surfacing
+        // "[object Object]" to the user. Determinism: prefer the
+        // `reason` field message (the only validated field on the
+        // StartSessionRequest contract), then any string-typed
+        // fieldErrors[].message, then body.message.
+        const pickMessage = (): string | null => {
+          const arr = body.fieldErrors;
+          if (!Array.isArray(arr)) return null;
+          const reasonHit = arr.find(
+            (fe) =>
+              fe != null &&
+              typeof fe === 'object' &&
+              (fe as { field?: unknown; message?: unknown }).field === 'reason' &&
+              typeof (fe as { message?: unknown }).message === 'string' &&
+              (fe as { message: string }).message.trim().length > 0,
+          ) as { message: string } | undefined;
+          if (reasonHit) return reasonHit.message;
+          const firstStringHit = arr.find(
+            (fe) =>
+              fe != null &&
+              typeof fe === 'object' &&
+              typeof (fe as { message?: unknown }).message === 'string' &&
+              (fe as { message: string }).message.trim().length > 0,
+          ) as { message: string } | undefined;
+          return firstStringHit ? firstStringHit.message : null;
+        };
+        const fieldMsg = pickMessage();
+        const bodyMsg =
+          typeof body.message === 'string' && body.message.trim().length > 0
+            ? body.message
+            : null;
+        const wrappedMsg = fieldMsg ?? bodyMsg ?? 'Validation failed';
         const wrapped = new Error(wrappedMsg) as Error & { errorCode?: string };
         wrapped.errorCode = 'VALIDATION_ERROR';
         throw wrapped;

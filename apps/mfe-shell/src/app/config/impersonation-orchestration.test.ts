@@ -267,6 +267,78 @@ describe('impersonation-orchestration (PR-C2)', () => {
     });
   });
 
+  it('enterImpersonationOrchestration falls back to body.message when fieldErrors is empty/missing (BUG #3 edge case)', async () => {
+    // Codex 019e1e66 REVISE-1: defensive guards must handle malformed
+    // VALIDATION_ERROR shapes (missing/non-array fieldErrors, non-string
+    // field message). Adapter should still surface a useful message
+    // and preserve `errorCode === 'VALIDATION_ERROR'` rather than
+    // crashing with TypeError or surfacing "[object Object]".
+    const initial = buildState();
+    const { apiPost } = setupMocks(initial);
+
+    const axiosErr = Object.assign(new Error('Request failed with status code 400'), {
+      response: {
+        status: 400,
+        data: {
+          error: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          // fieldErrors missing entirely
+        },
+      },
+    });
+    apiPost.mockRejectedValueOnce(axiosErr);
+
+    const orch = await import('./impersonation-orchestration');
+    await expect(
+      orch.enterImpersonationOrchestration({
+        targetUserId: 42,
+        targetEmail: 'target@example.com',
+        reason: 'whatever',
+      }),
+    ).rejects.toMatchObject({
+      message: 'Validation failed',
+      errorCode: 'VALIDATION_ERROR',
+    });
+  });
+
+  it('enterImpersonationOrchestration prefers reason field message over other fieldErrors (BUG #3 determinism)', async () => {
+    // Codex 019e1e66 REVISE-1: when fieldErrors has multiple entries
+    // (theoretically possible if Spring validates additional fields in
+    // future) the `reason` field message is the deterministic choice
+    // because it is the only validated field on the StartSessionRequest
+    // contract today.
+    const initial = buildState();
+    const { apiPost } = setupMocks(initial);
+
+    const axiosErr = Object.assign(new Error('Request failed with status code 400'), {
+      response: {
+        status: 400,
+        data: {
+          error: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          fieldErrors: [
+            { field: 'targetSubject', message: 'must be a valid UUID' },
+            { field: 'reason', message: "boyut '10' ile '500' arasında olmalı" },
+            { field: 'targetEmail', message: 'must be a well-formed email' },
+          ],
+        },
+      },
+    });
+    apiPost.mockRejectedValueOnce(axiosErr);
+
+    const orch = await import('./impersonation-orchestration');
+    await expect(
+      orch.enterImpersonationOrchestration({
+        targetUserId: 42,
+        targetEmail: 'target@example.com',
+        reason: 'short',
+      }),
+    ).rejects.toMatchObject({
+      message: "boyut '10' ile '500' arasında olmalı",
+      errorCode: 'VALIDATION_ERROR',
+    });
+  });
+
   it('exitImpersonationOrchestration leaves Redux untouched on revoke failure (Codex iter-3)', async () => {
     const initial = buildState({
       token: 'broker-token',
