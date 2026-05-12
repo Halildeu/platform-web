@@ -97,12 +97,21 @@ function routeSlug(route) {
 
 /** Categorise a resource URL into a coarse bucket for the taxonomy. */
 function categorise(url, initiatorType) {
-  // Module Federation chunk patterns
-  if (/loadShare__design_system/i.test(url)) return 'mf-shared:design-system';
-  if (/loadShare__react/i.test(url)) return 'mf-shared:react';
+  // Module Federation chunk patterns (token-boundary protected to avoid
+  // false matches; e.g. `loadShare__react` should NOT match `react-dom`)
+  if (/loadShare(__|_mf_\d+_)design[_-]system(__|$|[._-])/i.test(url)) {
+    return 'mf-shared:design-system';
+  }
+  if (/loadShare(__|_mf_\d+_)react([_-]dom)?(__|$|[._-])/i.test(url)) {
+    return /react[_-]dom/i.test(url) ? 'mf-shared:react-dom' : 'mf-shared:react';
+  }
   if (/loadShare__/i.test(url)) {
-    const m = url.match(/loadShare__(?:_mf_\d+_)?([^/]+)__/i);
-    return `mf-shared:${m ? m[1] : 'unknown'}`;
+    // Extract canonical package token, normalise `_mf_0_design_mf_1_system`
+    // to `design-system`.
+    const m = url.match(/loadShare__(?:_mf_\d+_)?([^/]+?)(?:__|\.|$)/i);
+    let token = m ? m[1] : 'unknown';
+    token = token.replace(/_mf_\d+_/g, '-').replace(/_/g, '-');
+    return `mf-shared:${token}`;
   }
   if (/remoteEntry\.js/.test(url)) return 'mf-remote-entry';
   if (/virtual_mf|virtualExposes|_virtual_mf/i.test(url)) return 'mf-virtual';
@@ -128,14 +137,28 @@ function hashedName(url) {
   return tail.replace(/-[A-Za-z0-9_-]{8,}(?=\.)/g, '-{hash}');
 }
 
-async function captureRoute(browser, route) {
+async function captureRoute(browser, routeBudget) {
+  const { route, auth } = routeBudget;
   console.log(`[taxonomy] ${route}`);
   const slug = routeSlug(route);
   const outDir = join(OUT_ROOT, slug);
   mkdirSync(outDir, { recursive: true });
 
+  // Auth fail-fast (Codex thread 019e1e34 finding 5): authenticated routes
+  // without --auth-storage produce silently-wrong taxonomy (login redirect
+  // or unauthorized shell shape). Require storage explicitly.
+  const wantsAuth = auth === 'authenticated';
+  if (wantsAuth && !opt.authStorage) {
+    console.error(`  ERROR ${route}: auth=authenticated but --auth-storage not provided`);
+    return {
+      route,
+      slug,
+      error: 'auth=authenticated requires --auth-storage (PR-S1.b/B4 test persona fixture)',
+    };
+  }
+
   const context = await browser.newContext({
-    storageState: opt.authStorage ?? undefined,
+    storageState: wantsAuth ? opt.authStorage : undefined,
     viewport: { width: 1440, height: 900 },
   });
   await context.addInitScript(() => {
@@ -144,7 +167,11 @@ async function captureRoute(browser, route) {
   const page = await context.newPage();
 
   const url = route.startsWith('http') ? route : `${BASE_URL}${route}`;
-  const traceFile = join(outDir, 'trace.json');
+  // Playwright trace (NOT Chrome DevTools format). Inspect via
+  // `npx playwright show-trace tests/perf/bundle-stats/<slug>/trace.zip`.
+  // For Chrome DevTools-format long-task attribution, see follow-up PR
+  // PR-A0.b (CDP Tracing.start/end -> chrome://tracing format).
+  const traceFile = join(outDir, 'trace.zip');
 
   try {
     // Start Chrome trace BEFORE navigation so we capture full load
@@ -240,9 +267,15 @@ async function captureRoute(browser, route) {
       resources: data.resources,
     };
 
+    // __perfSnapshot null check (Codex finding 4 advisory): explicit warn
+    // so silent zero-data is not mistaken for success.
+    if (!taxonomy.perfSnapshot) {
+      console.warn(`  WARN ${route}: __perfSnapshot returned null (PR-M1 harness not active or window flag missing)`);
+    }
+
     writeFileSync(join(outDir, 'taxonomy.json'), JSON.stringify(taxonomy, null, 2));
     console.log(`  -> ${outDir}/taxonomy.json (${totals.resourceCount} resources, ${totals.decodedKB} KB decoded)`);
-    console.log(`  -> ${traceFile} (Chrome trace for long-task attribution)`);
+    console.log(`  -> ${traceFile} (Playwright trace; inspect via 'npx playwright show-trace ${traceFile}')`);
 
     return taxonomy;
   } catch (e) {
@@ -262,9 +295,22 @@ async function main() {
   const browser = await chromium.launch({ headless: true });
   const results = [];
 
+  // Load budget records so each captured route inherits its auth/_acceptance
+  // metadata. Budget file is the single source of truth for what a route is.
+  const budgets = JSON.parse(
+    await import('node:fs').then((m) => m.promises.readFile(join(ROOT, 'performance-budgets.json'), 'utf8')),
+  );
+  const budgetByRoute = new Map();
+  for (const b of budgets.routes) {
+    if (!budgetByRoute.has(b.route)) budgetByRoute.set(b.route, b);
+  }
+
+  let anyFail = false;
   for (const route of routes) {
-    const t = await captureRoute(browser, route);
+    const routeBudget = budgetByRoute.get(route) ?? { route, mode: 'cold-anonymous', auth: 'anonymous' };
+    const t = await captureRoute(browser, routeBudget);
     results.push(t);
+    if (t.error) anyFail = true;
   }
 
   await browser.close();
@@ -283,6 +329,10 @@ async function main() {
   };
   writeFileSync(join(OUT_ROOT, 'all-routes.json'), JSON.stringify(aggregate, null, 2));
   console.log(`\n[taxonomy] aggregate: ${OUT_ROOT}/all-routes.json`);
+  if (anyFail) {
+    console.error(`\n[taxonomy] FAILURES present (see route.error fields); exit 1`);
+    process.exit(1);
+  }
 }
 
 main().catch((e) => {

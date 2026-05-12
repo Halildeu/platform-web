@@ -36,10 +36,10 @@ PR-B1a (AG Grid lazy split) + PR-B1b (design-system light entry) + PR-B2 (MF sha
 
 ```bash
 # Tek MFE (canary):
-ANALYZE_BUNDLE=1 pnpm --filter @mfe/shell build
+ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
 
 # Tüm MFE'ler (sonraki PR'larda her vite.config.ts'e plug eklendikçe):
-ANALYZE_BUNDLE=1 pnpm -r --filter '@mfe/*' build
+ANALYZE_BUNDLE=1 pnpm -r --filter 'mfe-*' build
 ```
 
 Çıktı:
@@ -175,7 +175,7 @@ Bu kanıt zemini olmadan PR-B1a/B1b/B2 effort'unu doğrulayamayız.
 
 ```bash
 # Mfe-shell stats üret:
-ANALYZE_BUNDLE=1 pnpm --filter @mfe/shell build
+ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
 
 # stats.json + treemap.html kontrol et:
 ls tests/perf/bundle-stats/mfe-shell/

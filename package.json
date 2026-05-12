@@ -195,7 +195,7 @@
     "perf:budget:testai": "node ./scripts/ci/route-performance-budget.mjs --target testai",
     "perf:budget:update-baseline": "node ./scripts/ci/route-performance-budget.mjs --target testai --update-baseline",
     "perf:budget:warn-only": "node ./scripts/ci/route-performance-budget.mjs --target testai --warn-only",
-    "bundle:analyze": "ANALYZE_BUNDLE=1 pnpm --filter @mfe/shell build",
+    "bundle:analyze": "ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build",
     "bundle:taxonomy": "node ./scripts/ci/bundle-taxonomy.mjs --target local",
     "bundle:taxonomy:testai": "node ./scripts/ci/bundle-taxonomy.mjs --target testai",
     "bundle:duplicates": "node ./scripts/ci/duplicate-package-detector.mjs",

@@ -35,31 +35,69 @@ if (!existsSync(STATS_DIR)) {
   process.exit(1);
 }
 
-/** Extract a normalised package name from a node_modules path. */
+/**
+ * Extract a normalised package name from a node_modules-relative path.
+ *
+ * Handles:
+ *   - POSIX `/node_modules/<pkg>/...` (hoisted + nested)
+ *   - Windows `\node_modules\<pkg>\...` (separator normalised)
+ *   - pnpm realpath `/node_modules/.pnpm/<pkg>@<ver>_hash/node_modules/<pkg>/...`
+ *     (last `node_modules/<pkg>` segment wins, skips `.pnpm`)
+ *   - @scope packages preserved
+ *   - Non-dep paths (app code) return null
+ */
 function pkgFromModule(modulePath) {
-  // Examples:
-  //   /node_modules/react/index.js -> react
-  //   /node_modules/@scope/pkg/dist/foo.js -> @scope/pkg
-  //   /apps/mfe-shell/src/app/foo.ts -> null (app code, not a dep)
-  const m = modulePath.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/);
-  return m ? m[1] : null;
+  if (!modulePath || typeof modulePath !== 'string') return null;
+  // Normalise to forward slashes
+  const norm = modulePath.replace(/\\/g, '/');
+  // Find LAST `node_modules/<segment>` occurrence and use its segment
+  // (handles pnpm realpath where the meaningful package is after .pnpm)
+  const re = /node_modules\/((?:@[^/]+\/)?[^/]+)/g;
+  let m;
+  let last = null;
+  while ((m = re.exec(norm)) !== null) {
+    const seg = m[1];
+    // Skip pnpm internal directory
+    if (seg === '.pnpm') continue;
+    last = seg;
+  }
+  return last;
 }
 
-/** Parse one MFE's stats.json (raw-data template from rollup-plugin-visualizer). */
+/**
+ * Parse one MFE's stats.json (raw-data template from rollup-plugin-visualizer v5).
+ *
+ * v5 raw-data schema: `{ version, tree, nodeParts: { uid: { ... } }, nodeMetas: { uid: { id, ... } } }`.
+ * Module path lives in `meta.id`, NOT the nodeMetas key (which is a uid).
+ * Codex thread 019e1e34 caught the previous mistake of treating the key as path.
+ * Size info (`renderedLength`, `gzipLength`, `brotliLength`) lives in
+ * `nodeParts[uid]` for v5; older versions had them on `nodeMetas[uid]`.
+ * We probe both shapes and fall back to safe defaults.
+ */
 function parseStats(statsPath) {
   const stats = JSON.parse(readFileSync(statsPath, 'utf8'));
-  // raw-data shape: { tree: { name, children: [...] }, nodeMetas: { ... } }
-  // nodeMetas keys are absolute paths; values have renderedLength, gzipLength, brotliLength
-  const result = new Map(); // package -> { totalRendered, totalGzip, files: Set }
+  const result = new Map();
+  const nodeMetas = stats.nodeMetas;
+  const nodeParts = stats.nodeParts ?? null;
+  if (!nodeMetas || typeof nodeMetas !== 'object') {
+    console.warn(`  WARN: stats.json missing nodeMetas (path=${statsPath}); skipping`);
+    return result;
+  }
 
-  const nodeMetas = stats.nodeMetas || {};
-  for (const [path, meta] of Object.entries(nodeMetas)) {
-    const pkg = pkgFromModule(path);
+  for (const [uid, meta] of Object.entries(nodeMetas)) {
+    if (!meta || typeof meta !== 'object') continue;
+    // Module id (path) lives on `meta.id` in v5 raw-data; fall back to uid for v4-like shape
+    const modulePath = meta.id ?? uid;
+    const pkg = pkgFromModule(modulePath);
     if (!pkg) continue;
+    // Size: v5 stores it under nodeParts[uid]; v4 sometimes on meta
+    const part = nodeParts && nodeParts[uid] ? nodeParts[uid] : meta;
+    const rendered = Number(part.renderedLength) || 0;
+    const gzip = Number(part.gzipLength) || 0;
     const entry = result.get(pkg) ?? { totalRendered: 0, totalGzip: 0, files: new Set() };
-    entry.totalRendered += meta.renderedLength || 0;
-    entry.totalGzip += meta.gzipLength || 0;
-    entry.files.add(path);
+    entry.totalRendered += rendered;
+    entry.totalGzip += gzip;
+    entry.files.add(modulePath);
     result.set(pkg, entry);
   }
 
