@@ -1136,6 +1136,30 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Enable bubble mode — sizes markers by the `size` field.',
       },
       {
+        name: 'large',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description:
+          "Enable ECharts' `large` mode — a Canvas-batching optimization that\ncollapses individual symbol draws into a single shape per series.\nVisible interactions (hover highlight, click) are coarser in large\nmode, but render time drops dramatically for 5K–50K point datasets.\n\nUse case: dense scatter plots where individual point hover isn't\nneeded (overview / brushing dashboards). The existing renderer\nrouter still escalates to WebGL above 100K points; this prop fills\nthe 5K–50K gap on Canvas. Maps to ECharts `series.large` +\n`largeThreshold` (we expose the threshold at the wrapper level so\ncallers can tune the cutoff without forking the renderer).",
+      },
+      {
+        name: 'largeThreshold',
+        type: 'number',
+        required: false,
+        default: '2000',
+        description:
+          'Point-count threshold above which `large` mode kicks in. Ignored\nunless `large` is `true`. Maps to ECharts `series.largeThreshold`.',
+      },
+      {
+        name: 'symbolSize',
+        type: '(datum: ScatterDataPoint) => number',
+        required: false,
+        default: 'undefined (constant 8 px, or bubble-mode sqrt(size))',
+        description:
+          'Custom function to compute marker size from a `ScatterDataPoint`.\nReceives `{ x, y, size, label }` and returns a pixel radius.\nOverrides both the default constant radius and the `bubble`-mode\n`Math.sqrt(size)` formula. Maps to ECharts `series.symbolSize`\nfunction variant.\n\nUse case: encoding a third dimension (revenue, severity, importance)\nwith a custom scale (logarithmic, quantile-bucketed) instead of the\ndefault linear sqrt.',
+      },
+      {
         name: 'noDataText',
         type: 'string',
         required: false,
