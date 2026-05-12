@@ -292,6 +292,7 @@
     "prettier": "^3.8.3",
     "rimraf": "^6.0.1",
     "rollup-plugin-visualizer": "^5.12.0",
+    "serve": "^14.2.5",
     "size-limit": "^12.0.1",
     "storybook": "^10.3.6",
     "storybook-design-token": "^5.0.0",
@@ -364,6 +365,13 @@
       "_doc": "PERF-INIT-V2 PMD section 2.1 0-3 ay warn target = 2 MB. Adjusted after baseline ratification.",
       "path": "apps/mfe-shell/dist/assets/index-*.js",
       "limit": "2 MB",
+      "gzip": false
+    },
+    {
+      "name": "mfe-shell full JS aggregate (PR-G1 regression watch)",
+      "_doc": "Codex thread 019e1e5d critical 6: entry-only ölçüm tek file glob ile sınırlı; bootstrap dynamic-import nedeniyle gerçek shell payload bu aggregate. PMD 2.1 cold-auth fail limit < 3 MB; warm watch 12 MB.",
+      "path": "apps/mfe-shell/dist/assets/*.js",
+      "limit": "12 MB",
       "gzip": false
     },
     {

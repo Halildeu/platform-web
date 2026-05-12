@@ -24,7 +24,7 @@ on:
   pull_request:
     paths:
       - 'apps/mfe-shell/**'
-      - 'packages/design-system/**'
+      - 'packages/**'
       - 'performance-budgets.json'
       - 'scripts/ci/route-performance-budget.mjs'
       - 'scripts/ci/bundle-taxonomy.mjs'
@@ -74,36 +74,48 @@ jobs:
       - name: Build mfe-shell (production preview)
         run: pnpm --filter mfe-shell build
 
-      - name: Serve production preview
+      - name: Serve production preview (SPA-aware Vite preview, port 5174)
         run: |
-          npx serve apps/mfe-shell/dist -l 5174 &
-          # Wait for the server to be reachable
-          until curl -fs http://localhost:5174/login >/dev/null 2>&1; do
+          # Vite preview understands SPA history fallback (avoids 404 on
+          # client-side routes like /login). Background process; CI step
+          # cleanup happens via runner.
+          pnpm --dir apps/mfe-shell exec vite preview \
+            --host 127.0.0.1 --port 5174 --strictPort --outDir dist &
+          # Wait up to 60s for server to accept connections
+          deadline=$(( $(date +%s) + 60 ))
+          until curl -fsI "http://127.0.0.1:5174/login" >/dev/null 2>&1; do
+            if [ $(date +%s) -ge "${deadline}" ]; then
+              echo "FATAL: preview server did not respond within 60s"
+              exit 1
+            fi
             sleep 1
           done
+          echo "preview server ready"
         shell: bash
 
-      - name: Route budget (warn-only during warmup)
+      - name: Route budget (warn-only via flag; failures NOT muted)
+        # Codex thread 019e1e5d critical 4: `--warn-only` already downgrades
+        # budget failures to exit 0. Removing `|| true` so infra crashes
+        # (runner import error, Playwright launch fail) surface as red.
         run: |
-          if [ "$PERF_WARN_ONLY" = "1" ]; then
-            node scripts/ci/route-performance-budget.mjs --target local --runs ${PERF_RUNS} --warn-only --routes /login || true
+          if [ "${PERF_WARN_ONLY}" = "1" ]; then
+            node scripts/ci/route-performance-budget.mjs --target local --runs "${PERF_RUNS}" --warn-only --routes /login
           else
-            node scripts/ci/route-performance-budget.mjs --target local --runs ${PERF_RUNS} --routes /login
+            node scripts/ci/route-performance-budget.mjs --target local --runs "${PERF_RUNS}" --require-baseline --routes /login
           fi
-        env:
-          PERF_WARN_ONLY: ${{ env.PERF_WARN_ONLY }}
-          PERF_RUNS: ${{ env.PERF_RUNS }}
 
-      - name: Bundle taxonomy (anonymous /login smoke)
-        run: |
-          node scripts/ci/bundle-taxonomy.mjs --target local --routes /login --runs 1 || true
+      - name: Bundle taxonomy (anonymous /login smoke, advisory)
+        # Advisory: bundle-taxonomy implementation regressions are visible
+        # in red but do not block the PR.
         continue-on-error: true
+        run: |
+          node scripts/ci/bundle-taxonomy.mjs --target local --routes /login --runs 1
 
-      - name: Duplicate package detector
+      - name: Duplicate package detector (advisory)
+        continue-on-error: true
         run: |
           ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
-          node scripts/ci/duplicate-package-detector.mjs || true
-        continue-on-error: true
+          node scripts/ci/duplicate-package-detector.mjs
 
       - name: Upload route budget artifact
         if: always()

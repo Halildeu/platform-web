@@ -50,13 +50,17 @@ for (let i = 0; i < args.length; i += 1) {
   else if (a === '--update-baseline') opt.updateBaseline = true;
   else if (a === '--warn-only') opt.warnOnly = true;
   else if (a === '--auth-storage') opt.authStorageState = args[++i];
+  else if (a === '--routes') opt.routesFilter = args[++i].split(',');
+  else if (a === '--require-baseline') opt.requireBaseline = true;
   else if (a === '--help' || a === '-h') {
     console.log(
       `Usage: node scripts/ci/route-performance-budget.mjs [options]\n\n` +
       `  --target local|testai|prod  (default: local)\n` +
       `  --runs N                    (default: 5)\n` +
+      `  --routes /a,/b,...          Filter routes to a subset (default: all from performance-budgets.json)\n` +
       `  --update-baseline           write tests/perf/baseline.json\n` +
       `  --warn-only                 never exit 1 (warmup mode)\n` +
+      `  --require-baseline          fail if tests/perf/baseline.json has no routes (hard-flip guard)\n` +
       `  --auth-storage PATH         Playwright storageState JSON for auth fixture`,
     );
     process.exit(0);
@@ -272,11 +276,34 @@ function evaluate(summary, budget) {
 }
 
 async function main() {
+  // Fail-closed guard for hard-flip phase: refuse to run without a populated
+  // baseline.json when `--require-baseline` is set. Prevents the first
+  // post-warmup run from passing with zero comparison data.
+  if (opt.requireBaseline) {
+    const keys = Object.keys(baseline.routes ?? {});
+    if (keys.length === 0) {
+      console.error('[perf-budget] FATAL: --require-baseline set but tests/perf/baseline.json has no routes');
+      console.error('              Hard-flip guard: run `npm run perf:budget:update-baseline` first or stay in --warn-only.');
+      process.exit(2);
+    }
+  }
+
+  // Apply --routes filter if provided (Codex thread 019e1e5d critical 1)
+  const targetRoutes = opt.routesFilter
+    ? budgets.routes.filter((r) => opt.routesFilter.includes(r.route))
+    : budgets.routes;
+
+  if (opt.routesFilter && targetRoutes.length === 0) {
+    console.error(`[perf-budget] FATAL: --routes filter matched no entries in performance-budgets.json`);
+    console.error(`              Requested: ${opt.routesFilter.join(', ')}`);
+    process.exit(2);
+  }
+
   const browser = await chromium.launch({ headless: true });
   const results = [];
   let anyFail = false;
 
-  for (const routeBudget of budgets.routes) {
+  for (const routeBudget of targetRoutes) {
     const summary = await measureRoute(browser, routeBudget);
 
     // Critical-finding fix (Codex thread 019e1e1b): measurement errors must

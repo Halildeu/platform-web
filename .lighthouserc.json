@@ -2,10 +2,11 @@
   "_doc": "PERF-INIT-V2 PR-G1: Lighthouse CI config. Production preview build target (Codex thread 019e1de0 — dev server measurement was unreliable). Hard fail on accessibility/best-practices; performance advisory during PR-G1 warmup.",
   "ci": {
     "collect": {
-      "_doc": "Build mfe-shell prod bundle locally then serve dist via npx serve. Anonymous /login route only (authenticated routes require PR-S1.b storage state fixture, deferred). PMD section 2.1 mode=cold-anonymous.",
+      "_doc": "Serve mfe-shell pre-built dist via Vite preview (SPA-aware, fallback to /index.html for client routes). Build step is the workflow's responsibility — do NOT re-run inside startServerCommand. Anonymous /login route only (authenticated routes require PR-S1.b storage state fixture, deferred). PMD section 2.1 mode=cold-anonymous.",
       "url": ["http://localhost:5174/login"],
-      "startServerCommand": "pnpm --filter mfe-shell build && npx serve apps/mfe-shell/dist -l 5174",
-      "startServerReadyPattern": "Accepting connections",
+      "startServerCommand": "pnpm --dir apps/mfe-shell exec vite preview --host 127.0.0.1 --port 5174 --strictPort --outDir dist",
+      "startServerReadyPattern": "Local:",
+      "startServerReadyTimeout": 60000,
       "numberOfRuns": 3,
       "settings": {
         "preset": "desktop",
