@@ -320,6 +320,89 @@ describe('LineChart option shape', () => {
   it('handles empty series without throwing', () => {
     expect(() => render(<LineChart series={[]} labels={[]} animate={false} />)).not.toThrow();
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-X2 wrapper extensions (Codex thread 019e1e30 AGREE):
+  // step + connectNulls for status-history / sparse-data line charts.
+  // ────────────────────────────────────────────────────────────────────
+
+  it('step=undefined (default) → series.step false, smooth follows curved', () => {
+    render(
+      <LineChart
+        series={[{ name: 's1', data: [1, 2, 3] }]}
+        labels={['a', 'b', 'c']}
+        curved
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s[0].step).toBe(false);
+    expect(s[0].smooth).toBe(true);
+  });
+
+  it('step=start → series.step="start" + smooth forced false (mutual exclusivity)', () => {
+    render(
+      <LineChart
+        series={[{ name: 's1', data: [1, 2, 3] }]}
+        labels={['a', 'b', 'c']}
+        step="start"
+        curved
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s[0].step).toBe('start');
+    expect(s[0].smooth).toBe(false);
+  });
+
+  it('step="middle" / "end" pass through verbatim', () => {
+    const { rerender } = render(
+      <LineChart
+        series={[{ name: 's1', data: [1, 2, 3] }]}
+        labels={['a', 'b', 'c']}
+        step="middle"
+        animate={false}
+      />,
+    );
+    expect(series()[0].step).toBe('middle');
+    rerender(
+      <LineChart
+        series={[{ name: 's1', data: [1, 2, 3] }]}
+        labels={['a', 'b', 'c']}
+        step="end"
+        animate={false}
+      />,
+    );
+    expect(series()[0].step).toBe('end');
+  });
+
+  it('connectNulls=false (default) lands as connectNulls false', () => {
+    render(
+      <LineChart
+        series={[{ name: 's1', data: [1, 2, 3] }]}
+        labels={['a', 'b', 'c']}
+        animate={false}
+      />,
+    );
+    expect(series()[0].connectNulls).toBe(false);
+  });
+
+  it('connectNulls=true propagates to every series', () => {
+    render(
+      <LineChart
+        series={[
+          { name: 's1', data: [1, 2, 3] },
+          { name: 's2', data: [4, 5, 6] },
+        ]}
+        labels={['a', 'b', 'c']}
+        connectNulls
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s[0].connectNulls).toBe(true);
+    expect(s[1].connectNulls).toBe(true);
+  });
 });
 
 /* ================================================================== */
@@ -351,6 +434,37 @@ describe('AreaChart option shape', () => {
       <AreaChart series={[{ name: 's1', data: [1, 2] }]} labels={['a', 'b']} animate={false} />,
     );
     expect(series()[0].stack).toBeUndefined();
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-X2 wrapper extensions: step + connectNulls (mirrors LineChart).
+  // ────────────────────────────────────────────────────────────────────
+
+  it('step="middle" + curved=true → series.step="middle", smooth forced false', () => {
+    render(
+      <AreaChart
+        series={[{ name: 's1', data: [1, 2, 3] }]}
+        labels={['a', 'b', 'c']}
+        step="middle"
+        curved
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s[0].step).toBe('middle');
+    expect(s[0].smooth).toBe(false);
+  });
+
+  it('connectNulls=true propagates to AreaChart series', () => {
+    render(
+      <AreaChart
+        series={[{ name: 's1', data: [1, 2, 3] }]}
+        labels={['a', 'b', 'c']}
+        connectNulls
+        animate={false}
+      />,
+    );
+    expect(series()[0].connectNulls).toBe(true);
   });
 });
 

@@ -82,6 +82,25 @@ export interface AreaChartProps extends AccessControlledProps {
   gradient?: boolean;
   /** Use bezier curves instead of straight lines. @default false */
   curved?: boolean;
+  /**
+   * Render the area edges as a step function instead of a continuous
+   * slope. Mutually exclusive with `curved` (ECharts ignores `smooth`
+   * when `step` is set). Useful for stacked status-history charts
+   * where interpolation between two states would be misleading.
+   * Mirrors the matching `step` prop on `LineChart`. Maps to ECharts
+   * `series.step`.
+   *
+   * @default undefined
+   */
+  step?: 'start' | 'middle' | 'end';
+  /**
+   * Connect data points across null / undefined values. ECharts breaks
+   * the area at gaps by default; setting `true` interpolates a fill
+   * across them. Maps to ECharts `series.connectNulls`.
+   *
+   * @default false
+   */
+  connectNulls?: boolean;
   /** Custom value formatter. */
   valueFormatter?: (value: number) => string;
   /** Animate on mount. @default true */
@@ -215,6 +234,8 @@ const AreaChartInner = React.forwardRef<
     showLegend = false,
     gradient = true,
     curved = false,
+    step,
+    connectNulls = false,
     valueFormatter,
     animate = true,
     title,
@@ -296,7 +317,13 @@ const AreaChartInner = React.forwardRef<
         type: 'line' as const,
         name: s.name,
         data: s.data,
-        smooth: curved,
+        // PR-X2: `step` takes precedence over `curved` — ECharts ignores
+        // `smooth` when `step` is set, but we still pass `false`
+        // explicitly to keep option output deterministic for snapshot
+        // tests.
+        smooth: step ? false : curved,
+        step: step ?? false,
+        connectNulls,
         stack: stacked ? 'total' : undefined,
         symbol: showDots ? 'circle' : 'none',
         symbolSize: showDots ? 5 : 0,
@@ -390,6 +417,10 @@ const AreaChartInner = React.forwardRef<
     seriesData,
     labels,
     stacked,
+    // PR-X2 (Codex thread 019e1e30): step + connectNulls for stacked
+    // status-history charts where interpolation between states is wrong.
+    step,
+    connectNulls,
     showDots,
     showGrid,
     showLegend,

@@ -410,6 +410,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Use bezier curves instead of straight lines.',
       },
       {
+        name: 'step',
+        type: "'start' | 'middle' | 'end'",
+        required: false,
+        default: 'undefined',
+        description:
+          "Render the line as a step function instead of a continuous slope.\n\n- `'start'` — vertical jump at the leading edge of each data point\n- `'middle'` — jump in the middle of the segment (centred between two points)\n- `'end'` — jump at the trailing edge\n\nMutually exclusive with `curved` (ECharts ignores `smooth` when\n`step` is set). Useful for status / state history charts where\na continuous slope would imply interpolation that doesn't exist\nin the underlying data. Maps to ECharts `series.step`.",
+      },
+      {
+        name: 'connectNulls',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description:
+          'Connect data points across null / undefined values. By default\nECharts breaks the line at the gap (which is correct for "missing\ndata") but for some series (e.g. user-edited sparse manual entries)\na connected line communicates "trend" more clearly. Maps to\nECharts `series.connectNulls`.',
+      },
+      {
         name: 'valueFormatter',
         type: '(value: number) => string',
         required: false,
@@ -832,6 +848,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'false',
         description: 'Use bezier curves instead of straight lines.',
+      },
+      {
+        name: 'step',
+        type: "'start' | 'middle' | 'end'",
+        required: false,
+        default: 'undefined',
+        description:
+          'Render the area edges as a step function instead of a continuous\nslope. Mutually exclusive with `curved` (ECharts ignores `smooth`\nwhen `step` is set). Useful for stacked status-history charts\nwhere interpolation between two states would be misleading.\nMirrors the matching `step` prop on `LineChart`. Maps to ECharts\n`series.step`.',
+      },
+      {
+        name: 'connectNulls',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description:
+          'Connect data points across null / undefined values. ECharts breaks\nthe area at gaps by default; setting `true` interpolates a fill\nacross them. Maps to ECharts `series.connectNulls`.',
       },
       {
         name: 'valueFormatter',
