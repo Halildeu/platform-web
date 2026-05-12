@@ -48,6 +48,7 @@ export type {
 // `019e10ab` iter-4 disipline (P1a precedent).
 export {
   useRequiredEChartsGL,
+  describeEChartsGLReason,
   type EChartsGLStatus,
   type EChartsGLUnsupportedReason,
   type UseRequiredEChartsGLOptions,

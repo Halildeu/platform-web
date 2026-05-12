@@ -72,6 +72,31 @@ describe('useRequiredEChartsGL — lifecycle contract', () => {
     expect(isEChartsGLRegistered()).toBe(false);
   });
 
+  // Live cluster smoke 2026-05-12 (Apple M4 Pro Chrome 147, WebGL1
+  // only) reproduced echarts-gl's silent-failure behaviour: the canvas
+  // mounts blank when WebGL2 is missing. requireWebGL2 (default true)
+  // gates the lazy import so the wrapper shows an actionable banner
+  // instead of a blank container.
+  it('returns "unsupported" with reason "webgl2-required" when only WebGL1 is available (default requireWebGL2=true)', async () => {
+    mockedDetect.mockReturnValue({ supported: true, webgl2: false });
+    const { result } = renderHook(() => useRequiredEChartsGL());
+    await waitFor(() => {
+      expect(result.current.status).toBe('unsupported');
+    });
+    expect(result.current.reason).toBe('webgl2-required');
+    // Critically: the dynamic import was NOT called when WebGL2 is missing.
+    expect(isEChartsGLRegistered()).toBe(false);
+  });
+
+  it('honours requireWebGL2=false escape hatch (WebGL1 → ready)', async () => {
+    mockedDetect.mockReturnValue({ supported: true, webgl2: false });
+    const { result } = renderHook(() => useRequiredEChartsGL({ requireWebGL2: false }));
+    await waitFor(() => {
+      expect(result.current.status).toBe('ready');
+    });
+    expect(isEChartsGLRegistered()).toBe(true);
+  });
+
   it('transitions "loading" → "ready" when WebGL OK and GL not yet registered', async () => {
     const { result } = renderHook(() => useRequiredEChartsGL());
     await waitFor(() => {

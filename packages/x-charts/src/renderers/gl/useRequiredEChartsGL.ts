@@ -41,7 +41,11 @@ import { isEChartsGLRegistered, registerEChartsGL } from './registerEChartsGL';
 export type EChartsGLStatus = 'idle' | 'loading' | 'ready' | 'unsupported';
 
 /** Why the helper rejected — surfaced for telemetry / dev DX. */
-export type EChartsGLUnsupportedReason = 'webgl-unavailable' | 'gl-import-failed' | 'disabled';
+export type EChartsGLUnsupportedReason =
+  | 'webgl-unavailable'
+  | 'webgl2-required'
+  | 'gl-import-failed'
+  | 'disabled';
 
 export interface UseRequiredEChartsGLOptions {
   /**
@@ -51,6 +55,19 @@ export interface UseRequiredEChartsGLOptions {
    * for an empty chart that won't render anyway).
    */
   enabled?: boolean;
+  /**
+   * Require WebGL2 specifically. Default `true` — echarts-gl 2.x ships
+   * shaders that fail silently on WebGL1-only contexts (the `init`
+   * call returns without throwing but the canvas stays empty). Live
+   * cluster smoke 2026-05-12 (Apple M4 Pro Chrome 147, WebGL1 only)
+   * reproduced the silent failure. Honest gate: probe WebGL2 up-front
+   * and surface a "WebGL2 required" banner via the unsupported branch
+   * instead of mounting a blank container.
+   *
+   * Set `false` to opt back into the legacy "WebGL1 is enough" gate
+   * (e.g. for unit tests that mock the probe).
+   */
+  requireWebGL2?: boolean;
 }
 
 export interface UseRequiredEChartsGLResult {
@@ -98,6 +115,7 @@ export function useRequiredEChartsGL(
   options?: UseRequiredEChartsGLOptions,
 ): UseRequiredEChartsGLResult {
   const enabled = options?.enabled ?? true;
+  const requireWebGL2 = options?.requireWebGL2 ?? true;
 
   const [state, setState] = useState<UseRequiredEChartsGLResult>(() => {
     if (!enabled) return { status: 'idle', reason: 'disabled' };
@@ -124,6 +142,16 @@ export function useRequiredEChartsGL(
       setState({ status: 'unsupported', reason: 'webgl-unavailable' });
       return;
     }
+    // echarts-gl 2.x ships shaders that need WebGL2 for any visible
+    // output. WebGL1-only contexts (older Chrome flags, software
+    // renderer fallback, certain Apple Silicon Chrome 147 builds —
+    // observed on M4 Pro 2026-05-12) silently mount an empty canvas
+    // instead of throwing. Surface that as a real unsupported state
+    // so wrappers can show an actionable banner.
+    if (requireWebGL2 && !cap.webgl2) {
+      setState({ status: 'unsupported', reason: 'webgl2-required' });
+      return;
+    }
 
     let cancelled = false;
     setState({ status: 'loading' });
@@ -143,7 +171,33 @@ export function useRequiredEChartsGL(
     return () => {
       cancelled = true;
     };
-  }, [enabled]);
+  }, [enabled, requireWebGL2]);
 
   return state;
+}
+
+/**
+ * Human-readable copy for the unsupported banner that 3D chart
+ * wrappers (Scatter3D / Surface3D / Lines3D / Globe) render when the
+ * GL hook rejects. Centralised here so all four wrappers stay in
+ * lock-step on tone + actionability.
+ *
+ * Live cluster smoke 2026-05-12 (Apple M4 Pro Chrome 147) surfaced
+ * `webgl2-required` as the most common rejection — historically the
+ * banner showed a single "WebGL unavailable" line which was
+ * misleading (the host had WebGL1). The reason-aware copy points the
+ * user to the GPU acceleration toggle that usually fixes it.
+ */
+export function describeEChartsGLReason(reason?: EChartsGLUnsupportedReason): string {
+  switch (reason) {
+    case 'webgl2-required':
+      return '3D rendering requires WebGL2. Your browser reports WebGL1 only — enable hardware acceleration in chrome://settings/system (or chrome://flags → "WebGL 2.0") and reload.';
+    case 'gl-import-failed':
+      return '3D rendering chunk failed to load. Check your network connection and refresh the page.';
+    case 'disabled':
+      return '3D rendering is disabled for this chart.';
+    case 'webgl-unavailable':
+    default:
+      return '3D rendering requires WebGL, which is not available in this environment.';
+  }
 }
