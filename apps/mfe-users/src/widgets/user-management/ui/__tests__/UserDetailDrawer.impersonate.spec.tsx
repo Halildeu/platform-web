@@ -44,7 +44,12 @@ vi.mock('@mfe/auth', () => ({
 // hydration via `/api/v1/authz/me`.
 const mockShellAuth = vi.hoisted(() => ({
   getToken: () => 'fake-token',
-  getUser: () => ({ userId: '1' }),
+  // Codex 019e1bed REVISE-2: real shell getUser() returns a UserProfile
+  // where `id` is KC subject UUID and `subscriberId` is the canonical
+  // numeric platform user id. Test fixture mirrors live shape so the
+  // self-guard comparison (drawer reads `subscriberId`) behaves the
+  // same in vitest as on testai.
+  getUser: () => ({ id: 'admin-kc-uuid-fixture', subscriberId: '1' }),
   ready: () => Promise.resolve({ ok: true as const }),
   isTransportReady: () => true,
   getPhase: () => 'transportReady' as const,
@@ -181,6 +186,57 @@ describe('UserDetailDrawer — Codex 019e1bed C-prime: shell-auth impersonation 
       throw new Error('Shell auth not configured');
     });
     renderDrawer();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('impersonate-action')).toBeNull();
+  });
+
+  it('submits enterImpersonationSession without targetSubject property (Codex 019e1bed REVISE-2)', async () => {
+    // Regression guard for the original UX bug: the impersonate form
+    // used to require operators to type a KC UUID. Backend now
+    // resolves it server-side via the service-token protected internal
+    // user-service endpoint. The submit payload must NOT include
+    // `targetSubject` at all — neither empty string nor a stale UUID
+    // — so contract tests and audit logs stay clean.
+    mockShellAuth.isSuperAdmin.mockReturnValue(true);
+    mockShellAuth.isImpersonating.mockReturnValue(false);
+    mockShellAuth.enterImpersonationSession.mockResolvedValue(undefined);
+    renderDrawer();
+    const { fireEvent } = await import('@testing-library/react');
+    // Open the form
+    const openBtn = await screen.findByTestId('impersonate-open-btn');
+    fireEvent.click(openBtn);
+    const reasonInput = await screen.findByTestId('impersonate-reason');
+    fireEvent.change(reasonInput, {
+      target: { value: 'Codex 019e1bed contract regression guard for omitted targetSubject' },
+    });
+    const submitBtn = await screen.findByTestId('impersonate-submit-btn');
+    fireEvent.click(submitBtn);
+    await waitFor(() => {
+      expect(mockShellAuth.enterImpersonationSession).toHaveBeenCalled();
+    });
+    const callArgs = mockShellAuth.enterImpersonationSession.mock.calls[0][0];
+    expect(callArgs).toEqual(
+      expect.objectContaining({
+        targetUserId: 42,
+        targetEmail: 'd35-granted@example.com',
+        reason: expect.stringContaining('Codex 019e1bed'),
+      }),
+    );
+    expect(callArgs).not.toHaveProperty('targetSubject');
+  });
+
+  it('hides ImpersonateAction when target user is the current admin (self-guard, PR #411)', async () => {
+    // Codex 019e1bed REVISE-2 — self-impersonation guard regression.
+    // Live shell `getUser().subscriberId` equals the platform user id;
+    // when the target row in the admin grid is the admin themselves the
+    // drawer must hide the action even if shell superAdmin=true.
+    mockShellAuth.isSuperAdmin.mockReturnValue(true);
+    mockShellAuth.isImpersonating.mockReturnValue(false);
+    // Test fixture admin subscriberId = '1' (see getUser mock above).
+    const selfUser = buildUser({ id: '1', email: 'admin@example.com', fullName: 'Admin Self' });
+    renderDrawer(selfUser);
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeTruthy();
     });

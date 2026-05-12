@@ -297,8 +297,33 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
           fullName: user.fullName,
         }
       : null;
+  // Codex 019e1bed PR-2 REVISE — self-impersonation guard.
+  // Shell `getUser()` returns a `UserProfile` (`packages/shared-types`)
+  // where `id` is the Keycloak subject UUID and `subscriberId` is the
+  // canonical numeric platform user id. The admin grid's `user.id` is
+  // the numeric platform id, so we compare against `subscriberId` (or
+  // legacy `userId` fallback). Stringified comparison tolerates
+  // string-vs-number drift across remote boundaries. Defense-in-depth
+  // alongside the backend `SELF_IMPERSONATION_FORBIDDEN` reject path.
+  const currentAdminUserId = (() => {
+    try {
+      const profile = getShellServices().auth.getUser() as {
+        id?: string | number;
+        subscriberId?: string | number;
+        userId?: string | number;
+      } | null;
+      const numericId = profile?.subscriberId ?? profile?.userId;
+      return numericId != null ? String(numericId) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const isSelfTarget =
+    impersonationTarget != null &&
+    currentAdminUserId != null &&
+    String(impersonationTarget.id) === currentAdminUserId;
   const canShowImpersonateAction =
-    isShellSuperAdmin && !isCurrentlyImpersonating && impersonationTarget != null;
+    isShellSuperAdmin && !isCurrentlyImpersonating && impersonationTarget != null && !isSelfTarget;
 
   const storedScope = useMemo(() => {
     try {

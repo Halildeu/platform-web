@@ -1,31 +1,35 @@
 /**
- * ImpersonateAction — User Impersonation v1 PR-C2 (Codex AGREE thread
- * `019e109c` iter-4 absorb).
+ * ImpersonateAction — User Impersonation v1.
  *
- * SuperAdmin-only action mounted inside {@code UserDetailDrawer}.
- * Captures reason (≥10 chars enforced server-side) + target Keycloak
- * subject UUID, then delegates to
- * {@code getShellServices().auth.enterImpersonationSession(...)}. The
- * orchestration owns the start request, broker cookie write, target
- * authz/me fetch, queryClient invalidation, Redux dispatch, and
- * persisted metadata for hydrate + audit-safe stop.
+ * SuperAdmin-only action mounted inside {@code UserDetailDrawer} as a
+ * top-of-drawer affordance for the platform admin grid.
  *
- * The PR-C scaffolding flow (raw setTokenCookie + localStorage write)
- * is removed: this component no longer touches cookies / localStorage
- * directly. Codex iter-31 RED (token swap doesn't reach shell auth
- * state) is closed because the orchestration's
- * {@code enterImpersonationSession} reducer atomically swaps
- * {@code state.auth.token / user / authzSnapshot / impersonation}.
+ * Codex thread `019e1bed` AGREE C-prime: this component used to ask the
+ * operator to paste the target user's Keycloak UUID into a UI field —
+ * which is impossible for real admins to know and made the feature
+ * effectively unusable. The flow is now:
+ *
+ *   - Reason (≥10 chars enforced backend) is the only operator input.
+ *   - Target Keycloak subject is resolved server-side from
+ *     {@code targetUserId} by the auth-service ImpersonationController
+ *     (which reads {@code users.kc_subject} via user-service).
+ *   - The orchestration owns the start request, broker cookie write,
+ *     target authz/me fetch, queryClient invalidation, Redux dispatch
+ *     and persisted metadata for hydrate + audit-safe stop.
+ *
+ * Defense-in-depth (Codex 019e1bed C-prime + this PR):
+ *   - SuperAdmin gate reads `getShellServices().auth.isSuperAdmin()`
+ *     instead of `usePermissions()` (alias-bypass guard).
+ *   - Backend rejects self-target with `SELF_IMPERSONATION_FORBIDDEN`
+ *     regardless of UI guard. UI still hides the action when targeting
+ *     self (handled in `UserDetailDrawer.canShowImpersonateAction`).
+ *   - Backend rejects unresolved targets with `TARGET_SUBJECT_UNRESOLVABLE`
+ *     when `users.kc_subject` is null (pre-V16 backfill).
+ *   - All known backend error codes are mapped to human-readable
+ *     Turkish messages so the generic 401 "Oturum süreniz doldu" toast
+ *     never masks an impersonation-specific failure.
  */
 import React, { useCallback, useState } from 'react';
-// Codex 019e1bed C-prime AGREE — `usePermissions` from `@mfe/auth` was
-// removed from this component's render gate. mfe-users' Vite alias
-// bypasses MF shared registration, so the local `@mfe/auth`
-// `PermissionContext` defaults to `isSuperAdmin: () => false` even
-// when shell-side authz reports `superAdmin = true`. The shell auth
-// singleton (`getShellServices().auth.isSuperAdmin()`) is now the
-// canonical source for this component's guard, matching the parent
-// `UserDetailDrawer` mount gate.
 import { getShellServices } from '../../../app/services/shell-services';
 import type { UserDetail } from '@mfe/shared-types';
 
@@ -33,16 +37,52 @@ interface ImpersonateActionProps {
   user: Pick<UserDetail, 'id' | 'email' | 'fullName'>;
 }
 
+/**
+ * Codex 019e1bed AGREE — backend errorCode → Turkish UI message mapping.
+ * Generic Error.message falls through when the code is unknown so the
+ * orchestration's existing failure modes (network errors, etc.) still
+ * surface a useful string.
+ */
+const ERROR_CODE_MESSAGES: Record<string, string> = {
+  SELF_IMPERSONATION_FORBIDDEN: 'Kendi hesabını impersonate edemezsin.',
+  TARGET_USER_DISABLED: 'Pasif kullanıcı için impersonation başlatılamaz.',
+  TARGET_SUBJECT_UNRESOLVABLE:
+    'Hedef kullanıcının Keycloak eşlemesi eksik (kc_subject backfill bekleniyor). Operatöre bildirin.',
+  ADMIN_IDENTITY_MISSING:
+    'Admin kimliği eksik. Çıkış yapıp tekrar giriş yapın veya KC userId attribute kontrolü gerekiyor.',
+  INSUFFICIENT_AUTHORITY: 'Bu işlem için süper admin yetkisi gerekiyor.',
+  NESTED_IMPERSONATION_FORBIDDEN:
+    'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
+  ACTIVE_SESSION_EXISTS: 'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
+  TARGET_SUBJECT_MISMATCH:
+    'KC token-exchange hedef kullanıcı kontrolü tutmadı (audit poisoning koruması).',
+  EXCHANGED_TOKEN_NOT_BROKER_ISSUED: 'KC token-exchange yanıtı broker-imzalı değil.',
+  EXCHANGED_TOKEN_EXPIRED: 'KC tarafından dönen token süresi dolmuş.',
+  TOKEN_EXCHANGE_FAILED: 'Keycloak token-exchange başarısız.',
+  SESSION_PERSIST_FAILED: 'Impersonation oturumu kaydedilemedi (permission-service hatası).',
+};
+
+const friendlyErrorMessage = (err: unknown): string => {
+  if (err instanceof Error) {
+    // Orchestration surfaces errorCode in error.message when backend
+    // returns a structured StartResponse with errorCode set.
+    const msg = err.message ?? '';
+    for (const [code, friendly] of Object.entries(ERROR_CODE_MESSAGES)) {
+      if (msg.includes(code)) return friendly;
+    }
+    return msg || 'Impersonation başlatılamadı. Lütfen tekrar deneyin.';
+  }
+  return 'Impersonation başlatılamadı. Lütfen tekrar deneyin.';
+};
+
 export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) => {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
-  const [targetSubject, setTargetSubject] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reasonValid = reason.trim().length >= 10;
-  const subjectValid = targetSubject.trim().length > 0;
-  const canSubmit = reasonValid && subjectValid && !submitting;
+  const canSubmit = reasonValid && !submitting;
 
   const handleStart = useCallback(async () => {
     setSubmitting(true);
@@ -58,13 +98,19 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
       // depth). The drawer mount gate already filters this case but
       // a race with multi-tab navigation could land us here.
       if (auth.isImpersonating()) {
-        setError('Zaten aktif bir impersonation oturumu var.');
+        setError(ERROR_CODE_MESSAGES.ACTIVE_SESSION_EXISTS);
         setSubmitting(false);
         return;
       }
+      // Codex 019e1bed REVISE-2 — `targetSubject` REMOVED from the
+      // request payload. Backend resolves it server-side from
+      // `targetUserId` via the service-token protected internal
+      // user-service endpoint, so the admin UI never sees the KC UUID.
+      // The shell type `ShellEnterImpersonationPayload.targetSubject`
+      // is now optional; omitting the key entirely keeps audit logs
+      // and contract tests clean (no "client sent empty subject" noise).
       await auth.enterImpersonationSession({
         targetUserId: numericUserId,
-        targetSubject: targetSubject.trim(),
         targetEmail: user.email,
         reason: reason.trim(),
       });
@@ -74,22 +120,19 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
       // the target authz snapshot.
       setOpen(false);
       setReason('');
-      setTargetSubject('');
       setSubmitting(false);
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Impersonation start failed; please retry.';
-      setError(message);
+      setError(friendlyErrorMessage(e));
       setSubmitting(false);
     }
-  }, [reason, targetSubject, user.email, user.id]);
+  }, [reason, user.email, user.id]);
 
   // Codex 019e1bed C-prime AGREE — guard reads through shell auth
-  // singleton instead of the previous `usePermissions().isSuperAdmin()`
-  // call, which resolved against a duplicated `PermissionContext` when
-  // mfe-users' Vite alias bypassed Module Federation shared
-  // registration. The shell-level `authzSnapshot.superAdmin` is the
-  // canonical source; fail-closed if shell-services is not yet
-  // configured (matches the parent `UserDetailDrawer` mount gate).
+  // singleton instead of `usePermissions().isSuperAdmin()`, which
+  // resolved against a duplicated `PermissionContext` when mfe-users'
+  // Vite alias bypassed Module Federation shared registration.
+  // Fail-closed if shell-services is not yet configured (matches the
+  // parent `UserDetailDrawer` mount gate).
   const canImpersonate = (() => {
     try {
       return getShellServices().auth.isSuperAdmin();
@@ -118,8 +161,8 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
             Impersonate {user.fullName} ({user.email})
           </p>
           <p className="mt-1 text-xs text-state-warning-text">
-            Bu işlem audit log&apos;una kaydedilir. Devam etmek için sebep ve hedef Keycloak subject
-            (UUID) gerekli.
+            Bu işlem audit log&apos;una kaydedilir. Devam etmek için sebep (min 10 karakter)
+            gerekli; hedef kullanıcı sistem tarafından otomatik çözümlenir.
           </p>
           <label className="mt-3 block">
             <span className="block text-xs font-semibold uppercase tracking-wide text-state-warning-text">
@@ -133,19 +176,6 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
               maxLength={500}
               className="mt-1 w-full rounded-md border border-state-warning-border bg-surface-default p-2 text-sm"
               data-testid="impersonate-reason"
-            />
-          </label>
-          <label className="mt-2 block">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-state-warning-text">
-              Keycloak subject (UUID)
-            </span>
-            <input
-              type="text"
-              value={targetSubject}
-              onChange={(e) => setTargetSubject(e.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              className="mt-1 w-full rounded-md border border-state-warning-border bg-surface-default p-2 font-mono text-xs"
-              data-testid="impersonate-subject"
             />
           </label>
           {error ? (
@@ -169,7 +199,6 @@ export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) =>
                 setOpen(false);
                 setError(null);
                 setReason('');
-                setTargetSubject('');
               }}
               disabled={submitting}
               className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-muted disabled:opacity-60"
