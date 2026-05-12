@@ -63,7 +63,7 @@ node scripts/ci/bundle-taxonomy.mjs \
 Çıktı:
 
 - `tests/perf/bundle-stats/<route-slug>/taxonomy.json` (her route için)
-- `tests/perf/bundle-stats/<route-slug>/trace.json` (Chrome DevTools format)
+- `tests/perf/bundle-stats/<route-slug>/trace.zip` (Playwright trace; **NOT** Chrome DevTools format — bkz §4)
 - `tests/perf/bundle-stats/all-routes.json` (aggregate)
 
 ### 3.3 Duplicate package report
@@ -80,16 +80,24 @@ node scripts/ci/duplicate-package-detector.mjs
 
 ---
 
-## 4. Chrome trace inceleme
+## 4. Playwright trace inceleme
 
-`trace.json` Chrome DevTools format. Açmak için:
+`trace.zip` Playwright trace formatı (Chrome DevTools formatı **değil**; gerçek Chrome trace için PR-A0.b CDP `Tracing.start`/`Tracing.end` gerek). Açmak için:
 
-1. Chrome'da `chrome://tracing` → "Load" → `trace.json` seç
-2. Veya Chrome DevTools → Performance tab → "Load profile..." → `trace.json`
+```bash
+npx playwright show-trace tests/perf/bundle-stats/<route-slug>/trace.zip
+```
 
-Long task attribution için filtre: `Long Task` lane veya `Function call` entries duration >50ms.
+Playwright trace viewer şunları gösterir:
 
-PR-A0'ın temel kanıt sorusu: "TBT 2937ms — hangi script bunu yapıyor?". Bu trace dosyaları PR-B3a (shell-services idle), PR-B3d (CSS critical path), PR-B3e (third-party RUM defer) için root-cause sağlar.
+- Network waterfall (resource loading + timing)
+- DOM snapshots
+- Console logs
+- Action timeline (page.goto, evaluate, etc.)
+
+**Long task attribution sınırı**: Playwright trace `devtools.timeline` v8 entries içermez. TBT/long task root-cause için browser performance.getEntriesByType('longtask') zaten taxonomy.json `perfSnapshot.longTasks` altında (PR-M1 harness). Daha detaylı CDP-level Chrome trace PR-A0.b scope.
+
+PR-A0'ın temel kanıt sorusu: "TBT 2937ms — hangi script bunu yapıyor?". Taxonomy `perfSnapshot.longTasks[].attribution` alanı + Playwright trace timeline ile çapraz analiz yapılır. CDP integration sonraki PR.
 
 ---
 
@@ -164,10 +172,11 @@ Bu kanıt zemini olmadan PR-B1a/B1b/B2 effort'unu doğrulayamayız.
 
 ## 9. Bilinen sınırlar
 
-1. **`mfe-shell` canary**: bu PR sadece mfe-shell için bundle stats üretir. Diğer 7 MFE eklenene kadar duplicate detector eksik veri ile çalışır.
-2. **Auth storage**: testai için real-user storage state PR-S1.b veya B4 conditional ile üretilecek.
-3. **Chrome trace**: manuel inceleme; otomatik long-task root-cause parser yok (gelecek PR).
-4. **Source map dependency**: rollup-plugin-visualizer `sourcemap: false` (build hızı + repo size); source-level granularity için ayrı `source-map-explorer` runs gerekecek.
+1. **`mfe-shell` canary**: bu PR sadece mfe-shell için bundle stats üretir. Duplicate detector `mfeCount >= 2` filtresi uyguladığı için tek MFE'de **duplicates listesi boş çıkar** (cross-MFE duplicate ancak 2+ MFE entegre olduğunda anlam taşır). Diğer 7 MFE'lerin integration PR'ları (per-MFE veya batch) sonra gelecek.
+2. **Auth storage**: testai için real-user storage state PR-S1.b veya B4 conditional ile üretilecek. Authenticated route'lar `--auth-storage` zorunlu (script fail-fast).
+3. **Trace formatı**: Playwright trace (`trace.zip`), Chrome DevTools formatı değil. CDP `Tracing.start`/`Tracing.end` ile gerçek Chrome trace PR-A0.b scope.
+4. **Long-task root-cause**: otomatik parser yok; `taxonomy.json` `perfSnapshot.longTasks` + Playwright trace cross-analiz manuel (gelecek PR).
+5. **Source map dependency**: rollup-plugin-visualizer `sourcemap: false` (build hızı + repo size); source-level granularity için ayrı `source-map-explorer` runs gerekecek.
 
 ---
 

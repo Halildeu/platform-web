@@ -21,9 +21,15 @@
  *     protocolHistogram: {...},
  *   }
  *
- * Plus a Chrome trace (devtools.timeline + v8.execute) is captured for
- * long task attribution analysis. Saved as
- * tests/perf/bundle-stats/<route-slug>/trace.json
+ * Plus a Playwright trace (NOT Chrome DevTools format) is captured for
+ * action/network/console inspection. Inspect via
+ *   npx playwright show-trace tests/perf/bundle-stats/<route-slug>/trace.zip
+ * Real Chrome DevTools trace (devtools.timeline + v8.execute) requires
+ * CDP `Tracing.start`/`Tracing.end` — scoped to follow-up PR-A0.b.
+ *
+ * Long task attribution uses the perf-observer `longtask` observer
+ * (taxonomy.json `perfSnapshot.longTasks`) rather than the Playwright
+ * trace alone.
  *
  * Usage:
  *   node scripts/ci/bundle-taxonomy.mjs [--target testai|local]
@@ -31,7 +37,7 @@
  *                                       [--auth-storage PATH]
  *
  * Output:
- *   tests/perf/bundle-stats/<route-slug>/{taxonomy.json, trace.json}
+ *   tests/perf/bundle-stats/<route-slug>/{taxonomy.json, trace.zip}
  *   tests/perf/bundle-stats/all-routes.json (aggregate)
  */
 
@@ -174,10 +180,10 @@ async function captureRoute(browser, routeBudget) {
   const traceFile = join(outDir, 'trace.zip');
 
   try {
-    // Start Chrome trace BEFORE navigation so we capture full load
-    // including long tasks. devtools.timeline is the category that
-    // gives us TaskRunner / Function call / Layout entries needed
-    // for long-task attribution.
+    // Playwright trace BEFORE navigation so the full load is recorded.
+    // This is the Playwright trace API, NOT Chrome DevTools format —
+    // inspect via `npx playwright show-trace path.zip`. Real
+    // devtools.timeline / v8.execute requires CDP, PR-A0.b scope.
     await context.tracing.start({
       screenshots: false,
       snapshots: false,
