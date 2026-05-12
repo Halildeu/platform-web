@@ -782,12 +782,23 @@ function BulletChart({
   target,
   max,
   unit = '%',
+  direction = 'higher-better',
 }: {
   label: string;
   actual: number;
   target: number;
   max: number;
   unit?: string;
+  /**
+   * Semantic direction of the metric — mirrors the same prop on
+   * `GaugeLocal` (Phase 2a). Default `'higher-better'` keeps the
+   * existing colour ramp (green when actual ≥ target). Set to
+   * `'lower-better'` for metrics where smaller is better — voluntary
+   * turnover, involuntary turnover, gender pay gap. Without it the
+   * 3 lower-better call sites currently paint green at high values
+   * (terrible) and red at low values (excellent).
+   */
+  direction?: 'higher-better' | 'lower-better';
 }) {
   const width = 280;
   const barH = 16;
@@ -795,12 +806,29 @@ function BulletChart({
   const actualW = Math.min((actual / max) * width, width);
   const targetX = Math.min((target / max) * width, width);
 
+  // For higher-better: green at/above target, amber within 30% below, red further below.
+  // For lower-better: green at/below target, amber within (target + 30% of remaining max),
+  // red further above. The lower-better amber upper bound uses
+  // `target + (max - target) * 0.3` instead of `target * 1.3` so it
+  // stays well-defined when target=0 (e.g. Cinsiyet Maas Farki gauge,
+  // where 0% pay gap is ideal). With target=0 max=20 the amber band
+  // becomes (0, 6] instead of degenerating to empty.
+  const okColor = 'var(--state-success-text)';
+  const warnColor = 'var(--state-warning-text)';
+  const errColor = 'var(--state-error-text)';
+  const lowerWarnUpper = target + (max - target) * 0.3;
   const color =
-    actual >= target
-      ? 'var(--state-success-text)'
-      : actual >= target * 0.7
-        ? 'var(--state-warning-text)'
-        : 'var(--state-error-text)';
+    direction === 'lower-better'
+      ? actual <= target
+        ? okColor
+        : actual <= lowerWarnUpper
+          ? warnColor
+          : errColor
+      : actual >= target
+        ? okColor
+        : actual >= target * 0.7
+          ? warnColor
+          : errColor;
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -1650,12 +1678,14 @@ const DemographicDashboard: React.FC = () => {
                     actual={summary.voluntaryTurnoverRate}
                     target={8}
                     max={20}
+                    direction="lower-better"
                   />
                   <BulletChart
                     label="Zorunlu Ayrilma"
                     actual={summary.involuntaryTurnoverRate}
                     target={2}
                     max={10}
+                    direction="lower-better"
                   />
                 </>
               );
@@ -1757,7 +1787,13 @@ const DemographicDashboard: React.FC = () => {
                   : summary.genderPayGapPercent;
               return (
                 <>
-                  <BulletChart label="Cinsiyet Maas Farki" actual={gap} target={0} max={20} />
+                  <BulletChart
+                    label="Cinsiyet Maas Farki"
+                    actual={gap}
+                    target={0}
+                    max={20}
+                    direction="lower-better"
+                  />
                   <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
                     Hedef: <strong>%0</strong> fark &mdash; mevcut fark{' '}
                     <strong style={{ color: 'var(--state-warning-text)' }}>%{gap}</strong>
