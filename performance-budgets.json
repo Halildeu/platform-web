@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "_doc": "PERF-INIT-V2 PR-M1: route-based performance budgets. See docs/performance/PERF-INIT-V2-plan.md §2.1.",
-  "_phase": "0-3 months hard gate (warn-only first 2 weeks, then %5 regression hard fail)",
+  "_phase": "PR-M1 scaffold + advisory matrix. Hard gate enforcement (auth fixture + warm cache priming + INP interaction injection + baseline ratchet) deferred to PR-G1.",
   "_acceptance": "Codex thread 019e1de0 AGREE",
   "_methodology": "median of 5 runs, foreground only, fixed Chrome version (Playwright bundled), CPU/network profile noted, hidden-page invalid",
   "routes": [

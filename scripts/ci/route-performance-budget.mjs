@@ -112,6 +112,20 @@ async function measureOnce(browser, routeBudget) {
     storageState,
     viewport: { width: 1440, height: 900 },
   });
+
+  // Inject the production opt-in flag BEFORE any page script runs. The
+  // perf-observer module's shouldExposeGlobal() reads this flag and only
+  // exposes window.__perfSnapshot() / __perfMark() when it is truthy. In
+  // dev/test bundles NODE_ENV !== 'production' is enough; this addInitScript
+  // covers production/preview/testai/prod measurements.
+  await context.addInitScript(() => {
+    /* eslint-disable */
+    // Set the perf-observer opt-in flag before any page script runs.
+    // perf-observer.ts shouldExposeGlobal() reads this flag and exposes
+    // window.__perfSnapshot()/window.__perfMark() when truthy.
+    window.__PERF_OBSERVER_ENABLE = 1;
+  });
+
   const page = await context.newPage();
 
   const url = route.startsWith('http') ? route : `${BASE_URL}${route}`;
