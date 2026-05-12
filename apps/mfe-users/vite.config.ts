@@ -185,7 +185,19 @@ export default defineConfig(({ mode }) => {
           find: '@mfe/design-system',
           replacement: path.resolve(__dirname, '../../packages/design-system/src'),
         },
-        { find: '@mfe/auth', replacement: path.resolve(__dirname, '../../packages/auth/src') },
+        // Codex 019e1bed AGREE Seçenek A: `@mfe/auth` alias intentionally OMITTED
+        // here (mirrors mfe-access pattern). Production/dev Vite must let the
+        // Module Federation `shared` config (sharedProdOnly @mfe/auth, line ~119)
+        // resolve `@mfe/auth` via the shared singleton registry; otherwise the
+        // alias rewrites consumer imports to raw TS source and bypasses MF →
+        // mfe-users gets its own bundled `PermissionContext` and `usePermissions()`
+        // returns the default `isSuperAdmin: () => false`, hiding PR-C2's
+        // ImpersonateAction in `UserDetailDrawer`. Test-time alias remains in
+        // `vitest.config.ts` (isolated from production resolve).
+        // {
+        //   find: '@mfe/auth',
+        //   replacement: path.resolve(__dirname, '../../packages/auth/src'),
+        // },
         {
           find: '@mfe/shared-http',
           replacement: path.resolve(__dirname, '../../packages/shared-http/src'),
