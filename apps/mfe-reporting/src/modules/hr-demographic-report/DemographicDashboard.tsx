@@ -8,6 +8,15 @@ import {
   ChartContainer as XChartContainer,
   KPICard as XKPICard,
   type KPICardTrend,
+  // 2026-05-12 — phase 1 migration of bespoke SVG widgets to canonical
+  // x-charts wrappers. GaugeChart replaces the local "GaugeLocal" big-
+  // number div (which never rendered a real gauge dial); LineChart
+  // replaces the "Maaş Farkı Trendi" hand-rolled <svg><polyline> path.
+  // The remaining custom widgets (BulletChart, StackedBar,
+  // AgePyramidChart, ProgressBar) need wrapper-level support
+  // (stack/back-to-back/marker overlay) — tracked as Phase 2 follow-up.
+  GaugeChart as XGaugeChart,
+  LineChart as XLineChart,
 } from '@mfe/x-charts';
 
 // ---------------------------------------------------------------------------
@@ -176,20 +185,57 @@ function TreemapLocal({ data }: { data: Array<{ label: string; value: number }> 
   return <XTreemapChart data={data} size="sm" />;
 }
 
+// Gauge widget — Phase 1 migration to `@mfe/x-charts/GaugeChart`.
+//
+// The previous `GaugeLocal` was a static <div> that printed the value +
+// label; it never rendered a dial / progress arc, defeating the
+// "gauge" semantic. Wrapping `XGaugeChart` here keeps the existing
+// call sites' shape (`<Gauge value=… target=… label=… unit?=… />`)
+// intact while gaining:
+//   - half-circle dial with progress arc + tick marks
+//   - threshold-coloured zones around `target`
+//   - decal patterns + theme + density signals (auto)
+//   - a11y data table + aria-live + ChartA11yShell mount
+//
+// `target` is mapped to the warning↔success threshold boundary so the
+// dial visually communicates "below target = red/orange, at-target =
+// green". `unit` is appended to the formatted value (e.g. "95/100").
 function GaugeLocal({
   value,
   label,
-  max: _max = 100,
+  target,
+  unit,
+  max,
 }: {
   value: number;
   label: string;
+  target?: number;
+  unit?: string;
+  /**
+   * Optional explicit max. When omitted we derive a sensible ceiling
+   * from the `unit` (`/100` → 100) or fall back to `target * 2` so
+   * the dial doesn't compress at very small values.
+   */
   max?: number;
 }) {
+  const derivedMax = max ?? (unit && unit.includes('100') ? 100 : Math.max((target ?? 10) * 2, 20));
+  const safeTarget = target ?? Math.round(derivedMax * 0.7);
+  const thresholds = [
+    { value: Math.round(safeTarget * 0.5), color: 'var(--state-error, #ef4444)' },
+    { value: safeTarget, color: 'var(--state-warning, #f59e0b)' },
+    { value: derivedMax, color: 'var(--state-success, #10b981)' },
+  ];
+  const fmt = (v: number): string => (unit ? `${v}${unit}` : `${v}`);
   return (
-    <div className="text-center">
-      <div className="text-2xl font-bold text-text-primary">{value}</div>
-      <div className="text-xs text-text-secondary">{label}</div>
-    </div>
+    <XGaugeChart
+      value={value}
+      max={derivedMax}
+      title={label}
+      size="sm"
+      thresholds={thresholds}
+      valueFormatter={fmt}
+      showAxisLabel={false}
+    />
   );
 }
 
@@ -1004,6 +1050,65 @@ const Treemap = TreemapLocal;
 const Gauge = GaugeLocal;
 
 // ---------------------------------------------------------------------------
+// SalaryTrendChart — x-charts XLineChart wrapper (Phase 1 migration).
+// Replaces the previous hand-rolled <svg><polyline> "Maas Farki Trendi" chart
+// so the quarterly pay-gap series renders through the same ECharts pipeline
+// (theme, decal, a11y, tooltip) as the other dashboards.
+// `useMemo` keeps series/labels reference-stable across parent re-renders,
+// avoiding the same setOption flood we hit with the 3D wrappers (PR #410).
+// ---------------------------------------------------------------------------
+function SalaryTrendChart({
+  trendData,
+}: {
+  trendData: Array<{ label: string; value: number }> | null;
+}) {
+  const { series, labels } = useMemo(() => {
+    const trendPoints: Array<{ label: string; gap: number }> = [];
+    if (trendData && trendData.length > 0) {
+      for (const row of trendData) {
+        const maleAvg = (row as Record<string, unknown>).male_avg as number | null;
+        const femaleAvg = (row as Record<string, unknown>).female_avg as number | null;
+        if (maleAvg && femaleAvg && maleAvg > 0) {
+          trendPoints.push({
+            label: row.label,
+            gap: Math.round(((maleAvg - femaleAvg) / maleAvg) * 1000) / 10,
+          });
+        }
+      }
+    }
+    const useMock = trendPoints.length === 0;
+    const points = useMock ? [8.2, 7.5, 7.1, 6.8, 6.3, 5.9] : trendPoints.map((p) => p.gap);
+    const lbls = useMock
+      ? ['Q1-25', 'Q2-25', 'Q3-25', 'Q4-25', 'Q1-26', 'Q2-26']
+      : trendPoints.map((p) => p.label);
+    return {
+      series: [
+        {
+          name: 'Maas Farki %',
+          data: points,
+          color: 'var(--state-warning-text, #f59e0b)',
+        },
+      ],
+      labels: lbls,
+    };
+  }, [trendData]);
+
+  const fmt = React.useCallback((v: number) => `%${v}`, []);
+
+  return (
+    <XLineChart
+      series={series}
+      labels={labels}
+      size="sm"
+      showDots
+      showGrid
+      valueFormatter={fmt}
+      description="Ceyrekler bazinda cinsiyet maas farki yuzdesi"
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Section Header
 // ---------------------------------------------------------------------------
 function SectionHeader({ children }: { children: React.ReactNode }) {
@@ -1620,89 +1725,7 @@ const DemographicDashboard: React.FC = () => {
             })()}
           </ChartCard>
           <ChartCard title={chartTitle('Maas Farki Trendi', 'salary-gender-trend')}>
-            {(() => {
-              const trendData = getChartData('salary-gender-trend');
-              // Use live trend data if available, compute pay gap % per year
-              const trendPoints: Array<{ label: string; gap: number }> = [];
-              if (trendData && trendData.length > 0) {
-                for (const row of trendData) {
-                  const maleAvg = (row as Record<string, unknown>).male_avg as number | null;
-                  const femaleAvg = (row as Record<string, unknown>).female_avg as number | null;
-                  if (maleAvg && femaleAvg && maleAvg > 0) {
-                    trendPoints.push({
-                      label: row.label,
-                      gap: Math.round(((maleAvg - femaleAvg) / maleAvg) * 1000) / 10,
-                    });
-                  }
-                }
-              }
-              const useMock = trendPoints.length === 0;
-              const points = useMock
-                ? [8.2, 7.5, 7.1, 6.8, 6.3, 5.9]
-                : trendPoints.map((p) => p.gap);
-              const labels = useMock
-                ? ['Q1-25', 'Q2-25', 'Q3-25', 'Q4-25', 'Q1-26', 'Q2-26']
-                : trendPoints.map((p) => p.label);
-              const maxY = Math.max(10, ...points.map((p) => Math.ceil(p)));
-              const xStart = 40;
-              const xEnd = 260;
-              const xStep = (xEnd - xStart) / Math.max(points.length - 1, 1);
-              const yTop = 10;
-              const yBottom = 110;
-              const pts = points.map((v, idx) => ({
-                x: xStart + idx * xStep,
-                y: yTop + ((maxY - v) / maxY) * (yBottom - yTop),
-                v,
-                label: labels[idx],
-              }));
-              const polyline = pts.map((p) => `${p.x},${p.y}`).join(' ');
-              return (
-                <svg viewBox="0 0 280 120" width="100%" style={{ display: 'block' }}>
-                  {[0, 30, 60, 90, 120].map((y, i) => (
-                    <line
-                      key={i}
-                      x1={30}
-                      y1={y}
-                      x2={270}
-                      y2={y}
-                      stroke="var(--border-subtle)"
-                      strokeWidth="0.5"
-                    />
-                  ))}
-                  <polyline
-                    points={polyline}
-                    fill="none"
-                    stroke="var(--state-warning-text)"
-                    strokeWidth="2"
-                    strokeLinejoin="round"
-                  />
-                  {pts.map((p, idx) => (
-                    <g key={idx}>
-                      <circle cx={p.x} cy={p.y} r="3" fill="var(--state-warning-text)" />
-                      <text
-                        x={p.x}
-                        y={p.y - 8}
-                        textAnchor="middle"
-                        fontSize="8"
-                        fontWeight="600"
-                        fill="var(--text-primary)"
-                      >
-                        %{p.v}
-                      </text>
-                      <text
-                        x={p.x}
-                        y={115}
-                        textAnchor="middle"
-                        fontSize="7"
-                        fill="var(--text-secondary)"
-                      >
-                        {p.label}
-                      </text>
-                    </g>
-                  ))}
-                </svg>
-              );
-            })()}
+            <SalaryTrendChart trendData={getChartData('salary-gender-trend')} />
           </ChartCard>
         </div>
       </DashboardSection>
