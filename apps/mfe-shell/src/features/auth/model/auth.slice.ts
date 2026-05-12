@@ -907,4 +907,18 @@ export const selectImpersonationOriginalAdminExpiresAt = (state: {
 export const selectImpersonationExpiresAt = (state: { auth: AuthState }): number | null =>
   state.auth.impersonation.expiresAt;
 
+/**
+ * Codex 019e1bed C-prime AGREE — shell-level superAdmin selector for
+ * remote MFE consumers that should NOT depend on a local `@mfe/auth`
+ * `PermissionContext` instance. When a remote's Vite alias bypasses
+ * Module Federation shared-singleton registration (e.g. mfe-users PR-C2),
+ * the local context falls back to its default `isSuperAdmin: () => false`
+ * even though the shell has hydrated `authzSnapshot.superAdmin = true`.
+ * `getShellServices().auth.isSuperAdmin()` reads through this selector,
+ * giving every remote one canonical answer.
+ */
+export const selectIsSuperAdmin = (state: { auth: AuthState }): boolean =>
+  state.auth.authzSnapshot != null &&
+  (state.auth.authzSnapshot as { superAdmin?: boolean }).superAdmin === true;
+
 export default authSlice.reducer;
