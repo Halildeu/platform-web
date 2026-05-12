@@ -43,7 +43,14 @@ export type RemoteShellAuthPhase =
  */
 export interface ShellEnterImpersonationPayload {
   targetUserId: number;
-  targetSubject: string;
+  /**
+   * Codex {@code 019e1bed} REVISE-2: optional. Backend now resolves the
+   * Keycloak subject server-side from {@code targetUserId} via the
+   * service-token protected internal user-service endpoint. Callers
+   * that omit this field get backend-authoritative resolution; legacy
+   * callers that still pass it short-circuit the resolution.
+   */
+  targetSubject?: string;
   targetEmail?: string;
   reason: string;
 }

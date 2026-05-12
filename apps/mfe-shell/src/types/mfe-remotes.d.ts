@@ -39,7 +39,13 @@ type RemoteShellAuthPhase =
  */
 type ShellEnterImpersonationPayload = {
   targetUserId: number;
-  targetSubject: string;
+  // Codex 019e1bed REVISE-2: optional. Backend resolves the Keycloak
+  // subject server-side from `targetUserId` via the service-token
+  // protected internal user-service endpoint. Keep the field optional
+  // on the ambient remote declaration so any MFE consumer matches the
+  // shell + mfe-users mirrors and never bakes in a "UUID zorunlu"
+  // contract by accident.
+  targetSubject?: string;
   targetEmail?: string;
   reason: string;
 };

@@ -87,17 +87,32 @@ export const ImpersonationBanner: React.FC = () => {
     <div
       role="alert"
       data-testid="impersonation-banner"
-      className="sticky top-0 z-50 flex w-full items-center justify-between gap-3 border-b border-state-warning-border bg-state-warning-bg px-4 py-2 text-sm font-medium text-state-warning-text shadow-sm"
+      // Codex 019e1bed PR-2 AGREE — viewport overflow fix.
+      // The previous markup used `flex w-full` with no `min-w-0` on the
+      // text container and no `shrink-0` on the stop button, so a long
+      // admin/target email pair pushed the stop button beyond the right
+      // edge of the viewport (rect left=1519 + width=176 > viewport
+      // 1568). On wide layouts this hid the stop affordance entirely
+      // unless the user scrolled. Defenses now:
+      //   - `box-border max-w-full` keeps the banner inside its parent
+      //   - `flex-wrap` allows the action column to wrap on narrow
+      //     viewports instead of overflowing
+      //   - `min-w-0` on the text column lets its content shrink/truncate
+      //   - `flex-shrink-0` + `ml-auto` on the action column keeps the
+      //     stop button visible regardless of message length
+      className="sticky top-0 z-50 box-border flex w-full max-w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-state-warning-border bg-state-warning-bg px-4 py-2 text-sm font-medium text-state-warning-text shadow-sm"
     >
-      <div className="flex items-center gap-2">
-        <span aria-hidden="true">⚠</span>
-        <span>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span aria-hidden="true" className="shrink-0">
+          ⚠
+        </span>
+        <span className="min-w-0 truncate">
           <strong>{originalLabel}</strong> olarak <strong>{targetLabel}</strong> adına işlem
           yapıyorsun
           {expiresInMinutes !== null ? ` (oturum ${expiresInMinutes} dk içinde sona erer)` : ''}.
         </span>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-3">
         {error ? (
           <span className="text-state-danger-text" data-testid="impersonation-banner-error">
             {error}

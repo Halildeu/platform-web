@@ -36,7 +36,9 @@ import type { UserProfile } from '@mfe/shared-types';
  */
 interface StartImpersonationRequest {
   targetUserId: number;
-  targetSubject: string;
+  // Codex 019e1bed REVISE-2: optional. Backend resolves via internal
+  // user-service endpoint when omitted.
+  targetSubject?: string;
   targetEmail?: string;
   reason: string;
 }
@@ -51,7 +53,9 @@ interface StartImpersonationResponseShape {
 
 export interface EnterImpersonationOrchestrationPayload {
   targetUserId: number;
-  targetSubject: string;
+  // Codex 019e1bed REVISE-2: optional. Backend resolves via internal
+  // user-service endpoint when omitted.
+  targetSubject?: string;
   targetEmail?: string;
   reason: string;
 }
@@ -177,11 +181,16 @@ export async function enterImpersonationOrchestration(
     __skipAuthReadyGate: true,
     __skipRefreshOn401: true,
   };
+  // Codex 019e1bed REVISE-2: build request conditionally so the
+  // `targetSubject` key is omitted from the JSON payload entirely when
+  // the caller didn't supply one. Backend resolves the subject
+  // server-side via the internal user-service endpoint.
+  const trimmedSubject = payload.targetSubject?.trim();
   const startRequest: StartImpersonationRequest = {
     targetUserId: payload.targetUserId,
-    targetSubject: payload.targetSubject.trim(),
     targetEmail: payload.targetEmail,
     reason: payload.reason.trim(),
+    ...(trimmedSubject ? { targetSubject: trimmedSubject } : {}),
   };
   let response: StartImpersonationResponseShape;
   try {
