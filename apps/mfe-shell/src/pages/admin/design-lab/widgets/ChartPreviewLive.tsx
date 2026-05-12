@@ -25,6 +25,13 @@ import {
   FunnelChart,
   SankeyChart,
   SunburstChart,
+  // Faz 21.11 P1a-P1d 3D Extension Pack — design-lab preview support.
+  // Boot's `echarts-gl` lazy chunk on first mount; degrades to a
+  // "WebGL unavailable" banner if WebGL is missing.
+  Scatter3D,
+  Surface3D,
+  Lines3D,
+  Globe,
   KPICard,
   SparklineChart,
   ChartDashboard,
@@ -811,6 +818,177 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             onNodeClick={getCallbackPreset(getEnum(toggles, 'onNodeClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Faz 21.11 P1a-P1d 3D Extension Pack — live preview support.
+    // Each wrapper lazy-loads `echarts-gl`; if WebGL is missing the
+    // wrapper degrades to its own "WebGL unavailable" banner so the
+    // preview surface stays graceful instead of crashing the page.
+    // Data fixtures kept compact (4-8 points) for fast initial paint.
+    // ──────────────────────────────────────────────────────────────
+    case 'scatter-3d-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <Scatter3D
+            data={[
+              { x: 0, y: 0, z: 0, label: 'origin' },
+              { x: 1, y: 2, z: 1, label: 'p1' },
+              { x: 2, y: 1, z: 3, label: 'p2' },
+              { x: 3, y: 3, z: 2, label: 'p3' },
+              { x: 4, y: 2, z: 4, label: 'p4' },
+              { x: 5, y: 4, z: 3, label: 'p5' },
+              { x: 2, y: 5, z: 5, label: 'p6' },
+              { x: 4, y: 5, z: 1, label: 'p7' },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'surface-3d-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      // 6×6 surface mesh — z = sin(x)+cos(y) for a recognisable
+      // ripple. Surface3D wants a FLAT Surface3DDataPoint[] array
+      // (one row per cell) PLUS `dataShape: [rows, cols]` so the
+      // grid topology is honoured (Faz 21.11 P1b contract).
+      const rows = 6;
+      const cols = 6;
+      const surfaceData: Array<{ x: number; y: number; z: number }> = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          surfaceData.push({ x: c, y: r, z: Math.sin(c / 1.5) + Math.cos(r / 1.5) });
+        }
+      }
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <Surface3D
+            data={surfaceData}
+            dataShape={[rows, cols]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'lines-3d-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      // Two xyz paths — a rising helix and a flatter swirl. Lines3DPath
+      // uses `{ coords, label?, color? }` (no `name` field; label is
+      // the SR-readable identifier).
+      const pathA: ReadonlyArray<readonly [number, number, number]> = Array.from(
+        { length: 24 },
+        (_, i) => [Math.cos(i / 3) * 3, Math.sin(i / 3) * 3, i / 3] as const,
+      );
+      const pathB: ReadonlyArray<readonly [number, number, number]> = Array.from(
+        { length: 24 },
+        (_, i) => [Math.cos(i / 4) * 2, Math.sin(i / 4) * 2, i / 6] as const,
+      );
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <Lines3D
+            data={[
+              { label: 'Helix', coords: pathA },
+              { label: 'Swirl', coords: pathB },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            lineWidth={getNum(toggles, 'lineWidth', 2)}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'globe-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      // GlobeLayer is a discriminated union — `type: 'scatter3D'`
+      // (NOT 'scatter'); 6 sample cities span TR + global majors.
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <Globe
+            layers={[
+              {
+                type: 'scatter3D',
+                name: 'Cities',
+                data: [
+                  { lon: 28.978, lat: 41.008, label: 'Istanbul', value: 100 },
+                  { lon: 32.866, lat: 39.925, label: 'Ankara', value: 80 },
+                  { lon: 27.142, lat: 38.423, label: 'Izmir', value: 65 },
+                  { lon: -73.935, lat: 40.73, label: 'New York', value: 120 },
+                  { lon: -0.128, lat: 51.507, label: 'London', value: 110 },
+                  { lon: 139.692, lat: 35.689, label: 'Tokyo', value: 130 },
+                ],
+              },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
