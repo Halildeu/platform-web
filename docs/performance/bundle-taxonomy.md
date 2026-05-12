@@ -166,7 +166,7 @@ Bu kanıt zemini olmadan PR-B1a/B1b/B2 effort'unu doğrulayamayız.
 - Diğer 7 MFE vite.config.ts'lerine plug ekleme (her biri ayrı PR veya batch PR)
 - CI workflow integration (PR-G1 scope)
 - Auth storage state generator (PR-S1.b/B4 conditional)
-- Long task attribution otomatik parser (manuel chrome://tracing inceleme)
+- Long task attribution otomatik parser (manuel Playwright trace + `perfSnapshot.longTasks` cross-analiz; CDP Chrome trace PR-A0.b)
 
 ---
 
@@ -189,7 +189,7 @@ ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
 # stats.json + treemap.html kontrol et:
 ls tests/perf/bundle-stats/mfe-shell/
 
-# Duplicate detector (sadece mfe-shell varsa, MFE içi self-duplicate gösterir):
+# Duplicate detector (sadece mfe-shell varsa, mfeCount >= 2 filter ile duplicates listesi BOŞ çıkar):
 node scripts/ci/duplicate-package-detector.mjs
 
 # Per-route taxonomy (local dev server):
