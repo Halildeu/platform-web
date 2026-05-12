@@ -26,7 +26,6 @@ import {
   setAuthPhase,
   setKeycloakSession,
   selectIsImpersonating,
-  selectIsSuperAdmin,
 } from '../../features/auth/model/auth.slice';
 import {
   enterImpersonationOrchestration,
@@ -210,11 +209,6 @@ configureShellServices({
   enterImpersonationSession: (payload) => enterImpersonationOrchestration(payload),
   exitImpersonationSession: () => exitImpersonationOrchestration(),
   isImpersonating: () => selectIsImpersonating(store.getState()),
-  // Codex 019e1bed C-prime AGREE: shell-level superAdmin getter for
-  // remote MFE consumers. mfe-users `UserDetailDrawer` /
-  // `ImpersonateAction` read this instead of the local PermissionContext
-  // so the gate cannot regress when MF share + alias setup drifts.
-  isSuperAdmin: () => selectIsSuperAdmin(store.getState()),
 });
 
 // Phase 2 PR-HTTP-3: wire the same auth-ready bridge into
@@ -431,11 +425,6 @@ export const wireRemoteShellServices = () => {
       exitImpersonationSession: () => exitImpersonationOrchestration(),
       /** PR-C2 quick gate for ImpersonateAction nested-impersonation guard. */
       isImpersonating: () => selectIsImpersonating(store.getState()),
-      // Codex 019e1bed C-prime AGREE: shell-level superAdmin getter for
-      // remote MFE consumers. mfe-users `UserDetailDrawer` /
-      // `ImpersonateAction` read this instead of the local PermissionContext
-      // so the gate cannot regress when MF share + alias setup drifts.
-      isSuperAdmin: () => selectIsSuperAdmin(store.getState()),
       /**
        * PR-C2 token change subscription. SSE consumers (mfe-audit
        * useAuditLiveStream) re-open their stream when the broker
