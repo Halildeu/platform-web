@@ -250,6 +250,21 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const authzReady = initialized && authz != null;
   const canEdit = !sessionExpired && (!authzReady || isAdmin || hasModule('USER_MANAGEMENT'));
 
+  // Codex 019e1bed AGREE: defense-in-depth — shell-services okunamazsa
+  // (federation cycle race), gate `false`'a düşmeli (fail-open visibility:
+  // ImpersonateAction kendi içinde `isSuperAdmin()` ikinci kapı + handleStart
+  // try/catch ile fail-closed action). Önceki inline `getShellServices().auth
+  // .isImpersonating()` JSX'te throw eden bir hata komple drawer alt-ağacını
+  // koparabilirdi.
+  const isCurrentlyImpersonating = (() => {
+    try {
+      return getShellServices().auth.isImpersonating();
+    } catch {
+      return false;
+    }
+  })();
+  const canShowImpersonateAction = isAdmin && !isCurrentlyImpersonating && Boolean(user.id);
+
   const storedScope = useMemo(() => {
     try {
       const raw = typeof window !== 'undefined' ? window.localStorage.getItem('halo.scope') : null;
@@ -1691,8 +1706,13 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             The action component itself renders null if !isSuperAdmin();
             we ALSO check isImpersonating() so the row hides while a
             session is already active (defence in depth — backend
-            rejects with NESTED_IMPERSONATION_FORBIDDEN regardless). */}
-        {isAdmin && !getShellServices().auth.isImpersonating() && user.id ? (
+            rejects with NESTED_IMPERSONATION_FORBIDDEN regardless).
+
+            Codex 019e1bed AGREE: `canShowImpersonateAction` computed above
+            with try/catch; previous inline `getShellServices().auth
+            .isImpersonating()` could throw mid-render if federation share
+            wiring lagged, collapsing the drawer subtree silently. */}
+        {canShowImpersonateAction ? (
           <section className="mt-4">
             <ImpersonateAction
               user={{
