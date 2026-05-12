@@ -206,6 +206,7 @@ function GaugeLocal({
   target,
   unit,
   max,
+  direction = 'higher-better',
 }: {
   value: number;
   label: string;
@@ -217,14 +218,50 @@ function GaugeLocal({
    * the dial doesn't compress at very small values.
    */
   max?: number;
+  /**
+   * Semantic direction of the metric.
+   *
+   * - `'higher-better'` (default): the threshold ramp paints red ≤ 50%
+   *   of target, amber ≤ target, green ≤ max. Use for promotion rate,
+   *   manager %, DEI score, training completion, etc.
+   * - `'lower-better'`: the ramp inverts so low values are green and
+   *   high values are red. Use for absenteeism rate, attrition rate,
+   *   defect %, complaint count, etc.
+   *
+   * Cross-AI peer review on PR #412 flagged the missing `direction`
+   * semantic — without it, the `Devamsizlik Orani` (absenteeism)
+   * gauge painted green at 18% (bad) and red at 1% (excellent).
+   */
+  direction?: 'higher-better' | 'lower-better';
 }) {
   const derivedMax = max ?? (unit && unit.includes('100') ? 100 : Math.max((target ?? 10) * 2, 20));
   const safeTarget = target ?? Math.round(derivedMax * 0.7);
-  const thresholds = [
-    { value: Math.round(safeTarget * 0.5), color: 'var(--state-error, #ef4444)' },
-    { value: safeTarget, color: 'var(--state-warning, #f59e0b)' },
-    { value: derivedMax, color: 'var(--state-success, #10b981)' },
-  ];
+  const halfTarget = Math.round(safeTarget * 0.5);
+  const errColor = 'var(--state-error, #ef4444)';
+  const warnColor = 'var(--state-warning, #f59e0b)';
+  const okColor = 'var(--state-success, #10b981)';
+  // `XGaugeChart` requires thresholds in ascending order with each
+  // entry's `value` defining the upper bound of its colour band.
+  //
+  // higher-better:  [0, halfTarget) red  → [halfTarget, target) amber → [target, max] green
+  // lower-better:   [0, target)     green → [target, max-band) amber  → [max-band, max] red
+  // The mid-band ceiling for the lower-better case is the midpoint
+  // between `target` and `derivedMax` so the amber zone has visible
+  // width even when target sits close to the dial bottom (e.g.
+  // absenteeism target=3, derivedMax=20 → amber zone 3 → 11).
+  const lowerMidCeiling = Math.round((safeTarget + derivedMax) / 2);
+  const thresholds =
+    direction === 'lower-better'
+      ? [
+          { value: safeTarget, color: okColor },
+          { value: lowerMidCeiling, color: warnColor },
+          { value: derivedMax, color: errColor },
+        ]
+      : [
+          { value: halfTarget, color: errColor },
+          { value: safeTarget, color: warnColor },
+          { value: derivedMax, color: okColor },
+        ];
   const fmt = (v: number): string => (unit ? `${v}${unit}` : `${v}`);
   return (
     <XGaugeChart
@@ -1549,7 +1586,12 @@ const DemographicDashboard: React.FC = () => {
           <SectionHeader>Isgucu Dinamikleri (APQC HC-4)</SectionHeader>
           <ChartCard title={chartTitle('Devamsizlik & Ise Alim', 'new-hires-12m')}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <Gauge value={summary.absenteeismRate} target={3} label="Devamsizlik Orani" />
+              <Gauge
+                value={summary.absenteeismRate}
+                target={3}
+                label="Devamsizlik Orani"
+                direction="lower-better"
+              />
               <div style={{ textAlign: 'center' }}>
                 <div
                   style={{
