@@ -50,8 +50,10 @@ import { WaterfallChart } from '../WaterfallChart';
 import { FunnelChart } from '../FunnelChart';
 import { SankeyChart } from '../SankeyChart';
 import { SunburstChart } from '../SunburstChart';
-// PR-X6: new BoxPlotChart wrapper.
+// PR-X6: BoxPlotChart wrapper.
 import { BoxPlotChart } from '../BoxPlotChart';
+// PR-X7: financial OHLC chart.
+import { CandlestickChart } from '../CandlestickChart';
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -994,7 +996,7 @@ describe('SunburstChart option shape', () => {
 });
 
 /* ================================================================== */
-/*  BoxPlotChart                                                       */
+/*  BoxPlotChart (PR-X6)                                               */
 /* ================================================================== */
 
 describe('BoxPlotChart option shape', () => {
@@ -1014,8 +1016,6 @@ describe('BoxPlotChart option shape', () => {
   it('computes 5-number summary from raw values (Q2=median)', () => {
     render(<BoxPlotChart data={[{ category: 'A', values: [1, 2, 3, 4, 5] }]} animate={false} />);
     const data = series()[0].data as number[][];
-    // Linear-interpolated quartiles for [1,2,3,4,5]:
-    // min=1, Q1=2, median=3, Q3=4, max=5
     expect(data[0]).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -1030,7 +1030,7 @@ describe('BoxPlotChart option shape', () => {
   it('emits scatter outlier series when showOutliers=true (default)', () => {
     render(
       <BoxPlotChart
-        data={[{ category: 'A', values: [1, 2, 3, 4, 5, 100] }]} // 100 = outlier
+        data={[{ category: 'A', values: [1, 2, 3, 4, 5, 100] }]}
         animate={false}
       />,
     );
@@ -1076,6 +1076,61 @@ describe('BoxPlotChart option shape', () => {
       />,
     );
     expect(series()[0].boxWidth).toEqual(['7%', '50%']);
+  });
+});
+
+/* ================================================================== */
+/*  CandlestickChart (PR-X7)                                           */
+/* ================================================================== */
+
+describe('CandlestickChart option shape', () => {
+  it('series.type === candlestick + maps OHLC tuples', () => {
+    render(
+      <CandlestickChart
+        data={[
+          { label: 'D1', open: 100, close: 110, low: 95, high: 115 },
+          { label: 'D2', open: 110, close: 105, low: 100, high: 112 },
+        ]}
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s[0].type).toBe('candlestick');
+    const data = s[0].data as number[][];
+    expect(data[0]).toEqual([100, 110, 95, 115]);
+    expect(data[1]).toEqual([110, 105, 100, 112]);
+  });
+
+  it('xAxis category-based, yAxis value with scale=true (financial range needed)', () => {
+    render(
+      <CandlestickChart
+        data={[{ label: 'D1', open: 100, close: 110, low: 95, high: 115 }]}
+        animate={false}
+      />,
+    );
+    expect(axis('xAxis')?.type).toBe('category');
+    expect(axis('yAxis')?.type).toBe('value');
+    expect(axis('yAxis')?.scale).toBe(true);
+  });
+
+  it('bullishColor / bearishColor map to itemStyle.color / color0', () => {
+    render(
+      <CandlestickChart
+        data={[{ label: 'D1', open: 100, close: 110, low: 95, high: 115 }]}
+        bullishColor="#0f0"
+        bearishColor="#f00"
+        animate={false}
+      />,
+    );
+    const itemStyle = series()[0].itemStyle as Record<string, unknown>;
+    expect(itemStyle.color).toBe('#0f0');
+    expect(itemStyle.color0).toBe('#f00');
+    expect(itemStyle.borderColor).toBe('#0f0');
+    expect(itemStyle.borderColor0).toBe('#f00');
+  });
+
+  it('handles empty data without throwing', () => {
+    expect(() => render(<CandlestickChart data={[]} animate={false} />)).not.toThrow();
   });
 });
 

@@ -47,6 +47,8 @@ export type ChartA11yKind =
   | 'sunburst'
   // PR-X6 (Codex thread 019e1e30): statistical box-and-whisker chart.
   | 'boxplot'
+  // PR-X7 (Codex thread 019e1e30): financial OHLC chart.
+  | 'candlestick'
   // Faz 21.11 P1a — 3D Extension Pack. Each 3D wrapper feeds the
   // shell its own kind so the default aria-label fallback can name
   // the chart correctly ("scatter3d chart with 1024 data points").
@@ -164,6 +166,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   // PR-X6 (Codex thread 019e1e30): statistical distribution chart with
   // five-number summary (min, Q1, median, Q3, max).
   boxplot: 'Box plot',
+  // PR-X7 (Codex thread 019e1e30): financial OHLC chart.
+  candlestick: 'Candlestick chart',
   // Faz 21.11 P1a — 3D Extension Pack. P1b adds 'Surface 3D chart' +
   // '3D line chart'; P1c adds 'Globe' (geo).
   scatter3d: '3D scatter chart',
