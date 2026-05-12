@@ -594,6 +594,80 @@ describe('ScatterChart option shape', () => {
   it('handles empty data without throwing', () => {
     expect(() => render(<ScatterChart data={[]} />)).not.toThrow();
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR-X4 wrapper extensions: large + largeThreshold + symbolSize fn
+  // (Codex thread 019e1e30 AGREE).
+  // ────────────────────────────────────────────────────────────────────
+
+  it('large=false (default) does NOT add large / largeThreshold keys', () => {
+    render(
+      <ScatterChart
+        data={[
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+        ]}
+      />,
+    );
+    const s = series()[0];
+    expect(s.large).toBeUndefined();
+    expect(s.largeThreshold).toBeUndefined();
+  });
+
+  it('large=true adds series.large=true with default threshold=2000', () => {
+    render(
+      <ScatterChart
+        data={[
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+        ]}
+        large
+      />,
+    );
+    const s = series()[0];
+    expect(s.large).toBe(true);
+    expect(s.largeThreshold).toBe(2000);
+  });
+
+  it('largeThreshold override passes through verbatim when large=true', () => {
+    render(
+      <ScatterChart
+        data={[
+          { x: 1, y: 2 },
+          { x: 3, y: 4 },
+        ]}
+        large
+        largeThreshold={5000}
+      />,
+    );
+    expect(series()[0].largeThreshold).toBe(5000);
+  });
+
+  it('symbolSize fn replaces the default constant', () => {
+    render(
+      <ScatterChart
+        data={[
+          { x: 1, y: 2, size: 9 },
+          { x: 3, y: 4, size: 25 },
+        ]}
+        symbolSize={(d) => (d.size != null ? Math.sqrt(d.size) * 5 : 8)}
+      />,
+    );
+    const s = series()[0];
+    // ECharts symbolSize is a function — the wrapper threads each datum
+    // back through the caller-supplied formula.
+    expect(typeof s.symbolSize).toBe('function');
+  });
+
+  it('symbolSize fn wins over bubble mode formula when both are set', () => {
+    const customFn = (_d: { size?: number }) => 100; // sentinel large
+    render(<ScatterChart data={[{ x: 1, y: 2, size: 9 }]} bubble symbolSize={customFn} />);
+    const s = series()[0];
+    expect(typeof s.symbolSize).toBe('function');
+    // Sentinel: the formula returns 100 — verify it's the caller's not bubble's.
+    const fn = s.symbolSize as (val: number[], params: { dataIndex: number }) => number;
+    expect(fn([1, 2, 9], { dataIndex: 0 })).toBe(100);
+  });
 });
 
 /* ================================================================== */

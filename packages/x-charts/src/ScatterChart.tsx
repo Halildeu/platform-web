@@ -109,6 +109,43 @@ export interface ScatterChartProps extends AccessControlledProps {
   yLabel?: string;
   /** Enable bubble mode — sizes markers by the `size` field. @default false */
   bubble?: boolean;
+  /**
+   * Enable ECharts' `large` mode — a Canvas-batching optimization that
+   * collapses individual symbol draws into a single shape per series.
+   * Visible interactions (hover highlight, click) are coarser in large
+   * mode, but render time drops dramatically for 5K–50K point datasets.
+   *
+   * Use case: dense scatter plots where individual point hover isn't
+   * needed (overview / brushing dashboards). The existing renderer
+   * router still escalates to WebGL above 100K points; this prop fills
+   * the 5K–50K gap on Canvas. Maps to ECharts `series.large` +
+   * `largeThreshold` (we expose the threshold at the wrapper level so
+   * callers can tune the cutoff without forking the renderer).
+   *
+   * @default false
+   */
+  large?: boolean;
+  /**
+   * Point-count threshold above which `large` mode kicks in. Ignored
+   * unless `large` is `true`. Maps to ECharts `series.largeThreshold`.
+   *
+   * @default 2000
+   */
+  largeThreshold?: number;
+  /**
+   * Custom function to compute marker size from a `ScatterDataPoint`.
+   * Receives `{ x, y, size, label }` and returns a pixel radius.
+   * Overrides both the default constant radius and the `bubble`-mode
+   * `Math.sqrt(size)` formula. Maps to ECharts `series.symbolSize`
+   * function variant.
+   *
+   * Use case: encoding a third dimension (revenue, severity, importance)
+   * with a custom scale (logarithmic, quantile-bucketed) instead of the
+   * default linear sqrt.
+   *
+   * @default undefined (constant 8 px, or bubble-mode sqrt(size))
+   */
+  symbolSize?: (datum: ScatterDataPoint) => number;
   /** Text shown when data is empty. @default "Veri yok" */
   noDataText?: string;
   /**
@@ -289,6 +326,9 @@ const ScatterChartInner = React.forwardRef<
     xLabel,
     yLabel,
     bubble = false,
+    large = false,
+    largeThreshold = 2000,
+    symbolSize: symbolSizeFnProp,
     noDataText = 'Veri yok',
     onDataPointClick,
     markups,
@@ -465,13 +505,24 @@ const ScatterChartInner = React.forwardRef<
       itemStyle: d.color ? { color: d.color } : undefined,
     }));
 
-    // Bubble: symbolSize maps size field to visual radius
-    const symbolSizeFn = bubble
-      ? (val: number[]) => {
-          const raw = val[2] ?? 10;
-          return Math.max(6, Math.min(60, Math.sqrt(raw) * 4));
+    // Bubble: symbolSize maps size field to visual radius.
+    // PR-X4: caller-supplied `symbolSize` function takes precedence over
+    // both the bubble formula and the constant default. The function
+    // receives a `ScatterDataPoint`-shaped object (we reconstruct from
+    // the `[x, y, size?]` numeric array ECharts passes through to keep
+    // the public API ergonomic — callers don't have to remember array
+    // index positions).
+    const symbolSizeFn = symbolSizeFnProp
+      ? (val: number[], params: { dataIndex: number }) => {
+          const datum = safeData[params.dataIndex];
+          return symbolSizeFnProp(datum ?? { x: val[0] ?? 0, y: val[1] ?? 0, size: val[2] });
         }
-      : 8;
+      : bubble
+        ? (val: number[]) => {
+            const raw = val[2] ?? 10;
+            return Math.max(6, Math.min(60, Math.sqrt(raw) * 4));
+          }
+        : 8;
 
     // Resolve legend before returning so the grid helper can read its
     // `show` / `orient` (Codex 019defa5 PARTIAL).
@@ -607,6 +658,13 @@ const ScatterChartInner = React.forwardRef<
             type: useGLSeriesType ? 'scatterGL' : 'scatter',
             data: scatterData,
             symbolSize: symbolSizeFn,
+            // PR-X4 (Codex thread 019e1e30): expose ECharts `large`
+            // mode for 5K–50K Canvas point batches. `scatterGL` already
+            // has its own batching, so `large` is only honored when we
+            // are NOT in WebGL mode — passing it on `scatterGL` is a
+            // no-op but we keep the option explicit so option diffs
+            // stay snapshot-deterministic.
+            ...(large ? { large: true, largeThreshold } : {}),
             itemStyle: {
               color: palette[0],
             },
@@ -671,6 +729,11 @@ const ScatterChartInner = React.forwardRef<
     xLabel,
     yLabel,
     bubble,
+    // PR-X4 (Codex thread 019e1e30): large-mode Canvas batching + custom
+    // symbolSize function for non-bubble custom radius encoding.
+    large,
+    largeThreshold,
+    symbolSizeFnProp,
     isEmpty,
     fmt,
     themeObject,
