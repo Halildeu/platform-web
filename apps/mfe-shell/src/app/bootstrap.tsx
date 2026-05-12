@@ -48,7 +48,20 @@ initSentry();
 
 // RUM: Web Vitals collection after Sentry is ready
 import { initRUM } from '../lib/rum';
+import { setupPerformanceObservers, recordMark } from '../lib/perf-observer';
+import { defaultSinks } from '../lib/rum-sinks';
+
+// Legacy RUM (LCP/FID/CLS/TTFB only — backwards compatibility for existing
+// Sentry transaction.setMeasurement consumers). Kept in parallel so this
+// PR is non-breaking.
 initRUM();
+
+// PERF-INIT-V2 PR-M1: extended PerformanceObserver harness adds INP, FCP,
+// long-task (TBT), custom marks, and resource summary. Installed once at
+// bootstrap; exposes window.__perfSnapshot() for Playwright route-budget
+// runner. See apps/mfe-shell/src/lib/perf-observer.ts + rum-sinks.ts.
+setupPerformanceObservers(defaultSinks);
+recordMark('shell:mounted');
 
 // OpenTelemetry: distributed trace context propagation
 import { initOtel } from '../lib/otel';
