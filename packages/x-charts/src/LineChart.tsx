@@ -81,6 +81,31 @@ export interface LineChartProps extends AccessControlledProps {
   showArea?: boolean;
   /** Use bezier curves instead of straight lines. @default false */
   curved?: boolean;
+  /**
+   * Render the line as a step function instead of a continuous slope.
+   *
+   * - `'start'` — vertical jump at the leading edge of each data point
+   * - `'middle'` — jump in the middle of the segment (centred between two points)
+   * - `'end'` — jump at the trailing edge
+   *
+   * Mutually exclusive with `curved` (ECharts ignores `smooth` when
+   * `step` is set). Useful for status / state history charts where
+   * a continuous slope would imply interpolation that doesn't exist
+   * in the underlying data. Maps to ECharts `series.step`.
+   *
+   * @default undefined
+   */
+  step?: 'start' | 'middle' | 'end';
+  /**
+   * Connect data points across null / undefined values. By default
+   * ECharts breaks the line at the gap (which is correct for "missing
+   * data") but for some series (e.g. user-edited sparse manual entries)
+   * a connected line communicates "trend" more clearly. Maps to
+   * ECharts `series.connectNulls`.
+   *
+   * @default false
+   */
+  connectNulls?: boolean;
   /** Custom value formatter. */
   valueFormatter?: (value: number) => string;
   /** Animate line drawing on mount. @default true */
@@ -188,6 +213,8 @@ const LineChartInner = React.forwardRef<
     showLegend = false,
     showArea = false,
     curved = false,
+    step,
+    connectNulls = false,
     valueFormatter,
     animate = true,
     title,
@@ -270,7 +297,13 @@ const LineChartInner = React.forwardRef<
       type: 'line' as const,
       name: s.name,
       data: s.data,
-      smooth: curved,
+      // ECharts ignores `smooth` when `step` is set, but we still pass
+      // `false` explicitly for clarity. `step` takes precedence so a
+      // caller that sets both gets step lines (matches the documented
+      // mutual-exclusivity).
+      smooth: step ? false : curved,
+      step: step ?? false,
+      connectNulls,
       symbol: showDots ? 'circle' : 'none',
       symbolSize: showDots ? 6 : 0,
       lineStyle: { color: s.color ?? palette[i % palette.length], width: 2 },
@@ -370,6 +403,11 @@ const LineChartInner = React.forwardRef<
     showLegend,
     showArea,
     curved,
+    // PR-X2 (Codex thread 019e1e30): step + connectNulls exposed for
+    // status/state-history charts that need stepped lines or gap-skipping
+    // semantics. Mutually exclusive with `curved` — see series builder.
+    step,
+    connectNulls,
     valueFormatter,
     animate,
     title,
