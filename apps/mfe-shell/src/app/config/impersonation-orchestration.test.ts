@@ -224,6 +224,49 @@ describe('impersonation-orchestration (PR-C2)', () => {
     expect(transportIdx).toBeGreaterThan(enterIdx);
   });
 
+  it('enterImpersonationOrchestration surfaces VALIDATION_ERROR fieldErrors as the localized message (BUG #3)', async () => {
+    // Codex 019e1e0f BUG #3: Spring's MethodArgumentNotValidException
+    // returns a 400 with body shape
+    //   { error: "VALIDATION_ERROR",
+    //     message: "Validation failed",
+    //     fieldErrors: [{field, message}] }
+    // — different from the StartResponse `errorCode/errorMessage`
+    // shape the BLOCKED branches return. Before this fix the FE
+    // ERROR_CODE_MESSAGES lookup never matched (axios error.message
+    // was just "Request failed with status code 400") and users saw
+    // a generic fallback. The adapter wraps the validation body into
+    // an Error whose `errorCode === 'VALIDATION_ERROR'` and whose
+    // `message` is the field-level localized text.
+    const initial = buildState();
+    const { apiPost } = setupMocks(initial);
+
+    const axiosErr = Object.assign(new Error('Request failed with status code 400'), {
+      response: {
+        status: 400,
+        data: {
+          error: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          fieldErrors: [
+            { field: 'reason', message: "boyut '10' ile '500' arasında olmalı" },
+          ],
+        },
+      },
+    });
+    apiPost.mockRejectedValueOnce(axiosErr);
+
+    const orch = await import('./impersonation-orchestration');
+    await expect(
+      orch.enterImpersonationOrchestration({
+        targetUserId: 42,
+        targetEmail: 'target@example.com',
+        reason: 'short',
+      }),
+    ).rejects.toMatchObject({
+      message: "boyut '10' ile '500' arasında olmalı",
+      errorCode: 'VALIDATION_ERROR',
+    });
+  });
+
   it('exitImpersonationOrchestration leaves Redux untouched on revoke failure (Codex iter-3)', async () => {
     const initial = buildState({
       token: 'broker-token',

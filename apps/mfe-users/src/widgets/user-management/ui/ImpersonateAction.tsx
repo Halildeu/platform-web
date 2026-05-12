@@ -64,6 +64,18 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
 
 const friendlyErrorMessage = (err: unknown): string => {
   if (err instanceof Error) {
+    // Codex 019e1e0f BUG #3 follow-up: orchestration adapter wraps
+    // Spring's `MethodArgumentNotValidException` (400 with shape
+    // `{error: "VALIDATION_ERROR", fieldErrors: [...]}`) into a regular
+    // Error whose `errorCode` property is "VALIDATION_ERROR" and whose
+    // `message` is the localized field message (e.g.
+    // "boyut '10' ile '500' arasında olmalı"). Prefer this verbatim
+    // over the generic ERROR_CODE_MESSAGES fallback because the
+    // backend already localized it via Spring's Turkish ValidationMessages.
+    const withCode = err as Error & { errorCode?: string };
+    if (withCode.errorCode === 'VALIDATION_ERROR' && err.message) {
+      return err.message;
+    }
     // Orchestration surfaces errorCode in error.message when backend
     // returns a structured StartResponse with errorCode set.
     const msg = err.message ?? '';
