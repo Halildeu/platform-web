@@ -75,6 +75,77 @@ const categories = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran'];
 const values1 = [320, 332, 301, 334, 390, 330];
 const values2 = [220, 182, 191, 234, 290, 330];
 
+// Faz 21.11 3D Extension Pack — STABLE module-scope fixtures for
+// the 3D wrappers' live preview. Live cluster smoke 2026-05-12
+// surfaced that JSX-inline fixtures (data arrays + dataShape tuples
+// + path coords) generate fresh references on every render, which
+// triggers Surface3D / Lines3D / Globe useMemo deps to recompute
+// each tick → setOption flood → ECharts canvas init silently
+// stalls and the wrapper container stays empty.
+//
+// Hoisting the fixtures here keeps the JSX call sites referentially
+// stable across re-renders. Scatter3D was renderng correctly even
+// before this hoist because its data array is small + its option
+// memo doesn't observe dataShape; the other three need this fix to
+// reach the canvas mount path.
+const SCATTER_3D_FIXTURE: ReadonlyArray<{
+  x: number;
+  y: number;
+  z: number;
+  label?: string;
+}> = [
+  { x: 0, y: 0, z: 0, label: 'origin' },
+  { x: 1, y: 2, z: 1, label: 'p1' },
+  { x: 2, y: 1, z: 3, label: 'p2' },
+  { x: 3, y: 3, z: 2, label: 'p3' },
+  { x: 4, y: 2, z: 4, label: 'p4' },
+  { x: 5, y: 4, z: 3, label: 'p5' },
+  { x: 2, y: 5, z: 5, label: 'p6' },
+  { x: 4, y: 5, z: 1, label: 'p7' },
+];
+
+const SURFACE_3D_ROWS = 6;
+const SURFACE_3D_COLS = 6;
+const SURFACE_3D_FIXTURE: ReadonlyArray<{ x: number; y: number; z: number }> = (() => {
+  const out: Array<{ x: number; y: number; z: number }> = [];
+  for (let r = 0; r < SURFACE_3D_ROWS; r++) {
+    for (let c = 0; c < SURFACE_3D_COLS; c++) {
+      out.push({ x: c, y: r, z: Math.sin(c / 1.5) + Math.cos(r / 1.5) });
+    }
+  }
+  return out;
+})();
+const SURFACE_3D_SHAPE: readonly [number, number] = [SURFACE_3D_ROWS, SURFACE_3D_COLS];
+
+const LINES_3D_PATH_A: ReadonlyArray<readonly [number, number, number]> = Array.from(
+  { length: 24 },
+  (_, i) => [Math.cos(i / 3) * 3, Math.sin(i / 3) * 3, i / 3] as const,
+);
+const LINES_3D_PATH_B: ReadonlyArray<readonly [number, number, number]> = Array.from(
+  { length: 24 },
+  (_, i) => [Math.cos(i / 4) * 2, Math.sin(i / 4) * 2, i / 6] as const,
+);
+const LINES_3D_FIXTURE = [
+  { label: 'Helix', coords: LINES_3D_PATH_A },
+  { label: 'Swirl', coords: LINES_3D_PATH_B },
+] as const;
+
+const GLOBE_FIXTURE_DATA = [
+  { lon: 28.978, lat: 41.008, label: 'Istanbul', value: 100 },
+  { lon: 32.866, lat: 39.925, label: 'Ankara', value: 80 },
+  { lon: 27.142, lat: 38.423, label: 'Izmir', value: 65 },
+  { lon: -73.935, lat: 40.73, label: 'New York', value: 120 },
+  { lon: -0.128, lat: 51.507, label: 'London', value: 110 },
+  { lon: 139.692, lat: 35.689, label: 'Tokyo', value: 130 },
+] as const;
+const GLOBE_FIXTURE_LAYERS = [
+  {
+    type: 'scatter3D' as const,
+    name: 'Cities',
+    data: GLOBE_FIXTURE_DATA,
+  },
+] as const;
+
 export interface ChartPreviewLiveProps {
   chartId: string;
   chartName: string;
@@ -848,16 +919,17 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           surfaceStyle={surfaceStyle}
         >
           <Scatter3D
-            data={[
-              { x: 0, y: 0, z: 0, label: 'origin' },
-              { x: 1, y: 2, z: 1, label: 'p1' },
-              { x: 2, y: 1, z: 3, label: 'p2' },
-              { x: 3, y: 3, z: 2, label: 'p3' },
-              { x: 4, y: 2, z: 4, label: 'p4' },
-              { x: 5, y: 4, z: 3, label: 'p5' },
-              { x: 2, y: 5, z: 5, label: 'p6' },
-              { x: 4, y: 5, z: 1, label: 'p7' },
-            ]}
+            // Stable module-scope fixture — keeps reference identity
+            // across PlaygroundTab re-renders so the wrapper's option
+            // memo deps don't flap and trigger a setOption flood.
+            data={
+              SCATTER_3D_FIXTURE as unknown as Array<{
+                x: number;
+                y: number;
+                z: number;
+                label?: string;
+              }>
+            }
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
@@ -877,18 +949,12 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'surface-3d-chart': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
-      // 6×6 surface mesh — z = sin(x)+cos(y) for a recognisable
-      // ripple. Surface3D wants a FLAT Surface3DDataPoint[] array
-      // (one row per cell) PLUS `dataShape: [rows, cols]` so the
-      // grid topology is honoured (Faz 21.11 P1b contract).
-      const rows = 6;
-      const cols = 6;
-      const surfaceData: Array<{ x: number; y: number; z: number }> = [];
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          surfaceData.push({ x: c, y: r, z: Math.sin(c / 1.5) + Math.cos(r / 1.5) });
-        }
-      }
+      // Stable 6×6 surface mesh (z = sin(c/1.5) + cos(r/1.5)) hoisted
+      // to module scope so dataShape + data references stay identical
+      // across re-renders. JSX-inline arrays here previously triggered
+      // the wrapper's option memo to recompute every tick which left
+      // the canvas in an unmount-mount limbo (live cluster smoke
+      // 2026-05-12 confirmed an empty container in that path).
       return (
         <PreviewBox
           ref={containerRef}
@@ -897,8 +963,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           surfaceStyle={surfaceStyle}
         >
           <Surface3D
-            data={surfaceData}
-            dataShape={[rows, cols]}
+            data={SURFACE_3D_FIXTURE as unknown as Array<{ x: number; y: number; z: number }>}
+            dataShape={SURFACE_3D_SHAPE}
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
@@ -918,17 +984,10 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'lines-3d-chart': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
-      // Two xyz paths — a rising helix and a flatter swirl. Lines3DPath
-      // uses `{ coords, label?, color? }` (no `name` field; label is
-      // the SR-readable identifier).
-      const pathA: ReadonlyArray<readonly [number, number, number]> = Array.from(
-        { length: 24 },
-        (_, i) => [Math.cos(i / 3) * 3, Math.sin(i / 3) * 3, i / 3] as const,
-      );
-      const pathB: ReadonlyArray<readonly [number, number, number]> = Array.from(
-        { length: 24 },
-        (_, i) => [Math.cos(i / 4) * 2, Math.sin(i / 4) * 2, i / 6] as const,
-      );
+      // Stable two-path helix + swirl fixture hoisted to module
+      // scope (live cluster smoke 2026-05-12: JSX-inline coords
+      // recomputed on every render → option memo flood → empty
+      // canvas).
       return (
         <PreviewBox
           ref={containerRef}
@@ -937,10 +996,12 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           surfaceStyle={surfaceStyle}
         >
           <Lines3D
-            data={[
-              { label: 'Helix', coords: pathA },
-              { label: 'Swirl', coords: pathB },
-            ]}
+            data={
+              LINES_3D_FIXTURE as unknown as Array<{
+                label: string;
+                coords: ReadonlyArray<readonly [number, number, number]>;
+              }>
+            }
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
@@ -961,8 +1022,10 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'globe-chart': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
-      // GlobeLayer is a discriminated union — `type: 'scatter3D'`
-      // (NOT 'scatter'); 6 sample cities span TR + global majors.
+      // Stable layers + cities fixture hoisted to module scope
+      // (live cluster smoke 2026-05-12: JSX-inline layers array
+      // recomputed every render → Globe option memo recompute
+      // flood → echarts-gl canvas mount stalled).
       return (
         <PreviewBox
           ref={containerRef}
@@ -971,20 +1034,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
           surfaceStyle={surfaceStyle}
         >
           <Globe
-            layers={[
-              {
-                type: 'scatter3D',
-                name: 'Cities',
-                data: [
-                  { lon: 28.978, lat: 41.008, label: 'Istanbul', value: 100 },
-                  { lon: 32.866, lat: 39.925, label: 'Ankara', value: 80 },
-                  { lon: 27.142, lat: 38.423, label: 'Izmir', value: 65 },
-                  { lon: -73.935, lat: 40.73, label: 'New York', value: 120 },
-                  { lon: -0.128, lat: 51.507, label: 'London', value: 110 },
-                  { lon: 139.692, lat: 35.689, label: 'Tokyo', value: 130 },
-                ],
-              },
-            ]}
+            layers={
+              GLOBE_FIXTURE_LAYERS as unknown as Array<{
+                type: 'scatter3D';
+                name?: string;
+                data: Array<{ lon: number; lat: number; label?: string; value?: number }>;
+              }>
+            }
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
