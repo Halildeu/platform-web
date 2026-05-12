@@ -73,13 +73,6 @@ type RemoteShellServices = {
     exitImpersonationSession: () => Promise<ShellExitImpersonationResult>;
     /** PR-C2 nested-impersonation guard. */
     isImpersonating: () => boolean;
-    /**
-     * Codex 019e1bed C-prime AGREE: shell-level superAdmin gate. Remotes
-     * whose `@mfe/auth` Vite alias bypasses MF shared registration
-     * (e.g. mfe-users) MUST consult this instead of `usePermissions()`
-     * to avoid reading from a duplicated local `PermissionContext`.
-     */
-    isSuperAdmin: () => boolean;
     /** PR-C2 token swap subscription (SSE consumers reconnect on broker swap). */
     onTokenChange: (listener: (token: string | null) => void) => () => void;
   };

@@ -80,16 +80,6 @@ export type RemoteShellServices = {
     exitImpersonationSession: () => Promise<ShellExitImpersonationResult>;
     /** PR-C2 nested-impersonation guard. */
     isImpersonating: () => boolean;
-    /**
-     * Codex 019e1bed C-prime AGREE: shell-level superAdmin gate exposed
-     * to mfe-users. The shell's canonical `authzSnapshot.superAdmin`
-     * surfaces here so `UserDetailDrawer` / `ImpersonateAction` consult
-     * the shell singleton instead of `usePermissions()` from a local
-     * `@mfe/auth` `PermissionContext` that may be the default
-     * (`isSuperAdmin: () => false`) when Vite alias bypasses MF
-     * shared-singleton registration.
-     */
-    isSuperAdmin: () => boolean;
     /** PR-C2 token swap subscription (SSE consumers reconnect on broker swap). */
     onTokenChange: (listener: (token: string | null) => void) => () => void;
   };
@@ -138,7 +128,6 @@ const createNoopServices = (): RemoteShellServices => ({
         message: 'Shell services not yet configured (impersonation)',
       }),
     isImpersonating: () => false,
-    isSuperAdmin: () => false,
     onTokenChange: () => () => undefined,
   },
 });
