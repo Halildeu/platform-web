@@ -105,6 +105,21 @@ export interface ShellAuthService {
   exitImpersonationSession(): Promise<ShellExitImpersonationResult>;
   /** PR-C2 nested-impersonation guard. */
   isImpersonating(): boolean;
+  /**
+   * Codex 019e1bed C-prime AGREE — superAdmin gate exposed via shell auth
+   * singleton instead of relying on remote MFE's local `@mfe/auth`
+   * `PermissionContext`. Remotes whose Vite alias bypasses MF shared
+   * registration would otherwise see the default
+   * `isSuperAdmin: () => false` from a duplicated context. Routing the
+   * gate through shell auth keeps consumer remotes (mfe-users
+   * `UserDetailDrawer`, `ImpersonateAction`) on the same canonical
+   * `authzSnapshot` the shell hydrates from `/api/v1/authz/me`.
+   *
+   * Source-of-truth: `store.getState().auth.authzSnapshot?.superAdmin`.
+   * Fallback: `false` until shell services are wired and authz is
+   * fetched (fail-closed; matches `isImpersonating` shape).
+   */
+  isSuperAdmin(): boolean;
 }
 
 export interface ShellTelemetryService {
@@ -159,6 +174,12 @@ export type ShellServicesInit = {
   exitImpersonationSession?: () => Promise<ShellExitImpersonationResult>;
   /** PR-C2 nested-impersonation guard. */
   isImpersonating?: () => boolean;
+  /**
+   * Codex 019e1bed C-prime AGREE: shell-level superAdmin gate for
+   * remote MFE consumers. Wiring should pass a getter that reads
+   * `store.getState().auth.authzSnapshot?.superAdmin === true`.
+   */
+  isSuperAdmin?: () => boolean;
 };
 
 const authListeners = new Set<AuthListener>();
@@ -223,6 +244,10 @@ let exitImpersonationSessionImpl: () => Promise<ShellExitImpersonationResult> = 
     message: 'Shell services not configured for impersonation',
   });
 let isImpersonatingImpl: () => boolean = () => false;
+// Codex 019e1bed C-prime AGREE: shell-level superAdmin gate. Default
+// `false` is fail-closed; wiring (`shell-services-wiring.ts`) supplies
+// the Redux-backed implementation reading `auth.authzSnapshot.superAdmin`.
+let isSuperAdminImpl: () => boolean = () => false;
 
 const emitTokenChange = (token: string | null, options?: AuthEmitOptions) => {
   const normalizedToken = normalizeToken(token);
@@ -261,6 +286,7 @@ export const configureShellServices = (init: ShellServicesInit): void => {
     enterImpersonationSessionImpl = init.enterImpersonationSession;
   if (init.exitImpersonationSession) exitImpersonationSessionImpl = init.exitImpersonationSession;
   if (init.isImpersonating) isImpersonatingImpl = init.isImpersonating;
+  if (init.isSuperAdmin) isSuperAdminImpl = init.isSuperAdmin;
 
   unsubscribeAuthSource?.();
   if (init.subscribeAuthToken) {
@@ -317,6 +343,7 @@ function createShellServices(queryClient: QueryClient | null): ShellServices {
       enterImpersonationSession: (payload) => enterImpersonationSessionImpl(payload),
       exitImpersonationSession: () => exitImpersonationSessionImpl(),
       isImpersonating: () => isImpersonatingImpl(),
+      isSuperAdmin: () => isSuperAdminImpl(),
     },
     query: queryClient ?? fallbackQueryClient ?? new QueryClient(),
     telemetry: {

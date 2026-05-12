@@ -250,12 +250,28 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
   const authzReady = initialized && authz != null;
   const canEdit = !sessionExpired && (!authzReady || isAdmin || hasModule('USER_MANAGEMENT'));
 
-  // Codex 019e1bed AGREE: defense-in-depth — shell-services okunamazsa
-  // (federation cycle race), gate `false`'a düşmeli (fail-open visibility:
-  // ImpersonateAction kendi içinde `isSuperAdmin()` ikinci kapı + handleStart
-  // try/catch ile fail-closed action). Önceki inline `getShellServices().auth
-  // .isImpersonating()` JSX'te throw eden bir hata komple drawer alt-ağacını
-  // koparabilirdi.
+  // Codex 019e1bed C-prime AGREE — impersonation visibility gate reads
+  // through shell-services auth singleton, not the local `usePermissions()`
+  // hook above. mfe-users' Vite alias bypasses Module Federation shared
+  // registration for `@mfe/auth`, so the remote ends up with a duplicated
+  // `PermissionContext` whose default is `isSuperAdmin: () => false` —
+  // the shell-level `authzSnapshot.superAdmin` is the only canonical
+  // source. `usePermissions()` is still consulted above for `canEdit`
+  // (role/module checks) because that data lives in the same authz
+  // payload and the duplicated context can still satisfy it for write
+  // gating; the impersonation gate is what regressed in production and
+  // is what this fix routes through the shell.
+  //
+  // Both calls are wrapped in try/catch (fail-closed) so a federation
+  // cycle race during mount never throws out of the JSX gate and never
+  // collapses the drawer subtree silently.
+  const isShellSuperAdmin = (() => {
+    try {
+      return getShellServices().auth.isSuperAdmin();
+    } catch {
+      return false;
+    }
+  })();
   const isCurrentlyImpersonating = (() => {
     try {
       return getShellServices().auth.isImpersonating();
@@ -263,7 +279,26 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
       return false;
     }
   })();
-  const canShowImpersonateAction = isAdmin && !isCurrentlyImpersonating && Boolean(user.id);
+  // Codex 019e1bed PR #408 regression — `UserDetailDrawer` always
+  // mounts (the parent `UsersPage` keeps it in the React tree and only
+  // toggles `open`), so the component body executes even when no row
+  // is selected and `user` is `null`. Prior C-prime PR #407 evaluated
+  // `Boolean(user.id)` unconditionally; when `isShellSuperAdmin === true`
+  // (the live cluster case) the short-circuit went all the way to
+  // `user.id` and crashed the entire UsersApp with
+  // `Cannot read properties of null (reading 'id')`. Build the
+  // impersonation target lazily so the gate, AND the JSX below, only
+  // touch `user.*` when a user is actually selected.
+  const impersonationTarget =
+    user && user.id
+      ? {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+        }
+      : null;
+  const canShowImpersonateAction =
+    isShellSuperAdmin && !isCurrentlyImpersonating && impersonationTarget != null;
 
   const storedScope = useMemo(() => {
     try {
@@ -1712,15 +1747,9 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ open, onClose, user
             with try/catch; previous inline `getShellServices().auth
             .isImpersonating()` could throw mid-render if federation share
             wiring lagged, collapsing the drawer subtree silently. */}
-        {canShowImpersonateAction ? (
+        {canShowImpersonateAction && impersonationTarget ? (
           <section className="mt-4">
-            <ImpersonateAction
-              user={{
-                id: user.id,
-                email: user.email,
-                fullName: user.fullName,
-              }}
-            />
+            <ImpersonateAction user={impersonationTarget} />
           </section>
         ) : null}
 
