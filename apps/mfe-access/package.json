@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@mfe/shared-http": "*",
-    "@tanstack/react-query": "^5.100.9",
+    "@tanstack/react-query": "^5.100.10",
     "@mfe/shared-types": "*",
     "@mfe/auth": "*",
     "@mfe/design-system": "*",
