@@ -11,6 +11,5 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     unobserve(): void {}
     disconnect(): void {}
   }
-  // @ts-expect-error - jsdom global augmentation, stub only.
-  globalThis.ResizeObserver = ResizeObserverStub;
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
