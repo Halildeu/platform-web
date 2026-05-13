@@ -36,6 +36,7 @@ import {
 import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
 import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
+import { scheduleOnIdle } from '../../lib/idle-scheduler';
 
 /**
  * Build-time constant injected by Vite's `define` config (see
@@ -518,24 +519,79 @@ export const wireRemoteShellServices = () => {
   });
 };
 
-let remoteShellServicesWired = false;
+/**
+ * PERF-INIT-V2 PR-B3a state machine.
+ *
+ * Before PR-B3a there was a single boolean ("wired or not").  With the
+ * idle deferral there is a new intermediate state: callback scheduled
+ * but the actual `wireRemoteShellServices()` work has not yet run.
+ * Codex review (thread 019e2060) flagged that lumping these together
+ * masks the real mental model.  Naming the variable
+ * `remoteShellServicesScheduledOrWired` documents the semantics:
+ * "we have already committed to wiring; do not schedule again."
+ */
+let remoteShellServicesScheduledOrWired = false;
 
 const shouldWireRemoteShellServices = () => {
   const authState = store.getState().auth;
   return isPermitAllMode() || Boolean(authState.token);
 };
 
-const wireRemoteShellServicesWhenReady = () => {
-  if (remoteShellServicesWired || !shouldWireRemoteShellServices()) {
+/**
+ * PERF-INIT-V2 PR-B3a (shell-services idle deferral).
+ *
+ * Once auth is ready and we decide to wire remote shell-services, do NOT
+ * call {@code wireRemoteShellServices()} synchronously — defer to the next
+ * idle window.  None of the remote {@code configureShellServices()}
+ * handlers are needed for the next paint; they register background
+ * listeners that only fire on later user actions (notification recipients,
+ * audit live-stream re-binders, etc.).  Running them off the critical path
+ * frees the main thread for post-login route render.
+ *
+ * {@code timeout: 3000} bounds the worst case so pages that never go
+ * idle (continuous animations, polling loops) still get their remote
+ * services within 3 seconds.
+ *
+ * Codex iter-2 P3 absorb (thread 019e2060): the idle callback re-checks
+ * {@code shouldWireRemoteShellServices()} before invoking the wiring
+ * function.  Without this guard a post-auth → logout sequence (auth lands,
+ * idle callback queued, user logs out before idle fires) would still
+ * trigger remote chunk loads on the `/login` page — exactly the public-
+ * route eager-evaluation hazard the call-site comment was trying to avoid.
+ * If the auth state has been invalidated by the time idle fires, we reset
+ * the scheduling flag so a subsequent re-login can schedule again.
+ */
+const REMOTE_SERVICES_IDLE_TIMEOUT_MS = 3000;
+
+const runWireWhenStillReady = () => {
+  if (!shouldWireRemoteShellServices()) {
+    // Auth was invalidated between schedule and idle fire.  Reset the
+    // flag so a future re-login can re-schedule; do NOT wire remotes
+    // onto the public route.
+    remoteShellServicesScheduledOrWired = false;
     return;
   }
-  remoteShellServicesWired = true;
   wireRemoteShellServices();
+};
+
+const wireRemoteShellServicesWhenReady = () => {
+  if (remoteShellServicesScheduledOrWired || !shouldWireRemoteShellServices()) {
+    return;
+  }
+  remoteShellServicesScheduledOrWired = true;
+  scheduleOnIdle(runWireWhenStillReady, {
+    timeout: REMOTE_SERVICES_IDLE_TIMEOUT_MS,
+  });
 };
 
 // Avoid eager remote evaluation on public routes like /login. Some remotes
 // still pull React vendor chunks during shell-services import, which can
 // white-screen the page before auth completes.
+//
+// PR-B3a (2026-05-13): even after auth lands, the actual
+// `wireRemoteShellServices()` call is now deferred to the next idle window
+// via `scheduleOnIdle` so it does not compete with the critical post-login
+// render.
 wireRemoteShellServicesWhenReady();
 
 store.subscribe(() => {
