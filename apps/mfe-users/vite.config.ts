@@ -91,6 +91,9 @@ const hostOnly = (
   fallback: string | boolean = false,
 ) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
+// PR-B2-rollout: convert @tanstack/react-query to hostOnly().  Shell
+// already declares it with `singleton: true, eager: true`; remote should
+// consume from host's share-scope rather than ship its own copy.
 const sharedCore = {
   react: hostOnly('react'),
   'react-dom': hostOnly('react-dom'),
@@ -98,7 +101,7 @@ const sharedCore = {
   'react-router-dom': hostOnly('react-router-dom'),
   'react-redux': hostOnly('react-redux'),
   '@reduxjs/toolkit': hostOnly('@reduxjs/toolkit'),
-  '@tanstack/react-query': singleton('@tanstack/react-query'),
+  '@tanstack/react-query': hostOnly('@tanstack/react-query'),
 };
 const sharedProdOnly = {
   'ag-grid-react': singleton('ag-grid-react'),
