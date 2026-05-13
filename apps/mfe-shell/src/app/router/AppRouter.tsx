@@ -51,9 +51,20 @@ const UnauthorizedPage = React.lazy(() => import('../../pages/unauthorized/Unaut
 
 import ThemeMatrixPage from '../../pages/runtime/ThemeMatrixPage';
 import { HomePage } from '../../pages/home/HomePage';
-import ThemeAdminPage from '../../pages/admin/ThemeAdminPage';
-import DesignLabPage from '../../pages/admin/DesignLabPage';
-import { DesignLabRoutes } from '../../pages/admin/design-lab/DesignLabRoutes';
+
+// PERF-INIT-V2 PR-B4b (admin pages lazy-load): ThemeAdminPage, DesignLabPage,
+// and DesignLabRoutes are admin-surface UIs that an average authenticated
+// user on /home never visits.  Lazy-loading keeps the eager shell chunk
+// graph free of the entire Design Lab tree (token editor, theme matrix,
+// component galleries, Storybook-like surfaces — large transitive cost).
+// Suspense fallback is already wired at the AppRouter outer boundary.
+const ThemeAdminPage = React.lazy(() => import('../../pages/admin/ThemeAdminPage'));
+const DesignLabPage = React.lazy(() => import('../../pages/admin/DesignLabPage'));
+const DesignLabRoutes = React.lazy(() =>
+  import('../../pages/admin/design-lab/DesignLabRoutes').then((m) => ({
+    default: m.DesignLabRoutes,
+  })),
+);
 
 const XSuiteDashboardPage = React.lazy(() => import('../../pages/admin/XSuiteDashboardPage'));
 const ServiceControlPage = React.lazy(
