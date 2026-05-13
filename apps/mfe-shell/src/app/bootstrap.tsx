@@ -69,24 +69,31 @@ initRUM();
 setupPerformanceObservers(defaultSinks);
 recordMark('shell:mounted');
 
-// OpenTelemetry: distributed trace context propagation
-// PERF-INIT-V2 PR-B3e: deferred to idle.  initOtel monkey-patches `fetch`
-// for traceparent header injection — it does NOT observe paint events.
-// React tree mounts BEFORE the first protected API call, so deferring
-// the patch to the next idle window only risks losing trace headers on
-// fetches that happen to fire in the first ~100ms (typical idle delay).
-// On a slow network the 1500ms timeout bounds the worst case so the
-// monkey-patch is always installed before user-driven API traffic.
+// OpenTelemetry + Feature Flags (PERF-INIT-V2 PR-B3e: deferred to idle).
+//   - initOtel() monkey-patches `fetch` for traceparent header injection.
+//     It does NOT observe paint events.  React tree mounts BEFORE the
+//     first protected API call, so deferring the patch to the next idle
+//     window only risks losing trace headers on fetches that fire in the
+//     first ~100ms (typical idle delay).  Worst case is bounded by the
+//     1500ms timeout.
+//   - initFeatureFlags() reads localStorage (dev only) and seeds an
+//     in-memory Map.  No code path reads flags during the synchronous
+//     bootstrap; route components query flags on demand AFTER React
+//     mounts.
 import { initOtel } from '../lib/otel';
-
-// Feature flags: runtime kill switches for safe rollout
-// PERF-INIT-V2 PR-B3e: deferred to idle.  initFeatureFlags reads
-// localStorage (dev only) and seeds an in-memory Map.  No code path
-// reads flags during the synchronous bootstrap; route components query
-// them on demand AFTER React mounts.
 import { initFeatureFlags } from '../lib/feature-flags';
-
 import { scheduleOnIdle } from '../lib/idle-scheduler';
+
+// Runtime browser error capture: early window errors + console.error +
+// unhandled promise rejections are collected into a shell buffer and
+// forwarded to shell telemetry when possible.  Stays eager so we catch
+// failures from the very next tick of bootstrap.
+initRuntimeErrorMonitor();
+
+// Schedule the deferred inits AFTER initRuntimeErrorMonitor so source
+// order mirrors the boundary matrix (Codex iter-1 P3 polish, thread
+// 019e2088): eager observability/error capture first, then idle-batched
+// non-paint inits.
 scheduleOnIdle(
   () => {
     initOtel();
@@ -94,11 +101,6 @@ scheduleOnIdle(
   },
   { timeout: 1500 },
 );
-
-// Runtime browser error capture: early window errors + console.error +
-// unhandled promise rejections are collected into a shell buffer and
-// forwarded to shell telemetry when possible.
-initRuntimeErrorMonitor();
 
 // Quiet-green: suppress known non-actionable console noise in development
 if (process.env.NODE_ENV === 'development') {
