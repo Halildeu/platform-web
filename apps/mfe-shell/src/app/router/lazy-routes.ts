@@ -6,11 +6,13 @@ import React from 'react';
 import { createLazyRemoteModule } from '../createLazyRemoteModule';
 import { SuggestionsAppOnDemand } from '../createSuggestionsAppOnDemand';
 import { EthicAppOnDemand } from '../createEthicAppOnDemand';
+import { SchemaExplorerAppOnDemand } from '../createSchemaExplorerAppOnDemand';
 
 /**
- * PERF-INIT-V2 PR-B5b1 + PR-B5b1.5 canary build-time conditional
- * (Codex thread 019e2272 iter-1 per-remote conditional pattern,
- * extended to ethic in B5b1.5):
+ * PERF-INIT-V2 PR-B5b1 + PR-B5b1.5 + PR-B5b2a canary build-time
+ * conditional (Codex thread 019e2272 iter-1 per-remote conditional
+ * pattern, extended to ethic in B5b1.5 and schema_explorer in
+ * B5b2a):
  *
  * - When `__MFE_SUGGESTIONS_ON_DEMAND__` / `__MFE_ETHIC_ON_DEMAND__`
  *   is `false` (default), the shell ships the eager federated route
@@ -34,6 +36,7 @@ import { EthicAppOnDemand } from '../createEthicAppOnDemand';
  */
 declare const __MFE_SUGGESTIONS_ON_DEMAND__: boolean;
 declare const __MFE_ETHIC_ON_DEMAND__: boolean;
+declare const __MFE_SCHEMA_EXPLORER_ON_DEMAND__: boolean;
 
 export const SuggestionsApp: React.ComponentType = __MFE_SUGGESTIONS_ON_DEMAND__
   ? SuggestionsAppOnDemand
@@ -54,10 +57,9 @@ export const ReportingModule = createLazyRemoteModule(
   () => import('mfe_reporting/ReportingApp'),
 );
 
-export const SchemaExplorerModule = createLazyRemoteModule(
-  'SchemaExplorer',
-  () => import('mfe_schema_explorer/SchemaExplorerApp'),
-);
+export const SchemaExplorerModule: React.ComponentType = __MFE_SCHEMA_EXPLORER_ON_DEMAND__
+  ? SchemaExplorerAppOnDemand
+  : createLazyRemoteModule('SchemaExplorer', () => import('mfe_schema_explorer/SchemaExplorerApp'));
 
 /* ------------------------------------------------------------------ */
 /*  Endpoint admin — build-time conditional                            */

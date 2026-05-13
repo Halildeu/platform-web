@@ -165,6 +165,7 @@ function buildRemotes(
   endpointAdminEnabled: boolean,
   suggestionsOnDemand: boolean,
   ethicOnDemand: boolean,
+  schemaExplorerOnDemand: boolean,
 ) {
   const enabled = {
     suggestions: readEnvBoolean([
@@ -283,11 +284,29 @@ function buildRemotes(
       name: 'mfe_reporting',
       entry: enabled.reporting ? remoteEntries.reporting : STUB,
     },
-    mfe_schema_explorer: {
-      type: 'module',
-      name: 'mfe_schema_explorer',
-      entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
-    },
+    // PERF-INIT-V2 PR-B5b2a canary: when `schemaExplorerOnDemand` is
+    // true and `enabled.schemaExplorer` is true, the entry is omitted
+    // from the federation manifest entirely.  The route render loader
+    // (`createSchemaExplorerAppOnDemand.tsx`) uses host MF runtime
+    // `registerRemotes` + `loadRemote` to bring the remote up only
+    // when `/schema-explorer` route mounts.  Same pattern as
+    // `mfe_suggestions` (B5b1) and `mfe_ethic` (B5b1.5) canaries —
+    // single `VITE_MFE_ON_DEMAND_BOOTSTRAP` env drives all via the
+    // existing `readSuggestionsOnDemandBuildFlag()` reader.
+    //
+    // mfe_schema_explorer is the LOWEST blast in the B5b2 admin set
+    // because it is NOT in the shell-services-wiring 4-remote contract
+    // (notifications/audit-SSE/impersonation/auth-ready) — same
+    // safety profile as mfe_suggestions and mfe_ethic.
+    ...(schemaExplorerOnDemand && enabled.schemaExplorer
+      ? {}
+      : {
+          mfe_schema_explorer: {
+            type: 'module' as const,
+            name: 'mfe_schema_explorer',
+            entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
+          },
+        }),
     // FE-001 reapply build-time omit (post-#284): when the flag is
     // OFF, the manifest entry is omitted entirely. STUB pattern was
     // tried in PR #258/#280 and crashed live MF runtime with
@@ -381,6 +400,26 @@ export default defineConfig(({ mode }) => {
   // future per-remote toggle expansion (B5b2); current implementation
   // reads same env via same reader function (single canary master toggle).
   const ethicOnDemandBuildEnabled = readSuggestionsOnDemandBuildFlag();
+  // PR-B5b2a: schema_explorer canary (admin set, NOT in shell-services
+  // 4-remote contract — lowest blast in admin batch).
+  //
+  // Codex iter-1 thread `019e2338` P1 fix: unlike suggestions/ethic
+  // which have AppRouter route-level enable guards (the `/suggestions`
+  // and `/ethic` routes are conditionally rendered when
+  // SHELL_ENABLE_*_REMOTE is true), schema_explorer is rendered
+  // unconditionally by AppRouter.  Therefore the canary on-demand
+  // selection MUST also AND with the enable env so disabled+canary
+  // combination doesn't double-fire (manifest STUB + on-demand
+  // runtime register → contract mismatch).  When the remote is
+  // disabled, lazy-routes falls through to the eager
+  // `createLazyRemoteModule` path which gracefully handles STUB via
+  // `isValidRemoteComponent` guard + classified fallback.
+  const schemaExplorerEnabled = readEnvBoolean([
+    'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
+    'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
+  ]);
+  const schemaExplorerOnDemandBuildEnabled =
+    readSuggestionsOnDemandBuildFlag() && schemaExplorerEnabled;
 
   return {
     base: appBasePath,
@@ -412,6 +451,7 @@ export default defineConfig(({ mode }) => {
           endpointAdminBuildEnabled,
           suggestionsOnDemandBuildEnabled,
           ethicOnDemandBuildEnabled,
+          schemaExplorerOnDemandBuildEnabled,
         ),
         exposes: {
           './logic': './src/exposed-logic.ts',
@@ -481,6 +521,10 @@ export default defineConfig(({ mode }) => {
       // branch when this evaluates to true, Rolldown DCE's the
       // `import('mfe_ethic/EthicApp')` static specifier.
       __MFE_ETHIC_ON_DEMAND__: JSON.stringify(ethicOnDemandBuildEnabled),
+      // PERF-INIT-V2 PR-B5b2a — same single-canary semantic; B5b2
+      // first remote (schema_explorer) is in admin set but NOT in
+      // shell-services contract (lowest blast in admin batch).
+      __MFE_SCHEMA_EXPLORER_ON_DEMAND__: JSON.stringify(schemaExplorerOnDemandBuildEnabled),
       // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
       // build-time opt-in for production __perfSnapshot exposure. The
       // perf-observer.ts shouldExposeGlobal() reads this constant; when
