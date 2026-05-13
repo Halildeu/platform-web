@@ -45,7 +45,7 @@
  * The `MFE_ON_DEMAND_BOOTSTRAP` runtime flag is read at BUILD TIME
  * via `process.env`.  Once a build has been made with the flag on,
  * `__MFE_ETHIC_ON_DEMAND__` is `true` and the eager branch
- * (`createLazyRemoteModule('Ethic', () => import('mfe_suggestions/...'))`)
+ * (`createLazyRemoteModule('Ethic', () => import('mfe_ethic/...'))`)
  * has been dead-code-eliminated from the bundle entirely.  There is
  * NO post-build runtime path back to the eager branch — a full
  * rebuild without the flag is required.  See PR body "Rollback"
@@ -119,7 +119,7 @@ function resolveEthicRemoteEntry(): string {
     if (url) return url;
   }
   // Dev fallback — matches default in apps/mfe-shell/vite.config.ts.
-  return 'http://localhost:3001/remoteEntry.js';
+  return 'http://localhost:3002/remoteEntry.js';
 }
 
 /**

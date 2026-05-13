@@ -251,7 +251,9 @@ function buildRemotes(
     // `registerRemotes` + `loadRemote` to bring the remote up only
     // when `/ethic` route mounts.  Same pattern as `mfe_suggestions`
     // canary above (PR-B5b1) — single `VITE_MFE_ON_DEMAND_BOOTSTRAP`
-    // env drives both via the `readMfeOnDemandBootstrapFlag()` reader.
+    // env drives both via the existing `readSuggestionsOnDemandBuildFlag()`
+    // reader (kept original function name from B5b1 for cross-PR audit
+    // continuity; ethic reads the same env via same reader call).
     ...(ethicOnDemand && enabled.ethic
       ? {}
       : {

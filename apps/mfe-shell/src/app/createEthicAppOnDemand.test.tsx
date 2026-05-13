@@ -11,7 +11,7 @@ import { cleanup, render, screen } from '@testing-library/react';
  * Verifies:
  *   1. First mount resolves the host instance from
  *      `globalThis.__FEDERATION__.__INSTANCES__`, calls
- *      `host.registerRemotes` with the suggestions entry, then
+ *      `host.registerRemotes` with the ethic entry, then
  *      `host.loadRemote('mfe_ethic/EthicApp')`.
  *   2. Idempotency — subsequent renders do not re-call register.
  *   3. Missing host instance surfaces the classified fallback
@@ -84,7 +84,7 @@ describe('createEthicAppOnDemand (PR-B5b1.5, iter-2)', () => {
     vi.restoreAllMocks();
   });
 
-  it('first mount calls host.registerRemotes with suggestions entry + host.loadRemote', async () => {
+  it('first mount calls host.registerRemotes with ethic entry + host.loadRemote', async () => {
     const host = installFakeHost();
     const mod = await import('./createEthicAppOnDemand');
     mod.__resetEthicRegisteredForTests();
@@ -250,7 +250,7 @@ describe('createEthicAppOnDemand (PR-B5b1.5, iter-2)', () => {
     delete process.env.VITE_MFE_ETHIC_URL;
   });
 
-  it('falls back to localhost:3001 when no env URL is set', async () => {
+  it('falls back to localhost:3002 when no env URL is set', async () => {
     delete process.env.MFE_ETHIC_URL;
     delete process.env.VITE_MFE_ETHIC_URL;
     const host = installFakeHost();
@@ -265,6 +265,6 @@ describe('createEthicAppOnDemand (PR-B5b1.5, iter-2)', () => {
     await screen.findByTestId('ethic-remote-loaded');
 
     const [remotes] = host.registerRemotes.mock.calls[0];
-    expect(remotes[0].entry).toBe('http://localhost:3001/remoteEntry.js');
+    expect(remotes[0].entry).toBe('http://localhost:3002/remoteEntry.js');
   });
 });
