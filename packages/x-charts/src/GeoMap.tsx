@@ -72,13 +72,17 @@ export type GeoMapDatum = {
 export type GeoMapVisualMap = {
   min?: number;
   max?: number;
-  /** Color gradient (low → high). @default uses theme palette */
+  /**
+   * Color gradient (low → high). Defaults to a 5-stop blue scale
+   * (#dbeafe → #1e3a8a). Override at the consumer site if the
+   * dashboard uses a non-blue accent.
+   */
   colors?: string[];
   /** Labels for [high, low] ends of the legend. */
   text?: [string, string];
   /** Show/hide the legend gradient. @default true */
   show?: boolean;
-  /** Legend position. @default 'bottom-left' */
+  /** Legend position. @default 'bottom' */
   position?: 'top' | 'bottom' | 'left' | 'right';
 };
 
@@ -358,6 +362,7 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       mapName,
       data,
       nameMap,
+      nameProperty,
       visualMap,
       showLabels,
       roam,
