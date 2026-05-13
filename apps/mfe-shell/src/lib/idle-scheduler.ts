@@ -20,8 +20,12 @@
  * Design choices:
  *   - We DO NOT call `requestIdleCallback(cb, { timeout })` directly because
  *     Safari's polyfill behaviour varies; instead we race a manual setTimeout.
- *   - The cancel handle is intentionally minimal (returns void) — callers
- *     that need cancellation can compose with AbortSignal explicitly.
+ *   - `scheduleOnIdle` returns an `IdleScheduleHandle` with a `cancel()`
+ *     method that revokes BOTH the requestIdleCallback handle (via
+ *     `cancelIdleCallback`) AND the setTimeout race.  Idempotent.  Heavy /
+ *     repeated callers should retain and cancel previous handles to avoid
+ *     stale closures; single-shot callers (the canonical PR-B3a use case)
+ *     can ignore the return value.
  *   - `runImmediately()` exists so unit tests don't need to mock timers.
  */
 
@@ -104,7 +108,15 @@ export function scheduleOnIdle(
     // explicitly — Safari's implementation has historically been
     // inconsistent at honouring the native `{ timeout }` option.
     idleHandle = ric(fire);
-    timeoutHandle = setTimeout(fire, timeoutMs);
+    // Guard the timeout arm in case the ric mock (or a future polyfill)
+    // invokes `fire` synchronously: if we already settled, there's no
+    // race left to run.  Without this guard a redundant `setTimeout`
+    // would still be created and need cancelling — harmless but
+    // wasteful and makes the "all handles cleared by cancel" contract
+    // harder to reason about in synthetic tests.
+    if (!settled) {
+      timeoutHandle = setTimeout(fire, timeoutMs);
+    }
   } else {
     // Fallback: schedule on the next macrotask.  We still respect the
     // `timeout` so behaviour stays predictable when callers tune it down.

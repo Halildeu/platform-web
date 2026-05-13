@@ -173,6 +173,53 @@ describe('idle-scheduler', () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
+  it('cancel() after async fire clears both handles (canonical browser path)', () => {
+    let ricCb: (() => void) | null = null;
+    const cancelRicMock = vi.fn();
+    window.requestIdleCallback = ((cb: () => void) => {
+      // Async path: store the callback and return.  The caller decides when
+      // to fire it (mirroring real browser behaviour).
+      ricCb = cb;
+      return 7 as unknown as number;
+    }) as unknown as typeof window.requestIdleCallback;
+    window.cancelIdleCallback = cancelRicMock as unknown as typeof window.cancelIdleCallback;
+
+    const cb = vi.fn();
+    const handle = scheduleOnIdle(cb, { timeout: 500 });
+
+    // Fire idle path — settle('fire') clears the still-armed timeout handle.
+    ricCb?.();
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cancelRicMock).toHaveBeenCalledWith(7);
+
+    // Subsequent cancel() must be a no-op AND not throw, and advancing past
+    // the timeout must not produce a second fire because the timeout was
+    // already cleared by settle('fire').
+    handle.cancel();
+    vi.advanceTimersByTime(500);
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not arm a setTimeout race when requestIdleCallback fires synchronously', () => {
+    // PR-B3a iter-3 (Codex thread 019e2060): if the ric implementation
+    // invokes `fire` synchronously inside ric(fire), the timeout race
+    // must NOT be armed — there is no race left to run.  This avoids
+    // creating a stale closure that has to be cancelled later.
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    window.requestIdleCallback = ((cb: () => void) => {
+      cb(); // synchronous fire — settled=true inside ric(fire)
+      return 99 as unknown as number;
+    }) as unknown as typeof window.requestIdleCallback;
+
+    const cb = vi.fn();
+    scheduleOnIdle(cb);
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    // No setTimeout should have been armed for the race.
+    expect(setTimeoutSpy).not.toHaveBeenCalled();
+    setTimeoutSpy.mockRestore();
+  });
+
   it('returns a no-op handle in SSR mode', async () => {
     vi.resetModules();
     const originalWindow = globalThis.window;
