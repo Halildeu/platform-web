@@ -1,11 +1,22 @@
 /* ------------------------------------------------------------------ */
 /*  Data Grid — AG Grid wrapper components                             */
 /*                                                                     */
-/*  Importing from this module automatically triggers AG Grid setup.   */
+/*  PERF-INIT-V2 PR-B1a: the previous `import './setup'` side-effect   */
+/*  here cascaded through the root `@mfe/design-system` barrel into    */
+/*  every consumer (including shell HomePage which only needs          */
+/*  PageHeader/VStack). That leaked AG Grid Enterprise into shell's    */
+/*  /home and /login cold loads.                                       */
+/*                                                                     */
+/*  The setup side-effect now lives at the explicit consumer entry:    */
+/*    apps/mfe-{users,access,reporting,audit}/src/app/bootstrap.tsx    */
+/*    apps/mfe-shell/src/pages/admin/design-lab/pages/ChartDetail.tsx  */
+/*                                                                     */
+/*  If you add a NEW grid-using surface, add an explicit               */
+/*  `import '@mfe/design-system/advanced/data-grid/setup';` at the     */
+/*  module entry. The setup file itself remains the SINGLE source of   */
+/*  truth for ModuleRegistry.registerModules — only the import POINT   */
+/*  has moved.                                                         */
 /* ------------------------------------------------------------------ */
-
-// Ensure AG Grid modules are registered + license applied
-import './setup';
 
 // Design token mapping for AG Grid themes
 import './grid-theme.css';
