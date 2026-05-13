@@ -61,6 +61,9 @@ import { BoxplotChart } from 'echarts/charts';
 // PR-X7 (Codex thread 019e1e30 AGREE): financial OHLC chart for stock/
 // crypto price ranges with bullish/bearish color coding.
 import { CandlestickChart } from 'echarts/charts';
+// PR-X10 (Codex thread 019e1e30 AGREE): decorative bar chart that renders
+// each bar as a tiled symbol (icon). Useful for infographic dashboards.
+import { PictorialBarChart } from 'echarts/charts';
 // Future: import { ParallelChart } from 'echarts/charts';
 // Future: import { GraphChart } from 'echarts/charts';
 
@@ -128,6 +131,7 @@ export function registerECharts(): void {
     SunburstChart,
     BoxplotChart, // PR-X6: statistical box-and-whisker chart
     CandlestickChart, // PR-X7: financial OHLC chart
+    PictorialBarChart, // PR-X10: decorative pictogram bar chart
     // Components
     TitleComponent,
     TooltipComponent,

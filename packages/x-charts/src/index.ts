@@ -78,6 +78,9 @@ export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';
 // PR-X7 (Codex thread 019e1e30 AGREE): financial OHLC chart.
 export { CandlestickChart } from './CandlestickChart';
 export type { CandlestickChartProps, CandlestickDataPoint } from './CandlestickChart';
+// PR-X10 (Codex thread 019e1e30 AGREE): decorative pictogram bar chart.
+export { PictorialBarChart } from './PictorialBarChart';
+export type { PictorialBarChartProps, PictorialBarDataPoint } from './PictorialBarChart';
 
 /* Composition */
 export { ChartContainer } from './ChartContainer';
