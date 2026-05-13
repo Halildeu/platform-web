@@ -148,17 +148,103 @@ async function measureOnce(browser, routeBudget) {
     }
 
     // Hard navigate; bringToFront ensures we are not hidden
-    await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+    const navResponse = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
     await page.bringToFront();
+
+    // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2): redirect
+    // guard. /admin/* routes silently redirect to /login when auth-storage
+    // is missing or expired; without this check the runner would record a
+    // /login measurement against a /admin/users budget — false-green.
+    //
+    // iter-2 P0 fix (Codex thread 019e2112): SPA-driven redirects fire
+    // AFTER React bootstrap + auth FSM resolution, not at navigation time.
+    // Path check must run AFTER the settle window, immediately before
+    // reading the snapshot, so we catch:
+    //   - SPA Navigate() inside ProtectedRoute denying auth
+    //   - MFE wildcard Navigate (e.g. /admin/access → /access/roles)
+    //   - any client-side redirect within the budget window
+    // Budget entries may set `expectedPath` for the canonical post-redirect
+    // path (e.g. /admin/access budget with expectedPath=/access/roles).
+    const targetUrl = (() => {
+      try { return new URL(url); } catch { return null; }
+    })();
+    const initialPath = targetUrl ? targetUrl.pathname : route;
+    const expectedPath = routeBudget.expectedPath ?? initialPath;
+    const checkPath = () => {
+      const cur = page.url();
+      try { return new URL(cur).pathname; } catch { return cur; }
+    };
+    // First check: any nav-time redirect (server 30x or near-instant SPA).
+    //
+    // Codex iter-3 P0 fix (thread 019e2112): nav-time check must accept
+    // EITHER the initial requested path OR the canonical expectedPath.
+    // SPA-driven wildcard redirects (e.g. /admin/access → /access/roles)
+    // fire AFTER React bootstrap; at nav-time the URL is still the
+    // initial path.  Rejecting at nav-time would cause a false-fail on
+    // routes that have a known canonical redirect.  The post-settle
+    // check (after the sentinel wait) enforces the strict canonical
+    // path, so `/login` (auth-failure case) is still rejected — just
+    // not at the wrong phase.
+    const navTimeAcceptable = new Set([initialPath, expectedPath]);
+    let finalPath = checkPath();
+    if (!navTimeAcceptable.has(finalPath)) {
+      return {
+        error: `redirect (nav-time): expected ${initialPath}${expectedPath !== initialPath ? ` or ${expectedPath}` : ''}, landed on ${finalPath} (auth-storage missing/expired?)`,
+        redirected: true,
+        navStatus: navResponse?.status() ?? null,
+        expectedPath,
+        initialPath,
+        finalPath,
+      };
+    }
 
     // Wait for perf snapshot harness to attach + LCP to settle
     await page.waitForFunction(() => typeof (window).__perfSnapshot === 'function', null, { timeout: 5000 });
-    await page.waitForTimeout(3000); // settle LCP + long tasks
+
+    // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2): rendered
+    // sentinel guard. Each route declares a `sentinel` selector in
+    // performance-budgets.json. If the sentinel does not appear within
+    // 10s the route render is considered incomplete and the measurement
+    // is rejected — protects against /admin/* blank-on-init false-green
+    // from the pre-existing auth FSM race documented in §5 risk register.
+    // When the budget entry omits `sentinel` we fall back to the legacy
+    // 3s settle wait (advisory mode for unmigrated routes).
+    if (routeBudget.sentinel) {
+      const sentinelSelector = routeBudget.sentinel;
+      try {
+        await page.waitForSelector(sentinelSelector, { timeout: 10000, state: 'visible' });
+      } catch (e) {
+        return {
+          error: `sentinel-not-rendered: selector "${sentinelSelector}" did not appear within 10s on ${checkPath()}`,
+          sentinelMissing: true,
+          sentinelSelector,
+        };
+      }
+    } else {
+      await page.waitForTimeout(3000); // legacy fallback
+    }
+
+    // Extra 2s for LCP / longtask observer to settle after sentinel render
+    await page.waitForTimeout(2000);
+
+    // iter-2 P0 fix (Codex 019e2112): re-check path AFTER settle window.
+    // SPA redirects (ProtectedRoute → /login, wildcard → canonical) fire
+    // post-bootstrap; nav-time check alone is insufficient.
+    finalPath = checkPath();
+    if (finalPath !== expectedPath) {
+      return {
+        error: `redirect (post-settle): expected ${expectedPath}, ended up on ${finalPath} (SPA navigation / auth FSM redirect)`,
+        redirected: true,
+        navStatus: navResponse?.status() ?? null,
+        expectedPath,
+        finalPath,
+      };
+    }
 
     const snap = await page.evaluate(() => (window).__perfSnapshot?.());
     const visibility = await page.evaluate(() => document.visibilityState);
 
-    return { snap, visibility };
+    return { snap, visibility, finalPath, expectedPath };
   } catch (e) {
     return { error: String(e && e.message ? e.message : e) };
   } finally {

@@ -9,6 +9,7 @@
       "route": "/login",
       "mode": "cold-anonymous",
       "auth": "anonymous",
+      "sentinel": "[data-testid=\"corporate-login-button\"]",
       "transferWarnKB": 500,
       "transferFailKB": 800,
       "decodedFailKB": 3000,
@@ -28,6 +29,7 @@
       "route": "/home",
       "mode": "cold-authenticated",
       "auth": "authenticated",
+      "sentinel": "h1, h2, [role=\"heading\"]",
       "transferWarnKB": 2000,
       "transferFailKB": 3000,
       "decodedFailKB": 12000,
@@ -64,6 +66,7 @@
       "route": "/admin/users",
       "mode": "cold-authenticated",
       "auth": "authenticated",
+      "sentinel": "h1, h2, [role=\"heading\"]",
       "transferWarnKB": 4000,
       "transferFailKB": 6000,
       "decodedFailKB": 18000,
@@ -76,24 +79,28 @@
       "clsFail": 0.1,
       "leaderTransferKB": 3000,
       "leaderDecodedKB": 8000,
-      "_note": "Grid route — AG Grid Community + filter/sort/pagination."
+      "_note": "Grid route — AG Grid Community + filter/sort/pagination. Sentinel uses page heading; grid load is independent (data API may fail in testai without seed)."
     },
     {
       "route": "/admin/access",
       "mode": "cold-authenticated",
       "auth": "authenticated",
+      "expectedPath": "/access/roles",
+      "sentinel": "h1, h2, [role=\"heading\"]",
       "transferWarnKB": 4000,
       "transferFailKB": 6000,
       "decodedFailKB": 18000,
       "resourceFailCount": 200,
       "tbtFailMs": 600,
       "leaderTransferKB": 3000,
-      "leaderDecodedKB": 8000
+      "leaderDecodedKB": 8000,
+      "_note": "mfe-access wildcard route redirects /admin/access/* → /access/roles (AccessApp.ui.tsx line 82). expectedPath declares canonical post-redirect target so PR-B5c-lite redirect guard does not false-fail."
     },
     {
       "route": "/admin/reports/fin-muhasebe-detay",
       "mode": "cold-authenticated",
       "auth": "authenticated",
+      "sentinel": ".ag-root-wrapper, .ag-root",
       "transferWarnKB": 5000,
       "transferFailKB": 8000,
       "decodedFailKB": 22000,
@@ -108,7 +115,7 @@
       "leaderTransferKB": 4000,
       "leaderDecodedKB": 12000,
       "leaderTbtMs": 50,
-      "_note": "AG Grid Enterprise + ECharts heavy route. Current baseline (2026-05-11): warm 6591 KB, decoded 49966 KB, TBT 2937ms, 10 long tasks / 3437ms total."
+      "_note": "AG Grid Enterprise + ECharts heavy route. Sentinel REQUIRES grid root (.ag-root-wrapper or .ag-root) — heading-only would false-pass when the grid is still mounting (Codex 019e2112 P0 fix). Current baseline (2026-05-11): warm 6591 KB, decoded 49966 KB, TBT 2937ms, 10 long tasks / 3437ms total."
     },
     {
       "route": "/home -> /admin/reports/fin-muhasebe-detay",
