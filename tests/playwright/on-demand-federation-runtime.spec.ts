@@ -52,6 +52,45 @@ const ON_DEMAND_REMOTE_ENTRY_URL_PATTERNS = [
 ];
 
 /**
+ * PR-B5b3d (Codex `019e239a` iter-2 P2 defense-in-depth): the
+ * @module-federation/vite plugin emits two auxiliary chunk shapes
+ * per remote when the manifest entry is present:
+ *
+ *   1. Virtual remoteEntry assets at
+ *      `/remotes/<slug>/assets/virtual_mf-...__mfe_internal__mfe_<key>__remoteEntry_js-*.js`
+ *      (the chunked remoteEntry implementation, fetched AFTER the
+ *      top-level `remoteEntry.js`)
+ *   2. Host static-loadRemote wrapper chunks at
+ *      `/assets/__mfe_internal__mfe_shell__loadRemote__mfe_<key>_*.js`
+ *      (emitted ONLY when a static `import('mfe_<key>/...')` survives
+ *      DCE — the regression class D3 catches at build time)
+ *
+ * Direct `remoteEntry.js` patterns above catch the expensive eager
+ * fetch; these auxiliary patterns are hardening so a future Rolldown /
+ * MF-plugin shape change doesn't silently mask a regression.  Source/
+ * build guard (PR #463) D1+D3 are the canonical proof; this runtime
+ * check is the live-deploy tripwire for the same regression class.
+ */
+const ON_DEMAND_REMOTE_AUX_REGEXES = [
+  // Per-remote virtual remoteEntry chunks (loaded from the remote origin).
+  /\/remotes\/suggestions\/assets\/[^?]*__mfe_internal__mfe_suggestions__remoteEntry_js/,
+  /\/remotes\/ethic\/assets\/[^?]*__mfe_internal__mfe_ethic__remoteEntry_js/,
+  /\/remotes\/schema-explorer\/assets\/[^?]*__mfe_internal__mfe_schema_explorer__remoteEntry_js/,
+  /\/remotes\/users\/assets\/[^?]*__mfe_internal__mfe_users__remoteEntry_js/,
+  /\/remotes\/access\/assets\/[^?]*__mfe_internal__mfe_access__remoteEntry_js/,
+  /\/remotes\/audit\/assets\/[^?]*__mfe_internal__mfe_audit__remoteEntry_js/,
+  /\/remotes\/reporting\/assets\/[^?]*__mfe_internal__mfe_reporting__remoteEntry_js/,
+  // Host static-loadRemote wrapper chunks (emitted by host build).
+  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_suggestions_/,
+  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_ethic_/,
+  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_schema_explorer_/,
+  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_users_/,
+  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_access_/,
+  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_audit_/,
+  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_reporting_/,
+];
+
+/**
  * Safe ceiling for /login cold transfer (KB).  Measured baseline
  * post-B5b2 is 2,344 KB (median of 3 Playwright runs on testai
  * BUILD_SHA `2a59704`); we set the ceiling at 5,000 KB to allow
@@ -102,30 +141,35 @@ test.describe('PR-B5b3b: on-demand federation runtime smoke (/login)', () => {
 
     await page.goto(`${target}/login`, { waitUntil: 'networkidle' });
 
-    // Filter for any of the 7 on-demand canary patterns.
-    const violations = allRequests.filter((u) =>
+    // Filter for any of the 7 direct remoteEntry.js patterns + 14
+    // auxiliary chunk patterns (per-remote virtual entry + host
+    // static-loadRemote wrappers) — Codex `019e239a` iter-2 P2
+    // defense-in-depth absorb.
+    const directViolations = allRequests.filter((u) =>
       ON_DEMAND_REMOTE_ENTRY_URL_PATTERNS.some((p) => u.includes(p)),
     );
+    const auxViolations = allRequests.filter((u) =>
+      ON_DEMAND_REMOTE_AUX_REGEXES.some((re) => re.test(u)),
+    );
+    const violations = [...directViolations, ...auxViolations];
 
     if (violations.length > 0) {
-      // Build a clear failure message that names which remote(s)
-      // regressed so on-call can map directly to the responsible
+      // Build a clear failure message that splits direct vs auxiliary
+      // chunk hits so on-call can map directly to the responsible
       // wrapper / lazy-routes / shell-services-wiring change.
-      const byRemote: Record<string, string[]> = {};
-      for (const u of violations) {
-        const remote =
-          ON_DEMAND_REMOTE_ENTRY_URL_PATTERNS.find((p) => u.includes(p)) ?? '<unknown>';
-        byRemote[remote] = byRemote[remote] || [];
-        byRemote[remote].push(u);
+      const categoryLines: string[] = [];
+      if (directViolations.length > 0) {
+        categoryLines.push(`  direct-remoteEntry: ${directViolations.length} request(s)`);
       }
-      const summary = Object.entries(byRemote)
-        .map(([r, urls]) => `  ${r}: ${urls.length} request(s)`)
-        .join('\n');
+      if (auxViolations.length > 0) {
+        categoryLines.push(`  auxiliary-chunk: ${auxViolations.length} request(s)`);
+      }
+      const summary = categoryLines.join('\n');
       throw new Error(
-        `[B5b3b] On-demand canary regression — eager admin remote fetch on /login:\n` +
+        `[B5b3b] On-demand canary regression — eager remote fetch on /login:\n` +
           `${summary}\n\n` +
           `All violating URLs:\n${violations.map((u) => `  ${u}`).join('\n')}\n\n` +
-          `Source/build guard (PR #463) catches this at PR time; if you reached this ` +
+          `Source/build guard (PR #463) D1+D3 invariants catch this at PR time; if you reached this ` +
           `nightly smoke with a regression, check: stale CDN cache, edge nginx misroute, ` +
           `or service worker caching the pre-canary bundle.`,
       );

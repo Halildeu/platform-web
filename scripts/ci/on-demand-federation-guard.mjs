@@ -175,6 +175,115 @@ function pass(area, msg) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Helpers.                                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Walk through `src` starting at `start` (which should be the
+ * character immediately after an opening `{`) and return the index of
+ * the matching closing `}` brace.  Tracks string/template literal and
+ * single-line / multi-line comments so braces inside them are
+ * ignored.  Returns -1 if no matching brace is found.
+ *
+ * Lightweight — does NOT handle every JS edge case (regex literals,
+ * unicode escape edge cases).  Used by S4 to extract the `if`/`else`
+ * block bodies in `shell-services-wiring.ts` which is well-formatted
+ * canonical TS, not an arbitrary script.
+ */
+function findMatchingBraceEnd(src, start) {
+  let depth = 1;
+  let i = start;
+  let inSingleString = false;
+  let inDoubleString = false;
+  let inTemplate = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  while (i < src.length) {
+    const c = src[i];
+    const next = src[i + 1];
+    if (inLineComment) {
+      if (c === '\n') inLineComment = false;
+      i++;
+      continue;
+    }
+    if (inBlockComment) {
+      if (c === '*' && next === '/') {
+        inBlockComment = false;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (inSingleString) {
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      if (c === "'") inSingleString = false;
+      i++;
+      continue;
+    }
+    if (inDoubleString) {
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      if (c === '"') inDoubleString = false;
+      i++;
+      continue;
+    }
+    if (inTemplate) {
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      if (c === '`') inTemplate = false;
+      i++;
+      continue;
+    }
+    if (c === '/' && next === '/') {
+      inLineComment = true;
+      i += 2;
+      continue;
+    }
+    if (c === '/' && next === '*') {
+      inBlockComment = true;
+      i += 2;
+      continue;
+    }
+    if (c === "'") {
+      inSingleString = true;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inDoubleString = true;
+      i++;
+      continue;
+    }
+    if (c === '`') {
+      inTemplate = true;
+      i++;
+      continue;
+    }
+    if (c === '{') {
+      depth++;
+      i++;
+      continue;
+    }
+    if (c === '}') {
+      depth--;
+      if (depth === 0) return i;
+      i++;
+      continue;
+    }
+    i++;
+  }
+  return -1;
+}
+
+/* ------------------------------------------------------------------ */
 /* Source invariant scans.                                             */
 /* ------------------------------------------------------------------ */
 
@@ -307,32 +416,83 @@ function scanSourceInvariants() {
     }
   }
 
-  // Invariant S4: admin-set remotes' static `import('mfe_<admin>/shell-services')`
-  // appears ONLY inside the `else` branch of `__MFE_ADMIN_REMOTES_ON_DEMAND__`.
-  // Cheap heuristic: scan line-by-line for the import specifier; assert
-  // the surrounding 40 lines contain `__MFE_ADMIN_REMOTES_ON_DEMAND__`
-  // (the conditional gate from prep-2 #460).
-  for (const r of ON_DEMAND_REGISTRY.filter((x) => x.adminSetMember)) {
-    const importSpec = `import('mfe_${r.key}/shell-services')`;
-    const idx = wiring.indexOf(importSpec);
-    if (idx < 0) {
-      // OK — entirely removed when canary is permanent.  Eventual state.
-      pass('S4', `admin static \`${importSpec}\` not present in wiring (fully on-demand)`);
-      continue;
-    }
-    // Find a window around the specifier; assert the build-time gate is
-    // within ±2000 chars (covers the eager-branch else block).
-    const winStart = Math.max(0, idx - 2000);
-    const winEnd = Math.min(wiring.length, idx + 2000);
-    const window = wiring.slice(winStart, winEnd);
-    if (!window.includes('__MFE_ADMIN_REMOTES_ON_DEMAND__')) {
+  // Invariant S4 (Codex `019e239a` iter-2/iter-3 P2 absorb → B5b3d
+  // hardening): admin-set remotes' static
+  // `import('mfe_<admin>/shell-services')` MUST appear ONLY inside the
+  // `else` branch of `if (__MFE_ADMIN_REMOTES_ON_DEMAND__) { ... } else
+  // { ... }`.  Original ±2000-char window was structurally weak — a
+  // comment mentioning the define within the window could mask an
+  // unconditional import.  Brace-matcher now extracts the exact `if`
+  // and `else` block spans and verifies admin imports are NOT in the
+  // `if` block (the on-demand branch) AND ARE in the `else` block
+  // (the eager-fallback branch) OR are absent entirely (fully
+  // on-demand eventual state).
+  //
+  // Note: this is a lightweight string-scan brace matcher, not a full
+  // AST.  It assumes the conditional uses the canonical shape
+  // produced by PR-B5b2-prep-2 (#460); if someone refactors to a
+  // different control flow shape (switch, early return, ternary
+  // assignment), S4 will fall back to the "block not found" pass
+  // (defense-in-depth: D1/D3 dist scans still enforce DCE invariants).
+  const adminGateMatch = wiring.match(/if\s*\(\s*__MFE_ADMIN_REMOTES_ON_DEMAND__\s*\)\s*\{/);
+  if (!adminGateMatch) {
+    pass(
+      'S4',
+      `no \`if (__MFE_ADMIN_REMOTES_ON_DEMAND__) { ... }\` block found in shell-services-wiring ` +
+        `(either fully on-demand eventual state, or refactored to a different shape — ` +
+        `D1/D3 dist invariants still enforce DCE)`,
+    );
+  } else {
+    // Locate `if` block body span by walking braces.
+    const ifBodyStart = adminGateMatch.index + adminGateMatch[0].length;
+    const ifBodyEnd = findMatchingBraceEnd(wiring, ifBodyStart);
+    if (ifBodyEnd < 0) {
       fail(
         'S4',
-        `admin static \`${importSpec}\` in wiring is NOT gated by __MFE_ADMIN_REMOTES_ON_DEMAND__ ` +
-          `(would be eagerly fetched on /login when canary ON)`,
+        `\`if (__MFE_ADMIN_REMOTES_ON_DEMAND__) {\` opening brace at index ${adminGateMatch.index} ` +
+          `has no matching closing brace`,
       );
     } else {
-      pass('S4', `admin static \`${importSpec}\` is gated by __MFE_ADMIN_REMOTES_ON_DEMAND__`);
+      // Locate optional `else {` after the if block.
+      const afterIf = wiring.slice(ifBodyEnd + 1);
+      const elseMatch = afterIf.match(/^\s*else\s*\{/);
+      let elseBodyStart = -1;
+      let elseBodyEnd = -1;
+      if (elseMatch) {
+        elseBodyStart = ifBodyEnd + 1 + elseMatch.index + elseMatch[0].length;
+        elseBodyEnd = findMatchingBraceEnd(wiring, elseBodyStart);
+      }
+      const ifBody = wiring.slice(ifBodyStart, ifBodyEnd);
+      const elseBody = elseBodyEnd > 0 ? wiring.slice(elseBodyStart, elseBodyEnd) : '';
+
+      for (const r of ON_DEMAND_REGISTRY.filter((x) => x.adminSetMember)) {
+        const importSpec = `import('mfe_${r.key}/shell-services')`;
+        const inIfBlock = ifBody.includes(importSpec);
+        const inElseBlock = elseBody.includes(importSpec);
+        const inWiringAtAll = wiring.includes(importSpec);
+
+        if (inIfBlock) {
+          fail(
+            'S4',
+            `admin static \`${importSpec}\` is INSIDE the on-demand \`if (__MFE_ADMIN_REMOTES_ON_DEMAND__)\` ` +
+              `block — would fire eagerly when canary is ON, defeating the whole purpose`,
+          );
+          continue;
+        }
+        if (inElseBlock) {
+          pass('S4', `admin static \`${importSpec}\` correctly placed inside \`else\` eager branch`);
+          continue;
+        }
+        if (inWiringAtAll) {
+          fail(
+            'S4',
+            `admin static \`${importSpec}\` is present in wiring but OUTSIDE both the on-demand \`if\` ` +
+              `and the eager \`else\` blocks — unconditional eager fetch on /login`,
+          );
+          continue;
+        }
+        pass('S4', `admin static \`${importSpec}\` not present in wiring (fully on-demand)`);
+      }
     }
   }
 
