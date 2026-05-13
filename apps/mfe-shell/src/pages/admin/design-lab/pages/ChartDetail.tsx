@@ -255,7 +255,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'undefined',
         description:
-          'Explicit value-axis maximum. Without this the axis auto-scales to\nthe data range — fine for most cases. Use when several BarCharts\nrender side-by-side and need to share a comparable scale (e.g. a\nstack of bullet-style progress widgets where each bar should occupy\nthe same fraction of `actual / max`). Maps to ECharts\n`xAxis.max` (horizontal) or `yAxis.max` (vertical).',
+          "Explicit value-axis maximum. Without this the axis auto-scales to\nthe data range — fine for most cases. Use when each BarChart needs\nto pin its OWN axis max (e.g. a bullet-style widget where the bar\nfills `actual / max` of its own track regardless of the data\npoint's magnitude). Each chart instance owns its own axis range —\nthis prop does NOT synchronise scales across multiple sibling\ncharts; for that, render all data in a single multi-series chart.\nMaps to ECharts `xAxis.max` (horizontal) or `yAxis.max` (vertical).",
       },
       {
         name: 'valueAxisMin',
