@@ -148,7 +148,7 @@ operationally convenient.)
 | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | PR-B5c-lite | NEXT   | Observer expose contract + route-rendered sentinel guard. Production observer flag implementation (or stub-removal). Route-budget runner sentinel/redirect guard so blank pages cannot generate false-green metrics. Auth-storage generator deliberately OUT-OF-SCOPE (M2a).      | Measurement validity (gate enabling)                                                    |
 | PR-B5a    | SHIPPED (PR #438) — **decoded ROI=0** | Consumer-side critical-graph subpath migration. 5 files migrated to `/patterns`, `/components`, `/primitives`. **Negative result**: bundle delta = 0 because MF runtime federates `@mfe/design-system` as a single root shared package entry; consumer subpath imports do NOT shrink the `loadShare__@mfe/design-system__loadShare__.mjs` wrapper. Tree-shake cannot cross MF share-scope. Value retained as **consumer hygiene** — see Wave B5d-arch backlog if a future architecture initiative pursues DS topology split. | `/home` decoded: **0 MB** (measured). Wave B5d ELIMINATED — see B5d-arch backlog. Decoded path shifts to B5b. |
-| PR-B5a2   | DEFERRED — pending B5d outcome | Admin-route root-barrel-thin pass + `/hooks`/`/lib` subpath additions. Without B5d topology split this PR would also yield decoded ROI=0; queued behind B5d0 PoC. | TBD (depends on B5d) |
+| PR-B5a2   | DEFERRED — out of PERF-INIT-V2 | Admin-route root-barrel-thin pass + `/hooks`/`/lib` subpath additions. B5d0 (#439) proved this does not reduce decoded JS under the current root shared topology. Keep only as consumer-hygiene work if a future B5d-arch / root-retirement initiative proceeds. | 0 MB expected in V2; architecture-backlog only |
 | PR-B5b0   | PLANNED  | RemoteEntry initiator-attribution diagnostic. CDP `Network.requestWillBeSent` initiator-stack on `/home` cold load. Identifies whether eager remote fetch source is shell-services-wiring, MF runtime preload, or static link preload. Mergeable diagnostic; informs B5b1 canary. **Acceptance**: artifact `tests/perf/initiator-trace/<BUILD_SHA>.json` committed; PMD §3 row updated with finding. | Diagnostic data — not user-facing perf delta                                            |
 | PR-B5b1   | UNBLOCKED (B5d0 result known) | MFE on-demand bootstrap canary — single MFE based on B5b0 finding. If shell-services source: `mfe_audit` or `mfe_access`. If MF runtime source: `mfe_suggestions`. **Preconditions**: (1) `MFE_ON_DEMAND_BOOTSTRAP` rollback flag LIVE (B5b3-prep). (2) **B5d0 PoC result understood** — DONE: B5d0 closed negative (#439); B5d-a infeasible; B5b becomes primary decoded path. **Acceptance**: `/home` remoteEntry count drops by 1 + decoded delta recorded + canary route smoke pass. **NOT credited with**: DS root wrapper size reduction (Codex iter-7 expectation reset — B5b targets remote bootstrap savings, not DS root). | Canary decoded -2 to -4 MB on remote bootstrap; informs B5b2 ramp |
 | PR-B5b2   | PLANNED  | MFE on-demand rollout to admin remotes (`access`, `audit`, `users`, `reporting`, `schema-explorer`). Route-scoped bootstrap; remote loads only when its route is reachable. **Precondition**: rollback flag still LIVE; B5b1 canary measurement closure landed. **Acceptance**: admin smoke matrix (`/admin/users`, `/admin/access/roles`, `/admin/audit/events`, `/admin/reports/*`) all render correctly + no shell-services contract regression (notifications, audit SSE, impersonation, auth-ready Promise). | `/home` decoded **-8 to -18 MB** (post-PR target: ~25-32 MB)                            |
@@ -299,14 +299,16 @@ is **B5c-lite scope**.
 
 ### §4.6 Critical-graph migration pattern (B5a, new)
 
-> **Caveat (post-B5a measurement, Codex 019e20fa iter-5)**: under the
-> current single-root `@mfe/design-system` shared package topology this
-> pattern is **consumer hygiene only**; the MF runtime continues to
-> federate the full package via one loadShare wrapper regardless of
-> the consumer's import path. Decoded reduction requires the B5d
-> share-scope topology split (§3 wave B5d). This §4.6 pattern remains
-> the correct call-site preparation for B5d; it does NOT on its own
-> reduce decoded JS.
+> **Caveat (post-B5a + B5d0 measurement, Codex 019e20fa iter-7)**:
+> under the current single-root `@mfe/design-system` shared package
+> topology this pattern is **consumer hygiene only**; the MF runtime
+> continues to federate the full package via one root loadShare
+> wrapper regardless of the consumer's import path. **B5d0 (#439)
+> proved that incremental subpath shared entries do not reduce
+> decoded JS** — the generated subpath providers proxy through the
+> root wrapper while the root entry remains present. Any DS decoded
+> reduction now requires a future B5d-arch / root-retirement or
+> multi-package architecture initiative, outside PERF-INIT-V2 scope.
 
 For each Shell module on the `/login` + `/home` critical render path:
 
