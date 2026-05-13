@@ -2,6 +2,11 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { setupAgGridLicense } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B1a: AG Grid module registration moved out of shell
+// bootstrap. Each grid-using MFE now imports the side-effect setup so the
+// AG Grid Enterprise bundle (~6 MB) does NOT load with /login or /home.
+// See mfe-users bootstrap comment.
+import '@mfe/design-system/advanced/data-grid/setup';
 import ReportingApp from './reporting/ReportingApp';
 import { configureShellServices } from './services/shell-services';
 

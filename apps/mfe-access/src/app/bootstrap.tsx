@@ -5,6 +5,10 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { I18nProvider, I18nManager } from 'mfe_shell/i18n';
 import { getDictionary } from '@mfe/i18n-dicts';
 import { setupAgGridLicense } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B1a: AG Grid module registration moved out of shell
+// bootstrap into each grid-using MFE so the Enterprise bundle (~6 MB)
+// no longer loads with /login or /home. See mfe-users bootstrap comment.
+import '@mfe/design-system/advanced/data-grid/setup';
 import AccessApp from './AccessApp.ui';
 import { configureShellServices } from './services/shell-services';
 import { isRuntimeDev } from './runtime/env';

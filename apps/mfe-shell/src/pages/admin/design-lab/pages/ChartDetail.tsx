@@ -7,6 +7,17 @@
 
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+// PERF-INIT-V2 PR-B1a: AG Grid module registration moved from shell
+// bootstrap to component-level side-effect import. This page renders
+// AgGridReact (search for `<AgGridReact` below); importing the setup
+// here ensures modules are registered only when the user reaches the
+// design-lab ChartDetail route (not on /login or /home).
+import '@mfe/design-system/advanced/data-grid/setup';
+import { setupAgGridLicense } from '@mfe/design-system';
+
+// One-time license init (idempotent in the design-system helper).
+setupAgGridLicense();
+
 import {
   FileCode2,
   BookOpen,
