@@ -54,6 +54,8 @@ import { SunburstChart } from '../SunburstChart';
 import { BoxPlotChart } from '../BoxPlotChart';
 // PR-X7: financial OHLC chart.
 import { CandlestickChart } from '../CandlestickChart';
+// PR-X10: pictogram bar chart.
+import { PictorialBarChart } from '../PictorialBarChart';
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -1131,6 +1133,83 @@ describe('CandlestickChart option shape', () => {
 
   it('handles empty data without throwing', () => {
     expect(() => render(<CandlestickChart data={[]} animate={false} />)).not.toThrow();
+  });
+});
+
+/* ================================================================== */
+/*  PictorialBarChart (PR-X10)                                         */
+/* ================================================================== */
+
+describe('PictorialBarChart option shape', () => {
+  it('series.type === pictorialBar + maps data values', () => {
+    render(
+      <PictorialBarChart
+        data={[
+          { label: 'A', value: 5 },
+          { label: 'B', value: 8 },
+        ]}
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s[0].type).toBe('pictorialBar');
+    const data = s[0].data as Array<{ value: number }>;
+    expect(data.map((d) => d.value)).toEqual([5, 8]);
+  });
+
+  it('default symbol=circle + symbolRepeat=true', () => {
+    render(<PictorialBarChart data={[{ label: 'A', value: 1 }]} animate={false} />);
+    const s = series()[0];
+    expect(s.symbol).toBe('circle');
+    expect(s.symbolRepeat).toBe(true);
+  });
+
+  it('symbol + symbolRepeat overrides apply at series level', () => {
+    render(
+      <PictorialBarChart
+        data={[{ label: 'A', value: 5 }]}
+        symbol="image://https://cdn/icon.svg"
+        symbolRepeat="fixed"
+        symbolSize={[20, 30]}
+        animate={false}
+      />,
+    );
+    const s = series()[0];
+    expect(s.symbol).toBe('image://https://cdn/icon.svg');
+    expect(s.symbolRepeat).toBe('fixed');
+    expect(s.symbolSize).toEqual([20, 30]);
+  });
+
+  it('per-data-point symbol overrides default symbol', () => {
+    render(
+      <PictorialBarChart
+        data={[
+          { label: 'A', value: 1, symbol: 'triangle' },
+          { label: 'B', value: 2 },
+        ]}
+        symbol="circle"
+        animate={false}
+      />,
+    );
+    const data = series()[0].data as Array<{ symbol?: string }>;
+    expect(data[0].symbol).toBe('triangle');
+    expect(data[1].symbol).toBe('circle');
+  });
+
+  it('horizontal orientation swaps axis types', () => {
+    render(
+      <PictorialBarChart
+        data={[{ label: 'A', value: 1 }]}
+        orientation="horizontal"
+        animate={false}
+      />,
+    );
+    expect(axis('xAxis')?.type).toBe('value');
+    expect(axis('yAxis')?.type).toBe('category');
+  });
+
+  it('handles empty data without throwing', () => {
+    expect(() => render(<PictorialBarChart data={[]} animate={false} />)).not.toThrow();
   });
 });
 
