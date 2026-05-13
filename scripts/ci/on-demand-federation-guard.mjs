@@ -43,7 +43,7 @@
  *   2  Pre-condition failed (e.g. dist missing without --build).
  */
 
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,6 +79,7 @@ const ON_DEMAND_REGISTRY = [
     wrapperFile: 'src/app/createSuggestionsAppOnDemand.tsx',
     defineKey: '__MFE_SUGGESTIONS_ON_DEMAND__',
     lazyRouteName: 'SuggestionsApp',
+    routeLabel: 'Suggestions',
     expose: 'SuggestionsApp',
     adminSetMember: false,
   },
@@ -87,6 +88,7 @@ const ON_DEMAND_REGISTRY = [
     wrapperFile: 'src/app/createEthicAppOnDemand.tsx',
     defineKey: '__MFE_ETHIC_ON_DEMAND__',
     lazyRouteName: 'EthicApp',
+    routeLabel: 'Ethic',
     expose: 'EthicApp',
     adminSetMember: false,
   },
@@ -95,6 +97,7 @@ const ON_DEMAND_REGISTRY = [
     wrapperFile: 'src/app/createSchemaExplorerAppOnDemand.tsx',
     defineKey: '__MFE_SCHEMA_EXPLORER_ON_DEMAND__',
     lazyRouteName: 'SchemaExplorerModule',
+    routeLabel: 'SchemaExplorer',
     expose: 'SchemaExplorerApp',
     adminSetMember: false,
   },
@@ -103,6 +106,7 @@ const ON_DEMAND_REGISTRY = [
     wrapperFile: 'src/app/createUsersAppOnDemand.tsx',
     defineKey: '__MFE_ADMIN_REMOTES_ON_DEMAND__',
     lazyRouteName: 'UsersModule',
+    routeLabel: 'Users',
     expose: 'UsersApp',
     adminSetMember: true,
   },
@@ -111,6 +115,7 @@ const ON_DEMAND_REGISTRY = [
     wrapperFile: 'src/app/createAccessAppOnDemand.tsx',
     defineKey: '__MFE_ADMIN_REMOTES_ON_DEMAND__',
     lazyRouteName: 'AccessModule',
+    routeLabel: 'Access',
     expose: 'AccessApp',
     adminSetMember: true,
   },
@@ -119,6 +124,7 @@ const ON_DEMAND_REGISTRY = [
     wrapperFile: 'src/app/createAuditAppOnDemand.tsx',
     defineKey: '__MFE_ADMIN_REMOTES_ON_DEMAND__',
     lazyRouteName: 'AuditModule',
+    routeLabel: 'Audit',
     expose: 'AuditApp',
     adminSetMember: true,
   },
@@ -127,6 +133,7 @@ const ON_DEMAND_REGISTRY = [
     wrapperFile: 'src/app/createReportingAppOnDemand.tsx',
     defineKey: '__MFE_ADMIN_REMOTES_ON_DEMAND__',
     lazyRouteName: 'ReportingModule',
+    routeLabel: 'Reporting',
     expose: 'ReportingApp',
     adminSetMember: true,
   },
@@ -204,9 +211,72 @@ function scanSourceInvariants() {
     }
   }
 
-  // Invariant S3: `lazy-routes.ts` declares each define + uses it in
-  // a ternary selecting the on-demand wrapper.  Catches the case where
-  // someone removes the wrapper branch without removing the wrapper.
+  // Invariant S2b (Codex `019e239a` iter-2 P1 absorb): each registry
+  // entry must have a matching spread-conditional in
+  // `buildRemotes()` that omits the manifest entry when the on-demand
+  // boolean AND the per-remote enable are both true.  Catches the
+  // regression where someone re-introduces an unconditional
+  // `mfe_<key>: { ... }` entry while leaving wrapper/DCE intact —
+  // which would re-add eager federation fetches even though D1/D3
+  // dist invariants stay green.
+  //
+  // Canonical shape (from B5b2-prep-2 PR #460):
+  //   ...(<onDemandVar> && enabled.<key>
+  //     ? {}
+  //     : {
+  //         mfe_<key>: { ... },
+  //       }),
+  //
+  // We look for `mfe_<key>` text inside a spread-conditional whose
+  // condition includes the canonical on-demand boolean variable
+  // (suggestionsOnDemand / ethicOnDemand / schemaExplorerOnDemand /
+  // adminRemotesOnDemand).
+  const onDemandVarByDefine = {
+    __MFE_SUGGESTIONS_ON_DEMAND__: 'suggestionsOnDemand',
+    __MFE_ETHIC_ON_DEMAND__: 'ethicOnDemand',
+    __MFE_SCHEMA_EXPLORER_ON_DEMAND__: 'schemaExplorerOnDemand',
+    __MFE_ADMIN_REMOTES_ON_DEMAND__: 'adminRemotesOnDemand',
+  };
+  for (const r of ON_DEMAND_REGISTRY) {
+    const onDemandVar = onDemandVarByDefine[r.defineKey];
+    if (!onDemandVar) {
+      fail('S2b', `unknown on-demand variable mapping for define ${r.defineKey}`);
+      continue;
+    }
+    // Find the spread-conditional whose condition starts with the
+    // on-demand var.  Allow flexible whitespace + `enabled.<key>` AND.
+    const condPattern = new RegExp(
+      String.raw`\.\.\.\(\s*${onDemandVar}\s*&&\s*enabled\.${r.key === 'schema_explorer' ? 'schemaExplorer' : r.key}\s*\?\s*\{\s*\}\s*:\s*\{\s*\n?\s*mfe_${r.key}\s*:`,
+      'm',
+    );
+    if (!condPattern.test(viteConfig)) {
+      fail(
+        'S2b',
+        `vite.config.ts buildRemotes() missing canonical spread-conditional for "${r.key}" ` +
+          `(expected \`...(${onDemandVar} && enabled.${r.key === 'schema_explorer' ? 'schemaExplorer' : r.key} ? {} : { mfe_${r.key}: ... })\`); ` +
+          `unconditional manifest entry would resume eager fetch`,
+      );
+    } else {
+      pass(
+        'S2b',
+        `vite.config.ts buildRemotes() gates mfe_${r.key} via ${onDemandVar} && enabled spread-conditional`,
+      );
+    }
+  }
+
+  // Invariant S3 (Codex `019e239a` iter-2 P2 absorb): `lazy-routes.ts`
+  // declares each define + the canonical ternary shape per registry
+  // entry binds the correct wrapper + eager fallback.
+  //
+  // Original heuristic only checked `lazyRoutes.includes(defineKey)`
+  // which let admin remotes (sharing one define) cross-bind to the
+  // wrong wrapper.  This stricter check looks for:
+  //
+  //   export const <lazyRouteName>...= <defineKey>
+  //     ? <ExpectedOnDemandWrapper>
+  //     : createLazyRemoteModule(<label>, () => import('mfe_<key>/<expose>'))
+  //
+  // with flexible whitespace + optional type annotation.
   for (const r of ON_DEMAND_REGISTRY) {
     if (!lazyRoutes.includes(`declare const ${r.defineKey}: boolean;`)) {
       fail(
@@ -215,10 +285,25 @@ function scanSourceInvariants() {
       );
       continue;
     }
-    if (!lazyRoutes.includes(r.defineKey)) {
-      fail('S3', `lazy-routes.ts does not reference define ${r.defineKey} for "${r.key}"`);
+    // Derive expected on-demand wrapper name from the wrapper file
+    // (e.g. createUsersAppOnDemand.tsx → UsersAppOnDemand).
+    const baseName = r.wrapperFile.split('/').pop().replace(/\.tsx$/, '');
+    const onDemandWrapperName = baseName.replace(/^create/, '');
+    // Match the canonical ternary shape — flexible whitespace + use
+    // the registry-declared routeLabel for the createLazyRemoteModule
+    // first argument (varies: 'Users', 'Suggestions' etc., not
+    // routeName).
+    const shapePattern = new RegExp(
+      String.raw`export\s+const\s+${r.lazyRouteName}[^=]*=\s*${r.defineKey}\s*\?\s*${onDemandWrapperName}\s*:\s*createLazyRemoteModule\s*\(\s*[\`'"]${r.routeLabel}[\`'"]\s*,\s*\(\s*\)\s*=>\s*import\s*\(\s*[\`'"]mfe_${r.key}/${r.expose}[\`'"]`,
+      's',
+    );
+    if (!shapePattern.test(lazyRoutes)) {
+      fail(
+        'S3',
+        `lazy-routes.ts does not have canonical shape \`export const ${r.lazyRouteName} = ${r.defineKey} ? ${onDemandWrapperName} : createLazyRemoteModule('${r.routeLabel}', () => import('mfe_${r.key}/${r.expose}'))\``,
+      );
     } else {
-      pass('S3', `lazy-routes.ts gates ${r.lazyRouteName} via ${r.defineKey}`);
+      pass('S3', `lazy-routes.ts binds ${r.lazyRouteName} → ${onDemandWrapperName} via ${r.defineKey} → createLazyRemoteModule('${r.routeLabel}', ...) (canonical shape)`);
     }
   }
 
@@ -269,23 +354,52 @@ function scanSourceInvariants() {
     }
   }
 
-  // Invariant S6: admin wrappers call `ensureRemoteShellServicesConfigured`
-  // BEFORE host.loadRemote(XxxApp) — Codex `019e2358` Option B critical
-  // add #2 (route-level race protection).
+  // Invariant S6 (Codex `019e239a` iter-2 P2 absorb): admin wrappers
+  // call `ensureRemoteShellServicesConfigured` BEFORE host.loadRemote
+  // (Codex `019e2358` Option B critical add #2 — deep-link race
+  // protection).
+  //
+  // Original heuristic only checked presence.  Stricter check verifies
+  // ORDER: the index of the `ensureRemoteShellServicesConfigured` call
+  // must precede the index of the FIRST `host.loadRemote` /
+  // `loadRemote<` (after the helper's own internal use is in the
+  // helper module, not the wrapper) call site.
   for (const r of ON_DEMAND_REGISTRY.filter((x) => x.adminSetMember)) {
     const wrapperPath = join(SHELL_DIR, r.wrapperFile);
     if (!existsSync(wrapperPath)) continue;
     const wrapper = readFileSync(wrapperPath, 'utf8');
-    if (!wrapper.includes('ensureRemoteShellServicesConfigured')) {
+    const ensureIdx = wrapper.indexOf('ensureRemoteShellServicesConfigured(');
+    if (ensureIdx < 0) {
       fail(
         'S6',
         `admin wrapper ${r.wrapperFile} does not call ensureRemoteShellServicesConfigured ` +
           `(deep-link race protection missing)`,
       );
+      continue;
+    }
+    // Match the wrapper's own host.loadRemote call site (not the helper
+    // import). The wrapper has `host.loadRemote<...>(REMOTE_KEY)`.
+    const loadRemoteMatch = wrapper.match(/host\.loadRemote\s*</);
+    if (!loadRemoteMatch) {
+      // No host.loadRemote call in wrapper — unexpected pattern.
+      fail(
+        'S6',
+        `admin wrapper ${r.wrapperFile} has ensureRemoteShellServicesConfigured but no ` +
+          `host.loadRemote< call site to order against`,
+      );
+      continue;
+    }
+    const loadRemoteIdx = loadRemoteMatch.index;
+    if (ensureIdx > loadRemoteIdx) {
+      fail(
+        'S6',
+        `admin wrapper ${r.wrapperFile} calls host.loadRemote BEFORE ensureRemoteShellServicesConfigured ` +
+          `(at indices ${loadRemoteIdx} and ${ensureIdx} — race protection broken)`,
+      );
     } else {
       pass(
         'S6',
-        `admin wrapper ${r.wrapperFile} calls ensureRemoteShellServicesConfigured before app load`,
+        `admin wrapper ${r.wrapperFile} calls ensureRemoteShellServicesConfigured (idx ${ensureIdx}) before host.loadRemote (idx ${loadRemoteIdx})`,
       );
     }
   }
@@ -337,25 +451,34 @@ function scanDistArtifacts() {
   }
   console.log(`[guard] scanning ${files.length} files under ${DIST_DIR}`);
 
-  // Invariant D1: no canonical static-import specifier survives DCE.
-  // Each on-demand remote's `import("mfe_<key>/`` specifier should be
-  // dead-code-eliminated when its define is true.
+  // Invariant D1 (Codex `019e239a` iter-2 P2 absorb): no canonical
+  // static-import specifier survives DCE.  Each on-demand remote's
+  // `import(...'mfe_<key>/...')` specifier should be dead-code-eliminated
+  // when its define is true.
+  //
+  // Stricter regex covers quote variations Rolldown may emit:
+  //   import("mfe_<key>/...")
+  //   import('mfe_<key>/...')
+  //   import(`mfe_<key>/...`)
+  // plus optional whitespace inside parens.
   //
   // Note: legitimate `host.loadRemote('mfe_<key>/...')` STRING literals
   // ARE expected in the runtime register path.  We specifically look
-  // for `import("mfe_<key>/`` (the DCE-targeted static-import call site
-  // shape Rolldown leaves only when the specifier survives in source).
+  // for `import(...)` call shape (the DCE-targeted static-import call
+  // site Rolldown leaves only when the specifier survives in source).
   for (const r of ON_DEMAND_REGISTRY) {
-    const needle = `import("mfe_${r.key}/`;
-    const hit = files.find((f) => readFileSync(f, 'utf8').includes(needle));
+    const importRegex = new RegExp(
+      String.raw`\bimport\s*\(\s*['"\x60]mfe_${r.key}/`,
+    );
+    const hit = files.find((f) => importRegex.test(readFileSync(f, 'utf8')));
     if (hit) {
       fail(
         'D1',
-        `dist file ${hit.split('/').pop()} contains static \`${needle}` +
-          `...\` — eager static import survived DCE for "${r.key}"`,
+        `dist file ${hit.split('/').pop()} contains static \`import(...mfe_${r.key}/...)\` ` +
+          `— eager static import survived DCE for "${r.key}"`,
       );
     } else {
-      pass('D1', `no static \`${needle}...\` survives DCE for "${r.key}"`);
+      pass('D1', `no static \`import(...mfe_${r.key}/...)\` call survives DCE for "${r.key}"`);
     }
   }
 

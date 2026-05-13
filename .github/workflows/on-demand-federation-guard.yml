@@ -28,6 +28,29 @@ on:
       - 'apps/mfe-shell/src/app/config/admin-remote-bootstrap.ts'
       - 'apps/mfe-shell/src/app/config/ensure-remote-shell-services.ts'
       - 'apps/mfe-shell/vite.config.ts'
+      - 'apps/mfe-shell/package.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/ci/on-demand-federation-guard.mjs'
+      - '.github/workflows/on-demand-federation-guard.yml'
+  # Main tripwire (Codex `019e239a` iter-2 P2 absorb): also fire on
+  # pushes to main so an out-of-band landing (e.g. force-push, admin
+  # bypass — neither of which we expect, but defense in depth) gets
+  # caught before the next dependent PR re-uses a regressed baseline.
+  # No auto-revert; failure just creates a red workflow run that
+  # operators can investigate.
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mfe-shell/src/app/create*AppOnDemand.tsx'
+      - 'apps/mfe-shell/src/app/router/lazy-routes.ts'
+      - 'apps/mfe-shell/src/app/config/shell-services-wiring.ts'
+      - 'apps/mfe-shell/src/app/config/admin-remote-bootstrap.ts'
+      - 'apps/mfe-shell/src/app/config/ensure-remote-shell-services.ts'
+      - 'apps/mfe-shell/vite.config.ts'
+      - 'apps/mfe-shell/package.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - 'scripts/ci/on-demand-federation-guard.mjs'
       - '.github/workflows/on-demand-federation-guard.yml'
   workflow_dispatch:
