@@ -198,6 +198,68 @@ export async function enterImpersonationOrchestration(
     response = res.data as StartImpersonationResponseShape;
   } catch (err) {
     store.dispatch(setAuthPhase('transportReady'));
+    // Codex 019e1e0f BUG #3 follow-up: Spring's
+    // MethodArgumentNotValidException (e.g. reason < 10 chars) returns
+    // a 400 with body shape
+    //   { error: "VALIDATION_ERROR",
+    //     message: "Validation failed",
+    //     fieldErrors: [{ field: "reason", message: "boyut '10' ile '500' arasında olmalı" }] }
+    // which differs from the StartResponse `errorCode/errorMessage`
+    // shape the controller's BLOCKED branches return. Without this
+    // adapter the FE error mapping never matched (axios error.message
+    // is just "Request failed with status code 400") and users saw a
+    // generic "Impersonation başlatılamadı" fallback. Surface the
+    // field-level message + a synthetic `VALIDATION_ERROR` errorCode
+    // so ImpersonateAction's ERROR_CODE_MESSAGES map can localize it.
+    const axiosBody = (err as { response?: { data?: unknown } })?.response?.data;
+    if (axiosBody && typeof axiosBody === 'object') {
+      const body = axiosBody as {
+        error?: string;
+        message?: string;
+        fieldErrors?: unknown;
+      };
+      if (body.error === 'VALIDATION_ERROR') {
+        // Codex 019e1e66 REVISE-1 absorb: defensive guards. `fieldErrors`
+        // may be undefined / non-array / contain non-string messages
+        // depending on Spring's serialization path; fall through to
+        // body.message (and ultimately a static fallback) rather than
+        // crashing with a secondary TypeError or surfacing
+        // "[object Object]" to the user. Determinism: prefer the
+        // `reason` field message (the only validated field on the
+        // StartSessionRequest contract), then any string-typed
+        // fieldErrors[].message, then body.message.
+        const pickMessage = (): string | null => {
+          const arr = body.fieldErrors;
+          if (!Array.isArray(arr)) return null;
+          const reasonHit = arr.find(
+            (fe) =>
+              fe != null &&
+              typeof fe === 'object' &&
+              (fe as { field?: unknown; message?: unknown }).field === 'reason' &&
+              typeof (fe as { message?: unknown }).message === 'string' &&
+              (fe as { message: string }).message.trim().length > 0,
+          ) as { message: string } | undefined;
+          if (reasonHit) return reasonHit.message;
+          const firstStringHit = arr.find(
+            (fe) =>
+              fe != null &&
+              typeof fe === 'object' &&
+              typeof (fe as { message?: unknown }).message === 'string' &&
+              (fe as { message: string }).message.trim().length > 0,
+          ) as { message: string } | undefined;
+          return firstStringHit ? firstStringHit.message : null;
+        };
+        const fieldMsg = pickMessage();
+        const bodyMsg =
+          typeof body.message === 'string' && body.message.trim().length > 0
+            ? body.message
+            : null;
+        const wrappedMsg = fieldMsg ?? bodyMsg ?? 'Validation failed';
+        const wrapped = new Error(wrappedMsg) as Error & { errorCode?: string };
+        wrapped.errorCode = 'VALIDATION_ERROR';
+        throw wrapped;
+      }
+    }
     throw err;
   }
 
