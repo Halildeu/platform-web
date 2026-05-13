@@ -131,17 +131,40 @@ function parsePort(configContent) {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** Parse shared deps from vite.config.ts */
+/** Parse shared deps from vite.config.ts.
+ *
+ * PR-B2 (PERF-INIT-V2 MF shared scope):
+ *   - Recognise BOTH quoted ('react-dom') and unquoted (react) object keys.
+ *     Previously only quoted keys matched → `react: singleton(...)` was missed
+ *     in every config, distorting drift counts.
+ *   - Recognise BOTH `singleton(` and `hostOnly(` factory calls.  `hostOnly()`
+ *     is the canonical provider pattern (host owns the singleton; remote sets
+ *     `import: false` to consume from host's share-scope).  It IS a singleton
+ *     declaration — federation-doctor treating it as missing was a false
+ *     positive that produced 30 phantom drifts across the workspace.
+ *
+ *   The canonical provider pattern is documented in
+ *   docs/performance/mf-shared-scope-audit.md (PR-B2).
+ */
 function parseSharedCore(configContent) {
   const deps = new Set();
-  // Match singleton('package-name') calls in sharedCore block
   const coreBlock = configContent.match(/const sharedCore\s*=\s*\{([\s\S]*?)\};/);
-  if (coreBlock) {
-    const singletonPattern = /['"]([^'"]+)['"]\s*:\s*singleton\(/g;
-    let m;
-    while ((m = singletonPattern.exec(coreBlock[1])) !== null) {
-      deps.add(m[1]);
-    }
+  if (!coreBlock) return deps;
+
+  // Key forms accepted:
+  //   react: ...                  → unquoted JS identifier
+  //   'react-dom': ...            → single-quoted string
+  //   "react-dom": ...            → double-quoted string
+  //   '@reduxjs/toolkit': ...     → scoped package (must be quoted)
+  // Value MUST start with a known share-factory call:
+  //   singleton(  → canonical singleton
+  //   hostOnly(   → canonical singleton w/ import:false (host as provider)
+  const sharedDepPattern =
+    /(?:['"]([^'"]+)['"]|([A-Za-z_$][\w$]*))\s*:\s*(?:singleton|hostOnly)\s*\(/g;
+  let m;
+  while ((m = sharedDepPattern.exec(coreBlock[1])) !== null) {
+    const key = m[1] ?? m[2];
+    if (key) deps.add(key);
   }
   return deps;
 }
