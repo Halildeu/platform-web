@@ -1459,13 +1459,17 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'geo-map': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
-      // Codex 019e22ea iter-2 absorb: default to the internal namespaced
-      // map name so the preview's 3-polygon fixture cannot pollute the
-      // canonical `'TR'` slot shared with the HR adoption consumer
-      // route. `sampleCode` and Generated Code still teach `'TR'` (the
-      // real consumer pattern); only the live preview's internal stub
-      // uses the namespaced alias.
-      const mapName = getStr(toggles, 'mapName', DESIGN_LAB_GEO_MAP_NAME);
+      // Codex 019e22ea iter-3 absorb: ALWAYS use the internal namespaced
+      // alias — never read `mapName` from the editor. An admin editing
+      // the field could type `'TR'` (the canonical consumer slot) and
+      // cause the preview's 3-polygon fixture to register under that
+      // global ECharts map name, polluting the registry the HR adoption
+      // PR (and other consumer routes) try to load real TR provinces
+      // into. `mapName` is also removed from `LIVE_PROP_SUPPORT['geo-
+      // map']` so the editor doesn't surface it. Generated Code /
+      // sampleCode keep teaching `mapName="TR"` as the consumer
+      // pattern; only the live preview's internal stub uses the alias.
+      const mapName = DESIGN_LAB_GEO_MAP_NAME;
       // Codex 019e22ea iter-1 absorb #6: `selectedMode` wrapper contract
       // is `boolean | 'single' | 'multiple'`. The toggle store returns
       // the literal string `'false'` / `'true'` from the enum control,

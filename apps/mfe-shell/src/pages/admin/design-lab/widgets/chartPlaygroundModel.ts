@@ -772,7 +772,15 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'description',
     'className',
     'size',
-    'mapName',
+    // Codex 019e22ea iter-3 absorb: `mapName` is intentionally NOT
+    // live-editable. Editing it from the playground would let an admin
+    // type `'TR'` (the canonical consumer slot) and have the
+    // design-lab's 3-polygon synthetic fixture register under that
+    // global ECharts map name — polluting the registry that the HR
+    // adoption PR (and any consumer route) would later try to load
+    // real TR provinces into. Preview always uses an internal
+    // namespaced alias. Generated Code / sampleCode keep teaching
+    // `mapName="TR"` as the consumer pattern.
     // Codex 019e22ea iter-1 absorb: alternative GeoJSON property key
     // (e.g. 'iso' or 'code') for region matching. Live-editable so
     // users can flip between name-based and code-based routing.
