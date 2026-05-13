@@ -1,0 +1,104 @@
+# PERF-INIT-V2 PR-B5b3 — On-Demand Federation Guard.
+#
+# Source + build-output invariant check for the 7 on-demand remote
+# canaries shipped in PR-B5b1 / PR-B5b1.5 / PR-B5b2a / PR-B5b2.
+# Catches regression where a future edit accidentally re-introduces
+# eager `mfe_<remote>/...` static imports or removes the build-time
+# define gate — which would re-add the eager federation fetch chain
+# on /login (the 49 MB → 2.3 MB transfer regression PR-B5b1+B5b2 fixed).
+#
+# Codex thread `019e239a` PARTIAL → AGREE-with-recommendations.  This is
+# the source/build static layer (deterministic PR hard gate); the
+# runtime Playwright network smoke + nightly cron is PR-B5b3b
+# follow-up.
+#
+# Triggers on changes that could regress the on-demand pattern: the
+# wrapper files themselves, the lazy-routes / shell-services-wiring
+# integration points, vite.config.ts define block, the guard script
+# itself, and the workflow file.
+
+name: PERF-INIT-V2 On-Demand Federation Guard
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mfe-shell/src/app/create*AppOnDemand.tsx'
+      - 'apps/mfe-shell/src/app/router/lazy-routes.ts'
+      - 'apps/mfe-shell/src/app/config/shell-services-wiring.ts'
+      - 'apps/mfe-shell/src/app/config/admin-remote-bootstrap.ts'
+      - 'apps/mfe-shell/src/app/config/ensure-remote-shell-services.ts'
+      - 'apps/mfe-shell/vite.config.ts'
+      - 'apps/mfe-shell/package.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/ci/on-demand-federation-guard.mjs'
+      - '.github/workflows/on-demand-federation-guard.yml'
+  # Main tripwire (Codex `019e239a` iter-2 P2 absorb): also fire on
+  # pushes to main so an out-of-band landing (e.g. force-push, admin
+  # bypass — neither of which we expect, but defense in depth) gets
+  # caught before the next dependent PR re-uses a regressed baseline.
+  # No auto-revert; failure just creates a red workflow run that
+  # operators can investigate.
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mfe-shell/src/app/create*AppOnDemand.tsx'
+      - 'apps/mfe-shell/src/app/router/lazy-routes.ts'
+      - 'apps/mfe-shell/src/app/config/shell-services-wiring.ts'
+      - 'apps/mfe-shell/src/app/config/admin-remote-bootstrap.ts'
+      - 'apps/mfe-shell/src/app/config/ensure-remote-shell-services.ts'
+      - 'apps/mfe-shell/vite.config.ts'
+      - 'apps/mfe-shell/package.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'scripts/ci/on-demand-federation-guard.mjs'
+      - '.github/workflows/on-demand-federation-guard.yml'
+  workflow_dispatch:
+
+jobs:
+  on-demand-federation-guard:
+    name: on-demand-federation-guard (source + dist invariants)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from package.json `packageManager` field
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Build mfe-shell with ALL 7 on-demand canary flags ON.  The guard
+      # verifies that this build emits ZERO static-import chunks for the
+      # on-demand remotes (DCE invariant) AND that the bootstrap.js
+      # contains the runtime register pattern for the admin set
+      # (on-demand path alive).
+      - name: Build mfe-shell (all 7 canary flags ON)
+        env:
+          VITE_MFE_ON_DEMAND_BOOTSTRAP: 'true'
+          VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE: 'true'
+          VITE_SHELL_ENABLE_ETHIC_REMOTE: 'true'
+          VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: 'true'
+          VITE_SHELL_ENABLE_USERS_REMOTE: 'true'
+          VITE_SHELL_ENABLE_ACCESS_REMOTE: 'true'
+          VITE_SHELL_ENABLE_AUDIT_REMOTE: 'true'
+          VITE_SHELL_ENABLE_REPORTING_REMOTE: 'true'
+        run: pnpm --filter mfe-shell build
+
+      - name: Run on-demand federation guard
+        run: pnpm mf:on-demand-guard
+
+      - name: Upload dist artifact on failure (debug aid)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mfe-shell-dist-on-failure
+          path: apps/mfe-shell/dist/
+          retention-days: 7
