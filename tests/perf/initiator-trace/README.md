@@ -1,10 +1,24 @@
 # PR-B5b0 Initiator Attribution Trace — Findings
 
-> **Diagnostic captured 2026-05-13 against testai live (`BUILD_SHA=08fb4b47`).**
-> Artifact: `08fb4b4.json`. Route: `/login` (anonymous, pre-auth — chosen
-> because remoteEntry.js fetches fire BEFORE the SSO redirect and we
-> wanted the pre-rendered MF bootstrap path without auth-storage
-> dependency).
+> **Diagnostic captured 2026-05-13 against testai live**.
+> Artifacts:
+>   - `08fb4b4.json` — initial capture (`BUILD_SHA=08fb4b47`); loadShare and
+>     mfBootstrap not yet separated in summary (Codex iter-1 P1 fix applied
+>     after this artifact was written; retained for traceability).
+>   - `8885120.json` — re-capture post-PR-#443 deploy (`BUILD_SHA=8885120f`);
+>     summary correctly splits `loadShareCount: 31` + `mfBootstrapCount: 1`.
+>
+> Route: `/login` (anonymous, pre-auth — chosen because remoteEntry.js
+> fetches fire BEFORE the SSO redirect and we wanted the pre-rendered
+> MF bootstrap path without auth-storage dependency).
+>
+> **Attribution scope (Codex iter-1 thread 019e2272)**: this trace
+> answers "WHO initiated remoteEntry.js" — the route is `/login` only
+> because route choice doesn't affect WHICH remotes
+> `federation({remotes})` registers at host bootstrap (the registration
+> is synchronous, route-independent, fires once per page load).
+> B5b1 implementation acceptance still requires `/home` authenticated
+> perf measurement (decoded delta) once auth-storage (M2a) is wired.
 
 ## Key Finding (informs PR-B5b1 canary choice)
 
@@ -47,13 +61,16 @@ at host bootstrap**, which triggers an HTTP fetch for each
 | users | `dist-CMSO7Him.js` | line 3 col 13645 |
 | access | `dist-CMSO7Him.js` | line 3 col 13645 |
 | audit | `dist-CMSO7Him.js` | line 3 col 13645 |
-| reporting | `dist-CMSO7Im.js` | line 3 col 13645 |
+| reporting | `dist-CMSO7Him.js` | line 3 col 13645 |
 | schema-explorer | `dist-CMSO7Him.js` | line 3 col 13645 |
 
 All 7 stack frames identical → single emission site in the bundle =
 @module-federation/vite registration loop.
 
-Plus 32 loadShare chunks fired from related shell-bundle frames.
+Plus 32 loadShare chunks fired from related shell-bundle frames. (The
+`mf-entry-bootstrap-0.js` document-loaded entry is tracked separately
+under `mfBootstrapChunks` to keep `loadShareCount` honest — Codex
+iter-1 P1 fix; pre-fix it was incorrectly grouped with loadShares.)
 
 ## Implication for PR-B5b1 Canary Strategy
 

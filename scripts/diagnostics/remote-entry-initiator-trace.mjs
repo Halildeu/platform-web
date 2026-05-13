@@ -95,9 +95,12 @@ function classifyRemoteEntry(reqUrl) {
   // /assets/__mfe_internal__mfe_<name>__loadShare__... (per-MFE loadShare)
   const loadShare = reqUrl.match(/__mfe_internal__mfe_([^_]+)__loadShare/);
   if (loadShare) return { type: 'loadShare', remoteName: loadShare[1] };
-  // /mf-entry-bootstrap-*.js
+  // /mf-entry-bootstrap-*.js — NOT a loadShare chunk; the MF runtime
+  // bootstrap entry that the document loads via parser.  Codex iter-1
+  // P1 (thread 019e2272): keep this separate from loadShareChunks so
+  // the artifact summary counts are honest.
   if (reqUrl.match(/\/mf-entry-bootstrap[-_]\d+\.js/)) {
-    return { type: 'mf-entry-bootstrap' };
+    return { type: 'mfBootstrap' };
   }
   return null;
 }
@@ -153,6 +156,7 @@ async function captureInitiatorTrace() {
 
   const remoteEntries = [];
   const loadShareChunks = [];
+  const mfBootstrapChunks = [];
   let buildSha = null;
 
   cdp.on('Network.requestWillBeSent', (event) => {
@@ -182,6 +186,8 @@ async function captureInitiatorTrace() {
 
     if (classification.type === 'remoteEntry') {
       remoteEntries.push(record);
+    } else if (classification.type === 'mfBootstrap') {
+      mfBootstrapChunks.push(record);
     } else {
       loadShareChunks.push({ ...record, dep: classification.remoteName });
     }
@@ -215,11 +221,13 @@ async function captureInitiatorTrace() {
     summary: {
       remoteEntryCount: remoteEntries.length,
       loadShareCount: loadShareChunks.length,
+      mfBootstrapCount: mfBootstrapChunks.length,
       byInitiatorType,
       byInitiatorSource,
     },
     remoteEntries,
     loadShareChunks: loadShareChunks.slice(0, 50), // cap to keep artifact readable
+    mfBootstrapChunks,
   };
 
   /* ---- Persist ---- */

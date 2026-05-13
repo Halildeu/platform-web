@@ -1,0 +1,537 @@
+{
+  "tool": "remote-entry-initiator-trace",
+  "version": "1.0.0",
+  "timestamp": "2026-05-13T17:51:14.897Z",
+  "target": "testai",
+  "url": "https://testai.acik.com/login",
+  "buildSha": "8885120",
+  "summary": {
+    "remoteEntryCount": 7,
+    "loadShareCount": 31,
+    "mfBootstrapCount": 1,
+    "byInitiatorType": {
+      "script": 7
+    },
+    "byInitiatorSource": {
+      "mf-runtime-shell-bundle": 7
+    }
+  },
+  "remoteEntries": [
+    {
+      "url": "https://testai.acik.com/remotes/suggestions/remoteEntry.js",
+      "remoteName": "suggestions",
+      "initiatorType": "script",
+      "initiatorSource": "mf-runtime-shell-bundle",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 3,
+          "columnNumber": 13645
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 0,
+          "columnNumber": 1313
+        }
+      ]
+    },
+    {
+      "url": "https://testai.acik.com/remotes/ethic/remoteEntry.js",
+      "remoteName": "ethic",
+      "initiatorType": "script",
+      "initiatorSource": "mf-runtime-shell-bundle",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 3,
+          "columnNumber": 13645
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 0,
+          "columnNumber": 1313
+        }
+      ]
+    },
+    {
+      "url": "https://testai.acik.com/remotes/access/remoteEntry.js",
+      "remoteName": "access",
+      "initiatorType": "script",
+      "initiatorSource": "mf-runtime-shell-bundle",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 3,
+          "columnNumber": 13645
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 0,
+          "columnNumber": 1313
+        }
+      ]
+    },
+    {
+      "url": "https://testai.acik.com/remotes/audit/remoteEntry.js",
+      "remoteName": "audit",
+      "initiatorType": "script",
+      "initiatorSource": "mf-runtime-shell-bundle",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 3,
+          "columnNumber": 13645
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 0,
+          "columnNumber": 1313
+        }
+      ]
+    },
+    {
+      "url": "https://testai.acik.com/remotes/users/remoteEntry.js",
+      "remoteName": "users",
+      "initiatorType": "script",
+      "initiatorSource": "mf-runtime-shell-bundle",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 3,
+          "columnNumber": 13645
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 0,
+          "columnNumber": 1313
+        }
+      ]
+    },
+    {
+      "url": "https://testai.acik.com/remotes/reporting/remoteEntry.js",
+      "remoteName": "reporting",
+      "initiatorType": "script",
+      "initiatorSource": "mf-runtime-shell-bundle",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 3,
+          "columnNumber": 13645
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 0,
+          "columnNumber": 1313
+        }
+      ]
+    },
+    {
+      "url": "https://testai.acik.com/remotes/schema-explorer/remoteEntry.js",
+      "remoteName": "schema-explorer",
+      "initiatorType": "script",
+      "initiatorSource": "mf-runtime-shell-bundle",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 3,
+          "columnNumber": 13645
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/dist-CMSO7Him.js",
+          "lineNumber": 0,
+          "columnNumber": 1313
+        }
+      ]
+    }
+  ],
+  "loadShareChunks": [
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react__loadShare__-CKW5FF-v.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "mf-internal-chunk",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 2614
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 1313
+        }
+      ],
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-DVjDgtGH.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react__loadShare__-CKW5FF-v.js",
+      "stack": null,
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_reduxjs_mf_1_toolkit__loadShare__-Bmnz8LPG.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "mf-internal-chunk",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 3962
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 1313
+        }
+      ],
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_reduxjs_mf_1_toolkit__loadShare__.mjs-Bt80qtKE.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_reduxjs_mf_1_toolkit__loadShare__-Bmnz8LPG.js",
+      "stack": null,
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_tanstack_mf_1_react_mf_2_query__loadShare__-BSZPxT7w.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "mf-internal-chunk",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 4230
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 1313
+        }
+      ],
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_tanstack_mf_1_react_mf_2_query__loadShare__.mjs-C1cxLdpy.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_tanstack_mf_1_react_mf_2_query__loadShare__-BSZPxT7w.js",
+      "stack": null,
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_redux__loadShare__-BDBgG4sw.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "mf-internal-chunk",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 5503
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 1313
+        }
+      ],
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_redux__loadShare__.mjs-DEk4h_hF.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_redux__loadShare__-BDBgG4sw.js",
+      "stack": null,
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_router__loadShare__-Cc8Xfdmz.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "mf-internal-chunk",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 5747
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 1313
+        }
+      ],
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_router__loadShare__.mjs-BOrdFGTm.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_router__loadShare__-Cc8Xfdmz.js",
+      "stack": null,
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_router_mf_2_dom__loadShare__-Cx2J1T32.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "mf-internal-chunk",
+      "initiatorScript": null,
+      "stack": [
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 5997
+        },
+        {
+          "functionName": "<anonymous>",
+          "url": "https://testai.acik.com/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_shell__remoteEntry_js-bV3CVlA3.js",
+          "lineNumber": 1,
+          "columnNumber": 1313
+        }
+      ],
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_router_mf_2_dom__loadShare__.mjs-UlT8b24T.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_router_mf_2_dom__loadShare__-Cx2J1T32.js",
+      "stack": null,
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/suggestions/assets/__mfe_internal__mfe_suggestions__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-CBZPcefB.js",
+      "remoteName": "suggestions",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/suggestions/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_suggestions__remoteEntry_js-BJ6LZcoO.js",
+      "stack": null,
+      "dep": "suggestions"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/ethic/assets/__mfe_internal__mfe_ethic__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-sIBL2Nm7.js",
+      "remoteName": "ethic",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/ethic/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_ethic__remoteEntry_js-BaOavvTw.js",
+      "stack": null,
+      "dep": "ethic"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/users/assets/__mfe_internal__mfe_users__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-CkNYs7hu.js",
+      "remoteName": "users",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/users/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_users__remoteEntry_js-MLhhIv5B.js",
+      "stack": null,
+      "dep": "users"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/audit/assets/__mfe_internal__mfe_audit__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-Bb5frsU7.js",
+      "remoteName": "audit",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/audit/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_audit__remoteEntry_js-oG2nWtyq.js",
+      "stack": null,
+      "dep": "audit"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/reporting/assets/__mfe_internal__mfe_reporting__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-C7BhO5N7.js",
+      "remoteName": "reporting",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/reporting/assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_reporting__remoteEntry_js-DqQMw9Id.js",
+      "stack": null,
+      "dep": "reporting"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/reporting/assets/__mfe_internal__mfe_reporting__loadShare___mf_0_tanstack_mf_1_react_mf_2_query__loadShare__.mjs-B4fxXqr9.js",
+      "remoteName": "reporting",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/reporting/assets/App-BS1XfTTM.js",
+      "stack": null,
+      "dep": "reporting"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/audit/assets/__mfe_internal__mfe_audit__loadShare___mf_0_tanstack_mf_1_react_mf_2_query__loadShare__.mjs-D_1dwqyS.js",
+      "remoteName": "audit",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/audit/assets/AuditApp-Cl5ff2j-.js",
+      "stack": null,
+      "dep": "audit"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/reporting/assets/__mfe_internal__mfe_reporting__loadShare__react_mf_2_router_mf_2_dom__loadShare__.mjs-D97BRQBw.js",
+      "remoteName": "reporting",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/reporting/assets/ReportingApp-tHKQQnm5.js",
+      "stack": null,
+      "dep": "reporting"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/reporting/assets/__mfe_internal__mfe_reporting__loadShare___mf_0_mfe_mf_1_i18n_mf_2_dicts__loadShare__.mjs-BOMy_ski.js",
+      "remoteName": "reporting",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/reporting/assets/ReportingApp-tHKQQnm5.js",
+      "stack": null,
+      "dep": "reporting"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/users/assets/__mfe_internal__mfe_users__loadShare__react_mf_2_redux__loadShare__.mjs-BRUpxoWh.js",
+      "remoteName": "users",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/users/assets/UsersApp.ui-CbkZlNp3.js",
+      "stack": null,
+      "dep": "users"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/users/assets/__mfe_internal__mfe_users__loadShare___mf_0_reduxjs_mf_1_toolkit__loadShare__.mjs-DrOd6sED.js",
+      "remoteName": "users",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/users/assets/UsersApp.ui-CbkZlNp3.js",
+      "stack": null,
+      "dep": "users"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/users/assets/__mfe_internal__mfe_users__loadShare___mf_0_tanstack_mf_1_react_mf_2_query__loadShare__.mjs-rxGpFFCN.js",
+      "remoteName": "users",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/users/assets/UsersApp.ui-CbkZlNp3.js",
+      "stack": null,
+      "dep": "users"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/users/assets/__mfe_internal__mfe_users__loadShare___mf_0_mfe_mf_1_i18n_mf_2_dicts__loadShare__.mjs-fL6OsKr7.js",
+      "remoteName": "users",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/users/assets/UsersApp.ui-CbkZlNp3.js",
+      "stack": null,
+      "dep": "users"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/access/assets/__mfe_internal__mfe_access__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-Dvs18QrP.js",
+      "remoteName": "access",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/access/assets/AccessApp.ui-BAzgp_oN.js",
+      "stack": null,
+      "dep": "access"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/access/assets/__mfe_internal__mfe_access__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-DHxWcISn.js",
+      "remoteName": "access",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/access/assets/AccessApp.ui-BAzgp_oN.js",
+      "stack": null,
+      "dep": "access"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/access/assets/__mfe_internal__mfe_access__loadShare___mf_0_tanstack_mf_1_react_mf_2_query__loadShare__.mjs-VewbImlb.js",
+      "remoteName": "access",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/access/assets/AccessApp.ui-BAzgp_oN.js",
+      "stack": null,
+      "dep": "access"
+    },
+    {
+      "url": "https://testai.acik.com/remotes/access/assets/__mfe_internal__mfe_access__loadShare__react_mf_2_router_mf_2_dom__loadShare__.mjs-3HNSH-aV.js",
+      "remoteName": "access",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/remotes/access/assets/AccessApp.ui-BAzgp_oN.js",
+      "stack": null,
+      "dep": "access"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-D9-5fYiv.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/bootstrap-CHse712f.js",
+      "stack": null,
+      "dep": "shell"
+    },
+    {
+      "url": "https://testai.acik.com/assets/__mfe_internal__mfe_shell__loadShare__react_mf_2_dom_mf_1_client__loadShare__.mjs-vkP74w8f.js",
+      "remoteName": "shell",
+      "initiatorType": "script",
+      "initiatorSource": "unknown(script)",
+      "initiatorScript": "https://testai.acik.com/assets/bootstrap-CHse712f.js",
+      "stack": null,
+      "dep": "shell"
+    }
+  ],
+  "mfBootstrapChunks": [
+    {
+      "url": "https://testai.acik.com/mf-entry-bootstrap-0.js",
+      "remoteName": null,
+      "initiatorType": "parser",
+      "initiatorSource": "document-parser",
+      "initiatorScript": "https://testai.acik.com/login",
+      "stack": null
+    }
+  ]
+}
