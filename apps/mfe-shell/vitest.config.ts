@@ -30,6 +30,7 @@ export default defineConfig({
   define: {
     __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: JSON.stringify(true),
     __MFE_SUGGESTIONS_ON_DEMAND__: JSON.stringify(true),
+    __MFE_ETHIC_ON_DEMAND__: JSON.stringify(true),
     __PERF_OBSERVER_EXPOSE__: JSON.stringify(false),
   },
   test: {

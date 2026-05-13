@@ -5,33 +5,43 @@
 import React from 'react';
 import { createLazyRemoteModule } from '../createLazyRemoteModule';
 import { SuggestionsAppOnDemand } from '../createSuggestionsAppOnDemand';
+import { EthicAppOnDemand } from '../createEthicAppOnDemand';
 
 /**
- * PERF-INIT-V2 PR-B5b1 canary build-time conditional (Codex
- * thread 019e2272 iter-1 per-remote conditional pattern):
+ * PERF-INIT-V2 PR-B5b1 + PR-B5b1.5 canary build-time conditional
+ * (Codex thread 019e2272 iter-1 per-remote conditional pattern,
+ * extended to ethic in B5b1.5):
  *
- * - When `__MFE_SUGGESTIONS_ON_DEMAND__` is `false` (default), the
- *   shell ships the eager federated route (current behaviour;
- *   no regression).  The static `import('mfe_suggestions/SuggestionsApp')`
+ * - When `__MFE_SUGGESTIONS_ON_DEMAND__` / `__MFE_ETHIC_ON_DEMAND__`
+ *   is `false` (default), the shell ships the eager federated route
+ *   (current behaviour; no regression).  The static
+ *   `import('mfe_suggestions/SuggestionsApp')` / `import('mfe_ethic/EthicApp')`
  *   specifier is evaluated by Rolldown and resolved against the
  *   federation manifest declared in `apps/mfe-shell/vite.config.ts`.
  *
- * - When `__MFE_SUGGESTIONS_ON_DEMAND__` is `true` (build-time canary
- *   active), the eager branch is dead-code-eliminated — the static
- *   import specifier never enters the bundle — and the shell picks
- *   the runtime-register path from `createSuggestionsAppOnDemand.tsx`.
- *   This is what removes the synchronous `/remotes/suggestions/remoteEntry.js`
- *   fetch from host bootstrap (PR-B5b0 attribution finding).
+ * - When the define is `true` (build-time canary active), the eager
+ *   branch is dead-code-eliminated — the static import specifier
+ *   never enters the bundle — and the shell picks the runtime-register
+ *   path from `createSuggestionsAppOnDemand.tsx` /
+ *   `createEthicAppOnDemand.tsx`.  This removes the synchronous
+ *   `/remotes/suggestions/remoteEntry.js` /
+ *   `/remotes/ethic/remoteEntry.js` fetch from host bootstrap
+ *   (PR-B5b0 attribution finding; B5b1 measured -6 MB decoded on /login).
  *
  * Same pattern as `EndpointAdminModule` below (PR #287 precedent).
+ * Both defines driven by the same `VITE_MFE_ON_DEMAND_BOOTSTRAP` env
+ * (single canary master toggle).
  */
 declare const __MFE_SUGGESTIONS_ON_DEMAND__: boolean;
+declare const __MFE_ETHIC_ON_DEMAND__: boolean;
 
 export const SuggestionsApp: React.ComponentType = __MFE_SUGGESTIONS_ON_DEMAND__
   ? SuggestionsAppOnDemand
   : createLazyRemoteModule('Suggestions', () => import('mfe_suggestions/SuggestionsApp'));
 
-export const EthicApp = createLazyRemoteModule('Ethic', () => import('mfe_ethic/EthicApp'));
+export const EthicApp: React.ComponentType = __MFE_ETHIC_ON_DEMAND__
+  ? EthicAppOnDemand
+  : createLazyRemoteModule('Ethic', () => import('mfe_ethic/EthicApp'));
 
 export const AccessModule = createLazyRemoteModule('Access', () => import('mfe_access/AccessApp'));
 
