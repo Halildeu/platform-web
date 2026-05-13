@@ -1,7 +1,12 @@
 import React, { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Search, BarChart3, Bell, User } from 'lucide-react';
-import { BottomNavigation } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B5a: consumer-side subpath migration.
+// MobileBottomBar renders on every authenticated route. BottomNavigation
+// lives in the components barrel; this aligns the call site for the
+// future B5d subpath share-scope split. Under the current root shared
+// package topology the loadShare wrapper is unchanged.
+import { BottomNavigation } from '@mfe/design-system/components';
 import { useAppSelector, useAppDispatch } from '../store/store.hooks';
 import { toggleOpen } from '../../features/notifications/model/notifications.slice';
 import { useShellCommonI18n } from '../i18n';

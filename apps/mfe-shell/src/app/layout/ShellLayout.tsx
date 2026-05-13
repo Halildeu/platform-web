@@ -2,7 +2,13 @@ import React, { useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store/store.hooks';
 import { useThemeContext } from '../theme/theme-context.provider';
-import { useToast, useBreakpoint } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B5a: useToast moves to components subpath; useBreakpoint
+// is one of 4 hooks (useBreakpoint/useAdaptiveLayout/useAutoThemeAdapter/
+// useDownloadWithProgress) that only the root barrel exposes today.
+// Adding a `/hooks` subpath export to @mfe/design-system is tracked as
+// PR-B5a2 polish to keep this PR focused on the existing subpaths.
+import { useToast } from '@mfe/design-system/components';
+import { useBreakpoint } from '@mfe/design-system';
 import { useShellCommonI18n } from '../i18n';
 import { useShellShortcuts } from '../shortcuts/useShellShortcuts.model';
 import { fetchProducts } from '../../features/products/model/products.slice';
