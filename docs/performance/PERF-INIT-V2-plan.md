@@ -210,7 +210,7 @@ Budget table is in `performance-budgets.json` (root); enforcement in
 
 ## §8. Tooling
 
-- `scripts/ops/federation-doctor.mjs` — lightweight share-scope CI gate
+- `scripts/ops/federation-doctor.mjs` — lightweight share-scope diagnostic (workspace script `pnpm mf:doctor`; not yet CI-wired)
 - `scripts/diagnostics/mf-shared-keys.mjs` — detailed audit
 - `scripts/ci/route-performance-budget.mjs` — Playwright route runner
 - `scripts/ci/bundle-taxonomy.mjs` — per-route resource breakdown
@@ -223,20 +223,20 @@ Budget table is in `performance-budgets.json` (root); enforcement in
 Scope: platform-web repository merges only. Cross-repo work (PR-S1
 in `platform-k8s-gitops`) tracked in that repo's own audit trail.
 
-| PR                 | Codex thread | Verdict                 | Merged at (UTC)      |
-| ------------------ | ------------ | ----------------------- | -------------------- |
-| #415 PR-M1         | —            | (early)                 | 2026-05-12T21:55:25Z |
-| #416 PR-A0         | —            | (early)                 | 2026-05-12T22:24:29Z |
-| #420 PR-G1         | —            | (early)                 | 2026-05-13T06:43:56Z |
-| #426 PR-B1a        | —            | (early)                 | 2026-05-13T07:11:37Z |
-| #427 PR-B1b        | —            | (early)                 | 2026-05-13T07:38:02Z |
-| #428 PR-B2-prep    | 019e204e     | AGREE iter-3            | 2026-05-13T08:16:57Z |
-| #429 PR-B3a        | 019e2060     | AGREE iter-3            | 2026-05-13T08:46:23Z |
-| #430 PR-B2-rollout | 019e2077     | PARTIAL ready_for_merge | 2026-05-13T08:47:32Z |
-| #432 PR-B3e        | 019e2088     | AGREE iter-1            | 2026-05-13T09:14:08Z |
-| #433 PR-B4a        | 019e2094     | AGREE iter-1            | 2026-05-13T09:25:15Z |
-| #434 PR-B4b        | 019e20a0     | AGREE                   | 2026-05-13T09:40:46Z |
-| #435 PMD doc       | 019e20ab     | REVISE (iter-2)         | (this PR, in-review) |
+| PR                 | Codex thread | Verdict                          | Merged at (UTC)      |
+| ------------------ | ------------ | -------------------------------- | -------------------- |
+| #415 PR-M1         | —            | (early)                          | 2026-05-12T21:55:25Z |
+| #416 PR-A0         | —            | (early)                          | 2026-05-12T22:24:29Z |
+| #420 PR-G1         | —            | (early)                          | 2026-05-13T06:43:56Z |
+| #426 PR-B1a        | —            | (early)                          | 2026-05-13T07:11:37Z |
+| #427 PR-B1b        | —            | (early)                          | 2026-05-13T07:38:02Z |
+| #428 PR-B2-prep    | 019e204e     | AGREE iter-3                     | 2026-05-13T08:16:57Z |
+| #429 PR-B3a        | 019e2060     | AGREE iter-3                     | 2026-05-13T08:46:23Z |
+| #430 PR-B2-rollout | 019e2077     | PARTIAL ready_for_merge          | 2026-05-13T08:47:32Z |
+| #432 PR-B3e        | 019e2088     | AGREE iter-1                     | 2026-05-13T09:14:08Z |
+| #433 PR-B4a        | 019e2094     | AGREE iter-1                     | 2026-05-13T09:25:15Z |
+| #434 PR-B4b        | 019e20a0     | AGREE                            | 2026-05-13T09:40:46Z |
+| #435 PMD doc       | 019e20ab     | PARTIAL ready_for_merge (iter-2) | (this PR, in-review) |
 
 Total: 11 platform-web PRs merged + 1 PMD doc in-review (this PR).
 PR-S1 cross-repo merge tracked separately in `platform-k8s-gitops`.
