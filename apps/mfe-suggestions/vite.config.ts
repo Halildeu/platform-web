@@ -29,6 +29,11 @@ const hostOnly = (
   fallback: string | boolean = false,
 ) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
+// PR-B2-rollout (canary): convert @tanstack/react-query to hostOnly() to
+// match the canonical provider pattern.  Shell already declares it with
+// `singleton: true, eager: true`, so the remote should consume from
+// host's share-scope rather than ship its own copy in the remote chunk.
+// See docs/performance/mf-shared-scope-audit.md.
 const sharedCore = {
   react: hostOnly('react'),
   'react-dom': hostOnly('react-dom'),
@@ -36,7 +41,7 @@ const sharedCore = {
   'react-router-dom': hostOnly('react-router-dom'),
   '@reduxjs/toolkit': hostOnly('@reduxjs/toolkit'),
   'react-redux': hostOnly('react-redux'),
-  '@tanstack/react-query': singleton('@tanstack/react-query'),
+  '@tanstack/react-query': hostOnly('@tanstack/react-query'),
 };
 const sharedProdOnly = {
   '@mfe/design-system': singleton('@mfe/design-system', false),
