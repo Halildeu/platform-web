@@ -1,7 +1,9 @@
 import React from 'react';
-// PERF-INIT-V2 PR-B5a: createLazyRemoteModule is invoked at MFE boot.
-// EmptyErrorLoading lives in the components barrel; deep import keeps
-// the root-barrel chunk off the critical fallback path.
+// PERF-INIT-V2 PR-B5a: consumer-side subpath migration.
+// createLazyRemoteModule is invoked at MFE boot. EmptyErrorLoading
+// lives in the components barrel; this aligns the call site for the
+// future B5d subpath share-scope split. Under the current root shared
+// package topology the loadShare wrapper is unchanged.
 import { EmptyErrorLoading } from '@mfe/design-system/components';
 
 type RemoteModule = {

@@ -11,9 +11,11 @@ import {
   Settings,
   Database,
 } from 'lucide-react';
-// PERF-INIT-V2 PR-B5a: Sidebar is on every authenticated route's
-// critical render path. ShellSidebar + its types live in the patterns
-// barrel; deep import avoids pulling the full design-system tree.
+// PERF-INIT-V2 PR-B5a: consumer-side subpath migration. Sidebar is on
+// every authenticated route's critical render path. ShellSidebar + its
+// types live in the patterns barrel; this aligns the call site for the
+// future B5d subpath share-scope split. Under the current root shared
+// package topology the loadShare wrapper is unchanged.
 import { ShellSidebar } from '@mfe/design-system/patterns';
 import type {
   ShellSidebarNavItem,

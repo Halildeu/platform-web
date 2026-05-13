@@ -2,9 +2,10 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-// PERF-INIT-V2 PR-B5a: critical-graph root-barrel eviction. ToastProvider
-// lives in the components barrel; importing it via root would pull the
-// full design-system tree into the eager AppProviders chunk.
+// PERF-INIT-V2 PR-B5a: consumer-side subpath migration. ToastProvider
+// lives in the components barrel; this aligns the call site for the
+// future B5d subpath share-scope split. Under the current root shared
+// package topology the loadShare wrapper is unchanged.
 import { ToastProvider } from '@mfe/design-system/components';
 import { PermissionProvider } from '@mfe/auth';
 import type { AuthzMeResponse } from '@mfe/auth';

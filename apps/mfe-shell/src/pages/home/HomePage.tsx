@@ -1,9 +1,10 @@
 import React from "react";
-// PERF-INIT-V2 PR-B5a (critical-graph root-barrel eviction): split root
-// barrel into subpath imports so tree-shake can drop the rest of the
-// design-system tree on /home cold load.  PageHeader is a pattern;
-// VStack is a primitive.  See docs/performance/PERF-INIT-V2-plan.md
-// §4.6 (Codex thread 019e20fa AGREE).
+// PERF-INIT-V2 PR-B5a: consumer-side subpath migration.
+// Under the current root shared package topology this does NOT shrink
+// the design-system loadShare wrapper; it aligns this critical-path
+// consumer with the future B5d subpath share-scope split.
+// PageHeader is a pattern; VStack is a primitive.  See
+// docs/performance/PERF-INIT-V2-plan.md §3 wave-B5d (Codex 019e20fa).
 import { PageHeader } from "@mfe/design-system/patterns";
 import { VStack } from "@mfe/design-system/primitives";
 

@@ -280,6 +280,15 @@ is **B5c-lite scope**.
 
 ### §4.6 Critical-graph migration pattern (B5a, new)
 
+> **Caveat (post-B5a measurement, Codex 019e20fa iter-5)**: under the
+> current single-root `@mfe/design-system` shared package topology this
+> pattern is **consumer hygiene only**; the MF runtime continues to
+> federate the full package via one loadShare wrapper regardless of
+> the consumer's import path. Decoded reduction requires the B5d
+> share-scope topology split (§3 wave B5d). This §4.6 pattern remains
+> the correct call-site preparation for B5d; it does NOT on its own
+> reduce decoded JS.
+
 For each Shell module on the `/login` + `/home` critical render path:
 
 1. Replace `from '@mfe/design-system'` with one of:
