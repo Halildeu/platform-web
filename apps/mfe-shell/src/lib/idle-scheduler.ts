@@ -35,17 +35,35 @@ export interface ScheduleOnIdleOptions {
   timeout?: number;
 }
 
+/**
+ * Cancel handle returned from `scheduleOnIdle`.  Calling `cancel()` revokes
+ * BOTH the `requestIdleCallback` handle and the `setTimeout` race so neither
+ * can fire later.  Idempotent — safe to call multiple times.
+ *
+ * Heavy / repeated callers should retain and cancel before re-scheduling to
+ * avoid keeping a stale closure around for the timeout window.  Single-shot
+ * callers (the canonical PR-B3a use case) can ignore the return value.
+ */
+export interface IdleScheduleHandle {
+  cancel(): void;
+}
+
 const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
  * Schedule `cb` to run on the next idle window or after `timeout` ms,
  * whichever comes first.
  *
- * Returns void — callers don't need a handle for the canonical PR-B3a
- * use case (one-shot remote services wiring).  If you need cancellation,
- * use a closure with an AbortSignal check inside `cb`.
+ * Returns an `IdleScheduleHandle` with a `cancel()` method that revokes
+ * both the requestIdleCallback handle AND the setTimeout race.  Single-
+ * shot callers may ignore the return value; repeated schedulers should
+ * cancel the previous handle before scheduling again to keep stale
+ * closures from outliving their relevance window.
  */
-export function scheduleOnIdle(cb: () => void, options: ScheduleOnIdleOptions = {}): void {
+export function scheduleOnIdle(
+  cb: () => void,
+  options: ScheduleOnIdleOptions = {},
+): IdleScheduleHandle {
   const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
 
   if (typeof window === 'undefined') {
@@ -55,15 +73,26 @@ export function scheduleOnIdle(cb: () => void, options: ScheduleOnIdleOptions = 
     // the case for shell-services-wiring (it short-circuits on
     // `typeof window === 'undefined'` internally).
     cb();
-    return;
+    return { cancel: () => undefined };
   }
 
-  let fired = false;
-  const fire = () => {
-    if (fired) return;
-    fired = true;
-    cb();
+  let settled = false;
+  let idleHandle: number | undefined;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+  const settle = (action: 'fire' | 'cancel') => {
+    if (settled) return;
+    settled = true;
+    if (idleHandle !== undefined && typeof window.cancelIdleCallback === 'function') {
+      window.cancelIdleCallback(idleHandle);
+    }
+    if (timeoutHandle !== undefined) {
+      clearTimeout(timeoutHandle);
+    }
+    if (action === 'fire') cb();
   };
+
+  const fire = () => settle('fire');
 
   const ric: typeof window.requestIdleCallback | undefined =
     typeof window.requestIdleCallback === 'function'
@@ -74,14 +103,17 @@ export function scheduleOnIdle(cb: () => void, options: ScheduleOnIdleOptions = 
     // Browser supports idle scheduling.  Race idle window vs. timeout
     // explicitly — Safari's implementation has historically been
     // inconsistent at honouring the native `{ timeout }` option.
-    ric(fire);
-    setTimeout(fire, timeoutMs);
-    return;
+    idleHandle = ric(fire);
+    timeoutHandle = setTimeout(fire, timeoutMs);
+  } else {
+    // Fallback: schedule on the next macrotask.  We still respect the
+    // `timeout` so behaviour stays predictable when callers tune it down.
+    timeoutHandle = setTimeout(fire, Math.min(1, timeoutMs));
   }
 
-  // Fallback: schedule on the next macrotask.  We still respect the
-  // `timeout` so behaviour stays predictable when callers tune it down.
-  setTimeout(fire, Math.min(1, timeoutMs));
+  return {
+    cancel: () => settle('cancel'),
+  };
 }
 
 /**
