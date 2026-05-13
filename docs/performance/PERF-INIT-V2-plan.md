@@ -68,12 +68,12 @@ same size on every route — strong duplicate-package signal.
 
 ### Wave B4 — Leader-conditional splits
 
-| PR     | Status    | Deliverable                                                                                     |
-| ------ | --------- | ----------------------------------------------------------------------------------------------- |
-| PR-B4a | MERGED    | Auth-flow pages lazy (`Login` / `Register` / `Unauthorized` — ~17 kB out of eager)              |
-| PR-B4b | IN-FLIGHT | Admin pages lazy (`ThemeAdmin` / `DesignLab` / `DesignLabRoutes` — ~1.4 MB out of eager)        |
-| PR-B4c | DEFERRED  | i18n async-locale (requires breaking the synchronous `getDictionary()` API — separate refactor) |
-| PR-B4d | N/A       | Fonts — system font stack only; no `@font-face` in current build                                |
+| PR     | Status   | Deliverable                                                                                     |
+| ------ | -------- | ----------------------------------------------------------------------------------------------- |
+| PR-B4a | MERGED   | Auth-flow pages lazy (`Login` / `Register` / `Unauthorized` — ~17 kB out of eager)              |
+| PR-B4b | MERGED   | Admin pages lazy (`ThemeAdmin` / `DesignLab` / `DesignLabRoutes` — ~1.4 MB out of eager)        |
+| PR-B4c | DEFERRED | i18n async-locale (requires breaking the synchronous `getDictionary()` API — separate refactor) |
+| PR-B4d | N/A      | Fonts — system font stack only; no `@font-face` in current build                                |
 
 ## §4. Implementation patterns
 
