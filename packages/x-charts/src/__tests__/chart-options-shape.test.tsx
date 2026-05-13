@@ -1259,8 +1259,6 @@ describe('PictorialBarChart option shape', () => {
   });
 });
 
-/* ================================================================== */
-<<<<<<< HEAD
 /*  ParallelCoordinatesChart (PR-X12a)                                 */
 /* ================================================================== */
 
@@ -1310,37 +1308,10 @@ describe('ParallelCoordinatesChart option shape', () => {
         data={sampleData}
         axes={sampleAxes}
         groupBy="dept"
-=======
-/*  GraphChart (PR-X12b)                                               */
-/* ================================================================== */
-
-describe('GraphChart option shape', () => {
-  const sampleNodes = [
-    { id: 'a', name: 'A', value: 10, category: 0 },
-    { id: 'b', name: 'B', value: 20, category: 0 },
-    { id: 'c', name: 'C', value: 30, category: 1 },
-  ];
-  const sampleEdges = [
-    { source: 'a', target: 'b', value: 5 },
-    { source: 'b', target: 'c', value: 3 },
-  ];
-  const sampleCategories = [
-    { name: 'Type 1', color: '#3b82f6' },
-    { name: 'Type 2', color: '#22c55e' },
-  ];
-
-  it('series.type === graph + maps nodes/edges/categories', () => {
-    render(
-      <GraphChart
-        nodes={sampleNodes}
-        edges={sampleEdges}
-        categories={sampleCategories}
->>>>>>> e6d1a45c (feat(x-charts): add GraphChart wrapper (PR-X12b, network topology))
         animate={false}
       />,
     );
     const s = series();
-<<<<<<< HEAD
     // 3 distinct dept values → 3 series.
     expect(s).toHaveLength(3);
     expect(s[0].name).toBe('Eng');
@@ -1390,7 +1361,38 @@ describe('GraphChart option shape', () => {
         />,
       ),
     ).not.toThrow();
-=======
+  });
+});
+
+/* ================================================================== */
+/*  GraphChart (PR-X12b)                                               */
+/* ================================================================== */
+
+describe('GraphChart option shape', () => {
+  const sampleNodes = [
+    { id: 'a', name: 'A', value: 10, category: 0 },
+    { id: 'b', name: 'B', value: 20, category: 0 },
+    { id: 'c', name: 'C', value: 30, category: 1 },
+  ];
+  const sampleEdges = [
+    { source: 'a', target: 'b', value: 5 },
+    { source: 'b', target: 'c', value: 3 },
+  ];
+  const sampleCategories = [
+    { name: 'Type 1', color: '#3b82f6' },
+    { name: 'Type 2', color: '#22c55e' },
+  ];
+
+  it('series.type === graph + maps nodes/edges/categories', () => {
+    render(
+      <GraphChart
+        nodes={sampleNodes}
+        edges={sampleEdges}
+        categories={sampleCategories}
+        animate={false}
+      />,
+    );
+    const s = series();
     expect(s[0].type).toBe('graph');
     const nodes = s[0].data as Array<{ id: string; name: string }>;
     const links = s[0].links as Array<{ source: string; target: string }>;
@@ -1450,7 +1452,6 @@ describe('GraphChart option shape', () => {
 
   it('handles empty nodes without throwing', () => {
     expect(() => render(<GraphChart nodes={[]} edges={[]} animate={false} />)).not.toThrow();
->>>>>>> e6d1a45c (feat(x-charts): add GraphChart wrapper (PR-X12b, network topology))
   });
 });
 
