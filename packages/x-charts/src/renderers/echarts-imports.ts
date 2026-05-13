@@ -64,7 +64,10 @@ import { CandlestickChart } from 'echarts/charts';
 // PR-X10 (Codex thread 019e1e30 AGREE): decorative bar chart that renders
 // each bar as a tiled symbol (icon). Useful for infographic dashboards.
 import { PictorialBarChart } from 'echarts/charts';
-// Future: import { ParallelChart } from 'echarts/charts';
+// PR-X12a (Codex thread 019e2119 AGREE): parallel coordinates chart for
+// multi-dim data comparison (HR compensation eşitliği analizi). Reads N
+// dimensions per row, renders one polyline per row across N axes.
+import { ParallelChart } from 'echarts/charts';
 // Future: import { GraphChart } from 'echarts/charts';
 
 /* ------------------------------------------------------------------ */
@@ -103,6 +106,10 @@ import { MarkLineComponent } from 'echarts/components';
 import { MarkPointComponent } from 'echarts/components';
 import { MarkAreaComponent } from 'echarts/components';
 import { VisualMapComponent } from 'echarts/components';
+// PR-X12a: ParallelComponent is the coordinate system that the
+// `ParallelChart` series renders into (analogous to GridComponent for
+// cartesian charts). Must register both series + coordinate system.
+import { ParallelComponent } from 'echarts/components';
 // Future: import { GeoComponent } from 'echarts/components';
 
 /* ------------------------------------------------------------------ */
@@ -132,6 +139,7 @@ export function registerECharts(): void {
     BoxplotChart, // PR-X6: statistical box-and-whisker chart
     CandlestickChart, // PR-X7: financial OHLC chart
     PictorialBarChart, // PR-X10: decorative pictogram bar chart
+    ParallelChart, // PR-X12a: parallel coordinates (multi-dim comparison)
     // Components
     TitleComponent,
     TooltipComponent,
@@ -148,6 +156,7 @@ export function registerECharts(): void {
     MarkPointComponent,
     MarkAreaComponent,
     VisualMapComponent,
+    ParallelComponent, // PR-X12a: parallel-coordinate system (axes layout)
   ]);
 
   _registered = true;
