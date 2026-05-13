@@ -436,12 +436,29 @@ function scanSourceInvariants() {
   // (defense-in-depth: D1/D3 dist scans still enforce DCE invariants).
   const adminGateMatch = wiring.match(/if\s*\(\s*__MFE_ADMIN_REMOTES_ON_DEMAND__\s*\)\s*\{/);
   if (!adminGateMatch) {
-    pass(
-      'S4',
-      `no \`if (__MFE_ADMIN_REMOTES_ON_DEMAND__) { ... }\` block found in shell-services-wiring ` +
-        `(either fully on-demand eventual state, or refactored to a different shape — ` +
-        `D1/D3 dist invariants still enforce DCE)`,
+    // Codex `019e239a` iter-4 P2 absorb: when the canonical gate is
+    // absent, defer to the actual content of the file.  If ANY admin
+    // static `import('mfe_<admin>/shell-services')` is still in the
+    // source, fail — the gate has been removed but the imports
+    // weren't.  If none are present, the file is in the eventual
+    // fully-on-demand state and PASS is correct.
+    const lingeringAdminImports = ON_DEMAND_REGISTRY.filter((x) => x.adminSetMember).filter((r) =>
+      wiring.includes(`import('mfe_${r.key}/shell-services')`),
     );
+    if (lingeringAdminImports.length > 0) {
+      fail(
+        'S4',
+        `no \`if (__MFE_ADMIN_REMOTES_ON_DEMAND__) { ... }\` gate found, but admin static ` +
+          `imports remain in shell-services-wiring: ${lingeringAdminImports.map((r) => r.key).join(', ')} ` +
+          `(canonical shape removed without retiring the eager imports)`,
+      );
+    } else {
+      pass(
+        'S4',
+        `no \`if (__MFE_ADMIN_REMOTES_ON_DEMAND__) { ... }\` gate found AND no admin static ` +
+          `imports present (fully on-demand eventual state)`,
+      );
+    }
   } else {
     // Locate `if` block body span by walking braces.
     const ifBodyStart = adminGateMatch.index + adminGateMatch[0].length;

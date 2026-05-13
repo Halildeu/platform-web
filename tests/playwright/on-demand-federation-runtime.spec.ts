@@ -81,13 +81,16 @@ const ON_DEMAND_REMOTE_AUX_REGEXES = [
   /\/remotes\/audit\/assets\/[^?]*__mfe_internal__mfe_audit__remoteEntry_js/,
   /\/remotes\/reporting\/assets\/[^?]*__mfe_internal__mfe_reporting__remoteEntry_js/,
   // Host static-loadRemote wrapper chunks (emitted by host build).
-  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_suggestions_/,
-  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_ethic_/,
-  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_schema_explorer_/,
-  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_users_/,
-  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_access_/,
-  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_audit_/,
-  /\/assets\/__mfe_internal__mfe_shell__loadRemote__mfe_reporting_/,
+  // Codex iter-4 P2 absorb: loosen the host wrapper path so future
+  // chunk-path reshaping (e.g. `assets/<subdir>/__mfe_internal...`)
+  // still matches.  Anchor on the canonical chunk-name prefix only.
+  /\/assets\/[^?]*__mfe_internal__mfe_shell__loadRemote__mfe_suggestions_/,
+  /\/assets\/[^?]*__mfe_internal__mfe_shell__loadRemote__mfe_ethic_/,
+  /\/assets\/[^?]*__mfe_internal__mfe_shell__loadRemote__mfe_schema_explorer_/,
+  /\/assets\/[^?]*__mfe_internal__mfe_shell__loadRemote__mfe_users_/,
+  /\/assets\/[^?]*__mfe_internal__mfe_shell__loadRemote__mfe_access_/,
+  /\/assets\/[^?]*__mfe_internal__mfe_shell__loadRemote__mfe_audit_/,
+  /\/assets\/[^?]*__mfe_internal__mfe_shell__loadRemote__mfe_reporting_/,
 ];
 
 /**
