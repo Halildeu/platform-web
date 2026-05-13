@@ -123,7 +123,45 @@ function readEndpointAdminBuildFlag(): boolean {
   );
 }
 
-function buildRemotes(endpointAdminEnabled: boolean) {
+/**
+ * PERF-INIT-V2 PR-B5b1 (canary) — BUILD-TIME first-defined precedence
+ * reader for the MFE on-demand bootstrap canary.  Default OFF — current
+ * eager bootstrap path stays canonical unless an operator explicitly
+ * opts in via `MFE_ON_DEMAND_BOOTSTRAP=1` (or `VITE_MFE_ON_DEMAND_BOOTSTRAP=1`)
+ * BEFORE running `pnpm build`.
+ *
+ * ROLLBACK SEMANTIC (Codex iter-2 P0-2 clarification):
+ *
+ * This reader is evaluated EXCLUSIVELY at build time by Vite — its
+ * result feeds the `__MFE_SUGGESTIONS_ON_DEMAND__` define constant
+ * which Rolldown dead-code-eliminates the inverse branch.  Once a
+ * build has been made with the flag ON, the eager
+ * `import('mfe_suggestions/SuggestionsApp')` specifier no longer
+ * exists in the bundle and CANNOT be re-enabled by any runtime env
+ * (`window.__env__`, `process.env`, etc.).  Full post-build rollback
+ * requires rebuilding with the flag OFF.
+ *
+ * The companion runtime reader in `apps/mfe-shell/src/app/config/mfe-bootstrap-flag.ts`
+ * (PR-B5b3-prep) exists for OTHER consumers that might gate behaviour
+ * on the same env — it does not flip B5b1's eager/on-demand selection
+ * after deploy.
+ */
+function readSuggestionsOnDemandBuildFlag(): boolean {
+  // First-defined wins: `MFE_ON_DEMAND_BOOTSTRAP` overrides
+  // `VITE_MFE_ON_DEMAND_BOOTSTRAP` so operators can disable the canary
+  // before the build runs even when CI exports the VITE_ form.
+  const runtimeRaw = process.env.MFE_ON_DEMAND_BOOTSTRAP;
+  if (runtimeRaw !== undefined && runtimeRaw !== '') {
+    return /^(1|true|yes|on)$/i.test(runtimeRaw.trim());
+  }
+  const buildRaw = process.env.VITE_MFE_ON_DEMAND_BOOTSTRAP;
+  if (buildRaw !== undefined && buildRaw !== '') {
+    return /^(1|true|yes|on)$/i.test(buildRaw.trim());
+  }
+  return false;
+}
+
+function buildRemotes(endpointAdminEnabled: boolean, suggestionsOnDemand: boolean) {
   const enabled = {
     suggestions: readEnvBoolean([
       'VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE',
@@ -185,11 +223,23 @@ function buildRemotes(endpointAdminEnabled: boolean) {
   };
 
   return {
-    mfe_suggestions: {
-      type: 'module',
-      name: 'mfe_suggestions',
-      entry: enabled.suggestions ? remoteEntries.suggestions : STUB,
-    },
+    // PERF-INIT-V2 PR-B5b1 canary: when `MFE_ON_DEMAND_BOOTSTRAP=1`
+    // the suggestions remote is OMITTED from the federation manifest so
+    // the @module-federation/vite plugin does not emit a synchronous
+    // `remoteEntry.js` fetch at host bootstrap.  The runtime route
+    // loader (`createSuggestionsAppOnDemand.tsx`) uses
+    // `@module-federation/runtime` `registerRemotes` + `loadRemote` to
+    // bring the remote up only when `/suggestions` is navigated to.
+    // Same precedent as `mfe_endpoint_admin` build-time omit below.
+    ...(suggestionsOnDemand && enabled.suggestions
+      ? {}
+      : {
+          mfe_suggestions: {
+            type: 'module' as const,
+            name: 'mfe_suggestions',
+            entry: enabled.suggestions ? remoteEntries.suggestions : STUB,
+          },
+        }),
     mfe_ethic: {
       type: 'module',
       name: 'mfe_ethic',
@@ -297,6 +347,14 @@ export default defineConfig(({ mode }) => {
   // Single source of truth — passed into both buildRemotes() and
   // define for compile-time consumption in lazy-routes.ts.
   const endpointAdminBuildEnabled = readEndpointAdminBuildFlag();
+  // PERF-INIT-V2 PR-B5b1 canary: same pattern as endpointAdminBuildEnabled.
+  // When ON the suggestions remote is omitted from federation manifest
+  // AND the static `import('mfe_suggestions/SuggestionsApp')` in
+  // lazy-routes.ts is dead-code-eliminated via the
+  // `__MFE_SUGGESTIONS_ON_DEMAND__` define constant below.  Runtime
+  // route loader uses `@module-federation/runtime` to bring the remote
+  // up on navigation.
+  const suggestionsOnDemandBuildEnabled = readSuggestionsOnDemandBuildFlag();
 
   return {
     base: appBasePath,
@@ -324,7 +382,7 @@ export default defineConfig(({ mode }) => {
         name: 'mfe_shell',
         filename: 'remoteEntry.js',
         dts: false,
-        remotes: buildRemotes(endpointAdminBuildEnabled),
+        remotes: buildRemotes(endpointAdminBuildEnabled, suggestionsOnDemandBuildEnabled),
         exposes: {
           './logic': './src/exposed-logic.ts',
           './services': './src/app/services/shell-services.ts',
@@ -383,6 +441,11 @@ export default defineConfig(({ mode }) => {
       // previous IIFE-over-process.env approach was not reliably
       // tree-shaken (Codex PR #287 iter-1 must-fix #1).
       __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: JSON.stringify(endpointAdminBuildEnabled),
+      // PERF-INIT-V2 PR-B5b1 canary: dead-code-eliminate the static
+      // `import('mfe_suggestions/SuggestionsApp')` in lazy-routes.ts
+      // when the on-demand canary is active.  Same Vite `define`
+      // pattern as the endpoint-admin precedent (Codex PR #287 iter-1).
+      __MFE_SUGGESTIONS_ON_DEMAND__: JSON.stringify(suggestionsOnDemandBuildEnabled),
       // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
       // build-time opt-in for production __perfSnapshot exposure. The
       // perf-observer.ts shouldExposeGlobal() reads this constant; when
@@ -393,9 +456,7 @@ export default defineConfig(({ mode }) => {
       // flag remains the recommended path for Playwright (no rebuild
       // needed); this build-time flag covers scenarios where addInitScript
       // cannot be wired (cluster-side Lighthouse, third-party perf probe).
-      __PERF_OBSERVER_EXPOSE__: JSON.stringify(
-        process.env.VITE_PERF_OBSERVER_EXPOSE === '1',
-      ),
+      __PERF_OBSERVER_EXPOSE__: JSON.stringify(process.env.VITE_PERF_OBSERVER_EXPOSE === '1'),
     },
 
     server: {

@@ -3,7 +3,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isMfeOnDemandBootstrapEnabled } from '../mfe-bootstrap-flag';
 
 /**
- * PERF-INIT-V2 PR-B5b3-prep — rollback feature flag contract tests.
+ * PERF-INIT-V2 PR-B5b3-prep — BUILD-TIME flag reader contract tests.
+ *
+ * Note (Codex thread `019e22ac` iter-4 reframing): this reader is a
+ * state-probe for OTHER consumers (observability/debug) — it does NOT
+ * control B5b1's eager/on-demand selection at runtime.  B5b1 reads the
+ * compile-time `__MFE_SUGGESTIONS_ON_DEMAND__` define populated by
+ * `vite.config.ts`, and the inverse branch is DCE'd from the bundle.
+ * Tests below verify env precedence semantics that match the
+ * build-time reader in `vite.config.ts`.
  *
  * The flag must default to FALSE (current eager bootstrap unchanged).
  * Operators can opt in via either `MFE_ON_DEMAND_BOOTSTRAP=1` (runtime
