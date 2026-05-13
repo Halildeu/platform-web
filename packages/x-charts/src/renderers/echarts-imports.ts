@@ -68,7 +68,11 @@ import { PictorialBarChart } from 'echarts/charts';
 // multi-dim data comparison (HR compensation eşitliği analizi). Reads N
 // dimensions per row, renders one polyline per row across N axes.
 import { ParallelChart } from 'echarts/charts';
-// Future: import { GraphChart } from 'echarts/charts';
+// PR-X12b (Codex thread 019e2119 AGREE): network/graph chart for entity-
+// edge relationship topology (Context Health DocGraph, dependency network,
+// permission cascade). Replaces "graph"-named bar charts that count nodes
+// but don't show their relationships.
+import { GraphChart } from 'echarts/charts';
 
 /* ------------------------------------------------------------------ */
 /*  Components (UI features used by charts)                            */
@@ -140,6 +144,7 @@ export function registerECharts(): void {
     CandlestickChart, // PR-X7: financial OHLC chart
     PictorialBarChart, // PR-X10: decorative pictogram bar chart
     ParallelChart, // PR-X12a: parallel coordinates (multi-dim comparison)
+    GraphChart, // PR-X12b: network/graph relationship topology
     // Components
     TitleComponent,
     TooltipComponent,
