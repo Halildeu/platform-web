@@ -3,6 +3,16 @@
   "_acceptance": "Codex thread 019e1de0 AGREE — warmup 2 weeks warn-only, then 5% hard fail.",
   "_methodology": "median of 5 runs, foreground only, fixed bundled Chrome version, hidden-page invalid. See scripts/ci/route-performance-budget.mjs.",
   "_phase": "INITIAL EMPTY — first PR-M1/PR-G1 run on main will populate this file. Subsequent regression checks compare against committed values.",
-  "timestamp": 0,
-  "routes": {}
+  "timestamp": 1778716452886,
+  "routes": {
+    "/login::cold-anonymous": {
+      "transferKB": 2343,
+      "decodedKB": 9069,
+      "resourceCount": 64,
+      "tbtMs": 72,
+      "longTaskTotalMs": 122,
+      "lcpMs": 1040,
+      "fcpMs": 1024
+    }
+  }
 }
