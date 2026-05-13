@@ -31,8 +31,16 @@
  *   node scripts/diagnostics/mf-shared-keys.mjs --strict   # exit 1 on issues
  *
  * EXIT CODES:
- *   0 — clean (no issues, or only --json mode without --strict)
- *   1 — issues found and --strict was passed (or always in human mode if any)
+ *   0 — script ran successfully.  This is the default; the human and JSON
+ *       outputs both surface any findings via their `issues` list, so a
+ *       reader can still see them at exit 0.
+ *   1 — `--strict` was passed AND at least one issue was found.  Use this
+ *       in CI to fail the build on shared-scope drift.
+ *   2 — unable to parse the shell sharedCore block (config corruption).
+ *
+ * Rationale: defaulting to exit 0 makes the diagnostic safe to run as a
+ * dev-time check without breaking unrelated scripts.  CI explicitly opts
+ * in to fail-on-issue by passing --strict.
  *
  * RELATED:
  *   - docs/performance/mf-shared-scope-audit.md
@@ -87,13 +95,24 @@ function readPackageDeps(dir) {
   }
 }
 
-/** Extract the `sharedCore` declaration block as raw source text. */
+/** Extract the `sharedCore` declaration block as raw source text.
+ *
+ * Strips block + line comments so commented-out entries do not get parsed
+ * as live declarations (parity with federation-doctor PR-B2 hardening).
+ */
 function extractSharedCoreBlock(content) {
   const m = content.match(/const sharedCore\s*=\s*\{([\s\S]*?)\n\};/);
-  return m ? m[1] : null;
+  if (!m) return null;
+  return m[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
 }
 
-/** Parse one sharedCore entry per line into a structured record. */
+/** Parse one sharedCore entry per line into a structured record.
+ *
+ * Anchored to line start to avoid prose matches inside template literals or
+ * string values.
+ */
 function parseSharedCoreEntries(blockSource) {
   if (!blockSource) return [];
   const entries = [];
@@ -154,8 +173,10 @@ for (const remote of remotes) {
     const remoteEntry = remote.sharedCoreByKey.get(dep);
     const shellVersion = shell.deps[dep] ?? null;
     const remoteVersion = remote.deps[dep] ?? null;
+    // Boolean for JSON consumer type stability: never null, always true|false.
+    const versionKnown = Boolean(shellVersion && remoteVersion);
     const versionMismatch =
-      shellVersion && remoteVersion && shellVersion !== remoteVersion;
+      versionKnown && shellVersion !== remoteVersion;
 
     const row = {
       remote: remote.name,
@@ -163,9 +184,11 @@ for (const remote of remotes) {
       present: !!remoteEntry,
       factory: remoteEntry?.factory ?? null,
       remoteImportFalse: remoteEntry?.importFalse ?? null,
+      remoteEager: remoteEntry?.eager ?? false,
       shellEager: shellEntry.eager,
       shellVersion,
       remoteVersion,
+      versionKnown,
       versionMismatch,
       issues: [],
     };
@@ -173,16 +196,30 @@ for (const remote of remotes) {
     if (!remoteEntry) {
       row.issues.push('missing-in-remote');
       issues.push(`${remote.name}: missing shared singleton '${dep}'`);
-    } else if (!remoteEntry.importFalse && !shellEntry.eager) {
-      // Both sides import; works but defeats the bundle-size benefit of
-      // canonical provider pattern.  Flag as advisory.
-      row.issues.push('both-sides-import-no-eager');
-    } else if (!remoteEntry.importFalse && shellEntry.eager) {
-      // Remote also bundles the dep even though host owns it.  Bundle waste.
-      row.issues.push('remote-bundles-canonical');
-      issues.push(
-        `${remote.name}: '${dep}' duplicated (host is canonical with eager:true; remote should use hostOnly())`,
-      );
+    } else {
+      // Remote-side eager:true is an anti-pattern under canonical provider.
+      // Only the host should pre-initialise the share-scope; if both sides
+      // mark a dep eager, both will race to claim the singleton.
+      if (remoteEntry.eager) {
+        row.issues.push('remote-eager');
+        issues.push(
+          `${remote.name}: '${dep}' declared eager on the remote side (only the host should be eager under canonical provider)`,
+        );
+      }
+      if (!remoteEntry.importFalse && !shellEntry.eager) {
+        // Both sides import; works but defeats the bundle-size benefit of
+        // canonical provider pattern.  Flag as advisory.
+        row.issues.push('both-sides-import-no-eager');
+      } else if (!remoteEntry.importFalse && shellEntry.eager) {
+        // Remote also ships the dep in its chunk even though host owns it.
+        // "remote-bundles-canonical" is a config-level signal — the actual
+        // byte waste must still be confirmed against the remote build's
+        // chunk graph.  This is what PR-B2-rollout proves out per remote.
+        row.issues.push('remote-bundles-canonical');
+        issues.push(
+          `${remote.name}: '${dep}' likely shipped in remote chunk (host is canonical with eager:true; remote should use hostOnly() — verify against chunk graph)`,
+        );
+      }
     }
 
     if (!shellEntry.eager) {

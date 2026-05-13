@@ -1,11 +1,13 @@
 # MF Shared-Scope Audit (PR-B2)
 
-> **Status:** PR-B2-prep (audit + diagnostic + doc) merged 2026-05-13.
+> **Status:** PR-B2-prep (audit + diagnostic + doc) proposed 2026-05-13.
 > Follow-up canary (`@tanstack/react-query` hostOnly conversion) tracked
 > separately as PR-B2-rollout.
 >
 > **Owners:** PERF-INIT-V2 working group (Claude + Codex peer review).
-> **Related:** `docs/performance/PERF-INIT-V2-plan.md` (§B2).
+> **Related:** PERF-INIT-V2 plan §B2 (Module Federation shared scope —
+> tracked in the PERF-INIT-V2 working-group notes; doc landing tracked
+> as a separate follow-up).
 
 ## TL;DR
 
@@ -132,7 +134,10 @@ if any issue is found.
 4. Run `node scripts/ops/federation-doctor.mjs --json` — expect
    `shared-deps-consistency: pass`.
 5. Run `node scripts/diagnostics/mf-shared-keys.mjs --strict` — expect
-   exit 0.
+   exit 0 once PR-B2-rollout has converted the remaining
+   `@tanstack/react-query` entries to `hostOnly()`. Until then
+   `--strict` correctly exits 1 with 6 `remote-bundles-canonical`
+   findings; that is the expected transitional state.
 6. Build at least one remote (`pnpm --filter mfe-suggestions build`)
    and verify the dep does **not** appear in the remote chunk graph.
 

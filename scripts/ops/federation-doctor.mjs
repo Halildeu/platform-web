@@ -142,6 +142,12 @@ function parsePort(configContent) {
  *     `import: false` to consume from host's share-scope).  It IS a singleton
  *     declaration — federation-doctor treating it as missing was a false
  *     positive that produced 30 phantom drifts across the workspace.
+ *   - Strip `//` line comments and `/* … *\/` block comments from the
+ *     sharedCore block before matching, so `// react: singleton(...)` does
+ *     not get parsed as a live declaration (Codex P2 hardening).
+ *   - Anchor the regex to a line start (with leading whitespace) so prose
+ *     containing `singleton(` inside template literals or string values does
+ *     not match.
  *
  *   The canonical provider pattern is documented in
  *   docs/performance/mf-shared-scope-audit.md (PR-B2).
@@ -151,6 +157,12 @@ function parseSharedCore(configContent) {
   const coreBlock = configContent.match(/const sharedCore\s*=\s*\{([\s\S]*?)\};/);
   if (!coreBlock) return deps;
 
+  // Strip block comments first, then line comments.  Order matters: a `//`
+  // inside a block comment must not survive the line-comment pass.
+  const stripped = coreBlock[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
   // Key forms accepted:
   //   react: ...                  → unquoted JS identifier
   //   'react-dom': ...            → single-quoted string
@@ -159,10 +171,11 @@ function parseSharedCore(configContent) {
   // Value MUST start with a known share-factory call:
   //   singleton(  → canonical singleton
   //   hostOnly(   → canonical singleton w/ import:false (host as provider)
+  // Anchored to line start (optionally indented) to avoid prose matches.
   const sharedDepPattern =
-    /(?:['"]([^'"]+)['"]|([A-Za-z_$][\w$]*))\s*:\s*(?:singleton|hostOnly)\s*\(/g;
+    /^\s*(?:['"]([^'"]+)['"]|([A-Za-z_$][\w$]*))\s*:\s*(?:singleton|hostOnly)\s*\(/gm;
   let m;
-  while ((m = sharedDepPattern.exec(coreBlock[1])) !== null) {
+  while ((m = sharedDepPattern.exec(stripped)) !== null) {
     const key = m[1] ?? m[2];
     if (key) deps.add(key);
   }
