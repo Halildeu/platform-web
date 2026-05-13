@@ -62,6 +62,11 @@
       "import": "./dist/esm/internal/overlay-engine/index.js",
       "require": "./dist/cjs/internal/overlay-engine/index.cjs"
     },
+    "./light": {
+      "types": "./dist/light.d.ts",
+      "import": "./dist/esm/light.js",
+      "require": "./dist/cjs/light.cjs"
+    },
     "./icons": {
       "types": "./dist/icons/index.d.ts",
       "import": "./dist/esm/icons/index.js",

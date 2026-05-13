@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, CardHeader, CardBody } from '@mfe/design-system';
-import { Badge } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B1b: light entry for /home initial widgets.
+import { Card, CardHeader, CardBody, Badge } from '@mfe/design-system/light';
 import { PieChart } from '@mfe/x-charts';
 
 const COCKPIT_URL = '/cockpit-api';

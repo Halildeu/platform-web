@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B1b: use the light entry to avoid pulling the full
+// design-system tree (components, patterns, advanced, icons, etc.) into
+// the /login cold-load chunk graph.
+import { Button } from '@mfe/design-system/light';
 import { useShellCommonI18n } from '../../app/i18n';
 import { resolveKeycloakLoginUrl, startKeycloakLogin } from '../../app/auth/keycloakClient';
 import { buildAppRedirectUri, isPermitAllMode } from '../../app/auth/auth-config';

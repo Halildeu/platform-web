@@ -3,6 +3,8 @@ import { defineConfig, type Options } from 'tsup';
 const entry = [
   // Main barrel
   'src/index.ts',
+  // PERF-INIT-V2 PR-B1b: light entry — slim subpath for /login + /home
+  'src/light.ts',
   // Layer-specific deep imports (F1 — Package Topology)
   'src/tokens/index.ts',
   'src/primitives/index.ts',
