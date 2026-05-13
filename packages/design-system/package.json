@@ -63,7 +63,7 @@
       "require": "./dist/cjs/internal/overlay-engine/index.cjs"
     },
     "./light": {
-      "types": "./dist/light.d.ts",
+      "types": "./dist/design-system/src/light.d.ts",
       "import": "./dist/esm/light.js",
       "require": "./dist/cjs/light.cjs"
     },
