@@ -20,6 +20,12 @@ const DEFAULT_FLAGS: FeatureFlag[] = [
   { key: 'design-lab-runtime-preview', enabled: true, description: 'Runtime preview in Design Lab', killSwitch: true },
   { key: 'sentry-tracing', enabled: true, description: 'Sentry performance tracing', killSwitch: true },
   { key: 'rum-web-vitals', enabled: true, description: 'Real User Monitoring', killSwitch: true },
+  // PERF-INIT-V2 PR-B5b3-prep (rollback flag for MFE on-demand bootstrap wave).
+  // Default OFF — current eager remote bootstrap is unchanged.  B5b1+ will
+  // consume this flag; B5b3-prep ships ONLY the registration so operators
+  // can pre-stage the env var before B5b1 rolls out.  See
+  // apps/mfe-shell/src/app/config/mfe-bootstrap-flag.ts for the env reader.
+  { key: 'mfe-on-demand-bootstrap', enabled: false, description: 'Defer MFE remote bootstrap until route navigation (PR-B5b1+; rollback flag set via MFE_ON_DEMAND_BOOTSTRAP env)', killSwitch: true },
 ];
 
 const flags: Map<string, FeatureFlag> = new Map(DEFAULT_FLAGS.map(f => [f.key, f]));
