@@ -161,7 +161,11 @@ function readSuggestionsOnDemandBuildFlag(): boolean {
   return false;
 }
 
-function buildRemotes(endpointAdminEnabled: boolean, suggestionsOnDemand: boolean) {
+function buildRemotes(
+  endpointAdminEnabled: boolean,
+  suggestionsOnDemand: boolean,
+  ethicOnDemand: boolean,
+) {
   const enabled = {
     suggestions: readEnvBoolean([
       'VITE_SHELL_ENABLE_SUGGESTIONS_REMOTE',
@@ -240,11 +244,25 @@ function buildRemotes(endpointAdminEnabled: boolean, suggestionsOnDemand: boolea
             entry: enabled.suggestions ? remoteEntries.suggestions : STUB,
           },
         }),
-    mfe_ethic: {
-      type: 'module',
-      name: 'mfe_ethic',
-      entry: enabled.ethic ? remoteEntries.ethic : STUB,
-    },
+    // PERF-INIT-V2 PR-B5b1.5 canary: when `ethicOnDemand` is true and
+    // `enabled.ethic` is true, the entry is omitted from the federation
+    // manifest entirely.  The route render loader
+    // (`createEthicAppOnDemand.tsx`) uses host MF runtime
+    // `registerRemotes` + `loadRemote` to bring the remote up only
+    // when `/ethic` route mounts.  Same pattern as `mfe_suggestions`
+    // canary above (PR-B5b1) — single `VITE_MFE_ON_DEMAND_BOOTSTRAP`
+    // env drives both via the existing `readSuggestionsOnDemandBuildFlag()`
+    // reader (kept original function name from B5b1 for cross-PR audit
+    // continuity; ethic reads the same env via same reader call).
+    ...(ethicOnDemand && enabled.ethic
+      ? {}
+      : {
+          mfe_ethic: {
+            type: 'module' as const,
+            name: 'mfe_ethic',
+            entry: enabled.ethic ? remoteEntries.ethic : STUB,
+          },
+        }),
     mfe_access: {
       type: 'module',
       name: 'mfe_access',
@@ -347,14 +365,22 @@ export default defineConfig(({ mode }) => {
   // Single source of truth — passed into both buildRemotes() and
   // define for compile-time consumption in lazy-routes.ts.
   const endpointAdminBuildEnabled = readEndpointAdminBuildFlag();
-  // PERF-INIT-V2 PR-B5b1 canary: same pattern as endpointAdminBuildEnabled.
-  // When ON the suggestions remote is omitted from federation manifest
-  // AND the static `import('mfe_suggestions/SuggestionsApp')` in
-  // lazy-routes.ts is dead-code-eliminated via the
-  // `__MFE_SUGGESTIONS_ON_DEMAND__` define constant below.  Runtime
-  // route loader uses `@module-federation/runtime` to bring the remote
-  // up on navigation.
+  // PERF-INIT-V2 PR-B5b1 + PR-B5b1.5 canary: same pattern as
+  // endpointAdminBuildEnabled.  Single `VITE_MFE_ON_DEMAND_BOOTSTRAP`
+  // env drives BOTH `mfe_suggestions` (PR-B5b1) AND `mfe_ethic`
+  // (PR-B5b1.5) on-demand bootstrap.  When ON, both remotes are
+  // omitted from federation manifest AND the static
+  // `import('mfe_suggestions/SuggestionsApp')` /
+  // `import('mfe_ethic/EthicApp')` specifiers in lazy-routes.ts are
+  // dead-code-eliminated via the `__MFE_SUGGESTIONS_ON_DEMAND__` /
+  // `__MFE_ETHIC_ON_DEMAND__` define constants below.  Runtime route
+  // loaders use host MF runtime `registerRemotes` + `loadRemote` to
+  // bring each remote up on navigation.
   const suggestionsOnDemandBuildEnabled = readSuggestionsOnDemandBuildFlag();
+  // PR-B5b1.5: separate variable name preserved for symmetry with
+  // future per-remote toggle expansion (B5b2); current implementation
+  // reads same env via same reader function (single canary master toggle).
+  const ethicOnDemandBuildEnabled = readSuggestionsOnDemandBuildFlag();
 
   return {
     base: appBasePath,
@@ -382,7 +408,11 @@ export default defineConfig(({ mode }) => {
         name: 'mfe_shell',
         filename: 'remoteEntry.js',
         dts: false,
-        remotes: buildRemotes(endpointAdminBuildEnabled, suggestionsOnDemandBuildEnabled),
+        remotes: buildRemotes(
+          endpointAdminBuildEnabled,
+          suggestionsOnDemandBuildEnabled,
+          ethicOnDemandBuildEnabled,
+        ),
         exposes: {
           './logic': './src/exposed-logic.ts',
           './services': './src/app/services/shell-services.ts',
@@ -446,6 +476,11 @@ export default defineConfig(({ mode }) => {
       // when the on-demand canary is active.  Same Vite `define`
       // pattern as the endpoint-admin precedent (Codex PR #287 iter-1).
       __MFE_SUGGESTIONS_ON_DEMAND__: JSON.stringify(suggestionsOnDemandBuildEnabled),
+      // PERF-INIT-V2 PR-B5b1.5 — same single-canary semantic as
+      // suggestions above; `lazy-routes.ts` selects the `EthicAppOnDemand`
+      // branch when this evaluates to true, Rolldown DCE's the
+      // `import('mfe_ethic/EthicApp')` static specifier.
+      __MFE_ETHIC_ON_DEMAND__: JSON.stringify(ethicOnDemandBuildEnabled),
       // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
       // build-time opt-in for production __perfSnapshot exposure. The
       // perf-observer.ts shouldExposeGlobal() reads this constant; when
