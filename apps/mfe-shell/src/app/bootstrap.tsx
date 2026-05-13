@@ -70,12 +70,30 @@ setupPerformanceObservers(defaultSinks);
 recordMark('shell:mounted');
 
 // OpenTelemetry: distributed trace context propagation
+// PERF-INIT-V2 PR-B3e: deferred to idle.  initOtel monkey-patches `fetch`
+// for traceparent header injection — it does NOT observe paint events.
+// React tree mounts BEFORE the first protected API call, so deferring
+// the patch to the next idle window only risks losing trace headers on
+// fetches that happen to fire in the first ~100ms (typical idle delay).
+// On a slow network the 1500ms timeout bounds the worst case so the
+// monkey-patch is always installed before user-driven API traffic.
 import { initOtel } from '../lib/otel';
-initOtel();
 
 // Feature flags: runtime kill switches for safe rollout
+// PERF-INIT-V2 PR-B3e: deferred to idle.  initFeatureFlags reads
+// localStorage (dev only) and seeds an in-memory Map.  No code path
+// reads flags during the synchronous bootstrap; route components query
+// them on demand AFTER React mounts.
 import { initFeatureFlags } from '../lib/feature-flags';
-initFeatureFlags();
+
+import { scheduleOnIdle } from '../lib/idle-scheduler';
+scheduleOnIdle(
+  () => {
+    initOtel();
+    initFeatureFlags();
+  },
+  { timeout: 1500 },
+);
 
 // Runtime browser error capture: early window errors + console.error +
 // unhandled promise rejections are collected into a shell buffer and
