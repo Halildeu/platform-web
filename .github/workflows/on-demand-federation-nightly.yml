@@ -1,0 +1,112 @@
+# PERF-INIT-V2 PR-B5b3b — On-Demand Federation Nightly Runtime Smoke.
+#
+# Companion to PR-B5b3 source/build static guard (workflow
+# on-demand-federation-guard.yml).  This nightly cron exercises the
+# deployed canary build against testai.acik.com and asserts:
+#
+#   1. ZERO requests to `/remotes/<remote>/remoteEntry.js` for the
+#      7 on-demand canaries (suggestions / ethic / schema_explorer /
+#      users / access / audit / reporting).
+#   2. /login cold transfer < 5 MB (ceiling above measured 2.34 MB
+#      baseline — catches the 49 MB pre-V2 regression).
+#   3. /login decoded JS < 15 MB (ceiling above measured 9.09 MB
+#      baseline).
+#
+# Codex thread `019e239a` two-layer recommendation; this is layer 2
+# (runtime/network observation).  No auto-revert per the Codex P0
+# decision — failure just creates a red workflow run for operator
+# triage, plus optional Slack alert if webhook secret is configured.
+#
+# Schedule: 02:00 UTC daily (05:00 Turkey local) — outside business
+# hours so an early-morning fix has a full day to land before the
+# next run.
+
+name: PERF-INIT-V2 On-Demand Federation Nightly Smoke (testai)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Override target base URL (default: https://testai.acik.com)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  TARGET_URL: ${{ inputs.target_url || 'https://testai.acik.com' }}
+
+jobs:
+  on-demand-federation-runtime:
+    name: on-demand federation runtime smoke (/login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from package.json `packageManager` field
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium (deps via setup, browser via cache)
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Runtime smoke — 0 admin remoteEntry fetches + perf ceiling
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ env.TARGET_URL }}
+        run: |
+          pnpm exec playwright test \
+            tests/playwright/on-demand-federation-runtime.spec.ts \
+            --config tests/playwright/playwright.config.ts \
+            --project chromium \
+            --reporter=list
+
+      # Optional Slack alert on failure.  Secret `SLACK_PERF_WEBHOOK_URL`
+      # is optional; if absent the step no-ops.  Use a low-noise channel
+      # since the nightly fires every day at the same time.
+      - name: Slack alert on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_PERF_WEBHOOK_URL }}
+          TARGET: ${{ env.TARGET_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${SLACK_WEBHOOK:-}" ]; then
+            echo "[B5b3b] SLACK_PERF_WEBHOOK_URL not configured; skipping Slack alert"
+            exit 0
+          fi
+          payload=$(cat <<EOF
+          {
+            "text": ":rotating_light: PERF-INIT-V2 B5b3b on-demand federation nightly smoke FAILED",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":rotating_light: *PERF-INIT-V2 B5b3b nightly smoke FAILED*\nTarget: \`${TARGET}\`\n<${RUN_URL}|Workflow run>"
+                }
+              }
+            ]
+          }
+          EOF
+          )
+          curl -sS -X POST -H 'Content-Type: application/json' -d "${payload}" "${SLACK_WEBHOOK}" || true
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-on-demand-federation-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
