@@ -55,6 +55,7 @@ import type { FC, PropsWithChildren } from 'react';
 import { createLazyRemoteModule } from './createLazyRemoteModule';
 import { ensureRemoteShellServicesConfigured } from './config/ensure-remote-shell-services';
 import { getSharedShellServices } from './config/shell-services-wiring';
+import { resolveAdminRemoteEntry } from './config/admin-remote-bootstrap';
 
 declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
@@ -92,24 +93,17 @@ function getHostMfInstance(): MfHostInstance | null {
 }
 
 /**
- * Read the users remoteEntry URL from runtime env injected by the
- * index.html transform.  Lookup order matches the build-time
- * `MFE_USERS_URL` env that `vite.config.ts` reads for the eager mode
- * federation manifest (port 3004 default — see `remoteEntries.users`).
+ * Codex `019e239a` post-merge B5b3c absorb: legacy
+ * `resolveUsersRemoteEntry()` retired in favor of central
+ * `resolveAdminRemoteEntry('users')` from
+ * `./config/admin-remote-bootstrap.ts` so the idle batch loader and
+ * the route-level wrapper share ONE resolver implementation.  Prior
+ * to this PR the wrapper kept its own copy of the lookup chain
+ * (window.__env__ MFE_USERS_URL → VITE_MFE_USERS_URL → process.env
+ * MFE_USERS_URL → VITE_MFE_USERS_URL → localhost:3004) which could
+ * silently drift from the central resolver in
+ * `admin-remote-bootstrap.ts`.
  */
-function resolveUsersRemoteEntry(): string {
-  if (typeof window !== 'undefined') {
-    const w = window as Window & { __env__?: Record<string, string> };
-    const url = w.__env__?.MFE_USERS_URL ?? w.__env__?.VITE_MFE_USERS_URL ?? null;
-    if (url) return url;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    const url = process.env.MFE_USERS_URL ?? process.env.VITE_MFE_USERS_URL ?? null;
-    if (url) return url;
-  }
-  // Dev fallback — matches default in apps/mfe-shell/vite.config.ts.
-  return 'http://localhost:3004/remoteEntry.js';
-}
 
 /**
  * Inner async loader for the route-level lazy factory.
@@ -133,7 +127,7 @@ async function loadUsersRemote(): Promise<{ default: FC<PropsWithChildren> }> {
   const sharedServices = getSharedShellServices();
   await ensureRemoteShellServicesConfigured(
     USERS_REMOTE_NAME,
-    resolveUsersRemoteEntry(),
+    resolveAdminRemoteEntry('users'),
     sharedServices,
   );
   const host = getHostMfInstance();

@@ -55,6 +55,7 @@ import type { FC, PropsWithChildren } from 'react';
 import { createLazyRemoteModule } from './createLazyRemoteModule';
 import { ensureRemoteShellServicesConfigured } from './config/ensure-remote-shell-services';
 import { getSharedShellServices } from './config/shell-services-wiring';
+import { resolveAdminRemoteEntry } from './config/admin-remote-bootstrap';
 
 declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
@@ -97,19 +98,6 @@ function getHostMfInstance(): MfHostInstance | null {
  * `MFE_AUDIT_URL` env that `vite.config.ts` reads for the eager mode
  * federation manifest (port 3006 default — see `remoteEntries.audit`).
  */
-function resolveAuditRemoteEntry(): string {
-  if (typeof window !== 'undefined') {
-    const w = window as Window & { __env__?: Record<string, string> };
-    const url = w.__env__?.MFE_AUDIT_URL ?? w.__env__?.VITE_MFE_AUDIT_URL ?? null;
-    if (url) return url;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    const url = process.env.MFE_AUDIT_URL ?? process.env.VITE_MFE_AUDIT_URL ?? null;
-    if (url) return url;
-  }
-  // Dev fallback — matches default in apps/mfe-shell/vite.config.ts.
-  return 'http://localhost:3006/remoteEntry.js';
-}
 
 /**
  * Inner async loader for the route-level lazy factory.
@@ -133,7 +121,7 @@ async function loadAuditRemote(): Promise<{ default: FC<PropsWithChildren> }> {
   const sharedServices = getSharedShellServices();
   await ensureRemoteShellServicesConfigured(
     AUDIT_REMOTE_NAME,
-    resolveAuditRemoteEntry(),
+    resolveAdminRemoteEntry('audit'),
     sharedServices,
   );
   const host = getHostMfInstance();
