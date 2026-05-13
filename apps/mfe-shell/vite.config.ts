@@ -124,20 +124,32 @@ function readEndpointAdminBuildFlag(): boolean {
 }
 
 /**
- * PERF-INIT-V2 PR-B5b1 (canary) — first-defined precedence reader for the
- * MFE on-demand bootstrap rollback flag.  Mirrors the runtime reader in
- * `apps/mfe-shell/src/app/config/mfe-bootstrap-flag.ts` (PR-B5b3-prep)
- * but evaluated at BUILD-TIME by Vite so the omit decision can shape
- * the federation manifest before bundling.  Default OFF — current eager
- * bootstrap path stays canonical unless an operator explicitly opts in
- * (rollback flag preserves the ability to disable at runtime even when
- * the build was made with the flag on).
+ * PERF-INIT-V2 PR-B5b1 (canary) — BUILD-TIME first-defined precedence
+ * reader for the MFE on-demand bootstrap canary.  Default OFF — current
+ * eager bootstrap path stays canonical unless an operator explicitly
+ * opts in via `MFE_ON_DEMAND_BOOTSTRAP=1` (or `VITE_MFE_ON_DEMAND_BOOTSTRAP=1`)
+ * BEFORE running `pnpm build`.
+ *
+ * ROLLBACK SEMANTIC (Codex iter-2 P0-2 clarification):
+ *
+ * This reader is evaluated EXCLUSIVELY at build time by Vite — its
+ * result feeds the `__MFE_SUGGESTIONS_ON_DEMAND__` define constant
+ * which Rolldown dead-code-eliminates the inverse branch.  Once a
+ * build has been made with the flag ON, the eager
+ * `import('mfe_suggestions/SuggestionsApp')` specifier no longer
+ * exists in the bundle and CANNOT be re-enabled by any runtime env
+ * (`window.__env__`, `process.env`, etc.).  Full post-build rollback
+ * requires rebuilding with the flag OFF.
+ *
+ * The companion runtime reader in `apps/mfe-shell/src/app/config/mfe-bootstrap-flag.ts`
+ * (PR-B5b3-prep) exists for OTHER consumers that might gate behaviour
+ * on the same env — it does not flip B5b1's eager/on-demand selection
+ * after deploy.
  */
 function readSuggestionsOnDemandBuildFlag(): boolean {
-  // First-defined wins (runtime takes precedence over build-time).
-  // Build-time reader can only inspect `process.env`; runtime fallbacks
-  // (`window.__env__`) do not exist here.  The runtime reader in
-  // mfe-bootstrap-flag.ts handles the rollback override after deploy.
+  // First-defined wins: `MFE_ON_DEMAND_BOOTSTRAP` overrides
+  // `VITE_MFE_ON_DEMAND_BOOTSTRAP` so operators can disable the canary
+  // before the build runs even when CI exports the VITE_ form.
   const runtimeRaw = process.env.MFE_ON_DEMAND_BOOTSTRAP;
   if (runtimeRaw !== undefined && runtimeRaw !== '') {
     return /^(1|true|yes|on)$/i.test(runtimeRaw.trim());
