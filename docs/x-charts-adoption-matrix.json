@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-12T20:37:08.915Z",
+  "generatedAt": "2026-05-13T20:06:42.028Z",
   "totalConsumers": 45,
   "byBucket": {
     "production": 17,
@@ -301,16 +301,22 @@
       "symbols": [
         "AreaChart",
         "BarChart",
+        "BoxPlotChart",
+        "CandlestickChart",
         "ChartContainer",
         "ChartDashboard",
         "ChartToolbar",
         "FunnelChart",
         "GaugeChart",
+        "GeoMap",
         "Globe",
+        "GraphChart",
         "HeatmapChart",
         "KPICard",
         "LineChart",
         "Lines3D",
+        "ParallelCoordinatesChart",
+        "PictorialBarChart",
         "PieChart",
         "RadarChart",
         "SHARED_CHART_CANVAS_HEIGHT",
@@ -322,6 +328,7 @@
         "Surface3D",
         "TreemapChart",
         "WaterfallChart",
+        "ensureGeoMapRegistered",
         "useAnomalyOverlay",
         "useChartInteractions",
         "useResponsiveBreakpoint"

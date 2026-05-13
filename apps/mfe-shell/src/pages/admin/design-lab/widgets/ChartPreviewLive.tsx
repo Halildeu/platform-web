@@ -378,29 +378,39 @@ type GeoMapPlaygroundInnerProps = Omit<React.ComponentProps<typeof GeoMap>, 'dat
 };
 
 const GeoMapPlaygroundInner: React.FC<GeoMapPlaygroundInnerProps> = ({
-  mapName = 'TR_DESIGN_LAB',
+  mapName = 'TR',
   ...rest
 }) => {
-  const [ready, setReady] = React.useState<boolean>(false);
+  // Codex 019e22ea iter-1 absorb #3: track readiness PER mapName so a
+  // live edit (user switches the registered map name in the playground
+  // editor) re-enters the loading state until the new map registers.
+  // Previously `ready` stayed `true` after first registration and a new
+  // mapName could render before its map was registered.
+  const [readyMapName, setReadyMapName] = React.useState<string | null>(null);
   React.useEffect(() => {
     let alive = true;
+    setReadyMapName(null);
     ensureGeoMapRegistered(mapName, () => GEO_MAP_PLAYGROUND_GEOJSON)
       .then(() => {
-        if (alive) setReady(true);
+        if (alive) setReadyMapName(mapName);
       })
       .catch(() => {
         // Loader is synchronous here so this branch should never fire,
         // but the catch guards against future loader swaps + keeps the
         // promise chain settled.
-        if (alive) setReady(true);
+        if (alive) setReadyMapName(mapName);
       });
     return () => {
       alive = false;
     };
   }, [mapName]);
-  if (!ready) {
+  if (readyMapName !== mapName) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-sm opacity-60">
+      <div
+        className="flex h-full w-full items-center justify-center text-sm opacity-60"
+        role="status"
+        aria-live="polite"
+      >
         Loading map fixture…
       </div>
     );
@@ -1252,6 +1262,12 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
+            // Codex 019e22ea iter-1 absorb: bullish/bearish colour
+            // overrides are real public props on the wrapper; wire
+            // them through so the playground editor can edit them
+            // live (matches the LIVE_PROP_SUPPORT entry).
+            bullishColor={getOptStr(toggles, 'bullishColor')}
+            bearishColor={getOptStr(toggles, 'bearishColor')}
             showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
@@ -1291,6 +1307,10 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             orientation={getEnum(toggles, 'orientation', 'vertical') as 'vertical' | 'horizontal'}
             symbol={getStr(toggles, 'symbol', 'circle')}
             symbolRepeat={isOn(toggles, 'symbolRepeat', true)}
+            // Codex 019e22ea iter-1 absorb: showGrid wired so the
+            // playground editor can toggle it (matches BarChart
+            // pattern). Wrapper default is `true`.
+            showGrid={isOn(toggles, 'showGrid', true)}
             showLegend={isOn(toggles, 'showLegend', false)}
             animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
@@ -1398,6 +1418,10 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             forceGravity={getOptNum(toggles, 'forceGravity') ?? 0.1}
             forceEdgeLength={getOptNum(toggles, 'forceEdgeLength') ?? 50}
             defaultSymbolSize={getOptNum(toggles, 'defaultSymbolSize') ?? 30}
+            // Codex 019e22ea iter-1 absorb: default node symbol shape
+            // wired so the playground editor can switch between
+            // 'circle' / 'rect' / 'roundRect' / 'diamond' etc.
+            symbol={getStr(toggles, 'symbol', 'circle')}
             showLegend={isOn(toggles, 'showLegend', true)}
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
@@ -1418,12 +1442,27 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'geo-map': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
-      const mapName = getStr(toggles, 'mapName', 'TR_DESIGN_LAB');
+      const mapName = getStr(toggles, 'mapName', 'TR');
+      // Codex 019e22ea iter-1 absorb #6: `selectedMode` wrapper contract
+      // is `boolean | 'single' | 'multiple'`. The toggle store returns
+      // the literal string `'false'` / `'true'` from the enum control,
+      // so we decode it back to the canonical boolean | enum union
+      // before handing it to the wrapper. Without this coercion, string
+      // `'false'` is truthy in JS and ECharts treats the chart as
+      // single-select on every render.
+      const selectedModeRaw = getEnum(toggles, 'selectedMode', 'false');
+      const selectedMode: boolean | 'single' | 'multiple' =
+        selectedModeRaw === 'false'
+          ? false
+          : selectedModeRaw === 'true'
+            ? true
+            : (selectedModeRaw as 'single' | 'multiple');
       // Inner component encapsulates the map registration side-effect.
-      // The stub GeoJSON is intentionally a single-feature placeholder so
-      // the preview renders a shape (instead of "map not registered" dev
-      // warning) without bundling a real TR provinces asset — HR adoption
-      // is a separate PR with the licensed Natural Earth payload.
+      // The stub GeoJSON is intentionally a 3-feature placeholder so the
+      // preview renders shapes (instead of "map not registered" dev
+      // warning) without bundling a real TR provinces asset — HR
+      // adoption is a separate PR with the licensed Natural Earth
+      // payload.
       return (
         <PreviewBox
           ref={containerRef}
@@ -1433,14 +1472,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
         >
           <GeoMapPlaygroundInner
             mapName={mapName}
+            nameProperty={getStr(toggles, 'nameProperty', 'name')}
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
             showLabels={isOn(toggles, 'showLabels', false)}
             roam={isOn(toggles, 'roam', true)}
-            selectedMode={
-              getEnum(toggles, 'selectedMode', 'false') as 'single' | 'multiple' | 'false' | 'true'
-            }
+            selectedMode={selectedMode}
             animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}

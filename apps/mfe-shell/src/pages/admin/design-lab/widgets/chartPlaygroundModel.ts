@@ -694,6 +694,10 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'size',
     'showGrid',
     'showLegend',
+    // Codex 019e22ea iter-1 absorb: bullish/bearish colour overrides
+    // are real public props on the wrapper and should be live-editable.
+    'bullishColor',
+    'bearishColor',
     'animate',
     'theme',
     'decal',
@@ -710,6 +714,9 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'orientation',
     'symbol',
     'symbolRepeat',
+    // Codex 019e22ea iter-1 absorb: wrapper defaults to `showGrid=true`;
+    // editor should allow toggling it (matches BarChart pattern).
+    'showGrid',
     'showLegend',
     'animate',
     'theme',
@@ -748,6 +755,9 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'forceGravity',
     'forceEdgeLength',
     'defaultSymbolSize',
+    // Codex 019e22ea iter-1 absorb: default symbol shape ('circle'
+    // /'rect'/'roundRect'/'diamond' etc.) is a real public prop.
+    'symbol',
     'showLegend',
     'animate',
     'theme',
@@ -763,6 +773,10 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'className',
     'size',
     'mapName',
+    // Codex 019e22ea iter-1 absorb: alternative GeoJSON property key
+    // (e.g. 'iso' or 'code') for region matching. Live-editable so
+    // users can flip between name-based and code-based routing.
+    'nameProperty',
     'showLabels',
     'roam',
     'selectedMode',
