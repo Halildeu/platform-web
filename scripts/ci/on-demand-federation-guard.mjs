@@ -368,15 +368,22 @@ function scanSourceInvariants() {
     const wrapperPath = join(SHELL_DIR, r.wrapperFile);
     if (!existsSync(wrapperPath)) continue;
     const wrapper = readFileSync(wrapperPath, 'utf8');
-    const ensureIdx = wrapper.indexOf('ensureRemoteShellServicesConfigured(');
-    if (ensureIdx < 0) {
+    // Codex `019e239a` iter-3 P2 absorb: search for the AWAITED call
+    // shape (`await ensureRemoteShellServicesConfigured(...)`) not the
+    // bare token — the bare token also appears in the wrapper's JSDoc
+    // header comment, and `indexOf` would return the comment position,
+    // giving a false-pass if the real call moves after host.loadRemote
+    // but the comment stays put.
+    const ensureCallMatch = wrapper.match(/\bawait\s+ensureRemoteShellServicesConfigured\s*\(/);
+    if (!ensureCallMatch) {
       fail(
         'S6',
-        `admin wrapper ${r.wrapperFile} does not call ensureRemoteShellServicesConfigured ` +
-          `(deep-link race protection missing)`,
+        `admin wrapper ${r.wrapperFile} does not have \`await ensureRemoteShellServicesConfigured(...)\` ` +
+          `call (deep-link race protection missing or non-awaited)`,
       );
       continue;
     }
+    const ensureIdx = ensureCallMatch.index;
     // Match the wrapper's own host.loadRemote call site (not the helper
     // import). The wrapper has `host.loadRemote<...>(REMOTE_KEY)`.
     const loadRemoteMatch = wrapper.match(/host\.loadRemote\s*</);
@@ -393,13 +400,13 @@ function scanSourceInvariants() {
     if (ensureIdx > loadRemoteIdx) {
       fail(
         'S6',
-        `admin wrapper ${r.wrapperFile} calls host.loadRemote BEFORE ensureRemoteShellServicesConfigured ` +
+        `admin wrapper ${r.wrapperFile} calls host.loadRemote BEFORE \`await ensureRemoteShellServicesConfigured(...)\` ` +
           `(at indices ${loadRemoteIdx} and ${ensureIdx} — race protection broken)`,
       );
     } else {
       pass(
         'S6',
-        `admin wrapper ${r.wrapperFile} calls ensureRemoteShellServicesConfigured (idx ${ensureIdx}) before host.loadRemote (idx ${loadRemoteIdx})`,
+        `admin wrapper ${r.wrapperFile} awaits ensureRemoteShellServicesConfigured (idx ${ensureIdx}) before host.loadRemote (idx ${loadRemoteIdx})`,
       );
     }
   }
