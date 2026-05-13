@@ -56,6 +56,17 @@ vi.mock('@mfe/x-charts', async () => {
     Surface3D: stubChart('Surface3D'),
     Lines3D: stubChart('Lines3D'),
     Globe: stubChart('Globe'),
+    // PR-X campaign wrappers (Codex 019e22b6 follow-up).
+    BoxPlotChart: stubChart('BoxPlotChart'),
+    CandlestickChart: stubChart('CandlestickChart'),
+    PictorialBarChart: stubChart('PictorialBarChart'),
+    ParallelCoordinatesChart: stubChart('ParallelCoordinatesChart'),
+    GraphChart: stubChart('GraphChart'),
+    GeoMap: stubChart('GeoMap'),
+    // `ensureGeoMapRegistered` is called by the GeoMap playground inner
+    // — return a resolved promise so the loading branch flips fast.
+    ensureGeoMapRegistered: vi.fn().mockResolvedValue(undefined),
+    isGeoMapRegistered: vi.fn().mockReturnValue(true),
   };
 });
 
@@ -79,6 +90,16 @@ const CHART_IDS_WITH_PRESETS = [
   'surface-3d-chart',
   'lines-3d-chart',
   'globe-chart',
+  // PR-X campaign live playground (Codex 019e22b6 follow-up):
+  // 6 new wrappers now have LIVE_PROP_SUPPORT + CHART_PRESETS
+  // + ChartPreviewLive switch arms, so they MUST mount cleanly
+  // with the playground/examples tabs populated.
+  'box-plot-chart',
+  'candlestick-chart',
+  'pictorial-bar-chart',
+  'parallel-coordinates-chart',
+  'graph-chart',
+  'geo-map',
 ] as const;
 
 function renderChartDetail(chartId: string) {

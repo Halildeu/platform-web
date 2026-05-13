@@ -32,6 +32,16 @@ import {
   Surface3D,
   Lines3D,
   Globe,
+  // PR-X campaign live playground (Codex 019e22b6 follow-up):
+  // wire the 6 wrappers into ChartPreviewLive so design-lab Playground
+  // tab renders real instances instead of the "yakında" fallback.
+  BoxPlotChart,
+  CandlestickChart,
+  PictorialBarChart,
+  ParallelCoordinatesChart,
+  GraphChart,
+  GeoMap,
+  ensureGeoMapRegistered,
   KPICard,
   SparklineChart,
   ChartDashboard,
@@ -289,6 +299,125 @@ export const CHART_CANVAS_HEIGHT = SHARED_CHART_CANVAS_HEIGHT;
  */
 export const responsiveHeight = (clampedSize: ChartSize, floor = 0): number =>
   Math.max(floor, CHART_CANVAS_HEIGHT[clampedSize] + 20);
+
+/* ------------------------------------------------------------------ */
+/*  PR-X campaign: GeoMap playground inner                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Synthetic placeholder GeoJSON for the design-lab `GeoMap` preview.
+ *
+ * Three single-polygon "regions" so the wrapper renders a non-empty
+ * canvas without bundling a real TR provinces (or world) asset — that
+ * licensed payload belongs to the HR adoption PR, not the design-lab
+ * playground.
+ */
+const GEO_MAP_PLAYGROUND_GEOJSON = {
+  type: 'FeatureCollection' as const,
+  features: [
+    {
+      type: 'Feature' as const,
+      properties: { name: 'İstanbul' },
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [
+          [
+            [28.5, 41.0],
+            [29.5, 41.0],
+            [29.5, 41.4],
+            [28.5, 41.4],
+            [28.5, 41.0],
+          ],
+        ],
+      },
+    },
+    {
+      type: 'Feature' as const,
+      properties: { name: 'Ankara' },
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [
+          [
+            [32.5, 39.7],
+            [33.3, 39.7],
+            [33.3, 40.2],
+            [32.5, 40.2],
+            [32.5, 39.7],
+          ],
+        ],
+      },
+    },
+    {
+      type: 'Feature' as const,
+      properties: { name: 'İzmir' },
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [
+          [
+            [26.8, 38.2],
+            [27.6, 38.2],
+            [27.6, 38.7],
+            [26.8, 38.7],
+            [26.8, 38.2],
+          ],
+        ],
+      },
+    },
+  ],
+};
+
+/**
+ * Wraps `<GeoMap>` with an idempotent `ensureGeoMapRegistered` mount
+ * effect so the design-lab playground can render the map without
+ * crashing on "map not registered" dev warning. The promise resolves
+ * synchronously here (loader returns the stub literal), so the wrapper
+ * is registered before the next render tick.
+ */
+type GeoMapPlaygroundInnerProps = Omit<React.ComponentProps<typeof GeoMap>, 'data' | 'mapName'> & {
+  mapName?: string;
+};
+
+const GeoMapPlaygroundInner: React.FC<GeoMapPlaygroundInnerProps> = ({
+  mapName = 'TR_DESIGN_LAB',
+  ...rest
+}) => {
+  const [ready, setReady] = React.useState<boolean>(false);
+  React.useEffect(() => {
+    let alive = true;
+    ensureGeoMapRegistered(mapName, () => GEO_MAP_PLAYGROUND_GEOJSON)
+      .then(() => {
+        if (alive) setReady(true);
+      })
+      .catch(() => {
+        // Loader is synchronous here so this branch should never fire,
+        // but the catch guards against future loader swaps + keeps the
+        // promise chain settled.
+        if (alive) setReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [mapName]);
+  if (!ready) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-sm opacity-60">
+        Loading map fixture…
+      </div>
+    );
+  }
+  return (
+    <GeoMap
+      mapName={mapName}
+      data={[
+        { name: 'İstanbul', value: 5000 },
+        { name: 'Ankara', value: 3000 },
+        { name: 'İzmir', value: 2200 },
+      ]}
+      visualMap={{ min: 0, max: 6000 }}
+      {...rest}
+    />
+  );
+};
 
 const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
   chartId,
@@ -1044,6 +1173,274 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             title={getStr(toggles, 'title', chartName)}
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // PR-X campaign live previews (Codex 019e22b6 follow-up): 6 new
+    // wrappers wired into the design-lab playground. Each case mirrors
+    // the canonical pattern (PreviewBox + chart instance + toggles
+    // forwarded from PlaygroundState). Sample data inline so the
+    // preview never depends on remote fixtures.
+    // ─────────────────────────────────────────────────────────────────
+
+    case 'box-plot-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <BoxPlotChart
+            data={[
+              { category: 'Q1', quartiles: [10, 22, 30, 38, 50] },
+              { category: 'Q2', quartiles: [12, 25, 34, 42, 55] },
+              { category: 'Q3', quartiles: [14, 28, 36, 44, 58], outliers: [8, 62] },
+              { category: 'Q4', quartiles: [16, 30, 40, 48, 60] },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            orientation={getEnum(toggles, 'orientation', 'vertical') as 'vertical' | 'horizontal'}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            showOutliers={isOn(toggles, 'showOutliers', true)}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'candlestick-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <CandlestickChart
+            data={[
+              { label: '2026-05-10', open: 100, close: 110, low: 95, high: 115 },
+              { label: '2026-05-11', open: 110, close: 105, low: 102, high: 112 },
+              { label: '2026-05-12', open: 105, close: 118, low: 104, high: 120 },
+              { label: '2026-05-13', open: 118, close: 124, low: 116, high: 128 },
+              { label: '2026-05-14', open: 124, close: 119, low: 117, high: 126 },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'pictorial-bar-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <PictorialBarChart
+            data={[
+              { label: 'Eng', value: 12 },
+              { label: 'Sales', value: 8 },
+              { label: 'HR', value: 5 },
+              { label: 'Ops', value: 6 },
+              { label: 'Marketing', value: 4 },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            orientation={getEnum(toggles, 'orientation', 'vertical') as 'vertical' | 'horizontal'}
+            symbol={getStr(toggles, 'symbol', 'circle')}
+            symbolRepeat={isOn(toggles, 'symbolRepeat', true)}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'parallel-coordinates-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      const groupByVal = getStr(toggles, 'groupBy', 'dept');
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <ParallelCoordinatesChart
+            data={[
+              { dept: 'Eng', salary: 85000, tenure: 5, satisfaction: 8 },
+              { dept: 'Eng', salary: 92000, tenure: 7, satisfaction: 9 },
+              { dept: 'Sales', salary: 62000, tenure: 3, satisfaction: 6 },
+              { dept: 'Sales', salary: 70000, tenure: 4, satisfaction: 7 },
+              { dept: 'HR', salary: 55000, tenure: 8, satisfaction: 8 },
+              { dept: 'HR', salary: 60000, tenure: 6, satisfaction: 7 },
+              { dept: 'Ops', salary: 68000, tenure: 5, satisfaction: 6 },
+            ]}
+            axes={[
+              { field: 'dept', name: 'Department', type: 'category' as const },
+              { field: 'salary', name: 'Salary', type: 'value' as const, min: 50000, max: 100000 },
+              { field: 'tenure', name: 'Tenure (yr)', type: 'value' as const, min: 0, max: 10 },
+              {
+                field: 'satisfaction',
+                name: 'Satisfaction',
+                type: 'value' as const,
+                min: 0,
+                max: 10,
+              },
+            ]}
+            groupBy={groupByVal === '' ? undefined : groupByVal}
+            lineOpacity={getOptNum(toggles, 'lineOpacity') ?? 0.35}
+            lineWidth={getOptNum(toggles, 'lineWidth') ?? 1.5}
+            showLegend={isOn(toggles, 'showLegend', false)}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'graph-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <GraphChart
+            nodes={[
+              { id: 'a', name: 'Doc A', value: 8, category: 0 },
+              { id: 'b', name: 'Doc B', value: 6, category: 0 },
+              { id: 'c', name: 'Doc C', value: 4, category: 0 },
+              { id: 'd', name: 'Orphan', value: 1, category: 1 },
+              { id: 'e', name: 'Circular', value: 3, category: 2 },
+              { id: 'f', name: 'Hub', value: 12, category: 0 },
+            ]}
+            edges={[
+              { source: 'a', target: 'b', value: 2 },
+              { source: 'b', target: 'c', value: 1 },
+              { source: 'f', target: 'a', value: 3 },
+              { source: 'f', target: 'b', value: 2 },
+              { source: 'f', target: 'c', value: 2 },
+              { source: 'e', target: 'f', value: 1 },
+              { source: 'f', target: 'e', value: 1 },
+            ]}
+            categories={[
+              { name: 'Active', color: '#3b82f6' },
+              { name: 'Orphan', color: '#f59e0b' },
+              { name: 'Cyclic', color: '#ef4444' },
+            ]}
+            layout={getEnum(toggles, 'layout', 'force') as 'force' | 'circular' | 'none'}
+            directed={isOn(toggles, 'directed', true)}
+            roam={isOn(toggles, 'roam', true)}
+            forceRepulsion={getOptNum(toggles, 'forceRepulsion') ?? 100}
+            forceGravity={getOptNum(toggles, 'forceGravity') ?? 0.1}
+            forceEdgeLength={getOptNum(toggles, 'forceEdgeLength') ?? 50}
+            defaultSymbolSize={getOptNum(toggles, 'defaultSymbolSize') ?? 30}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            animate={isOn(toggles, 'animate', true)}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    case 'geo-map': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      const mapName = getStr(toggles, 'mapName', 'TR_DESIGN_LAB');
+      // Inner component encapsulates the map registration side-effect.
+      // The stub GeoJSON is intentionally a single-feature placeholder so
+      // the preview renders a shape (instead of "map not registered" dev
+      // warning) without bundling a real TR provinces asset — HR adoption
+      // is a separate PR with the licensed Natural Earth payload.
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <GeoMapPlaygroundInner
+            mapName={mapName}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            showLabels={isOn(toggles, 'showLabels', false)}
+            roam={isOn(toggles, 'roam', true)}
+            selectedMode={
+              getEnum(toggles, 'selectedMode', 'false') as 'single' | 'multiple' | 'false' | 'true'
+            }
             animate={isOn(toggles, 'animate', true)}
             size={sizeFor('lg')}
             theme={themeOverride}
