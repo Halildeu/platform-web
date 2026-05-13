@@ -590,7 +590,7 @@ export const wireRemoteShellServices = () => {
   if (__MFE_ADMIN_REMOTES_ON_DEMAND__) {
     // PR-B5b2-prep-3 (Codex `019e237d` P3 absorb): iterate the canonical
     // sequence so comment-only drift can't silently re-order the
-    // registration.  Sequence test in `wire-admin-on-demand.test.ts`
+    // registration.  Sequence test in `__tests__/admin-remote-bootstrap.test.ts`
     // asserts the same order at module level.
     const adminRemotes: Array<{ name: string; entry: string }> = ADMIN_REMOTE_BOOTSTRAP_SEQUENCE.map(
       (key) => ({ name: `mfe_${key}`, entry: resolveAdminRemoteEntry(key) }),
