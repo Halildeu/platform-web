@@ -250,6 +250,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Gap between categories (% of category width). Smaller values\npack bars tighter. Maps to ECharts `series.barCategoryGap`.',
       },
       {
+        name: 'valueAxisMax',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description:
+          'Explicit value-axis maximum. Without this the axis auto-scales to\nthe data range — fine for most cases. Use when several BarCharts\nrender side-by-side and need to share a comparable scale (e.g. a\nstack of bullet-style progress widgets where each bar should occupy\nthe same fraction of `actual / max`). Maps to ECharts\n`xAxis.max` (horizontal) or `yAxis.max` (vertical).',
+      },
+      {
+        name: 'valueAxisMin',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description:
+          'Explicit value-axis minimum. Defaults to 0 for ECharts bar charts;\noverride when negative-value pyramids or signed deltas need a\nsymmetric domain (e.g. `[-300, 300]` for population pyramid).\nMaps to ECharts `xAxis.min` (horizontal) or `yAxis.min` (vertical).',
+      },
+      {
         name: 'onDataPointClick',
         type: '(event: ChartClickEvent) => void',
         required: false,

@@ -147,6 +147,22 @@ export interface BarChartProps extends AccessControlledProps {
    * pack bars tighter. Maps to ECharts `series.barCategoryGap`.
    */
   barCategoryGap?: string;
+  /**
+   * Explicit value-axis maximum. Without this the axis auto-scales to
+   * the data range — fine for most cases. Use when several BarCharts
+   * render side-by-side and need to share a comparable scale (e.g. a
+   * stack of bullet-style progress widgets where each bar should occupy
+   * the same fraction of `actual / max`). Maps to ECharts
+   * `xAxis.max` (horizontal) or `yAxis.max` (vertical).
+   */
+  valueAxisMax?: number;
+  /**
+   * Explicit value-axis minimum. Defaults to 0 for ECharts bar charts;
+   * override when negative-value pyramids or signed deltas need a
+   * symmetric domain (e.g. `[-300, 300]` for population pyramid).
+   * Maps to ECharts `xAxis.min` (horizontal) or `yAxis.min` (vertical).
+   */
+  valueAxisMin?: number;
   /** Callback fired when a data point (bar) is clicked. */
   onDataPointClick?: (event: ChartClickEvent) => void;
   /**
@@ -259,6 +275,8 @@ const BarChartInner = React.forwardRef<
     barWidth,
     barGap,
     barCategoryGap,
+    valueAxisMax,
+    valueAxisMin,
     onDataPointClick,
     markups,
     onMarkupClick,
@@ -342,6 +360,12 @@ const BarChartInner = React.forwardRef<
 
     const valueAxis = {
       type: 'value' as const,
+      // PR-X11 (Codex thread 019e1e30): expose explicit min/max so
+      // bullet-style widgets sharing a column can fix the axis range
+      // (`actual/max` ratios stay comparable across rows) and pyramid
+      // layouts can request a symmetric domain.
+      ...(valueAxisMin !== undefined ? { min: valueAxisMin } : {}),
+      ...(valueAxisMax !== undefined ? { max: valueAxisMax } : {}),
       axisLabel: {
         // Value axis keeps its formatter; just inherit responsive font size +
         // hideOverlap from the helper so wide value ranges (like 100k–1M)
@@ -520,6 +544,11 @@ const BarChartInner = React.forwardRef<
     barWidth,
     barGap,
     barCategoryGap,
+    // PR-X11: explicit value-axis range (Codex thread 019e1e30) — bullet
+    // widgets sharing a column need fixed max; pyramid wants symmetric
+    // min/max around zero.
+    valueAxisMax,
+    valueAxisMin,
     onDataPointClick,
     isEmpty,
     isHorizontal,
