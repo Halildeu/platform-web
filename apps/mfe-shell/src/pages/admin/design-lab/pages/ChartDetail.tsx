@@ -3246,9 +3246,9 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     ],
     sampleCode: `<BoxPlotChart
   data={[
-    { label: 'Q1', min: 10, q1: 22, median: 30, q3: 38, max: 50 },
-    { label: 'Q2', min: 12, q1: 25, median: 34, q3: 42, max: 55 },
-    { label: 'Q3', min: 14, q1: 28, median: 36, q3: 44, max: 58 },
+    { category: 'Q1', quartiles: [10, 22, 30, 38, 50] },
+    { category: 'Q2', quartiles: [12, 25, 34, 42, 55] },
+    { category: 'Q3', quartiles: [14, 28, 36, 44, 58] },
   ]}
   title="Quarterly distribution"
 />`,

@@ -1376,6 +1376,115 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // PR-X campaign sample-data scaffolds (Codex thread 019e22b6 iter-2
+  // absorb): generated code for the 6 new wrappers needs sampleData
+  // variables so the snippet is compile-ready. Each scaffold matches
+  // the actual wrapper data shape (BoxPlotDataPoint uses `category +
+  // quartiles`, not the simplified label/min/q1/... shape from the
+  // earlier draft).
+  'box-plot-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'BoxPlot distribution data',
+        jsLiteral: `[
+  { category: 'Q1', quartiles: [10, 22, 30, 38, 50] },
+  { category: 'Q2', quartiles: [12, 25, 34, 42, 55] },
+  { category: 'Q3', quartiles: [14, 28, 36, 44, 58] },
+]`,
+      },
+    ],
+  },
+  'candlestick-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'Candlestick OHLC time-series',
+        jsLiteral: `[
+  { label: '2026-05-10', open: 100, close: 110, low: 95, high: 115 },
+  { label: '2026-05-11', open: 110, close: 105, low: 102, high: 112 },
+  { label: '2026-05-12', open: 105, close: 118, low: 104, high: 120 },
+]`,
+      },
+    ],
+  },
+  'pictorial-bar-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'PictorialBar department headcount',
+        jsLiteral: `[
+  { label: 'Eng', value: 12 },
+  { label: 'Sales', value: 8 },
+  { label: 'HR', value: 5 },
+]`,
+      },
+    ],
+  },
+  'parallel-coordinates-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'ParallelCoordinates compensation rows',
+        jsLiteral: `[
+  { dept: 'Eng', salary: 80000, tenure: 5 },
+  { dept: 'Sales', salary: 60000, tenure: 3 },
+  { dept: 'HR', salary: 55000, tenure: 8 },
+]`,
+      },
+      {
+        propName: 'axes',
+        varName: 'sampleAxes',
+        caption: 'ParallelCoordinates axis definitions',
+        jsLiteral: `[
+  { field: 'dept', name: 'Department', type: 'category' },
+  { field: 'salary', name: 'Salary', type: 'value' },
+  { field: 'tenure', name: 'Tenure (yr)', type: 'value' },
+]`,
+      },
+    ],
+  },
+  'graph-chart': {
+    scaffold: [
+      {
+        propName: 'nodes',
+        varName: 'sampleNodes',
+        caption: 'GraphChart nodes',
+        jsLiteral: `[
+  { id: 'a', name: 'Doc A', value: 5, category: 0 },
+  { id: 'b', name: 'Doc B', value: 3, category: 0 },
+  { id: 'c', name: 'Orphan', value: 1, category: 1 },
+]`,
+      },
+      {
+        propName: 'edges',
+        varName: 'sampleEdges',
+        caption: 'GraphChart edges',
+        jsLiteral: `[
+  { source: 'a', target: 'b', value: 2 },
+  { source: 'b', target: 'c', value: 1 },
+]`,
+      },
+    ],
+  },
+  'geo-map': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'GeoMap region values',
+        jsLiteral: `[
+  { name: 'İstanbul', value: 5000 },
+  { name: 'Ankara', value: 3000 },
+  { name: 'İzmir', value: 2200 },
+]`,
+      },
+    ],
+  },
 };
 
 /**
