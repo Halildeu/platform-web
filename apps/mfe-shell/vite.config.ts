@@ -383,6 +383,19 @@ export default defineConfig(({ mode }) => {
       // previous IIFE-over-process.env approach was not reliably
       // tree-shaken (Codex PR #287 iter-1 must-fix #1).
       __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: JSON.stringify(endpointAdminBuildEnabled),
+      // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
+      // build-time opt-in for production __perfSnapshot exposure. The
+      // perf-observer.ts shouldExposeGlobal() reads this constant; when
+      // VITE_PERF_OBSERVER_EXPOSE='1' the window globals are exposed
+      // even in production builds. Off-by-default; only opt-in for
+      // synthetic measurement environments (testai performance preview,
+      // Lighthouse-CI worker). The runtime `window.__PERF_OBSERVER_ENABLE`
+      // flag remains the recommended path for Playwright (no rebuild
+      // needed); this build-time flag covers scenarios where addInitScript
+      // cannot be wired (cluster-side Lighthouse, third-party perf probe).
+      __PERF_OBSERVER_EXPOSE__: JSON.stringify(
+        process.env.VITE_PERF_OBSERVER_EXPOSE === '1',
+      ),
     },
 
     server: {

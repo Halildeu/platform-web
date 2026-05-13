@@ -148,17 +148,63 @@ async function measureOnce(browser, routeBudget) {
     }
 
     // Hard navigate; bringToFront ensures we are not hidden
-    await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+    const navResponse = await page.goto(url, { waitUntil: 'load', timeout: 30000 });
     await page.bringToFront();
+
+    // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2): redirect
+    // guard. /admin/* routes silently redirect to /login when auth-storage
+    // is missing or expired; without this check the runner would record a
+    // /login measurement against a /admin/users budget — false-green.
+    const finalUrl = page.url();
+    const expectedPath = (() => {
+      try { return new URL(url).pathname; } catch { return route; }
+    })();
+    const finalPath = (() => {
+      try { return new URL(finalUrl).pathname; } catch { return finalUrl; }
+    })();
+    if (finalPath !== expectedPath) {
+      return {
+        error: `redirect: expected ${expectedPath}, landed on ${finalPath} (auth-storage missing/expired?)`,
+        redirected: true,
+        navStatus: navResponse?.status() ?? null,
+        expectedPath,
+        finalPath,
+      };
+    }
 
     // Wait for perf snapshot harness to attach + LCP to settle
     await page.waitForFunction(() => typeof (window).__perfSnapshot === 'function', null, { timeout: 5000 });
-    await page.waitForTimeout(3000); // settle LCP + long tasks
+
+    // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2): rendered
+    // sentinel guard. Each route declares a `sentinel` selector in
+    // performance-budgets.json. If the sentinel does not appear within
+    // 10s the route render is considered incomplete and the measurement
+    // is rejected — protects against /admin/* blank-on-init false-green
+    // from the pre-existing auth FSM race documented in §5 risk register.
+    // When the budget entry omits `sentinel` we fall back to the legacy
+    // 3s settle wait (advisory mode for unmigrated routes).
+    if (route?.sentinel || routeBudget.sentinel) {
+      const sentinelSelector = routeBudget.sentinel ?? route.sentinel;
+      try {
+        await page.waitForSelector(sentinelSelector, { timeout: 10000, state: 'visible' });
+      } catch (e) {
+        return {
+          error: `sentinel-not-rendered: selector "${sentinelSelector}" did not appear within 10s on ${finalPath}`,
+          sentinelMissing: true,
+          sentinelSelector,
+        };
+      }
+    } else {
+      await page.waitForTimeout(3000); // legacy fallback
+    }
+
+    // Extra 2s for LCP / longtask observer to settle after sentinel render
+    await page.waitForTimeout(2000);
 
     const snap = await page.evaluate(() => (window).__perfSnapshot?.());
     const visibility = await page.evaluate(() => document.visibilityState);
 
-    return { snap, visibility };
+    return { snap, visibility, finalPath };
   } catch (e) {
     return { error: String(e && e.message ? e.message : e) };
   } finally {

@@ -434,20 +434,48 @@ export function captureSnapshot(): PerfSnapshot {
 }
 
 // Expose to window for Playwright/browser-side capture. Production builds
-// disable the global by default; opt-in via window.__PERF_OBSERVER_ENABLE=1
-// (set by Playwright/synthetic harnesses before bootstrap) or by setting
-// the build-time VITE_PERF_OBSERVER_EXPOSE env to '1'.
+// disable the global by default; three opt-in paths:
+//   1. Runtime: `window.__PERF_OBSERVER_ENABLE = 1` before bootstrap
+//      (set by Playwright/synthetic harness via `addInitScript`).
+//   2. Build-time: `VITE_PERF_OBSERVER_EXPOSE=1` env injected at build
+//      (Vite `define` constant — see `apps/mfe-shell/vite.config.ts`).
+//   3. Implicit dev: `NODE_ENV !== 'production'` (DX convenience).
+//
+// PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
+// before B5c-lite the build-time path existed only as a code comment;
+// no `define` constant nor any reader matched `VITE_PERF_OBSERVER_EXPOSE`.
+// Now the build-time constant is wired so the doc and the implementation
+// agree.
 //
 // Security note (Codex thread 019e1e1b finding 6): exposing this global
 // in production lowers the bar for same-origin XSS to exfiltrate timing
 // metadata, custom mark detail payloads, and resource URL lists. Raw
 // PerformanceAPI is already same-origin readable; this just normalises
 // it. Off-by-default in prod is the conservative choice.
-function shouldExposeGlobal(): boolean {
+
+declare const __PERF_OBSERVER_EXPOSE__: string | boolean | undefined;
+
+export function shouldExposeGlobal(): boolean {
   if (typeof window === 'undefined') return false;
   // Runtime opt-in: synthetic harness sets this flag before bootstrap.
   const opted = (window as unknown as { __PERF_OBSERVER_ENABLE?: unknown }).__PERF_OBSERVER_ENABLE;
   if (opted === 1 || opted === '1' || opted === true) return true;
+  // Build-time opt-in: `__PERF_OBSERVER_EXPOSE__` is defined by Vite's
+  // `define` config from `VITE_PERF_OBSERVER_EXPOSE` env. When unset the
+  // constant evaluates to `false`. When set to '1' or true, expose.
+  // The `typeof` guard protects environments where the constant was not
+  // injected (unit-test jsdom without Vite define).
+  try {
+    if (
+      typeof __PERF_OBSERVER_EXPOSE__ !== 'undefined' &&
+      (__PERF_OBSERVER_EXPOSE__ === '1' || __PERF_OBSERVER_EXPOSE__ === true)
+    ) {
+      return true;
+    }
+  } catch {
+    // ReferenceError in environments without the define injection — fall
+    // through to the NODE_ENV check.
+  }
   // In dev (Vite serves NODE_ENV=development), expose by default for DX.
   if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
     return true;
