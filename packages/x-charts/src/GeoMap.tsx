@@ -167,7 +167,7 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
     {
       mapName,
       data,
-      nameProperty: _nameProperty = 'name',
+      nameProperty = 'name',
       nameMap,
       visualMap,
       showLabels = false,
@@ -206,18 +206,26 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       accent: accentPreference,
     });
 
-    // Map registration check — render a friendly notice if the
-    // consumer forgot to call `ensureGeoMapRegistered` before mounting.
-    // In product runtime this means a config issue, not a transient
-    // condition; we still let ECharts render its own empty canvas (it
-    // logs `[ECharts] Map ${mapName} not exists.`), but surface a
-    // clear dev warning so the issue is debuggable.
-    const mapReady = useMemo(() => isGeoMapRegistered(mapName), [mapName]);
+    // Map registration check — Codex 019e2254 PR-X12c iter-2 blocker
+    // fix: do NOT `useMemo([mapName])` here. The original draft cached
+    // the result so a parent re-render AFTER late registration could
+    // not flip the gate; the wrapper would stay in "not registered"
+    // state even though `ensureGeoMapRegistered` had since completed.
+    // Re-checking on every render is cheap (synchronous Map lookup on
+    // the ECharts global) and lets the wrapper recover whenever the
+    // consumer's async registration settles + parent triggers a
+    // re-render.
+    const mapReady = isGeoMapRegistered(mapName);
 
     // Markup adapter NO-OP — emit dev warning when consumer passes
-    // markups (same pattern as Graph / Globe / Parallel).
+    // markups. `chartType: 'geo'` puts the geographic-map family into
+    // the support matrix as no-op so the adapter warns the consumer
+    // instead of silently dropping markups (Codex 019e2254 PR-X12c
+    // iter-2 finding: original draft passed `'bar'` so the matrix
+    // saw markups as full-support, generated patches, and we
+    // silently dropped them because GeoMap doesn't merge patches).
     useMarkupAdapter(markups, {
-      chartType: 'bar',
+      chartType: 'geo',
       orientation: 'vertical',
       dataContext: { labels: data.map((d) => d.name), series: [{ data: [] }] },
     });
@@ -304,6 +312,13 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
             type: 'map' as const,
             name: title ?? 'Regions',
             map: mapName,
+            // Codex 019e2254 PR-X12c iter-2 blocker fix: wire
+            // `nameProperty` into the series so ECharts matches
+            // `data[i].name` against `feature.properties[nameProperty]`
+            // instead of always `properties.name`. Lets consumers
+            // route on ISO codes ("TR-34") or backend identifiers
+            // without renaming the data.
+            nameProperty,
             data: echartsData,
             roam,
             selectedMode,
@@ -361,7 +376,6 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
     // Dev warning when consumer forgot registration. Production builds
     // skip the console call.
     if (process.env.NODE_ENV !== 'production' && !mapReady && !isEmpty) {
-       
       console.warn(
         `[@mfe/x-charts/GeoMap] map "${mapName}" not registered. Call ensureGeoMapRegistered("${mapName}", loader) before mounting.`,
       );

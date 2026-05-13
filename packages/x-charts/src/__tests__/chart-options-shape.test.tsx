@@ -1447,6 +1447,19 @@ describe('GeoMap option shape', () => {
     expect(data[0].name).toBe('İstanbul');
   });
 
+  it('nameProperty propagates to series option (code-based matching)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={[{ name: 'TR-34', value: 100 }]}
+        nameProperty="code"
+        animate={false}
+      />,
+    );
+    const s = series()[0];
+    expect(s.nameProperty).toBe('code');
+  });
+
   it('selectedMode + roam + showLabels props propagate', () => {
     render(
       <GeoMap

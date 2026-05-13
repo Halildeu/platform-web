@@ -40,7 +40,7 @@
  *
  * @see GeoMap.tsx — the wrapper that consumes this.
  */
-import { echarts } from '../renderers/echarts-imports';
+import { echarts, registerECharts } from '../renderers/echarts-imports';
 
 /**
  * GeoJSON FeatureCollection — minimal subset for ECharts. Region
@@ -94,6 +94,15 @@ export function isGeoMapRegistered(name: string): boolean {
  * so a later retry can attempt registration again.
  */
 export function ensureGeoMapRegistered(name: string, loader: GeoMapLoader): Promise<void> {
+  // Codex 019e2254 PR-X12c iter-2 blocker fix: ECharts' `registerMap`
+  // / `getMap` only function once `MapChart` + `GeoComponent` have
+  // been installed via `echarts.use([...])`. Without this, the global
+  // registry is silently a no-op and the wrapper's render gate never
+  // flips even after the caller "registered" the map. `registerECharts`
+  // itself is idempotent (guarded by a private `_registered` flag),
+  // so it's safe to call here before every loader attempt.
+  registerECharts();
+
   if (isGeoMapRegistered(name)) {
     return Promise.resolve();
   }

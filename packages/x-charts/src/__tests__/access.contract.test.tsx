@@ -57,13 +57,16 @@ import {
   __resetGeoMapRegistrationCacheForTests,
 } from '../geo/registerGeoMap';
 
-beforeEach(() => {
+beforeEach(async () => {
   resetEChartsMock();
   installJsdomPolyfills();
-  // PR-X12c: pre-register a stub map so `GeoMap` cases in the
-  // parametric matrix don't skip render due to missing registration.
+  // PR-X12c (Codex 019e2254 PR-X12c iter-2 fix): pre-register a stub
+  // map so `GeoMap` cases in the parametric matrix don't skip render
+  // due to missing registration. `await` (not fire-and-forget) so the
+  // registration is guaranteed complete before the render assertions
+  // run.
   __resetGeoMapRegistrationCacheForTests();
-  void ensureGeoMapRegistered('TR_TEST', () => ({
+  await ensureGeoMapRegistered('TR_TEST', () => ({
     type: 'FeatureCollection' as const,
     features: [
       {
