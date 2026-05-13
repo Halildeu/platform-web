@@ -40,12 +40,26 @@ jobs:
             # → permissions: [] → header'da modüller görünmüyor "henüz hiçbir rol atanmamış").
             # Doğru: https://ai.acik.com/api → resolve = /api/v1/authz/me → backend OK.
             gateway: https://ai.acik.com/api
+            # PERF-INIT-V2 B5b1: prod stays on default eager bootstrap (no
+            # canary risk on production); flip to "true" only when B5b1 is
+            # ready for prod rollout (post-canary measurement + B5b2 admin
+            # ramp closure).
+            mfe_on_demand_bootstrap: 'false'
           - variant: testai
             image_name: platform-web-frontend-testai
             kc_url: https://testai.acik.com
             kc_realm: platform-test
             origin: https://testai.acik.com
             gateway: https://testai.acik.com/api
+            # PERF-INIT-V2 B5b1 canary: testai variant builds with the
+            # MFE on-demand bootstrap flag enabled. Eager
+            # federation({remotes}) drops the `mfe_suggestions` entry +
+            # static `import('mfe_suggestions/SuggestionsApp')` specifier
+            # is dead-code-eliminated; route render swaps to runtime
+            # `host.registerRemotes` + `host.loadRemote` against the host
+            # MF instance.  Auto-applied to every commit reaching testai;
+            # prod variant stays unaffected (above row).
+            mfe_on_demand_bootstrap: 'true'
 
     steps:
       - name: Checkout
@@ -102,6 +116,7 @@ jobs:
             VITE_GATEWAY_URL=${{ matrix.gateway }}
             VITE_AUTH_MODE=keycloak
             VITE_AG_GRID_LICENSE_KEY=${{ secrets.AG_GRID_LICENSE_KEY }}
+            VITE_MFE_ON_DEMAND_BOOTSTRAP=${{ matrix.mfe_on_demand_bootstrap }}
             BUILD_SHA=${{ github.sha }}
             BUILD_REF=${{ github.ref_name }}
           tags: |
