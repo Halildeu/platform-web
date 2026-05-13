@@ -60,6 +60,22 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Validate persona is a test persona (NEVER the user login user)
+        env:
+          INPUT_USERNAME: ${{ inputs.username }}
+        run: |
+          set -euo pipefail
+          forbidden="admin@example.com gladyatore@hotmail.com"
+          lowered="$(echo "${INPUT_USERNAME}" | tr '[:upper:]' '[:lower:]')"
+          for u in $forbidden; do
+            if [ "${lowered}" = "${u}" ]; then
+              echo "::error::HARD RULE — Kullanıcı Aktif Credential'ına Dokunma YASAK"
+              echo "::error::Refusing to authenticate as ${INPUT_USERNAME}. Use d35-admin-persona or another test persona."
+              exit 1
+            fi
+          done
+          echo "[smoke] persona ${INPUT_USERNAME} accepted (test persona)."
+
       - name: Validate persona credential is provided
         env:
           ITER34_PASSWORD: ${{ secrets.ITER34_PASSWORD }}
