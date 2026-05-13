@@ -2,11 +2,12 @@
 
 > **Diagnostic captured 2026-05-13 against testai live**.
 > Artifacts:
->   - `08fb4b4.json` — initial capture (`BUILD_SHA=08fb4b47`); loadShare and
->     mfBootstrap not yet separated in summary (Codex iter-1 P1 fix applied
->     after this artifact was written; retained for traceability).
->   - `8885120.json` — re-capture post-PR-#443 deploy (`BUILD_SHA=8885120f`);
->     summary correctly splits `loadShareCount: 31` + `mfBootstrapCount: 1`.
+>
+> - `08fb4b4.json` — initial capture (`BUILD_SHA=08fb4b47`); loadShare and
+>   mfBootstrap not yet separated in summary (Codex iter-1 P1 fix applied
+>   after this artifact was written; retained for traceability).
+> - `8885120.json` — re-capture post-PR-#443 deploy (`BUILD_SHA=8885120f`);
+>   summary correctly splits `loadShareCount: 31` + `mfBootstrapCount: 1`.
 >
 > Route: `/login` (anonymous, pre-auth — chosen because remoteEntry.js
 > fetches fire BEFORE the SSO redirect and we wanted the pre-rendered
@@ -57,20 +58,20 @@ at host bootstrap**, which triggers an HTTP fetch for each
 
 > The earlier artifact `08fb4b4.json` reports `loadShareCount: 32`
 > because `mf-entry-bootstrap-0.js` was grouped with loadShare chunks
-> before the iter-1 split.  It is retained for traceability only;
+> before the iter-1 split. It is retained for traceability only;
 > the canonical summary above reflects the corrected classification.
 
 7 remoteEntries fetched on `/login` cold load:
 
-| Remote | Initiator script | Stack (top frame) |
-|---|---|---|
-| suggestions | `dist-CMSO7Him.js` | line 3 col 13645 |
-| ethic | `dist-CMSO7Him.js` | line 3 col 13645 |
-| users | `dist-CMSO7Him.js` | line 3 col 13645 |
-| access | `dist-CMSO7Him.js` | line 3 col 13645 |
-| audit | `dist-CMSO7Him.js` | line 3 col 13645 |
-| reporting | `dist-CMSO7Him.js` | line 3 col 13645 |
-| schema-explorer | `dist-CMSO7Him.js` | line 3 col 13645 |
+| Remote          | Initiator script   | Stack (top frame) |
+| --------------- | ------------------ | ----------------- |
+| suggestions     | `dist-CMSO7Him.js` | line 3 col 13645  |
+| ethic           | `dist-CMSO7Him.js` | line 3 col 13645  |
+| users           | `dist-CMSO7Him.js` | line 3 col 13645  |
+| access          | `dist-CMSO7Him.js` | line 3 col 13645  |
+| audit           | `dist-CMSO7Him.js` | line 3 col 13645  |
+| reporting       | `dist-CMSO7Him.js` | line 3 col 13645  |
+| schema-explorer | `dist-CMSO7Him.js` | line 3 col 13645  |
 
 All 7 stack frames identical → single emission site in the bundle =
 @module-federation/vite registration loop.
@@ -99,6 +100,7 @@ then registers the remote via the MF runtime API
 that needs it becomes reachable.
 
 **Effort**: medium. Requires:
+
 - Conditional `remotes` block in `vite.config.ts` (build flag)
 - Runtime registration shim that uses `MFE_ON_DEMAND_BOOTSTRAP` to
   choose static vs dynamic registration
@@ -106,7 +108,7 @@ that needs it becomes reachable.
   or `<Suspense>` boundary)
 
 **Risk**: medium. Touches shell bootstrap + MF runtime; need full
-rollback flag coverage. Canary candidate: `mfe_suggestions` (smallest
+build-time flag + rebuild rollback coverage. Canary candidate: `mfe_suggestions` (smallest
 blast radius, 0 direct `@tanstack/react-query` imports, the cleanest
 profile per PR-B2-rollout audit).
 
@@ -122,6 +124,7 @@ PR-B2 canonical-provider work. Reserved for B5d-arch initiative.
 ## Recommended Canary Selection for PR-B5b1
 
 **`mfe_suggestions`** — lowest blast radius:
+
 - 0 direct `@tanstack/react-query` imports (PR-B2-rollout audit)
 - Single exposed module (`./SuggestionsApp`)
 - No shell-services contract dependencies (per `shell-services-wiring.ts`
@@ -157,4 +160,4 @@ For an authenticated route trace (e.g. `/home`), pass `--auth-storage
   truncation)
 - PR-B3a #429 — shell-services idle defer (secondary fetch path,
   already merged)
-- PR-B5b3-prep #444 — rollback feature flag
+- PR-B5b3-prep #444 — BUILD-TIME flag reader + state-probe registration (rollback semantic: rebuild with flag off; no post-deploy runtime rollback)
