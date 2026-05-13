@@ -93,10 +93,16 @@ function getHostMfInstance(): MfHostInstance | null {
 }
 
 /**
- * Read the audit remoteEntry URL from runtime env injected by the
- * index.html transform.  Lookup order matches the build-time
- * `MFE_AUDIT_URL` env that `vite.config.ts` reads for the eager mode
- * federation manifest (port 3006 default — see `remoteEntries.audit`).
+ * Codex `019e239a` post-merge B5b3c absorb: legacy
+ * `resolveAuditRemoteEntry()` retired in favor of central
+ * `resolveAdminRemoteEntry('audit')` from
+ * `./config/admin-remote-bootstrap.ts` so the idle batch loader and
+ * the route-level wrapper share ONE resolver implementation.  Prior
+ * to this PR the wrapper kept its own copy of the lookup chain
+ * (window.__env__ MFE_AUDIT_URL → VITE_MFE_AUDIT_URL → process.env
+ * MFE_AUDIT_URL → VITE_MFE_AUDIT_URL → localhost:3006) which could
+ * silently drift from the central resolver in
+ * `admin-remote-bootstrap.ts`.
  */
 
 /**
