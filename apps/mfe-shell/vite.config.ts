@@ -457,12 +457,18 @@ export default defineConfig(({ mode }) => {
   // share a single build-time flag.  Same single-canary master toggle
   // (`VITE_MFE_ON_DEMAND_BOOTSTRAP`) as B5b1 / B5b1.5 / B5b2a — no new
   // env var introduced.  The flag is the AND of the master toggle and
-  // any-admin-enabled fan-in, because the static-import 4-remote
-  // contract is an atomic block in `shell-services-wiring.ts` (cannot
-  // selectively DCE only one of the 4).  If ANY admin remote is
-  // disabled via its enable env, Rolldown still needs to resolve the
-  // static imports for the OTHER 3, so on-demand only fires when ALL
-  // 4 are enabled (typical production config).
+  // an **all-admin-enabled** gate (every one of the 4 admin remote
+  // `*_REMOTE` enables must be true), because the static-import
+  // 4-remote contract is an atomic block in `shell-services-wiring.ts`
+  // (cannot selectively DCE only one of the 4).  If ANY admin remote
+  // is disabled via its enable env, Rolldown still needs to resolve
+  // the static imports for the OTHER 3, so on-demand only fires when
+  // ALL 4 are enabled (typical production config).
+  //
+  // Codex `019e237d` post-impl P3 nit absorb: original comment read
+  // "any-admin-enabled fan-in" which is the OPPOSITE of the actual
+  // all-AND-guard semantic and could mislead future readers into
+  // believing a single enabled remote suffices.  Clarified above.
   //
   // Codex `019e2358` Option B critical add #3: scaffolding-safe
   // semantics — when the master toggle is OFF (default), the flag

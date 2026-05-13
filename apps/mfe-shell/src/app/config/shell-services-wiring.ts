@@ -546,41 +546,19 @@ export function __resetSharedShellServicesForTests(): void {
   cachedSharedShellServices = null;
 }
 
-/**
- * Default `localhost:<port>` fallback used when no env override is
- * provided (dev mode).  Ports match the federation manifest defaults
- * in `apps/mfe-shell/vite.config.ts` `buildRemotes.remoteEntries`.
- */
-const ADMIN_REMOTE_DEFAULT_PORTS: Record<'reporting' | 'access' | 'audit' | 'users', number> = {
-  reporting: 3007,
-  access: 3005,
-  audit: 3006,
-  users: 3004,
-};
-
-/**
- * Resolve an admin remote's `remoteEntry.js` URL via the same lookup
- * order as the route-level wrappers
- * (`createUsersAppOnDemand.tsx` `resolveUsersRemoteEntry` etc.) so
- * the idle batch and the route-level call use the SAME URL.  If both
- * paths resolve different URLs the helper's `configuredRemotes` Set
- * would still dedup, but `host.registerRemotes` would be called with
- * the second URL, racing against the first load — keeping them
- * symmetrical avoids the hazard.
- */
-function resolveAdminRemoteEntry(key: 'reporting' | 'access' | 'audit' | 'users'): string {
-  const upper = key.toUpperCase();
-  if (typeof window !== 'undefined') {
-    const w = window as Window & { __env__?: Record<string, string> };
-    const url = w.__env__?.[`MFE_${upper}_URL`] ?? w.__env__?.[`VITE_MFE_${upper}_URL`] ?? null;
-    if (url) return url;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    const url = process.env[`MFE_${upper}_URL`] ?? process.env[`VITE_MFE_${upper}_URL`] ?? null;
-    if (url) return url;
-  }
-  return `http://localhost:${ADMIN_REMOTE_DEFAULT_PORTS[key]}/remoteEntry.js`;
-}
+// PR-B5b2-prep-3 (Codex `019e237d` post-merge P2 + P3 absorb): canonical
+// sequence + URL resolver moved to `./admin-remote-bootstrap.ts` so a
+// dedicated unit test can target them without importing this wiring
+// module (which pulls federation virtual specifiers that Vite's
+// import-analysis cannot resolve under vitest).  Production wiring
+// re-exports the sequence so the const remains discoverable through
+// `shell-services-wiring`.
+export {
+  ADMIN_REMOTE_BOOTSTRAP_SEQUENCE,
+  resolveAdminRemoteEntry,
+  type AdminRemoteKey,
+} from './admin-remote-bootstrap';
+import { ADMIN_REMOTE_BOOTSTRAP_SEQUENCE, resolveAdminRemoteEntry } from './admin-remote-bootstrap';
 
 export const wireRemoteShellServices = () => {
   if (typeof window === 'undefined') {
@@ -610,12 +588,13 @@ export const wireRemoteShellServices = () => {
   // an early signal from `mfe_reporting` before touching the more
   // sensitive remotes.
   if (__MFE_ADMIN_REMOTES_ON_DEMAND__) {
-    const adminRemotes: Array<{ name: string; entry: string }> = [
-      { name: 'mfe_reporting', entry: resolveAdminRemoteEntry('reporting') },
-      { name: 'mfe_access', entry: resolveAdminRemoteEntry('access') },
-      { name: 'mfe_audit', entry: resolveAdminRemoteEntry('audit') },
-      { name: 'mfe_users', entry: resolveAdminRemoteEntry('users') },
-    ];
+    // PR-B5b2-prep-3 (Codex `019e237d` P3 absorb): iterate the canonical
+    // sequence so comment-only drift can't silently re-order the
+    // registration.  Sequence test in `__tests__/admin-remote-bootstrap.test.ts`
+    // asserts the same order at module level.
+    const adminRemotes: Array<{ name: string; entry: string }> = ADMIN_REMOTE_BOOTSTRAP_SEQUENCE.map(
+      (key) => ({ name: `mfe_${key}`, entry: resolveAdminRemoteEntry(key) }),
+    );
     adminRemotes.forEach(({ name, entry }) => {
       ensureRemoteShellServicesConfigured(name, entry, sharedServices).catch((error) => {
         if (process.env.NODE_ENV !== 'production') {
