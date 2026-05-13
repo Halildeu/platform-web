@@ -67,14 +67,7 @@ const TRANSFER_CEILING_KB = 5000;
 const DECODED_CEILING_KB = 15000;
 
 test.describe('PR-B5b3b: on-demand federation runtime smoke (/login)', () => {
-  // Use a fresh isolated context per test so HTTP cache + storage
-  // don't leak across runs.
-  test.use({
-    storageState: undefined,
-    serviceWorkers: 'block',
-  });
-
-  test('no eager admin remoteEntry.js fetches on /login cold-anonymous', async ({
+  test('no eager on-demand remoteEntry.js fetches on /login cold-anonymous', async ({
     browser,
     baseURL,
   }) => {
@@ -84,12 +77,16 @@ test.describe('PR-B5b3b: on-demand federation runtime smoke (/login)', () => {
     // the canary deployment.
     const target = process.env.PLAYWRIGHT_BASE_URL || baseURL || 'https://testai.acik.com';
 
-    // Fresh context with cache disabled via CDP.  Without this, HTTP
-    // cache from previous runs hides the network observability we
-    // need; matches `route-performance-budget.mjs` methodology.
+    // Fresh context with cache disabled via CDP + service workers
+    // blocked so a previous-run SW cache cannot mask the live
+    // network state.  Codex `019e239a` iter-2 P2 absorb: passing
+    // `serviceWorkers: 'block'` directly into `browser.newContext()`
+    // is the only way to enforce it — the `test.use({...})` form
+    // does not propagate to manually-created contexts.
     const context = await browser.newContext({
-      // Ignore HTTPS errors for testai self-signed certs if present.
       ignoreHTTPSErrors: true,
+      serviceWorkers: 'block',
+      storageState: undefined,
     });
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
