@@ -1,0 +1,106 @@
+name: Design-Lab 23 Charts Smoke (manual dispatch)
+
+# PR-X campaign closure smoke — verifies the 23-wrapper design-lab
+# listing on testai (or any reachable cluster) renders cleanly + the 6
+# PR-X campaign chart detail pages mount without crash.
+#
+# Runs only on manual dispatch so it doesn't add unnecessary load to PR
+# CI cycles. Dispatch from the Actions UI or via `gh workflow run`:
+#
+#   gh workflow run design-lab-23-smoke.yml \
+#     --field base_url=https://testai.acik.com
+#
+# Required GitHub Actions secrets:
+#   ITER34_PASSWORD       (preferred — pairs with d35-admin-persona)
+#   PW_REAL_USER_PASSWORD (fallback — already exists in repo's secrets)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Frontend URL (PLAYWRIGHT_BASE_URL)'
+        required: true
+        default: 'https://testai.acik.com'
+      keycloak_url:
+        description: 'Keycloak URL (defaults to base_url for testai single-domain layout)'
+        required: false
+        default: ''
+      realm:
+        description: 'Keycloak realm name'
+        required: false
+        default: 'platform-test'
+      client_id:
+        description: 'Keycloak public client id'
+        required: false
+        default: 'frontend'
+      username:
+        description: 'Test persona username (NEVER the user login user)'
+        required: false
+        default: 'd35-admin-persona'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Validate persona credential is provided
+        env:
+          ITER34_PASSWORD: ${{ secrets.ITER34_PASSWORD }}
+          PW_REAL_USER_PASSWORD: ${{ secrets.PW_REAL_USER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ITER34_PASSWORD:-}" ] && [ -z "${PW_REAL_USER_PASSWORD:-}" ]; then
+            echo "::error::Neither ITER34_PASSWORD nor PW_REAL_USER_PASSWORD secret is set."
+            echo "::error::Configure one of them under repo Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          echo "[smoke] persona credential available."
+
+      - name: Run design-lab 23-charts smoke
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ inputs.base_url }}
+          ITER34_KEYCLOAK_URL: ${{ inputs.keycloak_url || inputs.base_url }}
+          ITER34_REALM: ${{ inputs.realm }}
+          ITER34_CLIENT_ID: ${{ inputs.client_id }}
+          ITER34_USERNAME: ${{ inputs.username }}
+          ITER34_PASSWORD: ${{ secrets.ITER34_PASSWORD }}
+          PW_REAL_USER_EMAIL: ${{ secrets.PW_REAL_USER_EMAIL }}
+          PW_REAL_USER_PASSWORD: ${{ secrets.PW_REAL_USER_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p tests/output test-results
+          pnpm exec playwright test \
+            tests/playwright/x-charts-design-lab-23.spec.ts \
+            --config tests/playwright/playwright.config.ts \
+            --project=chromium \
+            --workers=1 \
+            --reporter=list
+
+      - name: Upload screenshots + Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: design-lab-23-smoke-${{ github.run_id }}
+          path: |
+            tests/output/**
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
