@@ -55,6 +55,8 @@ export type ChartA11yKind =
   | 'parallel'
   // PR-X12b (Codex thread 019e2119 AGREE): network/graph topology.
   | 'graph'
+  // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map.
+  | 'geo'
   // Faz 21.11 P1a — 3D Extension Pack. Each 3D wrapper feeds the
   // shell its own kind so the default aria-label fallback can name
   // the chart correctly ("scatter3d chart with 1024 data points").
@@ -180,6 +182,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   parallel: 'Parallel coordinates chart',
   // PR-X12b (Codex thread 019e2119 AGREE): network / entity-edge graph.
   graph: 'Network graph',
+  // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map.
+  geo: 'Geographic map',
   // Faz 21.11 P1a — 3D Extension Pack. P1b adds 'Surface 3D chart' +
   // '3D line chart'; P1c adds 'Globe' (geo).
   scatter3d: '3D scatter chart',

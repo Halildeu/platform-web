@@ -45,7 +45,15 @@ export type MarkupChartKind =
   | 'waterfall'
   | 'funnel'
   | 'sankey'
-  | 'sunburst';
+  | 'sunburst'
+  // PR-X12c (Codex thread 019e2254 iter-2): geographic choropleth.
+  // No coordinate-axis equivalent for markLine/markArea so all
+  // markup types are no-op. Wrapper passes `chartType: 'geo'` so
+  // the consumer gets a dev warning instead of silently dropped
+  // markups (original PR-X12c draft passed 'bar' which the matrix
+  // saw as full-support, generating patches that the GeoMap wrapper
+  // then dropped silently).
+  | 'geo';
 
 export type MarkupTypeKey = ChartMarkup['type'];
 
@@ -90,6 +98,10 @@ export const DEFAULT_SUPPORT_MATRIX: MarkupSupportMatrix = {
   treemap: { line: 'no-op', segment: 'no-op', area: 'no-op', point: 'no-op', label: 'no-op' },
   sankey: { line: 'no-op', segment: 'no-op', area: 'no-op', point: 'no-op', label: 'no-op' },
   sunburst: { line: 'no-op', segment: 'no-op', area: 'no-op', point: 'no-op', label: 'no-op' },
+  // PR-X12c (Codex thread 019e2254 iter-2): all markup types no-op
+  // on geographic maps. No cartesian axes, so markLine/markArea
+  // can't be projected reliably. Dev warning surfaces the limit.
+  geo: { line: 'no-op', segment: 'no-op', area: 'no-op', point: 'no-op', label: 'no-op' },
 };
 
 /* ------------------------------------------------------------------ */

@@ -93,6 +93,15 @@ export type {
   GraphCategory,
   GraphLayoutMode,
 } from './GraphChart';
+// PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map.
+export { GeoMap } from './GeoMap';
+export type { GeoMapProps, GeoMapDatum, GeoMapVisualMap } from './GeoMap';
+export {
+  ensureGeoMapRegistered,
+  isGeoMapRegistered,
+  type GeoJsonFeatureCollection,
+  type GeoMapLoader,
+} from './geo/registerGeoMap';
 
 /* Composition */
 export { ChartContainer } from './ChartContainer';

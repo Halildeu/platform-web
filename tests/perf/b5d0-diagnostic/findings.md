@@ -28,18 +28,18 @@
 
 ### Shell `/apps/mfe-shell/dist/assets/` — design-system loadShare chunks
 
-| Measurement | Root DS wrapper | Separately emitted subpath wrappers |
-|---|---|---|
-| **Baseline** (no B5d0 config, no B5a consumer) | **6,512.1 KB** | 0 |
-| **B5d0 only** (subpath shared declared, no consumer) | **6,512.1 KB** (UNCHANGED) | 0 |
-| **B5d0 + B5a** (subpath declared + consumer deep imports) | **6,512.1 KB** (UNCHANGED) | 0 |
+| Measurement                                               | Root DS wrapper            | Separately emitted subpath wrappers |
+| --------------------------------------------------------- | -------------------------- | ----------------------------------- |
+| **Baseline** (no B5d0 config, no B5a consumer)            | **6,512.1 KB**             | 0                                   |
+| **B5d0 only** (subpath shared declared, no consumer)      | **6,512.1 KB** (UNCHANGED) | 0                                   |
+| **B5d0 + B5a** (subpath declared + consumer deep imports) | **6,512.1 KB** (UNCHANGED) | 0                                   |
 
 ### Canary `/apps/mfe-suggestions/dist/assets/`
 
-| Chunk | Size |
-|---|---|
+| Chunk                                                                                            | Size           |
+| ------------------------------------------------------------------------------------------------ | -------------- |
 | `__mfe_internal__mfe_suggestions__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs` | **5,959.3 KB** |
-| Separately emitted subpath wrappers | 0 |
+| Separately emitted subpath wrappers                                                              | 0              |
 
 ## Architectural Conclusion (Codex iter-7 corrected)
 
@@ -86,23 +86,23 @@ B5b acceptance:
   shell-services contract regression smoke
 - NOT credited with: DS root wrapper size reduction
 
-| PR | Status | Mechanism |
-|---|---|---|
-| **B5b3-prep** | NEXT | `MFE_ON_DEMAND_BOOTSTRAP` rollback flag, NO behaviour change |
-| **B5b0** | PARALLEL | RemoteEntry initiator-attribution diagnostic |
-| **B5b1** | THEN | Single MFE on-demand canary |
-| **B5b2** | THEN | Admin remotes rollout |
-| **B5b3** | THEN | federation-doctor + nightly smoke |
-| **B3b/c** | PARALLEL | cross-repo brotli + cache (transfer ROI, no decoded change) |
+| PR            | Status   | Mechanism                                                    |
+| ------------- | -------- | ------------------------------------------------------------ |
+| **B5b3-prep** | NEXT     | `MFE_ON_DEMAND_BOOTSTRAP` rollback flag, NO behaviour change |
+| **B5b0**      | PARALLEL | RemoteEntry initiator-attribution diagnostic                 |
+| **B5b1**      | THEN     | Single MFE on-demand canary                                  |
+| **B5b2**      | THEN     | Admin remotes rollout                                        |
+| **B5b3**      | THEN     | federation-doctor + nightly smoke                            |
+| **B3b/c**     | PARALLEL | cross-repo brotli + cache (transfer ROI, no decoded change)  |
 
 ## Wave B5d-arch (NEW — out of PERF-INIT-V2 scope, backlog only)
 
-| Candidate | Description | Status |
-|---|---|---|
-| Root shared retirement | Remove root `@mfe/design-system` shared entry; force all consumers to subpaths | Architecture spike — needs blast-radius assessment |
-| DS multi-package split | Split DS into `@mfe/ds-light` + `@mfe/ds-primitives` + ... as separate npm packages | Architecture initiative — separate planning round |
-| Build-time DS surgery | Custom Vite plugin to manually split root barrel pre-MF | Reject unless no alternative |
-| Accept DS root cost | Current PERF-INIT-V2 path | LIVE — accepted |
+| Candidate              | Description                                                                         | Status                                             |
+| ---------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Root shared retirement | Remove root `@mfe/design-system` shared entry; force all consumers to subpaths      | Architecture spike — needs blast-radius assessment |
+| DS multi-package split | Split DS into `@mfe/ds-light` + `@mfe/ds-primitives` + ... as separate npm packages | Architecture initiative — separate planning round  |
+| Build-time DS surgery  | Custom Vite plugin to manually split root barrel pre-MF                             | Reject unless no alternative                       |
+| Accept DS root cost    | Current PERF-INIT-V2 path                                                           | LIVE — accepted                                    |
 
 ## PR #439 Disposition (Codex iter-7)
 

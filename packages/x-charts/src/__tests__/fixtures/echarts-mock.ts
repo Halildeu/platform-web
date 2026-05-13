@@ -179,6 +179,26 @@ vi.mock('../../renderers/echarts-imports', () => {
     domOrInstance.dispose();
   }
 
+  // PR-X12c (Codex thread 019e2254): geo map registration shims so
+  // unit tests can exercise `ensureGeoMapRegistered` without a real
+  // ECharts runtime. Registry lives on `globalThis` so the outer
+  // `resetEChartsMock()` helper can clear it without crossing the
+  // vi.mock factory boundary (which would require `require()`,
+  // disallowed by lint).
+  const G = globalThis as {
+    __X_CHARTS_TEST_MAP_REGISTRY__?: Map<string, unknown>;
+  };
+  if (!G.__X_CHARTS_TEST_MAP_REGISTRY__) {
+    G.__X_CHARTS_TEST_MAP_REGISTRY__ = new Map<string, unknown>();
+  }
+  const _registeredMaps = G.__X_CHARTS_TEST_MAP_REGISTRY__;
+  function registerMap(name: string, geoJson: unknown): void {
+    _registeredMaps.set(name, geoJson);
+  }
+  function getMap(name: string): unknown {
+    return _registeredMaps.get(name);
+  }
+
   return {
     echarts: {
       init: vi.fn(init),
@@ -187,6 +207,9 @@ vi.mock('../../renderers/echarts-imports', () => {
       registerLocale: vi.fn(),
       getInstanceByDom: vi.fn(getInstanceByDom),
       dispose: vi.fn(disposeStatic),
+      registerMap: vi.fn(registerMap),
+      getMap: vi.fn(getMap),
+      __resetRegisteredMaps: () => _registeredMaps.clear(),
     },
     registerECharts: vi.fn(),
   };
@@ -229,6 +252,14 @@ export const resetEChartsMock = (): void => {
   mockState.allInstances.length = 0;
   mockState.duplicateInitCount = 0;
   mockState.nextInstanceId = 1;
+  // PR-X12c (Codex thread 019e2254): clear geo-map registry between
+  // tests so GeoMap suites start with no preregistered names. Registry
+  // lives on `globalThis` (see vi.mock factory above) so we can clear
+  // it here without crossing the mock-module boundary.
+  const G = globalThis as {
+    __X_CHARTS_TEST_MAP_REGISTRY__?: Map<string, unknown>;
+  };
+  G.__X_CHARTS_TEST_MAP_REGISTRY__?.clear();
 };
 
 /* ------------------------------------------------------------------ */
