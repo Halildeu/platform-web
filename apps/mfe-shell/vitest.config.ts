@@ -32,6 +32,7 @@ export default defineConfig({
     __MFE_SUGGESTIONS_ON_DEMAND__: JSON.stringify(true),
     __MFE_ETHIC_ON_DEMAND__: JSON.stringify(true),
     __MFE_SCHEMA_EXPLORER_ON_DEMAND__: JSON.stringify(true),
+    __MFE_ADMIN_REMOTES_ON_DEMAND__: JSON.stringify(true),
     __PERF_OBSERVER_EXPOSE__: JSON.stringify(false),
   },
   test: {
