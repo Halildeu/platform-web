@@ -1474,6 +1474,12 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
   'geo-map': {
     scaffold: [
       {
+        propName: 'mapName',
+        varName: 'sampleMapName',
+        caption: 'GeoMap registered map name',
+        jsLiteral: `'TR'`,
+      },
+      {
         propName: 'data',
         varName: 'sampleData',
         caption: 'GeoMap region values',
