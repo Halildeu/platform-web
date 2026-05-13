@@ -444,29 +444,52 @@ const GraphChartInner = React.forwardRef<
         name?: string;
         value?: number;
       };
+      // ChartClickEvent canonical shape (`types.ts`): `{ datum, value?,
+      // label?, seriesId?, xKey?, yKey? }`. Codex review 019e2244 +
+      // third-AI Claude review both flagged sibling wrappers (BoxPlot /
+      // Candlestick / PictorialBar) emitting non-canonical fields
+      // (`seriesName`, `seriesIndex`, `dataIndex`) — TS errors and
+      // contract drift. GraphChart stays canonical: node-vs-edge
+      // discriminator lives in `datum.kind` so consumers can route on
+      // it without leaking ECharts-internal fields.
+      const raw =
+        typeof p.data === 'object' && p.data !== null ? (p.data as Record<string, unknown>) : {};
       onDataPointClick({
-        seriesName: title ?? 'Network',
-        seriesIndex: 0,
-        dataIndex: p.dataIndex ?? 0,
+        datum: { kind: p.dataType ?? 'node', ...raw },
+        value: typeof p.value === 'number' ? p.value : undefined,
         label: p.name ?? '',
-        value: p.value ?? 0,
-        datum: {
-          kind: p.dataType ?? 'node',
-          ...(p.data ?? {}),
-        },
       });
     },
-    [onDataPointClick, title],
+    [onDataPointClick],
   );
 
-  const a11yData = useMemo(
-    () =>
-      nodes.map((n) => ({
-        label: n.name ?? n.id,
-        value: n.value ?? 0,
-      })),
-    [nodes],
-  );
+  // A11y data table — single linearized listing of nodes followed by
+  // edges. SR users walking the table read every node (sorted by
+  // category asc then value desc so the visual cluster ordering
+  // matches), then every edge as `Edge: source → target`. Codex review
+  // 019e2244 PR-X12b iter-1 REVISE absorb: v1 draft listed nodes only;
+  // edges added as labelled rows so the relationship topology is also
+  // reachable without sighted graph rendering.
+  const a11yData = useMemo(() => {
+    const sortedNodes = [...nodes].sort((a, b) => {
+      const ca = String(a.category ?? '');
+      const cb = String(b.category ?? '');
+      if (ca !== cb) return ca.localeCompare(cb);
+      return (b.value ?? 0) - (a.value ?? 0);
+    });
+    const nodeRows = sortedNodes.map((n) => ({
+      label:
+        n.category != null
+          ? `${n.name ?? n.id} (${categories?.[Number(n.category)]?.name ?? String(n.category)})`
+          : (n.name ?? n.id),
+      value: n.value ?? 0,
+    }));
+    const edgeRows = edges.map((e) => ({
+      label: `Edge: ${String(e.source)} → ${String(e.target)}${e.label ? ` (${e.label})` : ''}`,
+      value: e.value ?? 0,
+    }));
+    return [...nodeRows, ...edgeRows];
+  }, [nodes, edges, categories]);
 
   const a11yState = useChartA11y({
     chartType: 'graph',
@@ -481,7 +504,12 @@ const GraphChartInner = React.forwardRef<
   const { containerRef, instance: _instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     respectReducedMotion: true,
-    onClick: guardChartCallback(handleClick, true),
+    // Outer wrapper already passed a guarded `onDataPointClick`
+    // (BarChart pattern). Install ECharts click listener only when the
+    // outer signalled the callback should be wired — `readonly`
+    // /`disabled`/`hidden` collapse the prop to `undefined` upstream so
+    // no listener installs (no cursor: pointer, no event allocation).
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   const setRefs = useCallback(
@@ -510,14 +538,40 @@ const GraphChartInner = React.forwardRef<
 
 GraphChartInner.displayName = 'GraphChartInner';
 
+/**
+ * GraphChart — public wrapper. Accepts `access` + `accessReason`
+ * (`AccessControlledProps`) and forwards everything else to
+ * `GraphChartInner`. Pattern mirrors `BarChart`/`LineChart` outer/inner
+ * split: `resolveAccessState` resolves once, callbacks are guarded with
+ * `guardChartCallback(state, ...)`, gate decides DOM tree BEFORE inner
+ * hooks run. Codex review 019e2244 PR-X12b iter-1 REVISE absorb:
+ * original draft passed `accessState` prop (gate expects `access`) and
+ * swapped `guardChartCallback(handler, true)` argument order — both
+ * fixed to canonical BarChart pattern.
+ */
 export const GraphChart = React.forwardRef<HTMLDivElement, GraphChartProps>(function GraphChart(
-  { access, accessReason, ...rest },
+  {
+    access,
+    accessReason,
+    onDataPointClick,
+    onMarkupClick,
+    anomalySummary,
+    formatAnomalyAnnouncement,
+    ...rest
+  },
   ref,
 ) {
-  const accessState = resolveAccessState(access);
+  const { state } = resolveAccessState(access);
   return (
-    <ChartAccessGate accessState={accessState} accessReason={accessReason}>
-      <GraphChartInner ref={ref} {...rest} />
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <GraphChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        onMarkupClick={guardChartCallback(state, onMarkupClick)}
+        anomalySummary={anomalySummary}
+        formatAnomalyAnnouncement={formatAnomalyAnnouncement}
+      />
     </ChartAccessGate>
   );
 });
