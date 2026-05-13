@@ -51,6 +51,7 @@ import { WaterfallChart } from '../WaterfallChart';
 import { FunnelChart } from '../FunnelChart';
 import { SankeyChart } from '../SankeyChart';
 import { SunburstChart } from '../SunburstChart';
+import { GraphChart } from '../GraphChart';
 
 beforeEach(() => {
   resetEChartsMock();
@@ -248,6 +249,24 @@ const CASES: ChartCase[] = [
         access={o.access}
         accessReason={o.accessReason}
         onNodeClick={o.onClick as never}
+      />
+    ),
+  },
+  // PR-X12b (Codex thread 019e2244 iter-1 REVISE absorb): network/graph
+  // wrapper joins the parametric matrix so hidden/readonly/disabled/full
+  // contracts are enforced uniformly across all wrappers — not just the
+  // original 13. Click handler is `onDataPointClick` (fires on node or
+  // edge).
+  {
+    name: 'GraphChart',
+    handlerBearing: true,
+    render: (o) => (
+      <GraphChart
+        nodes={[{ id: 'a' }, { id: 'b' }]}
+        edges={[{ source: 'a', target: 'b' }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
       />
     ),
   },

@@ -58,6 +58,8 @@ import { CandlestickChart } from '../CandlestickChart';
 import { PictorialBarChart } from '../PictorialBarChart';
 // PR-X12a: parallel coordinates.
 import { ParallelCoordinatesChart } from '../ParallelCoordinatesChart';
+// PR-X12b: network / entity-edge graph.
+import { GraphChart } from '../GraphChart';
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -1257,7 +1259,6 @@ describe('PictorialBarChart option shape', () => {
   });
 });
 
-/* ================================================================== */
 /*  ParallelCoordinatesChart (PR-X12a)                                 */
 /* ================================================================== */
 
@@ -1360,6 +1361,97 @@ describe('ParallelCoordinatesChart option shape', () => {
         />,
       ),
     ).not.toThrow();
+  });
+});
+
+/* ================================================================== */
+/*  GraphChart (PR-X12b)                                               */
+/* ================================================================== */
+
+describe('GraphChart option shape', () => {
+  const sampleNodes = [
+    { id: 'a', name: 'A', value: 10, category: 0 },
+    { id: 'b', name: 'B', value: 20, category: 0 },
+    { id: 'c', name: 'C', value: 30, category: 1 },
+  ];
+  const sampleEdges = [
+    { source: 'a', target: 'b', value: 5 },
+    { source: 'b', target: 'c', value: 3 },
+  ];
+  const sampleCategories = [
+    { name: 'Type 1', color: '#3b82f6' },
+    { name: 'Type 2', color: '#22c55e' },
+  ];
+
+  it('series.type === graph + maps nodes/edges/categories', () => {
+    render(
+      <GraphChart
+        nodes={sampleNodes}
+        edges={sampleEdges}
+        categories={sampleCategories}
+        animate={false}
+      />,
+    );
+    const s = series();
+    expect(s[0].type).toBe('graph');
+    const nodes = s[0].data as Array<{ id: string; name: string }>;
+    const links = s[0].links as Array<{ source: string; target: string }>;
+    const categories = s[0].categories as Array<{ name: string }>;
+    expect(nodes).toHaveLength(3);
+    expect(links).toHaveLength(2);
+    expect(categories).toHaveLength(2);
+    expect(nodes[0]).toMatchObject({ id: 'a', name: 'A' });
+    expect(links[0]).toMatchObject({ source: 'a', target: 'b' });
+  });
+
+  it('default layout = force + force config emitted', () => {
+    render(<GraphChart nodes={sampleNodes} edges={sampleEdges} animate={false} />);
+    const s = series()[0];
+    expect(s.layout).toBe('force');
+    const force = s.force as { repulsion: number; gravity: number };
+    expect(force.repulsion).toBe(100);
+    expect(force.gravity).toBe(0.1);
+  });
+
+  it('layout="circular" does NOT emit force config', () => {
+    render(
+      <GraphChart nodes={sampleNodes} edges={sampleEdges} layout="circular" animate={false} />,
+    );
+    const s = series()[0];
+    expect(s.layout).toBe('circular');
+    expect(s.force).toBeUndefined();
+  });
+
+  it('directed=true (default) emits arrow head, false leaves none', () => {
+    const { rerender } = render(
+      <GraphChart nodes={sampleNodes} edges={sampleEdges} animate={false} />,
+    );
+    expect(series()[0].edgeSymbol).toEqual(['none', 'arrow']);
+    rerender(
+      <GraphChart nodes={sampleNodes} edges={sampleEdges} directed={false} animate={false} />,
+    );
+    expect(series()[0].edgeSymbol).toEqual(['none', 'none']);
+  });
+
+  it('force layout knobs (repulsion, gravity, edgeLength) pass through', () => {
+    render(
+      <GraphChart
+        nodes={sampleNodes}
+        edges={sampleEdges}
+        forceRepulsion={250}
+        forceGravity={0.2}
+        forceEdgeLength={[30, 80]}
+        animate={false}
+      />,
+    );
+    const force = series()[0].force as { repulsion: number; gravity: number; edgeLength: unknown };
+    expect(force.repulsion).toBe(250);
+    expect(force.gravity).toBe(0.2);
+    expect(force.edgeLength).toEqual([30, 80]);
+  });
+
+  it('handles empty nodes without throwing', () => {
+    expect(() => render(<GraphChart nodes={[]} edges={[]} animate={false} />)).not.toThrow();
   });
 });
 
