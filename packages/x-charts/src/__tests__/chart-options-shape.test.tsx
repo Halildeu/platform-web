@@ -284,6 +284,51 @@ describe('BarChart option shape', () => {
     expect(maleData).toEqual([-240, -362]);
     expect(femaleData).toEqual([18, 82]);
   });
+
+  // PR-X11 (Codex thread 019e1e30): explicit axis range so bullet
+  // widgets share a comparable scale and pyramid layouts can request
+  // a symmetric domain around zero.
+
+  it('valueAxisMax pins the value-axis max (bullet-chart contract)', () => {
+    render(
+      <BarChart
+        data={[{ label: 'A', value: 5 }]}
+        orientation="horizontal"
+        valueAxisMax={10}
+        animate={false}
+      />,
+    );
+    expect(axis('xAxis')?.max).toBe(10);
+  });
+
+  it('valueAxisMin + valueAxisMax pin symmetric domain (pyramid contract)', () => {
+    render(
+      <BarChart
+        data={
+          [{ label: '20-24', male: -240, female: 18 }] as unknown as Array<{
+            label: string;
+            value: number;
+          }>
+        }
+        series={[
+          { field: 'male', name: 'Erkek' },
+          { field: 'female', name: 'Kadin' },
+        ]}
+        orientation="horizontal"
+        valueAxisMin={-300}
+        valueAxisMax={300}
+        animate={false}
+      />,
+    );
+    expect(axis('xAxis')?.min).toBe(-300);
+    expect(axis('xAxis')?.max).toBe(300);
+  });
+
+  it('valueAxisMax undefined leaves axis auto-scaling (default backward-compat)', () => {
+    render(<BarChart data={[{ label: 'A', value: 5 }]} animate={false} />);
+    expect(axis('yAxis')?.max).toBeUndefined();
+    expect(axis('yAxis')?.min).toBeUndefined();
+  });
 });
 
 /* ================================================================== */
@@ -1031,10 +1076,7 @@ describe('BoxPlotChart option shape', () => {
 
   it('emits scatter outlier series when showOutliers=true (default)', () => {
     render(
-      <BoxPlotChart
-        data={[{ category: 'A', values: [1, 2, 3, 4, 5, 100] }]}
-        animate={false}
-      />,
+      <BoxPlotChart data={[{ category: 'A', values: [1, 2, 3, 4, 5, 100] }]} animate={false} />,
     );
     const allSeries = series();
     expect(allSeries.length).toBeGreaterThanOrEqual(2);

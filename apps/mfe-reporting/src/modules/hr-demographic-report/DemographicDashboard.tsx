@@ -8,13 +8,14 @@ import {
   ChartContainer as XChartContainer,
   KPICard as XKPICard,
   type KPICardTrend,
-  // 2026-05-12 — phase 1 migration of bespoke SVG widgets to canonical
-  // x-charts wrappers. GaugeChart replaces the local "GaugeLocal" big-
-  // number div (which never rendered a real gauge dial); LineChart
-  // replaces the "Maaş Farkı Trendi" hand-rolled <svg><polyline> path.
-  // The remaining custom widgets (BulletChart, StackedBar,
-  // AgePyramidChart, ProgressBar) need wrapper-level support
-  // (stack/back-to-back/marker overlay) — tracked as Phase 2 follow-up.
+  // 2026-05-13 — PR-X11 completes the bespoke-SVG → x-charts migration.
+  // GaugeChart replaces big-number divs; LineChart replaces the Maas
+  // Farki Trendi polyline; BarChart now backs BulletChart (showBackground +
+  // LineMarkup), ProgressBar (showBackground), StackedBar (stacked
+  // multi-series), and AgePyramidChart (2-series + negative values +
+  // valueFormatter absolute). PR-X1 + PR-X11 wrapper extensions
+  // (stacked/showBackground/valueAxisMin/valueAxisMax) made the final
+  // 4 internal swaps possible without changing call-site APIs.
   GaugeChart as XGaugeChart,
   LineChart as XLineChart,
 } from '@mfe/x-charts';
@@ -703,73 +704,44 @@ function _LegacyGauge({
 }
 
 // ---------------------------------------------------------------------------
-// Stacked Horizontal Bar
+// Stacked Horizontal Bar — PR-X11 migration.
+// ECharts native pattern: multi-series horizontal bar with `stack: 'name'`
+// shared key (enabled by PR-X1 BarChart `stacked` prop). Each segment
+// becomes its own series so the legend / decal / a11y data table all
+// work uniformly.
 // ---------------------------------------------------------------------------
 function StackedBar({ data }: { data: Array<{ label: string; value: number }> }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return null;
 
-  const barHeight = 32;
-  const height = barHeight + 40;
-  const width = 320;
+  // ECharts stacked-bar shape: ONE row whose fields are segments. The
+  // segment labels move to `series[i].name`; the row label is just a
+  // placeholder (we hide the category axis since there's only one row).
+  const stackedRow = data.reduce(
+    (acc, d, i) => {
+      acc[`seg_${i}`] = d.value;
+      return acc;
+    },
+    { label: 'Distribution' } as Record<string, string | number>,
+  );
 
-  const colored = data.map((d, i) => ({
-    ...d,
+  const seriesDef = data.map((d, i) => ({
+    field: `seg_${i}`,
+    name: d.label,
     color: SERIES_COLORS[i % SERIES_COLORS.length],
   }));
 
-  let currentX = 0;
-
   return (
-    <div>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ display: 'block' }}>
-        {colored.map((d, i) => {
-          const segW = (d.value / total) * width;
-          const x = currentX;
-          currentX += segW;
-          return (
-            <rect
-              key={i}
-              x={x}
-              y={0}
-              width={segW}
-              height={barHeight}
-              rx={i === 0 ? 4 : 0}
-              fill={d.color}
-              opacity={0.85}
-            >
-              <title>
-                {d.label}: {d.value} ({((d.value / total) * 100).toFixed(1)}%)
-              </title>
-            </rect>
-          );
-        })}
-        {/* Percentage labels */}
-        {(() => {
-          let labelX = 0;
-          return colored.map((d, i) => {
-            const segW = (d.value / total) * width;
-            const cx = labelX + segW / 2;
-            labelX += segW;
-            if (segW < 25) return null;
-            return (
-              <text
-                key={`lbl-${i}`}
-                x={cx}
-                y={barHeight / 2 + 4}
-                textAnchor="middle"
-                fontSize="10"
-                fontWeight="600"
-                fill="var(--surface-default)"
-              >
-                {Math.round((d.value / total) * 100)}%
-              </text>
-            );
-          });
-        })()}
-      </svg>
-      <Legend items={colored} />
-    </div>
+    <XBarChart
+      data={[stackedRow] as unknown as Array<{ label: string; value: number }>}
+      series={seriesDef}
+      orientation="horizontal"
+      stacked
+      size="sm"
+      showLegend
+      showValues
+      valueFormatter={(v) => `${Math.round((v / total) * 100)}%`}
+    />
   );
 }
 
@@ -800,12 +772,6 @@ function BulletChart({
    */
   direction?: 'higher-better' | 'lower-better';
 }) {
-  const width = 280;
-  const barH = 16;
-  const height = 40;
-  const actualW = Math.min((actual / max) * width, width);
-  const targetX = Math.min((target / max) * width, width);
-
   // For higher-better: green at/above target, amber within 30% below, red further below.
   // For lower-better: green at/below target, amber within (target + 30% of remaining max),
   // red further above. The lower-better amber upper bound uses
@@ -830,6 +796,10 @@ function BulletChart({
           ? warnColor
           : errColor;
 
+  // PR-X11 migration: replace SVG body with XBarChart + showBackground +
+  // LineMarkup at target. Header row stays HTML for the label/value
+  // composition — wrapper alone can't reproduce the "label left, value/
+  // target right" inline header in a single instance.
   return (
     <div style={{ marginBottom: 12 }}>
       <div
@@ -852,27 +822,32 @@ function BulletChart({
           </span>
         </span>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ display: 'block' }}>
-        {/* Background */}
-        <rect x={0} y={8} width={width} height={barH} rx={4} fill="var(--surface-muted)" />
-        {/* Actual */}
-        <rect x={0} y={8} width={actualW} height={barH} rx={4} fill={color} opacity={0.85} />
-        {/* Target line */}
-        <line
-          x1={targetX}
-          y1={4}
-          x2={targetX}
-          y2={28}
-          stroke="var(--text-primary)"
-          strokeWidth="2"
-        />
-      </svg>
+      <XBarChart
+        data={[{ label: '', value: actual, color }]}
+        orientation="horizontal"
+        showBackground
+        size="sm"
+        valueAxisMax={max}
+        markups={[
+          {
+            type: 'line',
+            axis: 'x',
+            value: target,
+            color: 'var(--text-primary)',
+            width: 2,
+          },
+        ]}
+        valueFormatter={(v) => `${v}${unit}`}
+      />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Progress Bar
+// Progress Bar — PR-X11 migration.
+// Header HTML stays for label/value composition; the bar body now uses
+// XBarChart with `showBackground` (track) so the widget participates in
+// theme/decal/a11y plumbing instead of an animated raw <div>.
 // ---------------------------------------------------------------------------
 function ProgressBar({
   label,
@@ -885,7 +860,6 @@ function ProgressBar({
   target: number;
   unit?: string;
 }) {
-  const percentage = Math.min((value / target) * 100, 100);
   const color =
     value >= target
       ? 'var(--state-success-text)'
@@ -909,25 +883,14 @@ function ProgressBar({
           {unit}
         </span>
       </div>
-      <div
-        style={{
-          width: '100%',
-          height: 8,
-          borderRadius: 4,
-          background: 'var(--surface-muted)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: `${percentage}%`,
-            height: '100%',
-            borderRadius: 4,
-            background: color,
-            transition: 'width 0.3s ease',
-          }}
-        />
-      </div>
+      <XBarChart
+        data={[{ label: '', value, color }]}
+        orientation="horizontal"
+        showBackground
+        size="sm"
+        valueAxisMax={target}
+        valueFormatter={(v) => `${v}${unit}`}
+      />
     </div>
   );
 }
@@ -981,7 +944,11 @@ const DashboardSection: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Age Pyramid Chart (horizontal bars: male LEFT, female RIGHT)
+// Age Pyramid Chart — PR-X11 migration.
+// Canonical ECharts population-pyramid pattern: 2 horizontal series, one
+// with NEGATIVE values (renders left of origin) + valueFormatter that
+// shows absolute values on the axis. Symmetric domain `[-max, +max]`
+// keeps the visual centred so left/right are comparable.
 // ---------------------------------------------------------------------------
 function AgePyramidChart({
   data,
@@ -989,119 +956,31 @@ function AgePyramidChart({
   data: Array<{ ageGroup: string; male: number; female: number }>;
 }) {
   const maxVal = Math.max(...data.flatMap((d) => [d.male, d.female]), 1);
-  const barHeight = 18;
-  const gap = 4;
-  const centerX = 160;
-  const sideWidth = 120;
-  const labelWidth = 40;
-  const svgWidth = centerX * 2;
-  const svgHeight = data.length * (barHeight + gap) + 20;
+
+  // ECharts pyramid wire format: { label: ageGroup, male: NEGATIVE, female: positive }.
+  // The wrapper passes these through unmodified (PR-X1 verified negative-
+  // value passthrough). `series` is multi-field; valueFormatter strips
+  // the sign so axis labels read 240 instead of -240.
+  const pyramidData = data.map((d) => ({
+    label: d.ageGroup,
+    male: -d.male,
+    female: d.female,
+  }));
 
   return (
-    <div>
-      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} width="100%" style={{ display: 'block' }}>
-        {/* Header */}
-        <text
-          x={centerX - sideWidth / 2}
-          y={12}
-          textAnchor="middle"
-          fontSize="9"
-          fontWeight="600"
-          fill="var(--action-primary)"
-        >
-          Erkek
-        </text>
-        <text
-          x={centerX + sideWidth / 2}
-          y={12}
-          textAnchor="middle"
-          fontSize="9"
-          fontWeight="600"
-          fill="var(--accent-soft)"
-        >
-          Kadin
-        </text>
-        {data.map((d, i) => {
-          const y = 18 + i * (barHeight + gap);
-          const maleW = (d.male / maxVal) * sideWidth;
-          const femaleW = (d.female / maxVal) * sideWidth;
-          return (
-            <g key={i}>
-              {/* Male bar (grows left from center) */}
-              <rect
-                x={centerX - labelWidth / 2 - maleW}
-                y={y}
-                width={maleW}
-                height={barHeight}
-                rx={3}
-                fill="var(--action-primary)"
-                opacity={0.8}
-              >
-                <title>
-                  Erkek {d.ageGroup}: {d.male}
-                </title>
-              </rect>
-              {d.male > 0 && (
-                <text
-                  x={centerX - labelWidth / 2 - maleW - 4}
-                  y={y + barHeight / 2 + 4}
-                  textAnchor="end"
-                  fontSize="8"
-                  fill="var(--text-secondary)"
-                >
-                  {d.male}
-                </text>
-              )}
-              {/* Age group label */}
-              <text
-                x={centerX}
-                y={y + barHeight / 2 + 4}
-                textAnchor="middle"
-                fontSize="9"
-                fontWeight="500"
-                fill="var(--text-primary)"
-              >
-                {d.ageGroup}
-              </text>
-              {/* Female bar (grows right from center) */}
-              <rect
-                x={centerX + labelWidth / 2}
-                y={y}
-                width={femaleW}
-                height={barHeight}
-                rx={3}
-                fill="var(--accent-soft)"
-                opacity={0.8}
-              >
-                <title>
-                  Kadin {d.ageGroup}: {d.female}
-                </title>
-              </rect>
-              {d.female > 0 && (
-                <text
-                  x={centerX + labelWidth / 2 + femaleW + 4}
-                  y={y + barHeight / 2 + 4}
-                  textAnchor="start"
-                  fontSize="8"
-                  fill="var(--text-secondary)"
-                >
-                  {d.female}
-                </text>
-              )}
-            </g>
-          );
-        })}
-        {/* Center line */}
-        <line
-          x1={centerX}
-          y1={16}
-          x2={centerX}
-          y2={svgHeight}
-          stroke="var(--border-subtle)"
-          strokeWidth="0.5"
-        />
-      </svg>
-    </div>
+    <XBarChart
+      data={pyramidData as unknown as Array<{ label: string; value: number }>}
+      series={[
+        { field: 'male', name: 'Erkek', color: 'var(--action-primary)' },
+        { field: 'female', name: 'Kadin', color: 'var(--accent-soft)' },
+      ]}
+      orientation="horizontal"
+      size="md"
+      showLegend
+      valueAxisMin={-maxVal}
+      valueAxisMax={maxVal}
+      valueFormatter={(v) => Math.abs(v).toString()}
+    />
   );
 }
 

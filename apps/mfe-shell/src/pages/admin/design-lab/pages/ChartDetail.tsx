@@ -250,6 +250,22 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Gap between categories (% of category width). Smaller values\npack bars tighter. Maps to ECharts `series.barCategoryGap`.',
       },
       {
+        name: 'valueAxisMax',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description:
+          "Explicit value-axis maximum. Without this the axis auto-scales to\nthe data range — fine for most cases. Use when each BarChart needs\nto pin its OWN axis max (e.g. a bullet-style widget where the bar\nfills `actual / max` of its own track regardless of the data\npoint's magnitude). Each chart instance owns its own axis range —\nthis prop does NOT synchronise scales across multiple sibling\ncharts; for that, render all data in a single multi-series chart.\nMaps to ECharts `xAxis.max` (horizontal) or `yAxis.max` (vertical).",
+      },
+      {
+        name: 'valueAxisMin',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description:
+          'Explicit value-axis minimum. Defaults to 0 for ECharts bar charts;\noverride when negative-value pyramids or signed deltas need a\nsymmetric domain (e.g. `[-300, 300]` for population pyramid).\nMaps to ECharts `xAxis.min` (horizontal) or `yAxis.min` (vertical).',
+      },
+      {
         name: 'onDataPointClick',
         type: '(event: ChartClickEvent) => void',
         required: false,
