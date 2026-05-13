@@ -37,6 +37,7 @@ import { queryClient } from './query-config';
 import { readEnvBoolean } from './env';
 import { isEndpointAdminRemoteEnabled } from '../shell-navigation';
 import { scheduleOnIdle } from '../../lib/idle-scheduler';
+import { ensureRemoteShellServicesConfigured } from './ensure-remote-shell-services';
 
 /**
  * Build-time constant injected by Vite's `define` config (see
@@ -52,6 +53,22 @@ import { scheduleOnIdle } from '../../lib/idle-scheduler';
  * manifest entry was omitted.
  */
 declare const __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: boolean;
+
+/**
+ * PERF-INIT-V2 PR-B5b2-prep (Codex thread `019e2358` AGREE Option B) —
+ * build-time constant injected by Vite's `define` config (see
+ * `vite.config.ts`). When `true`, the 4 admin remotes
+ * (mfe_users / mfe_audit / mfe_access / mfe_reporting) are omitted
+ * from the federation manifest at build time, and the static
+ * `import('mfe_<admin>/shell-services')` block below is dead-code-eliminated
+ * by Rolldown.  Same DCE pattern as `__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__`
+ * and `__MFE_SCHEMA_EXPLORER_ON_DEMAND__`.
+ *
+ * When the canary is OFF (default), the static-import path is
+ * preserved verbatim so production builds keep current behaviour
+ * (no regression).
+ */
+declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
 /* ---- Notification dispatcher ---- */
 
@@ -382,20 +399,52 @@ registerRefreshHandler(async (): Promise<RefreshResult> => {
 
 /* ---- Wire remote module shell-services ---- */
 
-export const wireRemoteShellServices = () => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  if (
-    readEnvBoolean('VITE_SHELL_SKIP_REMOTE_SERVICES') ||
-    readEnvBoolean('SHELL_SKIP_REMOTE_SERVICES')
-  ) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[shell] remote shell-services yuklemesi environment ile kapatildi');
-    }
-    return;
-  }
-  const sharedServices = {
+/**
+ * PERF-INIT-V2 PR-B5b2-prep-2 (Codex thread `019e2358` AGREE Option B) —
+ * exposed shape of the sharedServices object that remote MFEs receive
+ * via `configureShellServices(sharedServices)`.  Kept as a `type` so
+ * the 4 admin on-demand wrappers
+ * (`createUsersAppOnDemand.tsx` / `createAccessAppOnDemand.tsx` /
+ *  `createAuditAppOnDemand.tsx` / `createReportingAppOnDemand.tsx`)
+ * can type-narrow their `ensureRemoteShellServicesConfigured` call.
+ */
+export type SharedShellServices = {
+  notify: { push: typeof pushShellNotification };
+  telemetry: { emit: typeof emitShellTelemetry };
+  http: typeof api;
+  auth: {
+    getToken: () => string | null;
+    getUser: () => ReturnType<typeof store.getState>['auth']['user'] | null;
+    ready: () => ReturnType<typeof createAuthReadyPromise>;
+    isTransportReady: () => boolean;
+    getPhase: () => ReturnType<typeof store.getState>['auth']['phase'];
+    getEpoch: () => number;
+    enterImpersonationSession: (
+      payload: EnterImpersonationOrchestrationPayload,
+    ) => ReturnType<typeof enterImpersonationOrchestration>;
+    exitImpersonationSession: () => ReturnType<typeof exitImpersonationOrchestration>;
+    isImpersonating: () => boolean;
+    isSuperAdmin: () => boolean;
+    onTokenChange: (listener: (token: string | null) => void) => () => void;
+  };
+};
+
+/**
+ * Build the sharedServices object once per page load.  All getters are
+ * closures over `store.getState()` so the cached object stays current
+ * w.r.t. Redux state without rebuild.  Cached at module level so the
+ * route-level wrappers (B5b2-prep-2) and the idle batch loader below
+ * see the SAME object reference — important for remotes that compare
+ * services by identity.
+ *
+ * Codex `019e2358` Option B note: the cache lifetime is page-scoped
+ * (no reset path).  Logout/re-login does NOT invalidate it because
+ * the underlying getters read fresh Redux state on each invocation.
+ */
+let cachedSharedShellServices: SharedShellServices | null = null;
+
+function buildSharedShellServices(): SharedShellServices {
+  return {
     notify: { push: pushShellNotification },
     telemetry: { emit: emitShellTelemetry },
     http: api,
@@ -470,20 +519,138 @@ export const wireRemoteShellServices = () => {
       },
     },
   };
-  const remotes: Array<{
-    name: string;
-    loader: () => Promise<{
-      configureShellServices: (services: typeof sharedServices) => void;
-    }>;
-  }> = [
-    { name: 'mfe_access', loader: () => import('mfe_access/shell-services') },
-    { name: 'mfe_audit', loader: () => import('mfe_audit/shell-services') },
-    { name: 'mfe_users', loader: () => import('mfe_users/shell-services') },
-    {
-      name: 'mfe_reporting',
-      loader: () => import('mfe_reporting/shell-services'),
-    },
-  ];
+}
+
+/**
+ * Public accessor for the cached sharedServices object.  Used by:
+ *   - `wireRemoteShellServices()` below (idle batch loader)
+ *   - The 4 admin on-demand wrappers (route-level race protection)
+ * Both paths get the same object reference so the helper's
+ * configured-remotes Set semantics stay consistent.
+ */
+export function getSharedShellServices(): SharedShellServices {
+  if (cachedSharedShellServices !== null) {
+    return cachedSharedShellServices;
+  }
+  cachedSharedShellServices = buildSharedShellServices();
+  return cachedSharedShellServices;
+}
+
+/**
+ * Test-only reset for the sharedServices cache.  Production code
+ * MUST NOT call this; the cache lives for the page lifecycle.
+ *
+ * @internal
+ */
+export function __resetSharedShellServicesForTests(): void {
+  cachedSharedShellServices = null;
+}
+
+/**
+ * Default `localhost:<port>` fallback used when no env override is
+ * provided (dev mode).  Ports match the federation manifest defaults
+ * in `apps/mfe-shell/vite.config.ts` `buildRemotes.remoteEntries`.
+ */
+const ADMIN_REMOTE_DEFAULT_PORTS: Record<'reporting' | 'access' | 'audit' | 'users', number> = {
+  reporting: 3007,
+  access: 3005,
+  audit: 3006,
+  users: 3004,
+};
+
+/**
+ * Resolve an admin remote's `remoteEntry.js` URL via the same lookup
+ * order as the route-level wrappers
+ * (`createUsersAppOnDemand.tsx` `resolveUsersRemoteEntry` etc.) so
+ * the idle batch and the route-level call use the SAME URL.  If both
+ * paths resolve different URLs the helper's `configuredRemotes` Set
+ * would still dedup, but `host.registerRemotes` would be called with
+ * the second URL, racing against the first load — keeping them
+ * symmetrical avoids the hazard.
+ */
+function resolveAdminRemoteEntry(key: 'reporting' | 'access' | 'audit' | 'users'): string {
+  const upper = key.toUpperCase();
+  if (typeof window !== 'undefined') {
+    const w = window as Window & { __env__?: Record<string, string> };
+    const url = w.__env__?.[`MFE_${upper}_URL`] ?? w.__env__?.[`VITE_MFE_${upper}_URL`] ?? null;
+    if (url) return url;
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    const url = process.env[`MFE_${upper}_URL`] ?? process.env[`VITE_MFE_${upper}_URL`] ?? null;
+    if (url) return url;
+  }
+  return `http://localhost:${ADMIN_REMOTE_DEFAULT_PORTS[key]}/remoteEntry.js`;
+}
+
+export const wireRemoteShellServices = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (
+    readEnvBoolean('VITE_SHELL_SKIP_REMOTE_SERVICES') ||
+    readEnvBoolean('SHELL_SKIP_REMOTE_SERVICES')
+  ) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[shell] remote shell-services yuklemesi environment ile kapatildi');
+    }
+    return;
+  }
+  const sharedServices = getSharedShellServices();
+  // PERF-INIT-V2 PR-B5b2-prep-2 (Codex thread `019e2358` AGREE Option B):
+  // build-time conditional gate for the 4 admin remotes' shell-services
+  // wiring.  When `__MFE_ADMIN_REMOTES_ON_DEMAND__` is ON, Rolldown DCE's
+  // the static-import 4-remote contract block below; the idle batch loader
+  // uses `ensureRemoteShellServicesConfigured` from the prep-1 helper
+  // (PR #459) which registers + loads + configures via host MF runtime
+  // instance.  The same helper is also called by the route-level
+  // on-demand wrappers so concurrent calls collapse onto a single load.
+  //
+  // Sequence: `reporting → access → audit → users` (Codex risk ranking,
+  // lowest-blast first).  If the helper itself has a pathology, we get
+  // an early signal from `mfe_reporting` before touching the more
+  // sensitive remotes.
+  if (__MFE_ADMIN_REMOTES_ON_DEMAND__) {
+    const adminRemotes: Array<{ name: string; entry: string }> = [
+      { name: 'mfe_reporting', entry: resolveAdminRemoteEntry('reporting') },
+      { name: 'mfe_access', entry: resolveAdminRemoteEntry('access') },
+      { name: 'mfe_audit', entry: resolveAdminRemoteEntry('audit') },
+      { name: 'mfe_users', entry: resolveAdminRemoteEntry('users') },
+    ];
+    adminRemotes.forEach(({ name, entry }) => {
+      ensureRemoteShellServicesConfigured(name, entry, sharedServices).catch((error) => {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug(`[shell] ${name} shell-services konfigurasyonu atlandı`, error);
+        }
+      });
+    });
+  } else {
+    // Eager static-import path — current behaviour preserved verbatim
+    // when the canary is OFF.  Default for production until the testai
+    // variant flips `__MFE_ADMIN_REMOTES_ON_DEMAND__` to true.
+    const remotes: Array<{
+      name: string;
+      loader: () => Promise<{
+        configureShellServices: (services: typeof sharedServices) => void;
+      }>;
+    }> = [
+      { name: 'mfe_access', loader: () => import('mfe_access/shell-services') },
+      { name: 'mfe_audit', loader: () => import('mfe_audit/shell-services') },
+      { name: 'mfe_users', loader: () => import('mfe_users/shell-services') },
+      {
+        name: 'mfe_reporting',
+        loader: () => import('mfe_reporting/shell-services'),
+      },
+    ];
+    remotes.forEach(({ name, loader }) => {
+      loader()
+        .then((module) => module.configureShellServices(sharedServices))
+        .catch((error) => {
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug(`[shell] ${name} shell-services konfigurasyonu atlandı`, error);
+          }
+        });
+    });
+  }
   // FE-001 (post-#284) + Module Federation build-time tree-shake fix
   // (2026-05-08): the runtime `isEndpointAdminRemoteEnabled()` guard
   // alone is NOT enough — Rolldown's static analysis still tries to
@@ -503,20 +670,14 @@ export const wireRemoteShellServices = () => {
   // gate so a build-time-enabled bundle can still hide the remote
   // at runtime via env flag (legacy contract preserved).
   if (__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__ && isEndpointAdminRemoteEnabled()) {
-    remotes.push({
-      name: 'mfe_endpoint_admin',
-      loader: () => import('mfe_endpoint_admin/shell-services'),
-    });
-  }
-  remotes.forEach(({ name, loader }) => {
-    loader()
+    import('mfe_endpoint_admin/shell-services')
       .then((module) => module.configureShellServices(sharedServices))
       .catch((error) => {
         if (process.env.NODE_ENV !== 'production') {
-          console.debug(`[shell] ${name} shell-services konfigurasyonu atlandı`, error);
+          console.debug('[shell] mfe_endpoint_admin shell-services konfigurasyonu atlandı', error);
         }
       });
-  });
+  }
 };
 
 /**

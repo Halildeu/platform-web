@@ -7,6 +7,10 @@ import { createLazyRemoteModule } from '../createLazyRemoteModule';
 import { SuggestionsAppOnDemand } from '../createSuggestionsAppOnDemand';
 import { EthicAppOnDemand } from '../createEthicAppOnDemand';
 import { SchemaExplorerAppOnDemand } from '../createSchemaExplorerAppOnDemand';
+import { UsersAppOnDemand } from '../createUsersAppOnDemand';
+import { AccessAppOnDemand } from '../createAccessAppOnDemand';
+import { AuditAppOnDemand } from '../createAuditAppOnDemand';
+import { ReportingAppOnDemand } from '../createReportingAppOnDemand';
 
 /**
  * PERF-INIT-V2 PR-B5b1 + PR-B5b1.5 + PR-B5b2a canary build-time
@@ -38,6 +42,26 @@ declare const __MFE_SUGGESTIONS_ON_DEMAND__: boolean;
 declare const __MFE_ETHIC_ON_DEMAND__: boolean;
 declare const __MFE_SCHEMA_EXPLORER_ON_DEMAND__: boolean;
 
+/**
+ * PERF-INIT-V2 PR-B5b2-prep-2 (Codex thread `019e2358` AGREE Option B):
+ * single build-time flag gates the 4 admin remotes
+ * (users / audit / access / reporting) on-demand path.  When TRUE:
+ *
+ *   1. `vite.config.ts buildRemotes()` omits the 4 admin manifest
+ *      entries.
+ *   2. `shell-services-wiring.ts` static-import 4-remote contract
+ *      block is DCE'd; idle batch uses
+ *      `ensureRemoteShellServicesConfigured` helper instead.
+ *   3. The static `import('mfe_<admin>/...App')` specifiers below are
+ *      DCE'd and the route renders the on-demand wrappers instead.
+ *
+ * Same pattern as `__MFE_SUGGESTIONS_ON_DEMAND__` (B5b1) /
+ * `__MFE_ETHIC_ON_DEMAND__` (B5b1.5) / `__MFE_SCHEMA_EXPLORER_ON_DEMAND__`
+ * (B5b2a) — single `VITE_MFE_ON_DEMAND_BOOTSTRAP` master toggle
+ * drives all via `readSuggestionsOnDemandBuildFlag()` reader.
+ */
+declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
+
 export const SuggestionsApp: React.ComponentType = __MFE_SUGGESTIONS_ON_DEMAND__
   ? SuggestionsAppOnDemand
   : createLazyRemoteModule('Suggestions', () => import('mfe_suggestions/SuggestionsApp'));
@@ -46,16 +70,21 @@ export const EthicApp: React.ComponentType = __MFE_ETHIC_ON_DEMAND__
   ? EthicAppOnDemand
   : createLazyRemoteModule('Ethic', () => import('mfe_ethic/EthicApp'));
 
-export const AccessModule = createLazyRemoteModule('Access', () => import('mfe_access/AccessApp'));
+export const AccessModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
+  ? AccessAppOnDemand
+  : createLazyRemoteModule('Access', () => import('mfe_access/AccessApp'));
 
-export const AuditModule = createLazyRemoteModule('Audit', () => import('mfe_audit/AuditApp'));
+export const AuditModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
+  ? AuditAppOnDemand
+  : createLazyRemoteModule('Audit', () => import('mfe_audit/AuditApp'));
 
-export const UsersModule = createLazyRemoteModule('Users', () => import('mfe_users/UsersApp'));
+export const UsersModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
+  ? UsersAppOnDemand
+  : createLazyRemoteModule('Users', () => import('mfe_users/UsersApp'));
 
-export const ReportingModule = createLazyRemoteModule(
-  'Reporting',
-  () => import('mfe_reporting/ReportingApp'),
-);
+export const ReportingModule: React.ComponentType = __MFE_ADMIN_REMOTES_ON_DEMAND__
+  ? ReportingAppOnDemand
+  : createLazyRemoteModule('Reporting', () => import('mfe_reporting/ReportingApp'));
 
 export const SchemaExplorerModule: React.ComponentType = __MFE_SCHEMA_EXPLORER_ON_DEMAND__
   ? SchemaExplorerAppOnDemand

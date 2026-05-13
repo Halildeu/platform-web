@@ -166,6 +166,7 @@ function buildRemotes(
   suggestionsOnDemand: boolean,
   ethicOnDemand: boolean,
   schemaExplorerOnDemand: boolean,
+  adminRemotesOnDemand: boolean,
 ) {
   const enabled = {
     suggestions: readEnvBoolean([
@@ -264,26 +265,58 @@ function buildRemotes(
             entry: enabled.ethic ? remoteEntries.ethic : STUB,
           },
         }),
-    mfe_access: {
-      type: 'module',
-      name: 'mfe_access',
-      entry: enabled.access ? remoteEntries.access : STUB,
-    },
-    mfe_audit: {
-      type: 'module',
-      name: 'mfe_audit',
-      entry: enabled.audit ? remoteEntries.audit : STUB,
-    },
-    mfe_users: {
-      type: 'module',
-      name: 'mfe_users',
-      entry: enabled.users ? remoteEntries.users : STUB,
-    },
-    mfe_reporting: {
-      type: 'module',
-      name: 'mfe_reporting',
-      entry: enabled.reporting ? remoteEntries.reporting : STUB,
-    },
+    // PERF-INIT-V2 PR-B5b2-prep-2 canary (Codex thread `019e2358` AGREE
+    // Option B): when `adminRemotesOnDemand` AND the respective enable
+    // flag are both true, the 4 admin remotes are OMITTED from the
+    // federation manifest.  The route-level wrappers
+    // (`createUsersAppOnDemand.tsx` etc.) + `shell-services-wiring.ts`
+    // idle batch use `ensureRemoteShellServicesConfigured` (B5b2-prep-1
+    // helper, PR #459) to register + load via host MF runtime instance
+    // on demand.  Same pattern as `mfe_suggestions` (B5b1) /
+    // `mfe_ethic` (B5b1.5) / `mfe_schema_explorer` (B5b2a) — single
+    // `VITE_MFE_ON_DEMAND_BOOTSTRAP` env drives all via the existing
+    // `readSuggestionsOnDemandBuildFlag()` reader (kept original
+    // function name from B5b1 for cross-PR audit continuity).
+    //
+    // Sequence per Codex risk ranking: reporting (lowest blast) →
+    // access → audit → users (highest blast — shell-services contract
+    // owner for notifications + impersonation).
+    ...(adminRemotesOnDemand && enabled.access
+      ? {}
+      : {
+          mfe_access: {
+            type: 'module' as const,
+            name: 'mfe_access',
+            entry: enabled.access ? remoteEntries.access : STUB,
+          },
+        }),
+    ...(adminRemotesOnDemand && enabled.audit
+      ? {}
+      : {
+          mfe_audit: {
+            type: 'module' as const,
+            name: 'mfe_audit',
+            entry: enabled.audit ? remoteEntries.audit : STUB,
+          },
+        }),
+    ...(adminRemotesOnDemand && enabled.users
+      ? {}
+      : {
+          mfe_users: {
+            type: 'module' as const,
+            name: 'mfe_users',
+            entry: enabled.users ? remoteEntries.users : STUB,
+          },
+        }),
+    ...(adminRemotesOnDemand && enabled.reporting
+      ? {}
+      : {
+          mfe_reporting: {
+            type: 'module' as const,
+            name: 'mfe_reporting',
+            entry: enabled.reporting ? remoteEntries.reporting : STUB,
+          },
+        }),
     // PERF-INIT-V2 PR-B5b2a canary: when `schemaExplorerOnDemand` is
     // true and `enabled.schemaExplorer` is true, the entry is omitted
     // from the federation manifest entirely.  The route render loader
@@ -420,6 +453,36 @@ export default defineConfig(({ mode }) => {
   ]);
   const schemaExplorerOnDemandBuildEnabled =
     readSuggestionsOnDemandBuildFlag() && schemaExplorerEnabled;
+  // PR-B5b2-prep-2: 4 admin remotes (users/audit/access/reporting)
+  // share a single build-time flag.  Same single-canary master toggle
+  // (`VITE_MFE_ON_DEMAND_BOOTSTRAP`) as B5b1 / B5b1.5 / B5b2a — no new
+  // env var introduced.  The flag is the AND of the master toggle and
+  // any-admin-enabled fan-in, because the static-import 4-remote
+  // contract is an atomic block in `shell-services-wiring.ts` (cannot
+  // selectively DCE only one of the 4).  If ANY admin remote is
+  // disabled via its enable env, Rolldown still needs to resolve the
+  // static imports for the OTHER 3, so on-demand only fires when ALL
+  // 4 are enabled (typical production config).
+  //
+  // Codex `019e2358` Option B critical add #3: scaffolding-safe
+  // semantics — when the master toggle is OFF (default), the flag
+  // evaluates to false regardless of the per-remote enables, so the
+  // shell-services-wiring static-import path stays canonical.
+  const adminRemotesEnabled = {
+    users: readEnvBoolean(['VITE_SHELL_ENABLE_USERS_REMOTE', 'SHELL_ENABLE_USERS_REMOTE']),
+    audit: readEnvBoolean(['VITE_SHELL_ENABLE_AUDIT_REMOTE', 'SHELL_ENABLE_AUDIT_REMOTE']),
+    access: readEnvBoolean(['VITE_SHELL_ENABLE_ACCESS_REMOTE', 'SHELL_ENABLE_ACCESS_REMOTE']),
+    reporting: readEnvBoolean([
+      'VITE_SHELL_ENABLE_REPORTING_REMOTE',
+      'SHELL_ENABLE_REPORTING_REMOTE',
+    ]),
+  };
+  const adminRemotesOnDemandBuildEnabled =
+    readSuggestionsOnDemandBuildFlag() &&
+    adminRemotesEnabled.users &&
+    adminRemotesEnabled.audit &&
+    adminRemotesEnabled.access &&
+    adminRemotesEnabled.reporting;
 
   return {
     base: appBasePath,
@@ -452,6 +515,7 @@ export default defineConfig(({ mode }) => {
           suggestionsOnDemandBuildEnabled,
           ethicOnDemandBuildEnabled,
           schemaExplorerOnDemandBuildEnabled,
+          adminRemotesOnDemandBuildEnabled,
         ),
         exposes: {
           './logic': './src/exposed-logic.ts',
@@ -525,18 +589,23 @@ export default defineConfig(({ mode }) => {
       // first remote (schema_explorer) is in admin set but NOT in
       // shell-services contract (lowest blast in admin batch).
       __MFE_SCHEMA_EXPLORER_ON_DEMAND__: JSON.stringify(schemaExplorerOnDemandBuildEnabled),
-      // PERF-INIT-V2 PR-B5b2-prep (Codex thread `019e2358` AGREE Option B):
+      // PERF-INIT-V2 PR-B5b2-prep-2 (Codex thread `019e2358` AGREE Option B):
       // single build-time flag gates the 4 admin remotes
       // (users/audit/access/reporting) on-demand path.  Default false;
-      // testai variant CI matrix will flip this to true after the helper
-      // + lazy-routes wrappers + shell-services-wiring conditional
-      // branches land in subsequent PR-B5b2 implementation steps.
-      // Scaffolding-only in this PR — flag is wired into the define
-      // pipeline but no production code path currently reads it.  The
-      // ensure-remote-shell-services helper is the first consumer; it
-      // imports cleanly even when flag is false (no DCE risk because
-      // helper is a regular ES module, not a build-time conditional).
-      __MFE_ADMIN_REMOTES_ON_DEMAND__: JSON.stringify(false),
+      // testai variant CI matrix flips this to true when
+      // `VITE_MFE_ON_DEMAND_BOOTSTRAP=true` AND all 4 admin remotes are
+      // enabled.  When true:
+      //   1. `buildRemotes()` omits the 4 admin manifest entries (above).
+      //   2. `lazy-routes.ts` swaps Users/Access/Audit/Reporting
+      //      `createLazyRemoteModule(...)` for the on-demand wrappers.
+      //   3. `shell-services-wiring.ts` swaps the static
+      //      `import('mfe_<admin>/shell-services')` 4-remote contract block
+      //      for an `ensureRemoteShellServicesConfigured` idle batch.
+      //   4. Route-level wrappers also call
+      //      `ensureRemoteShellServicesConfigured` BEFORE `loadRemote`
+      //      for deep-link race protection (helper dedupes via
+      //      in-flight promise map + configured-remotes Set).
+      __MFE_ADMIN_REMOTES_ON_DEMAND__: JSON.stringify(adminRemotesOnDemandBuildEnabled),
       // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
       // build-time opt-in for production __perfSnapshot exposure. The
       // perf-observer.ts shouldExposeGlobal() reads this constant; when
