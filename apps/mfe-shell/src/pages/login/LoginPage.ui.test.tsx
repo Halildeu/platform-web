@@ -22,7 +22,8 @@ vi.mock('../../app/auth/keycloakClient', () => ({
   resolveKeycloakLoginUrl: resolveKeycloakLoginUrlMock,
 }));
 
-vi.mock('@mfe/design-system', () => ({
+// PERF-INIT-V2 PR-B1b: LoginPage now imports from '@mfe/design-system/light'.
+vi.mock('@mfe/design-system/light', () => ({
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props}>{children}</button>
   ),
