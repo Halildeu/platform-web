@@ -85,6 +85,7 @@
       "route": "/admin/access",
       "mode": "cold-authenticated",
       "auth": "authenticated",
+      "expectedPath": "/access/roles",
       "sentinel": "h1, h2, [role=\"heading\"]",
       "transferWarnKB": 4000,
       "transferFailKB": 6000,
@@ -92,13 +93,14 @@
       "resourceFailCount": 200,
       "tbtFailMs": 600,
       "leaderTransferKB": 3000,
-      "leaderDecodedKB": 8000
+      "leaderDecodedKB": 8000,
+      "_note": "mfe-access wildcard route redirects /admin/access/* → /access/roles (AccessApp.ui.tsx line 82). expectedPath declares canonical post-redirect target so PR-B5c-lite redirect guard does not false-fail."
     },
     {
       "route": "/admin/reports/fin-muhasebe-detay",
       "mode": "cold-authenticated",
       "auth": "authenticated",
-      "sentinel": "h1, h2, [role=\"heading\"], .ag-root-wrapper",
+      "sentinel": ".ag-root-wrapper, .ag-root",
       "transferWarnKB": 5000,
       "transferFailKB": 8000,
       "decodedFailKB": 22000,
@@ -113,7 +115,7 @@
       "leaderTransferKB": 4000,
       "leaderDecodedKB": 12000,
       "leaderTbtMs": 50,
-      "_note": "AG Grid Enterprise + ECharts heavy route. Sentinel includes AG Grid root so we don't measure a half-rendered page. Current baseline (2026-05-11): warm 6591 KB, decoded 49966 KB, TBT 2937ms, 10 long tasks / 3437ms total."
+      "_note": "AG Grid Enterprise + ECharts heavy route. Sentinel REQUIRES grid root (.ag-root-wrapper or .ag-root) — heading-only would false-pass when the grid is still mounting (Codex 019e2112 P0 fix). Current baseline (2026-05-11): warm 6591 KB, decoded 49966 KB, TBT 2937ms, 10 long tasks / 3437ms total."
     },
     {
       "route": "/home -> /admin/reports/fin-muhasebe-detay",

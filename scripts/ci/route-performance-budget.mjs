@@ -155,16 +155,30 @@ async function measureOnce(browser, routeBudget) {
     // guard. /admin/* routes silently redirect to /login when auth-storage
     // is missing or expired; without this check the runner would record a
     // /login measurement against a /admin/users budget — false-green.
-    const finalUrl = page.url();
-    const expectedPath = (() => {
-      try { return new URL(url).pathname; } catch { return route; }
+    //
+    // iter-2 P0 fix (Codex thread 019e2112): SPA-driven redirects fire
+    // AFTER React bootstrap + auth FSM resolution, not at navigation time.
+    // Path check must run AFTER the settle window, immediately before
+    // reading the snapshot, so we catch:
+    //   - SPA Navigate() inside ProtectedRoute denying auth
+    //   - MFE wildcard Navigate (e.g. /admin/access → /access/roles)
+    //   - any client-side redirect within the budget window
+    // Budget entries may set `expectedPath` for the canonical post-redirect
+    // path (e.g. /admin/access budget with expectedPath=/access/roles).
+    const targetUrl = (() => {
+      try { return new URL(url); } catch { return null; }
     })();
-    const finalPath = (() => {
-      try { return new URL(finalUrl).pathname; } catch { return finalUrl; }
-    })();
+    const initialPath = targetUrl ? targetUrl.pathname : route;
+    const expectedPath = routeBudget.expectedPath ?? initialPath;
+    const checkPath = () => {
+      const cur = page.url();
+      try { return new URL(cur).pathname; } catch { return cur; }
+    };
+    // First check: any nav-time redirect (server 30x or near-instant SPA)
+    let finalPath = checkPath();
     if (finalPath !== expectedPath) {
       return {
-        error: `redirect: expected ${expectedPath}, landed on ${finalPath} (auth-storage missing/expired?)`,
+        error: `redirect (nav-time): expected ${expectedPath}, landed on ${finalPath} (auth-storage missing/expired?)`,
         redirected: true,
         navStatus: navResponse?.status() ?? null,
         expectedPath,
@@ -189,7 +203,7 @@ async function measureOnce(browser, routeBudget) {
         await page.waitForSelector(sentinelSelector, { timeout: 10000, state: 'visible' });
       } catch (e) {
         return {
-          error: `sentinel-not-rendered: selector "${sentinelSelector}" did not appear within 10s on ${finalPath}`,
+          error: `sentinel-not-rendered: selector "${sentinelSelector}" did not appear within 10s on ${checkPath()}`,
           sentinelMissing: true,
           sentinelSelector,
         };
@@ -201,10 +215,24 @@ async function measureOnce(browser, routeBudget) {
     // Extra 2s for LCP / longtask observer to settle after sentinel render
     await page.waitForTimeout(2000);
 
+    // iter-2 P0 fix (Codex 019e2112): re-check path AFTER settle window.
+    // SPA redirects (ProtectedRoute → /login, wildcard → canonical) fire
+    // post-bootstrap; nav-time check alone is insufficient.
+    finalPath = checkPath();
+    if (finalPath !== expectedPath) {
+      return {
+        error: `redirect (post-settle): expected ${expectedPath}, ended up on ${finalPath} (SPA navigation / auth FSM redirect)`,
+        redirected: true,
+        navStatus: navResponse?.status() ?? null,
+        expectedPath,
+        finalPath,
+      };
+    }
+
     const snap = await page.evaluate(() => (window).__perfSnapshot?.());
     const visibility = await page.evaluate(() => document.visibilityState);
 
-    return { snap, visibility, finalPath };
+    return { snap, visibility, finalPath, expectedPath };
   } catch (e) {
     return { error: String(e && e.message ? e.message : e) };
   } finally {
