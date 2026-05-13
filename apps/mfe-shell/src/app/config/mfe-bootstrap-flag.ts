@@ -26,19 +26,45 @@
  * Default: OFF — current eager bootstrap unchanged.
  */
 
-import { readEnvBoolean } from './env';
+import { readEnv } from './env';
+
+const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
+
+function parseTruthy(value: string): boolean {
+  return TRUTHY.has(value.trim().toLowerCase());
+}
 
 /**
  * Read the rollback feature flag for MFE on-demand bootstrap.
  *
- * Returns `true` only when an operator has explicitly opted in via env
- * (cluster runtime or Vite build-time). Defaults to `false` — the
- * current eager bootstrap path stays the canonical behaviour until
- * B5b1+ consumes the flag and is itself rolled out.
+ * **Precedence (first-defined wins, including explicit falsy):**
+ *
+ *   1. `MFE_ON_DEMAND_BOOTSTRAP` runtime env
+ *      — when set (to ANY value including `0` / `false`), this source
+ *        decides; build-time is NOT consulted
+ *   2. `VITE_MFE_ON_DEMAND_BOOTSTRAP` build-time env
+ *      — only consulted when runtime env is unset
+ *
+ * **Why first-defined-wins (Codex iter-1 finding, thread 019e2266)**:
+ * a boolean-OR over both sources would let `VITE_MFE_ON_DEMAND_BOOTSTRAP=1`
+ * baked into the bundle override a deliberate
+ * `MFE_ON_DEMAND_BOOTSTRAP=0` runtime rollback — breaking the rollback
+ * contract the flag is supposed to provide.  Runtime MUST be able to
+ * disable an operator-opted build-time enable.
+ *
+ * Returns `true` only when the deciding source contains a truthy
+ * value (case-insensitive: `1` / `true` / `yes` / `on`).  Defaults to
+ * `false` — the current eager bootstrap path stays the canonical
+ * behaviour until B5b1+ consumes the flag and is itself rolled out.
  */
 export function isMfeOnDemandBootstrapEnabled(): boolean {
-  return (
-    readEnvBoolean('MFE_ON_DEMAND_BOOTSTRAP') ||
-    readEnvBoolean('VITE_MFE_ON_DEMAND_BOOTSTRAP')
-  );
+  const runtimeRaw = readEnv('MFE_ON_DEMAND_BOOTSTRAP', '');
+  if (runtimeRaw !== '') {
+    return parseTruthy(runtimeRaw);
+  }
+  const buildRaw = readEnv('VITE_MFE_ON_DEMAND_BOOTSTRAP', '');
+  if (buildRaw !== '') {
+    return parseTruthy(buildRaw);
+  }
+  return false;
 }

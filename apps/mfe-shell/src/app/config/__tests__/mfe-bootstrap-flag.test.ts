@@ -99,4 +99,43 @@ describe('isMfeOnDemandBootstrapEnabled (PR-B5b3-prep)', () => {
     }
     expect(isMfeOnDemandBootstrapEnabled()).toBe(true);
   });
+
+  /* ---------- Precedence matrix (Codex iter-1 P0 fix) ---------- */
+
+  it('runtime MFE_ON_DEMAND_BOOTSTRAP=0 OVERRIDES build-time VITE_MFE_ON_DEMAND_BOOTSTRAP=1', () => {
+    process.env.MFE_ON_DEMAND_BOOTSTRAP = '0';
+    process.env.VITE_MFE_ON_DEMAND_BOOTSTRAP = '1';
+    expect(isMfeOnDemandBootstrapEnabled()).toBe(false);
+  });
+
+  it('runtime MFE_ON_DEMAND_BOOTSTRAP=false OVERRIDES build-time VITE_MFE_ON_DEMAND_BOOTSTRAP=true', () => {
+    process.env.MFE_ON_DEMAND_BOOTSTRAP = 'false';
+    process.env.VITE_MFE_ON_DEMAND_BOOTSTRAP = 'true';
+    expect(isMfeOnDemandBootstrapEnabled()).toBe(false);
+  });
+
+  it('window.__env__.MFE_ON_DEMAND_BOOTSTRAP=0 + VITE_MFE_ON_DEMAND_BOOTSTRAP=1 keeps flag OFF', () => {
+    if (typeof window !== 'undefined') {
+      const w = window as Window & { __env__?: Record<string, string> };
+      w.__env__ = w.__env__ ?? {};
+      w.__env__.MFE_ON_DEMAND_BOOTSTRAP = '0';
+      w.__env__.VITE_MFE_ON_DEMAND_BOOTSTRAP = '1';
+    }
+    expect(isMfeOnDemandBootstrapEnabled()).toBe(false);
+  });
+
+  it('runtime unset + build-time =1 enables the flag', () => {
+    // (runtime is unset by clearEnv in beforeEach)
+    process.env.VITE_MFE_ON_DEMAND_BOOTSTRAP = '1';
+    expect(isMfeOnDemandBootstrapEnabled()).toBe(true);
+  });
+
+  it('runtime empty string is treated as UNSET — falls through to build-time', () => {
+    // Note: process.env.X = '' is set-but-empty.  readEnv() treats that
+    // as "fallback used" because the underlying check is truthiness of
+    // the raw string.  Document the contract: empty string === unset.
+    process.env.MFE_ON_DEMAND_BOOTSTRAP = '';
+    process.env.VITE_MFE_ON_DEMAND_BOOTSTRAP = '1';
+    expect(isMfeOnDemandBootstrapEnabled()).toBe(true);
+  });
 });
