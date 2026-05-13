@@ -68,7 +68,13 @@ import { PictorialBarChart } from 'echarts/charts';
 // multi-dim data comparison (HR compensation eşitliği analizi). Reads N
 // dimensions per row, renders one polyline per row across N axes.
 import { ParallelChart } from 'echarts/charts';
-// Future: import { GraphChart } from 'echarts/charts';
+// PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map for
+// regional distribution (HR location il bazlı yoğunluk). Map JSON
+// (TR provinces, world, etc.) is CONSUMER-supplied and registered via
+// `ensureGeoMapRegistered()`; this register only adds the series + geo
+// coordinate system. Bundle delta ~25KB (series + component), map JSON
+// stays out per Codex licensing/tree-shake guidance.
+import { MapChart } from 'echarts/charts';
 
 /* ------------------------------------------------------------------ */
 /*  Components (UI features used by charts)                            */
@@ -110,7 +116,11 @@ import { VisualMapComponent } from 'echarts/components';
 // `ParallelChart` series renders into (analogous to GridComponent for
 // cartesian charts). Must register both series + coordinate system.
 import { ParallelComponent } from 'echarts/components';
-// Future: import { GeoComponent } from 'echarts/components';
+// PR-X12c: GeoComponent is the coordinate system for `MapChart`
+// (choropleth) and any future scatter-overlay-on-map use case.
+// Required alongside `MapChart` for region styling, roam, visualMap
+// hooks to work.
+import { GeoComponent } from 'echarts/components';
 
 /* ------------------------------------------------------------------ */
 /*  Register — Call ONCE at app startup                                */
@@ -140,6 +150,7 @@ export function registerECharts(): void {
     CandlestickChart, // PR-X7: financial OHLC chart
     PictorialBarChart, // PR-X10: decorative pictogram bar chart
     ParallelChart, // PR-X12a: parallel coordinates (multi-dim comparison)
+    MapChart, // PR-X12c: geographic choropleth map (regional distribution)
     // Components
     TitleComponent,
     TooltipComponent,
@@ -157,6 +168,7 @@ export function registerECharts(): void {
     MarkAreaComponent,
     VisualMapComponent,
     ParallelComponent, // PR-X12a: parallel-coordinate system (axes layout)
+    GeoComponent, // PR-X12c: geo coordinate system (map series host)
   ]);
 
   _registered = true;

@@ -58,6 +58,12 @@ import { CandlestickChart } from '../CandlestickChart';
 import { PictorialBarChart } from '../PictorialBarChart';
 // PR-X12a: parallel coordinates.
 import { ParallelCoordinatesChart } from '../ParallelCoordinatesChart';
+// PR-X12c: geographic choropleth map.
+import { GeoMap } from '../GeoMap';
+import {
+  ensureGeoMapRegistered,
+  __resetGeoMapRegistrationCacheForTests,
+} from '../geo/registerGeoMap';
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -1360,6 +1366,117 @@ describe('ParallelCoordinatesChart option shape', () => {
         />,
       ),
     ).not.toThrow();
+  });
+});
+
+/* ================================================================== */
+/*  GeoMap (PR-X12c)                                                   */
+/* ================================================================== */
+
+describe('GeoMap option shape', () => {
+  const sampleGeoJson = {
+    type: 'FeatureCollection' as const,
+    features: [
+      {
+        type: 'Feature' as const,
+        properties: { name: 'İstanbul' },
+        geometry: { type: 'Polygon', coordinates: [] },
+      },
+      {
+        type: 'Feature' as const,
+        properties: { name: 'Ankara' },
+        geometry: { type: 'Polygon', coordinates: [] },
+      },
+    ],
+  };
+
+  const sampleData = [
+    { name: 'İstanbul', value: 5000 },
+    { name: 'Ankara', value: 3000 },
+  ];
+
+  beforeEach(async () => {
+    __resetGeoMapRegistrationCacheForTests();
+    await ensureGeoMapRegistered('TR', () => sampleGeoJson);
+  });
+
+  it('series.type === map + map=mapName + region data passes through', () => {
+    render(<GeoMap mapName="TR" data={sampleData} animate={false} />);
+    const s = series();
+    expect(s[0].type).toBe('map');
+    expect(s[0].map).toBe('TR');
+    const data = s[0].data as Array<{ name: string; value: number }>;
+    expect(data).toHaveLength(2);
+    expect(data[0]).toMatchObject({ name: 'İstanbul', value: 5000 });
+  });
+
+  it('visualMap emits continuous with computed min/max from data', () => {
+    render(<GeoMap mapName="TR" data={sampleData} animate={false} />);
+    const opt = lastDispatchedOption();
+    const vm = opt?.visualMap as Record<string, unknown>;
+    expect(vm.type).toBe('continuous');
+    expect(vm.min).toBe(3000);
+    expect(vm.max).toBe(5000);
+  });
+
+  it('visualMap min/max overrides propagate', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        visualMap={{ min: 0, max: 10000, colors: ['#fff', '#000'] }}
+        animate={false}
+      />,
+    );
+    const vm = lastDispatchedOption()?.visualMap as Record<string, unknown>;
+    expect(vm.min).toBe(0);
+    expect(vm.max).toBe(10000);
+    expect((vm.inRange as { color: string[] }).color).toEqual(['#fff', '#000']);
+  });
+
+  it('nameMap alias rewrites region names before passing to ECharts', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={[{ name: 'Istanbul', value: 100 }]}
+        nameMap={{ Istanbul: 'İstanbul' }}
+        animate={false}
+      />,
+    );
+    const data = series()[0].data as Array<{ name: string }>;
+    expect(data[0].name).toBe('İstanbul');
+  });
+
+  it('selectedMode + roam + showLabels props propagate', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        selectedMode="multiple"
+        roam={false}
+        showLabels
+        animate={false}
+      />,
+    );
+    const s = series()[0];
+    expect(s.selectedMode).toBe('multiple');
+    expect(s.roam).toBe(false);
+    expect((s.label as { show: boolean }).show).toBe(true);
+  });
+
+  it('handles empty data without throwing', () => {
+    expect(() => render(<GeoMap mapName="TR" data={[]} animate={false} />)).not.toThrow();
+  });
+
+  it('skips render when map not registered (no setOption call after registry clear)', () => {
+    __resetGeoMapRegistrationCacheForTests();
+    // Now no map is registered; GeoMap should not emit a series.
+    render(<GeoMap mapName="Unregistered" data={sampleData} animate={false} />);
+    // Either no setOption call OR call dispatched with empty option.
+    // The wrapper falls back to `{}` when option computes to null,
+    // so no `series` array should be present.
+    const opt = lastDispatchedOption();
+    expect(opt?.series).toBeUndefined();
   });
 });
 

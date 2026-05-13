@@ -51,10 +51,28 @@ import { WaterfallChart } from '../WaterfallChart';
 import { FunnelChart } from '../FunnelChart';
 import { SankeyChart } from '../SankeyChart';
 import { SunburstChart } from '../SunburstChart';
+import { GeoMap } from '../GeoMap';
+import {
+  ensureGeoMapRegistered,
+  __resetGeoMapRegistrationCacheForTests,
+} from '../geo/registerGeoMap';
 
 beforeEach(() => {
   resetEChartsMock();
   installJsdomPolyfills();
+  // PR-X12c: pre-register a stub map so `GeoMap` cases in the
+  // parametric matrix don't skip render due to missing registration.
+  __resetGeoMapRegistrationCacheForTests();
+  void ensureGeoMapRegistered('TR_TEST', () => ({
+    type: 'FeatureCollection' as const,
+    features: [
+      {
+        type: 'Feature' as const,
+        properties: { name: 'A' },
+        geometry: { type: 'Polygon', coordinates: [] },
+      },
+    ],
+  }));
 });
 
 afterEach(() => {
@@ -248,6 +266,23 @@ const CASES: ChartCase[] = [
         access={o.access}
         accessReason={o.accessReason}
         onNodeClick={o.onClick as never}
+      />
+    ),
+  },
+  // PR-X12c (Codex thread 019e2254 iter-1 AGREE): geographic choropleth
+  // wrapper. Uses canonical BarChart access-gate pattern from the start,
+  // so hidden/readonly/disabled/full all behave correctly. Map JSON is
+  // pre-registered in beforeEach (`TR_TEST` stub).
+  {
+    name: 'GeoMap',
+    handlerBearing: true,
+    render: (o) => (
+      <GeoMap
+        mapName="TR_TEST"
+        data={[{ name: 'A', value: 1 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
       />
     ),
   },
