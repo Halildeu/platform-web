@@ -39,10 +39,13 @@ at host bootstrap**, which triggers an HTTP fetch for each
 
 ## Summary
 
+**Canonical / latest** (`8885120.json`, post-PR-#443 deploy, post-Codex iter-1 split fix):
+
 ```json
 {
   "remoteEntryCount": 7,
-  "loadShareCount": 32,
+  "loadShareCount": 31,
+  "mfBootstrapCount": 1,
   "byInitiatorType": {
     "script": 7
   },
@@ -51,6 +54,11 @@ at host bootstrap**, which triggers an HTTP fetch for each
   }
 }
 ```
+
+> The earlier artifact `08fb4b4.json` reports `loadShareCount: 32`
+> because `mf-entry-bootstrap-0.js` was grouped with loadShare chunks
+> before the iter-1 split.  It is retained for traceability only;
+> the canonical summary above reflects the corrected classification.
 
 7 remoteEntries fetched on `/login` cold load:
 
@@ -67,10 +75,11 @@ at host bootstrap**, which triggers an HTTP fetch for each
 All 7 stack frames identical → single emission site in the bundle =
 @module-federation/vite registration loop.
 
-Plus 32 loadShare chunks fired from related shell-bundle frames. (The
-`mf-entry-bootstrap-0.js` document-loaded entry is tracked separately
-under `mfBootstrapChunks` to keep `loadShareCount` honest — Codex
-iter-1 P1 fix; pre-fix it was incorrectly grouped with loadShares.)
+Plus 31 loadShare chunks fired from related shell-bundle frames + 1
+`mf-entry-bootstrap-0.js` chunk tracked separately under
+`mfBootstrapChunks` (Codex iter-1 P1 split fix; pre-fix it was
+incorrectly grouped with loadShares — see the `08fb4b4.json` reference
+above where the legacy `loadShareCount: 32` came from).
 
 ## Implication for PR-B5b1 Canary Strategy
 
