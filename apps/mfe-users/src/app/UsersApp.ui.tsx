@@ -1,31 +1,40 @@
 import React from 'react';
+// PERF-INIT-V2 PR-B1a: AG Grid module registration at the federation
+// EXPOSE entry. Shell host imports `mfe_users/UsersApp` (this file),
+// NOT bootstrap.tsx — so the bootstrap-level setup import only covers
+// standalone open of the MFE. When loaded as a remote into shell, the
+// shell host bundle is responsible for registering AG Grid modules via
+// this side-effect import.
+import '@mfe/design-system/advanced/data-grid/setup';
 import { Provider as ReduxProvider, ReactReduxContext } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import {
-  QueryClient,
-  QueryClientProvider,
-} from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
 import UsersPage from '../pages/users/UsersPage.ui';
 
 const createStandaloneStore = () =>
   configureStore({
-    reducer: (state = {
-      auth: {
-        token: null,
-        status: 'idle',
-        error: null,
-        user: {
-          id: 'demo-user',
-          fullName: 'Demo Kullanıcı',
-          permissions: ['VIEW_USERS', 'EDIT_USERS', 'MANAGE_USERS'],
-          role: 'ADMIN',
+    reducer: (
+      state = {
+        auth: {
+          token: null,
+          status: 'idle',
+          error: null,
+          user: {
+            id: 'demo-user',
+            fullName: 'Demo Kullanıcı',
+            permissions: ['VIEW_USERS', 'EDIT_USERS', 'MANAGE_USERS'],
+            role: 'ADMIN',
+          },
         },
       },
-    }) => state,
+    ) => state,
   });
 
-class UsersAppErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class UsersAppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
@@ -60,9 +69,11 @@ const UsersAppProviders: React.FC<{ children: React.ReactNode }> = ({ children }
   // Shell's QueryClient is shared via window bridge because @tanstack/react-query
   // is resolved via alias in shell (bypassing MF loadShare), so React context
   // from shell's instance is not accessible here. Window bridge is the safe path.
-  const shellQueryClient = (typeof window !== 'undefined'
-    ? (window as Record<string, unknown>).__SHELL_QUERY_CLIENT__
-    : undefined) as QueryClient | undefined;
+  const shellQueryClient = (
+    typeof window !== 'undefined'
+      ? (window as Record<string, unknown>).__SHELL_QUERY_CLIENT__
+      : undefined
+  ) as QueryClient | undefined;
 
   const queryClientRef = React.useRef<QueryClient>();
   if (!shellQueryClient && !queryClientRef.current) {
@@ -79,18 +90,10 @@ const UsersAppProviders: React.FC<{ children: React.ReactNode }> = ({ children }
 
   // Always wrap with QueryClientProvider — uses shell's client if available,
   // otherwise standalone client for independent development
-  content = (
-    <QueryClientProvider client={effectiveQueryClient}>
-      {content}
-    </QueryClientProvider>
-  );
+  content = <QueryClientProvider client={effectiveQueryClient}>{content}</QueryClientProvider>;
 
   if (!existingReduxContext && storeRef.current) {
-    content = (
-      <ReduxProvider store={storeRef.current}>
-        {content}
-      </ReduxProvider>
-    );
+    content = <ReduxProvider store={storeRef.current}>{content}</ReduxProvider>;
   }
 
   return <>{content}</>;

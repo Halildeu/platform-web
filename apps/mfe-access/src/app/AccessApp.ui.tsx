@@ -1,4 +1,7 @@
 import React from 'react';
+// PERF-INIT-V2 PR-B1a: AG Grid module registration at the federation
+// EXPOSE entry. See mfe-users/UsersApp.ui.tsx comment.
+import '@mfe/design-system/advanced/data-grid/setup';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
