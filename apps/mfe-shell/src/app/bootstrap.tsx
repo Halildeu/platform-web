@@ -37,10 +37,16 @@ if (typeof window !== 'undefined') {
   };
 }
 
-// Side-effect import: registers all AG Grid modules + license
-// This is the SINGLE source of truth for module registration.
-// Do NOT register AG Grid modules anywhere else in the monorepo.
-import '@mfe/design-system/advanced/data-grid/setup';
+// PERF-INIT-V2 PR-B1a: AG Grid module registration moved OUT of shell
+// bootstrap into each grid-using MFE bootstrap (mfe-users, mfe-access,
+// mfe-reporting, mfe-audit) AND into the shell's design-lab ChartDetail
+// page (component-level lazy import). Shell host no longer eager-loads
+// the AG Grid Enterprise bundle (~6 MB) with /login or /home, so the
+// chunk only appears when a grid actually renders.
+//
+// Previous comment said this was "SINGLE source of truth" — that holds at
+// the design-system package level (setup.ts remains canonical), but the
+// IMPORT POINT is now per-grid-consumer rather than shell-wide.
 
 // Observability: init Sentry early, before React tree mounts
 import { initSentry } from '../lib/sentry';
@@ -106,11 +112,14 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 import { createRoot } from 'react-dom/client';
-import { setupAgGridLicense } from '@mfe/design-system';
 import ShellApp from './ShellApp';
 
-// AG Grid lisansını MFE'ler yüklenmeden önce set et
-setupAgGridLicense();
+// PERF-INIT-V2 PR-B1a: AG Grid Enterprise license setter moved out of
+// shell bootstrap. Each grid-using MFE (mfe-users/access/reporting/audit)
+// now calls setupAgGridLicense() in its own bootstrap, so the license
+// payload + module-federation share chain no longer eager-loads with
+// shell. Shell's own design-lab ChartDetail page handles license at
+// component-mount time.
 
 const container = document.getElementById('root');
 if (!container) {
