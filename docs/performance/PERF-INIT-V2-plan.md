@@ -138,9 +138,11 @@ Codex thread `019e20fa` REVISE-actionable consensus. Wave A/B closed
 "transfer wave"; Wave B5 opens "decoded / topology wave" to address the
 residual 48 MB decoded gap.
 
-Sequenced for safe rollout (B5a + B5b must NOT open in parallel —
-both touch shell bootstrap/render graph; measurement attribution
-breaks).
+Sequenced for safe rollout: **B5a + B5b1+ MUST NOT open in parallel**
+— both touch shell bootstrap/render graph; measurement attribution
+breaks. (B5b3-prep is the only exception: it ships the rollback flag
+only with NO behaviour change, so it can land before B5a closure if
+operationally convenient.)
 
 | PR        | Status   | Deliverable                                                                                                                                                                                                                                                                       | Expected ROI                                                                            |
 | --------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
