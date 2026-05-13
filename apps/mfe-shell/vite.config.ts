@@ -525,6 +525,18 @@ export default defineConfig(({ mode }) => {
       // first remote (schema_explorer) is in admin set but NOT in
       // shell-services contract (lowest blast in admin batch).
       __MFE_SCHEMA_EXPLORER_ON_DEMAND__: JSON.stringify(schemaExplorerOnDemandBuildEnabled),
+      // PERF-INIT-V2 PR-B5b2-prep (Codex thread `019e2358` AGREE Option B):
+      // single build-time flag gates the 4 admin remotes
+      // (users/audit/access/reporting) on-demand path.  Default false;
+      // testai variant CI matrix will flip this to true after the helper
+      // + lazy-routes wrappers + shell-services-wiring conditional
+      // branches land in subsequent PR-B5b2 implementation steps.
+      // Scaffolding-only in this PR — flag is wired into the define
+      // pipeline but no production code path currently reads it.  The
+      // ensure-remote-shell-services helper is the first consumer; it
+      // imports cleanly even when flag is false (no DCE risk because
+      // helper is a regular ES module, not a build-time conditional).
+      __MFE_ADMIN_REMOTES_ON_DEMAND__: JSON.stringify(false),
       // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
       // build-time opt-in for production __perfSnapshot exposure. The
       // perf-observer.ts shouldExposeGlobal() reads this constant; when
