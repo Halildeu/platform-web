@@ -35,6 +35,22 @@ ARG VITE_AG_GRID_LICENSE_KEY=""
 ARG BUILD_SHA=""
 ARG BUILD_REF=""
 
+# PERF-INIT-V2 PR-B5b1 (canary) — MFE on-demand bootstrap build-time flag.
+# When set to `1`/`true`/`yes`/`on`, the shell `vite.config.ts` reader
+# (`readSuggestionsOnDemandBuildFlag`) returns true and the
+# `__MFE_SUGGESTIONS_ON_DEMAND__` define switches `lazy-routes.ts` to the
+# on-demand `host.registerRemotes`/`host.loadRemote` path; Rolldown dead-
+# code-eliminates the static `import('mfe_suggestions/SuggestionsApp')`
+# specifier from the bundle, and `federation({remotes})` omits the
+# `mfe_suggestions` entry — no eager `/remotes/suggestions/remoteEntry.js`
+# fetch at host bootstrap. Default off keeps the eager federation
+# manifest intact (no regression on prod). Set via build-arg from
+# `ci-web-image-push.yml` matrix (`testai` variant gets the canary).
+# Rollback semantic: rebuild with flag off (post-build runtime override
+# is NOT possible because the inverse branch is DCE'd; see B5b3-prep
+# audit `apps/mfe-shell/src/app/config/mfe-bootstrap-flag.ts`).
+ARG VITE_MFE_ON_DEMAND_BOOTSTRAP="false"
+
 ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM} \
     VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID} \
@@ -42,6 +58,7 @@ ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_GATEWAY_URL=${VITE_GATEWAY_URL} \
     VITE_AUTH_MODE=${VITE_AUTH_MODE} \
     VITE_AG_GRID_LICENSE_KEY=${VITE_AG_GRID_LICENSE_KEY} \
+    VITE_MFE_ON_DEMAND_BOOTSTRAP=${VITE_MFE_ON_DEMAND_BOOTSTRAP} \
     BUILD_SHA=${BUILD_SHA} \
     BUILD_REF=${BUILD_REF}
 
