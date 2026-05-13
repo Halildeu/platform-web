@@ -523,6 +523,13 @@ const ChartsListing: React.FC = () => {
                   key={item.id}
                   type="button"
                   onClick={() => navigate(`/admin/design-lab/charts/${item.id}`)}
+                  // Codex 019e2349 follow-up: stable hooks for the headless
+                  // smoke (workflow_dispatch design-lab-23-smoke.yml). The
+                  // listing renders buttons, not anchors — so a selector by
+                  // `data-chart-slug` is the canonical stable contract for
+                  // the spec to enumerate cards.
+                  data-testid={`chart-card-${item.id}`}
+                  data-chart-slug={item.id}
                   className="group flex flex-col gap-1 rounded-xl border border-border-subtle bg-surface-default p-4 text-left transition hover:border-action-primary hover:shadow-sm"
                 >
                   <div className="flex items-center justify-between">
