@@ -272,17 +272,6 @@ const sharedProdOnly = {
   'ag-grid-react': singleton('ag-grid-react'),
   // Align with remotes — host must declare shared packages that remotes expect
   '@mfe/design-system': { singleton: true, requiredVersion: false as const },
-  // PERF-INIT-V2 PR-B5d0 (Codex thread 019e20fa iter-5 diagnostic PoC):
-  // explicit subpath shared entries to test whether MF runtime emits
-  // per-subpath loadShare wrappers instead of (or in addition to) the
-  // root @mfe/design-system wrapper. If the root wrapper shrinks/drops
-  // when shell+remote consumers import from these subpaths, the
-  // topology-split hypothesis holds and Wave B5d1 can proceed; if not,
-  // a different architectural pivot is needed.
-  '@mfe/design-system/light': { singleton: true, requiredVersion: false as const },
-  '@mfe/design-system/primitives': { singleton: true, requiredVersion: false as const },
-  '@mfe/design-system/components': { singleton: true, requiredVersion: false as const },
-  '@mfe/design-system/patterns': { singleton: true, requiredVersion: false as const },
   '@mfe/shared-http': { singleton: true, requiredVersion: false as const },
   '@mfe/i18n-dicts': { singleton: true, requiredVersion: false as const },
   // PR E (Codex CNS thread 019d99ba Tur 11): `@mfe/auth` MF singleton.

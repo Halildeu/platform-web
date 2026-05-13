@@ -45,14 +45,6 @@ const sharedCore = {
 };
 const sharedProdOnly = {
   '@mfe/design-system': singleton('@mfe/design-system', false),
-  // PERF-INIT-V2 PR-B5d0 (Codex thread 019e20fa iter-5 diagnostic PoC):
-  // mfe-suggestions is the canary remote for testing whether per-subpath
-  // shared entries cause MF runtime to emit subpath-specific loadShare
-  // wrappers. Shell declares the same set.
-  '@mfe/design-system/light': singleton('@mfe/design-system', false),
-  '@mfe/design-system/primitives': singleton('@mfe/design-system', false),
-  '@mfe/design-system/components': singleton('@mfe/design-system', false),
-  '@mfe/design-system/patterns': singleton('@mfe/design-system', false),
   clsx: singleton('clsx'),
   'tailwind-merge': singleton('tailwind-merge'),
 };
