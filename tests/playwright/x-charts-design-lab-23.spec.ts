@@ -49,15 +49,26 @@ const NEW_NAMES = [
   'GeoMap',
 ] as const;
 
-const USERNAME =
-  process.env.ITER34_USERNAME ?? process.env.PW_REAL_USER_EMAIL ?? 'd35-admin-persona';
-const PASSWORD = process.env.ITER34_PASSWORD ?? process.env.PW_REAL_USER_PASSWORD ?? '';
+// Codex 019e2349 iter-2 absorb: blank-aware env reader. GitHub Actions
+// `secrets.MISSING` expression collapses to an empty string instead of
+// `undefined`, which would defeat the `??` nullish fallback and leave
+// PASSWORD='' (then `test.skip(!PASSWORD)` would silently green the
+// whole smoke). Trim + fall through on empty.
+const readEnv = (name: string): string | undefined => {
+  const raw = process.env[name];
+  if (typeof raw !== 'string') return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const USERNAME = readEnv('ITER34_USERNAME') ?? readEnv('PW_REAL_USER_EMAIL') ?? 'd35-admin-persona';
+const PASSWORD = readEnv('ITER34_PASSWORD') ?? readEnv('PW_REAL_USER_PASSWORD') ?? '';
 
 // HARD RULE persona guard: refuse anything that looks like the user's
 // canonical login. The workflow validation step does the same gate
 // before this spec runs; double-check here for defence in depth.
 const FORBIDDEN_USERNAMES = new Set(['admin@example.com', 'gladyatore@hotmail.com']);
-if (FORBIDDEN_USERNAMES.has(USERNAME.toLowerCase())) {
+if (FORBIDDEN_USERNAMES.has(USERNAME.trim().toLowerCase())) {
   throw new Error(
     `[smoke] HARD RULE violation: refusing to authenticate as ${USERNAME}. Use d35-admin-persona or another test persona.`,
   );
@@ -200,7 +211,7 @@ test.describe('Design-lab charts listing — 23 wrappers (PR-X campaign closure)
       await expect(page.getByText(name, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
     }
     await page.screenshot({ path: 'tests/output/design-lab-charts-23.png', fullPage: true });
-     
+
     console.log(`[smoke] design-lab listing: ${uniqueSlugs.length} unique slugs`);
   });
 
