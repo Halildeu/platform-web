@@ -19,7 +19,7 @@
  * runtime (env var) without a rebuild. This is the rollback safety
  * net for the largest blast-radius wave in PERF-INIT-V2.
  *
- * Env var name precedence (first truthy wins):
+ * Env var name precedence (first-defined wins — runtime can disable build-time):
  *   1. `MFE_ON_DEMAND_BOOTSTRAP=1` (runtime env, cluster-side)
  *   2. `VITE_MFE_ON_DEMAND_BOOTSTRAP=1` (build-time env, Vite-injected)
  *
