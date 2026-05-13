@@ -151,6 +151,66 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'sunburst',
   },
+  // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker
+  // chart for five-number summary distributions.
+  {
+    id: 'box-plot-chart',
+    name: 'BoxPlotChart',
+    description: 'Istatistiksel dagilim, min-Q1-medyan-Q3-max bes sayi ozeti.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
+  // PR-X7 (Codex thread 019e1e30 AGREE): financial OHLC chart with
+  // bullish/bearish color coding for stock/crypto price ranges.
+  {
+    id: 'candlestick-chart',
+    name: 'CandlestickChart',
+    description: 'Finansal OHLC mum grafigi, bullish/bearish renk kodlu.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
+  // PR-X10 (Codex thread 019e1e30 AGREE): decorative pictogram bar
+  // chart rendering each bar as a tiled symbol (icon-style).
+  {
+    id: 'pictorial-bar-chart',
+    name: 'PictorialBarChart',
+    description: 'Dekoratif piktogram bar, her bar tiled symbol/icon.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
+  // PR-X12a (Codex thread 019e2119 AGREE): multi-dim parallel-coords
+  // plot for HR compensation eşitliği / employee profile analysis.
+  {
+    id: 'parallel-coordinates-chart',
+    name: 'ParallelCoordinatesChart',
+    description: 'Cok boyutlu paralel koordinat (her satir polyline, N axis).',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'line',
+  },
+  // PR-X12b (Codex thread 019e2119 AGREE): network / entity-edge
+  // topology graph (Context Health DocGraph, permission cascade).
+  {
+    id: 'graph-chart',
+    name: 'GraphChart',
+    description: 'Network/graf topolojisi, force/circular layout, node-edge iliskileri.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'sankey',
+  },
+  // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map
+  // for HR location distribution + branch concentration.
+  {
+    id: 'geo-map',
+    name: 'GeoMap',
+    description: 'Cografi choropleth harita (TR il, world, vb). visualMap renk gradyani.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'heatmap',
+  },
   // Faz 21.11 P1a — 3D Extension Pack. Lazy `echarts-gl` chunk loads
   // on first 3D mount; WebGL-required.
   {
@@ -419,7 +479,7 @@ const ChartsListing: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Charts</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          @mfe/x-charts — 17 chart tipi (13 2D + 4 3D), cross-filter, AI, performance. ECharts +
+          @mfe/x-charts — 23 chart tipi (19 2D + 4 3D), cross-filter, AI, performance. ECharts +
           echarts-gl engine.
         </p>
         <div className="mt-3 flex gap-2 text-xs text-text-tertiary">

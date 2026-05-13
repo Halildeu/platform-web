@@ -56,6 +56,22 @@ const CHARTS = [
   ['funnel-chart', 'FunnelChart'],
   ['sankey-chart', 'SankeyChart'],
   ['sunburst-chart', 'SunburstChart'],
+  // PR-X6 (Codex thread 019e1e30 AGREE): statistical distribution
+  // chart with five-number summary (min, Q1, median, Q3, max).
+  ['box-plot-chart', 'BoxPlotChart'],
+  // PR-X7 (Codex thread 019e1e30 AGREE): financial OHLC chart.
+  ['candlestick-chart', 'CandlestickChart'],
+  // PR-X10 (Codex thread 019e1e30 AGREE): decorative pictogram bar.
+  ['pictorial-bar-chart', 'PictorialBarChart'],
+  // PR-X12a (Codex thread 019e2119 AGREE): multi-dim parallel coords
+  // (HR compensation eşitliği analizi — N axis, polyline-per-row).
+  ['parallel-coordinates-chart', 'ParallelCoordinatesChart'],
+  // PR-X12b (Codex thread 019e2119 AGREE): network/entity-edge graph
+  // topology (Context Health DocGraph, permission cascade).
+  ['graph-chart', 'GraphChart'],
+  // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map
+  // (HR il bazlı yoğunluk, world country distribution).
+  ['geo-map', 'GeoMap'],
   // Faz 21.11 P1a — 3D Extension Pack. Scatter3D ships with the
   // foundation PR; P1c adds Globe. The slug uses the same dash-cased
   // pattern so the design-lab listing/detail route stays consistent
