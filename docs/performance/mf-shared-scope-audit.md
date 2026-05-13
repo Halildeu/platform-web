@@ -109,7 +109,14 @@ Detailed (mfe × dep) audit table. Surfaces:
 
 - **missing-in-remote** — remote does not declare the dep at all.
 - **remote-bundles-canonical** — remote uses `singleton()` while shell
-  is canonical with `eager: true`. Bundle-size waste.
+  is canonical with `eager: true`. Config-level signal of likely
+  duplicate shipping; confirm against the remote chunk graph
+  (`pnpm --filter <remote> build && pnpm bundle:taxonomy`) before
+  treating as a hard bundle-size finding.
+- **remote-eager** — a remote declares `eager: true` on a shared dep.
+  Under canonical provider only the host should be eager; a remote
+  eager would race the host on share-scope init. Current snapshot has
+  no `remote-eager` findings — this guards against regressions.
 - **both-sides-import-no-eager** — both bundle the dep AND host does
   not pre-initialise → race risk.
 - **shell-not-eager** — host singleton missing `eager: true`.
