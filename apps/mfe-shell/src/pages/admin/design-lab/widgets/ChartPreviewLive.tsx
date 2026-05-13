@@ -377,8 +377,25 @@ type GeoMapPlaygroundInnerProps = Omit<React.ComponentProps<typeof GeoMap>, 'dat
   mapName?: string;
 };
 
+/**
+ * Internal map name reserved for the design-lab GeoMap preview only.
+ *
+ * Codex 019e22ea iter-2 absorb: the previous draft defaulted to `'TR'`
+ * which is ALSO the canonical map name shown in `sampleCode` /
+ * Generated Code (the consumer-facing example). Since `ensureGeoMapRegistered`
+ * is idempotent — second call with the same name reuses the first
+ * loader's result — Design Lab fixture could collide with a real HR
+ * consumer route at runtime: whichever module mounts first wins.
+ *
+ * Workaround: design-lab uses an internal namespaced map name so the
+ * synthetic 3-polygon fixture never touches the global `'TR'` slot.
+ * Generated Code / sampleCode keeps `'TR'` as the canonical example for
+ * consumers; only the preview itself swaps to the internal name.
+ */
+const DESIGN_LAB_GEO_MAP_NAME = '__design_lab_TR_stub__';
+
 const GeoMapPlaygroundInner: React.FC<GeoMapPlaygroundInnerProps> = ({
-  mapName = 'TR',
+  mapName = DESIGN_LAB_GEO_MAP_NAME,
   ...rest
 }) => {
   // Codex 019e22ea iter-1 absorb #3: track readiness PER mapName so a
@@ -1442,7 +1459,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
     case 'geo-map': {
       const themeOverride = getEnum(toggles, 'theme', 'auto');
       const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
-      const mapName = getStr(toggles, 'mapName', 'TR');
+      // Codex 019e22ea iter-2 absorb: default to the internal namespaced
+      // map name so the preview's 3-polygon fixture cannot pollute the
+      // canonical `'TR'` slot shared with the HR adoption consumer
+      // route. `sampleCode` and Generated Code still teach `'TR'` (the
+      // real consumer pattern); only the live preview's internal stub
+      // uses the namespaced alias.
+      const mapName = getStr(toggles, 'mapName', DESIGN_LAB_GEO_MAP_NAME);
       // Codex 019e22ea iter-1 absorb #6: `selectedMode` wrapper contract
       // is `boolean | 'single' | 'multiple'`. The toggle store returns
       // the literal string `'false'` / `'true'` from the enum control,
