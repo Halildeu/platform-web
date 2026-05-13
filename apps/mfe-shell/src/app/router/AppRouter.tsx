@@ -38,13 +38,13 @@ const ReportEditorRoute = React.lazy(() =>
 
 /* ---- Page imports ---- */
 // PERF-INIT-V2 PR-B4a (login micro-entry): LoginPage / RegisterPage /
-// UnauthorizedPage are now lazy-loaded.  These public auth-flow pages
-// are needed exactly once per session — either at the very first visit
-// (cold cache → small extra chunk fetch, dominated by network) or on
-// logout (post-auth, where slight delay is acceptable).  Authenticated
-// users on /home, /admin/*, etc. no longer pay the cost of bundling
-// LoginPage / RegisterPage / UnauthorizedPage code into the shell's
-// initial chunk graph.
+// UnauthorizedPage are now lazy-loaded.  Auth-flow pages (Login/Register)
+// are needed at most once per session — cold-cache first visit or logout.
+// UnauthorizedPage is the denial-edge page (rendered when an authenticated
+// user lacks the requiredModule for a route).  All three are low-traffic
+// from the shell's authenticated-user perspective; lazy-loading keeps the
+// eager bundle graph for /home and /admin/* free of their code.  The
+// existing Suspense fallback at line ~100 covers the chunk-fetch state.
 const LoginPage = React.lazy(() => import('../../pages/login/LoginPage.ui'));
 const RegisterPage = React.lazy(() => import('../../pages/register/RegisterPage.ui'));
 const UnauthorizedPage = React.lazy(() => import('../../pages/unauthorized/UnauthorizedPage.ui'));
