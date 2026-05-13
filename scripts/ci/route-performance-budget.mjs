@@ -174,14 +174,26 @@ async function measureOnce(browser, routeBudget) {
       const cur = page.url();
       try { return new URL(cur).pathname; } catch { return cur; }
     };
-    // First check: any nav-time redirect (server 30x or near-instant SPA)
+    // First check: any nav-time redirect (server 30x or near-instant SPA).
+    //
+    // Codex iter-3 P0 fix (thread 019e2112): nav-time check must accept
+    // EITHER the initial requested path OR the canonical expectedPath.
+    // SPA-driven wildcard redirects (e.g. /admin/access → /access/roles)
+    // fire AFTER React bootstrap; at nav-time the URL is still the
+    // initial path.  Rejecting at nav-time would cause a false-fail on
+    // routes that have a known canonical redirect.  The post-settle
+    // check (after the sentinel wait) enforces the strict canonical
+    // path, so `/login` (auth-failure case) is still rejected — just
+    // not at the wrong phase.
+    const navTimeAcceptable = new Set([initialPath, expectedPath]);
     let finalPath = checkPath();
-    if (finalPath !== expectedPath) {
+    if (!navTimeAcceptable.has(finalPath)) {
       return {
-        error: `redirect (nav-time): expected ${expectedPath}, landed on ${finalPath} (auth-storage missing/expired?)`,
+        error: `redirect (nav-time): expected ${initialPath}${expectedPath !== initialPath ? ` or ${expectedPath}` : ''}, landed on ${finalPath} (auth-storage missing/expired?)`,
         redirected: true,
         navStatus: navResponse?.status() ?? null,
         expectedPath,
+        initialPath,
         finalPath,
       };
     }
@@ -197,8 +209,8 @@ async function measureOnce(browser, routeBudget) {
     // from the pre-existing auth FSM race documented in §5 risk register.
     // When the budget entry omits `sentinel` we fall back to the legacy
     // 3s settle wait (advisory mode for unmigrated routes).
-    if (route?.sentinel || routeBudget.sentinel) {
-      const sentinelSelector = routeBudget.sentinel ?? route.sentinel;
+    if (routeBudget.sentinel) {
+      const sentinelSelector = routeBudget.sentinel;
       try {
         await page.waitForSelector(sentinelSelector, { timeout: 10000, state: 'visible' });
       } catch (e) {
