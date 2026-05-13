@@ -44,7 +44,7 @@ truthful.
 | `/home`                                | decoded JS     | 49,947 KB           | 48,539 KB                                             | -3%               | 4× over (12,000 KB)  |
 | `/home`                                | TBT            | 2,937 ms            | observer-gated (production mode)                      | not measured      | not measurable yet   |
 | `/home`                                | resource count | (≈250)              | 184                                                   | better            | n/a                  |
-| `/admin/users`                         | transfer       | est. 14 MB          | **6,598 KB**                                          | better            | ~10% over (4,000 KB) |
+| `/admin/users`                         | transfer       | est. 14 MB          | **6,598 KB**                                          | better            | ~10% over leader (6,000 KB); improvement-milestone target 4,000 KB |
 | `/admin/users`                         | decoded JS     | est. 50 MB          | 48,548 KB                                             | minor             | 2.7× over (18,000)   |
 | `/admin/design-lab`                    | transfer       | (eager-bundled)     | 7,151 KB (post-lazy)                                  | large drop        | route-specific       |
 | Lazy chunks split out via Wave B (raw) | —              | —                   | **~7.7 MB eager out**                                 | —                 | —                    |
@@ -63,8 +63,8 @@ Each tier has different enforcement semantics so plan progress is honest:
 
 | Tier                       | Semantics                                                                                                                                    | Enforcement                                                                |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Hard regression gate**   | Current measurement must not regress more than +5% vs the latest committed baseline in `tests/perf/baseline.json`.                           | CI hard fail (route-budget runner once auth storage seeded — see B5c-auth) |
-| **Improvement milestone**  | Per-wave target — staged stepping stone on the way to leader. Expected post-B5: `/home` decoded ≤ 30 MB; transfer ≤ 5 MB. Post-B6: ≤ 18 MB.  | PR acceptance signal; not a CI hard gate                                   |
+| **Hard regression gate**   | Current measurement must not regress more than +5% vs the latest committed baseline in `tests/perf/baseline.json`.                           | CI hard fail (route-budget runner once authenticated matrix is live — see M2a auth-storage + M2b authenticated CI matrix) |
+| **Improvement milestone**  | Per-wave target — staged stepping stone on the way to leader. Expected post-B5b: `/home` decoded ≤ 25–32 MB; transfer ≤ 5 MB. Next architecture ratchet (DS root-barrel full retirement + i18n async + shared-scope topology): ≤ 18 MB.  | PR acceptance signal; not a CI hard gate                                   |
 | **Leader target**          | 12-month aspirational target representing "sector excellent". Decoded `/home` ≤ 12 MB, TBT ≤ 50 ms. Requires architectural redesign in part. | Not a hard gate — directional polestar                                     |
 | **Bundle-size CONTRACT §8** | Per-MFE size budget (size-limit) — already a CI advisory.                                                                                    | size-limit advisory (existing)                                             |
 
@@ -147,10 +147,11 @@ breaks).
 | PR-B5c-lite | NEXT   | Observer expose contract + route-rendered sentinel guard. Production observer flag implementation (or stub-removal). Route-budget runner sentinel/redirect guard so blank pages cannot generate false-green metrics. Auth-storage generator deliberately OUT-OF-SCOPE (M2a).      | Measurement validity (gate enabling)                                                    |
 | PR-B5a    | PLANNED  | Critical-route root-barrel eviction for `/login` + `/home` + their required shell boot/layout graph (AppProviders, ShellLayout, ShellHeader, Sidebar, MobileBottomBar, AuthBootstrapper, createLazyRemoteModule fallback, `/home` leaf components). Use `/light` + deep imports.   | `/home` decoded **-4 to -8 MB** (target post-PR: ~40-43 MB); transfer -0.5 to -1.5 MB   |
 | PR-B5a2   | OPTIONAL | Admin-route root-barrel-thin pass (`/admin/users`, `/admin/access`, etc., excluding Design Lab — DL stays via its own lazy chunk).                                                                                                                                                | `/admin/*` decoded -2 to -5 MB; medium-risk; only if B5a measurement confirms approach. |
-| PR-B5b0   | PLANNED  | RemoteEntry initiator-attribution diagnostic. CDP `Network.requestWillBeSent` initiator-stack on `/home` cold load. Identifies whether eager remote fetch source is shell-services-wiring, MF runtime preload, or static link preload. Mergeable diagnostic; informs B5b1 canary. | Diagnostic data — not user-facing perf delta                                            |
-| PR-B5b1   | PLANNED  | MFE on-demand bootstrap canary — single MFE based on B5b0 finding. If shell-services source: `mfe_audit` or `mfe_access`. If MF runtime source: `mfe_suggestions`.                                                                                                                | Canary decoded -2 to -4 MB; informs B5b2 ramp                                           |
-| PR-B5b2   | PLANNED  | MFE on-demand rollout to admin remotes (`access`, `audit`, `users`, `reporting`, `schema-explorer`). Route-scoped bootstrap; remote loads only when its route is reachable.                                                                                                       | `/home` decoded **-8 to -18 MB** (post-PR target: ~25-32 MB)                            |
-| PR-B5b3   | PLANNED  | federation-doctor + mf-shared-keys CI wiring + runtime smoke + rollback feature flag for B5b2.                                                                                                                                                                                    | Operational safety net for B5b rollout                                                  |
+| PR-B5b0   | PLANNED  | RemoteEntry initiator-attribution diagnostic. CDP `Network.requestWillBeSent` initiator-stack on `/home` cold load. Identifies whether eager remote fetch source is shell-services-wiring, MF runtime preload, or static link preload. Mergeable diagnostic; informs B5b1 canary. **Acceptance**: artifact `tests/perf/initiator-trace/<BUILD_SHA>.json` committed; PMD §3 row updated with finding. | Diagnostic data — not user-facing perf delta                                            |
+| PR-B5b1   | PLANNED  | MFE on-demand bootstrap canary — single MFE based on B5b0 finding. If shell-services source: `mfe_audit` or `mfe_access`. If MF runtime source: `mfe_suggestions`. **Precondition**: `MFE_ON_DEMAND_BOOTSTRAP` rollback feature flag LIVE before this PR merges (introduced in B5b3-prep, see below). **Acceptance**: `/home` remoteEntry count drops by 1 + decoded delta recorded + canary route smoke pass. | Canary decoded -2 to -4 MB; informs B5b2 ramp                                           |
+| PR-B5b2   | PLANNED  | MFE on-demand rollout to admin remotes (`access`, `audit`, `users`, `reporting`, `schema-explorer`). Route-scoped bootstrap; remote loads only when its route is reachable. **Precondition**: rollback flag still LIVE; B5b1 canary measurement closure landed. **Acceptance**: admin smoke matrix (`/admin/users`, `/admin/access/roles`, `/admin/audit/events`, `/admin/reports/*`) all render correctly + no shell-services contract regression (notifications, audit SSE, impersonation, auth-ready Promise). | `/home` decoded **-8 to -18 MB** (post-PR target: ~25-32 MB)                            |
+| PR-B5b3   | PLANNED  | federation-doctor + mf-shared-keys CI wiring + runtime smoke polish. (Rollback feature flag itself shipped earlier as B5b3-prep — see below.) **Acceptance**: CI gates run on every PR + runtime smoke nightly + flag toggle exercised via E2E. | Operational safety net for B5b rollout                                                  |
+| PR-B5b3-prep | PLANNED | **Pre-canary**: ship `MFE_ON_DEMAND_BOOTSTRAP` rollback feature flag + env-driven kill switch. NO behaviour change when flag off (current eager bootstrap unchanged). **Acceptance**: flag toggleable via env; smoke confirms both modes render `/home`. Must merge BEFORE B5b1. | Safety prerequisite (no perf delta) |
 | PR-B4c    | DEFERRED | i18n async-locale (re-affirmed deferred — comes after B5b)                                                                                                                                                                                                                        | Decoded -200 KB; breaking API                                                           |
 
 ### Wave B6 / M2 — Cross-repo + measurement infra (NEW, parallel)
@@ -314,7 +315,7 @@ Existing risks (unchanged unless noted):
 | Measurement false-green from pre-existing `/admin/*` auth-FSM blank state                                                                  | medium   | Every perf run must assert a DOM sentinel (page heading, table row, etc.) before reading metrics. Blank/redirect renders fail the gate. Encoded in B5c-lite scope.                                                                                       |
 | `VITE_PERF_OBSERVER_EXPOSE` contract drift (code comment says build flag exists; implementation reads only runtime `window.__PERF_OBSERVER_ENABLE`) | medium   | B5c-lite implements the build flag (production default off) OR removes the comment/stub. Either path closes the drift.                                                                                                                                  |
 | MF disabled-remote STUB regression history (data-URI runtime contract crash)                                                               | medium   | B5b on-demand bootstrap must NOT revert to STUB/data-URI mode for omitted remotes. Federation-doctor + runtime smoke required in B5b3.                                                                                                                  |
-| Shell-services side-effect contracts breaking under on-demand bootstrap (notifications, audit SSE, impersonation, auth ready bridge)        | high     | B5b1 canary against a single MFE only. Pre-canary contract enumeration (notifications, audit live-stream re-binders, impersonation telemetry, auth-ready Promise consumers). B5b3 includes feature-flag rollback.                                       |
+| Shell-services side-effect contracts breaking under on-demand bootstrap (notifications, audit SSE, impersonation, auth ready bridge)        | high     | B5b1 canary against a single MFE only. Pre-canary contract enumeration (notifications, audit live-stream re-binders, impersonation telemetry, auth-ready Promise consumers). **B5b3-prep** ships rollback feature flag BEFORE B5b1 merges (no behaviour change when flag off); B5b3 polish closes CI wiring + nightly smoke. |
 | Cache header policy + `installStaleBundleRecovery()` interaction                                                                            | medium   | PR-B3c must NOT mark `remoteEntry.js` as `immutable`; only hashed `/assets/*` chunks. §4.7 documents the acceptance test (deploy rollover E2E + at-most-one reload contract).                                                                            |
 | Source/live skew (PR merge ≠ deploy ≠ measurement)                                                                                         | medium   | Every metric snapshot carries `window.__BUILD_SHA__`. PMD audit log §9 records merge SHA AND deploy SHA. Browser smoke explicitly distinguishes "post-merge" vs "post-deploy".                                                                          |
 | Generated metadata / codemod risk (Design Lab JSON/import-string fields look like imports)                                                 | low      | B5a critical-graph migration must skip generated docs/catalog files (Design Lab `component-tokens.json`, `manifestEntries.ts`). Migration codemod (if added) uses explicit allowlist, not blanket regex.                                                |
@@ -329,7 +330,11 @@ Existing risks (unchanged unless noted):
 - **Smoke (per PR)**: `pnpm --filter mfe-shell build` + cross-AI Codex
   review.
 - **CI gates (PR-G1 + workspace defaults)**:
-  - `route budget + bundle taxonomy` (hard)
+  - `route budget` (route-performance-budget runner — hard fail on
+    transfer/decoded/TBT regression once authenticated matrix is wired
+    via M2a + M2b; currently anonymous-routes-only)
+  - `bundle taxonomy` (per-route resource breakdown — advisory artifact,
+    `continue-on-error: true`; informs review but does not block merge)
   - `size-limit (entry regression)` (advisory)
   - `lighthouse-ci (production preview, advisory)` (advisory)
   - 20+ existing hard gates (CSSOM, Visual Invariant, Token Drift,
@@ -343,6 +348,17 @@ Existing risks (unchanged unless noted):
 - **Measurement-validity preconditions** (§2.4): rendered-sentinel
   assert, auth-storage freshness, observer exposure, BUILD_SHA pinned,
   browser-vs-Playwright label.
+- **Baseline bootstrap runbook** (initial empty baseline → ratchet):
+  1. `tests/perf/baseline.json` starts empty (`routes: {}`).
+  2. First valid Playwright run (post-M2b authenticated matrix live)
+     records measurements in `warn-only` mode — written to baseline
+     but no CI fail.
+  3. Reviewer verifies: `BUILD_SHA` recorded, route-rendered sentinel
+     passed, auth-storage fresh, no observer-gated false-zero metric.
+  4. Once verified, flip `--warn-only` to ratchet mode; +5% regression
+     gate becomes live.
+  5. Subsequent improvement milestones ratchet baseline downward via
+     `pnpm perf:budget:update-baseline` after the producing PR merges.
 - **Manual smoke (post-merge testai)**: documented per PR; covers
   `/login` → `/home` → relevant admin route + DevTools network +
   console hygiene + AUTHENTICATED end-to-end (post-PR-B4 confirmed
@@ -413,6 +429,7 @@ are merged.
 | PR-B5c-lite     | —            | —             | —                       |
 | PR-B5a          | —            | —             | —                       |
 | PR-B5b0         | —            | —             | —                       |
+| PR-B5b3-prep    | —            | —             | — (precondition for B5b1) |
 | PR-B5b1         | —            | —             | —                       |
 | PR-B5b2         | —            | —             | —                       |
 | PR-B5b3         | —            | —             | —                       |
