@@ -55,6 +55,7 @@ import type { FC, PropsWithChildren } from 'react';
 import { createLazyRemoteModule } from './createLazyRemoteModule';
 import { ensureRemoteShellServicesConfigured } from './config/ensure-remote-shell-services';
 import { getSharedShellServices } from './config/shell-services-wiring';
+import { resolveAdminRemoteEntry } from './config/admin-remote-bootstrap';
 
 declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
@@ -92,24 +93,17 @@ function getHostMfInstance(): MfHostInstance | null {
 }
 
 /**
- * Read the audit remoteEntry URL from runtime env injected by the
- * index.html transform.  Lookup order matches the build-time
- * `MFE_AUDIT_URL` env that `vite.config.ts` reads for the eager mode
- * federation manifest (port 3006 default — see `remoteEntries.audit`).
+ * Codex `019e239a` post-merge B5b3c absorb: legacy
+ * `resolveAuditRemoteEntry()` retired in favor of central
+ * `resolveAdminRemoteEntry('audit')` from
+ * `./config/admin-remote-bootstrap.ts` so the idle batch loader and
+ * the route-level wrapper share ONE resolver implementation.  Prior
+ * to this PR the wrapper kept its own copy of the lookup chain
+ * (window.__env__ MFE_AUDIT_URL → VITE_MFE_AUDIT_URL → process.env
+ * MFE_AUDIT_URL → VITE_MFE_AUDIT_URL → localhost:3006) which could
+ * silently drift from the central resolver in
+ * `admin-remote-bootstrap.ts`.
  */
-function resolveAuditRemoteEntry(): string {
-  if (typeof window !== 'undefined') {
-    const w = window as Window & { __env__?: Record<string, string> };
-    const url = w.__env__?.MFE_AUDIT_URL ?? w.__env__?.VITE_MFE_AUDIT_URL ?? null;
-    if (url) return url;
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    const url = process.env.MFE_AUDIT_URL ?? process.env.VITE_MFE_AUDIT_URL ?? null;
-    if (url) return url;
-  }
-  // Dev fallback — matches default in apps/mfe-shell/vite.config.ts.
-  return 'http://localhost:3006/remoteEntry.js';
-}
 
 /**
  * Inner async loader for the route-level lazy factory.
@@ -133,7 +127,7 @@ async function loadAuditRemote(): Promise<{ default: FC<PropsWithChildren> }> {
   const sharedServices = getSharedShellServices();
   await ensureRemoteShellServicesConfigured(
     AUDIT_REMOTE_NAME,
-    resolveAuditRemoteEntry(),
+    resolveAdminRemoteEntry('audit'),
     sharedServices,
   );
   const host = getHostMfInstance();
