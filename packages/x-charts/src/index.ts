@@ -75,6 +75,9 @@ export type { SunburstChartProps } from './SunburstChart';
 // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 export { BoxPlotChart } from './BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';
+// PR-X7 (Codex thread 019e1e30 AGREE): financial OHLC chart.
+export { CandlestickChart } from './CandlestickChart';
+export type { CandlestickChartProps, CandlestickDataPoint } from './CandlestickChart';
 
 /* Composition */
 export { ChartContainer } from './ChartContainer';

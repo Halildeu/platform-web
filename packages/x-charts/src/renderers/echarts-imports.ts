@@ -56,11 +56,11 @@ import { GaugeChart } from 'echarts/charts';
 import { FunnelChart } from 'echarts/charts';
 import { HeatmapChart } from 'echarts/charts';
 import { SunburstChart } from 'echarts/charts';
-// PR-X6 (Codex thread 019e1e30 AGREE): activated for BoxPlotChart wrapper.
-// Statistical box-and-whisker chart for distribution overview — quartiles,
-// median, outliers — covers a niche the existing 14 wrappers can't.
+// PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 import { BoxplotChart } from 'echarts/charts';
-// Future: import { CandlestickChart } from 'echarts/charts';
+// PR-X7 (Codex thread 019e1e30 AGREE): financial OHLC chart for stock/
+// crypto price ranges with bullish/bearish color coding.
+import { CandlestickChart } from 'echarts/charts';
 // Future: import { ParallelChart } from 'echarts/charts';
 // Future: import { GraphChart } from 'echarts/charts';
 
@@ -127,6 +127,7 @@ export function registerECharts(): void {
     HeatmapChart,
     SunburstChart,
     BoxplotChart, // PR-X6: statistical box-and-whisker chart
+    CandlestickChart, // PR-X7: financial OHLC chart
     // Components
     TitleComponent,
     TooltipComponent,
