@@ -103,7 +103,7 @@ function getHostMfInstance(): MfHostInstance | null {
 }
 
 /**
- * Read the ethic remoteEntry URL from runtime env injected by
+ * Read the schema_explorer remoteEntry URL from runtime env injected by
  * the index.html transform.  Lookup order matches the build-time
  * `MFE_SCHEMA_EXPLORER_URL` env that `vite.config.ts` reads for the
  * eager mode federation manifest.

@@ -401,9 +401,25 @@ export default defineConfig(({ mode }) => {
   // reads same env via same reader function (single canary master toggle).
   const ethicOnDemandBuildEnabled = readSuggestionsOnDemandBuildFlag();
   // PR-B5b2a: schema_explorer canary (admin set, NOT in shell-services
-  // 4-remote contract — lowest blast in admin batch).  Same single
-  // canary master toggle (VITE_MFE_ON_DEMAND_BOOTSTRAP).
-  const schemaExplorerOnDemandBuildEnabled = readSuggestionsOnDemandBuildFlag();
+  // 4-remote contract — lowest blast in admin batch).
+  //
+  // Codex iter-1 thread `019e2338` P1 fix: unlike suggestions/ethic
+  // which have AppRouter route-level enable guards (the `/suggestions`
+  // and `/ethic` routes are conditionally rendered when
+  // SHELL_ENABLE_*_REMOTE is true), schema_explorer is rendered
+  // unconditionally by AppRouter.  Therefore the canary on-demand
+  // selection MUST also AND with the enable env so disabled+canary
+  // combination doesn't double-fire (manifest STUB + on-demand
+  // runtime register → contract mismatch).  When the remote is
+  // disabled, lazy-routes falls through to the eager
+  // `createLazyRemoteModule` path which gracefully handles STUB via
+  // `isValidRemoteComponent` guard + classified fallback.
+  const schemaExplorerEnabled = readEnvBoolean([
+    'VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
+    'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
+  ]);
+  const schemaExplorerOnDemandBuildEnabled =
+    readSuggestionsOnDemandBuildFlag() && schemaExplorerEnabled;
 
   return {
     base: appBasePath,
