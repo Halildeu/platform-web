@@ -84,6 +84,15 @@ export type { PictorialBarChartProps, PictorialBarDataPoint } from './PictorialB
 // PR-X12a (Codex thread 019e2119 AGREE): multi-dim parallel-coordinates plot.
 export { ParallelCoordinatesChart } from './ParallelCoordinatesChart';
 export type { ParallelCoordinatesChartProps, ParallelAxisDef } from './ParallelCoordinatesChart';
+// PR-X12b (Codex thread 019e2119 AGREE): network / entity-edge graph.
+export { GraphChart } from './GraphChart';
+export type {
+  GraphChartProps,
+  GraphNode,
+  GraphEdge,
+  GraphCategory,
+  GraphLayoutMode,
+} from './GraphChart';
 // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map.
 export { GeoMap } from './GeoMap';
 export type { GeoMapProps, GeoMapDatum, GeoMapVisualMap } from './GeoMap';

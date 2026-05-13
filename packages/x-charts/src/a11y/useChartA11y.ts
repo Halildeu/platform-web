@@ -53,6 +53,8 @@ export type ChartA11yKind =
   | 'pictorialBar'
   // PR-X12a (Codex thread 019e2119 AGREE): parallel coordinates plot.
   | 'parallel'
+  // PR-X12b (Codex thread 019e2119 AGREE): network/graph topology.
+  | 'graph'
   // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map.
   | 'geo'
   // Faz 21.11 P1a — 3D Extension Pack. Each 3D wrapper feeds the
@@ -178,6 +180,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   pictorialBar: 'Pictogram bar chart',
   // PR-X12a (Codex thread 019e2119 AGREE): multi-dim parallel coordinates plot.
   parallel: 'Parallel coordinates chart',
+  // PR-X12b (Codex thread 019e2119 AGREE): network / entity-edge graph.
+  graph: 'Network graph',
   // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map.
   geo: 'Geographic map',
   // Faz 21.11 P1a — 3D Extension Pack. P1b adds 'Surface 3D chart' +
