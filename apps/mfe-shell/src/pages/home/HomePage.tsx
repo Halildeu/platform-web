@@ -1,5 +1,11 @@
 import React from "react";
-import { PageHeader, VStack } from "@mfe/design-system";
+// PERF-INIT-V2 PR-B5a (critical-graph root-barrel eviction): split root
+// barrel into subpath imports so tree-shake can drop the rest of the
+// design-system tree on /home cold load.  PageHeader is a pattern;
+// VStack is a primitive.  See docs/performance/PERF-INIT-V2-plan.md
+// §4.6 (Codex thread 019e20fa AGREE).
+import { PageHeader } from "@mfe/design-system/patterns";
+import { VStack } from "@mfe/design-system/primitives";
 
 /**
  * Simple welcome landing page. Cockpit orchestrator widgets (ContextHealth,

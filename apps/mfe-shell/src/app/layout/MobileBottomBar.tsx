@@ -1,7 +1,9 @@
 import React, { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Search, BarChart3, Bell, User } from 'lucide-react';
-import { BottomNavigation } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B5a: MobileBottomBar renders on every authenticated
+// route. BottomNavigation lives in components; deep import.
+import { BottomNavigation } from '@mfe/design-system/components';
 import { useAppSelector, useAppDispatch } from '../store/store.hooks';
 import { toggleOpen } from '../../features/notifications/model/notifications.slice';
 import { useShellCommonI18n } from '../i18n';

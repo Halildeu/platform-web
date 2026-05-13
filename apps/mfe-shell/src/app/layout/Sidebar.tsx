@@ -11,8 +11,14 @@ import {
   Settings,
   Database,
 } from 'lucide-react';
-import { ShellSidebar } from '@mfe/design-system';
-import type { ShellSidebarNavItem, ShellSidebarFooterActionItem } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B5a: Sidebar is on every authenticated route's
+// critical render path. ShellSidebar + its types live in the patterns
+// barrel; deep import avoids pulling the full design-system tree.
+import { ShellSidebar } from '@mfe/design-system/patterns';
+import type {
+  ShellSidebarNavItem,
+  ShellSidebarFooterActionItem,
+} from '@mfe/design-system/patterns';
 import { useAppDispatch } from '../store/store.hooks';
 import { pushNotification, toggleOpen } from '../../features/notifications/model/notifications.slice';
 import { usePermissions } from '@mfe/auth';

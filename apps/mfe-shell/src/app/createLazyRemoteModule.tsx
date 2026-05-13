@@ -1,5 +1,8 @@
 import React from 'react';
-import { EmptyErrorLoading } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B5a: createLazyRemoteModule is invoked at MFE boot.
+// EmptyErrorLoading lives in the components barrel; deep import keeps
+// the root-barrel chunk off the critical fallback path.
+import { EmptyErrorLoading } from '@mfe/design-system/components';
 
 type RemoteModule = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- React.lazy expects ComponentType with arbitrary props for federated remotes

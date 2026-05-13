@@ -2,7 +2,10 @@ import React from 'react';
 import { Provider } from 'react-redux';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { ToastProvider } from '@mfe/design-system';
+// PERF-INIT-V2 PR-B5a: critical-graph root-barrel eviction. ToastProvider
+// lives in the components barrel; importing it via root would pull the
+// full design-system tree into the eager AppProviders chunk.
+import { ToastProvider } from '@mfe/design-system/components';
 import { PermissionProvider } from '@mfe/auth';
 import type { AuthzMeResponse } from '@mfe/auth';
 import { store } from '../store/store';
