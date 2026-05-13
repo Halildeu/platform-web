@@ -3244,6 +3244,28 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
+    sampleCode: `<BoxPlotChart
+  data={[
+    { label: 'Q1', min: 10, q1: 22, median: 30, q3: 38, max: 50 },
+    { label: 'Q2', min: 12, q1: 25, median: 34, q3: 42, max: 55 },
+    { label: 'Q3', min: 14, q1: 28, median: 36, q3: 44, max: 58 },
+  ]}
+  title="Quarterly distribution"
+/>`,
+    features: [
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
@@ -3412,6 +3434,28 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description:
           'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
+    ],
+    sampleCode: `<CandlestickChart
+  data={[
+    { label: '2026-05-10', open: 100, close: 110, low: 95, high: 115 },
+    { label: '2026-05-11', open: 110, close: 105, low: 102, high: 112 },
+    { label: '2026-05-12', open: 105, close: 118, low: 104, high: 120 },
+  ]}
+  title="Daily OHLC"
+/>`,
+    features: [
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
     ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
@@ -3606,6 +3650,30 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
+    sampleCode: `<PictorialBarChart
+  data={[
+    { label: 'Eng', value: 12 },
+    { label: 'Sales', value: 8 },
+    { label: 'HR', value: 5 },
+  ]}
+  symbol="circle"
+  symbolRepeat
+  title="Headcount by department"
+/>`,
+    features: [
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
@@ -3792,6 +3860,34 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description:
           'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
+    ],
+    sampleCode: `<ParallelCoordinatesChart
+  data={[
+    { dept: 'Eng', salary: 80000, tenure: 5 },
+    { dept: 'Sales', salary: 60000, tenure: 3 },
+    { dept: 'HR', salary: 55000, tenure: 8 },
+  ]}
+  axes={[
+    { field: 'dept', name: 'Department', type: 'category' },
+    { field: 'salary', name: 'Salary', type: 'value' },
+    { field: 'tenure', name: 'Tenure (yr)', type: 'value' },
+  ]}
+  groupBy="dept"
+  title="Compensation profile"
+/>`,
+    features: [
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
     ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
@@ -4021,6 +4117,36 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
+    sampleCode: `<GraphChart
+  nodes={[
+    { id: 'a', name: 'Doc A', value: 5, category: 0 },
+    { id: 'b', name: 'Doc B', value: 3, category: 0 },
+    { id: 'c', name: 'Orphan', value: 1, category: 1 },
+  ]}
+  edges={[
+    { source: 'a', target: 'b', value: 2 },
+    { source: 'b', target: 'c', value: 1 },
+  ]}
+  categories={[{ name: 'Active' }, { name: 'Orphan' }]}
+  layout="force"
+  directed
+  title="Doc reference graph"
+/>`,
+    features: [
+      'tooltip',
+      'responsive',
+      'animation',
+      'cross-filter',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
@@ -4213,6 +4339,38 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description:
           'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
+    ],
+    sampleCode: `// 1. Consumer registers the map asset (licensing decision lives in app):
+await ensureGeoMapRegistered('TR', () =>
+  fetch('/maps/tr-provinces.geo.json').then((r) => r.json()),
+);
+
+// 2. Use the wrapper:
+<GeoMap
+  mapName="TR"
+  data={[
+    { name: 'İstanbul', value: 5000 },
+    { name: 'Ankara', value: 3000 },
+  ]}
+  visualMap={{ min: 0, max: 10000 }}
+  roam
+  selectedMode="single"
+  title="HR location distribution"
+/>`,
+    features: [
+      'tooltip',
+      'responsive',
+      'animation',
+      'cross-filter',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
     ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],

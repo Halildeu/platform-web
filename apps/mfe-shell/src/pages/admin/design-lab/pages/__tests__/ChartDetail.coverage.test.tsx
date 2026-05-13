@@ -1,6 +1,15 @@
 // @vitest-environment jsdom
 /**
- * ChartDetail — page render coverage smoke for all 17 chart wrappers.
+ * ChartDetail — page render coverage smoke for chart wrappers with full
+ * playground (LIVE_PROP_SUPPORT + CHART_PRESETS) support.
+ *
+ * NOTE: The library exports 23 wrappers as of PR-X12c, but only 17 have
+ * the full live-playground wiring (LIVE_PROP_SUPPORT + CHART_PRESETS in
+ * chartPlaygroundModel + ChartPreviewLive switch). The 6 new PR-X
+ * campaign wrappers (BoxPlotChart, CandlestickChart, PictorialBarChart,
+ * ParallelCoordinatesChart, GraphChart, GeoMap) have detail-page entries
+ * (description + props + sampleCode + features) but no live playground —
+ * follow-up PR will extend the playground coverage to 23.
  *
  * Faz 21.11 PR-Playground-Coverage follow-up: lock the contract that
  * `/admin/design-lab/charts/:chartId` mounts cleanly for every wrapper
