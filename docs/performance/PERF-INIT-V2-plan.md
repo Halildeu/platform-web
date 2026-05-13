@@ -107,10 +107,13 @@ Documented in `docs/performance/mf-shared-scope-audit.md`.
   `import: false` + stub version (via the `hostOnly()` helper).
 - Remote chunks do not bundle their own copy at runtime.
 
-CI gate: `node scripts/ops/federation-doctor.mjs --json`
-(`shared-deps-consistency`) wired into the perf-budget workflow
-(PR-G1). Richer audit `node scripts/diagnostics/mf-shared-keys.mjs
-[--json|--strict]` is on-demand; CI wiring is a follow-up.
+Diagnostics: `node scripts/ops/federation-doctor.mjs --json` (lightweight
+`shared-deps-consistency` check) and `node scripts/diagnostics/mf-shared-keys.mjs
+[--json|--strict]` (richer audit) are available as workspace scripts
+(`pnpm mf:doctor`, `pnpm mf:doctor:json`, `pnpm mf:shared-keys`,
+`pnpm mf:shared-keys:json`, `pnpm mf:shared-keys:strict`). Neither is
+wired into a GitHub Actions workflow as of 2026-05-13 — both are
+on-demand; CI wiring is tracked as a follow-up.
 
 ### §4.3 Lazy-load policy (route-level)
 
@@ -154,7 +157,7 @@ Budget table is in `performance-budgets.json` (root); enforcement in
 
 | Risk                                                                                           | Severity | Mitigation                                                                                                                                                                                                                            |
 | ---------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HostOnly + import:false breaks if shell ships a different react-query version                  | high     | pnpm-lock unification + same-deploy-set policy + `mf-shared-keys --strict` available on-demand (CI wiring planned) + `federation-doctor` CI gate covers basic shared-deps parity                                                      |
+| HostOnly + import:false breaks if shell ships a different react-query version                  | high     | pnpm-lock unification + same-deploy-set policy + on-demand diagnostics (`federation-doctor` + `mf-shared-keys --strict`); CI wiring is a follow-up                                                                                    |
 | Idle deferral misses the OTel monkey-patch before first fetch                                  | medium   | 1500 ms timeout bounds worst case; backend logs request anyway, only cross-service span correlation is lost                                                                                                                           |
 | Lazy-loaded auth-flow pages add chunk-fetch latency on first visit                             | low      | Tiny chunks (4–8 kB for Login/Register/Unauthorized); behind explicit auth click intent, not first paint                                                                                                                              |
 | Lazy-loaded admin pages (Design Lab, Theme Admin) add chunk-fetch latency on admin first-visit | medium   | Large admin-only chunks (~1.4 MB raw split via PR-B4b); mitigated by admin route intent (sidebar click), warm browser cache thereafter, optional route-level skeleton / link prefetch as a future polish, post-merge admin smoke gate |
@@ -181,12 +184,14 @@ Budget table is in `performance-budgets.json` (root); enforcement in
   - `route budget + bundle taxonomy` (hard)
   - `size-limit (entry regression)` (advisory)
   - `lighthouse-ci (production preview, advisory)` (advisory)
-  - `federation-doctor` shared-deps parity (hard, via the perf-budget
-    workflow added by PR-G1)
-  - `mf-shared-keys --strict` (on-demand; CI wiring planned)
   - 20+ existing hard gates (CSSOM, Visual Invariant, Token Drift,
     Tree-shake, a11y, contrast, bundle-size CONTRACT §8, gitleaks,
     OSV, CodeQL, chart specs, Web Test Gate aggregator)
+- **On-demand diagnostics** (not yet in CI as of 2026-05-13; wiring
+  planned as a follow-up):
+  - `pnpm mf:doctor:json` — `federation-doctor` shared-deps parity
+  - `pnpm mf:shared-keys:strict` — richer (mfe × dep) audit, exits 1
+    on issues
 - **Manual smoke (post-merge testai)**: documented per PR; covers
   /login → /home → relevant admin route + DevTools network +
   console hygiene.
@@ -231,7 +236,7 @@ in `platform-k8s-gitops`) tracked in that repo's own audit trail.
 | #432 PR-B3e        | 019e2088     | AGREE iter-1            | 2026-05-13T09:14:08Z |
 | #433 PR-B4a        | 019e2094     | AGREE iter-1            | 2026-05-13T09:25:15Z |
 | #434 PR-B4b        | 019e20a0     | AGREE                   | 2026-05-13T09:40:46Z |
-| #435 PMD doc       | 019e20ab     | REVISE → AGREE (iter-1) | (this PR, in-review) |
+| #435 PMD doc       | 019e20ab     | REVISE (iter-2)         | (this PR, in-review) |
 
 Total: 11 platform-web PRs merged + 1 PMD doc in-review (this PR).
 PR-S1 cross-repo merge tracked separately in `platform-k8s-gitops`.
