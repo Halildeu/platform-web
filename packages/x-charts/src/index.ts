@@ -81,6 +81,9 @@ export type { CandlestickChartProps, CandlestickDataPoint } from './CandlestickC
 // PR-X10 (Codex thread 019e1e30 AGREE): decorative pictogram bar chart.
 export { PictorialBarChart } from './PictorialBarChart';
 export type { PictorialBarChartProps, PictorialBarDataPoint } from './PictorialBarChart';
+// PR-X12a (Codex thread 019e2119 AGREE): multi-dim parallel-coordinates plot.
+export { ParallelCoordinatesChart } from './ParallelCoordinatesChart';
+export type { ParallelCoordinatesChartProps, ParallelAxisDef } from './ParallelCoordinatesChart';
 
 /* Composition */
 export { ChartContainer } from './ChartContainer';

@@ -56,6 +56,8 @@ import { BoxPlotChart } from '../BoxPlotChart';
 import { CandlestickChart } from '../CandlestickChart';
 // PR-X10: pictogram bar chart.
 import { PictorialBarChart } from '../PictorialBarChart';
+// PR-X12a: parallel coordinates.
+import { ParallelCoordinatesChart } from '../ParallelCoordinatesChart';
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -1252,6 +1254,112 @@ describe('PictorialBarChart option shape', () => {
 
   it('handles empty data without throwing', () => {
     expect(() => render(<PictorialBarChart data={[]} animate={false} />)).not.toThrow();
+  });
+});
+
+/* ================================================================== */
+/*  ParallelCoordinatesChart (PR-X12a)                                 */
+/* ================================================================== */
+
+describe('ParallelCoordinatesChart option shape', () => {
+  const sampleAxes = [
+    { field: 'dept', name: 'Department', type: 'category' as const },
+    { field: 'salary', name: 'Salary', type: 'value' as const, min: 0, max: 100000 },
+    { field: 'tenure', name: 'Tenure (yr)', type: 'value' as const, min: 0, max: 30 },
+  ];
+  const sampleData = [
+    { dept: 'Eng', salary: 80000, tenure: 5 },
+    { dept: 'Sales', salary: 60000, tenure: 3 },
+    { dept: 'HR', salary: 55000, tenure: 8 },
+  ];
+
+  it('series.type === parallel + each row → polyline data in axis order', () => {
+    render(<ParallelCoordinatesChart data={sampleData} axes={sampleAxes} animate={false} />);
+    const s = series();
+    expect(s[0].type).toBe('parallel');
+    const data = s[0].data as Array<Array<number | string>>;
+    expect(data).toHaveLength(3);
+    // Each polyline is [v0, v1, v2] in the axis order.
+    expect(data[0]).toEqual(['Eng', 80000, 5]);
+    expect(data[1]).toEqual(['Sales', 60000, 3]);
+    expect(data[2]).toEqual(['HR', 55000, 8]);
+  });
+
+  it('parallelAxis array preserves visual order + types', () => {
+    render(<ParallelCoordinatesChart data={sampleData} axes={sampleAxes} animate={false} />);
+    const opt = lastDispatchedOption();
+    const parallelAxis = opt?.parallelAxis as Array<Record<string, unknown>>;
+    expect(parallelAxis).toHaveLength(3);
+    expect(parallelAxis[0]).toMatchObject({ dim: 0, name: 'Department', type: 'category' });
+    expect(parallelAxis[1]).toMatchObject({
+      dim: 1,
+      name: 'Salary',
+      type: 'value',
+      min: 0,
+      max: 100000,
+    });
+    expect(parallelAxis[2]).toMatchObject({ dim: 2, name: 'Tenure (yr)', type: 'value' });
+  });
+
+  it('groupBy partitions data into one series per group + assigns palette colors', () => {
+    render(
+      <ParallelCoordinatesChart
+        data={sampleData}
+        axes={sampleAxes}
+        groupBy="dept"
+        animate={false}
+      />,
+    );
+    const s = series();
+    // 3 distinct dept values → 3 series.
+    expect(s).toHaveLength(3);
+    expect(s[0].name).toBe('Eng');
+    expect(s[1].name).toBe('Sales');
+    expect(s[2].name).toBe('HR');
+    // Each series gets a distinct palette color.
+    const c0 = (s[0].lineStyle as Record<string, unknown>).color;
+    const c1 = (s[1].lineStyle as Record<string, unknown>).color;
+    expect(c0).not.toBe(c1);
+  });
+
+  it('default lineOpacity=0.35 + lineWidth=1.5 + overrides', () => {
+    render(<ParallelCoordinatesChart data={sampleData} axes={sampleAxes} animate={false} />);
+    const lineStyle = series()[0].lineStyle as Record<string, unknown>;
+    expect(lineStyle.opacity).toBe(0.35);
+    expect(lineStyle.width).toBe(1.5);
+  });
+
+  it('lineOpacity + lineWidth overrides pass through', () => {
+    render(
+      <ParallelCoordinatesChart
+        data={sampleData}
+        axes={sampleAxes}
+        lineOpacity={0.8}
+        lineWidth={3}
+        animate={false}
+      />,
+    );
+    const lineStyle = series()[0].lineStyle as Record<string, unknown>;
+    expect(lineStyle.opacity).toBe(0.8);
+    expect(lineStyle.width).toBe(3);
+  });
+
+  it('handles empty data without throwing', () => {
+    expect(() =>
+      render(<ParallelCoordinatesChart data={[]} axes={sampleAxes} animate={false} />),
+    ).not.toThrow();
+  });
+
+  it('handles <2 axes without throwing (returns null option)', () => {
+    expect(() =>
+      render(
+        <ParallelCoordinatesChart
+          data={sampleData}
+          axes={[{ field: 'dept', name: 'D', type: 'category' }]}
+          animate={false}
+        />,
+      ),
+    ).not.toThrow();
   });
 });
 
