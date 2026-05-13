@@ -86,14 +86,14 @@ B5b acceptance:
   shell-services contract regression smoke
 - NOT credited with: DS root wrapper size reduction
 
-| PR            | Status   | Mechanism                                                    |
-| ------------- | -------- | ------------------------------------------------------------ |
-| **B5b3-prep** | NEXT     | `MFE_ON_DEMAND_BOOTSTRAP` rollback flag, NO behaviour change |
-| **B5b0**      | PARALLEL | RemoteEntry initiator-attribution diagnostic                 |
-| **B5b1**      | THEN     | Single MFE on-demand canary                                  |
-| **B5b2**      | THEN     | Admin remotes rollout                                        |
-| **B5b3**      | THEN     | federation-doctor + nightly smoke                            |
-| **B3b/c**     | PARALLEL | cross-repo brotli + cache (transfer ROI, no decoded change)  |
+| PR            | Status         | Mechanism                                                                                                                           |
+| ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **B5b3-prep** | SHIPPED (#444) | `MFE_ON_DEMAND_BOOTSTRAP` BUILD-TIME flag reader (consumed at build by B5b1; no runtime rollback after deploy), NO behaviour change |
+| **B5b0**      | PARALLEL       | RemoteEntry initiator-attribution diagnostic                                                                                        |
+| **B5b1**      | THEN           | Single MFE on-demand canary                                                                                                         |
+| **B5b2**      | THEN           | Admin remotes rollout                                                                                                               |
+| **B5b3**      | THEN           | federation-doctor + nightly smoke                                                                                                   |
+| **B3b/c**     | PARALLEL       | cross-repo brotli + cache (transfer ROI, no decoded change)                                                                         |
 
 ## Wave B5d-arch (NEW — out of PERF-INIT-V2 scope, backlog only)
 
