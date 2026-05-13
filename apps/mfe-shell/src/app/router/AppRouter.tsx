@@ -37,9 +37,18 @@ const ReportEditorRoute = React.lazy(() =>
 );
 
 /* ---- Page imports ---- */
-import { LoginPage } from '../../pages/login';
-import { RegisterPage } from '../../pages/register';
-import { UnauthorizedPage } from '../../pages/unauthorized';
+// PERF-INIT-V2 PR-B4a (login micro-entry): LoginPage / RegisterPage /
+// UnauthorizedPage are now lazy-loaded.  These public auth-flow pages
+// are needed exactly once per session — either at the very first visit
+// (cold cache → small extra chunk fetch, dominated by network) or on
+// logout (post-auth, where slight delay is acceptable).  Authenticated
+// users on /home, /admin/*, etc. no longer pay the cost of bundling
+// LoginPage / RegisterPage / UnauthorizedPage code into the shell's
+// initial chunk graph.
+const LoginPage = React.lazy(() => import('../../pages/login/LoginPage.ui'));
+const RegisterPage = React.lazy(() => import('../../pages/register/RegisterPage.ui'));
+const UnauthorizedPage = React.lazy(() => import('../../pages/unauthorized/UnauthorizedPage.ui'));
+
 import ThemeMatrixPage from '../../pages/runtime/ThemeMatrixPage';
 import { HomePage } from '../../pages/home/HomePage';
 import ThemeAdminPage from '../../pages/admin/ThemeAdminPage';
