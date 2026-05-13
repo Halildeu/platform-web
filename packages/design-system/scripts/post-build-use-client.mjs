@@ -15,6 +15,8 @@ const DIRECTIVE = '"use client";\n';
 // "use client" so it can be imported in React Server Components.
 const ENTRY_FILES = [
   'index.js',
+  // PERF-INIT-V2 PR-B1b: light entry — slim subpath used by /login + /home
+  'light.js',
   // Layer-specific deep imports
   'tokens/index.js',
   'primitives/index.js',
