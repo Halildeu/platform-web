@@ -676,6 +676,9 @@ importers:
       '@mfe/x-scheduler':
         specifier: '*'
         version: link:../../packages/x-scheduler
+      '@module-federation/runtime':
+        specifier: ^2.4.0
+        version: 2.4.0(node-fetch@2.7.0)
       '@platform/capabilities':
         specifier: file:../../packages/platform-capabilities
         version: link:../../packages/platform-capabilities
@@ -4081,6 +4084,10 @@ packages:
     resolution: {integrity: sha512-x0HvcHqVJNTPk/Bw8JbLWlWoo6Wwnsug0fnYYro1HBrjxZ3G7/AZk7Ahv8JwDe1uIcz8eBqvu86FuF1POiG7vQ==}
     engines: {node: '>=6.0'}
 
+  adm-zip@0.5.17:
+    resolution: {integrity: sha512-+Ut8d9LLqwEvHHJl1+PIHqoyDxFgVN847JTVM3Izi3xHDWPE4UtzzXysMZQs64DMcrJfBeS/uoEP4AD3HQHnQQ==}
+    engines: {node: '>=12.0'}
+
   ag-charts-community@12.3.1:
     resolution: {integrity: sha512-uRaUFmCl8e0Y3KxjaHUYlkCPS5OtwtfTChkdpoZuBKDXqerCPTjPu+uvlun3rYUSYxScwVf2LZCI0Hfw4Vc+WQ==}
 
@@ -4587,8 +4594,8 @@ packages:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
     engines: {node: '>=6.0'}
 
-  chromedriver@148.0.2:
-    resolution: {integrity: sha512-9N9J6XxkB7dub7dcYzJomNfTbaEQA5qILpdha5cxUxgDC2hwE3u8yV/7tkJacSSfPGCHKHp05NYmAitQ4Y7tSw==}
+  chromedriver@148.0.3:
+    resolution: {integrity: sha512-efk4NIkjjRr3Zy0C8Trj8jpMGgDY+ZA6kVpYFerH3M4tM4fguKCi81PguWwmHVx8FZdMmhFYczb1PaPvJqUkZQ==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -9554,7 +9561,7 @@ snapshots:
     dependencies:
       '@axe-core/webdriverjs': 4.11.3(selenium-webdriver@4.41.0)
       axe-core: 4.11.4
-      chromedriver: 148.0.2
+      chromedriver: 148.0.3
       colors: 1.4.0
       commander: 9.5.0
       dotenv: 17.4.2
@@ -12430,6 +12437,8 @@ snapshots:
 
   adm-zip@0.5.10: {}
 
+  adm-zip@0.5.17: {}
+
   ag-charts-community@12.3.1:
     dependencies:
       ag-charts-core: 12.3.1
@@ -13013,12 +13022,12 @@ snapshots:
 
   chrome-trace-event@1.0.4: {}
 
-  chromedriver@148.0.2:
+  chromedriver@148.0.3:
     dependencies:
       '@testim/chrome-version': 1.1.4
+      adm-zip: 0.5.17
       axios: 1.16.0
       compare-versions: 6.1.1
-      extract-zip: 2.0.1
       proxy-agent: 8.0.1
       proxy-from-env: 2.1.0
       tcp-port-used: 1.0.2

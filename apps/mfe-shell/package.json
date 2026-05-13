@@ -28,6 +28,7 @@
     "@mfe/x-form-builder": "*",
     "@mfe/x-kanban": "*",
     "@mfe/x-scheduler": "*",
+    "@module-federation/runtime": "^2.4.0",
     "@platform/capabilities": "file:../../packages/platform-capabilities",
     "@reduxjs/toolkit": "^2.8.2",
     "@sentry/react": "^10.52.0",
