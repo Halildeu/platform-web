@@ -1,20 +1,20 @@
-import React from "react";
-import * as MfeUiKit from "@mfe/design-system";
-import { _xSuiteComponents } from "./xSuiteStubs";
+import React from 'react';
+import * as MfeUiKit from '@mfe/design-system';
+import { _xSuiteComponents } from './xSuiteStubs';
 
 /* Side-effect imports to register extended stubs */
-import "./xSuiteStubsExtended";
-import "./xSuiteEnterpriseStubs";
+import './xSuiteStubsExtended';
+import './xSuiteEnterpriseStubs';
 
 /* ---- Non-DOM props that should not be spread to native elements ---- */
 /* These are custom props recognized by @mfe/design-system components    */
 /* but cause React warnings when they leak to native DOM elements.       */
 export const NON_DOM_SAFE_PROPS = new Set([
-  "loadingDisplay",
-  "selectSize",
-  "fullWidth",
-  "emptyTitle",
-  "emptyDescription",
+  'loadingDisplay',
+  'selectSize',
+  'fullWidth',
+  'emptyTitle',
+  'emptyDescription',
 ]);
 
 /* ---- Event logging types for Actions Panel ---- */
@@ -34,7 +34,9 @@ const _subscribers = new Set<ActionLogSubscriber>();
 
 export function subscribeToActionLog(fn: ActionLogSubscriber) {
   _subscribers.add(fn);
-  return () => { _subscribers.delete(fn); };
+  return () => {
+    _subscribers.delete(fn);
+  };
 }
 
 export function nextLogId(): number {
@@ -70,33 +72,33 @@ const _rawRegistry = {
  */
 export const COMPONENT_ALIASES: Record<string, string> = {
   // MenuBar recipe variants (space-separated doc names)
-  "Navigation Menu": "MenuBar",
-  "App Header": "MenuBar",
-  "Search / Command Header": "MenuBar",
-  "Action Header": "MenuBar",
-  "Action Bar": "MenuBar",
-  "Desktop Menubar": "MenuBar",
+  'Navigation Menu': 'MenuBar',
+  'App Header': 'MenuBar',
+  'Search / Command Header': 'MenuBar',
+  'Action Header': 'MenuBar',
+  'Action Bar': 'MenuBar',
+  'Desktop Menubar': 'MenuBar',
   // MenuBar recipe variants (PascalCase / no-space keys)
-  NavigationMenu: "MenuBar",
-  AppHeader: "MenuBar",
-  CommandHeader: "MenuBar",
-  ActionHeader: "MenuBar",
-  ActionBar: "MenuBar",
-  DesktopMenubar: "MenuBar",
+  NavigationMenu: 'MenuBar',
+  AppHeader: 'MenuBar',
+  CommandHeader: 'MenuBar',
+  ActionHeader: 'MenuBar',
+  ActionBar: 'MenuBar',
+  DesktopMenubar: 'MenuBar',
   // Page template compositions — render primary layout component (space-separated)
-  "CRUD Template": "PageLayout",
-  "Dashboard Template": "PageLayout",
-  "Detail Template": "PageLayout",
-  "Settings Template": "PageLayout",
-  "Command Workspace": "PageLayout",
+  'CRUD Template': 'PageLayout',
+  'Dashboard Template': 'PageLayout',
+  'Detail Template': 'PageLayout',
+  'Settings Template': 'PageLayout',
+  'Command Workspace': 'PageLayout',
   // Page template compositions (PascalCase / no-space keys)
-  CrudTemplate: "PageLayout",
-  DashboardTemplate: "PageLayout",
-  DetailTemplate: "PageLayout",
-  SettingsTemplate: "PageLayout",
-  CommandWorkspace: "PageLayout",
+  CrudTemplate: 'PageLayout',
+  DashboardTemplate: 'PageLayout',
+  DetailTemplate: 'PageLayout',
+  SettingsTemplate: 'PageLayout',
+  CommandWorkspace: 'PageLayout',
   // Components documented under different name than export
-  SectionTabs: "DetailSectionTabs",
+  SectionTabs: 'DetailSectionTabs',
 };
 
 /**
@@ -104,98 +106,138 @@ export const COMPONENT_ALIASES: Record<string, string> = {
  * These appear in the doc catalog but cannot render a live preview.
  * We classify them by type to show an appropriate fallback UI.
  */
-export type NonComponentType = "hook" | "utility" | "constant" | "theme-setter" | "theme-api" | "hoc" | "upcoming";
+export type NonComponentType =
+  | 'hook'
+  | 'utility'
+  | 'constant'
+  | 'theme-setter'
+  | 'theme-api'
+  | 'hoc'
+  | 'upcoming';
 
 export const NON_COMPONENT_ENTRIES: Record<string, NonComponentType> = {
   // Hooks
-  useToast: "hook",
-  useAsyncCombobox: "hook",
-  useGridVariants: "hook",
-  useAgGridTablePagination: "hook",
+  useToast: 'hook',
+  useAsyncCombobox: 'hook',
+  useGridVariants: 'hook',
+  useAgGridTablePagination: 'hook',
   // Utility / factory functions
-  buildAuthHeaders: "utility",
-  buildEntityGridQueryParams: "utility",
-  createAccordionItemsFromSections: "utility",
-  createAccordionPreset: "utility",
-  createBreadcrumbItemsFromRoute: "utility",
-  createMenuBarItemsFromRoutes: "utility",
-  createMenuBarPreset: "utility",
-  createNavigationDestinationItems: "utility",
-  createNavigationRailPreset: "utility",
-  createPageHeaderStatItems: "utility",
-  createPageHeaderTagItems: "utility",
-  createPageLayoutBreadcrumbItems: "utility",
-  createPageLayoutPreset: "utility",
-  createSegmentedItemsFromFilters: "utility",
-  createSegmentedItemsFromRoutes: "utility",
-  createSegmentedPreset: "utility",
-  resolveAccessState: "utility",
-  resolveMenuBarActiveValue: "utility",
-  resolveNavigationRailActiveValue: "utility",
-  resolveSegmentedNextValue: "utility",
-  resolveThemeModeKey: "utility",
-  shouldBlockInteraction: "utility",
-  toggleVariantDefault: "utility",
+  buildAuthHeaders: 'utility',
+  buildEntityGridQueryParams: 'utility',
+  createAccordionItemsFromSections: 'utility',
+  createAccordionPreset: 'utility',
+  createBreadcrumbItemsFromRoute: 'utility',
+  createMenuBarItemsFromRoutes: 'utility',
+  createMenuBarPreset: 'utility',
+  createNavigationDestinationItems: 'utility',
+  createNavigationRailPreset: 'utility',
+  createPageHeaderStatItems: 'utility',
+  createPageHeaderTagItems: 'utility',
+  createPageLayoutBreadcrumbItems: 'utility',
+  createPageLayoutPreset: 'utility',
+  createSegmentedItemsFromFilters: 'utility',
+  createSegmentedItemsFromRoutes: 'utility',
+  createSegmentedPreset: 'utility',
+  resolveAccessState: 'utility',
+  resolveMenuBarActiveValue: 'utility',
+  resolveNavigationRailActiveValue: 'utility',
+  resolveSegmentedNextValue: 'utility',
+  resolveThemeModeKey: 'utility',
+  shouldBlockInteraction: 'utility',
+  toggleVariantDefault: 'utility',
   // HOC
-  withAccessGuard: "hoc",
+  withAccessGuard: 'hoc',
   // Theme setter functions
-  setAppearance: "theme-setter",
-  setDensity: "theme-setter",
-  setElevation: "theme-setter",
-  setMotion: "theme-setter",
-  setOverlayIntensity: "theme-setter",
-  setOverlayOpacity: "theme-setter",
-  setRadius: "theme-setter",
-  setSurfaceTone: "theme-setter",
-  setTableSurfaceTone: "theme-setter",
+  setAppearance: 'theme-setter',
+  setDensity: 'theme-setter',
+  setElevation: 'theme-setter',
+  setMotion: 'theme-setter',
+  setOverlayIntensity: 'theme-setter',
+  setOverlayOpacity: 'theme-setter',
+  setRadius: 'theme-setter',
+  setSurfaceTone: 'theme-setter',
+  setTableSurfaceTone: 'theme-setter',
   // Theme state / API
-  getResolvedToken: "theme-api",
-  getThemeAxes: "theme-api",
-  getThemeContract: "theme-api",
-  registerTokenResolver: "theme-api",
-  resetTokenResolver: "theme-api",
-  subscribeThemeAxes: "theme-api",
-  updateThemeAxes: "theme-api",
+  getResolvedToken: 'theme-api',
+  getThemeAxes: 'theme-api',
+  getThemeContract: 'theme-api',
+  registerTokenResolver: 'theme-api',
+  resetTokenResolver: 'theme-api',
+  subscribeThemeAxes: 'theme-api',
+  updateThemeAxes: 'theme-api',
   // MobileStepper is exported — use registry resolution
   MobileStepper: undefined,
   // X-Suite hooks & utilities
-  useScheduler: "hook",
-  useRecurrence: "hook",
-  useConflictDetection: "hook",
-  useKanban: "hook",
-  useDragDrop: "hook",
-  useKanbanFilter: "hook",
-  useWipPolicy: "hook",
-  useEditor: "hook",
-  useSlashCommands: "hook",
-  useMentions: "hook",
-  useFormSchema: "hook",
-  useConditionalLogic: "hook",
-  useAsyncValidation: "hook",
-  useMultiStepForm: "hook",
-  useColumnBuilder: "hook",
-  useGridExport: "hook",
-  useGridState: "hook",
-  ServerDataSource: "utility",
-  createFieldRegistry: "utility",
-  createSchemaValidator: "utility",
-  defaultSlashCommands: "constant",
+  useScheduler: 'hook',
+  useRecurrence: 'hook',
+  useConflictDetection: 'hook',
+  useKanban: 'hook',
+  useDragDrop: 'hook',
+  useKanbanFilter: 'hook',
+  useWipPolicy: 'hook',
+  useEditor: 'hook',
+  useSlashCommands: 'hook',
+  useMentions: 'hook',
+  useFormSchema: 'hook',
+  useConditionalLogic: 'hook',
+  useAsyncValidation: 'hook',
+  useMultiStepForm: 'hook',
+  useColumnBuilder: 'hook',
+  useGridExport: 'hook',
+  useGridState: 'hook',
+  ServerDataSource: 'utility',
+  createFieldRegistry: 'utility',
+  createSchemaValidator: 'utility',
+  defaultSlashCommands: 'constant',
   // Theme constants
-  THEME_APPEARANCE_OPTIONS: "constant",
-  THEME_DENSITY_OPTIONS: "constant",
-  THEME_ELEVATION_OPTIONS: "constant",
-  THEME_MOTION_OPTIONS: "constant",
-  THEME_RADIUS_OPTIONS: "constant",
+  THEME_APPEARANCE_OPTIONS: 'constant',
+  THEME_DENSITY_OPTIONS: 'constant',
+  THEME_ELEVATION_OPTIONS: 'constant',
+  THEME_MOTION_OPTIONS: 'constant',
+  THEME_RADIUS_OPTIONS: 'constant',
 };
 
-export const NON_COMPONENT_LABELS: Record<NonComponentType, { icon: string; label: string; description: string }> = {
-  hook: { icon: "🪝", label: "React Hook", description: "Bu bir React hook'udur ve görsel önizleme sağlanamaz. API dokümantasyonu için aşağıya bakın." },
-  utility: { icon: "🔧", label: "Utility Function", description: "Bu bir yardımcı fonksiyondur. Kullanım detayları için API sekmesine bakın." },
-  constant: { icon: "📋", label: "Constant / Options", description: "Bu sabit bir konfigürasyon nesnesidir. Değerleri ve kullanımı için API sekmesine bakın." },
-  "theme-setter": { icon: "🎨", label: "Theme Setter", description: "Bu bir tema ayar fonksiyonudur. Theme builder ile birlikte kullanılır." },
-  "theme-api": { icon: "⚙️", label: "Theme API", description: "Bu bir tema API fonksiyonudur. Tema sistemi ile programatik etkileşim sağlar." },
-  hoc: { icon: "🔀", label: "Ust Duzey Bilesen (HOC)", description: "Bu bir HOC'dir. Component'lari wrap ederek ek davranis ekler." },
-  upcoming: { icon: "🚧", label: "Upcoming Component", description: "Bu component henüz dışa aktarılmamıştır. Gelecek sürümde kullanıma sunulacaktır." },
+export const NON_COMPONENT_LABELS: Record<
+  NonComponentType,
+  { icon: string; label: string; description: string }
+> = {
+  hook: {
+    icon: '🪝',
+    label: 'React Hook',
+    description:
+      "Bu bir React hook'udur ve görsel önizleme sağlanamaz. API dokümantasyonu için aşağıya bakın.",
+  },
+  utility: {
+    icon: '🔧',
+    label: 'Utility Function',
+    description: 'Bu bir yardımcı fonksiyondur. Kullanım detayları için API sekmesine bakın.',
+  },
+  constant: {
+    icon: '📋',
+    label: 'Constant / Options',
+    description:
+      'Bu sabit bir konfigürasyon nesnesidir. Değerleri ve kullanımı için API sekmesine bakın.',
+  },
+  'theme-setter': {
+    icon: '🎨',
+    label: 'Theme Setter',
+    description: 'Bu bir tema ayar fonksiyonudur. Theme builder ile birlikte kullanılır.',
+  },
+  'theme-api': {
+    icon: '⚙️',
+    label: 'Theme API',
+    description: 'Bu bir tema API fonksiyonudur. Tema sistemi ile programatik etkileşim sağlar.',
+  },
+  hoc: {
+    icon: '🔀',
+    label: 'Ust Duzey Bilesen (HOC)',
+    description: "Bu bir HOC'dir. Component'lari wrap ederek ek davranis ekler.",
+  },
+  upcoming: {
+    icon: '🚧',
+    label: 'Upcoming Component',
+    description: 'Bu component henüz dışa aktarılmamıştır. Gelecek sürümde kullanıma sunulacaktır.',
+  },
 };
 
 /**
@@ -205,7 +247,7 @@ export function resolveComponentKey(name: string): string {
   if (COMPONENT_ALIASES[name]) return COMPONENT_ALIASES[name];
   // Try as-is, then PascalCase without spaces
   if (_rawRegistry[name]) return name;
-  const noSpaces = name.replace(/\s+/g, "");
+  const noSpaces = name.replace(/\s+/g, '');
   if (_rawRegistry[noSpaces]) return noSpaces;
   return name;
 }
@@ -223,12 +265,12 @@ export const componentRegistry = new Proxy(_rawRegistry, {
  */
 export const DEFAULT_CHILDREN: Record<string, React.ReactNode> = {
   /* Primitives — text-bearing */
-  Button: "Tikla",
+  Button: 'Tikla',
   IconButton: undefined,
-  Tag: "Etiket",
-  Badge: "Yeni",
-  Text: "Hizli kahverengi tilki tembel kopegin uzerinden atlar.",
-  LinkInline: "Baglanti metni",
+  Tag: 'Etiket',
+  Badge: 'Yeni',
+  Text: 'Hizli kahverengi tilki tembel kopegin uzerinden atlar.',
+  LinkInline: 'Baglanti metni',
   SearchInput: undefined,
 
   /* Form controls — no children */
@@ -347,22 +389,22 @@ export const DEFAULT_CHILDREN: Record<string, React.ReactNode> = {
   DesktopMenubar: undefined,
 
   /* MenuBar recipe aliases (doc names with spaces) */
-  "Navigation Menu": undefined,
-  "App Header": undefined,
-  "Search / Command Header": undefined,
-  "Action Header": undefined,
-  "Action Bar": undefined,
-  "Desktop Menubar": undefined,
+  'Navigation Menu': undefined,
+  'App Header': undefined,
+  'Search / Command Header': undefined,
+  'Action Header': undefined,
+  'Action Bar': undefined,
+  'Desktop Menubar': undefined,
   CommandWorkspace: undefined,
   CrudTemplate: undefined,
   DashboardTemplate: undefined,
   DetailTemplate: undefined,
   SettingsTemplate: undefined,
-  "CRUD Template": undefined,
-  "Dashboard Template": undefined,
-  "Detail Template": undefined,
-  "Settings Template": undefined,
-  "Command Workspace": undefined,
+  'CRUD Template': undefined,
+  'Dashboard Template': undefined,
+  'Detail Template': undefined,
+  'Settings Template': undefined,
+  'Command Workspace': undefined,
   ToastProvider: undefined,
 
   /* ---- X-Charts ---- */
@@ -456,7 +498,6 @@ export const DEFAULT_CHILDREN: Record<string, React.ReactNode> = {
   FieldRegistry: undefined,
 
   /* ---- Enterprise (missing) ---- */
-  AgingBuckets: undefined,
   ApprovalWorkflow: undefined,
   BulletChart: undefined,
   AuditLog: undefined,

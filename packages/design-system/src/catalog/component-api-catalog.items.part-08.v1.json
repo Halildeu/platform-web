@@ -1,10 +1,5 @@
 [
   {
-    "name": "AgingBuckets",
-    "props": [],
-    "slots": []
-  },
-  {
     "name": "AnimatePresence",
     "props": [],
     "slots": []
@@ -71,11 +66,6 @@
   },
   {
     "name": "Drawer",
-    "props": [],
-    "slots": []
-  },
-  {
-    "name": "EmptyStateBuilder",
     "props": [],
     "slots": []
   },
@@ -196,11 +186,6 @@
   },
   {
     "name": "Toast",
-    "props": [],
-    "slots": []
-  },
-  {
-    "name": "TrainingTracker",
     "props": [],
     "slots": []
   },

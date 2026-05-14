@@ -26,7 +26,6 @@ These components are stable, well-tested (contract+depth), and ready for product
 | ------------------ | ------------- | --------- | ----------------------------------------- |
 | DataExportDialog   | UX Pattern    | Yes       | Ready — awaiting reporting export feature |
 | DateRangePicker    | UX Pattern    | Yes       | Ready — awaiting dashboard date filters   |
-| EmptyStateBuilder  | UX Pattern    | Yes       | Ready — generic utility                   |
 | ExecutiveKPIStrip  | KPI/Metrics   | Yes       | Ready — awaiting executive dashboard      |
 | FileUploadZone     | UX Pattern    | Yes       | Ready — awaiting file management feature  |
 | FilterPresets      | UX Pattern    | Yes       | Ready — awaiting saved filter feature     |
@@ -40,39 +39,34 @@ These components are stable, well-tested (contract+depth), and ready for product
 
 Domain-specific components for specialized use cases. May need API refinement before production.
 
-| Component            | Category         | Notes                                     |
-| -------------------- | ---------------- | ----------------------------------------- |
-| ComparisonTable      | Analytics        | Nested row expansion, toggle groups       |
-| DecisionMatrix       | Decision Support | Weighted scoring grid                     |
-| FineKinney           | Risk             | Quantitative risk assessment (OHS domain) |
-| GanttTimeline        | Project          | Timeline with dependencies                |
-| GovernanceBoard      | Governance       | Control/compliance dashboard              |
-| MetricComparisonCard | KPI/Metrics      | Side-by-side metric widget                |
-| OrgChart             | Organizational   | SVG hierarchy chart                       |
-| PivotTable           | Analytics        | Dynamic pivot grid                        |
-| ProcessFlow          | Workflow         | Step-by-step flow visualization           |
-| RiskMatrix           | Risk             | 2D probability x impact grid              |
-| SWOTMatrix           | Strategy         | 4-quadrant SWOT analysis                  |
-| TrainingTracker      | HR               | Certification/training progress           |
-| ValueStream          | Lean             | Value stream mapping                      |
-| FlowBuilder          | Workflow         | Visual node/edge flow editor              |
-| ApprovalWorkflow     | Workflow         | Step-based approval chain                 |
+| Component        | Category       | Notes                                     |
+| ---------------- | -------------- | ----------------------------------------- |
+| ComparisonTable  | Analytics      | Nested row expansion, toggle groups       |
+| FineKinney       | Risk           | Quantitative risk assessment (OHS domain) |
+| GanttTimeline    | Project        | Timeline with dependencies                |
+| GovernanceBoard  | Governance     | Control/compliance dashboard              |
+| OrgChart         | Organizational | SVG hierarchy chart                       |
+| PivotTable       | Analytics      | Dynamic pivot grid                        |
+| ProcessFlow      | Workflow       | Step-by-step flow visualization           |
+| RiskMatrix       | Risk           | 2D probability x impact grid              |
+| ValueStream      | Lean           | Value stream mapping                      |
+| FlowBuilder      | Workflow       | Visual node/edge flow editor              |
+| ApprovalWorkflow | Workflow       | Step-based approval chain                 |
 
 ### EXPERIMENTAL — Chart Components (ECharts-backed)
 
 Built on ECharts engine. Available in Design Lab but not yet imported by any production app.
 
-| Component       | Chart Type  | Notes                           |
-| --------------- | ----------- | ------------------------------- |
-| AgingBuckets    | Stacked Bar | Receivables aging visualization |
-| BoxPlot         | Statistical | Quartile distribution           |
-| BulletChart     | Progress    | Single-metric bullet            |
-| ControlChart    | Statistical | SPC control limits              |
-| HeatmapCalendar | Heatmap     | GitHub-style day heatmap        |
-| HistogramChart  | Statistical | Frequency distribution          |
-| MicroChart      | Sparkline   | Inline mini visualization       |
-| ParetoChart     | Statistical | 80/20 pareto analysis           |
-| SankeyDiagram   | Flow        | Sankey flow diagram             |
+| Component       | Chart Type  | Notes                     |
+| --------------- | ----------- | ------------------------- |
+| BoxPlot         | Statistical | Quartile distribution     |
+| BulletChart     | Progress    | Single-metric bullet      |
+| ControlChart    | Statistical | SPC control limits        |
+| HeatmapCalendar | Heatmap     | GitHub-style day heatmap  |
+| HistogramChart  | Statistical | Frequency distribution    |
+| MicroChart      | Sparkline   | Inline mini visualization |
+| ParetoChart     | Statistical | 80/20 pareto analysis     |
+| SankeyDiagram   | Flow        | Sankey flow diagram       |
 
 > **Phase 1a (2026-05-14)**: FunnelChart, GaugeChart, RadarChart, TreemapChart,
 > and WaterfallChart enterprise duplicates were removed. The canonical surface

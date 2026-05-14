@@ -14,7 +14,6 @@ import { ValueStream } from '../ValueStream';
 import { StatusTimeline } from '../StatusTimeline';
 import { NotificationCenter } from '../NotificationCenter';
 import { InlineEdit } from '../InlineEdit';
-import { EmptyStateBuilder } from '../EmptyStateBuilder';
 import { FilterPresets } from '../FilterPresets';
 import { DataExportDialog } from '../DataExportDialog';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';
@@ -271,29 +270,6 @@ describe('InlineEdit', () => {
     const button = screen.getByRole('button');
     expect(button).toBeInTheDocument();
     expect(button).toHaveAttribute('aria-label');
-  });
-});
-
-describe('EmptyStateBuilder', () => {
-  it('renders no-data state', () => {
-    const { container } = render(<EmptyStateBuilder reason="no-data" />);
-    expect(container.firstElementChild).toBeTruthy();
-  });
-  it('renders error state', () => {
-    const { container } = render(<EmptyStateBuilder reason="error" />);
-    expect(container.firstElementChild).toBeTruthy();
-  });
-
-  it('has no accessibility violations', async () => {
-    const { container } = render(<EmptyStateBuilder reason="no-data" />);
-    await expectNoA11yViolations(container);
-  });
-
-  it('has accessible ARIA structure', () => {
-    render(<EmptyStateBuilder reason="no-data" />);
-    const status = screen.getByRole('status');
-    expect(status).toBeInTheDocument();
-    expect(status).toHaveAttribute('aria-label');
   });
 });
 

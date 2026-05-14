@@ -8,15 +8,12 @@ import { formatValue, getTrendColor, getTrendIcon, getToneClasses } from '../typ
 import type { EnterpriseTone } from '../types';
 
 // --- Component imports ---
-import { AgingBuckets } from '../AgingBuckets';
-import type { AgingBucket } from '../AgingBuckets';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import type { ApprovalStep } from '../ApprovalWorkflow';
 import { BulletChart } from '../BulletChart';
 import { ComparisonTable } from '../ComparisonTable';
 import type { ComparisonRow } from '../ComparisonTable';
 import { DataExportDialog } from '../DataExportDialog';
-import { EmptyStateBuilder } from '../EmptyStateBuilder';
 import { FilterPresets } from '../FilterPresets';
 import type { FilterPreset } from '../FilterPresets';
 import { InlineEdit } from '../InlineEdit';
@@ -32,7 +29,12 @@ describe('formatValue — all format branches', () => {
   });
 
   it('handles currency with custom currency and decimals', () => {
-    const result = formatValue(1234.5, { format: 'currency', currency: 'USD', locale: 'en-US', decimals: 2 });
+    const result = formatValue(1234.5, {
+      format: 'currency',
+      currency: 'USD',
+      locale: 'en-US',
+      decimals: 2,
+    });
     expect(result).toContain('1,234.50');
   });
 
@@ -114,96 +116,7 @@ describe('getToneClasses — all tones', () => {
 });
 
 // =====================================================================
-// 2. AgingBuckets — uncovered branches
 // =====================================================================
-
-describe('AgingBuckets', () => {
-  const baseBuckets: AgingBucket[] = [
-    { id: '1', label: '0-30', count: 10, value: 1000 },
-    { id: '2', label: '31-60', count: 5, value: 500 },
-    { id: '3', label: '61-90', count: 3, value: 300 },
-    { id: '4', label: '91-120', count: 2, value: 200 },
-    { id: '5', label: '120+', count: 1, value: 100 },
-  ];
-
-  it('renders with showStackedBar and exercises defaultTone across ratios', () => {
-    const { container } = render(
-      <AgingBuckets buckets={baseBuckets} showStackedBar />,
-    );
-    // All 5 buckets rendered
-    expect(container.querySelectorAll('[data-component="aging-buckets"]')).toHaveLength(1);
-  });
-
-  it('renders vertical orientation', () => {
-    const { container } = render(
-      <AgingBuckets buckets={baseBuckets} orientation="vertical" />,
-    );
-    expect(container.querySelector('[data-component="aging-buckets"]')).toBeTruthy();
-  });
-
-  it('handles access="hidden" — returns null', () => {
-    const { container } = render(
-      <AgingBuckets buckets={baseBuckets} access="hidden" />,
-    );
-    expect(container.querySelector('[data-component="aging-buckets"]')).toBeNull();
-  });
-
-  it('calls onBucketClick when bucket card is clicked', () => {
-    const handler = vi.fn();
-    render(<AgingBuckets buckets={baseBuckets} onBucketClick={handler} />);
-    const cards = screen.getAllByText(/items/);
-    fireEvent.click(cards[0].closest('div[class*="flex-1"]')!);
-    expect(handler).toHaveBeenCalledWith(baseBuckets[0]);
-  });
-
-  it('calls onBucketClick when stacked bar segment is clicked', () => {
-    const handler = vi.fn();
-    render(<AgingBuckets buckets={baseBuckets} showStackedBar onBucketClick={handler} />);
-    // Click on first stacked bar segment
-    const segments = document.querySelectorAll('[title*="%"]');
-    if (segments.length > 0) {
-      fireEvent.click(segments[0]);
-      expect(handler).toHaveBeenCalled();
-    }
-  });
-
-  it('handles getPercentage when totalValue is 0', () => {
-    const zeroBuckets: AgingBucket[] = [
-      { id: '1', label: '0-30', count: 0, value: 0 },
-    ];
-    const { container } = render(
-      <AgingBuckets buckets={zeroBuckets} showStackedBar />,
-    );
-    expect(container.querySelector('[data-component="aging-buckets"]')).toBeTruthy();
-  });
-
-  it('handles single bucket — defaultTone returns "default" for total<=1', () => {
-    const singleBucket: AgingBucket[] = [
-      { id: '1', label: 'Only', count: 1, value: 100 },
-    ];
-    render(<AgingBuckets buckets={singleBucket} showStackedBar />);
-    expect(screen.getByText('Only')).toBeTruthy();
-  });
-
-  it('respects custom tone on bucket', () => {
-    const customBuckets: AgingBucket[] = [
-      { id: '1', label: 'Custom', count: 1, value: 100, tone: 'danger' },
-    ];
-    render(<AgingBuckets buckets={customBuckets} showStackedBar />);
-    expect(screen.getByText('Custom')).toBeTruthy();
-  });
-
-  it('renders with formatOptions', () => {
-    render(
-      <AgingBuckets
-        buckets={baseBuckets}
-        formatOptions={{ format: 'currency', currency: 'USD', locale: 'en-US' }}
-      />,
-    );
-    const total = screen.getByText('Total');
-    expect(total).toBeTruthy();
-  });
-});
 
 // =====================================================================
 // 3. ApprovalWorkflow — uncovered branches
@@ -240,17 +153,13 @@ describe('ApprovalWorkflow', () => {
   ];
 
   it('renders all steps with connectors', () => {
-    render(
-      <ApprovalWorkflow steps={steps} orientation="horizontal" />,
-    );
+    render(<ApprovalWorkflow steps={steps} orientation="horizontal" />);
     expect(screen.getByText('Manager Review')).toBeTruthy();
     expect(screen.getByText('VP Approval')).toBeTruthy();
   });
 
   it('renders vertical orientation', () => {
-    render(
-      <ApprovalWorkflow steps={steps} orientation="vertical" />,
-    );
+    render(<ApprovalWorkflow steps={steps} orientation="vertical" />);
     expect(screen.getByText('Director Review')).toBeTruthy();
   });
 
@@ -271,18 +180,14 @@ describe('ApprovalWorkflow', () => {
 
   it('handles approve action on current step', () => {
     const onApprove = vi.fn();
-    render(
-      <ApprovalWorkflow steps={steps} onApprove={onApprove} />,
-    );
+    render(<ApprovalWorkflow steps={steps} onApprove={onApprove} />);
     fireEvent.click(screen.getByText('Approve'));
     expect(onApprove).toHaveBeenCalledWith('2');
   });
 
   it('handles reject flow — open textarea, type, confirm', async () => {
     const onReject = vi.fn();
-    render(
-      <ApprovalWorkflow steps={steps} onReject={onReject} />,
-    );
+    render(<ApprovalWorkflow steps={steps} onReject={onReject} />);
     fireEvent.click(screen.getByText('Reject'));
     // Textarea appears
     const textarea = await screen.findByLabelText('Rejection reason');
@@ -293,9 +198,7 @@ describe('ApprovalWorkflow', () => {
 
   it('handles reject cancel', async () => {
     const onReject = vi.fn();
-    render(
-      <ApprovalWorkflow steps={steps} onReject={onReject} />,
-    );
+    render(<ApprovalWorkflow steps={steps} onReject={onReject} />);
     fireEvent.click(screen.getByText('Reject'));
     await screen.findByLabelText('Rejection reason');
     fireEvent.click(screen.getByText('Cancel'));
@@ -304,9 +207,7 @@ describe('ApprovalWorkflow', () => {
 
   it('rejects confirm is disabled when comment is empty', async () => {
     const onReject = vi.fn();
-    render(
-      <ApprovalWorkflow steps={steps} onReject={onReject} />,
-    );
+    render(<ApprovalWorkflow steps={steps} onReject={onReject} />);
     fireEvent.click(screen.getByText('Reject'));
     const confirmBtn = await screen.findByText('Confirm Reject');
     expect(confirmBtn).toHaveProperty('disabled', true);
@@ -314,9 +215,7 @@ describe('ApprovalWorkflow', () => {
 
   it('handles delegate flow — input, type, confirm', async () => {
     const onDelegate = vi.fn();
-    render(
-      <ApprovalWorkflow steps={steps} onDelegate={onDelegate} />,
-    );
+    render(<ApprovalWorkflow steps={steps} onDelegate={onDelegate} />);
     fireEvent.click(screen.getByText('Delegate'));
     const input = await screen.findByLabelText('New assignee');
     fireEvent.change(input, { target: { value: 'new-person@example.com' } });
@@ -326,9 +225,7 @@ describe('ApprovalWorkflow', () => {
 
   it('delegate input supports Enter key', async () => {
     const onDelegate = vi.fn();
-    render(
-      <ApprovalWorkflow steps={steps} onDelegate={onDelegate} />,
-    );
+    render(<ApprovalWorkflow steps={steps} onDelegate={onDelegate} />);
     fireEvent.click(screen.getByText('Delegate'));
     const input = await screen.findByLabelText('New assignee');
     fireEvent.change(input, { target: { value: 'person@co.com' } });
@@ -338,9 +235,7 @@ describe('ApprovalWorkflow', () => {
 
   it('delegate cancel resets state', async () => {
     const onDelegate = vi.fn();
-    render(
-      <ApprovalWorkflow steps={steps} onDelegate={onDelegate} />,
-    );
+    render(<ApprovalWorkflow steps={steps} onDelegate={onDelegate} />);
     fireEvent.click(screen.getByText('Delegate'));
     await screen.findByLabelText('New assignee');
     // There should be two Cancel buttons (one per action box)
@@ -350,16 +245,12 @@ describe('ApprovalWorkflow', () => {
   });
 
   it('returns null when access="hidden"', () => {
-    const { container } = render(
-      <ApprovalWorkflow steps={steps} access="hidden" />,
-    );
+    const { container } = render(<ApprovalWorkflow steps={steps} access="hidden" />);
     expect(container.innerHTML).toBe('');
   });
 
   it('compact mode hides timestamps and comments', () => {
-    render(
-      <ApprovalWorkflow steps={steps} compact />,
-    );
+    render(<ApprovalWorkflow steps={steps} compact />);
     // The timestamp and comment should not be rendered
     expect(screen.queryByText('Looks good')).toBeNull();
   });
@@ -428,9 +319,7 @@ describe('BulletChart', () => {
   });
 
   it('renders vertical without label', () => {
-    const { container } = render(
-      <BulletChart value={50} target={70} orientation="vertical" />,
-    );
+    const { container } = render(<BulletChart value={50} target={70} orientation="vertical" />);
     expect(container.querySelector('[data-component="bullet-chart"]')).toBeTruthy();
   });
 
@@ -443,9 +332,7 @@ describe('BulletChart', () => {
   });
 
   it('returns null when access=hidden', () => {
-    const { container } = render(
-      <BulletChart value={50} target={70} access="hidden" />,
-    );
+    const { container } = render(<BulletChart value={50} target={70} access="hidden" />);
     expect(container.querySelector('[data-component="bullet-chart"]')).toBeNull();
   });
 
@@ -518,9 +405,7 @@ describe('ComparisonTable', () => {
   });
 
   it('handles invertVarianceColors', () => {
-    const { container } = render(
-      <ComparisonTable rows={rows} invertVarianceColors />,
-    );
+    const { container } = render(<ComparisonTable rows={rows} invertVarianceColors />);
     expect(container.querySelector('[data-component="comparison-table"]')).toBeTruthy();
   });
 
@@ -542,25 +427,19 @@ describe('ComparisonTable', () => {
   });
 
   it('handles flat row direction (actual equals target)', () => {
-    const flatRows: ComparisonRow[] = [
-      { id: '1', label: 'Same', actual: 100, target: 100 },
-    ];
+    const flatRows: ComparisonRow[] = [{ id: '1', label: 'Same', actual: 100, target: 100 }];
     render(<ComparisonTable rows={flatRows} />);
     expect(screen.getByText('Same')).toBeTruthy();
   });
 
   it('handles target=0 variance edge case', () => {
-    const zeroTarget: ComparisonRow[] = [
-      { id: '1', label: 'Zero', actual: 50, target: 0 },
-    ];
+    const zeroTarget: ComparisonRow[] = [{ id: '1', label: 'Zero', actual: 50, target: 0 }];
     render(<ComparisonTable rows={zeroTarget} />);
     expect(screen.getByText('Zero')).toBeTruthy();
   });
 
   it('returns null when access=hidden', () => {
-    const { container } = render(
-      <ComparisonTable rows={rows} access="hidden" />,
-    );
+    const { container } = render(<ComparisonTable rows={rows} access="hidden" />);
     expect(container.querySelector('[data-component="comparison-table"]')).toBeNull();
   });
 
@@ -594,16 +473,12 @@ describe('DataExportDialog', () => {
   });
 
   it('returns null when not open', () => {
-    const { container } = render(
-      <DataExportDialog {...defaultProps} open={false} />,
-    );
+    const { container } = render(<DataExportDialog {...defaultProps} open={false} />);
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('returns null when access=hidden', () => {
-    const { container } = render(
-      <DataExportDialog {...defaultProps} access="hidden" />,
-    );
+    const { container } = render(<DataExportDialog {...defaultProps} access="hidden" />);
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
@@ -633,7 +508,9 @@ describe('DataExportDialog', () => {
 
     // Click export
     const exportButtons = screen.getAllByText(/Aktar/);
-    const exportBtn = exportButtons.find(b => b.tagName === 'BUTTON' && !b.textContent?.includes('Vazge'));
+    const exportBtn = exportButtons.find(
+      (b) => b.tagName === 'BUTTON' && !b.textContent?.includes('Vazge'),
+    );
     fireEvent.click(exportBtn!);
 
     await waitFor(() => {
@@ -664,11 +541,11 @@ describe('DataExportDialog', () => {
   it('handles export error gracefully', async () => {
     const onExport = vi.fn().mockRejectedValue(new Error('fail'));
     const onClose = vi.fn();
-    render(
-      <DataExportDialog open={true} onClose={onClose} onExport={onExport} />,
-    );
+    render(<DataExportDialog open={true} onClose={onClose} onExport={onExport} />);
     const exportButtons = screen.getAllByText(/Aktar/);
-    const exportBtn = exportButtons.find(b => b.tagName === 'BUTTON' && !b.textContent?.includes('Vazge'));
+    const exportBtn = exportButtons.find(
+      (b) => b.tagName === 'BUTTON' && !b.textContent?.includes('Vazge'),
+    );
     fireEvent.click(exportBtn!);
     await waitFor(() => {
       expect(onExport).toHaveBeenCalled();
@@ -700,12 +577,7 @@ describe('DataExportDialog', () => {
   });
 
   it('disables interactions when access=disabled', () => {
-    render(
-      <DataExportDialog
-        {...defaultProps}
-        access="disabled"
-      />,
-    );
+    render(<DataExportDialog {...defaultProps} access="disabled" />);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeTruthy();
   });
@@ -723,95 +595,7 @@ describe('DataExportDialog', () => {
 });
 
 // =====================================================================
-// 7. EmptyStateBuilder — all reasons, sizes, actions
 // =====================================================================
-
-describe('EmptyStateBuilder', () => {
-  const reasons = ['no-data', 'no-results', 'no-permission', 'error', 'first-time', 'filtered-empty'] as const;
-
-  reasons.forEach((reason) => {
-    it(`renders reason="${reason}" with correct icon`, () => {
-      render(<EmptyStateBuilder reason={reason} />);
-      const el = screen.getByRole('status');
-      expect(el).toBeTruthy();
-    });
-  });
-
-  it('renders sm size', () => {
-    render(<EmptyStateBuilder reason="no-data" size="sm" />);
-  });
-
-  it('renders lg size', () => {
-    render(<EmptyStateBuilder reason="no-data" size="lg" />);
-  });
-
-  it('renders custom title and description', () => {
-    render(
-      <EmptyStateBuilder
-        reason="error"
-        title="Custom Title"
-        description="Custom Desc"
-      />,
-    );
-    expect(screen.getByText('Custom Title')).toBeTruthy();
-    expect(screen.getByText('Custom Desc')).toBeTruthy();
-  });
-
-  it('renders primary and secondary actions', () => {
-    const primaryHandler = vi.fn();
-    const secondaryHandler = vi.fn();
-    render(
-      <EmptyStateBuilder
-        reason="no-data"
-        primaryAction={{ label: 'Create', onClick: primaryHandler }}
-        secondaryAction={{ label: 'Learn more', onClick: secondaryHandler }}
-      />,
-    );
-    fireEvent.click(screen.getByText('Create'));
-    expect(primaryHandler).toHaveBeenCalled();
-    fireEvent.click(screen.getByText('Learn more'));
-    expect(secondaryHandler).toHaveBeenCalled();
-  });
-
-  it('disables actions when access=disabled', () => {
-    render(
-      <EmptyStateBuilder
-        reason="no-data"
-        access="disabled"
-        primaryAction={{ label: 'Do it', onClick: vi.fn() }}
-      />,
-    );
-    const btn = screen.getByText('Do it');
-    expect(btn).toHaveProperty('disabled', true);
-  });
-
-  it('returns null when access=hidden', () => {
-    const { container } = render(
-      <EmptyStateBuilder reason="no-data" access="hidden" />,
-    );
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('uses localeText overrides for reason', () => {
-    render(
-      <EmptyStateBuilder
-        reason="no-data"
-        localeText={{
-          'no-data': { title: 'Locale Title', description: 'Locale Desc' },
-        }}
-      />,
-    );
-    expect(screen.getByText('Locale Title')).toBeTruthy();
-    expect(screen.getByText('Locale Desc')).toBeTruthy();
-  });
-
-  it('forwards ref', () => {
-    const ref = React.createRef<HTMLDivElement>();
-    render(<EmptyStateBuilder reason="no-data" ref={ref} />);
-    expect(ref.current).toBeTruthy();
-    expect(ref.current?.getAttribute('role')).toBe('status');
-  });
-});
 
 // =====================================================================
 // 8. FilterPresets — save, delete, default, shared
@@ -825,9 +609,7 @@ describe('FilterPresets', () => {
   ];
 
   it('renders presets with star for default', () => {
-    render(
-      <FilterPresets presets={presets} onSelect={vi.fn()} />,
-    );
+    render(<FilterPresets presets={presets} onSelect={vi.fn()} />);
     expect(screen.getByText('Active')).toBeTruthy();
     expect(screen.getByText('Recent')).toBeTruthy();
     expect(screen.getByText('Shared View')).toBeTruthy();
@@ -860,13 +642,7 @@ describe('FilterPresets', () => {
 
   it('save popover cancel via Escape', async () => {
     const onSave = vi.fn();
-    render(
-      <FilterPresets
-        presets={presets}
-        onSelect={vi.fn()}
-        onSave={onSave}
-      />,
-    );
+    render(<FilterPresets presets={presets} onSelect={vi.fn()} onSave={onSave} />);
     fireEvent.click(screen.getByText('Kaydet'));
     const input = await screen.findByPlaceholderText(/Preset ad/);
     fireEvent.keyDown(input, { key: 'Escape' });
@@ -876,13 +652,7 @@ describe('FilterPresets', () => {
 
   it('does not save with empty name', async () => {
     const onSave = vi.fn();
-    render(
-      <FilterPresets
-        presets={presets}
-        onSelect={vi.fn()}
-        onSave={onSave}
-      />,
-    );
+    render(<FilterPresets presets={presets} onSelect={vi.fn()} onSave={onSave} />);
     fireEvent.click(screen.getByText('Kaydet'));
     const input = await screen.findByPlaceholderText(/Preset ad/);
     fireEvent.change(input, { target: { value: '   ' } });
@@ -892,13 +662,7 @@ describe('FilterPresets', () => {
 
   it('delete flow — show confirmation and confirm', async () => {
     const onDelete = vi.fn();
-    render(
-      <FilterPresets
-        presets={presets}
-        onSelect={vi.fn()}
-        onDelete={onDelete}
-      />,
-    );
+    render(<FilterPresets presets={presets} onSelect={vi.fn()} onDelete={onDelete} />);
     // Delete button for 'Recent' (non-shared)
     const deleteBtn = screen.getByLabelText('Delete preset Recent');
     fireEvent.click(deleteBtn);
@@ -910,13 +674,7 @@ describe('FilterPresets', () => {
 
   it('delete flow — cancel confirmation', async () => {
     const onDelete = vi.fn();
-    render(
-      <FilterPresets
-        presets={presets}
-        onSelect={vi.fn()}
-        onDelete={onDelete}
-      />,
-    );
+    render(<FilterPresets presets={presets} onSelect={vi.fn()} onDelete={onDelete} />);
     const deleteBtn = screen.getByLabelText('Delete preset Recent');
     fireEvent.click(deleteBtn);
     const cancelBtn = await screen.findByText('Vazge\u00e7');
@@ -926,13 +684,7 @@ describe('FilterPresets', () => {
 
   it('onSetDefault calls handler', () => {
     const onSetDefault = vi.fn();
-    render(
-      <FilterPresets
-        presets={presets}
-        onSelect={vi.fn()}
-        onSetDefault={onSetDefault}
-      />,
-    );
+    render(<FilterPresets presets={presets} onSelect={vi.fn()} onSetDefault={onSetDefault} />);
     const starBtn = screen.getByLabelText('Set Recent as default');
     fireEvent.click(starBtn);
     expect(onSetDefault).toHaveBeenCalledWith('p2');
@@ -946,9 +698,7 @@ describe('FilterPresets', () => {
   });
 
   it('highlights active preset', () => {
-    render(
-      <FilterPresets presets={presets} onSelect={vi.fn()} activePresetId="p2" />,
-    );
+    render(<FilterPresets presets={presets} onSelect={vi.fn()} activePresetId="p2" />);
     // Active one should have action-primary border
     const recentBtn = screen.getByText('Recent').closest('button');
     expect(recentBtn?.className).toContain('action-primary');
@@ -961,9 +711,7 @@ describe('FilterPresets', () => {
 
 describe('InlineEdit', () => {
   it('renders display mode with formatDisplay', () => {
-    render(
-      <InlineEdit value="100" onSave={vi.fn()} formatDisplay={(v) => `$${v}`} />,
-    );
+    render(<InlineEdit value="100" onSave={vi.fn()} formatDisplay={(v) => `$${v}`} />);
     expect(screen.getByText('$100')).toBeTruthy();
   });
 
@@ -1073,9 +821,7 @@ describe('InlineEdit', () => {
   });
 
   it('returns null when access=hidden', () => {
-    const { container } = render(
-      <InlineEdit value="x" onSave={vi.fn()} access="hidden" />,
-    );
+    const { container } = render(<InlineEdit value="x" onSave={vi.fn()} access="hidden" />);
     expect(container.innerHTML).toBe('');
   });
 

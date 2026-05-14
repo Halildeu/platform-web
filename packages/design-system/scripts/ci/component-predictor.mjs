@@ -45,7 +45,6 @@ const COMPONENT_KEYWORDS = {
 
   // Dashboard
   'ExecutiveKPIStrip': ['kpi', 'dashboard', 'metric', 'executive', 'summary'],
-  'MetricComparisonCard': ['comparison', 'period', 'month', 'year', 'trend'],
   'MicroChart': ['sparkline', 'inline', 'mini', 'compact'],
   'SmartDashboard': ['dashboard', 'overview', 'panel', 'widget'],
 
@@ -59,8 +58,6 @@ const COMPONENT_KEYWORDS = {
   // Risk
   'RiskMatrix': ['risk', 'matrix', 'impact', 'probability', 'assessment'],
   'FineKinney': ['fine-kinney', 'osh', 'safety', 'hazard', 'isg'],
-  'SWOTMatrix': ['swot', 'strategy', 'strength', 'weakness', 'opportunity', 'threat'],
-  'DecisionMatrix': ['decision', 'scoring', 'criteria', 'weight', 'alternative'],
 
   // Forms
   'AdaptiveForm': ['form', 'input', 'submit', 'create', 'edit'],
@@ -79,7 +76,6 @@ const COMPONENT_KEYWORDS = {
   // Organization
   'OrgChart': ['org', 'organization', 'hierarchy', 'team', 'department'],
   'GovernanceBoard': ['governance', 'compliance', 'board', 'policy'],
-  'TrainingTracker': ['training', 'education', 'certification', 'compliance'],
 
   // Navigation
   'Tabs': ['tab', 'section', 'category'],
@@ -98,7 +94,6 @@ const COMPONENT_KEYWORDS = {
   // Export
   'DataExportDialog': ['export', 'download', 'pdf', 'excel', 'csv'],
   'ComparisonTable': ['compare', 'versus', 'before-after', 'diff'],
-  'AgingBuckets': ['aging', 'overdue', 'bucket', 'receivable', 'payable'],
 };
 
 // Score each component

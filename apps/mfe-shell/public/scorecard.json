@@ -1051,50 +1051,6 @@
     ]
   },
   {
-    "name": "MetricComparisonCard",
-    "path": "enterprise/MetricComparisonCard.tsx",
-    "dir": "enterprise",
-    "lineCount": 298,
-    "scores": {
-      "api": 95,
-      "testDepth": 26,
-      "a11y": 0,
-      "testCoverage": 80,
-      "accessControl": 100,
-      "storyCompleteness": 82,
-      "i18n": 100,
-      "documentation": 90
-    },
-    "totalScore": 61,
-    "grade": "B",
-    "improvements": [
-      "Add userEvent interaction tests (+14 pts)",
-      "Add expectNoA11yViolations + role queries (+15 pts)"
-    ]
-  },
-  {
-    "name": "SWOTMatrix",
-    "path": "enterprise/SWOTMatrix.tsx",
-    "dir": "enterprise",
-    "lineCount": 356,
-    "scores": {
-      "api": 95,
-      "testDepth": 26,
-      "a11y": 0,
-      "testCoverage": 80,
-      "accessControl": 100,
-      "storyCompleteness": 82,
-      "i18n": 100,
-      "documentation": 90
-    },
-    "totalScore": 61,
-    "grade": "B",
-    "improvements": [
-      "Add userEvent interaction tests (+14 pts)",
-      "Add expectNoA11yViolations + role queries (+15 pts)"
-    ]
-  },
-  {
     "name": "presets",
     "path": "advanced/data-grid/column-system/presets.tsx",
     "dir": "advanced",
@@ -1136,28 +1092,6 @@
     "grade": "B",
     "improvements": [
       "Add userEvent interaction tests (+15 pts)",
-      "Add expectNoA11yViolations + role queries (+15 pts)"
-    ]
-  },
-  {
-    "name": "DecisionMatrix",
-    "path": "enterprise/DecisionMatrix.tsx",
-    "dir": "enterprise",
-    "lineCount": 336,
-    "scores": {
-      "api": 100,
-      "testDepth": 26,
-      "a11y": 0,
-      "testCoverage": 80,
-      "accessControl": 100,
-      "storyCompleteness": 82,
-      "i18n": 100,
-      "documentation": 90
-    },
-    "totalScore": 62,
-    "grade": "B",
-    "improvements": [
-      "Add userEvent interaction tests (+14 pts)",
       "Add expectNoA11yViolations + role queries (+15 pts)"
     ]
   },
@@ -2340,25 +2274,6 @@
     "scores": {
       "api": 95,
       "testDepth": 79,
-      "a11y": 75,
-      "testCoverage": 100,
-      "accessControl": 100,
-      "storyCompleteness": 100,
-      "i18n": 100,
-      "documentation": 100
-    },
-    "totalScore": 90,
-    "grade": "A",
-    "improvements": []
-  },
-  {
-    "name": "TrainingTracker",
-    "path": "enterprise/TrainingTracker.tsx",
-    "dir": "enterprise",
-    "lineCount": 271,
-    "scores": {
-      "api": 95,
-      "testDepth": 78,
       "a11y": 75,
       "testCoverage": 100,
       "accessControl": 100,
@@ -3606,25 +3521,6 @@
     "improvements": []
   },
   {
-    "name": "AgingBuckets",
-    "path": "enterprise/AgingBuckets.tsx",
-    "dir": "enterprise",
-    "lineCount": 205,
-    "scores": {
-      "api": 90,
-      "testDepth": 78,
-      "a11y": 100,
-      "testCoverage": 100,
-      "accessControl": 100,
-      "storyCompleteness": 100,
-      "i18n": 100,
-      "documentation": 100
-    },
-    "totalScore": 93,
-    "grade": "A",
-    "improvements": []
-  },
-  {
     "name": "BulletChart",
     "path": "enterprise/BulletChart.tsx",
     "dir": "enterprise",
@@ -4164,25 +4060,6 @@
     "scores": {
       "api": 100,
       "testDepth": 80,
-      "a11y": 100,
-      "testCoverage": 100,
-      "accessControl": 100,
-      "storyCompleteness": 100,
-      "i18n": 100,
-      "documentation": 100
-    },
-    "totalScore": 95,
-    "grade": "A",
-    "improvements": []
-  },
-  {
-    "name": "EmptyStateBuilder",
-    "path": "enterprise/EmptyStateBuilder.tsx",
-    "dir": "enterprise",
-    "lineCount": 253,
-    "scores": {
-      "api": 100,
-      "testDepth": 79,
       "a11y": 100,
       "testCoverage": 100,
       "accessControl": 100,

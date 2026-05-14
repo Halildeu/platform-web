@@ -20,11 +20,8 @@ import { StatusTimeline } from '../StatusTimeline';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../RiskMatrix';
 import { GanttTimeline } from '../GanttTimeline';
-import { AgingBuckets } from '../AgingBuckets';
 import { ComparisonTable } from '../ComparisonTable';
-import { TrainingTracker } from '../TrainingTracker';
 import { GovernanceBoard } from '../GovernanceBoard';
-import { EmptyStateBuilder } from '../EmptyStateBuilder';
 import { ThemeLayout } from '../ThemeLayout';
 
 // ===========================================================================
@@ -1282,80 +1279,7 @@ describe('GanttTimeline – depth', () => {
 });
 
 // ===========================================================================
-// 19. AgingBuckets
 // ===========================================================================
-describe('AgingBuckets – depth', () => {
-  it('handles empty buckets array', () => {
-    const { container } = render(<AgingBuckets buckets={[]} />);
-    expect(container.firstElementChild).toBeTruthy();
-    expect(container.innerHTML).not.toBe('');
-  });
-
-  it('fires onBucketClick when bucket is clicked', () => {
-    const onClick = vi.fn();
-    const buckets = [{ id: '1', label: '0-30', count: 45, value: 120000 }];
-    render(<AgingBuckets buckets={buckets} onBucketClick={onClick} />);
-    fireEvent.click(screen.getByText('0-30'));
-    expect(onClick).toHaveBeenCalled();
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders with access="disabled"', () => {
-    const buckets = [{ id: '1', label: '0-30', count: 5, value: 1000 }];
-    const { container } = render(<AgingBuckets buckets={buckets} access="disabled" />);
-    expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
-  });
-
-  it('resolves async rendering via waitFor', async () => {
-    const { container } = render(<AgingBuckets buckets={[]} />);
-    await waitFor(() => {
-      expect(container.firstElementChild).toBeTruthy();
-      expect(container.innerHTML).not.toBe('');
-    });
-    expect(
-      container.querySelector('[data-component]') || container.firstElementChild,
-    ).toBeInTheDocument();
-  });
-
-  it('handles readonly access state', () => {
-    const { container } = render(<AgingBuckets access="readonly" buckets={[]} />);
-    const root = container.firstElementChild;
-    expect(root).toBeTruthy();
-    expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<AgingBuckets buckets={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(
-      root?.getAttribute('data-testid') !== undefined ||
-        root?.getAttribute('data-component') !== undefined,
-    ).toBe(true);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<AgingBuckets buckets={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(
-      root?.getAttribute('data-testid') !== undefined ||
-        root?.getAttribute('data-component') !== undefined,
-    ).toBe(true);
-  });
-});
-
 // ===========================================================================
 // 20. ComparisonTable
 // ===========================================================================
@@ -1432,90 +1356,7 @@ describe('ComparisonTable – depth', () => {
 });
 
 // ===========================================================================
-// 21. TrainingTracker
 // ===========================================================================
-describe('TrainingTracker – depth', () => {
-  it('handles empty items array', () => {
-    const { container } = render(<TrainingTracker items={[]} />);
-    expect(container.firstElementChild).toBeTruthy();
-    expect(container.innerHTML).not.toBe('');
-  });
-
-  it('fires onItemClick when item is clicked', () => {
-    const onClick = vi.fn();
-    const items = [
-      {
-        id: '1',
-        title: 'Safety',
-        category: 'Compliance',
-        status: 'completed' as const,
-        progress: 100,
-      },
-    ];
-    render(<TrainingTracker items={items} onItemClick={onClick} />);
-    fireEvent.click(screen.getByText('Safety'));
-    expect(onClick).toHaveBeenCalled();
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders with access="disabled"', () => {
-    const items = [
-      { id: '1', title: 'X', category: 'Y', status: 'in-progress' as const, progress: 50 },
-    ];
-    const { container } = render(<TrainingTracker items={items} access="disabled" />);
-    expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
-  });
-
-  it('resolves async rendering via waitFor', async () => {
-    const { container } = render(<TrainingTracker items={[]} />);
-    await waitFor(() => {
-      expect(container.firstElementChild).toBeTruthy();
-      expect(container.innerHTML).not.toBe('');
-    });
-    expect(
-      container.querySelector('[data-component]') || container.firstElementChild,
-    ).toBeInTheDocument();
-  });
-
-  it('handles readonly access state', () => {
-    const { container } = render(<TrainingTracker access="readonly" items={[]} />);
-    const root = container.firstElementChild;
-    expect(root).toBeTruthy();
-    expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<TrainingTracker items={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(
-      root?.getAttribute('data-testid') !== undefined ||
-        root?.getAttribute('data-component') !== undefined,
-    ).toBe(true);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<TrainingTracker items={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(
-      root?.getAttribute('data-testid') !== undefined ||
-        root?.getAttribute('data-component') !== undefined,
-    ).toBe(true);
-  });
-});
-
 // ===========================================================================
 // 22. GovernanceBoard
 // ===========================================================================
@@ -1610,88 +1451,7 @@ describe('GovernanceBoard – depth', () => {
 });
 
 // ===========================================================================
-// 23. EmptyStateBuilder
 // ===========================================================================
-describe('EmptyStateBuilder – depth', () => {
-  it('renders all reason types without crash', () => {
-    const reasons = [
-      'no-data',
-      'no-results',
-      'no-permission',
-      'error',
-      'first-time',
-      'filtered-empty',
-    ] as const;
-    for (const reason of reasons) {
-      const { container } = render(<EmptyStateBuilder reason={reason} />);
-      expect(container.firstElementChild).toBeTruthy();
-    }
-  });
-
-  it('fires primaryAction onClick when action button clicked', () => {
-    const onClick = vi.fn();
-    render(<EmptyStateBuilder reason="no-data" primaryAction={{ label: 'Retry', onClick }} />);
-    fireEvent.click(screen.getByText('Retry'));
-    expect(onClick).toHaveBeenCalled();
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders with access="disabled" still showing content', () => {
-    const { container } = render(<EmptyStateBuilder reason="error" access="disabled" />);
-    expect(container.firstElementChild).toBeTruthy();
-    expect(container.innerHTML).not.toBe('');
-  });
-
-  it('resolves async rendering via waitFor', async () => {
-    const { container } = render(<EmptyStateBuilder reason="error" access="disabled" />);
-    await waitFor(() => {
-      expect(container.firstElementChild).toBeTruthy();
-      expect(container.innerHTML).not.toBe('');
-    });
-    expect(
-      container.querySelector('[data-component]') || container.firstElementChild,
-    ).toBeInTheDocument();
-  });
-
-  it('handles readonly access state', () => {
-    const { container } = render(<EmptyStateBuilder reason="error" access="readonly" />);
-    const root = container.firstElementChild;
-    expect(root).toBeTruthy();
-    expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<EmptyStateBuilder reason="error" access="disabled" />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(
-      root?.getAttribute('data-testid') !== undefined ||
-        root?.getAttribute('data-component') !== undefined,
-    ).toBe(true);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<EmptyStateBuilder reason="error" access="disabled" />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(
-      root?.getAttribute('data-testid') !== undefined ||
-        root?.getAttribute('data-component') !== undefined,
-    ).toBe(true);
-  });
-});
-
 // ===========================================================================
 // 24. ThemeLayout
 // ===========================================================================

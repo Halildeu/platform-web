@@ -28,12 +28,12 @@ export { GovernanceBoard } from './GovernanceBoard';
 export { GanttTimeline } from './GanttTimeline';
 
 // Financial & Analytics
-export { AgingBuckets } from './AgingBuckets';
+// AgingBuckets: removed — niche single-purpose finance widget (Phase 1b triage)
 // FunnelChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 export { ComparisonTable } from './ComparisonTable';
 
 // HR & Training
-export { TrainingTracker } from './TrainingTracker';
+// TrainingTracker: removed — domain-specific HR widget, not on generic DS surface (Phase 1b triage)
 
 // Visualization
 export { BulletChart } from './BulletChart';
@@ -63,9 +63,7 @@ export type { NotificationCenterLocaleText } from './NotificationCenter';
 // Editing
 export { InlineEdit } from './InlineEdit';
 
-// Empty States
-export { EmptyStateBuilder } from './EmptyStateBuilder';
-export type { EmptyStateBuilderLocaleText } from './EmptyStateBuilder';
+// EmptyStateBuilder: removed — simple pattern, blocks/empty-state covers it (Phase 1b triage)
 
 // Filters
 export { FilterPresets } from './FilterPresets';
@@ -119,23 +117,11 @@ export type { HistogramChartProps, HistogramBin } from './HistogramChart';
 export { ControlChart } from './ControlChart';
 export type { ControlChartProps, ControlChartPoint } from './ControlChart';
 
-// SWOT Matrix
-export { SWOTMatrix } from './SWOTMatrix';
-export type { SWOTMatrixProps, SWOTItem, SWOTQuadrant } from './SWOTMatrix';
-
-// Decision Matrix
-export { DecisionMatrix } from './DecisionMatrix';
-export type {
-  DecisionMatrixProps,
-  DecisionOption,
-  DecisionCriterion,
-  DecisionScore,
-} from './DecisionMatrix';
+// SWOTMatrix: removed — 4-quadrant grid is a simple pattern (Phase 1b triage)
+// DecisionMatrix: removed — overlap with SWOTMatrix, weighted-score grid is simple pattern (Phase 1b triage)
 
 // File Upload
 export { FileUploadZone } from './FileUploadZone';
 export type { FileUploadZoneProps, UploadedFile } from './FileUploadZone';
 
-// Metric Comparison
-export { MetricComparisonCard } from './MetricComparisonCard';
-export type { MetricComparisonCardProps } from './MetricComparisonCard';
+// MetricComparisonCard: removed — overlap with ExecutiveKPIStrip (Phase 1b triage)
