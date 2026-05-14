@@ -1,0 +1,1 @@
+var e=e=>(e.rowGroupCols?.length??0)>0||(e.valueCols?.length??0)>0||(e.pivotCols?.length??0)>0||e.pivotMode===!0||(e.groupKeys?.length??0)>0;export{e as t};

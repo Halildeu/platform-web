@@ -1,0 +1,1 @@
+import{n as e,t}from"./__mfe_internal__mfe_reporting__H_A_I__hostAutoInit__H_A_I__-DngpY8Sm.js";export{t as hostInitPromise,e as initHost};

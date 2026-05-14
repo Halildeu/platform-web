@@ -1,0 +1,1 @@
+import{t as e}from"./virtual_mf-exposes___mfe_internal__mfe_reporting__remoteEntry_js-DwgorpI4.js";export{e as default};

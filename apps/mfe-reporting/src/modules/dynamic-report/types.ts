@@ -7,7 +7,16 @@ export type DynamicReportRow = Record<string, unknown>;
 export type ReportColumnMeta = {
   field: string;
   headerName: string;
-  type: 'text' | 'number' | 'date' | 'badge' | 'status' | 'currency' | 'boolean' | 'percent' | 'enum';
+  type:
+    | 'text'
+    | 'number'
+    | 'date'
+    | 'badge'
+    | 'status'
+    | 'currency'
+    | 'boolean'
+    | 'percent'
+    | 'enum';
   width: number;
   sensitive: boolean;
   /** Badge/enum: raw value → variant color map (e.g., { ADMIN: 'danger', USER: 'info' }) */
@@ -47,6 +56,30 @@ export type ReportCapabilities = {
   serverSideGrouping: boolean;
   groupableFields?: string[];
   aggregatableFields?: string[];
+  /**
+   * PR-0.4a (Codex 019e2695 hybrid pivot): backend pivot SQL flag.
+   * When true, the frontend may send {@code pivotMode=true} +
+   * {@code pivotCols[]} on {@code POST /query} and expect a
+   * pivot-applied response. Stays false until PR-0.4b wires the
+   * backend SQL path; older backends that predate the field deserialize
+   * to {@code undefined}, treated as false.
+   */
+  serverSidePivoting?: boolean;
+  /**
+   * PR-0.4a (Codex 019e2695 hybrid pivot): AG Grid native client pivot
+   * flag. When true AND {@code dataSourceMode === 'client'}, the
+   * frontend enables AG Grid's client-side pivot engine. Only sane on
+   * reports with a hard ≤ 10K row client-mode cap.
+   */
+  clientPivotAllowed?: boolean;
+  /**
+   * PR-0.4a: column field names that may be dragged into AG Grid's
+   * pivot column drop zone (matches AG Grid's {@code enablePivot}
+   * surface). Authoritative on both server-mode and client-mode —
+   * client-side pivot must respect the same backend allowlist so UX
+   * stays consistent across modes.
+   */
+  pivotableFields?: string[];
 };
 
 export type ReportListItem = {

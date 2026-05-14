@@ -1,0 +1,1 @@
+import{mn as e}from"./__mfe_internal__mfe_reporting__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-CzfH0Bwu.js";import"./data-grid-CnjQ83Fz.js";export{e as EntityGridTemplate};
