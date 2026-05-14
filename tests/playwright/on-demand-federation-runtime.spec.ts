@@ -142,7 +142,20 @@ test.describe('PR-B5b3b: on-demand federation runtime smoke (/login)', () => {
       allRequests.push(req.url());
     });
 
-    await page.goto(`${target}/login`, { waitUntil: 'networkidle' });
+    // B5b3b iter-2 (nightly first-fire failure absorb 2026-05-14):
+    // `waitUntil: 'networkidle'` waits 500ms with ZERO network activity.
+    // SPA shells with SSE/heartbeat/polling never reach idle within
+    // 30s default → CI timeout.  Switch to `'load'` (window.onload
+    // fires) which is sufficient for the network-observability assertion
+    // (request capture started on `page.on('request', ...)` BEFORE goto,
+    // so all sub-resource fetches are recorded regardless of waitUntil).
+    // Bump per-call timeout to 45s for slower GitHub Actions runner
+    // network paths.
+    await page.goto(`${target}/login`, { waitUntil: 'load', timeout: 45_000 });
+    // Give late-fired fetches (post-load JS-initiated chunks) 5s to
+    // flush before the assertion — without this, lazy import requests
+    // launched after window.load could miss the capture window.
+    await page.waitForTimeout(5_000);
 
     // Filter for any of the 7 direct remoteEntry.js patterns + 14
     // auxiliary chunk patterns (per-remote virtual entry + host
