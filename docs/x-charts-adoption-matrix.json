@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-05-14T14:29:32.654Z",
-  "totalConsumers": 48,
+  "generatedAt": "2026-05-14T16:17:05.450Z",
+  "totalConsumers": 43,
   "byBucket": {
     "production": 20,
     "test": 3,
     "demo": 11,
-    "package": 14
+    "package": 9
   },
   "entries": [
     {
@@ -720,81 +720,6 @@
       "symbols": [
         "XPieChart",
         "XPieChartProps"
-      ],
-      "kinds": [
-        "ImportDeclaration"
-      ]
-    },
-    {
-      "file": "packages/design-system/src/enterprise/FunnelChart.tsx",
-      "app": "design-system",
-      "bucket": "package",
-      "subpaths": [
-        "@mfe/x-charts"
-      ],
-      "symbols": [
-        "XFunnelChart",
-        "XFunnelChartProps"
-      ],
-      "kinds": [
-        "ImportDeclaration"
-      ]
-    },
-    {
-      "file": "packages/design-system/src/enterprise/GaugeChart.tsx",
-      "app": "design-system",
-      "bucket": "package",
-      "subpaths": [
-        "@mfe/x-charts"
-      ],
-      "symbols": [
-        "XGaugeChart",
-        "XGaugeChartProps"
-      ],
-      "kinds": [
-        "ImportDeclaration"
-      ]
-    },
-    {
-      "file": "packages/design-system/src/enterprise/RadarChart.tsx",
-      "app": "design-system",
-      "bucket": "package",
-      "subpaths": [
-        "@mfe/x-charts"
-      ],
-      "symbols": [
-        "XRadarChart",
-        "XRadarChartProps"
-      ],
-      "kinds": [
-        "ImportDeclaration"
-      ]
-    },
-    {
-      "file": "packages/design-system/src/enterprise/TreemapChart.tsx",
-      "app": "design-system",
-      "bucket": "package",
-      "subpaths": [
-        "@mfe/x-charts"
-      ],
-      "symbols": [
-        "XTreemapChart",
-        "XTreemapChartProps"
-      ],
-      "kinds": [
-        "ImportDeclaration"
-      ]
-    },
-    {
-      "file": "packages/design-system/src/enterprise/WaterfallChart.tsx",
-      "app": "design-system",
-      "bucket": "package",
-      "subpaths": [
-        "@mfe/x-charts"
-      ],
-      "symbols": [
-        "XWaterfallChart",
-        "XWaterfallChartProps"
       ],
       "kinds": [
         "ImportDeclaration"
