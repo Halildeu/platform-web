@@ -1,0 +1,112 @@
+# Impersonation FE Faz 2 — Playwright dev-mode harness (B0 scaffold).
+#
+# Codex 019e2022 Hybrid AGREE → B-lite: PR #486 production-preview
+# harness chained 5 CI fails on shell bootstrap timeout; that path is
+# now classified as a separate P1 shell-test-infra bug. This workflow
+# uses pnpm dev (full module federation runtime) instead of the
+# production preview to sidestep those bootstrap quirks.
+#
+# Mode: workflow_dispatch only for B0 — operator triggers manually
+# until the harness is proven stable across runs. PR-time gate is a
+# follow-up PR (B1+) once we have signal on deterministic boot times
+# and the dev server's CI cold-start profile.
+#
+# Trigger paths (when promoted to pull_request):
+#   - tests/playwright/impersonation.flow.faz2.spec.ts
+#   - apps/mfe-shell/src/app/providers/AppProviders.tsx
+#   - apps/mfe-users/src/widgets/user-management/ui/ImpersonateAction.tsx
+#   - .github/workflows/impersonation-pw-faz2-dev-mode.yml
+
+name: Impersonation FE Faz 2 (dev-mode, manual dispatch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeout_minutes:
+        description: 'Dev-mode shell readiness budget (minutes)'
+        required: false
+        default: '8'
+
+jobs:
+  impersonation-pw-faz2-dev:
+    name: Impersonation Faz 2 bootstrap (dev-mode, chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      # Dev-mode shell needs these for the fake-auth bootstrap path so
+      # the spec can land /admin/users without a live KC token.
+      PW_FAKE_AUTH: '1'
+      VITE_AUTH_MODE: 'permitAll'
+      VITE_ENABLE_FAKE_AUTH: '1'
+      VITE_AUTH_CONTRACT_E2E: '1'
+      AUTH_MODE: 'permitAll'
+      PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:3000'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Start dev servers (core profile, background)
+        run: |
+          set -euo pipefail
+          # Start the core profile (shell + a minimal MFE set) in the
+          # background. The repo's run-dev-servers helper writes session
+          # state to .cache/runtime_guard so the readiness probe can wait
+          # on a deterministic signal rather than a sleep.
+          WEB_RUNTIME_PROFILE=core \
+          WEB_RUNTIME_WAIT_SECONDS=$((${{ inputs.timeout_minutes }} * 60)) \
+          WEB_RUNTIME_POLL_INTERVAL=2 \
+          WEB_RUNTIME_REQUIRE_BACKEND_GUARD=0 \
+          pnpm start &
+          echo "dev-servers PID=$!"
+        shell: bash
+
+      - name: Wait for shell readiness
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + (${{ inputs.timeout_minutes }} * 60) ))
+          until curl -fsI "http://127.0.0.1:3000/" >/dev/null 2>&1; do
+            if [ $(date +%s) -ge "${deadline}" ]; then
+              echo "FATAL: shell did not respond within ${{ inputs.timeout_minutes }} minutes"
+              exit 1
+            fi
+            sleep 3
+          done
+          echo "shell ready"
+        shell: bash
+
+      - name: Run Faz 2 B0 bootstrap spec
+        run: |
+          pnpm exec playwright test \
+            tests/playwright/impersonation.flow.faz2.spec.ts \
+            --config tests/playwright/playwright.config.ts \
+            --project=chromium \
+            --workers=1
+
+      - name: Stop dev servers
+        if: always()
+        run: bash scripts/health/stop-dev-servers.sh || true
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: impersonation-faz2-b0-pw-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+            apps/mfe-shell/logs/
+          retention-days: 7
