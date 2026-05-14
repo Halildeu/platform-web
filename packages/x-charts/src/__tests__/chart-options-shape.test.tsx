@@ -1677,7 +1677,10 @@ describe('GeoMap option shape', () => {
     expect(ripple.brushType).toBe('stroke');
   });
 
-  it('effectScatter respectReducedMotion=true → period=0 (pulse skipped)', () => {
+  it('effectScatter respectReducedMotion=true → number=0 (ripple paths suppressed)', () => {
+    // Codex 019e25a2 iter-1 medium-fix: see builder unit test note.
+    // Wrapper-side reduced-motion uses `rippleEffect.number = 0` to
+    // skip ripple emission; period/scale remain in valid ranges.
     render(
       <GeoMap
         mapName="TR"
@@ -1693,9 +1696,14 @@ describe('GeoMap option shape', () => {
       />,
     );
     const fx = series()[1];
-    const ripple = fx.rippleEffect as { period: number; scale: number };
-    expect(ripple.period).toBe(0);
-    expect(ripple.scale).toBe(1);
+    const ripple = fx.rippleEffect as {
+      number: number;
+      period: number;
+      scale: number;
+    };
+    expect(ripple.number).toBe(0);
+    expect(ripple.period).toBe(4);
+    expect(ripple.scale).toBe(2.5);
   });
 
   it('mixed overlays (bubble + effectScatter) preserve type discrimination', () => {

@@ -282,15 +282,26 @@ describe('buildEffectScatterLayerSeries — effectScatter layer spec', () => {
     expect(ripple.brushType).toBe('fill');
   });
 
-  it('respectReducedMotion: true → period=0, scale=1 (pulse skipped)', () => {
+  it('respectReducedMotion: true → number=0 (ripple paths suppressed)', () => {
+    // Codex 019e25a2 iter-1 medium-fix: `period: 0` would still build
+    // zero-duration animators inside `EffectSymbol.startEffectAnimation`
+    // (no `period > 0` guard there). `number: 0` suppresses ripple
+    // paths entirely while period/scale stay in valid ranges.
     const layer: GeoEffectScatterLayer = {
       ...sampleEffect(),
       respectReducedMotion: true,
     };
     const spec = buildEffectScatterLayerSeries(layer, 0);
-    const ripple = spec.rippleEffect as { period: number; scale: number };
-    expect(ripple.period).toBe(0);
-    expect(ripple.scale).toBe(1);
+    const ripple = spec.rippleEffect as {
+      number: number;
+      period: number;
+      scale: number;
+    };
+    expect(ripple.number).toBe(0);
+    // period/scale stay at defaults (valid range) so ECharts doesn't
+    // construct a zero-duration loop even though no ripple is drawn.
+    expect(ripple.period).toBe(4);
+    expect(ripple.scale).toBe(2.5);
   });
 
   it('showEffectOn defaults to "render", honours override', () => {

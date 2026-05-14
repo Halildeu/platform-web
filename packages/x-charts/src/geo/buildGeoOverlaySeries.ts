@@ -183,11 +183,13 @@ export function buildEffectScatterLayerSeries(
     },
   }));
 
-  // Reduced-motion: degrade to plain scatter (no ripple) so the
-  // wrapper-side opt-out preserves the click/tooltip/a11y contract
-  // but skips the animation. Type stays `'effectScatter'` so callers
-  // see consistent option shape; ECharts treats `period: 0` as
-  // "no animation".
+  // Reduced-motion: keep the `effectScatter` type so callers see
+  // consistent option shape, but emit zero ripple paths via
+  // `rippleEffect.number = 0`. Codex 019e25a2 iter-1 medium-fix:
+  // ECharts `EffectSymbol.startEffectAnimation` has no `period > 0`
+  // guard (unlike `EffectLine`), so `period: 0` would still construct
+  // a zero-duration animator/path loop. `number: 0` suppresses ripple
+  // emission entirely while leaving period/scale in valid ranges.
   const reduced = layer.respectReducedMotion === true;
 
   return {
@@ -199,10 +201,16 @@ export function buildEffectScatterLayerSeries(
     symbol: layer.symbol ?? 'pin',
     symbolSize: layer.symbolSize ?? 14,
     rippleEffect: reduced
-      ? // Reduced-motion: zero-period + zero-scale = no animation,
-        // but the property block stays present so option-shape tests
-        // can still assert layer presence.
-        { period: 0, scale: 1, brushType: layer.rippleBrush ?? 'stroke' }
+      ? // Reduced-motion: zero ripple paths (`number: 0`) — the
+        // property block stays present so option-shape tests can
+        // still assert layer presence; period/scale stay in valid
+        // ranges so ECharts doesn't construct zero-duration loops.
+        {
+          number: 0,
+          period: layer.ripplePeriod ?? 4,
+          scale: layer.rippleScale ?? 2.5,
+          brushType: layer.rippleBrush ?? 'stroke',
+        }
       : {
           period: layer.ripplePeriod ?? 4,
           scale: layer.rippleScale ?? 2.5,

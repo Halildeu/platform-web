@@ -4329,7 +4329,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'undefined',
         description:
-          "Optional overlay layers rendered on top of the choropleth base.\n\nPR-X13a (Codex thread 019e2254): foundation supports `bubble`\nlayer (scatter on `coordinateSystem: 'geo'`). Future PRs append\nlayer types via discriminated union (`effectScatter`, `flow`,\n`heatmap`, `marker`).\n\nEach overlay is independently opt-in; mix and match as needed:\n\n```tsx\n<GeoMap\n  mapName=\"TR\"\n  data={[{ name: 'İstanbul', value: 5000 }]}\n  overlays={[\n    { type: 'bubble', data: [\n      { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 1200 },\n    ]},\n  ]}\n/>\n```",
+          "Optional overlay layers rendered on top of the choropleth base.\n\nCurrently supported layer `type`s:\n  - `bubble` — scatter on `coordinateSystem: 'geo'`, sqrt-scaled\n    symbol size by metric (PR-X13a, Codex thread `019e2254`).\n  - `effectScatter` — animated pulse markers via ECharts\n    `rippleEffect` (PR-X13b, Codex thread `019e25a2`). Honours\n    `respectReducedMotion` per layer (suppresses ripple paths\n    via `rippleEffect.number = 0`).\n\nFuture PRs append additional layer types via the discriminated\nunion: `flow` (lines OD), `heatmap` (density), `marker` (icon).\n\nEach overlay is independently opt-in; mix and match as needed:\n\n```tsx\n<GeoMap\n  mapName=\"TR\"\n  data={[{ name: 'İstanbul', value: 5000 }]}\n  overlays={[\n    { type: 'bubble', data: [\n      { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 1200 },\n    ]},\n    { type: 'effectScatter', data: [\n      { name: 'Bursa Hub', coordinates: [29.06, 40.19], value: 1 },\n    ]},\n  ]}\n/>\n```",
       },
       {
         name: 'access',
