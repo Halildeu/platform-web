@@ -590,6 +590,122 @@ function scanSourceInvariants() {
 }
 
 /* ------------------------------------------------------------------ */
+/* S7: Host MF instance lookup centralization (B5b2-hostfix #476 +     */
+/*     Codex `019e2580` containment recommendation).                   */
+/*                                                                     */
+/* The B5b2 functional regression class was caused by 8 sites each     */
+/* keeping their own `getHostMfInstance()` copy that did exact-equality */
+/* lookup `instance.options.name === 'mfe_shell'`, which doesn't match  */
+/* the production runtime name `'__mfe_internal__mfe_shell'`.           */
+/* PR #476 centralized the lookup in                                    */
+/* `apps/mfe-shell/src/app/config/host-mf-instance.ts`.  This invariant */
+/* prevents a future commit from silently re-introducing a raw lookup  */
+/* by:                                                                 */
+/*   S7a — any production source under apps/mfe-shell/src/ MUST NOT    */
+/*         reference `__FEDERATION__.__INSTANCES__` or declare a       */
+/*         local `getHostMfInstance` outside the central helper file. */
+/*   S7b — every on-demand canary wrapper + the ensure-remote-shell-  */
+/*         services helper MUST import from './config/host-mf-instance'. */
+/* ------------------------------------------------------------------ */
+
+function checkHostLookupCentralization() {
+  console.log('[guard] === Source invariant S7: host-mf-instance centralization ===');
+
+  // S7a — forbidden raw-lookup patterns outside the central helper.
+  const ALLOWED_HELPER = 'src/app/config/host-mf-instance.ts';
+  const FORBIDDEN = [
+    {
+      pattern: /__FEDERATION__\.__INSTANCES__/,
+      label: 'raw __FEDERATION__.__INSTANCES__ lookup (use getHostMfInstance instead)',
+    },
+    {
+      pattern: /(?:function|const)\s+getHostMfInstance\b/,
+      label: 'local redeclaration of getHostMfInstance (must import from host-mf-instance helper)',
+    },
+  ];
+
+  const srcDir = join(SHELL_DIR, 'src');
+  const violations = [];
+
+  function walk(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        // Skip vendor, build, and test directories.
+        if (
+          entry.name === 'node_modules' ||
+          entry.name === 'dist' ||
+          entry.name === '__tests__'
+        ) {
+          continue;
+        }
+        walk(full);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+      // Skip test files (assertions and mocks naturally reference the same shape).
+      if (/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) continue;
+      const rel = full.replace(SHELL_DIR + '/', '');
+      if (rel === ALLOWED_HELPER) continue;
+      const src = readFileSync(full, 'utf8');
+      const lines = src.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Cheap comment/JSDoc filter — anything starting with `//`, `*`, or whitespace+`*`.
+        if (/^\s*(\/\/|\*)/.test(line)) continue;
+        for (const { pattern, label } of FORBIDDEN) {
+          if (pattern.test(line)) {
+            violations.push({ file: rel, line: i + 1, label, snippet: line.trim().slice(0, 100) });
+          }
+        }
+      }
+    }
+  }
+
+  if (existsSync(srcDir)) walk(srcDir);
+
+  if (violations.length > 0) {
+    for (const v of violations) {
+      fail('S7a', `${v.file}:${v.line} — ${v.label} :: \`${v.snippet}\``);
+    }
+  } else {
+    pass(
+      'S7a',
+      `host MF lookup centralized — no raw __FEDERATION__/getHostMfInstance redeclarations outside ${ALLOWED_HELPER}`,
+    );
+  }
+
+  // S7b — consumers actually import from the central helper.
+  const CONSUMERS = [
+    'src/app/config/ensure-remote-shell-services.ts',
+    ...ON_DEMAND_REGISTRY.map((r) => r.wrapperFile),
+  ];
+  // Match any relative import resolving to the host-mf-instance helper:
+  // wrappers under `apps/mfe-shell/src/app/` import via `./config/host-mf-instance`
+  // while ensure-remote-shell-services itself lives in the same directory and
+  // uses `./host-mf-instance`.  Both forms should pass.
+  const HELPER_IMPORT_RE = /from\s+['"][^'"]*host-mf-instance['"]/;
+  for (const rel of CONSUMERS) {
+    const full = join(SHELL_DIR, rel);
+    if (!existsSync(full)) {
+      // Not a hard fail — the wrapper file may legitimately be absent
+      // in a future tree (e.g. a canary retired); flag as advisory.
+      console.warn(`[guard][WARN][S7b] expected consumer not found: ${rel}`);
+      continue;
+    }
+    const src = readFileSync(full, 'utf8');
+    if (HELPER_IMPORT_RE.test(src)) {
+      pass('S7b', `${rel} imports getHostMfInstance from central host-mf-instance helper`);
+    } else {
+      fail(
+        'S7b',
+        `${rel} does NOT import from ./config/host-mf-instance (must use centralized helper to avoid B5b2-hostfix regression class)`,
+      );
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Build step (optional).                                              */
 /* ------------------------------------------------------------------ */
 
@@ -728,6 +844,8 @@ console.log('');
 
 if (!opt.distOnly) {
   scanSourceInvariants();
+  // S7 — B5b2-hostfix containment (Codex `019e2580` recommendation).
+  checkHostLookupCentralization();
 }
 
 if (opt.build) {
