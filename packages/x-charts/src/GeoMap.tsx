@@ -49,7 +49,11 @@ import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { isGeoMapRegistered } from './geo/registerGeoMap';
 import type { GeoOverlay, GeoOverlayMeta } from './geo/geoOverlayTypes';
-import { buildGeoOverlaySeries } from './geo/buildGeoOverlaySeries';
+import {
+  buildGeoOverlaySeries,
+  buildGeoOverlayVisualMaps,
+  safeHeatmapIntensity,
+} from './geo/buildGeoOverlaySeries';
 import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
@@ -175,9 +179,25 @@ export interface GeoMapProps extends AccessControlledProps {
    *     trail (PR-X13c, Codex thread `019e25d4`). Linear width scale
    *     by metric (sqrt opt-in). Honours `respectReducedMotion`
    *     (`effect.show: false`).
+   *   - `heatmap` — density visualisation via ECharts `heatmap`
+   *     series on geo coord system (PR-X13d, Codex thread
+   *     `019e25ee`). Emits a dedicated visualMap pinned to the
+   *     overlay series (`dimension: 2`) so the heatmap colour
+   *     encoding stays isolated from the base choropleth. When any
+   *     heatmap layer is present, `option.visualMap` switches from a
+   *     single object to an array (back-compat preserved when no
+   *     heatmap is configured). **NON-INTERACTIVE**: ECharts geo
+   *     heatmap renders a single raster `ZRImage` with `silent: true`
+   *     and does NOT emit per-datum tooltip/click events. The wrapper
+   *     intentionally does not stage tooltip/click branches for
+   *     heatmap (would be runtime-unreachable). A11y SR summary row
+   *     (`"<layer>: N points, intensity MIN-MAX"`) is the canonical
+   *     accessible representation. Consumers who need point-level
+   *     interactivity should overlay a transparent `bubble` layer at
+   *     the same coordinates as a proxy.
    *
    * Future PRs append additional layer types via the discriminated
-   * union: `heatmap` (density), `marker` (icon).
+   * union: `marker` (icon).
    *
    * Each overlay is independently opt-in; mix and match as needed:
    *
@@ -400,6 +420,19 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
                 }
                 return lines.join('<br/>');
               }
+              // 'heatmap' is non-interactive by contract — Codex
+              // 019e25ee post-impl iter-1+iter-2 verified vs
+              // echarts@5.6.0 source: geo heatmap renders ONE raster
+              // `ZRImage` with `silent: true` and emits NO per-datum
+              // tooltip event. Defensive early-return so that any
+              // future ECharts behaviour change OR synthetic test
+              // cannot accidentally render a tooltip via the generic
+              // point branch below. A11y SR summary row (overlay loop
+              // below) is the canonical accessible representation for
+              // density data.
+              if (overlay.type === 'heatmap') {
+                return '';
+              }
               // Point overlay branch (bubble + effectScatter).
               const lines = [`<b>${escapeHtml(p.name ?? '')}</b>`];
               if (overlay.layerName) {
@@ -421,7 +454,19 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
             return [`<b>${escapeHtml(displayName)}</b>`, `Value: ${v}`].join('<br/>');
           },
         },
-        visualMap: visualMapLayout,
+        // Codex 019e25ee PR-X13d iter-2/3 absorb: when at least one
+        // heatmap overlay is present, ECharts requires a per-series
+        // visualMap entry (otherwise it dev-throws "Heatmap must use
+        // with visualMap"). The wrapper switches from a single object
+        // to an array shape only when needed, so existing consumers
+        // without heatmap overlays see byte-identical option shape.
+        visualMap: (() => {
+          const heatmapVisualMaps = buildGeoOverlayVisualMaps(overlays, 1);
+          if (heatmapVisualMaps.length === 0) {
+            return visualMapLayout; // backward-compat single-object
+          }
+          return [visualMapLayout, ...heatmapVisualMaps];
+        })(),
         series: [
           {
             type: 'map' as const,
@@ -593,6 +638,19 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
             });
             return;
           }
+          // 'heatmap' is non-interactive by contract — Codex 019e25ee
+          // post-impl iter-1+iter-2: ECharts geo heatmap (raster
+          // `ZRImage`, `silent: true`) does not emit per-datum click
+          // events. Defensive early-return so that any future ECharts
+          // behaviour change OR synthetic test cannot accidentally
+          // emit a heatmap click contract via the generic point branch
+          // below. Density visualisation is read-only at the wrapper
+          // layer; consumers who need point-level interactivity should
+          // overlay a transparent `bubble` layer at the same
+          // coordinates as a proxy.
+          if (overlay.type === 'heatmap') {
+            return;
+          }
           // Point overlay (bubble + effectScatter).
           onDataPointClick({
             datum: {
@@ -655,6 +713,21 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
                 value: edge.value ?? 0,
               });
             }
+          } else if (layer.type === 'heatmap') {
+            // Codex 019e25ee PR-X13d iter-1 must-fix #8 + iter-2 #5:
+            // density is an aggregate; per-point SR rows would dump
+            // thousands of coordinates and mislead users. Emit one
+            // summary row with raw point count (transparent — invalid
+            // values still counted) and sanitized intensity range
+            // (consistent with visualMap domain so SR + visual agree).
+            const pointCount = layer.data.length;
+            const sanitizedValues = layer.data.map((d) => safeHeatmapIntensity(d.value));
+            const min = sanitizedValues.length > 0 ? Math.min(...sanitizedValues) : 0;
+            const max = sanitizedValues.length > 0 ? Math.max(...sanitizedValues) : 0;
+            overlayRows.push({
+              label: `${layerLabel}: ${pointCount} points, intensity ${min}-${max}`,
+              value: max,
+            });
           } else {
             // Point overlay (bubble + effectScatter) — original branch.
             // Sort each overlay's points by value desc for consistent SR
@@ -685,6 +758,12 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
     const { containerRef, instance: _instance } = useEChartsRenderer({
       option: option ?? ({} as EChartsOption),
       respectReducedMotion: true,
+      // Codex 019e25ee PR-X13d iter-2 must-fix #4: `notMerge: true` so
+      // toggling heatmap overlays on/off (or any overlay added/removed)
+      // doesn't leave stale series + visualMap components from the
+      // prior render. ECharts default merge would keep the heatmap
+      // visualMap entry orphaned when its series disappears.
+      notMerge: true,
       onClick: onDataPointClick ? handleClick : undefined,
     });
 

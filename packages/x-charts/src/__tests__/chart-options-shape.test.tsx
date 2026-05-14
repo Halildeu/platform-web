@@ -27,6 +27,7 @@ import {
   seriesTypes,
   resetEChartsMock,
   clickListenerRegistrations,
+  lastSetOptionOpts,
 } from './fixtures/echarts-mock'; // side-effect import: vi.mock hoisted before component imports below
 import { installJsdomPolyfills, restoreJsdomPolyfills } from './fixtures/jsdom-polyfills';
 
@@ -2082,6 +2083,220 @@ describe('GeoMap option shape', () => {
     // Coordinate fallback when fromName/toName missing.
     expect(payload.label).toBe('29.00,41.00 → 32.85,39.93');
   });
+
+  /* -------------------------------------------------------------- */
+  /*  PR-X13d: heatmap overlay (Codex thread 019e25ee)               */
+  /* -------------------------------------------------------------- */
+
+  it('heatmap overlay appends a series with type "heatmap"', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'heatmap',
+            data: [
+              { name: 'İstanbul', coordinates: [29.0, 41.0], value: 80 },
+              { name: 'Ankara', coordinates: [32.85, 39.93], value: 40 },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const heatmap = series()[1];
+    expect(heatmap.type).toBe('heatmap');
+    expect(heatmap.coordinateSystem).toBe('geo');
+    expect(heatmap.geoIndex).toBe(0); // shared with base
+    expect(heatmap.pointSize).toBe(20); // default
+    expect(heatmap.blurSize).toBe(30); // default
+    expect(heatmap.minOpacity).toBe(0); // default
+    expect(heatmap.maxOpacity).toBe(0.8); // default — base shines through
+  });
+
+  it('option.visualMap is an ARRAY when heatmap overlay is present', () => {
+    // Codex 019e25ee plan-time + iter-2: heatmap requires its own
+    // visualMap entry (ECharts dev-throws "Heatmap must use with
+    // visualMap" otherwise). Wrapper switches single object →
+    // [base, ...heatmapVMs] only when needed.
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'heatmap',
+            data: [{ name: 'X', coordinates: [29, 41], value: 50 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    expect(Array.isArray(opt?.visualMap)).toBe(true);
+    const vms = opt?.visualMap as Array<Record<string, unknown>>;
+    expect(vms.length).toBe(2);
+    // visualMap[0] = base map (still pinned to seriesIndex: 0)
+    expect(vms[0].seriesIndex).toBe(0);
+    // visualMap[1] = heatmap (pinned to overlay series, dimension: 2)
+    expect(vms[1].seriesIndex).toBe(1);
+    expect(vms[1].dimension).toBe(2);
+    expect(vms[1].show).toBe(false); // legend opt-in
+  });
+
+  it('option.visualMap stays a SINGLE OBJECT when no heatmap (back-compat)', () => {
+    // Regression guard: bubble/effectScatter/flow without heatmap
+    // must NOT change the option.visualMap shape — existing consumers
+    // would break if it became an array unconditionally.
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          { type: 'bubble', data: [{ name: 'A', coordinates: [29, 41], value: 1 }] },
+          {
+            type: 'effectScatter',
+            data: [{ name: 'B', coordinates: [32, 39], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    expect(Array.isArray(opt?.visualMap)).toBe(false);
+    const vm = opt?.visualMap as { seriesIndex: number };
+    expect(vm.seriesIndex).toBe(0); // base map only
+  });
+
+  it('mixed overlays (bubble + heatmap) → 3 series + 2 visualMaps with correct seriesIndex math', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          { type: 'bubble', data: [{ name: 'A', coordinates: [29, 41], value: 1 }] },
+          {
+            type: 'heatmap',
+            data: [{ name: 'B', coordinates: [32, 39], value: 50 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    expect(allSeries).toHaveLength(3); // base + bubble + heatmap
+    expect(allSeries[2].type).toBe('heatmap');
+    const opt = lastDispatchedOption();
+    const vms = opt?.visualMap as Array<Record<string, unknown>>;
+    expect(vms.length).toBe(2);
+    expect(vms[0].seriesIndex).toBe(0); // base
+    expect(vms[1].seriesIndex).toBe(2); // heatmap is series[2] (after bubble)
+  });
+
+  it('heatmap rerender: toggle on → off does NOT leave stale series or visualMap (notMerge: true)', () => {
+    // Codex 019e25ee iter-2 must-fix #4 + post-impl test note: ECharts
+    // default merge would keep the heatmap visualMap orphaned when its
+    // series disappears. GeoMap opts into notMerge: true so each render
+    // fully replaces option.series + option.visualMap. The test
+    // explicitly asserts the wrapper passed `notMerge: true` to
+    // setOption — without this guard the test would silently pass even
+    // if `notMerge` were removed (mock does not simulate ECharts merge).
+    const { rerender } = render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'heatmap',
+            data: [{ name: 'X', coordinates: [29, 41], value: 50 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    expect(seriesTypes(lastDispatchedOption())).toContain('heatmap');
+    expect(Array.isArray(lastDispatchedOption()?.visualMap)).toBe(true);
+    // Direct args check — wrapper MUST pass `notMerge: true` to
+    // setOption(option, opts) so ECharts replaces option fully.
+    expect(lastSetOptionOpts()?.notMerge).toBe(true);
+
+    // Toggle heatmap off (overlays prop empty).
+    rerender(<GeoMap mapName="TR" data={sampleData} overlays={[]} animate={false} />);
+    // Stale heatmap component must NOT survive the rerender.
+    const types = seriesTypes(lastDispatchedOption());
+    expect(types).not.toContain('heatmap');
+    // visualMap shape regresses to single-object (back-compat preserved).
+    expect(Array.isArray(lastDispatchedOption()?.visualMap)).toBe(false);
+    // notMerge: true STILL passed on the rerender (regression guard
+    // for the wrapper accidentally dropping the opt mid-lifecycle).
+    expect(lastSetOptionOpts()?.notMerge).toBe(true);
+  });
+
+  it('heatmap a11y SR row: summary format "<layer>: N points, intensity MIN-MAX"', () => {
+    // Codex 019e25ee iter-1 must-fix #8 + iter-2 #5: density is
+    // aggregate; per-point linearization would dump thousands of
+    // coordinates and mislead SR users. Single summary row instead.
+    const { container } = render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'heatmap',
+            name: 'Events density',
+            data: [
+              { coordinates: [29.0, 41.0], value: 87 },
+              { coordinates: [32.85, 39.93], value: 42 },
+              { coordinates: [27.14, 38.42], value: 23 },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const rows = container.querySelectorAll('table tbody tr');
+    const labels = Array.from(rows).map((tr) => tr.querySelector('td')?.textContent ?? '');
+    const summary = labels.find((l) => l.includes('points, intensity'));
+    expect(summary).toBe('Events density: 3 points, intensity 23-87');
+  });
+
+  it('heatmap a11y SR row uses raw point count even when intensities sanitize', () => {
+    // Codex iter-2 #5: pointCount = data.length (transparent),
+    // intensity range = sanitized values (consistent with visualMap).
+    const { container } = render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'heatmap',
+            name: 'Mixed density',
+            data: [
+              { coordinates: [29.0, 41.0], value: -10 }, // invalid → 0
+              { coordinates: [32.85, 39.93], value: NaN }, // invalid → 0
+              { coordinates: [27.14, 38.42], value: 50 }, // valid → 50
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const rows = container.querySelectorAll('table tbody tr');
+    const labels = Array.from(rows).map((tr) => tr.querySelector('td')?.textContent ?? '');
+    const summary = labels.find((l) => l.includes('points, intensity'));
+    // 3 raw points, sanitized range 0..50
+    expect(summary).toBe('Mixed density: 3 points, intensity 0-50');
+  });
+
+  // No 'heatmap click' test by design — Codex 019e25ee post-impl P1
+  // verified vs echarts@5.6.0 source: geo heatmap renders one raster
+  // `ZRImage` with `silent: true` and emits NO per-datum click event.
+  // The wrapper intentionally drops the heatmap click branch in
+  // GeoMap.tsx so a synthetic test here would prove only that the
+  // mock can be misused — not that real users click density blobs.
+  // A11y SR summary row tests above are the canonical accessibility
+  // contract for heatmap density data.
 
   it('overlays trigger explicit option.geo block (shared coord system)', () => {
     render(

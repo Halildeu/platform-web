@@ -104,8 +104,8 @@ export {
 } from './geo/registerGeoMap';
 // PR-X13a (Codex thread 019e2254): geo overlay layer types — discriminated
 // union foundation. Layer types shipped: `bubble` (PR-X13a),
-// `effectScatter` (PR-X13b), `flow` (PR-X13c). Future PRs append
-// `heatmap` (PR-X13d), `marker` (PR-X13e). Consumers pass
+// `effectScatter` (PR-X13b), `flow` (PR-X13c), `heatmap` (PR-X13d).
+// Future PRs append `marker` (PR-X13e). Consumers pass
 // `overlays={[{type:'bubble', ...}]}` to GeoMap.
 //
 // Note: `GeoOverlayMeta` is intentionally NOT re-exported here — it's
@@ -117,6 +117,8 @@ export type {
   GeoEffectScatterLayer,
   GeoFlowLayer,
   GeoFlowDatum,
+  GeoHeatmapLayer,
+  GeoHeatmapDatum,
   GeoPointDatum,
 } from './geo/geoOverlayTypes';
 

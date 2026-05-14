@@ -338,6 +338,121 @@ export interface GeoFlowLayer {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Layer: Heatmap (density on geo — PR-X13d)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Single heatmap datum — point with intensity. The wrapper sanitizes
+ * non-finite / negative intensities to 0 via `safeHeatmapIntensity`
+ * so series data, `_overlay` metadata, and visualMap domain all share
+ * the same value (no "visual 0, payload NaN" drift).
+ */
+export interface GeoHeatmapDatum {
+  /** Optional display name (tooltip/click fallback when coord-only). */
+  name?: string;
+  /** `[longitude, latitude]` in WGS84. */
+  coordinates: [number, number];
+  /** Density intensity — non-negative raw value. Sanitized at build. */
+  value: number;
+  /** Optional category bucket. */
+  category?: string | number;
+}
+
+/**
+ * Heatmap layer — density visualisation over the geo map. Each datum
+ * is a point with an intensity value; ECharts renders a smoothed
+ * density blob via `pointSize` + `blurSize` and colour-encodes via a
+ * dedicated visualMap (separate from the base choropleth visualMap
+ * so the two encodings stay isolated).
+ *
+ * Maps to ECharts `heatmap` series with `coordinateSystem: 'geo'`.
+ *
+ * **VisualMap architecture** (Codex 019e25ee plan-time AGREE):
+ * - Base choropleth visualMap stays pinned to `seriesIndex: 0`.
+ * - Each heatmap layer emits its own visualMap entry pinned to its
+ *   own series index, with `dimension: 2` (intensity is the third
+ *   element of the `[lng, lat, intensity]` data tuple).
+ * - When at least one heatmap overlay is present, `option.visualMap`
+ *   switches from a single object to an array. Otherwise the original
+ *   single-object shape is preserved for backward compatibility.
+ *
+ * **Reduced motion**: heatmap is static — no animation to disable.
+ * `respectReducedMotion` is not part of this layer's contract.
+ *
+ * @see PR-X13d Codex 019e25ee plan-time AGREE
+ */
+export interface GeoHeatmapLayer {
+  type: 'heatmap';
+  /** Layer name (used as visualMap legend title + a11y prefix). */
+  name?: string;
+  /** Density point data. */
+  data: GeoHeatmapDatum[];
+  /**
+   * Point spread radius in pixels (ECharts canonical default 20).
+   * Higher = each datum contributes to a wider area.
+   * @default 20
+   */
+  pointSize?: number;
+  /**
+   * Blur radius in pixels (ECharts canonical default 30). Higher =
+   * smoother density transitions between points.
+   * @default 30
+   */
+  blurSize?: number;
+  /**
+   * Explicit intensity domain lower bound for the visualMap. Default
+   * `min(sanitized values)` when data is non-empty, `0` otherwise.
+   */
+  minIntensity?: number;
+  /**
+   * Explicit intensity domain upper bound for the visualMap. Default
+   * `max(sanitized values)` when data is non-empty, `1` otherwise.
+   */
+  maxIntensity?: number;
+  /**
+   * Min pixel opacity (0..1) — ECharts series-level alpha control.
+   * Codex 019e25ee iter-2: alpha lives on the series, NOT in the
+   * visualMap `inRange.opacity` (which ECharts geo heatmap ignores).
+   * @default 0
+   */
+  minOpacity?: number;
+  /**
+   * Max pixel opacity (0..1). Capped below 1 by default so the base
+   * choropleth still shines through; raise for emphasis-only density.
+   * @default 0.8
+   */
+  maxOpacity?: number;
+  /**
+   * Colour gradient (low → high). Default is a 5-stop diverging ramp
+   * (blue → yellow → red) distinct from the base choropleth blue
+   * gradient so the two encodings remain visually separable.
+   * @default ['#313695', '#74add1', '#ffffbf', '#f46d43', '#a50026']
+   */
+  colors?: string[];
+  /**
+   * Show a separate visualMap legend for the heatmap. Opt-in: when
+   * `false` (default), the heatmap colour-encoding is implicit
+   * (consumer can document it externally). Multiple heatmap legends
+   * stacked tend to clutter the canvas.
+   * @default false
+   */
+  showLegend?: boolean;
+  /** Heatmap legend position (when `showLegend: true`). */
+  legendPosition?: 'top' | 'bottom' | 'left' | 'right';
+  /**
+   * Legend labels for [high, low] ends. Default `['Density (high)',
+   * 'Density (low)']` distinguishes the legend from the base
+   * choropleth legend.
+   */
+  legendText?: [string, string];
+  /**
+   * Z-index relative to other overlays.
+   * @default 5
+   */
+  z?: number;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Internal `_overlay` metadata — typed for tooltip/click/a11y       */
 /* ------------------------------------------------------------------ */
 
@@ -371,6 +486,18 @@ export type GeoOverlayMeta =
       toName?: string;
       value?: number;
       category?: string | number;
+    }
+  | {
+      type: 'heatmap';
+      layerName: string;
+      coordinates: [number, number];
+      /**
+       * Sanitized intensity — `safeHeatmapIntensity` ensures this
+       * matches the value stamped into ECharts series data + visualMap
+       * domain + a11y summary range. No "visual 0, payload -5" drift.
+       */
+      value?: number;
+      category?: string | number;
     };
 
 /* ------------------------------------------------------------------ */
@@ -393,7 +520,6 @@ export type GeoOverlayMeta =
  * series builder. Adding a new variant is a non-breaking change for
  * consumers since they pass only the variants they need.
  */
-export type GeoOverlay = GeoBubbleLayer | GeoEffectScatterLayer | GeoFlowLayer;
+export type GeoOverlay = GeoBubbleLayer | GeoEffectScatterLayer | GeoFlowLayer | GeoHeatmapLayer;
 // Future:
-// | GeoHeatmapLayer
 // | GeoMarkerLayer;

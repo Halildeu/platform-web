@@ -231,6 +231,22 @@ export const lastDispatchedOption = (): DispatchedOption | null => {
 export const allDispatchedOptions = (): DispatchedOption[] =>
   setOptionMock.mock.calls.map((call) => call[0] as DispatchedOption);
 
+/**
+ * Second argument passed to the most recent `setOption(option, opts)` call,
+ * or `null` when the wrapper called `setOption(option)` without opts.
+ * Use to assert merge behaviour like `{ notMerge: true }` opt-in.
+ *
+ * Codex 019e25ee post-impl test note: rerender stale tests should
+ * verify the wrapper actually opts into `notMerge: true`, not just
+ * that the last option object lost the stale series — without the
+ * args check, removing `notMerge` from the wrapper would silently
+ * pass the same test (mock does not simulate ECharts merge).
+ */
+export const lastSetOptionOpts = (): Record<string, unknown> | null => {
+  const lastCall = setOptionMock.mock.calls.at(-1);
+  return (lastCall?.[1] as Record<string, unknown> | undefined) ?? null;
+};
+
 /** series[*].type literals on the last dispatched option, or []. */
 export const seriesTypes = (option: DispatchedOption | null): string[] => {
   if (!option) return [];
