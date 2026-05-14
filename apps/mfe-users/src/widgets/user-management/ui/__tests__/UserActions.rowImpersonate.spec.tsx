@@ -129,7 +129,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
   it('opens the inline reason modal on click and exposes the submit testid', () => {
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    fireEvent.click(screen.getByText((c) => c.includes('Hesaba Geç')));
+    fireEvent.click(screen.getByText((c) => c.includes('users.actions.impersonate.menu')));
     expect(screen.queryByTestId('row-impersonate-modal')).toBeTruthy();
     expect(screen.queryByTestId('row-impersonate-reason')).toBeTruthy();
     expect(screen.queryByTestId('row-impersonate-submit-btn')).toBeTruthy();
@@ -138,7 +138,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
   it('submits the orchestration call with reason + targetUserId + targetEmail', async () => {
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    fireEvent.click(screen.getByText((c) => c.includes('Hesaba Geç')));
+    fireEvent.click(screen.getByText((c) => c.includes('users.actions.impersonate.menu')));
 
     fireEvent.change(screen.getByTestId('row-impersonate-reason'), {
       target: { value: 'Row-level impersonate quick action — 15 chars ok' },
@@ -167,7 +167,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
 
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    fireEvent.click(screen.getByText((c) => c.includes('Hesaba Geç')));
+    fireEvent.click(screen.getByText((c) => c.includes('users.actions.impersonate.menu')));
 
     fireEvent.change(screen.getByTestId('row-impersonate-reason'), {
       target: { value: 'valid 15 chars row' },
