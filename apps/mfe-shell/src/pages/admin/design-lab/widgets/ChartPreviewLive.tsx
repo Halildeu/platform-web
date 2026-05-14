@@ -1556,6 +1556,45 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
                   showLabels: true,
                 });
               }
+              // PR-X13c (Codex 019e25d4 iter-2 AGREE): flow overlay
+              // demonstrates origin-destination edges via ECharts `lines`
+              // series. Demo edges stay within the placeholder GeoJSON
+              // viewport (İstanbul/Ankara/İzmir) so the curves remain
+              // visible on the synthetic 3-feature map.
+              if (isOn(toggles, 'showFlowOverlay', false)) {
+                layers.push({
+                  type: 'flow',
+                  name: 'Logistics Flow',
+                  data: [
+                    {
+                      fromName: 'İstanbul',
+                      toName: 'Ankara',
+                      from: [29.0, 41.0],
+                      to: [32.85, 39.93],
+                      value: 800,
+                    },
+                    {
+                      fromName: 'İstanbul',
+                      toName: 'İzmir',
+                      from: [29.0, 41.0],
+                      to: [27.14, 38.42],
+                      value: 600,
+                    },
+                    {
+                      fromName: 'Ankara',
+                      toName: 'İzmir',
+                      from: [32.85, 39.93],
+                      to: [27.14, 38.42],
+                      value: 400,
+                    },
+                  ],
+                  color: '#2563eb',
+                  curveness: 0.25,
+                  minWidth: 1.5,
+                  maxWidth: 6,
+                  showEffect: true,
+                });
+              }
               return layers.length > 0 ? layers : undefined;
             })()}
           />

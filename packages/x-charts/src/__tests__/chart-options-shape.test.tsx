@@ -26,11 +26,12 @@ import {
   allDispatchedOptions,
   seriesTypes,
   resetEChartsMock,
+  clickListenerRegistrations,
 } from './fixtures/echarts-mock'; // side-effect import: vi.mock hoisted before component imports below
 import { installJsdomPolyfills, restoreJsdomPolyfills } from './fixtures/jsdom-polyfills';
 
 import React from 'react';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
 
 /* ------------------------------------------------------------------ */
@@ -1722,6 +1723,288 @@ describe('GeoMap option shape', () => {
     expect(allSeries).toHaveLength(3); // base + bubble + effectScatter
     expect(allSeries[1].type).toBe('scatter');
     expect(allSeries[2].type).toBe('effectScatter');
+  });
+
+  /* -------------------------------------------------------------- */
+  /*  PR-X13c: flow overlay (Codex thread 019e25d4)                  */
+  /* -------------------------------------------------------------- */
+
+  it('flow overlay appends a series with lines type + curveness', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            data: [
+              {
+                fromName: 'İstanbul',
+                toName: 'Ankara',
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 800,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const flow = series()[1];
+    expect(flow.type).toBe('lines');
+    expect(flow.coordinateSystem).toBe('geo');
+    expect(flow.geoIndex).toBe(0); // shared with base map
+    expect(flow.polyline).toBe(false);
+    const ls = flow.lineStyle as { curveness: number; opacity: number };
+    expect(ls.curveness).toBe(0.2); // default
+    expect(ls.opacity).toBe(0.6); // default
+  });
+
+  it('flow effect.show defaults to false (animation opt-in)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            data: [
+              {
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 1,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const flow = series()[1];
+    const eff = flow.effect as { show: boolean };
+    expect(eff.show).toBe(false);
+  });
+
+  it('flow showEffect=true → effect.show: true (trail animation on)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            showEffect: true,
+            data: [
+              {
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 1,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const flow = series()[1];
+    const eff = flow.effect as { show: boolean };
+    expect(eff.show).toBe(true);
+  });
+
+  it('flow respectReducedMotion=true → effect.show: false (trail suppressed)', () => {
+    // Codex 019e25d4 iter-2: lines has no rippleEffect.number analogue.
+    // `effect.show: false` is the canonical reduced-motion opt-out.
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            showEffect: true,
+            respectReducedMotion: true,
+            data: [
+              {
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 1,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const flow = series()[1];
+    const eff = flow.effect as { show: boolean };
+    expect(eff.show).toBe(false);
+  });
+
+  it('mixed overlays (bubble + effectScatter + flow) emits 4 series total', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          { type: 'bubble', data: [{ name: 'A', coordinates: [29, 41], value: 100 }] },
+          {
+            type: 'effectScatter',
+            data: [{ name: 'B', coordinates: [32, 39], value: 5 }],
+          },
+          {
+            type: 'flow',
+            data: [
+              {
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 1,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    expect(allSeries).toHaveLength(4); // base + bubble + effectScatter + flow
+    expect(allSeries[1].type).toBe('scatter');
+    expect(allSeries[2].type).toBe('effectScatter');
+    expect(allSeries[3].type).toBe('lines');
+  });
+
+  it('flow visualMap.seriesIndex stays scoped to base (overlay isolation)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            data: [
+              {
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 1,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    const vm = opt?.visualMap as { seriesIndex: number } | undefined;
+    expect(vm?.seriesIndex).toBe(0);
+  });
+
+  it('flow click → onDataPointClick fires with kind="overlay", overlayType="flow"', () => {
+    // Codex 019e25d4 iter-2: click contract test — wrapper must
+    // discriminate flow overlay datum from point overlay + region.
+    const handler = vi.fn();
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            name: 'Logistics flow',
+            data: [
+              {
+                fromName: 'İstanbul',
+                toName: 'Ankara',
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 800,
+                category: 'air',
+              },
+            ],
+          },
+        ]}
+        onDataPointClick={handler}
+        animate={false}
+      />,
+    );
+    const registrations = clickListenerRegistrations();
+    expect(registrations.length).toBeGreaterThanOrEqual(1);
+    const clickHandler = registrations[registrations.length - 1];
+    // Simulate ECharts click event with flow datum payload.
+    clickHandler({
+      seriesType: 'lines',
+      name: 'İstanbul → Ankara',
+      data: {
+        _overlay: {
+          type: 'flow',
+          layerName: 'Logistics flow',
+          from: [29.0, 41.0],
+          to: [32.85, 39.93],
+          fromName: 'İstanbul',
+          toName: 'Ankara',
+          value: 800,
+          category: 'air',
+        },
+      },
+    });
+    expect(handler).toHaveBeenCalledOnce();
+    const payload = handler.mock.calls[0][0] as {
+      datum: Record<string, unknown>;
+      value?: number;
+      label?: string;
+    };
+    expect(payload.datum.kind).toBe('overlay');
+    expect(payload.datum.overlayType).toBe('flow');
+    expect(payload.datum.layerName).toBe('Logistics flow');
+    expect(payload.datum.fromName).toBe('İstanbul');
+    expect(payload.datum.toName).toBe('Ankara');
+    expect(payload.datum.from).toEqual([29.0, 41.0]);
+    expect(payload.datum.to).toEqual([32.85, 39.93]);
+    expect(payload.datum.category).toBe('air');
+    expect(payload.value).toBe(800);
+    expect(payload.label).toBe('İstanbul → Ankara');
+  });
+
+  it('flow click with coordinate-fallback label (no fromName/toName)', () => {
+    const handler = vi.fn();
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            data: [
+              {
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 1,
+              },
+            ],
+          },
+        ]}
+        onDataPointClick={handler}
+        animate={false}
+      />,
+    );
+    const registrations = clickListenerRegistrations();
+    const clickHandler = registrations[registrations.length - 1];
+    clickHandler({
+      seriesType: 'lines',
+      name: '29.00,41.00 → 32.85,39.93',
+      data: {
+        _overlay: {
+          type: 'flow',
+          layerName: 'flow overlay',
+          from: [29.0, 41.0],
+          to: [32.85, 39.93],
+          value: 1,
+        },
+      },
+    });
+    expect(handler).toHaveBeenCalledOnce();
+    const payload = handler.mock.calls[0][0] as { label?: string };
+    // Coordinate fallback when fromName/toName missing.
+    expect(payload.label).toBe('29.00,41.00 → 32.85,39.93');
   });
 
   it('overlays trigger explicit option.geo block (shared coord system)', () => {

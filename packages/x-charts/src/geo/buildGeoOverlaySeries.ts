@@ -7,13 +7,24 @@
  * pattern from the 3D Extension Pack (Codex thread `019e10ab`
  * iter-4 disipline).
  *
- * PR-X13a (Codex thread `019e2254`): only `'bubble'` (scatter on
- * `coordinateSystem: 'geo'`). Future overlays append cases here.
+ * Layer types shipped:
+ *   - PR-X13a (Codex `019e2254`): `'bubble'` — scatter on
+ *     `coordinateSystem: 'geo'`, sqrt-scaled symbolSize.
+ *   - PR-X13b (Codex `019e25a2`): `'effectScatter'` — animated pulse
+ *     for highlighted lokasyonlar. Reduced-motion via
+ *     `rippleEffect.number = 0`.
+ *   - PR-X13c (Codex `019e25d4`): `'flow'` — origin-destination
+ *     `lines` with linear width scale (sqrt opt-in). Reduced-motion
+ *     via `effect.show: false`.
+ *
+ * Future overlays (`'heatmap'`, `'marker'`) append cases below.
  */
 import type {
   GeoOverlay,
   GeoBubbleLayer,
   GeoEffectScatterLayer,
+  GeoFlowLayer,
+  GeoFlowDatum,
   GeoPointDatum,
 } from './geoOverlayTypes';
 
@@ -240,6 +251,171 @@ export function buildEffectScatterLayerSeries(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Flow (lines on geo) — value → lineStyle.width scale                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Clamped width scale for flow lines. Default `'linear'` because
+ * stroke width is a one-dimensional channel — a 2× metric reads as
+ * 2× thickness, which matches user intuition. `'sqrt'` is available
+ * as an outlier-control opt-in (long-tailed distributions where the
+ * largest edges would otherwise visually dominate).
+ *
+ * Edge cases mirror `bubbleSymbolSize`:
+ *   - non-finite value → returns minW
+ *   - negative value or negative domain → floored to 0 (defensive)
+ *   - all values equal → returns midpoint of [minW, maxW]
+ *   - value outside [minValue, maxValue] → clamped to nearest bound
+ */
+function flowLineWidth(
+  value: number,
+  minValue: number,
+  maxValue: number,
+  minW: number,
+  maxW: number,
+  scale: 'linear' | 'sqrt' = 'linear',
+): number {
+  if (!Number.isFinite(value)) return minW;
+  const safeValue = value < 0 ? 0 : value;
+  const safeMin = minValue < 0 ? 0 : minValue;
+  const safeMax = maxValue < 0 ? 0 : maxValue;
+  if (safeMax === safeMin) return (minW + maxW) / 2;
+  const clamped = Math.max(safeMin, Math.min(safeMax, safeValue));
+  const t =
+    scale === 'sqrt'
+      ? // Sqrt branch: outlier control. `safeMax === safeMin` guard
+        // above already protects from division-by-zero here.
+        (Math.sqrt(clamped) - Math.sqrt(safeMin)) / (Math.sqrt(safeMax) - Math.sqrt(safeMin))
+      : (clamped - safeMin) / (safeMax - safeMin);
+  return minW + t * (maxW - minW);
+}
+
+/**
+ * Synthesize a stable display name for a flow edge (used by the
+ * `label.formatter: '{b}'` path + tooltip + a11y SR linearization).
+ * Prefers `fromName`/`toName` when present; falls back to coordinate
+ * formatting.
+ */
+function flowEdgeName(d: GeoFlowDatum): string {
+  const from = d.fromName ?? `${d.from[0].toFixed(2)},${d.from[1].toFixed(2)}`;
+  const to = d.toName ?? `${d.to[0].toFixed(2)},${d.to[1].toFixed(2)}`;
+  return `${from} → ${to}`;
+}
+
+/**
+ * Build a single flow layer spec.
+ *
+ * Maps to ECharts `lines` series (`polyline: false`, single segment
+ * per datum). Wrapper passes the layer + the geo coordinate system
+ * index (shared with the base map, default 0).
+ *
+ * Reduced-motion: when `respectReducedMotion: true`, the trail
+ * animation is suppressed (`effect.show: false`) regardless of
+ * `showEffect`. The series type stays `'lines'` so option-shape tests
+ * and consumer code see a consistent contract.
+ */
+export function buildFlowLayerSeries(layer: GeoFlowLayer, geoIndex: number): GeoOverlaySeriesSpec {
+  const data = layer.data ?? [];
+  const numericValues = data.map((d) => d.value).filter((v): v is number => Number.isFinite(v));
+  const minValue = numericValues.length > 0 ? Math.min(...numericValues) : 0;
+  const maxValue = numericValues.length > 0 ? Math.max(...numericValues) : 1;
+  const minW = layer.minWidth ?? 1;
+  const maxW = layer.maxWidth ?? 6;
+  const baseWidth = layer.width ?? 2;
+  const widthScale = layer.widthScale ?? 'linear';
+  // Curveness clamp: default 0.2 (subtle arc that separates
+  // counter-flow edges). Non-finite or out-of-range values fall back
+  // to the default rather than corrupting the line render.
+  const curveness =
+    typeof layer.curveness === 'number' && Number.isFinite(layer.curveness)
+      ? Math.max(0, Math.min(1, layer.curveness))
+      : 0.2;
+  const reduced = layer.respectReducedMotion === true;
+  const effectOn = layer.showEffect === true && !reduced;
+
+  const seriesData = data.map((d: GeoFlowDatum) => {
+    // Per-edge width: value-driven scale when value is finite, else
+    // fall back to the layer's constant `width` (default 2).
+    const width =
+      typeof d.value === 'number' && Number.isFinite(d.value)
+        ? flowLineWidth(d.value, minValue, maxValue, minW, maxW, widthScale)
+        : baseWidth;
+    return {
+      // ECharts geo `lines` datum: `coords: [[lng, lat], [lng, lat]]`.
+      // `name` populates the `'{b}'` label token + click `params.name`
+      // — Codex 019e25d4 iter-2 nit: without it the label formatter
+      // would emit an empty string.
+      name: flowEdgeName(d),
+      coords: [d.from, d.to],
+      lineStyle: {
+        width,
+        color: d.color,
+        opacity: layer.opacity ?? 0.6,
+        curveness,
+      },
+      // Same `_overlay` namespace convention as bubble + effectScatter,
+      // but with `type: 'flow'` discriminator + from/to instead of
+      // coordinates. Wrapper-side tooltip/click/a11y switches on
+      // `_overlay.type` to narrow this shape.
+      _overlay: {
+        type: layer.type as 'flow',
+        layerName: layer.name ?? 'Flow overlay',
+        from: d.from,
+        to: d.to,
+        fromName: d.fromName,
+        toName: d.toName,
+        value: d.value,
+        category: d.category,
+      },
+    };
+  });
+
+  return {
+    type: 'lines',
+    coordinateSystem: 'geo',
+    geoIndex,
+    name: layer.name ?? 'Flow overlay',
+    data: seriesData,
+    // OD-only (single segment per datum). Multi-waypoint routes
+    // (`polyline: true`) are out of scope for PR-X13c — Codex
+    // 019e25d4 iter-2 explicit deferral.
+    polyline: false,
+    effect: effectOn
+      ? {
+          show: true,
+          period: layer.effectPeriod ?? 6,
+          trailLength: layer.effectTrailLength ?? 0.3,
+          symbol: layer.effectSymbol ?? 'arrow',
+          symbolSize: layer.effectSymbolSize ?? 8,
+        }
+      : {
+          // Codex 019e25d4 iter-2: reduced-motion → `effect.show: false`
+          // (plain line render). `lines` has no `rippleEffect.number`
+          // analogue — `show: false` is the canonical opt-out.
+          show: false,
+        },
+    lineStyle: {
+      color: layer.color,
+      opacity: layer.opacity ?? 0.6,
+      curveness,
+    },
+    label: layer.showLabels
+      ? {
+          show: true,
+          position: 'middle',
+          formatter: '{b}',
+          fontSize: 11,
+        }
+      : { show: false },
+    emphasis: {
+      focus: 'self',
+      lineStyle: { opacity: 1, width: maxW + 1 },
+    },
+    z: layer.z ?? 5,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dispatcher — consumers pass `overlays: GeoOverlay[]`               */
 /* ------------------------------------------------------------------ */
 
@@ -264,7 +440,10 @@ export function buildGeoOverlaySeries(
       case 'effectScatter':
         specs.push(buildEffectScatterLayerSeries(layer, geoIndex));
         break;
-      // Future: 'flow' | 'heatmap' | 'marker'
+      case 'flow':
+        specs.push(buildFlowLayerSeries(layer, geoIndex));
+        break;
+      // Future: 'heatmap' | 'marker'
       default: {
         // Exhaustiveness guard — TS narrows the union; at runtime an
         // unknown variant is silently dropped (consumer typo
@@ -277,5 +456,5 @@ export function buildGeoOverlaySeries(
   return specs;
 }
 
-// Re-export the size helper for unit tests.
-export { bubbleSymbolSize };
+// Re-export scale helpers for unit tests.
+export { bubbleSymbolSize, flowLineWidth, flowEdgeName };

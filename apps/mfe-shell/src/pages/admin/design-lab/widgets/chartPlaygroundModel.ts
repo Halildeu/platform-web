@@ -801,6 +801,11 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     // point use case. Same toggle pattern as bubble — flag in,
     // synthetic data baked into ChartPreviewLive.
     'showEffectScatterOverlay',
+    // PR-X13c (Codex 019e25d4 iter-2 AGREE): flow overlay toggle.
+    // Adds a logistics-style origin-destination overlay (İstanbul →
+    // Ankara, İstanbul → İzmir, Ankara → İzmir) drawn via ECharts
+    // `lines` series with curved edges + animated trail.
+    'showFlowOverlay',
     'animate',
     'theme',
     'decal',
@@ -2692,6 +2697,26 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       description:
         'Multi-layer demo — silent bubbles for HQ headcount + animated pulse for critical alerts.',
       statePatch: { showBubbleOverlay: true, showEffectScatterOverlay: true },
+    },
+    {
+      id: 'with-flow-overlay',
+      label: 'With Flow Overlay',
+      tag: 'overlay',
+      description:
+        'Choropleth + origin-destination flow lines (PR-X13c). Linear width scale by metric + animated trail.',
+      statePatch: { showFlowOverlay: true },
+    },
+    {
+      id: 'with-all-overlays',
+      label: 'All Overlays',
+      tag: 'overlay',
+      description:
+        'Combo demo — choropleth + HQ bubbles + critical pulse + logistics flow lines (PR-X13a+X13b+X13c).',
+      statePatch: {
+        showBubbleOverlay: true,
+        showEffectScatterOverlay: true,
+        showFlowOverlay: true,
+      },
     },
     {
       id: 'no-roam',

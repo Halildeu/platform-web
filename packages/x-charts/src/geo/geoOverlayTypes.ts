@@ -193,6 +193,187 @@ export interface GeoEffectScatterLayer {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Layer: Flow (origin-destination lines on geo — PR-X13c)            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Single OD edge — origin → destination with optional metric.
+ *
+ * Coordinates are `[lng, lat]` (WGS84). `fromName` / `toName` improve
+ * tooltip + a11y labels; absent names fall back to coordinate
+ * formatting (`"29.00, 41.00"`).
+ */
+export interface GeoFlowDatum {
+  /** Origin point coordinates `[longitude, latitude]`. */
+  from: [number, number];
+  /** Destination point coordinates `[longitude, latitude]`. */
+  to: [number, number];
+  /** Origin label (for tooltip + a11y). */
+  fromName?: string;
+  /** Destination label. */
+  toName?: string;
+  /**
+   * Numeric metric driving `lineStyle.width` via clamped scale
+   * (linear by default; sqrt opt-in for outlier control).
+   */
+  value?: number;
+  /** Optional category bucket. */
+  category?: string | number;
+  /** Per-edge color override. */
+  color?: string;
+}
+
+/**
+ * Flow layer — origin-destination edges drawn over the geo map.
+ *
+ * Maps to ECharts `lines` series with `coordinateSystem: 'geo'` and
+ * `polyline: false` (single segment per datum). Use case: logistics
+ * routes, migration flows, financial transfers, network topology
+ * across geographic endpoints.
+ *
+ * Encoding:
+ *   - `value` → `lineStyle.width` (linear scale, clamped to
+ *     `[minWidth, maxWidth]`). Linear because stroke width is a
+ *     one-dimensional channel (unlike bubble area which needs sqrt
+ *     for perceptual correctness).
+ *   - `category` → optional consumer-driven grouping (not visually
+ *     encoded by the wrapper; passed through for click/a11y).
+ *
+ * Animation: opt-in via `showEffect: true`. The trailing pulse along
+ * each line is purely decorative — disable for accessibility-critical
+ * dashboards or when the consumer detects `prefers-reduced-motion`
+ * (set `respectReducedMotion: true`).
+ *
+ * @see PR-X13c Codex 019e25d4 plan-time AGREE
+ */
+export interface GeoFlowLayer {
+  type: 'flow';
+  /** Layer name (legend label, a11y prefix). */
+  name?: string;
+  /** OD edge data. */
+  data: GeoFlowDatum[];
+  /** Per-layer color override (per-edge `color` still wins). */
+  color?: string;
+  /**
+   * Line opacity. Recommended < 1 for dense flow maps so overlapping
+   * edges remain readable.
+   * @default 0.6
+   */
+  opacity?: number;
+  /**
+   * `lineStyle.curveness` in `[0, 1]`. Higher = more pronounced arc;
+   * a small curve (0.2) helps visually separate counter-flow edges.
+   * @default 0.2
+   */
+  curveness?: number;
+  /**
+   * Constant line width fallback when datum has no `value`.
+   * @default 2
+   */
+  width?: number;
+  /**
+   * Minimum line width for value-driven scale (lowest value clamps here).
+   * @default 1
+   */
+  minWidth?: number;
+  /**
+   * Maximum line width for value-driven scale (highest value clamps here).
+   * @default 6
+   */
+  maxWidth?: number;
+  /**
+   * Width scale. `'linear'` (default) is the most honest encoding for
+   * stroke width — a 2× metric reads as 2× thickness. `'sqrt'` is
+   * available for outlier control (long-tailed distributions where
+   * the largest edges would otherwise dominate).
+   * @default 'linear'
+   */
+  widthScale?: 'linear' | 'sqrt';
+  /**
+   * Show animated trail along each line (ECharts `effect`).
+   * Opt-in (default off) since the animation can be distracting on
+   * dense flow maps.
+   * @default false
+   */
+  showEffect?: boolean;
+  /**
+   * Period of the trail animation in seconds.
+   * @default 6
+   */
+  effectPeriod?: number;
+  /**
+   * Trail length as a fraction of the line `[0, 1]`. Higher = longer
+   * comet tail.
+   * @default 0.3
+   */
+  effectTrailLength?: number;
+  /**
+   * Symbol drawn at the head of each trail.
+   * @default 'arrow'
+   */
+  effectSymbol?: string;
+  /**
+   * Trail symbol pixel size.
+   * @default 8
+   */
+  effectSymbolSize?: number;
+  /**
+   * When `true`, the wrapper disables the trail effect entirely
+   * (`effect.show: false`) regardless of `showEffect`. Consumers
+   * should set this to mirror OS-level `prefers-reduced-motion: reduce`.
+   * @default false
+   */
+  respectReducedMotion?: boolean;
+  /**
+   * Show edge labels at the middle of each line (label = synthesized
+   * `"<fromName> → <toName>"` or coordinate fallback).
+   * @default false
+   */
+  showLabels?: boolean;
+  /**
+   * Z-index relative to other overlays.
+   * @default 5
+   */
+  z?: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Internal `_overlay` metadata — typed for tooltip/click/a11y       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Internal discriminated metadata namespace stamped onto every
+ * overlay datum so the wrapper's tooltip/click/a11y branches can
+ * narrow without `any` casts.
+ *
+ * NOT a public API — consumer-facing payload is the
+ * `onDataPointClick({ datum })` shape (see `GeoMap.tsx`). This type
+ * is exported for internal package use (`buildGeoOverlaySeries` ↔
+ * `GeoMap`) but not re-exported from `packages/x-charts/src/index.ts`
+ * to prevent the `_overlay` shape becoming part of the public surface.
+ *
+ * @internal
+ */
+export type GeoOverlayMeta =
+  | {
+      type: 'bubble' | 'effectScatter';
+      layerName: string;
+      coordinates: [number, number];
+      value?: number;
+      category?: string | number;
+    }
+  | {
+      type: 'flow';
+      layerName: string;
+      from: [number, number];
+      to: [number, number];
+      fromName?: string;
+      toName?: string;
+      value?: number;
+      category?: string | number;
+    };
+
+/* ------------------------------------------------------------------ */
 /*  Discriminated union — append future layer types here               */
 /* ------------------------------------------------------------------ */
 
@@ -201,10 +382,10 @@ export interface GeoEffectScatterLayer {
  *
  * Past iters:
  * - PR-X13a: `'bubble'` (silent scatter, value→symbolSize sqrt scale)
- * - PR-X13b (this PR): `'effectScatter'` (animated pulse for highlights)
+ * - PR-X13b: `'effectScatter'` (animated pulse for highlights)
+ * - PR-X13c (this PR): `'flow'` (origin-destination lines, linear width)
  *
  * Future:
- * - PR-X13c: `'flow'` (origin-destination lines)
  * - PR-X13d: `'heatmap'` (density on geo)
  * - PR-X13e: `'marker'` (declarative SVG/icon markers)
  *
@@ -212,8 +393,7 @@ export interface GeoEffectScatterLayer {
  * series builder. Adding a new variant is a non-breaking change for
  * consumers since they pass only the variants they need.
  */
-export type GeoOverlay = GeoBubbleLayer | GeoEffectScatterLayer;
+export type GeoOverlay = GeoBubbleLayer | GeoEffectScatterLayer | GeoFlowLayer;
 // Future:
-// | GeoFlowLayer
 // | GeoHeatmapLayer
 // | GeoMarkerLayer;
