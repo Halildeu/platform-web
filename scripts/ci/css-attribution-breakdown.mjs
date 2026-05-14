@@ -10,17 +10,27 @@
  *   2. This script asserts the analysis build produced at least one
  *      `apps/mfe-shell/dist/assets/*.css` AND at least one matching
  *      `.css.map` sibling so that `source-map-explorer` has usable input.
- *   3. Invokes `source-map-explorer` to emit:
- *        - docs/performance/css-breakdown.html (human treemap)
- *        - docs/performance/css-breakdown.json (CI artifact / parser feed)
+ *   3. Invokes `source-map-explorer` TWICE — once per output format —
+ *      because `source-map-explorer@2.5.3` CLI treats `--html` and
+ *      `--json` as mutually exclusive (Codex thread `019e277b`
+ *      blocking-1 absorb; single-call with both produces
+ *      `Arguments html and json are mutually exclusive` exit 1):
+ *        - HTML invocation → docs/performance/css-breakdown.html (treemap)
+ *        - JSON invocation → docs/performance/css-breakdown.json (parser
+ *          feed; canonical attribution baseline).
+ *      The JSON invocation does NOT pass `--gzip` because
+ *      `source-map-explorer` flips `onlyMapped=true` under gzip and
+ *      drops unmapped bytes from the report — that is the exact signal
+ *      we need preserved for the B3d1 / B3d2 decision gate (Codex
+ *      thread `019e277b` blocking-2 absorb).
  *
- * Fail-fast contract (Codex thread 019e276d blocking-2 absorb):
+ * Fail-fast contract (Codex thread `019e276d` blocking-2 absorb):
  *   - If `dist/assets/*.css` glob is empty → exit 2 (analysis build missing).
  *   - If NO `.css.map` siblings exist → exit 3 (sourcemaps disabled — the
  *     `CSS_ATTRIBUTION=1` toggle did not fire, or Vite emitted JS-only
  *     sourcemaps). Empty / low-value `css-breakdown.json` is NOT silently
  *     produced.
- *   - If `source-map-explorer` errors → exit propagates.
+ *   - If either `source-map-explorer` invocation errors → exit propagates.
  *
  * Usage:
  *   CSS_ATTRIBUTION=1 pnpm --filter mfe-shell build
@@ -44,16 +54,24 @@ const OUT_DIR = join(ROOT, 'docs', 'performance');
 const OUT_HTML = join(OUT_DIR, 'css-breakdown.html');
 const OUT_JSON = join(OUT_DIR, 'css-breakdown.json');
 
-function listCssFiles() {
-  if (!existsSync(DIST_ASSETS)) {
-    return { css: [], maps: [] };
-  }
-  const entries = readdirSync(DIST_ASSETS);
-  const css = entries.filter((e) => e.endsWith('.css'));
-  const maps = entries.filter((e) => e.endsWith('.css.map'));
+/**
+ * Build the two source-map-explorer argv arrays. Exported so unit tests
+ * can assert the CLI contract without spawning the binary (Codex thread
+ * `019e277b` blocking-1 follow-up: argv contract test).
+ *
+ * Contract invariants:
+ *   - Neither argv combines `--html` and `--json` (mutually exclusive).
+ *   - JSON argv MUST NOT carry `--gzip` (would force onlyMapped=true
+ *     and drop unmapped bytes — kills the decision-gate signal).
+ *
+ * @param {string[]} cssPaths - absolute paths to dist CSS files
+ * @returns {{ html: string[], json: string[] }} two argv arrays
+ *   (each starts with 'source-map-explorer' for `pnpm exec` invocation).
+ */
+export function buildSourceMapExplorerArgvs(cssPaths) {
   return {
-    css: css.map((f) => join(DIST_ASSETS, f)),
-    maps: maps.map((f) => join(DIST_ASSETS, f)),
+    html: ['source-map-explorer', ...cssPaths, '--html', OUT_HTML],
+    json: ['source-map-explorer', ...cssPaths, '--json', OUT_JSON],
   };
 }
 
@@ -84,40 +102,59 @@ function main() {
 
   mkdirSync(OUT_DIR, { recursive: true });
 
-  // source-map-explorer accepts file globs; pass explicit paths to avoid
-  // shell-glob portability issues.
-  const args = [
-    'source-map-explorer',
-    ...css,
-    '--html',
-    OUT_HTML,
-    '--json',
-    OUT_JSON,
-    // `--gzip` adds compressed-size column (deploy-relevant proxy for
-    // wire-bytes; complementary to runtime decoded-KB in bundle-taxonomy).
-    '--gzip',
+  const { html: htmlArgs, json: jsonArgs } = buildSourceMapExplorerArgvs(css);
+
+  // Two separate invocations — see file header & buildSourceMapExplorerArgvs
+  // docstring for the CLI-contract rationale.
+  const invocations = [
+    { name: 'JSON', argv: jsonArgs, out: OUT_JSON },
+    { name: 'HTML', argv: htmlArgs, out: OUT_HTML },
   ];
 
-  const result = spawnSync('pnpm', ['exec', ...args], {
-    cwd: ROOT,
-    stdio: 'inherit',
-    shell: false,
-  });
+  for (const inv of invocations) {
+    const result = spawnSync('pnpm', ['exec', ...inv.argv], {
+      cwd: ROOT,
+      stdio: 'inherit',
+      shell: false,
+    });
 
-  if (result.error) {
-    console.error('[css-breakdown] spawn error:', result.error.message);
-    process.exit(4);
+    if (result.error) {
+      console.error(
+        `[css-breakdown] spawn error (${inv.name}):`,
+        result.error.message,
+      );
+      process.exit(4);
+    }
+
+    if (typeof result.status === 'number' && result.status !== 0) {
+      console.error(
+        `[css-breakdown] source-map-explorer ${inv.name} invocation exited with code ${result.status}`,
+      );
+      process.exit(result.status);
+    }
+
+    console.log(`[css-breakdown] OK -> ${inv.out}`);
   }
-
-  if (typeof result.status === 'number' && result.status !== 0) {
-    console.error(
-      `[css-breakdown] source-map-explorer exited with code ${result.status}`,
-    );
-    process.exit(result.status);
-  }
-
-  console.log(`[css-breakdown] OK -> ${OUT_HTML}`);
-  console.log(`[css-breakdown] OK -> ${OUT_JSON}`);
 }
 
-main();
+export function listCssFiles() {
+  if (!existsSync(DIST_ASSETS)) {
+    return { css: [], maps: [] };
+  }
+  const entries = readdirSync(DIST_ASSETS);
+  const css = entries.filter((e) => e.endsWith('.css'));
+  const maps = entries.filter((e) => e.endsWith('.css.map'));
+  return {
+    css: css.map((f) => join(DIST_ASSETS, f)),
+    maps: maps.map((f) => join(DIST_ASSETS, f)),
+  };
+}
+
+// Gate top-level invocation (mirrors bundle-taxonomy.mjs pattern) so
+// tests can import buildSourceMapExplorerArgvs / listCssFiles without
+// running the script body.
+const __isDirectInvoke =
+  process.argv[1] && process.argv[1].endsWith('css-attribution-breakdown.mjs');
+if (__isDirectInvoke) {
+  main();
+}
