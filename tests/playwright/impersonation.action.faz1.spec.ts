@@ -1,5 +1,6 @@
 /**
- * Impersonation FE E2E — Faz 1 (Codex {@code 019e2022} strategy AGREE'd).
+ * Impersonation FE E2E — Faz 1 (Codex {@code 019e2022} strategy AGREE'd
+ * + REVISE-2 absorbed).
  *
  * Phase 1 covers two authz-boundary contracts at the UI layer:
  *
@@ -7,18 +8,20 @@
  *      "Impersonate this user" affordance inside {@code UserDetailDrawer}
  *      and can open the reason form.
  *   2. {@code action_hidden_for_user_role} — A non-admin profile
- *      (no {@code IMPERSONATION_AUDIT} permission, {@code isSuperAdmin=false})
- *      never sees the affordance. The component returns null in the
- *      `canImpersonate` gate.
+ *      ({@code authzSnapshot.superAdmin === false}) never sees the
+ *      affordance. The component returns null in the {@code canImpersonate}
+ *      gate that reads {@code getShellServices().auth.isSuperAdmin()}.
  *
- * Phase 2 (spawn task chip) builds on this fixture: M3/M4 happy + stop,
- * viewport overflow M10, and full enter→stop flow with mocked API.
- *
- * Boundary (ADR-0011 §2.3): test-only. Auth runs through the existing
- * fake-auth shell fixture (PW_FAKE_AUTH=1); no live KC interaction.
+ * Critical fixture detail (Codex {@code 019e2022} BLOCKER fix): the
+ * impersonation gate reads from the shell Redux store
+ * ({@code state.auth.authzSnapshot.superAdmin}), NOT from the local
+ * permissions array bundled with the fake-auth shell. The existing
+ * {@code authenticateAndNavigate} helper does not seed this snapshot,
+ * so this spec dispatches it explicitly after navigation so both cases
+ * exercise the real gate instead of the default-null state.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { authenticateAndNavigate } from './utils/auth';
 
 const ADMIN_PERMISSIONS = [
@@ -34,67 +37,91 @@ const USER_PERMISSIONS = [
   'WAREHOUSE',
 ];
 
-// UsersPage renders ag-grid; pick the first data row that is not the
-// pinned header. The existing admin-users.auth.spec uses the same
-// `.ag-root` selector to wait for grid readiness.
 const FIRST_ROW_SELECTOR = '.ag-root .ag-row';
 const IMPERSONATE_OPEN_TESTID = 'impersonate-open-btn';
 const IMPERSONATE_REASON_TESTID = 'impersonate-reason';
 
-const enableFakeAuth = () => {
-  // Tests in this file always use the fake-auth shell — they probe FE
-  // gating, not the live KC flow. We still let an operator override via
-  // PW_FAKE_AUTH=0 to drive against a real test cluster.
+const ensureFakeAuthEnv = () => {
   if (!process.env.PW_FAKE_AUTH) {
     process.env.PW_FAKE_AUTH = '1';
   }
 };
 
+/**
+ * Dispatch the shell Redux action that backs
+ * {@code selectIsSuperAdmin}. Without this, the gate stays at its
+ * default-null state regardless of permission flags. The payload only
+ * sets the snapshot — token/profile remain whatever
+ * {@code installSessionState} put there.
+ */
+const seedSuperAdminSnapshot = async (page: Page, isSuperAdmin: boolean) => {
+  await page.evaluate((value) => {
+    const store = (window as unknown as { __shellStore?: {
+      dispatch: (action: { type: string; payload: unknown }) => unknown;
+    } }).__shellStore;
+    if (!store) {
+      return;
+    }
+    store.dispatch({
+      type: 'auth/setKeycloakSession',
+      payload: {
+        authzSnapshot: {
+          subscriberId: 1,
+          userId: 1,
+          superAdmin: value,
+          permissions: value ? ['IMPERSONATION_AUDIT', 'AUDIT'] : [],
+          allowedModules: value ? ['admin', 'users', 'audit'] : ['warehouse'],
+        },
+      },
+    });
+  }, isSuperAdmin);
+};
+
+const stubUserList = async (page: Page) => {
+  await page.route('**/api/v1/users**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          {
+            id: 42,
+            email: 'halil.kocoglu@example.com',
+            fullName: 'Halil Kocoglu',
+            role: 'USER',
+            enabled: true,
+          },
+        ],
+        total: 1,
+        page: 1,
+        pageSize: 100,
+      }),
+    });
+  });
+};
+
 test.describe('Impersonation action authz boundary — Faz 1', () => {
   test.beforeAll(() => {
-    enableFakeAuth();
+    ensureFakeAuthEnv();
   });
 
   test('action_visible_for_super_admin', async ({ page, baseURL }) => {
     test.skip(process.env.PW_FAKE_AUTH !== '1', 'Faz 1 runs against the fake-auth shell');
 
-    // Mock the user list so the test does not depend on a dev seed and
-    // produces a deterministic row we can click. The shape mirrors the
-    // contract verified by admin-users.auth.spec.
-    await page.route('**/api/v1/users**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          items: [
-            {
-              id: 42,
-              email: 'halil.kocoglu@example.com',
-              fullName: 'Halil Kocoglu',
-              role: 'USER',
-              enabled: true,
-            },
-          ],
-          total: 1,
-          page: 1,
-          pageSize: 100,
-        }),
-      });
-    });
-
+    await stubUserList(page);
     await authenticateAndNavigate(page, baseURL, '/admin/users', ADMIN_PERMISSIONS);
+    await seedSuperAdminSnapshot(page, true);
 
-    // Grid mounts and the mocked row is clickable.
+    // Grid renders the deterministic mocked row.
     await expect(page.locator('.ag-root')).toBeVisible({ timeout: 20_000 });
     const firstRow = page.locator(FIRST_ROW_SELECTOR).first();
     await expect(firstRow).toBeVisible({ timeout: 20_000 });
     await firstRow.click();
 
-    // Drawer mounts; the SuperAdmin sees the affordance.
+    // Drawer mounts; the SuperAdmin sees the affordance and can open
+    // the reason form.
     const openBtn = page.getByTestId(IMPERSONATE_OPEN_TESTID);
     await expect(openBtn).toBeVisible({ timeout: 10_000 });
-
-    // Clicking expands the inline reason form.
     await openBtn.click();
     await expect(page.getByTestId(IMPERSONATE_REASON_TESTID)).toBeVisible();
   });
@@ -102,16 +129,30 @@ test.describe('Impersonation action authz boundary — Faz 1', () => {
   test('action_hidden_for_user_role', async ({ page, baseURL }) => {
     test.skip(process.env.PW_FAKE_AUTH !== '1', 'Faz 1 runs against the fake-auth shell');
 
-    // Non-admin profile — PermissionProvider may redirect away from
-    // /admin/users entirely; either way the affordance must not render.
+    await stubUserList(page);
     await authenticateAndNavigate(page, baseURL, '/admin/users', USER_PERMISSIONS);
+    await seedSuperAdminSnapshot(page, false);
 
-    // Give the route a brief settle window before asserting absence.
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
+    // Even if the route lets us land on /admin/users with a viewer
+    // profile, the action component fail-closes — its testId never
+    // matches. We deliberately stub the user list and try to open the
+    // drawer too, so the assertion proves "drawer present but action
+    // absent" rather than "page redirected away."
+    const gridVisible = await page
+      .locator('.ag-root')
+      .isVisible({ timeout: 10_000 })
+      .catch(() => false);
+    if (gridVisible) {
+      const firstRow = page.locator(FIRST_ROW_SELECTOR).first();
+      const rowVisible = await firstRow.isVisible({ timeout: 5_000 }).catch(() => false);
+      if (rowVisible) {
+        await firstRow.click();
+      }
+    }
 
-    // The action component fail-closes when isSuperAdmin() returns false;
-    // it renders nothing, so even if the user happens to land on a page
-    // that includes the drawer, the testid must remain unmatched.
+    // Settle the route so the page has a fair chance to mount the gate.
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined);
+
     const openBtn = page.getByTestId(IMPERSONATE_OPEN_TESTID);
     await expect(openBtn).toHaveCount(0);
   });

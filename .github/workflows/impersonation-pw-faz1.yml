@@ -1,0 +1,91 @@
+# Impersonation FE Playwright PR-time gate — Session 47 Faz 1.
+#
+# Codex thread 019e2022 strategy AGREE + REVISE-2 absorbed: the FE Faz 1
+# PR contains only a Playwright spec; without a PR-time run the scaffold
+# would land unverified. This lane builds a production preview of
+# mfe-shell, serves it through vite preview, and runs the focused
+# impersonation.action.faz1.spec against chromium.
+#
+# Trigger paths intentionally narrow so unrelated PRs do not pay the
+# 5-10 minute build + Playwright cost.
+
+name: Impersonation FE Playwright (Faz 1)
+
+on:
+  pull_request:
+    paths:
+      - 'tests/playwright/impersonation.action.faz1.spec.ts'
+      - 'tests/playwright/utils/auth.ts'
+      - 'apps/mfe-users/src/widgets/user-management/ui/ImpersonateAction.tsx'
+      - 'apps/mfe-users/src/widgets/user-management/ui/UserDetailDrawer.ui.tsx'
+      - 'apps/mfe-shell/src/app/config/impersonation-orchestration.ts'
+      - 'apps/mfe-shell/src/features/auth/model/auth.slice.ts'
+      - '.github/workflows/impersonation-pw-faz1.yml'
+  workflow_dispatch:
+
+jobs:
+  impersonation-pw-faz1:
+    name: Impersonation Faz 1 spec (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PW_FAKE_AUTH: '1'
+      PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:5174'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Build mfe-shell (production preview)
+        env:
+          # The fake-auth shell needs build-time fallback knobs so the
+          # runtime window.__env__ override has a baseline to merge into.
+          VITE_AUTH_MODE: 'permitAll'
+          VITE_ENABLE_FAKE_AUTH: '1'
+        run: pnpm --filter mfe-shell build
+
+      - name: Serve production preview (vite preview, port 5174)
+        run: |
+          pnpm --dir apps/mfe-shell exec vite preview \
+            --host 127.0.0.1 --port 5174 --strictPort --outDir dist &
+          deadline=$(( $(date +%s) + 90 ))
+          until curl -fsI "http://127.0.0.1:5174/login" >/dev/null 2>&1; do
+            if [ $(date +%s) -ge "${deadline}" ]; then
+              echo "FATAL: preview server did not respond within 90s"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "preview server ready"
+        shell: bash
+
+      - name: Run impersonation Faz 1 Playwright spec
+        run: |
+          pnpm exec playwright test \
+            tests/playwright/impersonation.action.faz1.spec.ts \
+            --config tests/playwright/playwright.config.ts \
+            --project=chromium \
+            --workers=1
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: impersonation-faz1-pw-report-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
