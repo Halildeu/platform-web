@@ -428,9 +428,22 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       }));
     }
     if (dataSourceMode !== 'server') {
-      // Client-mode datasources let AG Grid group in-memory regardless
-      // of backend capability — no per-column gating needed.
-      return colDefs;
+      // Client-mode datasources let AG Grid handle row grouping and
+      // value aggregation in-memory regardless of backend capability,
+      // but PR-0.4a (Codex 019e2695) still gates pivot per the
+      // `clientPivotAllowed` capability and the `pivotableFields`
+      // allowlist. Otherwise a client-mode report with
+      // `clientPivotAllowed=false` could still let the user drag a
+      // column onto the pivot drop zone.
+      const clientPivotModeAllowed = reportCapabilities?.clientPivotAllowed === true;
+      return colDefs.map((cd) => {
+        const field = (cd as { field?: string }).field;
+        return {
+          ...cd,
+          enablePivot:
+            clientPivotModeAllowed && field !== undefined && pivotableFieldSet.has(field),
+        };
+      });
     }
     /*
      * Server-mode with capability=true: per-column gating against the
@@ -523,7 +536,17 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         return next as VariantColumnState[number];
       });
     },
-    [dataSourceMode, groupableFieldSet, aggregatableFieldSet],
+    [
+      dataSourceMode,
+      groupableFieldSet,
+      aggregatableFieldSet,
+      // Codex 019e2695 iter-2 absorb: PR-0.4a dependency closure must
+      // include the pivot capability inputs so a late-arriving
+      // capability envelope re-derives the sanitizer rather than
+      // sticking to stale `serverSidePivoting=false` / empty allowlist.
+      pivotableFieldSet,
+      reportCapabilities,
+    ],
   );
 
   /*
@@ -559,7 +582,14 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   const capabilityKey = React.useMemo(() => {
     const groupable = (reportCapabilities?.groupableFields ?? []).join(',');
     const aggregatable = (reportCapabilities?.aggregatableFields ?? []).join(',');
-    return `${reportCapabilities?.serverSideGrouping ? '1' : '0'}|${groupable}|${aggregatable}`;
+    // Codex 019e2695 iter-2 absorb: PR-0.4a pivot capability inputs
+    // must participate in the envelope signature so a late-arriving
+    // `serverSidePivoting=true` (or pivotableFields list change)
+    // triggers a VariantIntegration remount + auto-apply re-run.
+    const pivotable = (reportCapabilities?.pivotableFields ?? []).join(',');
+    const ssp = reportCapabilities?.serverSidePivoting ? '1' : '0';
+    const cpa = reportCapabilities?.clientPivotAllowed ? '1' : '0';
+    return `${reportCapabilities?.serverSideGrouping ? '1' : '0'}|${groupable}|${aggregatable}|${ssp}|${cpa}|${pivotable}`;
   }, [reportCapabilities]);
 
   /* ---- Server-side datasource ---- */

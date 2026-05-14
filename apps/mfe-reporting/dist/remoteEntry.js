@@ -1,1 +1,0 @@
-import{n as e,t}from"./assets/virtual_mf-REMOTE_ENTRY_ID___mfe_internal__mfe_reporting__remoteEntry_js-BVCrwK4U.js";export{t as get,e as init};

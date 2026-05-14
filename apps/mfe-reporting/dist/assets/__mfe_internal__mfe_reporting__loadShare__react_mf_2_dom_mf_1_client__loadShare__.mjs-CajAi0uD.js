@@ -1,1 +1,0 @@
-var e=`__mf_module_cache__`;globalThis[e]||={share:{},remote:{}},globalThis[e].share||={},globalThis[e].remote||={};var t=globalThis[e].share[`react-dom/client`];if(t===void 0)throw Error(`[Module Federation] Shared module react-dom/client was imported before federation bootstrap finished.`);t.__esModule,t.default;var{createRoot:n,hydrateRoot:r}=t;export{n as t};
