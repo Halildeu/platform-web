@@ -62,14 +62,33 @@ export const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children
   //      the existing test-only probe flag for surface coherence.
   //   3. Permit-all + fake-auth shells (Playwright impersonation Faz 1+)
   //      driven by the production `vite preview` CI lane.
+  //
+  // Production bundles use Vite's module bundle where `process.env.*` is
+  // not inlined for VITE_* vars; the Playwright fake-auth helper sets the
+  // runtime overrides on `window.__env__` via addInitScript before the
+  // bundle boots, so the read below honours both surfaces.
   if (typeof window !== 'undefined') {
-    const isDev = process.env.NODE_ENV !== 'production';
+    const readEnv = (key: string): string => {
+      try {
+        if (typeof process !== 'undefined' && typeof process.env?.[key] === 'string') {
+          return String(process.env[key]);
+        }
+      } catch {
+        /* process undefined in browser bundle — fall through */
+      }
+      const winEnv = (window as Window & {
+        __env__?: Record<string, string | undefined>;
+        __ENV__?: Record<string, string | undefined>;
+      });
+      return String(winEnv.__env__?.[key] ?? winEnv.__ENV__?.[key] ?? '');
+    };
+    const isDev = readEnv('NODE_ENV') !== 'production';
     const isContractE2e =
-      (process.env.VITE_AUTH_CONTRACT_E2E ?? '').toString().toLowerCase() === '1' ||
-      (process.env.NEXT_PUBLIC_AUTH_CONTRACT_E2E ?? '').toString().toLowerCase() === '1';
+      readEnv('VITE_AUTH_CONTRACT_E2E').toLowerCase() === '1' ||
+      readEnv('NEXT_PUBLIC_AUTH_CONTRACT_E2E').toLowerCase() === '1';
     const isPermitAllFakeAuth =
-      (process.env.VITE_AUTH_MODE ?? '').toString().toLowerCase() === 'permitall' &&
-      (process.env.VITE_ENABLE_FAKE_AUTH ?? '').toString() === '1';
+      readEnv('VITE_AUTH_MODE').toLowerCase() === 'permitall' &&
+      readEnv('VITE_ENABLE_FAKE_AUTH') === '1';
     if (isDev || isContractE2e || isPermitAllFakeAuth) {
       window.__shellStore = store;
     }
