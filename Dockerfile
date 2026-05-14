@@ -129,13 +129,31 @@ server {
     # Post-B3c: `max-age=31536000, immutable` (1y) — disk cache HIT for
     # all hashed JS/CSS chunks, 0 KB transfer on warm visits.
     #
+    # Codex iter-3 P1.1 absorb: `always` keyword removed — without it,
+    # the long-cache header applies only to successful 2xx/3xx
+    # responses.  404 stale-bundle responses do NOT inherit 1y
+    # immutable (would otherwise lock browsers on a missing asset).
+    #
     # Entry surfaces (`/`, `/index.html`, `*remoteEntry.js`) above retain
     # `no-store, must-revalidate` so the SPA shell + federation manifest
     # stay live.
     location /assets/ {
         try_files $uri =404;
         access_log off;
-        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # PERF-INIT-V2 PR-B3c iter-3 P1.2 absorb: hashed remote chunks under
+    # `/remotes/<remote>/assets/` get the same 1y immutable treatment.
+    # `build-single-domain.mjs` copies remote dist `/assets/*` to
+    # `/remotes/<slug>/assets/*` (see scripts/deploy/build-single-domain.mjs
+    # line ~173).  Without this regex block, those paths fall through
+    # to the SPA catch-all (`location /`) and inherit no Cache-Control
+    # header (browser defaults to short revalidation).
+    location ~ ^/remotes/[^/]+/assets/ {
+        try_files $uri =404;
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
     # SPA catch-all
