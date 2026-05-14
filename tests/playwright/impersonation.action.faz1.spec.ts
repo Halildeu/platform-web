@@ -1,6 +1,6 @@
 /**
  * Impersonation FE E2E — Faz 1 (Codex {@code 019e2022} strategy AGREE'd
- * + REVISE-2 absorbed).
+ * + CI iter-4 absorb).
  *
  * Phase 1 covers two authz-boundary contracts at the UI layer:
  *
@@ -12,17 +12,22 @@
  *      affordance. The component returns null in the {@code canImpersonate}
  *      gate that reads {@code getShellServices().auth.isSuperAdmin()}.
  *
- * Critical fixture detail (Codex {@code 019e2022} BLOCKER fix): the
- * impersonation gate reads from the shell Redux store
- * ({@code state.auth.authzSnapshot.superAdmin}), NOT from the local
- * permissions array bundled with the fake-auth shell. The existing
- * {@code authenticateAndNavigate} helper does not seed this snapshot,
- * so this spec dispatches it explicitly after navigation so both cases
- * exercise the real gate instead of the default-null state.
+ * Iter-4 lessons absorbed:
+ *
+ *   - The shared `authenticateAndNavigate` helper waits on
+ *     {@code window.__shellStore}, which the production preview build
+ *     does not expose by default. Iter-2/iter-3 patches widened the
+ *     exposure gate but the production bundle still booted into a
+ *     different code path (likely the auth bootstrap redirect) before
+ *     AppProviders mounted, so the store never landed in time.
+ *   - Iter-4 bypasses the shared helper entirely. The spec drives the
+ *     fake-auth shell directly via {@code addInitScript} + the
+ *     {@code __authContractProbe} surface that the shell already exposes
+ *     when {@code VITE_AUTH_CONTRACT_E2E=1} is set at build time. The
+ *     probe gives us a stable, production-supported handle on the store.
  */
 
 import { test, expect, type Page } from '@playwright/test';
-import { authenticateAndNavigate } from './utils/auth';
 
 const ADMIN_PERMISSIONS = [
   'USER_MANAGEMENT',
@@ -31,38 +36,64 @@ const ADMIN_PERMISSIONS = [
   'WAREHOUSE',
 ];
 
-const USER_PERMISSIONS = [
-  // Intentionally NO IMPERSONATION_AUDIT and NO admin role markers; this
-  // mirrors the "viewer" profile that must never see the impersonate CTA.
-  'WAREHOUSE',
-];
+const USER_PERMISSIONS = ['WAREHOUSE'];
 
 const FIRST_ROW_SELECTOR = '.ag-root .ag-row';
 const IMPERSONATE_OPEN_TESTID = 'impersonate-open-btn';
 const IMPERSONATE_REASON_TESTID = 'impersonate-reason';
 
-const ensureFakeAuthEnv = () => {
-  if (!process.env.PW_FAKE_AUTH) {
-    process.env.PW_FAKE_AUTH = '1';
-  }
+const seedFakeAuthEnv = async (page: Page, permissions: string[]) => {
+  await page.addInitScript(
+    ({ nextPermissions }) => {
+      const win = window as Window & {
+        __env__?: Record<string, string>;
+        __ENV__?: Record<string, string>;
+      };
+      const next = {
+        ...(win.__env__ ?? {}),
+        VITE_AUTH_MODE: 'permitAll',
+        VITE_ENABLE_FAKE_AUTH: '1',
+        VITE_AUTH_CONTRACT_E2E: '1',
+        VITE_FAKE_AUTH_PERMISSIONS: nextPermissions.join(','),
+        VITE_FAKE_AUTH_EMAIL: 'faz1-test@local',
+        VITE_FAKE_AUTH_NAME: 'Faz 1 Test User',
+        VITE_FAKE_AUTH_DISPLAY: 'Faz 1 Test User',
+        VITE_FAKE_AUTH_ROLE: 'ADMIN',
+      };
+      win.__env__ = next;
+      win.__ENV__ = next;
+    },
+    { nextPermissions: permissions },
+  );
 };
 
-/**
- * Dispatch the shell Redux action that backs
- * {@code selectIsSuperAdmin}. Without this, the gate stays at its
- * default-null state regardless of permission flags. The payload only
- * sets the snapshot — token/profile remain whatever
- * {@code installSessionState} put there.
- */
+const waitForStore = async (page: Page) => {
+  // Probe takes precedence; if the build runs with VITE_AUTH_CONTRACT_E2E
+  // it lands on `window.__authContractProbe.store`. Some dev/test builds
+  // also expose the legacy `__shellStore`.
+  await page.waitForFunction(
+    () => {
+      const w = window as unknown as {
+        __authContractProbe?: { store?: unknown };
+        __shellStore?: unknown;
+      };
+      return Boolean(w.__authContractProbe?.store || w.__shellStore);
+    },
+    { timeout: 45_000 },
+  );
+};
+
 const seedSuperAdminSnapshot = async (page: Page, isSuperAdmin: boolean) => {
   await page.evaluate((value) => {
-    const store = (window as unknown as { __shellStore?: {
-      dispatch: (action: { type: string; payload: unknown }) => unknown;
-    } }).__shellStore;
+    const w = window as unknown as {
+      __authContractProbe?: { store?: { dispatch: (a: unknown) => unknown } };
+      __shellStore?: { dispatch: (a: unknown) => unknown };
+    };
+    const store = w.__authContractProbe?.store ?? w.__shellStore;
     if (!store) {
-      return;
+      throw new Error('No store surface (neither __authContractProbe.store nor __shellStore)');
     }
-    store.dispatch({
+    (store as { dispatch: (a: unknown) => unknown }).dispatch({
       type: 'auth/setKeycloakSession',
       payload: {
         authzSnapshot: {
@@ -101,36 +132,40 @@ const stubUserList = async (page: Page) => {
 };
 
 test.describe('Impersonation action authz boundary — Faz 1', () => {
-  test.beforeAll(() => {
-    ensureFakeAuthEnv();
-  });
+  // Iter-4: extend per-test timeout. Production-preview cold start +
+  // module-federation remote bundle preload + auth bootstrap can take
+  // longer than the default 30s when chromium runs on a CI runner.
+  test.setTimeout(120_000);
 
   test('action_visible_for_super_admin', async ({ page, baseURL }) => {
-    test.skip(process.env.PW_FAKE_AUTH !== '1', 'Faz 1 runs against the fake-auth shell');
-
+    await seedFakeAuthEnv(page, ADMIN_PERMISSIONS);
     await stubUserList(page);
-    await authenticateAndNavigate(page, baseURL, '/admin/users', ADMIN_PERMISSIONS);
+
+    const root = baseURL ?? 'http://localhost:3000';
+    await page.goto(`${root}/admin/users`, { waitUntil: 'domcontentloaded' });
+
+    await waitForStore(page);
     await seedSuperAdminSnapshot(page, true);
 
-    // Grid renders the deterministic mocked row.
-    await expect(page.locator('.ag-root')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.ag-root')).toBeVisible({ timeout: 30_000 });
     const firstRow = page.locator(FIRST_ROW_SELECTOR).first();
-    await expect(firstRow).toBeVisible({ timeout: 20_000 });
+    await expect(firstRow).toBeVisible({ timeout: 30_000 });
     await firstRow.click();
 
-    // Drawer mounts; the SuperAdmin sees the affordance and can open
-    // the reason form.
     const openBtn = page.getByTestId(IMPERSONATE_OPEN_TESTID);
-    await expect(openBtn).toBeVisible({ timeout: 10_000 });
+    await expect(openBtn).toBeVisible({ timeout: 15_000 });
     await openBtn.click();
     await expect(page.getByTestId(IMPERSONATE_REASON_TESTID)).toBeVisible();
   });
 
   test('action_hidden_for_user_role', async ({ page, baseURL }) => {
-    test.skip(process.env.PW_FAKE_AUTH !== '1', 'Faz 1 runs against the fake-auth shell');
-
+    await seedFakeAuthEnv(page, USER_PERMISSIONS);
     await stubUserList(page);
-    await authenticateAndNavigate(page, baseURL, '/admin/users', USER_PERMISSIONS);
+
+    const root = baseURL ?? 'http://localhost:3000';
+    await page.goto(`${root}/admin/users`, { waitUntil: 'domcontentloaded' });
+
+    await waitForStore(page);
     await seedSuperAdminSnapshot(page, false);
 
     // Even if the route lets us land on /admin/users with a viewer
@@ -140,7 +175,7 @@ test.describe('Impersonation action authz boundary — Faz 1', () => {
     // absent" rather than "page redirected away."
     const gridVisible = await page
       .locator('.ag-root')
-      .isVisible({ timeout: 10_000 })
+      .isVisible({ timeout: 15_000 })
       .catch(() => false);
     if (gridVisible) {
       const firstRow = page.locator(FIRST_ROW_SELECTOR).first();
@@ -149,9 +184,7 @@ test.describe('Impersonation action authz boundary — Faz 1', () => {
         await firstRow.click();
       }
     }
-
-    // Settle the route so the page has a fair chance to mount the gate.
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined);
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
 
     const openBtn = page.getByTestId(IMPERSONATE_OPEN_TESTID);
     await expect(openBtn).toHaveCount(0);

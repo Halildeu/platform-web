@@ -53,8 +53,13 @@ jobs:
         env:
           # The fake-auth shell needs build-time fallback knobs so the
           # runtime window.__env__ override has a baseline to merge into.
+          # Iter-4 absorb: also turn on the AuthContract E2E probe so the
+          # spec can dispatch into a stable, production-supported store
+          # handle (window.__authContractProbe.store) without relying on
+          # the dev-only __shellStore exposure.
           VITE_AUTH_MODE: 'permitAll'
           VITE_ENABLE_FAKE_AUTH: '1'
+          VITE_AUTH_CONTRACT_E2E: '1'
         run: pnpm --filter mfe-shell build
 
       - name: Serve production preview (vite preview, port 5174)
