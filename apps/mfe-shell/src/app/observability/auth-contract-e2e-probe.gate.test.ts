@@ -13,7 +13,7 @@
 // And the new boolean acceptance:
 //   flag === '1'  ||  flag.toLowerCase() === 'true'
 
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { isAuthContractE2eEnabled } from './auth-contract-e2e-probe';
 
 const originalEnv = { ...process.env };
@@ -24,28 +24,39 @@ const originalWindowEnv = (window as Window & {
 describe('isAuthContractE2eEnabled — Codex 019e27bf safe env reader', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
+    // Clear the flag on EVERY surface this gate consults — process.env,
+    // import.meta.env (vitest may inline CI-level env), window.__env__,
+    // window.__ENV__. The CI Unit lane runs with VITE_AUTH_CONTRACT_E2E
+    // unset, but a parallel impersonation lane or local rebuild can
+    // poison vitest's `import.meta.env` snapshot if not stubbed away.
+    delete process.env.VITE_AUTH_CONTRACT_E2E;
+    delete process.env.NEXT_PUBLIC_AUTH_CONTRACT_E2E;
+    vi.stubEnv('VITE_AUTH_CONTRACT_E2E', '');
+    vi.stubEnv('NEXT_PUBLIC_AUTH_CONTRACT_E2E', '');
     (window as Window & { __env__?: Record<string, string | undefined> }).__env__ = undefined;
+    (window as Window & { __ENV__?: Record<string, string | undefined> }).__ENV__ = undefined;
   });
 
   afterEach(() => {
     process.env = originalEnv;
     (window as Window & { __env__?: Record<string, string | undefined> }).__env__ =
       originalWindowEnv;
+    vi.unstubAllEnvs();
   });
 
-  it('returns true when process.env.VITE_AUTH_CONTRACT_E2E is "1"', () => {
-    process.env.VITE_AUTH_CONTRACT_E2E = '1';
+  it('returns true when import.meta.env.VITE_AUTH_CONTRACT_E2E is "1"', () => {
+    vi.stubEnv('VITE_AUTH_CONTRACT_E2E', '1');
     expect(isAuthContractE2eEnabled()).toBe(true);
   });
 
-  it('returns true when process.env.VITE_AUTH_CONTRACT_E2E is "true" (case-insensitive)', () => {
-    process.env.VITE_AUTH_CONTRACT_E2E = 'TRUE';
+  it('returns true when import.meta.env.VITE_AUTH_CONTRACT_E2E is "true" (case-insensitive)', () => {
+    vi.stubEnv('VITE_AUTH_CONTRACT_E2E', 'TRUE');
     expect(isAuthContractE2eEnabled()).toBe(true);
   });
 
-  it('returns true when process.env.NEXT_PUBLIC_AUTH_CONTRACT_E2E is set', () => {
-    delete process.env.VITE_AUTH_CONTRACT_E2E;
-    process.env.NEXT_PUBLIC_AUTH_CONTRACT_E2E = '1';
+  it('returns true when NEXT_PUBLIC_AUTH_CONTRACT_E2E is set', () => {
+    vi.stubEnv('VITE_AUTH_CONTRACT_E2E', '');
+    vi.stubEnv('NEXT_PUBLIC_AUTH_CONTRACT_E2E', '1');
     expect(isAuthContractE2eEnabled()).toBe(true);
   });
 
@@ -83,9 +94,9 @@ describe('isAuthContractE2eEnabled — Codex 019e27bf safe env reader', () => {
   });
 
   it('returns false when the flag value is "0" or "false"', () => {
-    process.env.VITE_AUTH_CONTRACT_E2E = '0';
+    vi.stubEnv('VITE_AUTH_CONTRACT_E2E', '0');
     expect(isAuthContractE2eEnabled()).toBe(false);
-    process.env.VITE_AUTH_CONTRACT_E2E = 'false';
+    vi.stubEnv('VITE_AUTH_CONTRACT_E2E', 'false');
     expect(isAuthContractE2eEnabled()).toBe(false);
   });
 });
