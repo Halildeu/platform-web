@@ -112,6 +112,24 @@ jobs:
       - name: Token drift gate (build artifacts and theme CSS)
         run: pnpm run tokens:drift
 
+  semantic-layer-required:
+    name: Semantic Layer (no-raw-hex)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12'
+      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Semantic-layer no-raw-hex gate (theme/core/*.ts)
+        run: pnpm --filter @mfe/design-system run semantic-layer-no-raw-hex:ci
+
   cssom-canary-required:
     name: CSSOM Canary (Chromium)
     runs-on: ubuntu-latest
@@ -596,6 +614,7 @@ jobs:
     needs:
       - unit-required
       - token-drift-required
+      - semantic-layer-required
       - cssom-canary-required
       - cssom-full-advisory
       - lint-warn-visibility-advisory
@@ -609,13 +628,15 @@ jobs:
           set -euo pipefail
           unit_result="${{ needs.unit-required.result }}"
           token_result="${{ needs.token-drift-required.result }}"
+          semantic_result="${{ needs.semantic-layer-required.result }}"
           cssom_result="${{ needs.cssom-canary-required.result }}"
           visual_result="${{ needs.visual-invariant-required.result }}"
           echo "unit-required: $unit_result"
           echo "token-drift-required: $token_result"
+          echo "semantic-layer-required: $semantic_result"
           echo "cssom-canary-required: $cssom_result"
           echo "visual-invariant-required: $visual_result"
-          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" ]]; then
+          if [[ "$unit_result" != "success" || "$token_result" != "success" || "$semantic_result" != "success" || "$cssom_result" != "success" || "$visual_result" != "success" ]]; then
             echo "::error::A required job failed."
             exit 1
           fi

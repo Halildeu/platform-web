@@ -182,7 +182,7 @@
     "quality": "npm run typecheck && npm run lint:ci && npm run audit:ci && npm run test:quality:ci && npm run test && npm run scorecard:ci",
     "perf-benchmark": "node scripts/ci/perf-benchmark.mjs",
     "changelog": "node scripts/ci/changelog-gen.mjs",
-    "quality:full": "npm run typecheck && npm run lint:ci && npm run audit:ci && npm run test:quality:ci && npm run test && npm run test:a11y-gate:ci && npm run token-audit:ci && npm run dark-fallback-gate:ci && npm run license-audit:ci && npm run keyboard-matrix && npm run docs:api && npm run semver-check && npm run perf-benchmark && npm run scorecard:ci",
+    "quality:full": "npm run typecheck && npm run lint:ci && npm run audit:ci && npm run test:quality:ci && npm run test && npm run test:a11y-gate:ci && npm run token-audit:ci && npm run dark-fallback-gate:ci && npm run semantic-layer-no-raw-hex:ci && npm run license-audit:ci && npm run keyboard-matrix && npm run docs:api && npm run semver-check && npm run perf-benchmark && npm run scorecard:ci",
     "quality:reports": "npm run scorecard:json && npm run scorecard:dashboard && npm run bundle-report && npm run changelog && npm run docs:api",
     "test:a11y-gate": "node scripts/ci/a11y-gate.mjs",
     "test:a11y-gate:ci": "node scripts/ci/a11y-gate.mjs --ci",
@@ -205,6 +205,8 @@
     "keyboard-matrix": "node scripts/ci/keyboard-matrix.mjs",
     "dark-fallback-gate": "node scripts/ci/dark-fallback-gate.mjs",
     "dark-fallback-gate:ci": "node scripts/ci/dark-fallback-gate.mjs --ci",
+    "semantic-layer-no-raw-hex": "node scripts/ci/semantic-layer-no-raw-hex.mjs",
+    "semantic-layer-no-raw-hex:ci": "node scripts/ci/semantic-layer-no-raw-hex.mjs --ci",
     "prepack": "[ -d dist ] || npm run build",
     "prepublishOnly": "npm run build",
     "figma:generate-stubs": "node ../../scripts/generate-figma-connect-stubs.mjs"
