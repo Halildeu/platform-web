@@ -138,13 +138,24 @@ const UNSPECIFIED_PATTERNS = new Set([
  * Roughly normalise a label for unspecified-bucket comparison.
  * Independent of the TR alias index because the alias is for
  * known provinces only; this is for the "missing data" tag.
+ *
+ * Exported so the API-level `fetchHrDemographicRows` filter can
+ * share the exact same semantic as the chart adapter — Codex
+ * 019e26a9 post-impl iter-2 must-fix: `Belirtilmemiş` filter must
+ * NOT also catch unmatched labels (those are surfaced separately
+ * via `unmatchedLabels` in the chart adapter).
  */
-function looksUnspecified(label: string): boolean {
+export function isUnspecifiedLocationLabel(label: string | null | undefined): boolean {
   if (label == null) return true;
-  const trimmed = label.trim();
+  const trimmed = String(label).trim();
   if (trimmed.length === 0) return true;
   const upper = trimmed.toLocaleUpperCase('tr-TR');
   return UNSPECIFIED_PATTERNS.has(upper);
+}
+
+/** @internal — kept for in-file use; mirrors `isUnspecifiedLocationLabel`. */
+function looksUnspecified(label: string): boolean {
+  return isUnspecifiedLocationLabel(label);
 }
 
 /**

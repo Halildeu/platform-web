@@ -6,11 +6,15 @@ import type { GridRequest, GridResponse } from '../../grid';
 >>>>>>> 2192487a (fix(hr-demografik): pr-x14 post-impl iter-1 absorb (3 high+medium))
 import { api } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
-// PR-X14 (Codex 019e26a9 post-impl high #2): row filtering must use
-// the same alias normalization the map adapter does — otherwise
-// `location=İstanbul` filter drops the same İSTANBUL(Avrupa) /
-// İSTANBUL(Anadolu) rows the map correctly aggregates to TR-34.
+// PR-X14 (Codex 019e26a9 post-impl high #2 + iter-2 must-fix): row
+// filtering must use the same alias normalization the map adapter does
+// — otherwise `location=İstanbul` filter drops the same İSTANBUL(Avrupa)
+// / İSTANBUL(Anadolu) rows the map correctly aggregates to TR-34. The
+// "Belirtilmemiş" filter must use the shared `isUnspecifiedLocationLabel`
+// helper so unmatched labels DON'T fall into the unspecified bucket
+// (Codex iter-2 absorb).
 import { findProvinceCodeByLabel } from './geo/tr-provinces';
+import { isUnspecifiedLocationLabel } from './utils/location-to-geomap';
 
 // ---------------------------------------------------------------------------
 // Backend Dashboard API — canlı Workcube verisi
@@ -139,11 +143,12 @@ export const fetchHrDemographicRows = async (
     const filterCode = findProvinceCodeByLabel(filters.location);
     if (filterCode) {
       filtered = filtered.filter((r) => findProvinceCodeByLabel(r.location) === filterCode);
-    } else if (filters.location === 'Belirtilmemiş') {
-      filtered = filtered.filter((r) => {
-        const code = findProvinceCodeByLabel(r.location);
-        return code === null;
-      });
+    } else if (isUnspecifiedLocationLabel(filters.location)) {
+      // Codex 019e26a9 post-impl iter-2 must-fix: "Belirtilmemiş"
+      // bucket must use the SAME semantic as the adapter so unmatched
+      // labels (e.g. "Atlantis", typos) do NOT also fall here. They
+      // surface separately via `unmatchedLabels` in the map adapter.
+      filtered = filtered.filter((r) => isUnspecifiedLocationLabel(r.location));
     } else {
       // Unknown filter value — fall back to legacy exact equality so
       // pre-existing callers don't silently drop to "no results".
