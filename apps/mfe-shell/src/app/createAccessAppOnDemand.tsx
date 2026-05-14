@@ -57,7 +57,7 @@ import { ensureRemoteShellServicesConfigured } from './config/ensure-remote-shel
 import { getSharedShellServices } from './config/shell-services-wiring';
 import { resolveAdminRemoteEntry } from './config/admin-remote-bootstrap';
 // PR-B5b2-hostfix (Codex `019e2528`): host lookup centralized.
-import { getHostMfInstance } from './config/host-mf-instance';
+import { getHostMfInstance, CONFIGURED_HOST_NAME } from './config/host-mf-instance';
 
 declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
@@ -108,7 +108,7 @@ async function loadAccessRemote(): Promise<{ default: FC<PropsWithChildren> }> {
   // register-via-helper and loadRemote, surface as classified fallback.
   if (!host) {
     throw new Error(
-      `[B5b2-prep] Host MF runtime instance "${ACCESS_HOST_NAME}" disappeared between ensure and load.`,
+      `[B5b2-prep] Host MF runtime instance "${CONFIGURED_HOST_NAME}" disappeared between ensure and load.`,
     );
   }
   const mod = await host.loadRemote<{ default: FC<PropsWithChildren> }>(ACCESS_REMOTE_KEY);

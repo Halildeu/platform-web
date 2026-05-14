@@ -56,7 +56,7 @@ import React, { Suspense } from 'react';
 import type { FC, PropsWithChildren } from 'react';
 import { createLazyRemoteModule } from './createLazyRemoteModule';
 // PR-B5b2-hostfix (Codex `019e2528`): host lookup centralized.
-import { getHostMfInstance } from './config/host-mf-instance';
+import { getHostMfInstance, CONFIGURED_HOST_NAME } from './config/host-mf-instance';
 
 declare const __MFE_SUGGESTIONS_ON_DEMAND__: boolean;
 
@@ -100,7 +100,7 @@ function ensureSuggestionsRegistered(): void {
   const host = getHostMfInstance();
   if (!host) {
     throw new Error(
-      `[B5b1] Host MF runtime instance "${SUGGESTIONS_HOST_NAME}" not initialized — ` +
+      `[B5b1] Host MF runtime instance "${CONFIGURED_HOST_NAME}" not initialized — ` +
         `eager bootstrap chain broken or this module rendered before host setup.`,
     );
   }
@@ -132,7 +132,7 @@ async function loadSuggestionsRemote(): Promise<{ default: FC<PropsWithChildren>
   // between register and load.
   if (!host) {
     throw new Error(
-      `[B5b1] Host MF runtime instance "${SUGGESTIONS_HOST_NAME}" disappeared between register and load.`,
+      `[B5b1] Host MF runtime instance "${CONFIGURED_HOST_NAME}" disappeared between register and load.`,
     );
   }
   const mod = await host.loadRemote<{ default: FC<PropsWithChildren> }>(SUGGESTIONS_REMOTE_KEY);
