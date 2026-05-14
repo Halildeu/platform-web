@@ -203,6 +203,14 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       cellSelection: true,
       multiSortKey: 'ctrl' as const,
       rowGroupPanelShow: rowGroupingEnabled ? ('always' as const) : ('never' as const),
+      // PR-0.4d-fe (Codex thread 019e2695 iter-2 P2 absorb): align AG
+      // Grid's SSRM secondary-field separator with the backend alias
+      // contract (`pvt__<pivot>__<value>__<func>__<valueField>`). When
+      // the response degrades to the `pivotResultFields`-only fallback
+      // path, AG Grid parses each field string by this separator; the
+      // default `_` would split mid-token (e.g. `pvt` / `<pivot>` /
+      // `<value>` / `sum` / `amount` becomes useful only with `__`).
+      serverSidePivotResultFieldSeparator: '__',
       ...(dataSourceMode === 'server'
         ? { cacheBlockSize: SERVER_CACHE_BLOCK_SIZE, maxBlocksInCache: 1 }
         : {}),

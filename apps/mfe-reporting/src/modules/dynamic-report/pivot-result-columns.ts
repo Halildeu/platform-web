@@ -115,36 +115,54 @@ export const applyPivotResultColumns = (
   pivotResultColumns: PivotResultColumn[] | undefined,
   lastSignatureRef: { current: string | null },
 ): PivotApplyMode => {
-  if (!api) return { mode: 'noop' };
+  // PR-0.4d-fe iter-2 (Codex 019e2695 P1 absorb): null api still has a
+  // useful fallback path — if the response carries `pivotResultFields`
+  // (old backend without `pivotResultColumns`, or rolling deploy serving
+  // only the alias list), the datasource can still hand the list to
+  // `params.success` so AG Grid registers row-data keys.
+  if (!api) {
+    return pivotResultFields?.length ? { mode: 'fallback', pivotResultFields } : { mode: 'noop' };
+  }
 
-  // Mismatch / desync: backend ordering invariant broken. Fall through
-  // to the pivotResultFields-only path (AG Grid's native success
-  // signature) so the grid at least registers the row-data keys.
-  if (
-    pivotResultFields?.length &&
-    pivotResultColumns?.length &&
-    !isAlignedPivotEnvelope(pivotResultFields, pivotResultColumns)
-  ) {
+  const apiWithPivot = api as GridApi & {
+    setPivotResultColumns?: (columns: unknown[] | null) => void;
+  };
+  const canSetExplicit = typeof apiWithPivot.setPivotResultColumns === 'function';
+
+  // Codex 019e2695 iter-2 P1 absorb: align desync OR missing columns
+  // both fall back to the pivotResultFields-only path. The previous
+  // shape only caught the "both present, desynced" case; a real-world
+  // rolling deploy where the backend serves `pivotResultFields` alone
+  // (PR-0.4b only, no PR-0.4d-be yet) silently slipped into the
+  // no-pivot-metadata clear branch and AG Grid never received the
+  // alias list.
+  const aligned = isAlignedPivotEnvelope(pivotResultFields, pivotResultColumns);
+  if (pivotResultFields?.length && !aligned) {
+    if (lastSignatureRef.current !== null && canSetExplicit) {
+      apiWithPivot.setPivotResultColumns([]);
+    }
     lastSignatureRef.current = null;
-    return {
-      mode: 'fallback',
-      pivotResultFields,
-    };
+    return { mode: 'fallback', pivotResultFields };
+  }
+
+  // Aligned envelope but the AG Grid build doesn't expose
+  // `setPivotResultColumns` (older minor, restrictive test mock). Fall
+  // back to AG Grid's native `pivotResultFields` success path so the
+  // grid at least registers the row-data keys; metadata
+  // (label/agg/value) won't be surfaced but the data renders.
+  if (aligned && !canSetExplicit) {
+    lastSignatureRef.current = null;
+    return { mode: 'fallback', pivotResultFields: pivotResultFields as string[] };
   }
 
   // No pivot metadata in the response. Either the request wasn't a
   // pivot request, or the report degraded back to flat/grouped — in
   // both cases we need to clear any previously registered secondary
   // columns so the grid doesn't keep showing ghost pivot headers.
-  if (!isAlignedPivotEnvelope(pivotResultFields, pivotResultColumns)) {
+  if (!aligned) {
     if (lastSignatureRef.current !== null) {
       lastSignatureRef.current = null;
-      // AG Grid setPivotResultColumns([]) clears the secondary list;
-      // available on the Enterprise SSRM API surface.
-      const apiWithPivot = api as GridApi & {
-        setPivotResultColumns?: (columns: unknown[]) => void;
-      };
-      if (typeof apiWithPivot.setPivotResultColumns === 'function') {
+      if (canSetExplicit) {
         apiWithPivot.setPivotResultColumns([]);
       }
       return { mode: 'cleared' };
@@ -152,30 +170,28 @@ export const applyPivotResultColumns = (
     return { mode: 'noop' };
   }
 
-  // Aligned envelope — build the explicit secondary colDefs.
-  const signature = pivotEnvelopeSignature(pivotResultColumns);
+  // Aligned envelope + AG Grid supports setPivotResultColumns → build
+  // the explicit secondary colDefs.
+  const signature = pivotEnvelopeSignature(pivotResultColumns as PivotResultColumn[]);
   if (signature === lastSignatureRef.current) {
     return { mode: 'noop' };
   }
   lastSignatureRef.current = signature;
 
-  const secondaryColDefs: PivotSecondaryColDef[] = pivotResultColumns.map((col) => ({
-    colId: col.field,
-    field: col.field,
-    headerName: buildPivotSecondaryHeader(col),
-    pivotField: col.pivotField,
-    pivotValue: col.pivotValue,
-    pivotLabel: col.pivotLabel,
-    aggFunc: col.aggFunc,
-    valueField: col.valueField,
-  }));
+  const secondaryColDefs: PivotSecondaryColDef[] = (pivotResultColumns as PivotResultColumn[]).map(
+    (col) => ({
+      colId: col.field,
+      field: col.field,
+      headerName: buildPivotSecondaryHeader(col),
+      pivotField: col.pivotField,
+      pivotValue: col.pivotValue,
+      pivotLabel: col.pivotLabel,
+      aggFunc: col.aggFunc,
+      valueField: col.valueField,
+    }),
+  );
 
-  const apiWithPivot = api as GridApi & {
-    setPivotResultColumns?: (columns: unknown[]) => void;
-  };
-  if (typeof apiWithPivot.setPivotResultColumns === 'function') {
-    apiWithPivot.setPivotResultColumns(secondaryColDefs);
-  }
+  apiWithPivot.setPivotResultColumns!(secondaryColDefs);
 
   return { mode: 'explicit', secondaryColDefs };
 };

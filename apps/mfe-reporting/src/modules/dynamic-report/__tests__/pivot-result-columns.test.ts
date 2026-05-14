@@ -202,7 +202,11 @@ describe('applyPivotResultColumns', () => {
     );
     // Signature ref is cleared so the next aligned response re-registers.
     expect(ref.current).toBeNull();
-    expect(api.setPivotResultColumns).not.toHaveBeenCalled();
+    // Codex 019e2695 iter-2 P1 absorb: a desync after a prior explicit
+    // registration must also clear the stale secondary columns so the
+    // grid doesn't keep showing them while the fallback path runs.
+    expect(api.setPivotResultColumns).toHaveBeenCalledTimes(1);
+    expect(api.setPivotResultColumns).toHaveBeenCalledWith([]);
   });
 
   it('clears previously registered secondary columns when the response drops pivot metadata', () => {
@@ -249,26 +253,99 @@ describe('applyPivotResultColumns', () => {
     expect(api.setPivotResultColumns).not.toHaveBeenCalled();
   });
 
-  it('is a no-op when the grid api is null (datasource closure timing)', () => {
+  it('falls back to pivotResultFields when api is null but the response carries the alias list', () => {
+    // Codex 019e2695 iter-2 P1 absorb: null api closure timing must
+    // still let the datasource hand pivotResultFields to params.success
+    // so AG Grid registers row-data keys.
     const ref = { current: null as string | null };
 
     const result = applyPivotResultColumns(null, sampleFields, sampleColumns, ref);
+
+    expect(result.mode).toBe('fallback');
+    expect((result as Extract<PivotApplyMode, { mode: 'fallback' }>).pivotResultFields).toEqual(
+      sampleFields,
+    );
+  });
+
+  it('is a no-op when api is null and the response carries no pivot metadata', () => {
+    const ref = { current: null as string | null };
+
+    const result = applyPivotResultColumns(null, undefined, undefined, ref);
 
     expect(result.mode).toBe('noop');
     expect(ref.current).toBeNull();
   });
 
-  it('tolerates AG Grid builds that do not expose setPivotResultColumns', () => {
+  it('falls back when AG Grid builds do not expose setPivotResultColumns (Codex iter-2 P1)', () => {
     // Older AG Grid versions / mocks may not surface the SSRM
-    // setPivotResultColumns API. Helper must not throw, just skip the
-    // registration step and still return the explicit mode so the
-    // datasource caller knows the envelope was aligned.
+    // setPivotResultColumns API. Helper must fall back to the
+    // pivotResultFields path so AG Grid still registers row-data keys.
     const partialApi = {} as unknown as Parameters<typeof applyPivotResultColumns>[0];
     const ref = { current: null as string | null };
 
     const result = applyPivotResultColumns(partialApi, sampleFields, sampleColumns, ref);
 
-    expect(result.mode).toBe('explicit');
+    expect(result.mode).toBe('fallback');
+    expect((result as Extract<PivotApplyMode, { mode: 'fallback' }>).pivotResultFields).toEqual(
+      sampleFields,
+    );
+    expect(ref.current).toBeNull();
+  });
+
+  it('falls back when backend ships pivotResultFields without pivotResultColumns (PR-0.4b only deploy)', () => {
+    // Codex 019e2695 iter-2 P1 critical: rolling deploy with PR-0.4b
+    // backend but no PR-0.4d-be deploy yet. Backend serves the alias
+    // list without the semantic metadata; helper must still surface the
+    // alias list onto AG Grid via the fallback path.
+    const api = mockApi();
+    const ref = { current: null as string | null };
+
+    const result = applyPivotResultColumns(
+      api as unknown as Parameters<typeof applyPivotResultColumns>[0],
+      sampleFields,
+      undefined,
+      ref,
+    );
+
+    expect(result.mode).toBe('fallback');
+    expect((result as Extract<PivotApplyMode, { mode: 'fallback' }>).pivotResultFields).toEqual(
+      sampleFields,
+    );
+    expect(api.setPivotResultColumns).not.toHaveBeenCalled();
+    expect(ref.current).toBeNull();
+  });
+
+  it('clears previously registered explicit columns when the response degrades to fields-only', () => {
+    // Rolling-deploy sequence: explicit envelope (T0) → fields-only
+    // envelope (T1). The helper must clear the previously registered
+    // explicit columns AND return the fallback path so the datasource
+    // re-supplies pivotResultFields on params.success.
+    const api = mockApi();
+    const ref = { current: null as string | null };
+
+    // T0: explicit envelope live.
+    applyPivotResultColumns(
+      api as unknown as Parameters<typeof applyPivotResultColumns>[0],
+      sampleFields,
+      sampleColumns,
+      ref,
+    );
     expect(ref.current).not.toBeNull();
+    expect(api.setPivotResultColumns).toHaveBeenCalledTimes(1);
+
+    // T1: rolling deploy → fields-only response.
+    const result = applyPivotResultColumns(
+      api as unknown as Parameters<typeof applyPivotResultColumns>[0],
+      sampleFields,
+      undefined,
+      ref,
+    );
+
+    expect(result.mode).toBe('fallback');
+    expect(ref.current).toBeNull();
+    // setPivotResultColumns called twice: once to register T0,
+    // once with [] to clear stale columns before falling back.
+    expect(api.setPivotResultColumns).toHaveBeenCalledTimes(2);
+    expect(api.setPivotResultColumns).toHaveBeenLastCalledWith([]);
   });
 });
