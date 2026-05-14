@@ -2,8 +2,15 @@ import type { HrDemographicFilters, HrDemographicRow, DemographicSummary } from 
 import { generateMockEmployees, computeSummary } from './mock-data';
 import type { GridRequest, GridResponse } from '../../grid';
 // eslint-disable-next-line no-restricted-imports -- defensive fallback when getShellServices() unavailable (resolveHttp helper below)
+// eslint-disable-next-line no-restricted-imports -- pre-existing fallback path; tracked separately as a shell-services migration.
+>>>>>>> 2192487a (fix(hr-demografik): pr-x14 post-impl iter-1 absorb (3 high+medium))
 import { api } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
+// PR-X14 (Codex 019e26a9 post-impl high #2): row filtering must use
+// the same alias normalization the map adapter does — otherwise
+// `location=İstanbul` filter drops the same İSTANBUL(Avrupa) /
+// İSTANBUL(Anadolu) rows the map correctly aggregates to TR-34.
+import { findProvinceCodeByLabel } from './geo/tr-provinces';
 
 // ---------------------------------------------------------------------------
 // Backend Dashboard API — canlı Workcube verisi
@@ -124,7 +131,24 @@ export const fetchHrDemographicRows = async (
     filtered = filtered.filter((r) => r.gender === filters.gender);
   }
   if (filters.location && filters.location !== 'all') {
-    filtered = filtered.filter((r) => r.location === filters.location);
+    // Codex 019e26a9 post-impl high #2: code-based comparison so the
+    // İstanbul filter accepts every row whose label aliases to TR-34
+    // (canonical "İstanbul", "İSTANBUL(Avrupa)", "İSTANBUL(Anadolu)",
+    // ASCII-folded variants). "Belirtilmemiş" stays a separate bucket
+    // that does NOT match any province filter.
+    const filterCode = findProvinceCodeByLabel(filters.location);
+    if (filterCode) {
+      filtered = filtered.filter((r) => findProvinceCodeByLabel(r.location) === filterCode);
+    } else if (filters.location === 'Belirtilmemiş') {
+      filtered = filtered.filter((r) => {
+        const code = findProvinceCodeByLabel(r.location);
+        return code === null;
+      });
+    } else {
+      // Unknown filter value — fall back to legacy exact equality so
+      // pre-existing callers don't silently drop to "no results".
+      filtered = filtered.filter((r) => r.location === filters.location);
+    }
   }
   if (filters.employmentType && filters.employmentType !== 'all') {
     filtered = filtered.filter((r) => r.employmentType === filters.employmentType);

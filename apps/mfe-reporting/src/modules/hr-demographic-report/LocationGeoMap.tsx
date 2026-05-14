@@ -20,7 +20,7 @@
  *     the TR-XX code there) — Codex iter-2 #2 fix.
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { GeoMap, KPICard as XKPICard, type GeoOverlay } from '@mfe/x-charts';
+import { GeoMap, type GeoOverlay } from '@mfe/x-charts';
 import { Alert } from '@mfe/design-system';
 import { DetailDrawer } from '@mfe/design-system';
 import { useTRMapRegistration } from './geo/useTRMapRegistration';
@@ -139,22 +139,28 @@ export const LocationGeoMap: React.FC<LocationGeoMapProps> = ({
     <div className="flex flex-col gap-3">
       {/* Data-quality badge — Belirtilmemiş outlier kept out of the
           map domain (would dominate the visualMap scale) but surfaced
-          so consumers see the missing-data signal. */}
+          inline so the missing-data signal is visible. Codex 019e26a9
+          post-impl medium #3 absorb: NOT a nested XKPICard ("no card
+          inside card" DS guardrail). Compact inline `Alert` instead. */}
       {adapter.unspecifiedCount > 0 && (
-        <div className="flex gap-3">
-          <XKPICard
-            title="İkamet Eksik"
-            value={fmt(adapter.unspecifiedCount)}
-            subtitle="Veri kalitesi metriği — haritada gösterilmez"
-          />
-        </div>
+        <Alert variant="warning" title="Veri kalitesi notu">
+          <div className="text-xs">
+            <strong>{fmt(adapter.unspecifiedCount)}</strong> personelin ikamet şehri belirtilmemiş —
+            haritada gösterilmez, ayrı data-quality metriği.
+          </div>
+        </Alert>
       )}
 
       <GeoMap
         mapName="TR"
         nameProperty="code"
+        // Codex 019e26a9 post-impl high #1: pass canonical Turkish
+        // display name (NOT code). `GeoMap` flows `name` through
+        // `nameMap` for code-based feature matching; preserving the
+        // display name keeps tooltip + a11y SR table user-readable
+        // ("İstanbul" not "TR-34").
         data={adapter.mapData.map((d) => ({
-          name: d.code,
+          name: d.name,
           value: d.value,
           code: d.code,
         }))}
