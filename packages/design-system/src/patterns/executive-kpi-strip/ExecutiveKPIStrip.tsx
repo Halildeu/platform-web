@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { resolveAccessState, accessStyles } from '../../internal/access-controller';
 import type { AccessLevel } from '../../internal/access-controller';
-import { formatValue, getTrendColor, getTrendIcon } from '../../enterprise/types';
-import type { FormatOptions, TrendInfo } from '../../enterprise/types';
+import { formatValue, getTrendColor, getTrendIcon } from '../../utils/format-helpers';
+import type { FormatOptions, TrendInfo } from '../../utils/format-helpers';
 
 // ---------------------------------------------------------------------------
 // Types
