@@ -56,8 +56,23 @@ declare global {
 }
 
 export const AppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
-    window.__shellStore = store;
+  // Expose the Redux store on `window.__shellStore` in three cases:
+  //   1. Dev builds (NODE_ENV !== 'production') — original behaviour.
+  //   2. Auth-contract E2E builds (VITE_AUTH_CONTRACT_E2E=1) — re-uses
+  //      the existing test-only probe flag for surface coherence.
+  //   3. Permit-all + fake-auth shells (Playwright impersonation Faz 1+)
+  //      driven by the production `vite preview` CI lane.
+  if (typeof window !== 'undefined') {
+    const isDev = process.env.NODE_ENV !== 'production';
+    const isContractE2e =
+      (process.env.VITE_AUTH_CONTRACT_E2E ?? '').toString().toLowerCase() === '1' ||
+      (process.env.NEXT_PUBLIC_AUTH_CONTRACT_E2E ?? '').toString().toLowerCase() === '1';
+    const isPermitAllFakeAuth =
+      (process.env.VITE_AUTH_MODE ?? '').toString().toLowerCase() === 'permitall' &&
+      (process.env.VITE_ENABLE_FAKE_AUTH ?? '').toString() === '1';
+    if (isDev || isContractE2e || isPermitAllFakeAuth) {
+      window.__shellStore = store;
+    }
   }
   // Phase 2 PR-E2E-6: install test-only window probe surface (idempotent;
   // no-op when VITE_AUTH_CONTRACT_E2E is unset).
