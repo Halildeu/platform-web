@@ -17,10 +17,6 @@
       "figmaUrl": "pending",
       "figmaNodeId": "pending:AgGridServer"
     },
-    "AgingBuckets": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:AgingBuckets"
-    },
     "AIActionAuditTimeline": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:AIActionAuditTimeline"
@@ -161,10 +157,6 @@
       "figmaUrl": "pending",
       "figmaNodeId": "pending:DateRangePicker"
     },
-    "DecisionMatrix": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:DecisionMatrix"
-    },
     "Descriptions": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:Descriptions"
@@ -204,10 +196,6 @@
     "EmptyState": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:EmptyState"
-    },
-    "EmptyStateBuilder": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:EmptyStateBuilder"
     },
     "EntitySummaryBlock": {
       "figmaUrl": "pending",
@@ -304,10 +292,6 @@
     "MenuBar": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:MenuBar"
-    },
-    "MetricComparisonCard": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:MetricComparisonCard"
     },
     "MicroChart": {
       "figmaUrl": "pending",
@@ -445,10 +429,6 @@
       "figmaUrl": "pending",
       "figmaNodeId": "pending:Switch"
     },
-    "SWOTMatrix": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:SWOTMatrix"
-    },
     "TableSimple": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:TableSimple"
@@ -500,10 +480,6 @@
     "TourCoachmarks": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:TourCoachmarks"
-    },
-    "TrainingTracker": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:TrainingTracker"
     },
     "Transfer": {
       "figmaUrl": "pending",

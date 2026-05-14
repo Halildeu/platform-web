@@ -217,17 +217,17 @@ import entry217 from './entries/ValueStream.doc';
 import entry218 from './entries/StatusTimeline.doc';
 import entry219 from './entries/NotificationCenter.doc';
 import entry220 from './entries/InlineEdit.doc';
-import entry221 from './entries/EmptyStateBuilder.doc';
+// entry221 (EmptyStateBuilder): removed — Phase 1b niche triage
 import entry222 from './entries/FilterPresets.doc';
 import entry223 from './entries/DataExportDialog.doc';
 import entry224 from './entries/ExecutiveKPIStrip.doc';
 import entry225 from './entries/ApprovalWorkflow.doc';
 import entry226 from './entries/RiskMatrix.doc';
 import entry227 from './entries/GanttTimeline.doc';
-import entry228 from './entries/AgingBuckets.doc';
+// entry228 (AgingBuckets): removed — Phase 1b niche triage
 // entry229 (FunnelChart): removed — `@mfe/x-charts` canonical (Phase 1a)
 import entry230 from './entries/ComparisonTable.doc';
-import entry231 from './entries/TrainingTracker.doc';
+// entry231 (TrainingTracker): removed — Phase 1b niche triage
 import entry232 from './entries/GovernanceBoard.doc';
 import entry233 from './entries/ThemeLayout.doc';
 import entry234 from './entries/FineKinney.doc';
@@ -240,10 +240,10 @@ import entry240 from './entries/ActivityFeed.doc';
 import entry241 from './entries/BoxPlot.doc';
 import entry242 from './entries/HistogramChart.doc';
 import entry243 from './entries/ControlChart.doc';
-import entry244 from './entries/SWOTMatrix.doc';
-import entry245 from './entries/DecisionMatrix.doc';
+// entry244 (SWOTMatrix): removed — Phase 1b niche triage
+// entry245 (DecisionMatrix): removed — Phase 1b niche triage
 import entry246 from './entries/FileUploadZone.doc';
-import entry247 from './entries/MetricComparisonCard.doc';
+// entry247 (MetricComparisonCard): removed — Phase 1b niche triage
 import entry248 from './entries/FlowBuilder.doc';
 import entry249 from './entries/VariantIntegration.doc';
 import entry250 from './entries/StatusIndicator.doc';
@@ -485,16 +485,13 @@ export const designLabComponentDocEntries: DesignLabComponentDocEntry[] = [
   entry218,
   entry219,
   entry220,
-  entry221,
   entry222,
   entry223,
   entry224,
   entry225,
   entry226,
   entry227,
-  entry228,
   entry230,
-  entry231,
   entry232,
   entry233,
   entry234,
@@ -507,10 +504,7 @@ export const designLabComponentDocEntries: DesignLabComponentDocEntry[] = [
   entry241,
   entry242,
   entry243,
-  entry244,
-  entry245,
   entry246,
-  entry247,
   entry248,
   entry249,
   entry250,

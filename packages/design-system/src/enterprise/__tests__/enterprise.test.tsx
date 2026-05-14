@@ -8,10 +8,8 @@ import { ExecutiveKPIStrip } from '../ExecutiveKPIStrip';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../RiskMatrix';
 import { GanttTimeline } from '../GanttTimeline';
-import { AgingBuckets } from '../AgingBuckets';
 
 import { ComparisonTable } from '../ComparisonTable';
-import { TrainingTracker } from '../TrainingTracker';
 import { GovernanceBoard } from '../GovernanceBoard';
 import { ThemeLayout } from '../ThemeLayout';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';
@@ -177,33 +175,6 @@ describe('GanttTimeline', () => {
   });
 });
 
-describe('AgingBuckets', () => {
-  const buckets = [
-    { label: '0-30', count: 45, value: 120000, percentage: 40, tone: 'success' as const },
-    { label: '31-60', count: 20, value: 80000, percentage: 27, tone: 'warning' as const },
-    { label: '60+', count: 10, value: 100000, percentage: 33, tone: 'danger' as const },
-  ];
-
-  it('renders buckets', () => {
-    const { container } = render(<AgingBuckets buckets={buckets} />);
-    expect(container.textContent).toContain('0-30');
-  });
-
-  it('has no accessibility violations', async () => {
-    const { container } = render(<AgingBuckets buckets={buckets} />);
-    await expectNoA11yViolations(container);
-  });
-
-  it('has accessible ARIA structure', () => {
-    const { container } = render(<AgingBuckets buckets={buckets} />);
-    const region = screen.queryByRole('region') || screen.queryByRole('list');
-    expect(
-      region || container.querySelector('[aria-label]') || container.firstElementChild,
-    ).toBeTruthy();
-    expect(container.innerHTML).toContain('0-30');
-  });
-});
-
 describe('ComparisonTable', () => {
   const rows = [
     { label: 'Revenue', actual: 1200000, target: 1000000 },
@@ -225,42 +196,6 @@ describe('ComparisonTable', () => {
     const table = screen.getByRole('table');
     expect(table).toBeInTheDocument();
     expect(container.querySelector('[aria-label]') || table).toBeTruthy();
-  });
-});
-
-describe('TrainingTracker', () => {
-  const items = [
-    {
-      id: '1',
-      title: 'Safety Training',
-      category: 'Compliance',
-      status: 'completed' as const,
-      progress: 100,
-    },
-    {
-      id: '2',
-      title: 'Leadership',
-      category: 'Skills',
-      status: 'in-progress' as const,
-      progress: 60,
-    },
-  ];
-
-  it('renders tracker', () => {
-    const { container } = render(<TrainingTracker items={items} />);
-    expect(container.textContent).toContain('Safety Training');
-  });
-
-  it('has no accessibility violations', async () => {
-    const { container } = render(<TrainingTracker items={items} />);
-    await expectNoA11yViolations(container);
-  });
-
-  it('has accessible ARIA structure', () => {
-    const { container } = render(<TrainingTracker items={items} />);
-    const buttons = screen.getAllByRole('button');
-    expect(buttons.length).toBeGreaterThan(0);
-    expect(container.querySelector('[aria-label]') || container.firstElementChild).toBeTruthy();
   });
 });
 
