@@ -119,11 +119,23 @@ server {
         add_header Cache-Control "no-store, must-revalidate" always;
     }
 
-    # Hashed assets — long cache (immutable)
+    # PERF-INIT-V2 PR-B3c (Codex thread `019e240d` AGREE) — hashed Vite
+    # chunks under `/assets/` get long-cache.  Content-hash filenames
+    # (e.g. `bootstrap-CDWbzp5o.js`) auto-invalidate on every new build,
+    # so 1y immutable is safe.  Vite docs canonical pattern.
+    #
+    # Pre-B3c: `max-age=3600` (1h) — returning visitors re-validated
+    # every hour.
+    # Post-B3c: `max-age=31536000, immutable` (1y) — disk cache HIT for
+    # all hashed JS/CSS chunks, 0 KB transfer on warm visits.
+    #
+    # Entry surfaces (`/`, `/index.html`, `*remoteEntry.js`) above retain
+    # `no-store, must-revalidate` so the SPA shell + federation manifest
+    # stay live.
     location /assets/ {
         try_files $uri =404;
         access_log off;
-        add_header Cache-Control "public, max-age=3600, immutable" always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
     }
 
     # SPA catch-all
