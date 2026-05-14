@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSummary, getLiveKPIs, getLiveCharts } from './api';
 import type { DemographicSummary } from './types';
+// PR-X14 (Codex 019e26a9 plan-time AGREE): canonical İkamet Şehri
+// visualisation replaces the duplicate "Lokasyon Dagilimi" PieChart
+// widgets. GeoMap + bubble overlay + drill-down drawer.
+import { LocationGeoMap } from './LocationGeoMap';
 import {
   PieChart as XPieChart,
   BarChart as XBarChart,
@@ -1280,11 +1284,17 @@ const DemographicDashboard: React.FC = () => {
           </ChartCard>
         </div>
 
-        {/* ── ROW 3: DEI Gauges / Nesil / Lokasyon ────────────── */}
+        {/* ── ROW 3: DEI Gauges / Nesil ───────────────────────── */}
+        {/* PR-X14 (Codex 019e26a9 plan-time AGREE): "Lokasyon
+            Dagilimi" duplicate card removed from this row. The
+            canonical İkamet Şehri visualisation now lives in the
+            APQC HC-2 / Organizasyonel row below as <LocationGeoMap />
+            (GeoMap + bubble overlay + drill-down drawer). Grid
+            collapses from 3 columns to 2 (Codex iter-2 must-fix #1). */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 16,
             marginBottom: 16,
           }}
@@ -1346,11 +1356,8 @@ const DemographicDashboard: React.FC = () => {
               />
             </div>
           </ChartCard>
-          <ChartCard title={chartTitle('Lokasyon Dagilimi', 'location-distribution')}>
-            <PieChart
-              data={getChartData('location-distribution') ?? summary.locationDistribution}
-            />
-          </ChartCard>
+          {/* PR-X14: previous "Lokasyon Dagilimi" PieChart removed —
+              canonical İkamet Şehri lives in the HC-2 row below. */}
         </div>
 
         {/* ── ROW 4: Bullet Charts + Etik Uyum ────────────────── */}
@@ -1449,9 +1456,17 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <SectionHeader>Organizasyonel (APQC HC-2)</SectionHeader>
-          <ChartCard title={chartTitle('Lokasyon Dagilimi', 'location-distribution')}>
-            <PieChart
+          {/* PR-X14 (Codex 019e26a9 plan-time iter-3 AGREE):
+              Canonical İkamet Şehri visualisation. Replaces the
+              prior PieChart (72-slice unreadable). GeoMap + bubble
+              overlay + DetailDrawer drill-down. The Row 3 duplicate
+              card has also been removed for single-source-of-truth.
+              See `LocationGeoMap.tsx` + `geo/` + `utils/location-to-geomap.ts`. */}
+          <ChartCard title={chartTitle('Ikamet Sehri', 'location-distribution')}>
+            <LocationGeoMap
               data={getChartData('location-distribution') ?? summary.locationDistribution}
+              title="İkamet Şehri"
+              description="Personelin TR illeri bazında dağılımı (Belirtilmemiş ayrı badge'de)"
             />
           </ChartCard>
           <ChartCard title={chartTitle('Pozisyon Seviyesi', 'position-level')}>
