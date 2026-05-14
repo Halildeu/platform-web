@@ -132,10 +132,12 @@ const stubUserList = async (page: Page) => {
 };
 
 test.describe('Impersonation action authz boundary — Faz 1', () => {
-  // Iter-4: extend per-test timeout. Production-preview cold start +
-  // module-federation remote bundle preload + auth bootstrap can take
-  // longer than the default 30s when chromium runs on a CI runner.
-  test.setTimeout(120_000);
+  // Iter-4/5: the shared playwright.config sets actionTimeout: 15_000
+  // which caps page.waitForFunction even when callers specify a higher
+  // explicit timeout. Bump it to 60s for this describe block so the
+  // production-preview shell boot has room to land __authContractProbe.
+  test.use({ actionTimeout: 60_000, navigationTimeout: 60_000 });
+  test.setTimeout(180_000);
 
   test('action_visible_for_super_admin', async ({ page, baseURL }) => {
     await seedFakeAuthEnv(page, ADMIN_PERMISSIONS);
