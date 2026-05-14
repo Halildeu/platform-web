@@ -27,6 +27,7 @@ import {
   seriesTypes,
   resetEChartsMock,
   clickListenerRegistrations,
+  lastSetOptionOpts,
 } from './fixtures/echarts-mock'; // side-effect import: vi.mock hoisted before component imports below
 import { installJsdomPolyfills, restoreJsdomPolyfills } from './fixtures/jsdom-polyfills';
 
@@ -2194,10 +2195,13 @@ describe('GeoMap option shape', () => {
   });
 
   it('heatmap rerender: toggle on → off does NOT leave stale series or visualMap (notMerge: true)', () => {
-    // Codex 019e25ee iter-2 must-fix #4: ECharts default merge would
-    // keep the heatmap visualMap orphaned when its series disappears.
-    // GeoMap opts into notMerge: true so each render fully replaces
-    // option.series + option.visualMap.
+    // Codex 019e25ee iter-2 must-fix #4 + post-impl test note: ECharts
+    // default merge would keep the heatmap visualMap orphaned when its
+    // series disappears. GeoMap opts into notMerge: true so each render
+    // fully replaces option.series + option.visualMap. The test
+    // explicitly asserts the wrapper passed `notMerge: true` to
+    // setOption — without this guard the test would silently pass even
+    // if `notMerge` were removed (mock does not simulate ECharts merge).
     const { rerender } = render(
       <GeoMap
         mapName="TR"
@@ -2213,6 +2217,9 @@ describe('GeoMap option shape', () => {
     );
     expect(seriesTypes(lastDispatchedOption())).toContain('heatmap');
     expect(Array.isArray(lastDispatchedOption()?.visualMap)).toBe(true);
+    // Direct args check — wrapper MUST pass `notMerge: true` to
+    // setOption(option, opts) so ECharts replaces option fully.
+    expect(lastSetOptionOpts()?.notMerge).toBe(true);
 
     // Toggle heatmap off (overlays prop empty).
     rerender(<GeoMap mapName="TR" data={sampleData} overlays={[]} animate={false} />);
@@ -2221,6 +2228,9 @@ describe('GeoMap option shape', () => {
     expect(types).not.toContain('heatmap');
     // visualMap shape regresses to single-object (back-compat preserved).
     expect(Array.isArray(lastDispatchedOption()?.visualMap)).toBe(false);
+    // notMerge: true STILL passed on the rerender (regression guard
+    // for the wrapper accidentally dropping the opt mid-lifecycle).
+    expect(lastSetOptionOpts()?.notMerge).toBe(true);
   });
 
   it('heatmap a11y SR row: summary format "<layer>: N points, intensity MIN-MAX"', () => {
@@ -2279,50 +2289,14 @@ describe('GeoMap option shape', () => {
     expect(summary).toBe('Mixed density: 3 points, intensity 0-50');
   });
 
-  it('heatmap click → onDataPointClick fires with overlayType=heatmap', () => {
-    const handler = vi.fn();
-    render(
-      <GeoMap
-        mapName="TR"
-        data={sampleData}
-        overlays={[
-          {
-            type: 'heatmap',
-            name: 'Events density',
-            data: [{ name: 'İstanbul', coordinates: [29.0, 41.0], value: 87 }],
-          },
-        ]}
-        onDataPointClick={handler}
-        animate={false}
-      />,
-    );
-    const registrations = clickListenerRegistrations();
-    const clickHandler = registrations[registrations.length - 1];
-    clickHandler({
-      seriesType: 'heatmap',
-      name: 'İstanbul',
-      data: {
-        _overlay: {
-          type: 'heatmap',
-          layerName: 'Events density',
-          coordinates: [29.0, 41.0],
-          value: 87,
-        },
-      },
-    });
-    expect(handler).toHaveBeenCalledOnce();
-    const payload = handler.mock.calls[0][0] as {
-      datum: Record<string, unknown>;
-      value?: number;
-      label?: string;
-    };
-    expect(payload.datum.kind).toBe('overlay');
-    expect(payload.datum.overlayType).toBe('heatmap');
-    expect(payload.datum.layerName).toBe('Events density');
-    expect(payload.datum.coordinates).toEqual([29.0, 41.0]);
-    expect(payload.value).toBe(87);
-    expect(payload.label).toBe('İstanbul');
-  });
+  // No 'heatmap click' test by design — Codex 019e25ee post-impl P1
+  // verified vs echarts@5.6.0 source: geo heatmap renders one raster
+  // `ZRImage` with `silent: true` and emits NO per-datum click event.
+  // The wrapper intentionally drops the heatmap click branch in
+  // GeoMap.tsx so a synthetic test here would prove only that the
+  // mock can be misused — not that real users click density blobs.
+  // A11y SR summary row tests above are the canonical accessibility
+  // contract for heatmap density data.
 
   it('overlays trigger explicit option.geo block (shared coord system)', () => {
     render(
