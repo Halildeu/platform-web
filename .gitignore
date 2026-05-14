@@ -46,3 +46,9 @@ archive/
 public/design-tokens.source.json
 web/.eslintcache
 apps/*/dist/
+
+# PERF-INIT-V2 PR-B3d0-impl: source-map-explorer CSS attribution artifacts
+# (generated; CI uploads them, never commit — node_modules paths,
+# sourcemap normalization, and build hash variance kirletir diff trail).
+docs/performance/css-breakdown.html
+docs/performance/css-breakdown.json
