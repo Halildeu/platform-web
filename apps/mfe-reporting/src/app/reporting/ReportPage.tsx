@@ -172,6 +172,24 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
     () => new Set(reportCapabilities?.groupableFields ?? []),
     [reportCapabilities],
   );
+  /*
+   * PR-0.4a (Codex 019e2695 hybrid pivot design): pivot capability
+   * derivation. Two independent flags + an allowlist:
+   *
+   *   serverSidePivoting=true  → backend pivot SQL (PR-0.4b lands SQL path)
+   *   clientPivotAllowed=true  → AG Grid native client pivot (small reports)
+   *   pivotableFields          → columns the user may drag onto pivot
+   *
+   * `pivotModeAllowed` is the single derived gate: pivot UI lights up
+   * iff the report opts into at least one mode and (for client mode)
+   * the dataSourceMode actually matches. Otherwise pivot UI stays
+   * hidden so a stale capability or accidental drag cannot produce a
+   * 400 GROUPING_NOT_SUPPORTED roundtrip.
+   */
+  const pivotableFieldSet = React.useMemo(
+    () => new Set(reportCapabilities?.pivotableFields ?? []),
+    [reportCapabilities],
+  );
   const aggregatableFieldSet = React.useMemo(
     () => new Set(reportCapabilities?.aggregatableFields ?? []),
     [reportCapabilities],
@@ -410,9 +428,22 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       }));
     }
     if (dataSourceMode !== 'server') {
-      // Client-mode datasources let AG Grid group in-memory regardless
-      // of backend capability — no per-column gating needed.
-      return colDefs;
+      // Client-mode datasources let AG Grid handle row grouping and
+      // value aggregation in-memory regardless of backend capability,
+      // but PR-0.4a (Codex 019e2695) still gates pivot per the
+      // `clientPivotAllowed` capability and the `pivotableFields`
+      // allowlist. Otherwise a client-mode report with
+      // `clientPivotAllowed=false` could still let the user drag a
+      // column onto the pivot drop zone.
+      const clientPivotModeAllowed = reportCapabilities?.clientPivotAllowed === true;
+      return colDefs.map((cd) => {
+        const field = (cd as { field?: string }).field;
+        return {
+          ...cd,
+          enablePivot:
+            clientPivotModeAllowed && field !== undefined && pivotableFieldSet.has(field),
+        };
+      });
     }
     /*
      * Server-mode with capability=true: per-column gating against the
@@ -422,18 +453,42 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
      * capability lights up — keeps the UI honest about what the
      * backend will accept on POST /query.
      */
+    /*
+     * PR-0.4a (Codex 019e2695): pivot UI gate. Pivot mode lights up
+     * iff:
+     *   - backend opts in via serverSidePivoting=true (PR-0.4b wires
+     *     the backend SQL path on a per-report basis), OR
+     *   - the report opts into clientPivotAllowed AND we are actually
+     *     running in client-mode (raw rows already in browser memory,
+     *     ≤ 10K cap).
+     * Otherwise the pivot drop-zone, panel and column header pivot
+     * actions stay hidden — stops the GROUPING_NOT_SUPPORTED 400
+     * round-trip pattern the testai canary hit on PR #491.
+     */
+    const pivotModeAllowed =
+      reportCapabilities?.serverSidePivoting === true ||
+      (reportCapabilities?.clientPivotAllowed === true && dataSourceMode === 'client');
     return colDefs.map((cd) => {
       const field = (cd as { field?: string }).field;
       const isGroupable = field !== undefined && groupableFieldSet.has(field);
       const isAggregatable = field !== undefined && aggregatableFieldSet.has(field);
+      const isPivotable = pivotModeAllowed && field !== undefined && pivotableFieldSet.has(field);
       return {
         ...cd,
         enableRowGroup: isGroupable,
         enableValue: isAggregatable,
-        enablePivot: false,
+        enablePivot: isPivotable,
       };
     });
-  }, [colDefs, rowGroupingEnabled, dataSourceMode, groupableFieldSet, aggregatableFieldSet]);
+  }, [
+    colDefs,
+    rowGroupingEnabled,
+    dataSourceMode,
+    groupableFieldSet,
+    aggregatableFieldSet,
+    pivotableFieldSet,
+    reportCapabilities,
+  ]);
 
   /*
    * PR-0.2 sanitizer for saved variant column state. Server-mode only —
@@ -455,6 +510,14 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       if (dataSourceMode !== 'server') return state;
       const groupableSet = groupableFieldSet;
       const aggregatableSet = aggregatableFieldSet;
+      const pivotableSet = pivotableFieldSet;
+      // PR-0.4a (Codex 019e2695): pivot state preservation is now
+      // capability-gated rather than blanket-stripped. Server-mode
+      // saved variants only keep pivot/pivotIndex on columns whose
+      // field is in pivotableFields AND when the backend has actually
+      // opted into serverSidePivoting=true. Otherwise the next
+      // /query roundtrip would fail with 400 GROUPING_NOT_SUPPORTED.
+      const pivotPersistAllowed = reportCapabilities?.serverSidePivoting === true;
       return state.map((entry) => {
         if (!entry || typeof entry !== 'object') return entry;
         const next = { ...(entry as Record<string, unknown>) };
@@ -466,16 +529,24 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         if (!aggregatableSet.has(colId)) {
           delete next.aggFunc;
         }
-        // Pivot stays disabled platform-wide until PR-0.4 ships the
-        // backend pivot path; an in-flight saved variant carrying
-        // pivot=true would just produce a 400 GROUPING_NOT_SUPPORTED
-        // on the next /query call.
-        delete next.pivot;
-        delete next.pivotIndex;
+        if (!pivotPersistAllowed || !pivotableSet.has(colId)) {
+          delete next.pivot;
+          delete next.pivotIndex;
+        }
         return next as VariantColumnState[number];
       });
     },
-    [dataSourceMode, groupableFieldSet, aggregatableFieldSet],
+    [
+      dataSourceMode,
+      groupableFieldSet,
+      aggregatableFieldSet,
+      // Codex 019e2695 iter-2 absorb: PR-0.4a dependency closure must
+      // include the pivot capability inputs so a late-arriving
+      // capability envelope re-derives the sanitizer rather than
+      // sticking to stale `serverSidePivoting=false` / empty allowlist.
+      pivotableFieldSet,
+      reportCapabilities,
+    ],
   );
 
   /*
@@ -484,8 +555,21 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
    * in-memory pivot stays usable for the legacy client-side reports.
    */
   const sanitizeVariantPivotMode = React.useCallback(
-    (pivotMode: boolean | undefined) => (dataSourceMode === 'server' ? false : pivotMode),
-    [dataSourceMode],
+    (pivotMode: boolean | undefined) => {
+      // PR-0.4a (Codex 019e2695): capability-gated pivotMode sanitize.
+      //   server-mode → serverSidePivoting=true ? pivotMode : false
+      //   client-mode → clientPivotAllowed=true ? pivotMode : false
+      // The previous "server-mode forces false" rule is superseded by
+      // the per-report capability flag — once a report opts in (e.g.
+      // fin-muhasebe-detay sets serverSidePivoting=true in its
+      // metadata response), saved variants with pivotMode=true become
+      // valid in server-mode too.
+      if (dataSourceMode === 'server') {
+        return reportCapabilities?.serverSidePivoting === true ? pivotMode : false;
+      }
+      return reportCapabilities?.clientPivotAllowed === true ? pivotMode : false;
+    },
+    [dataSourceMode, reportCapabilities],
   );
 
   /*
@@ -498,7 +582,14 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   const capabilityKey = React.useMemo(() => {
     const groupable = (reportCapabilities?.groupableFields ?? []).join(',');
     const aggregatable = (reportCapabilities?.aggregatableFields ?? []).join(',');
-    return `${reportCapabilities?.serverSideGrouping ? '1' : '0'}|${groupable}|${aggregatable}`;
+    // Codex 019e2695 iter-2 absorb: PR-0.4a pivot capability inputs
+    // must participate in the envelope signature so a late-arriving
+    // `serverSidePivoting=true` (or pivotableFields list change)
+    // triggers a VariantIntegration remount + auto-apply re-run.
+    const pivotable = (reportCapabilities?.pivotableFields ?? []).join(',');
+    const ssp = reportCapabilities?.serverSidePivoting ? '1' : '0';
+    const cpa = reportCapabilities?.clientPivotAllowed ? '1' : '0';
+    return `${reportCapabilities?.serverSideGrouping ? '1' : '0'}|${groupable}|${aggregatable}|${ssp}|${cpa}|${pivotable}`;
   }, [reportCapabilities]);
 
   /* ---- Server-side datasource ---- */

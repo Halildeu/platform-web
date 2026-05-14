@@ -45,3 +45,4 @@ Thumbs.db
 archive/
 public/design-tokens.source.json
 web/.eslintcache
+apps/*/dist/
