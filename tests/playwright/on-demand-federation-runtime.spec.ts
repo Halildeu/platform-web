@@ -142,23 +142,25 @@ test.describe('PR-B5b3b: on-demand federation runtime smoke (/login)', () => {
       allRequests.push(req.url());
     });
 
-    // B5b3b iter-3 (nightly re-trigger 25841744053 STILL TimeoutError
-    // even with waitUntil:'load' + 45s timeout — GitHub Actions runner
-    // ↔ Turkey-side testai.acik.com cold TLS handshake + MFE federation
-    // chain + heavy initial JS payload exceeds 45s).
+    // B5b3b iter-4 absorb (nightly run 25841973521 STILL TimeoutError
+    // at 60s with `waitUntil:'domcontentloaded'` — GitHub Actions
+    // runner ↔ Turkey-side testai.acik.com path is genuinely 60s+ on
+    // cold TLS handshake + first-byte download).
     //
-    // Switch to `waitUntil:'domcontentloaded'` which fires when HTML
-    // parsing completes (typically 1-3s) — no waiting on iframes,
-    // images, CSS, or external scripts.  Request capture already
-    // started on `page.on('request', ...)` BEFORE goto, so ALL
-    // sub-resource fetches are recorded regardless of waitUntil
-    // (including those launched AFTER DOMContentLoaded but before
-    // window.load).
+    // Final fallback: `waitUntil:'commit'` returns the moment the
+    // first response byte arrives (before HTML parsing even starts).
+    // This is the minimum that lets the network observer kick in —
+    // any subsequent sub-resource request fired by the page is still
+    // captured by `page.on('request', ...)` which is armed BEFORE
+    // goto.  We then waitForTimeout for 20s to let SPA bootstrap +
+    // initial chunk graph complete.
     //
-    // 60s per-call timeout for the slow CI path; 10s post-DCL wait
-    // for late-fired lazy chunks to flush before assertion.
-    await page.goto(`${target}/login`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await page.waitForTimeout(10_000);
+    // Per-call timeout 90s gives the cold TLS handshake adequate
+    // budget even on the worst CI runner network.  If the first byte
+    // never arrives in 90s, that's a real testai availability issue
+    // (worth waking on-call) — not a B5b3b flake.
+    await page.goto(`${target}/login`, { waitUntil: 'commit', timeout: 90_000 });
+    await page.waitForTimeout(20_000);
 
     // Filter for any of the 7 direct remoteEntry.js patterns + 14
     // auxiliary chunk patterns (per-remote virtual entry + host
