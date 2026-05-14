@@ -415,3 +415,4 @@ export type {
 export { ComparisonTable } from './comparison-table';
 export { DateRangePicker } from './date-range-picker';
 export { InlineEdit } from './inline-edit';
+export { DataExportDialog } from './data-export-dialog';
