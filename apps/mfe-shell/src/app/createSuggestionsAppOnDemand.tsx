@@ -55,52 +55,15 @@
 import React, { Suspense } from 'react';
 import type { FC, PropsWithChildren } from 'react';
 import { createLazyRemoteModule } from './createLazyRemoteModule';
+// PR-B5b2-hostfix (Codex `019e2528`): host lookup centralized.
+import { getHostMfInstance, CONFIGURED_HOST_NAME } from './config/host-mf-instance';
 
 declare const __MFE_SUGGESTIONS_ON_DEMAND__: boolean;
 
-const SUGGESTIONS_HOST_NAME = 'mfe_shell';
 const SUGGESTIONS_REMOTE_NAME = 'mfe_suggestions';
 const SUGGESTIONS_REMOTE_KEY = `${SUGGESTIONS_REMOTE_NAME}/SuggestionsApp`;
 
-/**
- * Shape of the MF host instance we use — narrowed from
- * `ModuleFederation` to the two methods we actually call.  Keeping
- * the surface narrow makes the module easy to mock in unit tests
- * without pulling the full `@module-federation/runtime-core` type
- * graph.
- */
-interface MfHostInstance {
-  options: { name: string };
-  registerRemotes(
-    remotes: Array<{ name: string; entry: string; type?: string }>,
-    options?: { force?: boolean },
-  ): void;
-  loadRemote<T = unknown>(key: string): Promise<T | null>;
-}
-
-interface FederationGlobal {
-  __INSTANCES__?: MfHostInstance[];
-}
-
 let suggestionsRegistered = false;
-
-/**
- * Resolve the host MF runtime instance from the global registry that
- * `@module-federation/runtime-core` maintains at
- * `globalThis.__FEDERATION__.__INSTANCES__`.  The host bundle's
- * `federation({ name: 'mfe_shell', ... })` call ends up pushed there
- * during host bootstrap.
- *
- * Returns `null` when no host instance is present (test environment
- * without runtime bootstrap, or pre-MF setup error).
- */
-function getHostMfInstance(): MfHostInstance | null {
-  const root: typeof globalThis & { __FEDERATION__?: FederationGlobal } =
-    typeof globalThis === 'object' ? globalThis : (window as unknown as typeof globalThis);
-  const federation = (root as { __FEDERATION__?: FederationGlobal }).__FEDERATION__;
-  const instances = federation?.__INSTANCES__ ?? [];
-  return instances.find((i) => i.options.name === SUGGESTIONS_HOST_NAME) ?? null;
-}
 
 /**
  * Read the suggestions remoteEntry URL from runtime env injected by
@@ -137,7 +100,7 @@ function ensureSuggestionsRegistered(): void {
   const host = getHostMfInstance();
   if (!host) {
     throw new Error(
-      `[B5b1] Host MF runtime instance "${SUGGESTIONS_HOST_NAME}" not initialized — ` +
+      `[B5b1] Host MF runtime instance "${CONFIGURED_HOST_NAME}" not initialized — ` +
         `eager bootstrap chain broken or this module rendered before host setup.`,
     );
   }
@@ -169,7 +132,7 @@ async function loadSuggestionsRemote(): Promise<{ default: FC<PropsWithChildren>
   // between register and load.
   if (!host) {
     throw new Error(
-      `[B5b1] Host MF runtime instance "${SUGGESTIONS_HOST_NAME}" disappeared between register and load.`,
+      `[B5b1] Host MF runtime instance "${CONFIGURED_HOST_NAME}" disappeared between register and load.`,
     );
   }
   const mod = await host.loadRemote<{ default: FC<PropsWithChildren> }>(SUGGESTIONS_REMOTE_KEY);

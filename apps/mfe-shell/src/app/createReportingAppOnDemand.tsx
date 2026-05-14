@@ -56,41 +56,13 @@ import { createLazyRemoteModule } from './createLazyRemoteModule';
 import { ensureRemoteShellServicesConfigured } from './config/ensure-remote-shell-services';
 import { getSharedShellServices } from './config/shell-services-wiring';
 import { resolveAdminRemoteEntry } from './config/admin-remote-bootstrap';
+// PR-B5b2-hostfix (Codex `019e2528`): host lookup centralized.
+import { getHostMfInstance, CONFIGURED_HOST_NAME } from './config/host-mf-instance';
 
 declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
-const REPORTING_HOST_NAME = 'mfe_shell';
 const REPORTING_REMOTE_NAME = 'mfe_reporting';
 const REPORTING_REMOTE_KEY = `${REPORTING_REMOTE_NAME}/ReportingApp`;
-
-/**
- * Shape of the MF host instance we use — narrowed from
- * `ModuleFederation` to the one method we actually call (`loadRemote`).
- * `registerRemotes` is handled inside the ensure helper, so the
- * wrapper's only direct call is `loadRemote`.
- */
-interface MfHostInstance {
-  options: { name: string };
-  loadRemote<T = unknown>(key: string): Promise<T | null>;
-}
-
-interface FederationGlobal {
-  __INSTANCES__?: MfHostInstance[];
-}
-
-/**
- * Resolve the host MF runtime instance from the global registry that
- * `@module-federation/runtime-core` maintains at
- * `globalThis.__FEDERATION__.__INSTANCES__`.  See B5b1/B5b1.5/B5b2a
- * canaries + ensure-remote-shell-services helper for the same lookup.
- */
-function getHostMfInstance(): MfHostInstance | null {
-  const root: typeof globalThis & { __FEDERATION__?: FederationGlobal } =
-    typeof globalThis === 'object' ? globalThis : (window as unknown as typeof globalThis);
-  const federation = (root as { __FEDERATION__?: FederationGlobal }).__FEDERATION__;
-  const instances = federation?.__INSTANCES__ ?? [];
-  return instances.find((i) => i.options.name === REPORTING_HOST_NAME) ?? null;
-}
 
 /**
  * Codex `019e239a` post-merge B5b3c absorb: legacy
@@ -136,7 +108,7 @@ async function loadReportingRemote(): Promise<{ default: FC<PropsWithChildren> }
   // register-via-helper and loadRemote, surface as classified fallback.
   if (!host) {
     throw new Error(
-      `[B5b2-prep] Host MF runtime instance "${REPORTING_HOST_NAME}" disappeared between ensure and load.`,
+      `[B5b2-prep] Host MF runtime instance "${CONFIGURED_HOST_NAME}" disappeared between ensure and load.`,
     );
   }
   const mod = await host.loadRemote<{ default: FC<PropsWithChildren> }>(REPORTING_REMOTE_KEY);

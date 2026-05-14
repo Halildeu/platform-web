@@ -37,39 +37,18 @@
 // Generic type for shared services — caller provides shape;
 // helper just passes through to remote.configureShellServices.
 
-/**
- * Shape of the MF host instance we use — narrowed to the two methods
- * we call.  Mirrors the type used by B5b1's
- * `createSuggestionsAppOnDemand.tsx` (kept in sync deliberately;
- * future factory refactor could share a single type).
- */
-interface MfHostInstance {
-  options: { name: string };
-  registerRemotes(
-    remotes: Array<{ name: string; entry: string; type?: string }>,
-    options?: { force?: boolean },
-  ): void;
-  loadRemote<T = unknown>(key: string): Promise<T | null>;
-}
-
-interface FederationGlobal {
-  __INSTANCES__?: MfHostInstance[];
-}
-
-const HOST_NAME = 'mfe_shell';
-
-/**
- * Resolve the host MF runtime instance from the global registry.
- * Returns `null` when no host instance is present (test environment
- * without runtime bootstrap, or pre-MF setup error).
- */
-function getHostMfInstance(): MfHostInstance | null {
-  const root: typeof globalThis & { __FEDERATION__?: FederationGlobal } =
-    typeof globalThis === 'object' ? globalThis : (window as unknown as typeof globalThis);
-  const federation = (root as { __FEDERATION__?: FederationGlobal }).__FEDERATION__;
-  const instances = federation?.__INSTANCES__ ?? [];
-  return instances.find((i) => i.options.name === HOST_NAME) ?? null;
-}
+// PR-B5b2-hostfix (Codex thread `019e2528` PARTIAL→AGREE absorb):
+// host instance lookup is delegated to the single-source
+// `host-mf-instance` module so the `__mfe_internal__mfe_shell`
+// runtime-prefixed name produced by `@module-federation/vite` is
+// matched correctly in both test and production builds.  Before this
+// refactor every wrapper + this helper duplicated a `getHostMfInstance`
+// definition that only handled the unprefixed test-environment name.
+import {
+  CONFIGURED_HOST_NAME,
+  getHostMfInstance,
+  listHostMfInstanceCandidates,
+} from './host-mf-instance';
 
 /**
  * Per-remote configured-once guard map.  Once a remote's
@@ -125,9 +104,17 @@ export async function ensureRemoteShellServicesConfigured(
   const work = (async (): Promise<void> => {
     const host = getHostMfInstance();
     if (!host) {
+      // Codex `019e2528` revision: enrich the diagnostic with the
+      // actual instance names currently registered so a future
+      // name-shape change can be triaged from one console line
+      // without requiring live `globalThis` inspection.
+      const candidates = listHostMfInstanceCandidates();
+      const candidatesDesc =
+        candidates.length > 0 ? `[${candidates.join(', ')}]` : '[<no instances>]';
       throw new Error(
-        `[B5b2-prep] Host MF runtime instance "${HOST_NAME}" not initialized — ` +
-          `cannot ensure shell-services for "${remoteName}".`,
+        `[B5b2-prep] Host MF runtime instance "${CONFIGURED_HOST_NAME}" not found — ` +
+          `cannot ensure shell-services for "${remoteName}". ` +
+          `Candidates seen: ${candidatesDesc}`,
       );
     }
     // Register the remote (idempotent in MF runtime 2.x for identical

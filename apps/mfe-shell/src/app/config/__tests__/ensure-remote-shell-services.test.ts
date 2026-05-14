@@ -30,7 +30,9 @@ interface FederationGlobalShape {
   __INSTANCES__?: FakeHostInstance[];
 }
 
-const HOST_NAME = 'mfe_shell';
+// PR-B5b2-hostfix: use the production-runtime host name (vite plugin
+// prefixes the configured 'mfe_shell' with '__mfe_internal__').
+const HOST_NAME = '__mfe_internal__mfe_shell';
 
 function installFakeHost(opts?: {
   loadRemoteResult?: { configureShellServices?: (s: unknown) => void } | null;
@@ -182,11 +184,32 @@ describe('ensureRemoteShellServicesConfigured (PR-B5b2-prep)', () => {
     expect(__isRemoteShellServicesConfiguredForTests('mfe_access')).toBe(false);
   });
 
-  it('throws when host MF instance is missing', async () => {
+  it('throws with enriched candidate list when host MF instance is missing', async () => {
     // No installFakeHost — __INSTANCES__ stays empty.
+    // PR-B5b2-hostfix (Codex `019e2528` revision): error mesajı artık
+    // "not found ... Candidates seen: [<no instances>]" şeklinde olmalı.
     await expect(
       ensureRemoteShellServicesConfigured('mfe_users', 'http://localhost:3004/remoteEntry.js', {}),
-    ).rejects.toThrow(/Host MF runtime instance .* not initialized/);
+    ).rejects.toThrow(/Host MF runtime instance "mfe_shell" not found .* Candidates seen: \[<no instances>\]/);
+    expect(__isRemoteShellServicesConfiguredForTests('mfe_users')).toBe(false);
+  });
+
+  it('throws with enriched candidate list when only non-host instances are registered', async () => {
+    // PR-B5b2-hostfix: regresyon koruması — mfe_users isimli bir instance
+    // kayıtlıysa ama host yoksa, hata mesajında gerçek candidate'lar
+    // listelenmeli (live triage hızı için).
+    const g = globalThis as { __FEDERATION__?: { __INSTANCES__?: unknown[] } };
+    g.__FEDERATION__ = {
+      __INSTANCES__: [
+        { options: { name: '__mfe_internal__mfe_users' } },
+        { options: { name: '__mfe_internal__mfe_reporting' } },
+      ],
+    };
+    await expect(
+      ensureRemoteShellServicesConfigured('mfe_users', 'http://localhost:3004/remoteEntry.js', {}),
+    ).rejects.toThrow(
+      /Host MF runtime instance "mfe_shell" not found .* Candidates seen: \[__mfe_internal__mfe_users, __mfe_internal__mfe_reporting\]/,
+    );
     expect(__isRemoteShellServicesConfiguredForTests('mfe_users')).toBe(false);
   });
 
