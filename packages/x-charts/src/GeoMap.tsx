@@ -164,10 +164,16 @@ export interface GeoMapProps extends AccessControlledProps {
   /**
    * Optional overlay layers rendered on top of the choropleth base.
    *
-   * PR-X13a (Codex thread 019e2254): foundation supports `bubble`
-   * layer (scatter on `coordinateSystem: 'geo'`). Future PRs append
-   * layer types via discriminated union (`effectScatter`, `flow`,
-   * `heatmap`, `marker`).
+   * Currently supported layer `type`s:
+   *   - `bubble` — scatter on `coordinateSystem: 'geo'`, sqrt-scaled
+   *     symbol size by metric (PR-X13a, Codex thread `019e2254`).
+   *   - `effectScatter` — animated pulse markers via ECharts
+   *     `rippleEffect` (PR-X13b, Codex thread `019e25a2`). Honours
+   *     `respectReducedMotion` per layer (suppresses ripple paths
+   *     via `rippleEffect.number = 0`).
+   *
+   * Future PRs append additional layer types via the discriminated
+   * union: `flow` (lines OD), `heatmap` (density), `marker` (icon).
    *
    * Each overlay is independently opt-in; mix and match as needed:
    *
@@ -178,6 +184,9 @@ export interface GeoMapProps extends AccessControlledProps {
    *   overlays={[
    *     { type: 'bubble', data: [
    *       { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 1200 },
+   *     ]},
+   *     { type: 'effectScatter', data: [
+   *       { name: 'Bursa Hub', coordinates: [29.06, 40.19], value: 1 },
    *     ]},
    *   ]}
    * />

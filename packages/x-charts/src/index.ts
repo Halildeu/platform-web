@@ -107,7 +107,12 @@ export {
 // `effectScatter` (PR-X13b), `flow` (PR-X13c), `heatmap` (PR-X13d),
 // `marker` (PR-X13e). Consumers pass `overlays={[{type:'bubble', ...}]}`
 // to GeoMap.
-export type { GeoOverlay, GeoBubbleLayer, GeoPointDatum } from './geo/geoOverlayTypes';
+export type {
+  GeoOverlay,
+  GeoBubbleLayer,
+  GeoEffectScatterLayer,
+  GeoPointDatum,
+} from './geo/geoOverlayTypes';
 
 /* Composition */
 export { ChartContainer } from './ChartContainer';

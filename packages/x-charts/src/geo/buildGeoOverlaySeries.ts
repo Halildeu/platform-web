@@ -10,7 +10,12 @@
  * PR-X13a (Codex thread `019e2254`): only `'bubble'` (scatter on
  * `coordinateSystem: 'geo'`). Future overlays append cases here.
  */
-import type { GeoOverlay, GeoBubbleLayer, GeoPointDatum } from './geoOverlayTypes';
+import type {
+  GeoOverlay,
+  GeoBubbleLayer,
+  GeoEffectScatterLayer,
+  GeoPointDatum,
+} from './geoOverlayTypes';
 
 /* ------------------------------------------------------------------ */
 /*  Output type                                                        */
@@ -143,6 +148,98 @@ export function buildBubbleLayerSeries(
 }
 
 /* ------------------------------------------------------------------ */
+/*  EffectScatter (animated pulse on geo) — PR-X13b                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build an effectScatter layer spec.
+ *
+ * Unlike bubble, effectScatter uses a constant `symbolSize` (not
+ * value-driven) — the pulse animation IS the encoding. Layered on top
+ * of choropleth, it draws the eye to a small set of priority points.
+ * Wrapper stays declarative; ECharts owns the animation lifecycle.
+ *
+ * Reduced-motion: when `respectReducedMotion: true`, the wrapper
+ * short-circuits to a plain scatter (effect skipped) so users with
+ * `prefers-reduced-motion: reduce` aren't subjected to the pulse.
+ */
+export function buildEffectScatterLayerSeries(
+  layer: GeoEffectScatterLayer,
+  geoIndex: number,
+): GeoOverlaySeriesSpec {
+  const data = layer.data ?? [];
+  const seriesData = data.map((d: GeoPointDatum) => ({
+    value: [d.coordinates[0], d.coordinates[1], d.value ?? 0],
+    name: d.name,
+    itemStyle: d.color ? { color: d.color } : undefined,
+    // Same `_overlay` namespace as bubble — click handler / tooltip
+    // / a11y all key on `data._overlay.type` to discriminate.
+    _overlay: {
+      type: layer.type as 'effectScatter',
+      layerName: layer.name ?? 'EffectScatter overlay',
+      coordinates: d.coordinates,
+      value: d.value,
+      category: d.category,
+    },
+  }));
+
+  // Reduced-motion: keep the `effectScatter` type so callers see
+  // consistent option shape, but emit zero ripple paths via
+  // `rippleEffect.number = 0`. Codex 019e25a2 iter-1 medium-fix:
+  // ECharts `EffectSymbol.startEffectAnimation` has no `period > 0`
+  // guard (unlike `EffectLine`), so `period: 0` would still construct
+  // a zero-duration animator/path loop. `number: 0` suppresses ripple
+  // emission entirely while leaving period/scale in valid ranges.
+  const reduced = layer.respectReducedMotion === true;
+
+  return {
+    type: 'effectScatter',
+    coordinateSystem: 'geo',
+    geoIndex,
+    name: layer.name ?? 'EffectScatter overlay',
+    data: seriesData,
+    symbol: layer.symbol ?? 'pin',
+    symbolSize: layer.symbolSize ?? 14,
+    rippleEffect: reduced
+      ? // Reduced-motion: zero ripple paths (`number: 0`) — the
+        // property block stays present so option-shape tests can
+        // still assert layer presence; period/scale stay in valid
+        // ranges so ECharts doesn't construct zero-duration loops.
+        {
+          number: 0,
+          period: layer.ripplePeriod ?? 4,
+          scale: layer.rippleScale ?? 2.5,
+          brushType: layer.rippleBrush ?? 'stroke',
+        }
+      : {
+          period: layer.ripplePeriod ?? 4,
+          scale: layer.rippleScale ?? 2.5,
+          brushType: layer.rippleBrush ?? 'stroke',
+        },
+    showEffectOn: layer.showEffectOn ?? 'render',
+    itemStyle: {
+      color: layer.color,
+      opacity: layer.opacity ?? 0.9,
+    },
+    label:
+      (layer.showLabels ?? true)
+        ? {
+            show: true,
+            position: 'right',
+            formatter: '{b}',
+            fontSize: 11,
+          }
+        : { show: false },
+    emphasis: {
+      focus: 'self',
+      label: { show: true, fontWeight: 'bold' },
+      itemStyle: { opacity: 1 },
+    },
+    z: layer.z ?? 5,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dispatcher — consumers pass `overlays: GeoOverlay[]`               */
 /* ------------------------------------------------------------------ */
 
@@ -164,7 +261,10 @@ export function buildGeoOverlaySeries(
       case 'bubble':
         specs.push(buildBubbleLayerSeries(layer, geoIndex));
         break;
-      // Future: 'effectScatter' | 'flow' | 'heatmap' | 'marker'
+      case 'effectScatter':
+        specs.push(buildEffectScatterLayerSeries(layer, geoIndex));
+        break;
+      // Future: 'flow' | 'heatmap' | 'marker'
       default: {
         // Exhaustiveness guard — TS narrows the union; at runtime an
         // unknown variant is silently dropped (consumer typo

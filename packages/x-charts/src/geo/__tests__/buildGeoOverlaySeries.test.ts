@@ -11,9 +11,10 @@ import { describe, it, expect } from 'vitest';
 import {
   buildGeoOverlaySeries,
   buildBubbleLayerSeries,
+  buildEffectScatterLayerSeries,
   bubbleSymbolSize,
 } from '../buildGeoOverlaySeries';
-import type { GeoBubbleLayer } from '../geoOverlayTypes';
+import type { GeoBubbleLayer, GeoEffectScatterLayer } from '../geoOverlayTypes';
 
 const sampleBubble = (): GeoBubbleLayer => ({
   type: 'bubble',
@@ -229,6 +230,136 @@ describe('buildBubbleLayerSeries — overlay metadata namespace', () => {
     const spec = buildBubbleLayerSeries(layer, 0);
     const data = spec.data as Array<{ _overlay: { layerName: string } }>;
     expect(data[0]._overlay.layerName).toBe('Bubble overlay');
+  });
+});
+
+/* ================================================================== */
+/*  PR-X13b — EffectScatter (animated pulse on geo)                    */
+/* ================================================================== */
+
+const sampleEffect = (): GeoEffectScatterLayer => ({
+  type: 'effectScatter',
+  name: 'Critical alerts',
+  data: [
+    { name: 'İstanbul', coordinates: [29.0, 41.0], value: 10 },
+    { name: 'İzmir', coordinates: [27.1, 38.4], value: 5 },
+  ],
+});
+
+describe('buildEffectScatterLayerSeries — effectScatter layer spec', () => {
+  it('series.type === "effectScatter" + coordinateSystem === "geo"', () => {
+    const spec = buildEffectScatterLayerSeries(sampleEffect(), 0);
+    expect(spec.type).toBe('effectScatter');
+    expect(spec.coordinateSystem).toBe('geo');
+    expect(spec.geoIndex).toBe(0);
+  });
+
+  it('symbol defaults to "pin", symbolSize defaults to 14', () => {
+    const def = buildEffectScatterLayerSeries(sampleEffect(), 0);
+    expect(def.symbol).toBe('pin');
+    expect(def.symbolSize).toBe(14);
+  });
+
+  it('rippleEffect defaults: period=4, scale=2.5, brushType="stroke"', () => {
+    const def = buildEffectScatterLayerSeries(sampleEffect(), 0);
+    const ripple = def.rippleEffect as { period: number; scale: number; brushType: string };
+    expect(ripple.period).toBe(4);
+    expect(ripple.scale).toBe(2.5);
+    expect(ripple.brushType).toBe('stroke');
+  });
+
+  it('rippleEffect overrides propagate', () => {
+    const layer: GeoEffectScatterLayer = {
+      ...sampleEffect(),
+      ripplePeriod: 1.5,
+      rippleScale: 4,
+      rippleBrush: 'fill',
+    };
+    const spec = buildEffectScatterLayerSeries(layer, 0);
+    const ripple = spec.rippleEffect as { period: number; scale: number; brushType: string };
+    expect(ripple.period).toBe(1.5);
+    expect(ripple.scale).toBe(4);
+    expect(ripple.brushType).toBe('fill');
+  });
+
+  it('respectReducedMotion: true → number=0 (ripple paths suppressed)', () => {
+    // Codex 019e25a2 iter-1 medium-fix: `period: 0` would still build
+    // zero-duration animators inside `EffectSymbol.startEffectAnimation`
+    // (no `period > 0` guard there). `number: 0` suppresses ripple
+    // paths entirely while period/scale stay in valid ranges.
+    const layer: GeoEffectScatterLayer = {
+      ...sampleEffect(),
+      respectReducedMotion: true,
+    };
+    const spec = buildEffectScatterLayerSeries(layer, 0);
+    const ripple = spec.rippleEffect as {
+      number: number;
+      period: number;
+      scale: number;
+    };
+    expect(ripple.number).toBe(0);
+    // period/scale stay at defaults (valid range) so ECharts doesn't
+    // construct a zero-duration loop even though no ripple is drawn.
+    expect(ripple.period).toBe(4);
+    expect(ripple.scale).toBe(2.5);
+  });
+
+  it('showEffectOn defaults to "render", honours override', () => {
+    const def = buildEffectScatterLayerSeries(sampleEffect(), 0);
+    expect(def.showEffectOn).toBe('render');
+    const onHover = buildEffectScatterLayerSeries(
+      { ...sampleEffect(), showEffectOn: 'emphasis' },
+      0,
+    );
+    expect(onHover.showEffectOn).toBe('emphasis');
+  });
+
+  it('opacity defaults to 0.9 (higher than bubble 0.7)', () => {
+    const def = buildEffectScatterLayerSeries(sampleEffect(), 0);
+    expect((def.itemStyle as { opacity?: number }).opacity).toBe(0.9);
+  });
+
+  it('showLabels defaults to true (highlights deserve a label)', () => {
+    const def = buildEffectScatterLayerSeries(sampleEffect(), 0);
+    expect((def.label as { show: boolean }).show).toBe(true);
+  });
+
+  it('showLabels=false collapses to label.show=false', () => {
+    const layer: GeoEffectScatterLayer = { ...sampleEffect(), showLabels: false };
+    const spec = buildEffectScatterLayerSeries(layer, 0);
+    expect((spec.label as { show: boolean }).show).toBe(false);
+  });
+
+  it('emits stable `_overlay` namespace per datum', () => {
+    const spec = buildEffectScatterLayerSeries(sampleEffect(), 0);
+    const data = spec.data as Array<{
+      _overlay: { type: string; layerName: string; coordinates: [number, number]; value: number };
+    }>;
+    expect(data[0]._overlay.type).toBe('effectScatter');
+    expect(data[0]._overlay.layerName).toBe('Critical alerts');
+    expect(data[0]._overlay.coordinates).toEqual([29.0, 41.0]);
+    expect(data[0]._overlay.value).toBe(10);
+  });
+
+  it('handles empty data without throwing', () => {
+    expect(() =>
+      buildEffectScatterLayerSeries({ type: 'effectScatter', data: [] }, 0),
+    ).not.toThrow();
+  });
+});
+
+describe('buildGeoOverlaySeries — multi-layer mix (bubble + effectScatter)', () => {
+  it('appends one series per layer in array order, type-discriminated', () => {
+    const specs = buildGeoOverlaySeries(
+      [
+        { type: 'bubble', data: [{ name: 'A', coordinates: [29, 41], value: 1 }] },
+        { type: 'effectScatter', data: [{ name: 'B', coordinates: [32, 39], value: 2 }] },
+      ],
+      0,
+    );
+    expect(specs).toHaveLength(2);
+    expect(specs[0].type).toBe('scatter');
+    expect(specs[1].type).toBe('effectScatter');
   });
 });
 

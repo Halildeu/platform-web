@@ -1648,6 +1648,82 @@ describe('GeoMap option shape', () => {
     expect(allSeries[2].name).toBe('Layer B');
   });
 
+  // PR-X13b (Codex thread 019e2254 plan-time AGREE): effectScatter
+  // overlay layer — animated pulse for highlighted points.
+  it('effectScatter overlay appends a series with rippleEffect config', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'effectScatter',
+            name: 'Critical alerts',
+            data: [{ name: 'İstanbul', coordinates: [29.0, 41.0], value: 5 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    expect(allSeries).toHaveLength(2);
+    expect(allSeries[0].type).toBe('map');
+    const fx = allSeries[1];
+    expect(fx.type).toBe('effectScatter');
+    expect(fx.coordinateSystem).toBe('geo');
+    expect(fx.geoIndex).toBe(0);
+    const ripple = fx.rippleEffect as { period: number; brushType: string };
+    expect(ripple.period).toBe(4);
+    expect(ripple.brushType).toBe('stroke');
+  });
+
+  it('effectScatter respectReducedMotion=true → number=0 (ripple paths suppressed)', () => {
+    // Codex 019e25a2 iter-1 medium-fix: see builder unit test note.
+    // Wrapper-side reduced-motion uses `rippleEffect.number = 0` to
+    // skip ripple emission; period/scale remain in valid ranges.
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'effectScatter',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+            respectReducedMotion: true,
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const fx = series()[1];
+    const ripple = fx.rippleEffect as {
+      number: number;
+      period: number;
+      scale: number;
+    };
+    expect(ripple.number).toBe(0);
+    expect(ripple.period).toBe(4);
+    expect(ripple.scale).toBe(2.5);
+  });
+
+  it('mixed overlays (bubble + effectScatter) preserve type discrimination', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          { type: 'bubble', data: [{ name: 'A', coordinates: [29, 41], value: 100 }] },
+          { type: 'effectScatter', data: [{ name: 'B', coordinates: [32, 39], value: 5 }] },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    expect(allSeries).toHaveLength(3); // base + bubble + effectScatter
+    expect(allSeries[1].type).toBe('scatter');
+    expect(allSeries[2].type).toBe('effectScatter');
+  });
+
   it('overlays trigger explicit option.geo block (shared coord system)', () => {
     render(
       <GeoMap

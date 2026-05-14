@@ -49,6 +49,12 @@ import { BarChart } from 'echarts/charts';
 import { LineChart } from 'echarts/charts';
 import { PieChart } from 'echarts/charts';
 import { ScatterChart } from 'echarts/charts';
+// PR-X13b (Codex thread 019e2254 plan-time AGREE): animated pulse
+// scatter for vurgulanmış (highlighted) lokasyonlar over a geo map.
+// `effectScatter` series renders a periodic ripple effect to draw the
+// eye to a small set of priority points (cf. plain `ScatterChart`
+// which is silent — used for general bubble overlays).
+import { EffectScatterChart } from 'echarts/charts';
 import { SankeyChart } from 'echarts/charts';
 import { TreemapChart } from 'echarts/charts';
 import { RadarChart } from 'echarts/charts';
@@ -144,6 +150,7 @@ export function registerECharts(): void {
     LineChart,
     PieChart,
     ScatterChart,
+    EffectScatterChart, // PR-X13b: animated pulse scatter for highlighted geo points
     SankeyChart,
     TreemapChart,
     RadarChart,

@@ -100,18 +100,120 @@ export interface GeoBubbleLayer {
 /*  Discriminated union — append future layer types here               */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Layer: EffectScatter (animated pulse — PR-X13b)                    */
+/* ------------------------------------------------------------------ */
+
 /**
- * Discriminated union of all geo overlay types. PR-X13a ships only
- * `'bubble'`; future PRs append `'effectScatter'` (PR-X13b), `'flow'`
- * (PR-X13c), `'heatmap'` (PR-X13d), `'marker'` (PR-X13e).
+ * EffectScatter layer — discrete points with an animated ripple
+ * effect to draw the eye to highlighted lokasyonlar.
+ *
+ * Maps to ECharts `effectScatter` series with `coordinateSystem: 'geo'`.
+ * Use case: a small set of priority points (kritik şehirler, vurgu
+ * gerektiren noktalar) where the pulse is meaningful — NOT a general
+ * bubble overlay (use `GeoBubbleLayer` for that — silent scatter,
+ * better for dense data).
+ *
+ * Reduced-motion respect: when consumer/runtime indicates
+ * `prefers-reduced-motion: reduce`, wrappers should pass
+ * `respectReducedMotion: true` so the wrapper short-circuits the
+ * pulse effect at build time. The flag lives at the layer level so
+ * consumers can opt out per-layer (e.g., compliance-critical
+ * dashboards).
+ */
+export interface GeoEffectScatterLayer {
+  type: 'effectScatter';
+  /** Layer name (legend label, a11y prefix). */
+  name?: string;
+  /** Point data. */
+  data: GeoPointDatum[];
+  /**
+   * Symbol shape (same vocabulary as bubble).
+   * @default 'pin'
+   */
+  symbol?: string;
+  /**
+   * Symbol size (constant — value-based scale would compete visually
+   * with the pulse animation; tightly-bounded for emphasis only).
+   * @default 14
+   */
+  symbolSize?: number;
+  /**
+   * Period of the ripple animation in seconds. Lower = more frantic.
+   * @default 4
+   */
+  ripplePeriod?: number;
+  /**
+   * Scale of the ripple effect relative to symbolSize. 2.5 means the
+   * ripple grows to 2.5× the symbol radius before fading.
+   * @default 2.5
+   */
+  rippleScale?: number;
+  /**
+   * Ripple visual style. `'stroke'` is the canonical "radar pulse"
+   * look; `'fill'` is more aggressive (use only for a single critical
+   * marker).
+   * @default 'stroke'
+   */
+  rippleBrush?: 'stroke' | 'fill';
+  /**
+   * Trigger for the effect: always render or only on hover. `'render'`
+   * is the default (constant pulse); `'emphasis'` reserves the effect
+   * for hover (less visual noise on dense maps).
+   * @default 'render'
+   */
+  showEffectOn?: 'render' | 'emphasis';
+  /**
+   * When `true`, the wrapper omits the ripple animation entirely.
+   * Honour OS-level `prefers-reduced-motion: reduce` by setting this
+   * to `true` from the consumer (the wrapper does NOT introspect the
+   * media query directly to keep it server-renderable + testable).
+   * @default false
+   */
+  respectReducedMotion?: boolean;
+  /** Per-layer color override (per-point `color` still wins). */
+  color?: string;
+  /**
+   * Layer opacity. EffectScatter ripples look better at full opacity
+   * (the ripple itself fades over its lifecycle).
+   * @default 0.9
+   */
+  opacity?: number;
+  /**
+   * Show data labels next to each point.
+   * @default true (highlighted points usually deserve a label)
+   */
+  showLabels?: boolean;
+  /**
+   * Z-index. Default same as bubble (5) so layered overlays stack
+   * by array order.
+   * @default 5
+   */
+  z?: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Discriminated union — append future layer types here               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Discriminated union of all geo overlay types.
+ *
+ * Past iters:
+ * - PR-X13a: `'bubble'` (silent scatter, value→symbolSize sqrt scale)
+ * - PR-X13b (this PR): `'effectScatter'` (animated pulse for highlights)
+ *
+ * Future:
+ * - PR-X13c: `'flow'` (origin-destination lines)
+ * - PR-X13d: `'heatmap'` (density on geo)
+ * - PR-X13e: `'marker'` (declarative SVG/icon markers)
  *
  * Wrappers pattern-match on `type` and dispatch to the right ECharts
  * series builder. Adding a new variant is a non-breaking change for
  * consumers since they pass only the variants they need.
  */
-export type GeoOverlay = GeoBubbleLayer;
+export type GeoOverlay = GeoBubbleLayer | GeoEffectScatterLayer;
 // Future:
-// | GeoEffectScatterLayer
 // | GeoFlowLayer
 // | GeoHeatmapLayer
 // | GeoMarkerLayer;
