@@ -4324,6 +4324,14 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Custom anomaly announcement formatter.',
       },
       {
+        name: 'overlays',
+        type: 'GeoOverlay[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Optional overlay layers rendered on top of the choropleth base.\n\nPR-X13a (Codex thread 019e2254): foundation supports `bubble`\nlayer (scatter on `coordinateSystem: 'geo'`). Future PRs append\nlayer types via discriminated union (`effectScatter`, `flow`,\n`heatmap`, `marker`).\n\nEach overlay is independently opt-in; mix and match as needed:\n\n```tsx\n<GeoMap\n  mapName=\"TR\"\n  data={[{ name: 'İstanbul', value: 5000 }]}\n  overlays={[\n    { type: 'bubble', data: [\n      { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 1200 },\n    ]},\n  ]}\n/>\n```",
+      },
+      {
         name: 'access',
         type: '"full" | "readonly" | "disabled" | "hidden"',
         required: false,

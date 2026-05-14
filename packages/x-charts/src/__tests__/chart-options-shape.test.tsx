@@ -1572,6 +1572,180 @@ describe('GeoMap option shape', () => {
     expect(() => render(<GeoMap mapName="TR" data={[]} animate={false} />)).not.toThrow();
   });
 
+  // PR-X13a (Codex thread 019e2254 plan-time AGREE): overlays prop
+  // foundation. Bubble layer on coordinateSystem='geo' renders as a
+  // second series after the choropleth base.
+  it('overlays={[{type:"bubble"...}]} appends a scatter-on-geo series', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'bubble',
+            name: 'HQ Headcount',
+            data: [
+              { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 1200 },
+              { name: 'Ankara HQ', coordinates: [32.8, 39.9], value: 800 },
+            ],
+            symbol: 'circle',
+            opacity: 0.7,
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    // Base map series + 1 bubble overlay
+    expect(allSeries).toHaveLength(2);
+    expect(allSeries[0].type).toBe('map');
+    const bubble = allSeries[1];
+    expect(bubble.type).toBe('scatter');
+    expect(bubble.coordinateSystem).toBe('geo');
+    expect(bubble.geoIndex).toBe(0);
+    expect(bubble.name).toBe('HQ Headcount');
+    const bubbleData = bubble.data as Array<{ value: number[]; name: string }>;
+    expect(bubbleData).toHaveLength(2);
+    expect(bubbleData[0].value).toEqual([29.0, 41.0, 1200]);
+    expect(bubbleData[0].name).toBe('İstanbul HQ');
+  });
+
+  it('overlays absent does not emit any geo coord standalone series duplication', () => {
+    render(<GeoMap mapName="TR" data={sampleData} animate={false} />);
+    const allSeries = series();
+    // Single map series — no leftover scatter from a stale overlay.
+    expect(allSeries).toHaveLength(1);
+    expect(allSeries[0].type).toBe('map');
+  });
+
+  it('multiple overlay layers all appended in order', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'bubble',
+            name: 'Layer A',
+            data: [{ name: 'A', coordinates: [29, 41], value: 100 }],
+          },
+          {
+            type: 'bubble',
+            name: 'Layer B',
+            data: [{ name: 'B', coordinates: [32, 39], value: 200 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    // Base map + 2 bubble overlays
+    expect(allSeries).toHaveLength(3);
+    expect(allSeries[0].type).toBe('map');
+    expect(allSeries[1].type).toBe('scatter');
+    expect(allSeries[1].name).toBe('Layer A');
+    expect(allSeries[2].type).toBe('scatter');
+    expect(allSeries[2].name).toBe('Layer B');
+  });
+
+  it('overlays trigger explicit option.geo block (shared coord system)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'bubble',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    const geoBlock = opt?.geo as Record<string, unknown> | undefined;
+    expect(geoBlock).toBeDefined();
+    expect(geoBlock?.map).toBe('TR');
+  });
+
+  // Codex 019e25a2 PR-X13a iter-3 absorb: visualMap MUST be scoped
+  // to the base map series only. Without `seriesIndex: 0`, ECharts'
+  // default "all series" target drags bubble overlays into the
+  // choropleth color encoding.
+  it('option.visualMap.seriesIndex pins to base map only (overlay isolation)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'bubble',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    const vm = opt?.visualMap as Record<string, unknown>;
+    expect(vm.seriesIndex).toBe(0);
+  });
+
+  // Codex 019e25a2 PR-X13a iter-2 must-fix #1: when base map binds
+  // to host geo, region click/tooltip lives on `option.geo`, not on
+  // the series. `silent` MUST be falsy (default) so events surface.
+  it('option.geo has region interaction surfaces (silent !== true, label, selectedMode)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        showLabels
+        selectedMode="single"
+        overlays={[
+          {
+            type: 'bubble',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    const geoBlock = opt?.geo as Record<string, unknown> | undefined;
+    expect(geoBlock).toBeDefined();
+    expect(geoBlock?.silent).not.toBe(true);
+    expect(geoBlock?.selectedMode).toBe('single');
+    expect((geoBlock?.label as { show: boolean }).show).toBe(true);
+    expect(geoBlock?.emphasis).toBeDefined();
+    expect(geoBlock?.select).toBeDefined();
+  });
+
+  // Codex 019e25a2 PR-X13a iter-1 must-fix #1: base map series and
+  // overlay scatter must SHARE the explicit geo coord system so
+  // pan/zoom state stays in sync.
+  it('base map series binds to geoIndex=0 (shares coord with overlays)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'bubble',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    const baseMap = allSeries[0];
+    expect(baseMap.type).toBe('map');
+    expect(baseMap.geoIndex).toBe(0);
+    const overlay = allSeries[1];
+    expect(overlay.geoIndex).toBe(0);
+    // Both bind to the same geoIndex → ECharts shares coord state.
+  });
+
   it('skips render when map not registered (no setOption call after registry clear)', () => {
     __resetGeoMapRegistrationCacheForTests();
     // Now no map is registered; GeoMap should not emit a series.
