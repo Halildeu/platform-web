@@ -1668,6 +1668,35 @@ describe('GeoMap option shape', () => {
     expect(geoBlock?.map).toBe('TR');
   });
 
+  // Codex 019e25a2 PR-X13a iter-2 must-fix #1: when base map binds
+  // to host geo, region click/tooltip lives on `option.geo`, not on
+  // the series. `silent` MUST be falsy (default) so events surface.
+  it('option.geo has region interaction surfaces (silent !== true, label, selectedMode)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        showLabels
+        selectedMode="single"
+        overlays={[
+          {
+            type: 'bubble',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    const geoBlock = opt?.geo as Record<string, unknown> | undefined;
+    expect(geoBlock).toBeDefined();
+    expect(geoBlock?.silent).not.toBe(true);
+    expect(geoBlock?.selectedMode).toBe('single');
+    expect((geoBlock?.label as { show: boolean }).show).toBe(true);
+    expect(geoBlock?.emphasis).toBeDefined();
+    expect(geoBlock?.select).toBeDefined();
+  });
+
   // Codex 019e25a2 PR-X13a iter-1 must-fix #1: base map series and
   // overlay scatter must SHARE the explicit geo coord system so
   // pan/zoom state stays in sync.

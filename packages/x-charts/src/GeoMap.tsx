@@ -419,27 +419,42 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
           // for existing consumers preserved.
           ...buildGeoOverlaySeries(overlays, 0),
         ],
-        // PR-X13a: explicit `geo` coordinate system declaration so
-        // overlay scatter/lines/heatmap/custom series can attach via
-        // `coordinateSystem: 'geo'`. The base `map` series already
-        // implies a geo coord, but ECharts requires the standalone
-        // `geo` block when other series want to share that coord.
+        // PR-X13a (Codex 019e25a2 iter-2 absorb): explicit `geo`
+        // coordinate system. When base `map` series binds via
+        // `geoIndex: 0`, ECharts moves the actual region drawing
+        // ownership from `MapView` to `GeoView`. So all region-level
+        // visual + interaction surfaces (label, select, emphasis,
+        // selectedMode) MUST live on the `geo` block, not on the
+        // series. Iter-1 left them on the series and added
+        // `silent: true` here, which silenced base region
+        // hover/click/tooltip entirely.
         geo: {
           map: mapName,
           roam,
+          // Mirror selectedMode so base region selection still works.
+          selectedMode,
+          // Region label config — same as series.label so showLabels
+          // toggle continues to work.
+          label: {
+            show: showLabels,
+            fontSize: scaleFontSize(10, densityFontMultiplier),
+          },
           itemStyle: {
-            areaColor: '#f1f5f9',
+            // areaColor intentionally unset so visualMap-driven base
+            // map colors win; only border styling is fixed here.
             borderColor: '#cbd5e1',
             borderWidth: 0.5,
           },
           emphasis: {
-            label: { show: false },
-            itemStyle: { areaColor: '#e2e8f0' },
+            label: { show: true, fontWeight: 'bold' as const },
+            itemStyle: { borderColor: '#000', borderWidth: 1 },
           },
-          // Hide the standalone geo from visualMap dimension so the
-          // base `map` series alone drives the choropleth gradient;
-          // overlays (scatter etc.) remain unaffected by visualMap.
-          silent: true,
+          select: {
+            label: { show: true, fontWeight: 'bold' as const },
+            itemStyle: { borderColor: '#000', borderWidth: 2 },
+          },
+          // `silent: false` (default) — region click/hover/tooltip
+          // events MUST surface for the base choropleth contract.
         },
         aria: {
           enabled: true,
