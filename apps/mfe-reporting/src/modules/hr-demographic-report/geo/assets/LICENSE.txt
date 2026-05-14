@@ -1,0 +1,33 @@
+tr-provinces.geo.json — Türkiye 81 il (province) GeoJSON polygon dataset
+=========================================================================
+
+Source: https://github.com/cihadturhan/tr-geojson (file: geo/tr-cities-utf8.json)
+Author: Cihad Turhan (https://github.com/cihadturhan)
+Derived from: OpenStreetMap (https://www.openstreetmap.org/copyright)
+
+License: Open Database License (ODbL) v1.0
+       https://opendatacommons.org/licenses/odbl/1-0/
+
+Attribution required in any user-facing surface that renders this data.
+See README.md (in this directory) for attribution markup snippet.
+
+Data summary:
+- 81 features (full TR il coverage, plate codes TR-01..TR-81)
+- Geometry type: MultiPolygon
+- properties.name: Turkish display name (TitleCase, e.g. "İstanbul", "Adana")
+- Coordinate system: WGS84 (EPSG:4326)
+
+Notes:
+- properties.code (TR-XX) is stamped at load time by `normalizeTRGeoJson.ts`
+  using the alias dictionary in `../tr-provinces.ts`. The raw file does NOT
+  carry ISO 3166-2 codes.
+- Polygons are simplified by the upstream author for web render performance;
+  precision is appropriate for choropleth at country scale, not for
+  cadastral / boundary work.
+
+Compliance:
+- This bundle is published under ODbL § 3.1: any consumer redistributing
+  the resulting build must preserve the OSM/cihadturhan attribution and
+  the ODbL license link.
+- Modifications (e.g. `properties.code` stamping in `normalizeTRGeoJson.ts`)
+  are documented in `README.md`.

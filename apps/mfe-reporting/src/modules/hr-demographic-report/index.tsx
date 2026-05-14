@@ -5,6 +5,14 @@ import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
 import type { HrDemographicFilters, HrDemographicRow } from './types';
 import { fetchHrDemographicRows } from './api';
 import DemographicDashboard from './DemographicDashboard';
+// PR-X14 (Codex 019e26a9 iter-2 must-fix #4): filter dropdown parity
+// with the expanded mock + alias coverage. 81 canonical TR il
+// + Belirtilmemiş bucket. İstanbul Avrupa/Anadolu split labels are
+// preserved in the drawer breakdown (provinceDetails.sourceLabels);
+// the filter UI exposes the canonical "İstanbul" entry only —
+// `fetchHrDemographicRows` server-side equality compares the
+// normalised province name, not the split sub-region.
+import { TR_PROVINCES } from './geo/tr-provinces';
 
 const sharedReport = getSharedReport('hr-demografik-yapi');
 
@@ -39,11 +47,22 @@ export const hrDemographicReportModule: ReportModule<HrDemographicFilters, HrDem
       <>
         <label className={labelClass}>
           <span>{t('reports.filters.search.placeholder')}</span>
-          <input data-testid="report-filter-search" className={inputClass} value={values.search ?? ''} placeholder={t('reports.hrDemographic.filters.searchPlaceholder')} onChange={(e) => setFieldValue('search', e.target.value)} />
+          <input
+            data-testid="report-filter-search"
+            className={inputClass}
+            value={values.search ?? ''}
+            placeholder={t('reports.hrDemographic.filters.searchPlaceholder')}
+            onChange={(e) => setFieldValue('search', e.target.value)}
+          />
         </label>
         <label className={labelClass}>
           <span>{t('reports.hrDemographic.filters.department')}</span>
-          <select data-testid="report-filter-department" className={inputClass} value={values.department ?? 'all'} onChange={(e) => setFieldValue('department', e.target.value)}>
+          <select
+            data-testid="report-filter-department"
+            className={inputClass}
+            value={values.department ?? 'all'}
+            onChange={(e) => setFieldValue('department', e.target.value)}
+          >
             <option value="all">{t('reports.filters.all')}</option>
             <option value="Finans">Finans</option>
             <option value="İnsan Kaynakları">İnsan Kaynakları</option>
@@ -57,16 +76,33 @@ export const hrDemographicReportModule: ReportModule<HrDemographicFilters, HrDem
         </label>
         <label className={labelClass}>
           <span>{t('reports.hrDemographic.filters.location')}</span>
-          <select data-testid="report-filter-location" className={inputClass} value={values.location ?? 'all'} onChange={(e) => setFieldValue('location', e.target.value)}>
+          <select
+            data-testid="report-filter-location"
+            className={inputClass}
+            value={values.location ?? 'all'}
+            onChange={(e) => setFieldValue('location', e.target.value)}
+          >
             <option value="all">{t('reports.filters.all')}</option>
-            <option value="İstanbul">İstanbul</option>
-            <option value="Ankara">Ankara</option>
-            <option value="İzmir">İzmir</option>
+            {/* PR-X14: 81 TR provinces (sorted by plate code) +
+                Belirtilmemiş bucket. Sourced from canonical
+                TR_PROVINCES dataset so adapter + filter share one
+                source of truth. */}
+            <option value="Belirtilmemiş">Belirtilmemiş</option>
+            {TR_PROVINCES.map((p) => (
+              <option key={p.code} value={p.name}>
+                {p.name}
+              </option>
+            ))}
           </select>
         </label>
         <label className={labelClass}>
           <span>{t('reports.hrDemographic.filters.gender')}</span>
-          <select data-testid="report-filter-gender" className={inputClass} value={values.gender ?? 'all'} onChange={(e) => setFieldValue('gender', e.target.value)}>
+          <select
+            data-testid="report-filter-gender"
+            className={inputClass}
+            value={values.gender ?? 'all'}
+            onChange={(e) => setFieldValue('gender', e.target.value)}
+          >
             <option value="all">{t('reports.filters.all')}</option>
             <option value="Erkek">Erkek</option>
             <option value="Kadın">Kadın</option>
@@ -74,7 +110,12 @@ export const hrDemographicReportModule: ReportModule<HrDemographicFilters, HrDem
         </label>
         <label className={labelClass}>
           <span>{t('reports.hrDemographic.filters.employmentType')}</span>
-          <select data-testid="report-filter-employment-type" className={inputClass} value={values.employmentType ?? 'all'} onChange={(e) => setFieldValue('employmentType', e.target.value)}>
+          <select
+            data-testid="report-filter-employment-type"
+            className={inputClass}
+            value={values.employmentType ?? 'all'}
+            onChange={(e) => setFieldValue('employmentType', e.target.value)}
+          >
             <option value="all">{t('reports.filters.all')}</option>
             <option value="Tam Zamanlı">Tam Zamanlı</option>
             <option value="Yarı Zamanlı">Yarı Zamanlı</option>
@@ -86,24 +127,83 @@ export const hrDemographicReportModule: ReportModule<HrDemographicFilters, HrDem
     );
   },
   getColumnMeta: (): ColumnMeta[] => [
-    { field: 'fullName', headerNameKey: 'reports.hrDemographic.columns.fullName', columnType: 'bold-text', flex: 1.4 },
-    { field: 'department', headerNameKey: 'reports.hrDemographic.columns.department', columnType: 'text', width: 150 },
-    { field: 'position', headerNameKey: 'reports.hrDemographic.columns.position', columnType: 'text', flex: 1.2 },
     {
-      field: 'gender', headerNameKey: 'reports.hrDemographic.columns.gender', columnType: 'badge', width: 90,
-      variantMap: { Erkek: 'info', Kadın: 'primary' }, defaultVariant: 'default',
+      field: 'fullName',
+      headerNameKey: 'reports.hrDemographic.columns.fullName',
+      columnType: 'bold-text',
+      flex: 1.4,
     },
-    { field: 'age', headerNameKey: 'reports.hrDemographic.columns.age', columnType: 'number', width: 70 },
-    { field: 'education', headerNameKey: 'reports.hrDemographic.columns.education', columnType: 'text', width: 130 },
     {
-      field: 'employmentType', headerNameKey: 'reports.hrDemographic.columns.employmentType', columnType: 'badge', width: 120,
-      variantMap: { 'Tam Zamanlı': 'success', 'Yarı Zamanlı': 'warning', 'Sözleşmeli': 'info', 'Stajyer': 'muted' },
+      field: 'department',
+      headerNameKey: 'reports.hrDemographic.columns.department',
+      columnType: 'text',
+      width: 150,
+    },
+    {
+      field: 'position',
+      headerNameKey: 'reports.hrDemographic.columns.position',
+      columnType: 'text',
+      flex: 1.2,
+    },
+    {
+      field: 'gender',
+      headerNameKey: 'reports.hrDemographic.columns.gender',
+      columnType: 'badge',
+      width: 90,
+      variantMap: { Erkek: 'info', Kadın: 'primary' },
       defaultVariant: 'default',
     },
-    { field: 'location', headerNameKey: 'reports.hrDemographic.columns.location', columnType: 'text', width: 100 },
-    { field: 'tenureYears', headerNameKey: 'reports.hrDemographic.columns.tenureYears', columnType: 'number', width: 90, suffix: 'yıl' },
-    { field: 'hireDate', headerNameKey: 'reports.hrDemographic.columns.hireDate', columnType: 'date', width: 110, format: 'short' },
-    { field: 'generation', headerNameKey: 'reports.hrDemographic.columns.generation', columnType: 'text', width: 110 },
+    {
+      field: 'age',
+      headerNameKey: 'reports.hrDemographic.columns.age',
+      columnType: 'number',
+      width: 70,
+    },
+    {
+      field: 'education',
+      headerNameKey: 'reports.hrDemographic.columns.education',
+      columnType: 'text',
+      width: 130,
+    },
+    {
+      field: 'employmentType',
+      headerNameKey: 'reports.hrDemographic.columns.employmentType',
+      columnType: 'badge',
+      width: 120,
+      variantMap: {
+        'Tam Zamanlı': 'success',
+        'Yarı Zamanlı': 'warning',
+        Sözleşmeli: 'info',
+        Stajyer: 'muted',
+      },
+      defaultVariant: 'default',
+    },
+    {
+      field: 'location',
+      headerNameKey: 'reports.hrDemographic.columns.location',
+      columnType: 'text',
+      width: 100,
+    },
+    {
+      field: 'tenureYears',
+      headerNameKey: 'reports.hrDemographic.columns.tenureYears',
+      columnType: 'number',
+      width: 90,
+      suffix: 'yıl',
+    },
+    {
+      field: 'hireDate',
+      headerNameKey: 'reports.hrDemographic.columns.hireDate',
+      columnType: 'date',
+      width: 110,
+      format: 'short',
+    },
+    {
+      field: 'generation',
+      headerNameKey: 'reports.hrDemographic.columns.generation',
+      columnType: 'text',
+      width: 110,
+    },
   ],
   getColumns: () => [],
   fetchRows: (filters, request) => fetchHrDemographicRows(filters, request),

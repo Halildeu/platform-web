@@ -1,4 +1,13 @@
 import type { HrDemographicRow, DemographicSummary } from './types';
+// PR-X14 (Codex 019e26a9 plan-time AGREE): mock data expands from 3
+// cities to 81 TR provinces + "Belirtilmemiş" + İstanbul Avrupa/Anadolu
+// split labels so LocationGeoMap exercises the full alias/normalization
+// path. Deterministic seed: Phase 1 guarantees ≥1 row per label
+// (Codex iter-2 must-fix #7), Phase 2 weighted-random fill mimics the
+// observed production distribution (Belirtilmemiş 37%, İstanbul cluster
+// ~14%, Ankara 12%, İzmir 6%, long tail spread across 78 other
+// provinces).
+import { TR_PROVINCES } from './geo/tr-provinces';
 
 // ---------------------------------------------------------------------------
 // Seeded pseudo-random generator (simple mulberry32)
@@ -43,52 +52,262 @@ function weightedPick<T>(items: readonly T[], weights: readonly number[], rng: (
 // Name pools
 // ---------------------------------------------------------------------------
 const FIRST_NAMES_MALE = [
-  'Ahmet', 'Mehmet', 'Mustafa', 'Ali', 'Hüseyin', 'Hasan', 'İbrahim', 'İsmail',
-  'Yusuf', 'Osman', 'Murat', 'Ömer', 'Ramazan', 'Halil', 'Süleyman', 'Abdullah',
-  'Recep', 'Fatih', 'Emre', 'Burak', 'Serkan', 'Kadir', 'Cem', 'Onur', 'Erhan',
-  'Tolga', 'Baran', 'Deniz', 'Enes', 'Kaan', 'Tuncay', 'Volkan', 'Kerem',
-  'Barış', 'Uğur', 'Gökhan', 'Selim', 'Furkan', 'Taha', 'Yiğit', 'Can',
-  'Berkay', 'Caner', 'Batuhan', 'Doğukan', 'Emir', 'Koray', 'Alp', 'Çağrı',
-  'Oğuz', 'Tarık', 'Eren',
+  'Ahmet',
+  'Mehmet',
+  'Mustafa',
+  'Ali',
+  'Hüseyin',
+  'Hasan',
+  'İbrahim',
+  'İsmail',
+  'Yusuf',
+  'Osman',
+  'Murat',
+  'Ömer',
+  'Ramazan',
+  'Halil',
+  'Süleyman',
+  'Abdullah',
+  'Recep',
+  'Fatih',
+  'Emre',
+  'Burak',
+  'Serkan',
+  'Kadir',
+  'Cem',
+  'Onur',
+  'Erhan',
+  'Tolga',
+  'Baran',
+  'Deniz',
+  'Enes',
+  'Kaan',
+  'Tuncay',
+  'Volkan',
+  'Kerem',
+  'Barış',
+  'Uğur',
+  'Gökhan',
+  'Selim',
+  'Furkan',
+  'Taha',
+  'Yiğit',
+  'Can',
+  'Berkay',
+  'Caner',
+  'Batuhan',
+  'Doğukan',
+  'Emir',
+  'Koray',
+  'Alp',
+  'Çağrı',
+  'Oğuz',
+  'Tarık',
+  'Eren',
 ] as const;
 
 const FIRST_NAMES_FEMALE = [
-  'Fatma', 'Ayşe', 'Emine', 'Hatice', 'Zeynep', 'Elif', 'Meryem', 'Şerife',
-  'Zehra', 'Sultan', 'Hanife', 'Havva', 'Merve', 'Büşra', 'Esra', 'Derya',
-  'Selin', 'Gül', 'Aslı', 'Ebru', 'Pınar', 'Özlem', 'Sevgi', 'Sibel', 'Dilek',
-  'Ece', 'İrem', 'Başak', 'Ceren', 'Damla', 'Gizem', 'Tuğçe', 'Melike',
-  'Nur', 'Yasemin', 'Burcu', 'Beyza', 'Simge', 'Cansu', 'Duygu', 'Hande',
-  'İlknur', 'Seda', 'Şeyma', 'Nihal', 'Serap', 'Elif', 'Berfin', 'Ezgi',
-  'Aleyna', 'Deniz', 'Naz',
+  'Fatma',
+  'Ayşe',
+  'Emine',
+  'Hatice',
+  'Zeynep',
+  'Elif',
+  'Meryem',
+  'Şerife',
+  'Zehra',
+  'Sultan',
+  'Hanife',
+  'Havva',
+  'Merve',
+  'Büşra',
+  'Esra',
+  'Derya',
+  'Selin',
+  'Gül',
+  'Aslı',
+  'Ebru',
+  'Pınar',
+  'Özlem',
+  'Sevgi',
+  'Sibel',
+  'Dilek',
+  'Ece',
+  'İrem',
+  'Başak',
+  'Ceren',
+  'Damla',
+  'Gizem',
+  'Tuğçe',
+  'Melike',
+  'Nur',
+  'Yasemin',
+  'Burcu',
+  'Beyza',
+  'Simge',
+  'Cansu',
+  'Duygu',
+  'Hande',
+  'İlknur',
+  'Seda',
+  'Şeyma',
+  'Nihal',
+  'Serap',
+  'Elif',
+  'Berfin',
+  'Ezgi',
+  'Aleyna',
+  'Deniz',
+  'Naz',
 ] as const;
 
 const LAST_NAMES = [
-  'Yılmaz', 'Kaya', 'Demir', 'Çelik', 'Şahin', 'Yıldız', 'Yıldırım', 'Öztürk',
-  'Aydın', 'Özdemir', 'Arslan', 'Doğan', 'Kılıç', 'Aslan', 'Çetin', 'Kara',
-  'Koç', 'Kurt', 'Özkan', 'Şimşek', 'Polat', 'Korkmaz', 'Acar', 'Güneş',
-  'Tekin', 'Akın', 'Aktaş', 'Erdoğan', 'Yalçın', 'Esen', 'Kaplan', 'Taş',
-  'Karaca', 'Güler', 'Bulut', 'Karataş', 'Sarı', 'Bozkurt', 'Aksoy', 'Turan',
-  'Çalışkan', 'Bayram', 'Erdem', 'Yavuz', 'Toprak', 'Altın', 'Duman', 'Uçar',
-  'Peker', 'Başaran', 'Avcı', 'Tuncer',
+  'Yılmaz',
+  'Kaya',
+  'Demir',
+  'Çelik',
+  'Şahin',
+  'Yıldız',
+  'Yıldırım',
+  'Öztürk',
+  'Aydın',
+  'Özdemir',
+  'Arslan',
+  'Doğan',
+  'Kılıç',
+  'Aslan',
+  'Çetin',
+  'Kara',
+  'Koç',
+  'Kurt',
+  'Özkan',
+  'Şimşek',
+  'Polat',
+  'Korkmaz',
+  'Acar',
+  'Güneş',
+  'Tekin',
+  'Akın',
+  'Aktaş',
+  'Erdoğan',
+  'Yalçın',
+  'Esen',
+  'Kaplan',
+  'Taş',
+  'Karaca',
+  'Güler',
+  'Bulut',
+  'Karataş',
+  'Sarı',
+  'Bozkurt',
+  'Aksoy',
+  'Turan',
+  'Çalışkan',
+  'Bayram',
+  'Erdem',
+  'Yavuz',
+  'Toprak',
+  'Altın',
+  'Duman',
+  'Uçar',
+  'Peker',
+  'Başaran',
+  'Avcı',
+  'Tuncer',
 ] as const;
 
 const DEPARTMENTS = [
-  'Finans', 'İnsan Kaynakları', 'Bilgi Teknolojileri', 'Satış',
-  'Pazarlama', 'Üretim', 'Hukuk', 'Lojistik',
+  'Finans',
+  'İnsan Kaynakları',
+  'Bilgi Teknolojileri',
+  'Satış',
+  'Pazarlama',
+  'Üretim',
+  'Hukuk',
+  'Lojistik',
 ] as const;
 
 const POSITIONS_BY_DEPT: Record<string, readonly string[]> = {
   Finans: ['Finans Uzmanı', 'Muhasebe Sorumlusu', 'Bütçe Analisti', 'Mali Müşavir'],
   'İnsan Kaynakları': ['İK Uzmanı', 'İK Koordinatörü', 'Eğitim Uzmanı', 'Bordro Sorumlusu'],
-  'Bilgi Teknolojileri': ['Yazılım Geliştirici', 'Sistem Yöneticisi', 'Veri Analisti', 'DevOps Mühendisi', 'QA Mühendisi'],
+  'Bilgi Teknolojileri': [
+    'Yazılım Geliştirici',
+    'Sistem Yöneticisi',
+    'Veri Analisti',
+    'DevOps Mühendisi',
+    'QA Mühendisi',
+  ],
   Satış: ['Satış Temsilcisi', 'Bölge Müdürü', 'Satış Koordinatörü', 'Anahtar Müşteri Yöneticisi'],
   Pazarlama: ['Pazarlama Uzmanı', 'Dijital Pazarlama Uzmanı', 'İçerik Editörü', 'Marka Yöneticisi'],
   Üretim: ['Üretim Operatörü', 'Kalite Kontrol Uzmanı', 'Bakım Teknisyeni', 'Vardiya Amiri'],
   Hukuk: ['Hukuk Danışmanı', 'Sözleşme Uzmanı', 'Uyum Yöneticisi'],
-  Lojistik: ['Lojistik Uzmanı', 'Depo Sorumlusu', 'Sevkiyat Koordinatörü', 'Tedarik Zinciri Analisti'],
+  Lojistik: [
+    'Lojistik Uzmanı',
+    'Depo Sorumlusu',
+    'Sevkiyat Koordinatörü',
+    'Tedarik Zinciri Analisti',
+  ],
 };
 
-const LOCATIONS = ['İstanbul', 'Ankara', 'İzmir'] as const;
+/**
+ * Location label pool — 81 TR provinces + İstanbul Avrupa/Anadolu
+ * split labels + "Belirtilmemiş" data-quality outlier.
+ *
+ * Order matters for the Phase 1 seed: every label appears at least
+ * once in the generated row set so the dashboard's filter dropdown,
+ * GeoMap matching, and adapter unmatched-tracking all exercise the
+ * full path.
+ */
+const LOCATION_LABELS: readonly string[] = [
+  ...TR_PROVINCES.map((p) => p.name),
+  'İSTANBUL(Avrupa)',
+  'İSTANBUL(Anadolu)',
+  'Belirtilmemiş',
+];
+
+/**
+ * Weighted distribution mimicking the observed production payload
+ * (browser-verified 2026-05-14 testai snapshot):
+ *   Belirtilmemiş 939 (37%), Ankara 315 (12%), İSTANBUL(Avrupa) 256,
+ *   İSTANBUL(Anadolu) 121, İzmir 155, plus a long tail spread across
+ *   the remaining 78 provinces.
+ *
+ * Weights are relative (sum normalised by `weightedPick`).
+ */
+const LOCATION_WEIGHTS_BY_LABEL: Readonly<Record<string, number>> = (() => {
+  const map: Record<string, number> = {
+    Belirtilmemiş: 370,
+    'İSTANBUL(Avrupa)': 100,
+    'İSTANBUL(Anadolu)': 47,
+    Ankara: 124,
+    İzmir: 60,
+    Çanakkale: 39,
+    Tekirdağ: 38,
+    Antalya: 29,
+    Bursa: 22,
+    Van: 12,
+    Sakarya: 11,
+    Konya: 11,
+    Kocaeli: 11,
+    Şanlıurfa: 11,
+    Adana: 9,
+    Yozgat: 6,
+    Balıkesir: 6,
+    Ordu: 6,
+    Afyonkarahisar: 5,
+    Diyarbakır: 5,
+    Muğla: 5,
+  };
+  // Long tail — every remaining province gets a small but non-zero
+  // weight so Phase 2 has a chance of picking it; Phase 1 already
+  // guarantees ≥1 row.
+  for (const province of TR_PROVINCES) {
+    if (!(province.name in map)) {
+      map[province.name] = 2;
+    }
+  }
+  return map;
+})();
 
 const EDUCATION_LEVELS = ['İlkokul', 'Lise', 'Lisans', 'Yüksek Lisans', 'Doktora'] as const;
 const EDUCATION_WEIGHTS = [3, 25, 45, 20, 7] as const;
@@ -98,7 +317,13 @@ const EMPLOYMENT_WEIGHTS = [75, 10, 10, 5] as const;
 
 const MARITAL_STATUSES = ['Bekar', 'Evli', 'Boşanmış'] as const;
 
-const POSITION_LEVELS = ['Uzman', 'Kıdemli Uzman', 'Müdür', 'Direktör', 'Genel Müdür Yrd.'] as const;
+const POSITION_LEVELS = [
+  'Uzman',
+  'Kıdemli Uzman',
+  'Müdür',
+  'Direktör',
+  'Genel Müdür Yrd.',
+] as const;
 const POSITION_LEVEL_WEIGHTS = [60, 20, 12, 5, 3] as const;
 
 // ---------------------------------------------------------------------------
@@ -119,12 +344,21 @@ export function generateMockEmployees(count: number): HrDemographicRow[] {
   const currentYear = 2026;
   const rows: HrDemographicRow[] = [];
 
+  // PR-X14 (Codex 019e26a9 iter-2 must-fix #7): deterministic location
+  // assignment. Phase 1 — every label in LOCATION_LABELS receives at
+  // least one row so the dashboard / GeoMap / adapter exercise the
+  // full alias path; Phase 2 — remaining rows weighted-random fill via
+  // LOCATION_WEIGHTS_BY_LABEL. The sequential `phase1Index < count`
+  // guard handles the (unusual) case where caller requests fewer rows
+  // than there are labels.
+  const phase1Labels = LOCATION_LABELS.slice(0, Math.min(count, LOCATION_LABELS.length));
+  const weightedLabels = LOCATION_LABELS;
+  const weightedValues = LOCATION_LABELS.map((label) => LOCATION_WEIGHTS_BY_LABEL[label] ?? 1);
+
   for (let i = 0; i < count; i++) {
     const isFemale = rng() < 0.48;
     const gender: HrDemographicRow['gender'] = isFemale ? 'Kadın' : 'Erkek';
-    const firstName = isFemale
-      ? pick(FIRST_NAMES_FEMALE, rng)
-      : pick(FIRST_NAMES_MALE, rng);
+    const firstName = isFemale ? pick(FIRST_NAMES_FEMALE, rng) : pick(FIRST_NAMES_MALE, rng);
     const lastName = pick(LAST_NAMES, rng);
     const fullName = `${firstName} ${lastName}`;
 
@@ -136,7 +370,10 @@ export function generateMockEmployees(count: number): HrDemographicRow[] {
 
     const department = pick(DEPARTMENTS, rng);
     const position = pick(POSITIONS_BY_DEPT[department] ?? ['Uzman'], rng);
-    const location = pick(LOCATIONS, rng);
+    // Phase 1: guarantee every label appears at least once.
+    // Phase 2: weighted-random fill mimicking production distribution.
+    const location =
+      i < phase1Labels.length ? phase1Labels[i] : weightedPick(weightedLabels, weightedValues, rng);
 
     const education = weightedPick(EDUCATION_LEVELS, [...EDUCATION_WEIGHTS], rng);
     const employmentType = weightedPick(EMPLOYMENT_TYPES, [...EMPLOYMENT_WEIGHTS], rng);
@@ -160,8 +397,8 @@ export function generateMockEmployees(count: number): HrDemographicRow[] {
     let militaryStatus = 'Yok';
     if (gender === 'Erkek') {
       const mRoll = rng();
-      if (mRoll < 0.70) militaryStatus = 'Yapıldı';
-      else if (mRoll < 0.90) militaryStatus = 'Tecilli';
+      if (mRoll < 0.7) militaryStatus = 'Yapıldı';
+      else if (mRoll < 0.9) militaryStatus = 'Tecilli';
       else militaryStatus = 'Muaf';
     }
 
@@ -196,7 +433,10 @@ export function generateMockEmployees(count: number): HrDemographicRow[] {
 // ---------------------------------------------------------------------------
 // Summary computation
 // ---------------------------------------------------------------------------
-function countBy<T>(arr: readonly T[], keyFn: (item: T) => string): Array<{ label: string; value: number }> {
+function countBy<T>(
+  arr: readonly T[],
+  keyFn: (item: T) => string,
+): Array<{ label: string; value: number }> {
   const map = new Map<string, number>();
   for (const item of arr) {
     const key = keyFn(item);
@@ -229,7 +469,17 @@ function getAgePyramidGroup(age: number): string {
   return '60+';
 }
 
-const AGE_PYRAMID_ORDER = ['20-24', '25-29', '30-34', '35-39', '40-44', '45-49', '50-54', '55-59', '60+'];
+const AGE_PYRAMID_ORDER = [
+  '20-24',
+  '25-29',
+  '30-34',
+  '35-39',
+  '40-44',
+  '45-49',
+  '50-54',
+  '55-59',
+  '60+',
+];
 
 function getTenureGroup(years: number): string {
   if (years < 1) return '<1 yıl';
@@ -243,7 +493,7 @@ export function computeSummary(rows: HrDemographicRow[]): DemographicSummary {
   const total = rows.length;
   const males = rows.filter((r) => r.gender === 'Erkek').length;
   const females = rows.filter((r) => r.gender === 'Kadın').length;
-  const others = total - males - females;
+  const _others = total - males - females;
 
   const malePercent = Math.round((males / total) * 100);
   const femalePercent = Math.round((females / total) * 100);
@@ -254,9 +504,8 @@ export function computeSummary(rows: HrDemographicRow[]): DemographicSummary {
 
   const managers = rows.filter((r) => r.isManager);
   const femaleManagers = managers.filter((r) => r.gender === 'Kadın');
-  const femaleManagerRate = managers.length > 0
-    ? Math.round((femaleManagers.length / managers.length) * 100)
-    : 0;
+  const femaleManagerRate =
+    managers.length > 0 ? Math.round((femaleManagers.length / managers.length) * 100) : 0;
 
   const disabilityCount = rows.filter((r) => r.hasDisability).length;
   const disabilityRate = Math.round((disabilityCount / total) * 1000) / 10;
@@ -286,9 +535,7 @@ export function computeSummary(rows: HrDemographicRow[]): DemographicSummary {
   // Organizasyonel (HC-2)
   const locationDistribution = countBy(rows, (r) => r.location);
   const positionLevelDistribution = countBy(rows, (r) => r.positionLevel);
-  const spanOfControl = managers.length > 0
-    ? Math.round((total / managers.length) * 10) / 10
-    : 0;
+  const spanOfControl = managers.length > 0 ? Math.round((total / managers.length) * 10) / 10 : 0;
 
   // Isgucu Dinamikleri (HC-4) — simulated realistic values
   const absenteeismRate = 4.2;
@@ -299,9 +546,8 @@ export function computeSummary(rows: HrDemographicRow[]): DemographicSummary {
   const involuntaryTurnoverRate = 2.9;
 
   // Etik & Uyum
-  const ethicsTrainingRate = Math.round(
-    (rows.filter((r) => r.ethicsTrainingComplete).length / total) * 1000,
-  ) / 10;
+  const ethicsTrainingRate =
+    Math.round((rows.filter((r) => r.ethicsTrainingComplete).length / total) * 1000) / 10;
   const whistleblowerCases = 7;
   const disciplinaryActions = [
     { label: 'Uyarı', value: 12 },

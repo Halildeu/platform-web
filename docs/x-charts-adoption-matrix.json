@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-05-13T20:06:42.028Z",
-  "totalConsumers": 45,
+  "generatedAt": "2026-05-14T14:29:32.654Z",
+  "totalConsumers": 48,
   "byBucket": {
-    "production": 17,
+    "production": 20,
     "test": 3,
     "demo": 11,
     "package": 14
@@ -176,6 +176,50 @@
         "XLineChart",
         "XPieChart",
         "XTreemapChart"
+      ],
+      "kinds": [
+        "ImportDeclaration"
+      ]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/hr-demographic-report/geo/useTRMapRegistration.ts",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": [
+        "@mfe/x-charts"
+      ],
+      "symbols": [
+        "ensureGeoMapRegistered",
+        "isGeoMapRegistered"
+      ],
+      "kinds": [
+        "ImportDeclaration"
+      ]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/hr-demographic-report/LocationGeoMap.tsx",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": [
+        "@mfe/x-charts"
+      ],
+      "symbols": [
+        "GeoMap",
+        "GeoOverlay"
+      ],
+      "kinds": [
+        "ImportDeclaration"
+      ]
+    },
+    {
+      "file": "apps/mfe-reporting/src/modules/hr-demographic-report/utils/location-to-geomap.ts",
+      "app": "mfe-reporting",
+      "bucket": "production",
+      "subpaths": [
+        "@mfe/x-charts"
+      ],
+      "symbols": [
+        "GeoBubbleLayer"
       ],
       "kinds": [
         "ImportDeclaration"
