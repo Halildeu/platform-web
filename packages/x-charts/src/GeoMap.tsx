@@ -330,7 +330,43 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
         tooltip: {
           trigger: 'item',
           confine: true,
-          formatter: (p: { name?: string; value?: number; data?: { _originalName?: string } }) => {
+          // Codex 019e25a2 PR-X13a iter-1 must-fix #3: discriminate
+          // between map series datum (region — `_originalName` /
+          // numeric `p.value`) and scatter overlay datum (bubble —
+          // `_overlay` namespace + `value: [lng, lat, metric]` array).
+          formatter: (p: {
+            seriesType?: string;
+            name?: string;
+            value?: number | number[];
+            data?: {
+              _originalName?: string;
+              _overlay?: {
+                type: string;
+                layerName: string;
+                coordinates: [number, number];
+                value?: number;
+                category?: string | number;
+              };
+            };
+          }) => {
+            // Overlay datum branch (scatter / future overlay layers).
+            const overlay = p.data?._overlay;
+            if (overlay) {
+              const lines = [`<b>${escapeHtml(p.name ?? '')}</b>`];
+              if (overlay.layerName) {
+                lines.push(`<span style="opacity:0.7">${escapeHtml(overlay.layerName)}</span>`);
+              }
+              if (typeof overlay.value === 'number' && Number.isFinite(overlay.value)) {
+                lines.push(`Value: ${fmt(overlay.value)}`);
+              }
+              const [lng, lat] = overlay.coordinates;
+              lines.push(`Coords: ${lng.toFixed(2)}°, ${lat.toFixed(2)}°`);
+              if (overlay.category != null) {
+                lines.push(`Category: ${escapeHtml(String(overlay.category))}`);
+              }
+              return lines.join('<br/>');
+            }
+            // Base map (region) datum branch — original behaviour.
             const displayName = (p.data?._originalName as string | undefined) ?? p.name ?? '';
             const v = typeof p.value === 'number' && Number.isFinite(p.value) ? fmt(p.value) : '—';
             return [`<b>${escapeHtml(displayName)}</b>`, `Value: ${v}`].join('<br/>');
@@ -340,6 +376,13 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
         series: [
           {
             type: 'map' as const,
+            // Codex 019e25a2 PR-X13a iter-1 must-fix #1: bind base map
+            // to the explicit `option.geo` block so it shares the
+            // coordinate system (and pan/zoom state) with overlay
+            // scatter series. Without `geoIndex`, ECharts creates an
+            // "inner exclusive geo" for the map series and overlays
+            // diverge from the base after the first roam interaction.
+            geoIndex: 0,
             name: title ?? 'Regions',
             map: mapName,
             // Codex 019e2254 PR-X12c iter-2 blocker fix: wire
@@ -445,14 +488,46 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       (params: unknown) => {
         if (!onDataPointClick) return;
         const p = params as {
+          seriesType?: string;
           name?: string;
-          value?: number;
-          data?: { _originalName?: string; _code?: string };
+          value?: number | number[];
+          data?: {
+            _originalName?: string;
+            _code?: string;
+            _overlay?: {
+              type: string;
+              layerName: string;
+              coordinates: [number, number];
+              value?: number;
+              category?: string | number;
+            };
+          };
         };
+        // Codex 019e25a2 PR-X13a iter-1 must-fix #2: discriminate
+        // overlay clicks (scatter / future overlay layer types) from
+        // base map region clicks. Overlay datum carries `_overlay`
+        // namespace; map datum carries `_originalName` / `_code`.
+        const overlay = p.data?._overlay;
+        if (overlay) {
+          onDataPointClick({
+            datum: {
+              kind: 'overlay',
+              overlayType: overlay.type,
+              layerName: overlay.layerName,
+              name: p.name ?? '',
+              coordinates: overlay.coordinates,
+              category: overlay.category,
+            },
+            value: typeof overlay.value === 'number' ? overlay.value : undefined,
+            label: p.name ?? '',
+          });
+          return;
+        }
+        // Base map region click — original behaviour.
         const originalName = p.data?._originalName ?? p.name ?? '';
         const code = p.data?._code;
         onDataPointClick({
-          datum: { region: originalName, code },
+          datum: { kind: 'region', region: originalName, code },
           value: typeof p.value === 'number' ? p.value : undefined,
           label: originalName,
         });
@@ -464,16 +539,36 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
     // value. Codex review note: HR usage on small-cohort cells may
     // benefit from suppression (`<5` → "<5") but that's a consumer-side
     // privacy decision, not a wrapper default. We pass raw values.
-    const a11yData = useMemo(
-      () =>
-        [...data]
-          .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
-          .map((d) => ({
-            label: d.name,
-            value: d.value ?? 0,
-          })),
-      [data],
-    );
+    // Codex 019e25a2 PR-X13a iter-1 must-fix #6: append overlay rows
+    // to the SR linearization so bubble (and future overlay) layer
+    // datapoints are reachable without sighted canvas. Mirrors the
+    // GraphChart edges-after-nodes pattern from Codex 019e2244 review.
+    // Each overlay row prefixes the layer name so SR users can
+    // distinguish "Region: İstanbul" from "Bubble overlay: İstanbul HQ".
+    const a11yData = useMemo(() => {
+      const regionRows = [...data]
+        .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+        .map((d) => ({
+          label: d.name,
+          value: d.value ?? 0,
+        }));
+      const overlayRows: Array<{ label: string; value: number }> = [];
+      if (overlays && overlays.length > 0) {
+        for (const layer of overlays) {
+          const layerLabel = layer.name ?? `${layer.type} overlay`;
+          // Sort each overlay's points by value desc for consistent SR
+          // walk order (matches how the canvas highlights densest first).
+          const sorted = [...layer.data].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+          for (const pt of sorted) {
+            overlayRows.push({
+              label: `${layerLabel}: ${pt.name}`,
+              value: pt.value ?? 0,
+            });
+          }
+        }
+      }
+      return [...regionRows, ...overlayRows];
+    }, [data, overlays]);
 
     const a11yState = useChartA11y({
       chartType: 'geo',

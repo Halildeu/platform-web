@@ -1514,6 +1514,42 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            // PR-X13a (Codex 019e25a2 iter-1 #12): overlay layer
+            // demonstration. Toggle ON via Playground `showBubbleOverlay`
+            // to surface the bubble overlay on top of the choropleth.
+            // 3 HQ points use the same İstanbul/Ankara/İzmir cities so
+            // the visual narrative is consistent with the base map.
+            overlays={
+              isOn(toggles, 'showBubbleOverlay', false)
+                ? [
+                    {
+                      type: 'bubble',
+                      name: 'HQ Headcount',
+                      data: [
+                        {
+                          name: 'İstanbul HQ',
+                          coordinates: [29.0, 41.0],
+                          value: 1200,
+                        },
+                        {
+                          name: 'Ankara HQ',
+                          coordinates: [32.85, 39.93],
+                          value: 800,
+                        },
+                        {
+                          name: 'İzmir Ofis',
+                          coordinates: [27.14, 38.42],
+                          value: 450,
+                        },
+                      ],
+                      symbol: 'circle',
+                      opacity: 0.7,
+                      showLabels: true,
+                      color: '#dc2626',
+                    },
+                  ]
+                : undefined
+            }
           />
         </PreviewBox>
       );

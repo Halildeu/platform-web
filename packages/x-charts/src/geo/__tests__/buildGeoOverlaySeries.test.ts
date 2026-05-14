@@ -160,6 +160,78 @@ describe('bubbleSymbolSize — sqrt scale invariants', () => {
   });
 });
 
+describe('bubbleSymbolSize — negative-domain defensive floor', () => {
+  // Codex 019e25a2 iter-1 must-fix #4: sqrt(negative) = NaN. Bubble
+  // metric is semantically non-negative; clamp safely.
+  it('negative value floors at 0 → minSize', () => {
+    expect(bubbleSymbolSize(-50, 0, 100, 8, 60)).toBe(8);
+  });
+
+  it('negative minValue is treated as 0', () => {
+    // safeMin = 0, safeMax = 100, value = 50 → midpoint of [8, 60]
+    const result = bubbleSymbolSize(50, -100, 100, 8, 60);
+    expect(Number.isNaN(result)).toBe(false);
+    expect(result).toBeGreaterThan(8);
+    expect(result).toBeLessThan(60);
+  });
+
+  it('negative maxValue degrades to flat (both safeMin === safeMax === 0)', () => {
+    // safeMin = 0, safeMax = 0 → midpoint
+    const result = bubbleSymbolSize(-10, -100, -50, 8, 60);
+    expect(result).toBe(34); // (8+60)/2
+  });
+
+  it('builder ingests negative values without producing NaN symbolSize', () => {
+    const layer: GeoBubbleLayer = {
+      type: 'bubble',
+      data: [
+        { name: 'A', coordinates: [0, 0], value: -10 },
+        { name: 'B', coordinates: [1, 1], value: 50 },
+      ],
+    };
+    const spec = buildBubbleLayerSeries(layer, 0);
+    const sizeFn = spec.symbolSize as (val: number[]) => number;
+    expect(Number.isNaN(sizeFn([0, 0, -10]))).toBe(false);
+    expect(Number.isNaN(sizeFn([1, 1, 50]))).toBe(false);
+  });
+});
+
+describe('buildBubbleLayerSeries — overlay metadata namespace', () => {
+  // Codex 019e25a2 iter-1 must-fix #11: stable `_overlay` payload.
+  it('every datum carries `_overlay` with type/layerName/coords/value/category', () => {
+    const layer: GeoBubbleLayer = {
+      type: 'bubble',
+      name: 'HQ',
+      data: [{ name: 'X', coordinates: [10, 20], value: 5, category: 'office' }],
+    };
+    const spec = buildBubbleLayerSeries(layer, 0);
+    const data = spec.data as Array<{
+      _overlay: {
+        type: string;
+        layerName: string;
+        coordinates: [number, number];
+        value: number;
+        category: string;
+      };
+    }>;
+    expect(data[0]._overlay.type).toBe('bubble');
+    expect(data[0]._overlay.layerName).toBe('HQ');
+    expect(data[0]._overlay.coordinates).toEqual([10, 20]);
+    expect(data[0]._overlay.value).toBe(5);
+    expect(data[0]._overlay.category).toBe('office');
+  });
+
+  it('layerName falls back to "Bubble overlay" when name omitted', () => {
+    const layer: GeoBubbleLayer = {
+      type: 'bubble',
+      data: [{ name: 'Y', coordinates: [0, 0], value: 1 }],
+    };
+    const spec = buildBubbleLayerSeries(layer, 0);
+    const data = spec.data as Array<{ _overlay: { layerName: string } }>;
+    expect(data[0]._overlay.layerName).toBe('Bubble overlay');
+  });
+});
+
 describe('buildGeoOverlaySeries — bubble pipeline integration', () => {
   it('produces a series the wrapper can splice into option.series', () => {
     const specs = buildGeoOverlaySeries([sampleBubble()], 0);

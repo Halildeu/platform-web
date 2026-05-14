@@ -50,14 +50,21 @@ function bubbleSymbolSize(
   minSize: number,
   maxSize: number,
 ): number {
-  // NaN is the only non-finite value we treat as "missing"; Infinity
-  // clamps naturally to the maxValue (and becomes maxSize).
+  // Codex 019e25a2 iter-1 must-fix #4: defensive non-negative floor.
+  // Sqrt of a negative is NaN — so any negative value or negative
+  // input range would corrupt the scale. The bubble metric domain is
+  // semantically non-negative (count, magnitude, intensity) so floor
+  // at 0; consumers passing negatives get treated as 0 (smallest
+  // bubble) rather than rendering invalid sizes.
   if (Number.isNaN(value)) return minSize;
-  if (maxValue === minValue) return (minSize + maxSize) / 2;
-  const clamped = Math.max(minValue, Math.min(maxValue, value));
+  const safeValue = value < 0 ? 0 : value;
+  const safeMin = minValue < 0 ? 0 : minValue;
+  const safeMax = maxValue < 0 ? 0 : maxValue;
+  if (safeMax === safeMin) return (minSize + maxSize) / 2;
+  const clamped = Math.max(safeMin, Math.min(safeMax, safeValue));
   // Sqrt scale: area ~ value
-  const sqrtMin = Math.sqrt(minValue);
-  const sqrtMax = Math.sqrt(maxValue);
+  const sqrtMin = Math.sqrt(safeMin);
+  const sqrtMax = Math.sqrt(safeMax);
   const sqrtVal = Math.sqrt(clamped);
   const t = (sqrtVal - sqrtMin) / (sqrtMax - sqrtMin);
   return minSize + t * (maxSize - minSize);
@@ -88,8 +95,18 @@ export function buildBubbleLayerSeries(
     value: [d.coordinates[0], d.coordinates[1], d.value ?? 0],
     name: d.name,
     itemStyle: d.color ? { color: d.color } : undefined,
-    // Stash domain payload for tooltip + click events.
-    _category: d.category,
+    // Codex 019e25a2 iter-1 must-fix #11: namespaced overlay metadata
+    // so the click handler / tooltip / a11y can discriminate overlay
+    // datums from base map datums and emit a stable canonical payload.
+    // Single underscore-prefixed object keeps ECharts datum schema
+    // clean while giving wrapper code a typed surface.
+    _overlay: {
+      type: layer.type as 'bubble',
+      layerName: layer.name ?? 'Bubble overlay',
+      coordinates: d.coordinates,
+      value: d.value,
+      category: d.category,
+    },
   }));
 
   return {

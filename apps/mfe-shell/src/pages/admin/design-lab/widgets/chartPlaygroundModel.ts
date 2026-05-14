@@ -788,6 +788,13 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'showLabels',
     'roam',
     'selectedMode',
+    // PR-X13a (Codex 019e2254 plan-time AGREE): bubble overlay toggle.
+    // Not a real wrapper prop — the playground inner reads this flag
+    // and conditionally builds an `overlays` prop with a demo bubble
+    // layer (İstanbul HQ + Ankara HQ + İzmir Ofis). Lets the design-
+    // lab user flip the layered overlay on/off live without an
+    // overlay JSON editor.
+    'showBubbleOverlay',
     'animate',
     'theme',
     'decal',
@@ -2655,6 +2662,14 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'labels',
       description: 'Show region names as labels on the map (denser canvas).',
       statePatch: { showLabels: true },
+    },
+    {
+      id: 'with-bubble-overlay',
+      label: 'With Bubble Overlay',
+      tag: 'overlay',
+      description:
+        'Choropleth + city HQ bubbles (PR-X13a). Bubble symbolSize ∝ √value (area-perceptual scale).',
+      statePatch: { showBubbleOverlay: true },
     },
     {
       id: 'no-roam',

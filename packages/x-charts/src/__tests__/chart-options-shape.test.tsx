@@ -1668,6 +1668,32 @@ describe('GeoMap option shape', () => {
     expect(geoBlock?.map).toBe('TR');
   });
 
+  // Codex 019e25a2 PR-X13a iter-1 must-fix #1: base map series and
+  // overlay scatter must SHARE the explicit geo coord system so
+  // pan/zoom state stays in sync.
+  it('base map series binds to geoIndex=0 (shares coord with overlays)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'bubble',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    const baseMap = allSeries[0];
+    expect(baseMap.type).toBe('map');
+    expect(baseMap.geoIndex).toBe(0);
+    const overlay = allSeries[1];
+    expect(overlay.geoIndex).toBe(0);
+    // Both bind to the same geoIndex → ECharts shares coord state.
+  });
+
   it('skips render when map not registered (no setOption call after registry clear)', () => {
     __resetGeoMapRegistrationCacheForTests();
     // Now no map is registered; GeoMap should not emit a series.
