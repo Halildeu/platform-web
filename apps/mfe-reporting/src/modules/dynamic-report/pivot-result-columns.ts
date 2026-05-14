@@ -86,10 +86,12 @@ const pivotEnvelopeSignature = (columns: PivotResultColumn[]): string =>
  * P3): no HTML injection through registry-supplied labels.
  */
 export const buildPivotSecondaryHeader = (column: PivotResultColumn): string => {
-  // Single-valueCol grids tend to have the agg/value identical across
-  // every bucket; in that case the bare label reads cleaner. We still
-  // keep the metadata on the colDef so a future grouped-header PR can
-  // promote it without changing this helper.
+  // Flat disambiguation is intentional in PR-0.4d-fe: every secondary
+  // header ships the agg/value pair so multi-valueCol reports never
+  // collide on a bare label. A follow-up PR can promote this to a
+  // grouped secondary colDef (parent = pivot label, children = one
+  // colDef per agg/value pair) without changing this helper's signature
+  // — the metadata fields are already on the resulting PivotSecondaryColDef.
   return `${column.pivotLabel} / ${column.aggFunc.toUpperCase()}(${column.valueField})`;
 };
 
