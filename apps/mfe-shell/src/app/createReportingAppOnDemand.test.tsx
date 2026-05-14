@@ -73,7 +73,9 @@ interface FederationGlobalShape {
   __INSTANCES__?: FakeHostInstance[];
 }
 
-const HOST_NAME = 'mfe_shell';
+// PR-B5b2-hostfix: use the production-runtime host name (vite plugin
+// prefixes the configured 'mfe_shell' with '__mfe_internal__').
+const HOST_NAME = '__mfe_internal__mfe_shell';
 
 function installFakeHost(opts?: {
   appComponentOverride?: React.FC | null;

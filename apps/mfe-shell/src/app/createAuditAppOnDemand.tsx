@@ -56,41 +56,13 @@ import { createLazyRemoteModule } from './createLazyRemoteModule';
 import { ensureRemoteShellServicesConfigured } from './config/ensure-remote-shell-services';
 import { getSharedShellServices } from './config/shell-services-wiring';
 import { resolveAdminRemoteEntry } from './config/admin-remote-bootstrap';
+// PR-B5b2-hostfix (Codex `019e2528`): host lookup centralized.
+import { getHostMfInstance } from './config/host-mf-instance';
 
 declare const __MFE_ADMIN_REMOTES_ON_DEMAND__: boolean;
 
-const AUDIT_HOST_NAME = 'mfe_shell';
 const AUDIT_REMOTE_NAME = 'mfe_audit';
 const AUDIT_REMOTE_KEY = `${AUDIT_REMOTE_NAME}/AuditApp`;
-
-/**
- * Shape of the MF host instance we use — narrowed from
- * `ModuleFederation` to the one method we actually call (`loadRemote`).
- * `registerRemotes` is handled inside the ensure helper, so the
- * wrapper's only direct call is `loadRemote`.
- */
-interface MfHostInstance {
-  options: { name: string };
-  loadRemote<T = unknown>(key: string): Promise<T | null>;
-}
-
-interface FederationGlobal {
-  __INSTANCES__?: MfHostInstance[];
-}
-
-/**
- * Resolve the host MF runtime instance from the global registry that
- * `@module-federation/runtime-core` maintains at
- * `globalThis.__FEDERATION__.__INSTANCES__`.  See B5b1/B5b1.5/B5b2a
- * canaries + ensure-remote-shell-services helper for the same lookup.
- */
-function getHostMfInstance(): MfHostInstance | null {
-  const root: typeof globalThis & { __FEDERATION__?: FederationGlobal } =
-    typeof globalThis === 'object' ? globalThis : (window as unknown as typeof globalThis);
-  const federation = (root as { __FEDERATION__?: FederationGlobal }).__FEDERATION__;
-  const instances = federation?.__INSTANCES__ ?? [];
-  return instances.find((i) => i.options.name === AUDIT_HOST_NAME) ?? null;
-}
 
 /**
  * Codex `019e239a` post-merge B5b3c absorb: legacy

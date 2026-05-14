@@ -55,52 +55,15 @@
 import React, { Suspense } from 'react';
 import type { FC, PropsWithChildren } from 'react';
 import { createLazyRemoteModule } from './createLazyRemoteModule';
+// PR-B5b2-hostfix (Codex `019e2528`): host lookup centralized.
+import { getHostMfInstance } from './config/host-mf-instance';
 
 declare const __MFE_SCHEMA_EXPLORER_ON_DEMAND__: boolean;
 
-const SCHEMA_EXPLORER_HOST_NAME = 'mfe_shell';
 const SCHEMA_EXPLORER_REMOTE_NAME = 'mfe_schema_explorer';
 const SCHEMA_EXPLORER_REMOTE_KEY = `${SCHEMA_EXPLORER_REMOTE_NAME}/SchemaExplorerApp`;
 
-/**
- * Shape of the MF host instance we use — narrowed from
- * `ModuleFederation` to the two methods we actually call.  Keeping
- * the surface narrow makes the module easy to mock in unit tests
- * without pulling the full `@module-federation/runtime-core` type
- * graph.
- */
-interface MfHostInstance {
-  options: { name: string };
-  registerRemotes(
-    remotes: Array<{ name: string; entry: string; type?: string }>,
-    options?: { force?: boolean },
-  ): void;
-  loadRemote<T = unknown>(key: string): Promise<T | null>;
-}
-
-interface FederationGlobal {
-  __INSTANCES__?: MfHostInstance[];
-}
-
 let schemaExplorerRegistered = false;
-
-/**
- * Resolve the host MF runtime instance from the global registry that
- * `@module-federation/runtime-core` maintains at
- * `globalThis.__FEDERATION__.__INSTANCES__`.  The host bundle's
- * `federation({ name: 'mfe_shell', ... })` call ends up pushed there
- * during host bootstrap.
- *
- * Returns `null` when no host instance is present (test environment
- * without runtime bootstrap, or pre-MF setup error).
- */
-function getHostMfInstance(): MfHostInstance | null {
-  const root: typeof globalThis & { __FEDERATION__?: FederationGlobal } =
-    typeof globalThis === 'object' ? globalThis : (window as unknown as typeof globalThis);
-  const federation = (root as { __FEDERATION__?: FederationGlobal }).__FEDERATION__;
-  const instances = federation?.__INSTANCES__ ?? [];
-  return instances.find((i) => i.options.name === SCHEMA_EXPLORER_HOST_NAME) ?? null;
-}
 
 /**
  * Read the schema_explorer remoteEntry URL from runtime env injected by
