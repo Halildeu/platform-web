@@ -48,7 +48,7 @@ import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { isGeoMapRegistered } from './geo/registerGeoMap';
-import type { GeoOverlay } from './geo/geoOverlayTypes';
+import type { GeoOverlay, GeoOverlayMeta } from './geo/geoOverlayTypes';
 import { buildGeoOverlaySeries } from './geo/buildGeoOverlaySeries';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -370,24 +370,12 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
             value?: number | number[];
             data?: {
               _originalName?: string;
-              _overlay?:
-                | {
-                    type: 'bubble' | 'effectScatter';
-                    layerName: string;
-                    coordinates: [number, number];
-                    value?: number;
-                    category?: string | number;
-                  }
-                | {
-                    type: 'flow';
-                    layerName: string;
-                    from: [number, number];
-                    to: [number, number];
-                    fromName?: string;
-                    toName?: string;
-                    value?: number;
-                    category?: string | number;
-                  };
+              // Codex 019e25d4 post-impl: import shared internal
+              // `GeoOverlayMeta` union from geoOverlayTypes instead of
+              // duplicating the shape inline — single source of truth
+              // for the `_overlay` namespace prevents drift between
+              // builder (which stamps it) and wrapper (which reads it).
+              _overlay?: GeoOverlayMeta;
             };
           }) => {
             // Overlay datum branch (point or flow).
@@ -570,24 +558,9 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
           data?: {
             _originalName?: string;
             _code?: string;
-            _overlay?:
-              | {
-                  type: 'bubble' | 'effectScatter';
-                  layerName: string;
-                  coordinates: [number, number];
-                  value?: number;
-                  category?: string | number;
-                }
-              | {
-                  type: 'flow';
-                  layerName: string;
-                  from: [number, number];
-                  to: [number, number];
-                  fromName?: string;
-                  toName?: string;
-                  value?: number;
-                  category?: string | number;
-                };
+            // Codex 019e25d4 post-impl: same shared `GeoOverlayMeta`
+            // import as the tooltip formatter — single source of truth.
+            _overlay?: GeoOverlayMeta;
           };
         };
         // Codex 019e25a2 PR-X13a iter-1 must-fix #2 + PR-X13c

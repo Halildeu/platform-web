@@ -1964,6 +1964,82 @@ describe('GeoMap option shape', () => {
     expect(payload.label).toBe('İstanbul → Ankara');
   });
 
+  it('flow a11y SR row format: "<layer>: Flow edge: <from> to <to>"', () => {
+    // Codex 019e25d4 post-impl must-fix: focused assertion that the
+    // hidden SR data table contains a row for each flow edge with the
+    // canonical "Flow edge: <from> to <to>" format. Mirrors the iter-2
+    // a11y preference (visual "→" arrow swapped for screen-reader
+    // friendly "edge" semantic).
+    const { container } = render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            name: 'Logistics flow',
+            data: [
+              {
+                fromName: 'İstanbul',
+                toName: 'Ankara',
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 800,
+              },
+              {
+                fromName: 'İstanbul',
+                toName: 'İzmir',
+                from: [29.0, 41.0],
+                to: [27.14, 38.42],
+                value: 600,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    // ChartA11yShell renders the hidden data table inline (visually
+    // hidden via VISUALLY_HIDDEN_STYLE, present in DOM for SR walk).
+    const rows = container.querySelectorAll('table tbody tr');
+    const labels = Array.from(rows)
+      .map((tr) => tr.querySelector('td')?.textContent ?? '')
+      .filter((label) => label.includes('Flow edge'));
+    expect(labels).toContain('Logistics flow: Flow edge: İstanbul to Ankara');
+    expect(labels).toContain('Logistics flow: Flow edge: İstanbul to İzmir');
+    // Sort by value desc verifies the SR walk order: 800 first, 600 next.
+    expect(labels[0]).toContain('İstanbul to Ankara');
+    expect(labels[1]).toContain('İstanbul to İzmir');
+  });
+
+  it('flow a11y SR row falls back to coords when fromName/toName missing', () => {
+    const { container } = render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'flow',
+            // no layer name → defaults to "flow overlay"
+            data: [
+              {
+                from: [29.0, 41.0],
+                to: [32.85, 39.93],
+                value: 1,
+              },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const rows = container.querySelectorAll('table tbody tr');
+    const labels = Array.from(rows).map((tr) => tr.querySelector('td')?.textContent ?? '');
+    // Coordinate fallback in the SR linearization.
+    const flowRow = labels.find((l) => l.includes('Flow edge:'));
+    expect(flowRow).toBe('flow overlay: Flow edge: 29.00,41.00 to 32.85,39.93');
+  });
+
   it('flow click with coordinate-fallback label (no fromName/toName)', () => {
     const handler = vi.fn();
     render(
