@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Generated depth test — regenerate: node scripts/ci/generate-depth-tests.mjs --write
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { ComparisonTable } from '../ComparisonTable';
 
 afterEach(cleanup);
@@ -38,7 +38,9 @@ describe('ComparisonTable — depth', () => {
     });
 
     it('handles single-item defaultExpandedIds', () => {
-      const { container } = render(<ComparisonTable {...requiredProps} defaultExpandedIds={[{}] as any} />);
+      const { container } = render(
+        <ComparisonTable {...requiredProps} defaultExpandedIds={[{}] as any} />,
+      );
       expect(container.firstElementChild).toBeTruthy();
     });
   });

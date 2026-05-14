@@ -1508,7 +1508,7 @@
   },
   {
     "name": "ExecutiveKPIStrip",
-    "path": "enterprise/ExecutiveKPIStrip.tsx",
+    "path": "patterns/executive-kpi-strip/ExecutiveKPIStrip.tsx",
     "dir": "enterprise",
     "lineCount": 282,
     "scores": {
@@ -1888,7 +1888,7 @@
   },
   {
     "name": "InlineEdit",
-    "path": "enterprise/InlineEdit.tsx",
+    "path": "components/inline-edit/InlineEdit.tsx",
     "dir": "enterprise",
     "lineCount": 297,
     "scores": {
@@ -2667,7 +2667,7 @@
   },
   {
     "name": "DateRangePicker",
-    "path": "enterprise/DateRangePicker.tsx",
+    "path": "components/date-range-picker/DateRangePicker.tsx",
     "dir": "enterprise",
     "lineCount": 395,
     "scores": {
@@ -3921,7 +3921,7 @@
   },
   {
     "name": "ComparisonTable",
-    "path": "enterprise/ComparisonTable.tsx",
+    "path": "components/comparison-table/ComparisonTable.tsx",
     "dir": "enterprise",
     "lineCount": 314,
     "scores": {

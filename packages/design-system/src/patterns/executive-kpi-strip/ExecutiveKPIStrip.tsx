@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { resolveAccessState, accessStyles } from '../internal/access-controller';
-import type { AccessLevel } from '../internal/access-controller';
-import { formatValue, getTrendColor, getTrendIcon } from './types';
-import type { FormatOptions, TrendInfo } from './types';
+import { resolveAccessState, accessStyles } from '../../internal/access-controller';
+import type { AccessLevel } from '../../internal/access-controller';
+import { formatValue, getTrendColor, getTrendIcon } from '../../enterprise/types';
+import type { FormatOptions, TrendInfo } from '../../enterprise/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,13 +28,13 @@ export interface KPIMetric {
 }
 
 /** Props for the ExecutiveKPIStrip component.
-   * @example
-   * ```tsx
-   * <ExecutiveKPIStrip />
-   * ```
-   * @since 1.0.0
-   * @see [Docs](https://design.mfe.dev/components/executive-k-p-i-strip)
-   */
+ * @example
+ * ```tsx
+ * <ExecutiveKPIStrip />
+ * ```
+ * @since 1.0.0
+ * @see [Docs](https://design.mfe.dev/components/executive-k-p-i-strip)
+ */
 export interface ExecutiveKPIStripProps {
   metrics: KPIMetric[];
   /** Number of visible columns on desktop (2-6). Mobile=1, tablet=2. Default 4. */
@@ -52,10 +52,31 @@ export interface ExecutiveKPIStripProps {
 // Size configuration
 // ---------------------------------------------------------------------------
 
-const SIZE_CONFIG: Record<KPIStripSize, { card: string; label: string; value: string; trend: string; sparkH: number }> = {
-  sm: { card: 'px-3 py-2', label: 'text-xs', value: 'text-lg font-semibold', trend: 'text-[10px]', sparkH: 20 },
-  md: { card: 'px-4 py-3', label: 'text-sm', value: 'text-2xl font-bold', trend: 'text-xs', sparkH: 28 },
-  lg: { card: 'px-5 py-4', label: 'text-base', value: 'text-3xl font-bold', trend: 'text-sm', sparkH: 36 },
+const SIZE_CONFIG: Record<
+  KPIStripSize,
+  { card: string; label: string; value: string; trend: string; sparkH: number }
+> = {
+  sm: {
+    card: 'px-3 py-2',
+    label: 'text-xs',
+    value: 'text-lg font-semibold',
+    trend: 'text-[10px]',
+    sparkH: 20,
+  },
+  md: {
+    card: 'px-4 py-3',
+    label: 'text-sm',
+    value: 'text-2xl font-bold',
+    trend: 'text-xs',
+    sparkH: 28,
+  },
+  lg: {
+    card: 'px-5 py-4',
+    label: 'text-base',
+    value: 'text-3xl font-bold',
+    trend: 'text-sm',
+    sparkH: 36,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -106,10 +127,21 @@ function MiniGauge({ current, goal, size }: { current: number; goal: number; siz
   const radius = (size - 4) / 2;
   const circumference = Math.PI * radius; // half-circle
   const filled = circumference * pct;
-  const color = pct >= 1 ? 'var(--state-success-text)' : pct >= 0.7 ? 'var(--state-warning-text)' : 'var(--state-error-text)';
+  const color =
+    pct >= 1
+      ? 'var(--state-success-text)'
+      : pct >= 0.7
+        ? 'var(--state-warning-text)'
+        : 'var(--state-error-text)';
 
   return (
-    <svg width={size} height={size / 2 + 2} viewBox={`0 0 ${size} ${size / 2 + 2}`} aria-hidden="true" className="shrink-0">
+    <svg
+      width={size}
+      height={size / 2 + 2}
+      viewBox={`0 0 ${size} ${size / 2 + 2}`}
+      aria-hidden="true"
+      className="shrink-0"
+    >
       <path
         d={`M 2 ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 2} ${size / 2}`}
         fill="none"
@@ -137,7 +169,10 @@ function KPISkeleton({ size, count }: { size: KPIStripSize; count: number }) {
   return (
     <>
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className={`${s.card} rounded-lg border border-border-default bg-surface-default animate-pulse`}>
+        <div
+          key={i}
+          className={`${s.card} rounded-lg border border-border-default bg-surface-default animate-pulse`}
+        >
           <div className="h-3 w-20 rounded-xs bg-surface-muted mb-2" />
           <div className="h-6 w-28 rounded-xs bg-surface-muted mb-1" />
           <div className="h-2 w-16 rounded-xs bg-surface-muted" />
@@ -196,9 +231,15 @@ export function ExecutiveKPIStrip({
           const metricAccess = resolveAccessState(metric.access ?? access);
           if (metricAccess.isHidden) return null;
 
-          const isInteractive = onMetricClick && !metricAccess.isDisabled && !metricAccess.isReadonly && !globalAccess.isDisabled;
+          const isInteractive =
+            onMetricClick &&
+            !metricAccess.isDisabled &&
+            !metricAccess.isReadonly &&
+            !globalAccess.isDisabled;
           const formatted = formatValue(metric.value, metric.format);
-          const trendColor = metric.trend ? getTrendColor(metric.trend.direction, metric.invertTrend) : undefined;
+          const trendColor = metric.trend
+            ? getTrendColor(metric.trend.direction, metric.invertTrend)
+            : undefined;
 
           return (
             <div
@@ -208,17 +249,23 @@ export function ExecutiveKPIStrip({
               aria-label={`${metric.label}: ${formatted}`}
               aria-disabled={metricAccess.isDisabled || globalAccess.isDisabled || undefined}
               onClick={isInteractive ? () => onMetricClick(metric.id) : undefined}
-              onKeyDown={isInteractive ? (e: React.KeyboardEvent) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onMetricClick(metric.id);
-                }
-              } : undefined}
+              onKeyDown={
+                isInteractive
+                  ? (e: React.KeyboardEvent) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onMetricClick(metric.id);
+                      }
+                    }
+                  : undefined
+              }
               className={[
                 s.card,
                 'rounded-lg border border-border-default bg-surface-default',
                 'transition-shadow duration-(--motion-duration-fast)',
-                isInteractive ? 'cursor-pointer hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]' : '',
+                isInteractive
+                  ? 'cursor-pointer hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]'
+                  : '',
                 metricAccess.isDisabled ? 'opacity-50 pointer-events-none' : '',
               ].join(' ')}
             >
@@ -229,9 +276,7 @@ export function ExecutiveKPIStrip({
 
               {/* Value row */}
               <div className="flex items-end gap-2 flex-wrap">
-                <span className={`${s.value} text-text-primary leading-none`}>
-                  {formatted}
-                </span>
+                <span className={`${s.value} text-text-primary leading-none`}>{formatted}</span>
 
                 {/* Trend badge */}
                 {metric.trend && (
@@ -276,6 +321,6 @@ export function ExecutiveKPIStrip({
   );
 }
 
-ExecutiveKPIStrip.displayName = "ExecutiveKPIStrip";
+ExecutiveKPIStrip.displayName = 'ExecutiveKPIStrip';
 
 export default ExecutiveKPIStrip;

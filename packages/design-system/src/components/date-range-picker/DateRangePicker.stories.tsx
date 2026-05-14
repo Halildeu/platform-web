@@ -7,7 +7,13 @@ const meta: Meta<typeof DateRangePicker> = {
   component: DateRangePicker,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof DateRangePicker>;
