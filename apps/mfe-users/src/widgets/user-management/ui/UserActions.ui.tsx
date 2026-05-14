@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { UserSummary } from '@mfe/shared-types';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
@@ -6,6 +6,49 @@ import { usePermissions } from '@mfe/auth';
 import { PERMISSIONS } from '../../../features/user-management/lib/permissions.constants';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
 import { pushToast } from '../../../shared/notifications';
+import { getShellServices } from '../../../app/services/shell-services';
+
+// Codex 019e2022 follow-up — row-level impersonate quick action.
+// Mirrors ImpersonateAction's friendlyErrorMessage map so the row-level
+// menu item surfaces the same localized backend messages without the
+// operator having to navigate into the user-detail drawer first.
+const ROW_IMPERSONATE_ERROR_MESSAGES: Record<string, string> = {
+  SELF_IMPERSONATION_FORBIDDEN: 'Kendi hesabını impersonate edemezsin.',
+  TARGET_USER_DISABLED: 'Pasif kullanıcı için impersonation başlatılamaz.',
+  TARGET_SUBJECT_UNRESOLVABLE:
+    'Hedef kullanıcının Keycloak eşlemesi eksik (kc_subject backfill bekleniyor). Operatöre bildirin.',
+  ADMIN_IDENTITY_MISSING:
+    'Admin kimliği eksik. Çıkış yapıp tekrar giriş yapın veya KC userId attribute kontrolü gerekiyor.',
+  INSUFFICIENT_AUTHORITY: 'Bu işlem için süper admin yetkisi gerekiyor.',
+  NESTED_IMPERSONATION_FORBIDDEN:
+    'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
+  ACTIVE_SESSION_EXISTS: 'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
+  ACTIVE_IMPERSONATION_EXISTS:
+    'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
+  TARGET_SUBJECT_MISMATCH:
+    'KC token-exchange hedef kullanıcı kontrolü tutmadı (audit poisoning koruması).',
+  EXCHANGED_TOKEN_NOT_BROKER_ISSUED: 'KC token-exchange yanıtı broker-imzalı değil.',
+  EXCHANGED_TOKEN_EXPIRED: 'KC tarafından dönen token süresi dolmuş.',
+  TOKEN_EXCHANGE_FAILED: 'Keycloak token-exchange başarısız.',
+  SESSION_PERSIST_FAILED: 'Impersonation oturumu kaydedilemedi (permission-service hatası).',
+};
+
+const friendlyRowImpersonateError = (err: unknown): string => {
+  if (err instanceof Error) {
+    const withCode = err as Error & { errorCode?: string };
+    // Codex 019e1e0f BUG #3: VALIDATION_ERROR carries the localized
+    // backend message verbatim.
+    if (withCode.errorCode === 'VALIDATION_ERROR' && err.message) {
+      return err.message;
+    }
+    const codeFromMessage = err.message?.match(/^[A-Z_]+/)?.[0];
+    if (codeFromMessage && ROW_IMPERSONATE_ERROR_MESSAGES[codeFromMessage]) {
+      return ROW_IMPERSONATE_ERROR_MESSAGES[codeFromMessage];
+    }
+    return err.message;
+  }
+  return 'Impersonation başlatılamadı.';
+};
 
 interface UserActionsProps {
   user: UserSummary;
@@ -32,6 +75,75 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const { t } = useUsersI18n();
+
+  // Codex 019e2022 follow-up — row-level impersonate quick action.
+  // The action is gated by the shell auth singleton (matches
+  // ImpersonateAction's defense-in-depth contract). Self-target is
+  // suppressed via the shell's getUser()/subscriberId comparison.
+  const shellAuth = useMemo(() => {
+    try {
+      return getShellServices().auth;
+    } catch {
+      return null;
+    }
+  }, []);
+  const shellSuperAdmin = useMemo(() => {
+    try {
+      return Boolean(shellAuth?.isSuperAdmin?.());
+    } catch {
+      return false;
+    }
+  }, [shellAuth]);
+  const shellImpersonating = useMemo(() => {
+    try {
+      return Boolean(shellAuth?.isImpersonating?.());
+    } catch {
+      return false;
+    }
+  }, [shellAuth]);
+  const callerSubscriberId = useMemo(() => {
+    try {
+      const profile = shellAuth?.getUser?.() as { subscriberId?: string | number } | null;
+      const raw = profile?.subscriberId;
+      return raw != null ? String(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [shellAuth]);
+  const isSelfTarget = callerSubscriberId != null && callerSubscriberId === String(user.id);
+  const canRowImpersonate = shellSuperAdmin && !shellImpersonating && !isSelfTarget;
+
+  const [impersonateOpen, setImpersonateOpen] = useState(false);
+  const [impersonateReason, setImpersonateReason] = useState('');
+  const [impersonateSubmitting, setImpersonateSubmitting] = useState(false);
+  const [impersonateError, setImpersonateError] = useState<string | null>(null);
+
+  const closeImpersonateModal = useCallback(() => {
+    setImpersonateOpen(false);
+    setImpersonateReason('');
+    setImpersonateError(null);
+    setImpersonateSubmitting(false);
+  }, []);
+
+  const submitImpersonate = useCallback(async () => {
+    if (!shellAuth || impersonateReason.trim().length < 10) {
+      return;
+    }
+    setImpersonateSubmitting(true);
+    setImpersonateError(null);
+    try {
+      const numericUserId = typeof user.id === 'number' ? user.id : parseInt(String(user.id), 10);
+      await shellAuth.enterImpersonationSession({
+        targetUserId: numericUserId,
+        targetEmail: user.email,
+        reason: impersonateReason.trim(),
+      });
+      closeImpersonateModal();
+    } catch (e) {
+      setImpersonateError(friendlyRowImpersonateError(e));
+      setImpersonateSubmitting(false);
+    }
+  }, [shellAuth, impersonateReason, user.email, user.id, closeImpersonateModal]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -106,6 +218,22 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
       });
     }
 
+    if (canRowImpersonate) {
+      // Codex 019e2022 follow-up — row-level quick action mirrors
+      // ImpersonateAction's contract: SuperAdmin only, not self, not
+      // during an active session. Opens an inline reason modal so the
+      // operator does not have to navigate into UserDetailDrawer first.
+      menu.push({
+        key: 'impersonate',
+        label: t('users.actions.impersonate.menu') || 'Hesaba Geç',
+        onClick: () => {
+          setImpersonateOpen(true);
+          setImpersonateReason('');
+          setImpersonateError(null);
+        },
+      });
+    }
+
     if (callerIsSuperAdmin) {
       menu.push({
         key: 'grant-super-admin',
@@ -160,6 +288,7 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
     grantSuperAdminMutation,
     revokeSuperAdminMutation,
     callerIsSuperAdmin,
+    canRowImpersonate,
     user.email,
     user.id,
     user.status,
@@ -209,6 +338,76 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
                 {item.label}
               </button>
             ))}
+          </div>,
+          document.body,
+        )}
+      {impersonateOpen && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => {
+              if (!impersonateSubmitting) {
+                closeImpersonateModal();
+              }
+            }}
+            data-testid="row-impersonate-modal"
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-state-warning-border bg-surface-default p-4 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <p className="font-semibold text-state-warning-text">
+                Impersonate {user.fullName || user.email}
+              </p>
+              <p className="mt-1 text-xs text-state-warning-text">
+                Bu işlem audit log&apos;una kaydedilir. Devam etmek için sebep (min 10 karakter) gerekli;
+                hedef kullanıcı sistem tarafından otomatik çözümlenir.
+              </p>
+              <label className="mt-3 block">
+                <span className="block text-xs font-semibold uppercase tracking-wide text-state-warning-text">
+                  Sebep (min 10 karakter)
+                </span>
+                <textarea
+                  value={impersonateReason}
+                  onChange={(e) => setImpersonateReason(e.target.value)}
+                  rows={3}
+                  minLength={10}
+                  maxLength={500}
+                  className="mt-1 w-full rounded-md border border-state-warning-border bg-surface-default p-2 text-sm"
+                  data-testid="row-impersonate-reason"
+                  autoFocus
+                />
+              </label>
+              {impersonateError ? (
+                <p
+                  className="mt-2 text-xs text-state-danger-text"
+                  data-testid="row-impersonate-error"
+                >
+                  {impersonateError}
+                </p>
+              ) : null}
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeImpersonateModal}
+                  disabled={impersonateSubmitting}
+                  className="rounded-xl border border-border-subtle px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-muted disabled:opacity-60"
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  onClick={submitImpersonate}
+                  disabled={
+                    impersonateSubmitting || impersonateReason.trim().length < 10
+                  }
+                  className="rounded-xl bg-state-warning-text px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  data-testid="row-impersonate-submit-btn"
+                >
+                  {impersonateSubmitting ? 'Başlatılıyor…' : 'Impersonate başlat'}
+                </button>
+              </div>
+            </div>
           </div>,
           document.body,
         )}
