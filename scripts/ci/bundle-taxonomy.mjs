@@ -143,6 +143,124 @@ function hashedName(url) {
   return tail.replace(/-[A-Za-z0-9_-]{8,}(?=\.)/g, '-{hash}');
 }
 
+/**
+ * PERF-INIT-V2 PR-B3d0-impl: CSS attribution extractor (runtime / A channel).
+ *
+ * Confidence-based bucket assignment per spike doc §4.2 (Codex thread
+ * `019e26ee` blocking-1 absorb):
+ *
+ *   - `remote:<name>`     — `/remotes/<name>/assets/...`        (confidence: medium)
+ *   - `shell-root`        — `/assets/index-<hash>.css`          (confidence: low — URL only)
+ *   - `<package>?`        — heuristic substring match           (confidence: low — URL only)
+ *   - `unknown`           — no rule matched                     (confidence: low)
+ *
+ * **Package attribution is NOT decisively answered here**; that is the
+ * source-map-explorer (B channel) job. Heuristic `<package>?` buckets
+ * carry the `?` suffix as a visual hint that they are URL-pattern
+ * guesses, not sourcemap-verified facts. Downstream consumers gate any
+ * decision (e.g. B3d1 lazy-import) on the `unknown` ratio: if it exceeds
+ * 20%, runtime channel is insufficient and B channel sourcemap baseline
+ * is required (see `cssAttributionSummary.requiresSourcemapBaseline`).
+ *
+ * @param {object} resource - resource entry with `name`, `decodedBodySize`
+ * @returns {object} CssAttribution record
+ */
+function extractCssAttribution(resource) {
+  const decodedKB = (resource.decodedBodySize || 0) / 1024;
+  let pathname = '';
+  try {
+    pathname = new URL(resource.name).pathname;
+  } catch {
+    pathname = resource.name;
+  }
+
+  const base = {
+    decodedKB: Math.round(decodedKB * 100) / 100,
+    confidence: 'low',
+    evidence: ['url'],
+    assetUrl: pathname,
+  };
+
+  // Remote bucket — confident URL evidence (path namespace)
+  const remoteMatch = pathname.match(/^\/remotes\/([^/]+)\/assets\//);
+  if (remoteMatch) {
+    return {
+      ...base,
+      source: `remote:${remoteMatch[1]}`,
+      confidence: 'medium',
+      evidence: ['url', 'remote'],
+    };
+  }
+
+  // Shell-root bucket — index-<hash>.css under /assets
+  if (/^\/assets\/index-[A-Za-z0-9_-]+\.css$/.test(pathname)) {
+    return { ...base, source: 'shell-root' };
+  }
+
+  // Heuristic package match (low confidence, `?` suffix as warning)
+  if (/ag[-_]?grid/i.test(pathname)) {
+    return { ...base, source: 'ag-grid?' };
+  }
+  if (/echarts|chartjs|\bchart\b/i.test(pathname)) {
+    return { ...base, source: 'echarts?' };
+  }
+  if (/design[-_]system|mfe[-_]ds/i.test(pathname)) {
+    return { ...base, source: 'design-system?' };
+  }
+
+  return { ...base, source: 'unknown' };
+}
+
+/**
+ * Aggregate CSS attribution rows into a summary suitable for decision
+ * gating (B3d1 / B3d2 trigger criteria per spike doc §4.4).
+ *
+ * Output keys are intentionally additive (Codex thread `019e276d`
+ * blocking-3 absorb): the top-level `totals.cssDecodedKB` aggregate is
+ * NOT mutated; new fields live under `taxonomy.cssAttributionSummary`
+ * to keep `totals.*` numeric-only and avoid downstream consumer breakage.
+ */
+function summarizeCssAttribution(breakdown) {
+  const totalKB = breakdown.reduce((acc, r) => acc + r.decodedKB, 0);
+  const bySource = breakdown.reduce((acc, r) => {
+    acc[r.source] = (acc[r.source] || 0) + r.decodedKB;
+    return acc;
+  }, {});
+  const topContributors = Object.entries(bySource)
+    .map(([source, decodedKB]) => ({
+      source,
+      decodedKB: Math.round(decodedKB * 100) / 100,
+      ratio: totalKB > 0 ? Math.round((decodedKB / totalKB) * 1000) / 1000 : 0,
+    }))
+    .sort((a, b) => b.decodedKB - a.decodedKB)
+    .slice(0, 10);
+
+  const unknownKB = bySource['unknown'] || 0;
+  const unknownRatio = totalKB > 0 ? unknownKB / totalKB : 0;
+  // Decision-gate hint per spike doc §4.4: when runtime heuristic
+  // coverage drops below 80% (unknown >= 20%), B channel sourcemap
+  // baseline is required because URL-pattern matching is no longer a
+  // representative signal.
+  const requiresSourcemapBaseline = unknownRatio >= 0.2;
+
+  return {
+    totalKB: Math.round(totalKB * 100) / 100,
+    rowCount: breakdown.length,
+    topContributors,
+    unknownRatio: Math.round(unknownRatio * 1000) / 1000,
+    requiresSourcemapBaseline,
+    // Confidence rollup — what fraction of decoded CSS bytes is backed
+    // by which evidence tier.
+    confidenceMix: breakdown.reduce(
+      (acc, r) => {
+        acc[r.confidence] = (acc[r.confidence] || 0) + r.decodedKB;
+        return acc;
+      },
+      { high: 0, medium: 0, low: 0 },
+    ),
+  };
+}
+
 async function captureRoute(browser, routeBudget) {
   const { route, auth } = routeBudget;
   console.log(`[taxonomy] ${route}`);
@@ -260,6 +378,24 @@ async function captureRoute(browser, routeBudget) {
       return acc;
     }, {});
 
+    // PERF-INIT-V2 PR-B3d0-impl: CSS attribution breakdown (additive
+    // schema — does NOT mutate `totals.cssDecodedKB`; lives as siblings
+    // `cssBreakdown` + `cssAttributionSummary`). Codex thread `019e276d`
+    // blocking-3 absorb.
+    const cssBreakdown = data.resources
+      .filter((r) => r.category === 'css')
+      .map((r) => extractCssAttribution(r))
+      .sort((a, b) => b.decodedKB - a.decodedKB);
+    const cssAttributionSummary = summarizeCssAttribution(cssBreakdown);
+
+    // Decision-gate hint stdout: log when unknown ratio crosses the
+    // sourcemap-baseline threshold so CI logs surface the signal.
+    if (cssAttributionSummary.requiresSourcemapBaseline) {
+      console.warn(
+        `  WARN ${route}: CSS unknown ratio ${(cssAttributionSummary.unknownRatio * 100).toFixed(1)}% >= 20% — runtime heuristic insufficient; run \`pnpm perf:css-breakdown\` (source-map-explorer) for authoritative attribution.`,
+      );
+    }
+
     const taxonomy = {
       route,
       slug,
@@ -270,6 +406,8 @@ async function captureRoute(browser, routeBudget) {
       totals,
       dominantChunks,
       protocolHistogram,
+      cssBreakdown,
+      cssAttributionSummary,
       resources: data.resources,
     };
 
@@ -331,6 +469,9 @@ async function main() {
       totals: r.totals,
       dominantChunks: r.dominantChunks,
       protocolHistogram: r.protocolHistogram,
+      // PR-B3d0-impl: aggregate-level CSS attribution summary so consumers
+      // can scan the cross-route signal without per-route taxonomy.json IO.
+      cssAttributionSummary: r.cssAttributionSummary,
     })),
   };
   writeFileSync(join(OUT_ROOT, 'all-routes.json'), JSON.stringify(aggregate, null, 2));
@@ -341,7 +482,17 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(2);
-});
+// PR-B3d0-impl: gate top-level Playwright execution so unit tests can
+// import the CSS attribution helpers without triggering browser launch.
+// Mirrors the pattern used by other scripts/ci/*.mjs that export pure
+// helpers (e.g. benchmark-1m-enforcer.mjs).
+const __isDirectInvoke =
+  process.argv[1] && process.argv[1].endsWith('bundle-taxonomy.mjs');
+if (__isDirectInvoke) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(2);
+  });
+}
+
+export { extractCssAttribution, summarizeCssAttribution };

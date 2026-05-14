@@ -29,6 +29,7 @@ on:
       - 'scripts/ci/route-performance-budget.mjs'
       - 'scripts/ci/bundle-taxonomy.mjs'
       - 'scripts/ci/duplicate-package-detector.mjs'
+      - 'scripts/ci/css-attribution-breakdown.mjs'
       - 'scripts/vite-plugins/bundle-visualizer.ts'
       - 'tests/perf/baseline.json'
       - 'tests/perf/route-budget.spec.ts'
@@ -116,6 +117,19 @@ jobs:
           ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
           pnpm exec node scripts/ci/duplicate-package-detector.mjs
 
+      # PERF-INIT-V2 PR-B3d0-impl (Codex thread 019e276d blocking-1 absorb):
+      # CSS attribution (build-time, source-map-explorer) runs AFTER runtime
+      # measurement so the sourcemap-enabled analysis build does not
+      # contaminate the route-budget / bundle-taxonomy runtime captures
+      # above (those measure the default production preview build at port
+      # 5174). The CSS_ATTRIBUTION=1 build is a separate dist rebuild,
+      # consumed by source-map-explorer only.
+      - name: CSS attribution audit (build-time, advisory)
+        continue-on-error: true
+        run: |
+          CSS_ATTRIBUTION=1 pnpm --filter mfe-shell build
+          pnpm perf:css-breakdown
+
       - name: Upload route budget artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,6 +138,8 @@ jobs:
           path: |
             tests/perf/last-run.json
             tests/perf/bundle-stats/
+            docs/performance/css-breakdown.html
+            docs/performance/css-breakdown.json
           retention-days: 30
 
   size-limit:

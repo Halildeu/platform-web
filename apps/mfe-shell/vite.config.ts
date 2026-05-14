@@ -753,7 +753,14 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'esnext',
       outDir: 'dist',
-      sourcemap: mode === 'development',
+      // PERF-INIT-V2 PR-B3d0-impl: `CSS_ATTRIBUTION=1` opt-in flag enables
+      // production sourcemaps so that `source-map-explorer` can attribute
+      // CSS bundles to originating packages (AG Grid, ECharts, design-system,
+      // etc.). Default production build keeps sourcemaps OFF; the
+      // analysis build is a separate post-runtime rebuild (perf-budget.yml
+      // step ordering) so that runtime taxonomy measurement always reflects
+      // the canonical production output, not a sourcemap-enabled variant.
+      sourcemap: process.env.CSS_ATTRIBUTION === '1' ? true : mode === 'development',
     },
   };
 });
