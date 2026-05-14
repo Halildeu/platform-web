@@ -15,7 +15,7 @@ import { StatusTimeline } from '../StatusTimeline';
 import { NotificationCenter } from '../NotificationCenter';
 import { InlineEdit } from '../index';
 import { FilterPresets } from '../FilterPresets';
-import { DataExportDialog } from '../DataExportDialog';
+import { DataExportDialog } from '../index';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';
 import userEvent from '@testing-library/user-event';
 
