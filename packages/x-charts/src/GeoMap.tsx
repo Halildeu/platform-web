@@ -48,7 +48,7 @@ import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { isGeoMapRegistered } from './geo/registerGeoMap';
-import type { GeoOverlay } from './geo/geoOverlayTypes';
+import type { GeoOverlay, GeoOverlayMeta } from './geo/geoOverlayTypes';
 import { buildGeoOverlaySeries } from './geo/buildGeoOverlaySeries';
 import type { EChartsOption } from './renderers/echarts-imports';
 
@@ -171,9 +171,13 @@ export interface GeoMapProps extends AccessControlledProps {
    *     `rippleEffect` (PR-X13b, Codex thread `019e25a2`). Honours
    *     `respectReducedMotion` per layer (suppresses ripple paths
    *     via `rippleEffect.number = 0`).
+   *   - `flow` — origin-destination lines with optional animated
+   *     trail (PR-X13c, Codex thread `019e25d4`). Linear width scale
+   *     by metric (sqrt opt-in). Honours `respectReducedMotion`
+   *     (`effect.show: false`).
    *
    * Future PRs append additional layer types via the discriminated
-   * union: `flow` (lines OD), `heatmap` (density), `marker` (icon).
+   * union: `heatmap` (density), `marker` (icon).
    *
    * Each overlay is independently opt-in; mix and match as needed:
    *
@@ -187,6 +191,13 @@ export interface GeoMapProps extends AccessControlledProps {
    *     ]},
    *     { type: 'effectScatter', data: [
    *       { name: 'Bursa Hub', coordinates: [29.06, 40.19], value: 1 },
+   *     ]},
+   *     { type: 'flow', data: [
+   *       {
+   *         fromName: 'İstanbul', toName: 'Ankara',
+   *         from: [29.0, 41.0], to: [32.85, 39.93],
+   *         value: 800,
+   *       },
    *     ]},
    *   ]}
    * />
@@ -347,28 +358,49 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
         tooltip: {
           trigger: 'item',
           confine: true,
-          // Codex 019e25a2 PR-X13a iter-1 must-fix #3: discriminate
-          // between map series datum (region — `_originalName` /
-          // numeric `p.value`) and scatter overlay datum (bubble —
-          // `_overlay` namespace + `value: [lng, lat, metric]` array).
+          // Codex 019e25a2 PR-X13a iter-1 must-fix #3 + PR-X13c
+          // 019e25d4 iter-2: discriminate region datum (`_originalName`
+          // / numeric `p.value`), point overlay datum (bubble +
+          // effectScatter, `_overlay` namespace with `coordinates`),
+          // and flow overlay datum (`_overlay.type === 'flow'` with
+          // `from`/`to` instead of `coordinates`).
           formatter: (p: {
             seriesType?: string;
             name?: string;
             value?: number | number[];
             data?: {
               _originalName?: string;
-              _overlay?: {
-                type: string;
-                layerName: string;
-                coordinates: [number, number];
-                value?: number;
-                category?: string | number;
-              };
+              // Codex 019e25d4 post-impl: import shared internal
+              // `GeoOverlayMeta` union from geoOverlayTypes instead of
+              // duplicating the shape inline — single source of truth
+              // for the `_overlay` namespace prevents drift between
+              // builder (which stamps it) and wrapper (which reads it).
+              _overlay?: GeoOverlayMeta;
             };
           }) => {
-            // Overlay datum branch (scatter / future overlay layers).
+            // Overlay datum branch (point or flow).
             const overlay = p.data?._overlay;
             if (overlay) {
+              if (overlay.type === 'flow') {
+                // Flow tooltip: layer name + "<from> → <to>" route,
+                // value + category as available. fromName/toName
+                // preferred; coordinate fallback when names absent.
+                const from =
+                  overlay.fromName ??
+                  `${overlay.from[0].toFixed(2)}°, ${overlay.from[1].toFixed(2)}°`;
+                const to =
+                  overlay.toName ?? `${overlay.to[0].toFixed(2)}°, ${overlay.to[1].toFixed(2)}°`;
+                const lines = [`<b>${escapeHtml(overlay.layerName)}</b>`];
+                lines.push(`${escapeHtml(from)} → ${escapeHtml(to)}`);
+                if (typeof overlay.value === 'number' && Number.isFinite(overlay.value)) {
+                  lines.push(`Value: ${fmt(overlay.value)}`);
+                }
+                if (overlay.category != null) {
+                  lines.push(`Category: ${escapeHtml(String(overlay.category))}`);
+                }
+                return lines.join('<br/>');
+              }
+              // Point overlay branch (bubble + effectScatter).
               const lines = [`<b>${escapeHtml(p.name ?? '')}</b>`];
               if (overlay.layerName) {
                 lines.push(`<span style="opacity:0.7">${escapeHtml(overlay.layerName)}</span>`);
@@ -526,21 +558,42 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
           data?: {
             _originalName?: string;
             _code?: string;
-            _overlay?: {
-              type: string;
-              layerName: string;
-              coordinates: [number, number];
-              value?: number;
-              category?: string | number;
-            };
+            // Codex 019e25d4 post-impl: same shared `GeoOverlayMeta`
+            // import as the tooltip formatter — single source of truth.
+            _overlay?: GeoOverlayMeta;
           };
         };
-        // Codex 019e25a2 PR-X13a iter-1 must-fix #2: discriminate
-        // overlay clicks (scatter / future overlay layer types) from
-        // base map region clicks. Overlay datum carries `_overlay`
-        // namespace; map datum carries `_originalName` / `_code`.
+        // Codex 019e25a2 PR-X13a iter-1 must-fix #2 + PR-X13c
+        // 019e25d4 iter-2: discriminate region clicks (`_originalName`
+        // / `_code`), point overlay clicks (bubble + effectScatter,
+        // `coordinates`), and flow overlay clicks (`from`/`to`).
         const overlay = p.data?._overlay;
         if (overlay) {
+          if (overlay.type === 'flow') {
+            // Flow payload: from/to + names + category. `label` is the
+            // synthesized route string so consumers don't have to
+            // rebuild it. Coordinates carried as-is (consumer may want
+            // to derive distance, bearing, etc.).
+            const from =
+              overlay.fromName ?? `${overlay.from[0].toFixed(2)},${overlay.from[1].toFixed(2)}`;
+            const to = overlay.toName ?? `${overlay.to[0].toFixed(2)},${overlay.to[1].toFixed(2)}`;
+            onDataPointClick({
+              datum: {
+                kind: 'overlay',
+                overlayType: 'flow',
+                layerName: overlay.layerName,
+                from: overlay.from,
+                to: overlay.to,
+                fromName: overlay.fromName,
+                toName: overlay.toName,
+                category: overlay.category,
+              },
+              value: typeof overlay.value === 'number' ? overlay.value : undefined,
+              label: `${from} → ${to}`,
+            });
+            return;
+          }
+          // Point overlay (bubble + effectScatter).
           onDataPointClick({
             datum: {
               kind: 'overlay',
@@ -588,14 +641,31 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       if (overlays && overlays.length > 0) {
         for (const layer of overlays) {
           const layerLabel = layer.name ?? `${layer.type} overlay`;
-          // Sort each overlay's points by value desc for consistent SR
-          // walk order (matches how the canvas highlights densest first).
-          const sorted = [...layer.data].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-          for (const pt of sorted) {
-            overlayRows.push({
-              label: `${layerLabel}: ${pt.name}`,
-              value: pt.value ?? 0,
-            });
+          if (layer.type === 'flow') {
+            // Flow SR rows: "<layer>: Flow edge: <from> to <to>"
+            // (Codex 019e25d4 iter-2 a11y preference — "edge" semantic
+            // signals direction better than the visual "→" arrow for
+            // screen-reader users).
+            const sorted = [...layer.data].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+            for (const edge of sorted) {
+              const from = edge.fromName ?? `${edge.from[0].toFixed(2)},${edge.from[1].toFixed(2)}`;
+              const to = edge.toName ?? `${edge.to[0].toFixed(2)},${edge.to[1].toFixed(2)}`;
+              overlayRows.push({
+                label: `${layerLabel}: Flow edge: ${from} to ${to}`,
+                value: edge.value ?? 0,
+              });
+            }
+          } else {
+            // Point overlay (bubble + effectScatter) — original branch.
+            // Sort each overlay's points by value desc for consistent SR
+            // walk order (matches how the canvas highlights densest first).
+            const sorted = [...layer.data].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+            for (const pt of sorted) {
+              overlayRows.push({
+                label: `${layerLabel}: ${pt.name}`,
+                value: pt.value ?? 0,
+              });
+            }
           }
         }
       }

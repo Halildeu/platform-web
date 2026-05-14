@@ -55,6 +55,12 @@ import { ScatterChart } from 'echarts/charts';
 // eye to a small set of priority points (cf. plain `ScatterChart`
 // which is silent — used for general bubble overlays).
 import { EffectScatterChart } from 'echarts/charts';
+// PR-X13c (Codex thread 019e25d4 plan-time AGREE): origin-destination
+// flow lines drawn over a geo map (`lines` series with
+// `coordinateSystem: 'geo'`). Used for logistics routes, migration
+// flows, financial transfers — any directed edge between two
+// geographic endpoints. Disjoint from `LineChart` (cartesian xy line).
+import { LinesChart } from 'echarts/charts';
 import { SankeyChart } from 'echarts/charts';
 import { TreemapChart } from 'echarts/charts';
 import { RadarChart } from 'echarts/charts';
@@ -151,6 +157,7 @@ export function registerECharts(): void {
     PieChart,
     ScatterChart,
     EffectScatterChart, // PR-X13b: animated pulse scatter for highlighted geo points
+    LinesChart, // PR-X13c: origin-destination flow lines on geo coord system
     SankeyChart,
     TreemapChart,
     RadarChart,
