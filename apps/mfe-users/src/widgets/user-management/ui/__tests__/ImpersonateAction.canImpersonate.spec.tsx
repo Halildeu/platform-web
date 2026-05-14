@@ -30,7 +30,7 @@
 
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // ---------- mocks (must be defined BEFORE the SUT import) ----------
 
@@ -127,13 +127,13 @@ describe('ImpersonateAction — canImpersonate fail-closed gate (Faz 1)', () => 
     fireEvent.change(textarea, { target: { value: 'short' } });
     fireEvent.click(screen.getByTestId('impersonate-submit-btn'));
 
-    // The async handler awaits the rejected promise; vitest's react-dom
-    // flush surfaces the error after the next microtask.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const errorNode = screen.queryByTestId('impersonate-error');
-    expect(errorNode).toBeTruthy();
-    expect(errorNode?.textContent).toContain('Sebep en az 10 karakter olmalı');
+    // The async handler awaits the rejected promise + setState batched
+    // updates; React 18 + jsdom needs an actual waitFor poll rather than
+    // a handful of microtask flushes to surface the error testid.
+    await waitFor(() => {
+      const node = screen.queryByTestId('impersonate-error');
+      expect(node).toBeTruthy();
+      expect(node?.textContent).toContain('Sebep en az 10 karakter olmalı');
+    });
   });
 });
