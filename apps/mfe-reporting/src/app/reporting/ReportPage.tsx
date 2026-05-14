@@ -30,6 +30,7 @@ import { getShellServices } from '../services/shell-services';
 // PR-FE-3 (Codex 019e08e2 iter-11): typed error for tenant gate +
 // CompanyPicker for the in-page selection prompt.
 import { isTenantSelectionRequiredError } from '../../modules/dynamic-report/api';
+import { resolveErrorMessage } from '../../modules/dynamic-report/error-messages';
 import { CompanyPicker } from '../../components/CompanyPicker';
 
 /* ------------------------------------------------------------------ */
@@ -584,8 +585,12 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             return;
           }
           params.fail?.();
-          const messageText = error instanceof Error ? error.message : 'Veriler yüklenemedi.';
-          showToast('error', messageText);
+          // Codex 019e2695 absorb: map structured ReportQueryError
+          // codes (GROUPING_NOT_SUPPORTED, INVALID_AGGREGATION_REQUEST,
+          // tenant_selection_required, vault_unavailable, ...) to
+          // user-facing Turkish copy instead of relaying the raw
+          // backend envelope text.
+          showToast('error', resolveErrorMessage(error, 'Veriler yüklenemedi.'));
         } finally {
           setLoading(false);
         }
@@ -616,7 +621,9 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         setClientRows([]);
         return;
       }
-      showToast('error', error instanceof Error ? error.message : 'Veriler yüklenemedi.');
+      // Codex 019e2695 absorb: same Türkçe-mapped toast as the
+      // server-mode branch above.
+      showToast('error', resolveErrorMessage(error, 'Veriler yüklenemedi.'));
       setClientRows([]);
     } finally {
       setLoading(false);
@@ -744,11 +751,13 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         window.URL.revokeObjectURL(objectUrl);
         showToast('success', t('reports.export.success') || 'Export indirilmeye başladı.');
       } catch (error: unknown) {
+        // Codex 019e2695 absorb: export path shares the Türkçe mapping
+        // but with an export-specific fallback ("Export başlatılamadı")
+        // so the toast stays scoped to the failing flow when a
+        // non-structured error bubbles up.
         showToast(
           'error',
-          error instanceof Error
-            ? error.message
-            : t('reports.export.failed') || 'Export başlatılamadı.',
+          resolveErrorMessage(error, t('reports.export.failed') || 'Export başlatılamadı.'),
         );
       } finally {
         setExporting(false);
