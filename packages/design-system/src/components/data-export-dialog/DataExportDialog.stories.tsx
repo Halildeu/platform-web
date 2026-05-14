@@ -3,11 +3,17 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { DataExportDialog } from './DataExportDialog';
 
 const meta: Meta<typeof DataExportDialog> = {
-  title: 'Enterprise/DataExportDialog',
+  title: 'Components/DataExportDialog',
   component: DataExportDialog,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof DataExportDialog>;
@@ -20,7 +26,9 @@ export const Default: Story = {
     recordCounts: { visible: 25, all: 1420, selected: 5, filtered: 120 },
   },
   play: async ({ canvasElement }) => {
-    const el = canvasElement.querySelector('[role="radio"], [role="button"], button, input[type="radio"]');
+    const el = canvasElement.querySelector(
+      '[role="radio"], [role="button"], button, input[type="radio"]',
+    );
     if (el) (el as HTMLElement).click();
   },
 };

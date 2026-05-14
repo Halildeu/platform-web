@@ -76,8 +76,9 @@ export { FilterPresets } from './FilterPresets';
 export type { FilterPresetsLocaleText } from './FilterPresets';
 
 // Export
-export { DataExportDialog } from './DataExportDialog';
-export type { DataExportDialogLocaleText } from './DataExportDialog';
+// DataExportDialog moved to ../components/data-export-dialog/ (Phase 3 follow-up adopt). Compat shim.
+export { DataExportDialog } from '../components/data-export-dialog/DataExportDialog';
+export type { DataExportDialogLocaleText } from '../components/data-export-dialog/DataExportDialog';
 
 // Fine-Kinney Risk Assessment
 export { FineKinney } from './FineKinney';

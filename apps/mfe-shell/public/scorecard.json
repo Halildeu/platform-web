@@ -3940,7 +3940,7 @@
   },
   {
     "name": "DataExportDialog",
-    "path": "enterprise/DataExportDialog.tsx",
+    "path": "components/data-export-dialog/DataExportDialog.tsx",
     "dir": "enterprise",
     "lineCount": 353,
     "scores": {
