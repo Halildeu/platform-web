@@ -121,13 +121,67 @@ test.describe('Impersonation FE Faz 2 — dev-mode bootstrap (B0 scaffold)', () 
   }
 
   /**
+   * Codex `019e27bf` fresh-context review finding: B1-B4 used to call
+   * seedSuperAdmin() right after `page.goto(..., 'domcontentloaded')`
+   * without waiting for the shell to expose `__authContractProbe.store`
+   * or `__shellStore`. The dispatch then threw "No store surface" even
+   * when PR #510's env-reader fix was correctly landed, because the
+   * Playwright spec itself raced AppProviders mount. This helper makes
+   * readiness deterministic so a future dispatch failure points to the
+   * real layer (AppProviders crash, remote preload, etc.).
+   */
+  async function waitForStoreSurface(page: import('@playwright/test').Page) {
+    try {
+      await page.waitForFunction(
+        () => {
+          const w = window as unknown as {
+            __authContractProbe?: { store?: unknown };
+            __shellStore?: unknown;
+          };
+          return Boolean(w.__authContractProbe?.store || w.__shellStore);
+        },
+        { timeout: 60_000 },
+      );
+    } catch (err) {
+      // Diagnostic dump on readiness timeout (Codex 019e27bf #2):
+      // future agents/operators get a concrete signal about which layer
+      // failed rather than just "No store surface".
+      const diag = await page
+        .evaluate(() => {
+          const w = window as unknown as {
+            __env__?: Record<string, string | undefined>;
+            __shellStore?: unknown;
+            __authContractProbe?: unknown;
+          };
+          return {
+            href: location.href,
+            readyState: document.readyState,
+            bodySnippet: document.body?.innerText?.slice(0, 800) ?? '',
+            shellStore: typeof w.__shellStore,
+            authContractProbe: typeof w.__authContractProbe,
+            envKeys: w.__env__ ? Object.keys(w.__env__) : null,
+            envViteAuthMode: w.__env__?.VITE_AUTH_MODE ?? null,
+            envFakeAuth: w.__env__?.VITE_ENABLE_FAKE_AUTH ?? null,
+            envContractE2e: w.__env__?.VITE_AUTH_CONTRACT_E2E ?? null,
+          };
+        })
+        .catch(() => null);
+      // eslint-disable-next-line no-console
+      console.error('[faz2] waitForStoreSurface timeout diagnostic:', JSON.stringify(diag));
+      throw err;
+    }
+  }
+
+  /**
    * Seed shell Redux authzSnapshot via dispatch so {@code isSuperAdmin()}
    * returns the requested boolean — mirrors the Vitest companion test.
+   * Codex `019e27bf` fix: gate on store readiness before dispatching.
    */
   async function seedSuperAdmin(
     page: import('@playwright/test').Page,
     isSuperAdmin: boolean,
   ) {
+    await waitForStoreSurface(page);
     await page.evaluate((value) => {
       const w = window as unknown as {
         __authContractProbe?: { store?: { dispatch: (a: unknown) => unknown } };
@@ -135,7 +189,9 @@ test.describe('Impersonation FE Faz 2 — dev-mode bootstrap (B0 scaffold)', () 
       };
       const store = w.__authContractProbe?.store ?? w.__shellStore;
       if (!store) {
-        throw new Error('No store surface');
+        // Should be unreachable after waitForStoreSurface, but keep as
+        // explicit invariant.
+        throw new Error('No store surface (post-wait)');
       }
       (store as { dispatch: (a: unknown) => unknown }).dispatch({
         type: 'auth/setKeycloakSession',
@@ -196,14 +252,15 @@ test.describe('Impersonation FE Faz 2 — dev-mode bootstrap (B0 scaffold)', () 
     await reason.fill('Faz 2 B1 M3 — happy enter flow');
     await page.getByTestId('impersonate-submit-btn').click();
 
-    // Body shape proof — the start POST must carry the resolved target.
-    await page.waitForFunction(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (c: any) => Boolean(c?.startBody?.targetUserId),
-      captured,
-      { timeout: 15_000 },
-    );
-    expect((captured.startBody as { targetUserId: number }).targetUserId).toBe(42);
+    // Codex `019e27bf` fresh-context #2: Playwright's `page.waitForFunction`
+    // serializes its argument to the browser context, so a Node-side
+    // mutation of `captured` is invisible to the polled function. Use
+    // `expect.poll` against the Node-side state instead.
+    await expect
+      .poll(() => (captured.startBody as { targetUserId?: number } | undefined)?.targetUserId, {
+        timeout: 15_000,
+      })
+      .toBe(42);
     expect((captured.startBody as { reason: string }).reason).toContain('Faz 2 B1 M3');
   });
 
