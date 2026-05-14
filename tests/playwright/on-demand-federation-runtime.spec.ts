@@ -113,7 +113,7 @@ test.describe('PR-B5b3b: on-demand federation runtime smoke (/login)', () => {
     browser,
     baseURL,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
 
     // Force testai default if no override — this smoke is targeted at
     // the canary deployment.
@@ -142,20 +142,23 @@ test.describe('PR-B5b3b: on-demand federation runtime smoke (/login)', () => {
       allRequests.push(req.url());
     });
 
-    // B5b3b iter-2 (nightly first-fire failure absorb 2026-05-14):
-    // `waitUntil: 'networkidle'` waits 500ms with ZERO network activity.
-    // SPA shells with SSE/heartbeat/polling never reach idle within
-    // 30s default → CI timeout.  Switch to `'load'` (window.onload
-    // fires) which is sufficient for the network-observability assertion
-    // (request capture started on `page.on('request', ...)` BEFORE goto,
-    // so all sub-resource fetches are recorded regardless of waitUntil).
-    // Bump per-call timeout to 45s for slower GitHub Actions runner
-    // network paths.
-    await page.goto(`${target}/login`, { waitUntil: 'load', timeout: 45_000 });
-    // Give late-fired fetches (post-load JS-initiated chunks) 5s to
-    // flush before the assertion — without this, lazy import requests
-    // launched after window.load could miss the capture window.
-    await page.waitForTimeout(5_000);
+    // B5b3b iter-3 (nightly re-trigger 25841744053 STILL TimeoutError
+    // even with waitUntil:'load' + 45s timeout — GitHub Actions runner
+    // ↔ Turkey-side testai.acik.com cold TLS handshake + MFE federation
+    // chain + heavy initial JS payload exceeds 45s).
+    //
+    // Switch to `waitUntil:'domcontentloaded'` which fires when HTML
+    // parsing completes (typically 1-3s) — no waiting on iframes,
+    // images, CSS, or external scripts.  Request capture already
+    // started on `page.on('request', ...)` BEFORE goto, so ALL
+    // sub-resource fetches are recorded regardless of waitUntil
+    // (including those launched AFTER DOMContentLoaded but before
+    // window.load).
+    //
+    // 60s per-call timeout for the slow CI path; 10s post-DCL wait
+    // for late-fired lazy chunks to flush before assertion.
+    await page.goto(`${target}/login`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForTimeout(10_000);
 
     // Filter for any of the 7 direct remoteEntry.js patterns + 14
     // auxiliary chunk patterns (per-remote virtual entry + host
