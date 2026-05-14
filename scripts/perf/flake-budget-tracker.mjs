@@ -126,8 +126,22 @@ function main() {
   const rerun = JSON.parse(readFileSync(opt.rerun, 'utf8'));
   const baseline = JSON.parse(readFileSync(opt.baseline, 'utf8'));
 
-  const o = pickRoute(original, opt.route, opt.mode);
-  const r = pickRoute(rerun, opt.route, opt.mode);
+  // Codex 019e27fa iter-3 P0-1 absorb: route-performance-budget.mjs artifact
+  // top-level alanları (build_sha, frontend_image_digest, browser_profile)
+  // route satırlarına DEĞİL artifact root'a yazıyor. Per-route 5-part context
+  // equality için route objesini artifact top-level alanlarla enrich et;
+  // route satırı kendi alanını taşıyorsa o önceliklidir (legacy fixture).
+  const enrichRoute = (route, artifact) => {
+    if (!route) return null;
+    return {
+      ...route,
+      build_sha: route.build_sha ?? artifact.build_sha,
+      browser_profile: route.browser_profile ?? artifact.browser_profile,
+      frontend_image_digest: route.frontend_image_digest ?? artifact.frontend_image_digest,
+    };
+  };
+  const o = enrichRoute(pickRoute(original, opt.route, opt.mode), original);
+  const r = enrichRoute(pickRoute(rerun, opt.route, opt.mode), rerun);
   if (!o || !r) {
     console.error(`[fp-tracker] route ${opt.route}::${opt.mode} missing from one of original/rerun`);
     process.exit(1);

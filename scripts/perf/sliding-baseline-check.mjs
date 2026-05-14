@@ -3,8 +3,12 @@
  * PERF-INIT-V2.1 PR-G2: Sliding baseline drift gate + flake budget.
  *
  * Replaces the single-snapshot regression check in route-performance-budget.mjs
- * with a rolling FIFO window: 14-day sliding median per route key, IQR-based
- * variance band, flake budget tracking with external JSONL ledger.
+ * with a rolling FIFO window: 14-day sliding median per route key, hybrid
+ * p95+2σ variance band (Codex 019e27fa iter-3 P0-3 absorb: contract was
+ * loosely described as "IQR variance band" in iter-2; actual implementation
+ * uses `current > p95 OR current > median + 2*stdDev` which is more
+ * conservative for right-skewed metrics like LCP/TBT), flake budget tracking
+ * with external JSONL ledger.
  *
  * Spike contract: docs/performance/PR-V2.1-G2-sliding-baseline-spike.md
  * Codex thread (spike): 019e26f9-5c6d-7bb1-a81e-5fdf403a80bf (AGREE final)
@@ -156,18 +160,24 @@ function computeSlidingStats(history, windowDays) {
 }
 
 /**
- * Read comparable run outcomes from JSONL ledger (Codex iter-2 absorb P0-3).
+ * Read comparable run outcomes from JSONL ledger (Codex iter-2 absorb P0-3 +
+ * iter-3 absorb P0-2: ABM-1 §4.2 5-part comparable join-key).
  * Ledger entry shape — extended:
  *   { timestamp, route, mode, authState, build_sha, browser_profile,
- *     outcome: 'pass'|'fail'|'confirmed_fp', is_fp: bool }
+ *     frontend_image_digest, outcome: 'pass'|'fail'|'confirmed_fp', is_fp: bool }
  * Backward compat: legacy fp-only entries (`confirmed_fp:true` only) normalize
  * to outcome='confirmed_fp', is_fp:true. Such legacy entries count toward FP
  * but do not contribute pass-side denominator.
+ *
+ * Codex 019e27fa iter-3 P0-2 absorb: filter `${route}::${mode}` yetmez —
+ * comparable run join-key route + mode + authState + build_sha + browser_profile
+ * + frontend_image_digest (optional). `compareContext` opts'tan gelir; eksik
+ * varsa fail-closed (entry filtered out — comparable değil sayılır).
  */
-function readLedgerEntries(ledgerPath, routeKey, lastN) {
+function readLedgerEntries(ledgerPath, routeKey, lastN, compareContext = null) {
   if (!existsSync(ledgerPath)) return [];
   const lines = readFileSync(ledgerPath, 'utf8').split('\n').filter(Boolean);
-  return lines
+  const entries = lines
     .map((l) => {
       try {
         return JSON.parse(l);
@@ -175,7 +185,39 @@ function readLedgerEntries(ledgerPath, routeKey, lastN) {
         return null;
       }
     })
-    .filter((e) => e && `${e.route}::${e.mode}` === routeKey)
+    .filter((e) => e && `${e.route}::${e.mode}` === routeKey);
+
+  // 5-part comparable filter (Codex 019e27fa P0-2 absorb).
+  // Legacy ledger entry'ler (`confirmed_fp:true` only, build_sha yok) backward
+  // compat: artifact context taşıyor ama ledger entry boş ise filter geçer.
+  // Strict mismatch: ledger entry build_sha taşır AMA artifact'den farklıdır → reject.
+  const filtered = compareContext
+    ? entries.filter((e) => {
+        const eAuth = e.authState ?? e.auth ?? 'anonymous';
+        const cAuth = compareContext.authState ?? 'anonymous';
+        if (eAuth !== cAuth) return false;
+        // build_sha: strict mismatch (her ikisi de varsa eşit olmalı)
+        if (compareContext.build_sha && e.build_sha && e.build_sha !== compareContext.build_sha) return false;
+        // browser_profile: aynı pattern
+        if (
+          compareContext.browser_profile &&
+          e.browser_profile &&
+          e.browser_profile !== compareContext.browser_profile
+        )
+          return false;
+        // frontend_image_digest: optional, strict mismatch
+        if (
+          compareContext.frontend_image_digest &&
+          e.frontend_image_digest &&
+          e.frontend_image_digest !== compareContext.frontend_image_digest
+        ) {
+          return false;
+        }
+        return true;
+      })
+    : entries; // fallback (no compareContext): backward compat with existing tests
+
+  return filtered
     .map((e) => ({
       ...e,
       is_fp: e.is_fp === true || e.confirmed_fp === true,
@@ -190,8 +232,17 @@ function readLedgerEntries(ledgerPath, routeKey, lastN) {
  * Returns {fpCount, totalCount, allEntries} where totalCount = entries with
  * known outcome (excludes ledgers that only recorded FPs without pass rows).
  */
-function countFalsePositives(ledgerPath, routeKey, lastN) {
-  const entries = readLedgerEntries(ledgerPath, routeKey, lastN);
+function countFalsePositives(ledgerPath, routeKey, lastN, compareContext = null) {
+  const entries = readLedgerEntries(ledgerPath, routeKey, lastN, compareContext);
+  // Codex 019e27fa iter-3 P0-2 absorb (PARTIAL):
+  // Ledger schema'da bir RUN = bir entry (run-outcome-recorder.mjs `outcome:
+  // 'pass'|'fail'|'confirmed_fp'` yazıyor). FP marker entry'si run-recorder
+  // çıktısı; orijinal fail entry separately recorded DEĞİL — flake-budget-tracker
+  // confirmed_fp olarak appendlemiyor + run-recorder run-outcome'i pass/fail/fp
+  // olarak record ediyor. Bu pattern altında `outcome !== 'unknown'` filter +
+  // is_fp counter doğru. Codex finding gerçek scenario sadece legacy ledger
+  // entry'leri (fp marker yalın confirmed_fp:true) için relevant; yeni schema
+  // run-outcome-recorder ile her run tek entry olacak.
   const known = entries.filter((e) => e.outcome !== 'unknown');
   const fp = known.filter((e) => e.is_fp === true).length;
   return { fpCount: fp, totalCount: known.length, allEntries: entries.length };
@@ -199,7 +250,7 @@ function countFalsePositives(ledgerPath, routeKey, lastN) {
 
 /**
  * Spike §4.2 flake budget evaluation — denominator = comparable runs (NOT
- * ledger entry count). Codex iter-2 absorb P0-3.
+ * ledger entry count). Codex iter-2 absorb P0-3 + iter-3 P0-2.
  * Returns:
  *   {
  *     satisfied,
@@ -215,17 +266,24 @@ function countFalsePositives(ledgerPath, routeKey, lastN) {
  * treated as "satisfied" (not yet enough runs to violate), but the evaluator
  * reports totalCount so hard-fail activation evidence can encode comparableRuns
  * separately. Spike §4.4 already requires comparableRuns >= 20 in evidence block.
+ *
+ * Codex 019e27fa iter-3 P0-2 absorb: compareContext arg ile 5-part comparable
+ * join-key uygulanır (authState + build_sha + browser_profile + digest).
  */
-function evaluateFlakeBudget(ledgerPath, routeKey) {
-  const last20 = countFalsePositives(ledgerPath, routeKey, 20);
-  const last100 = countFalsePositives(ledgerPath, routeKey, 100);
+function evaluateFlakeBudget(ledgerPath, routeKey, compareContext = null) {
+  const last20 = countFalsePositives(ledgerPath, routeKey, 20, compareContext);
+  const last100 = countFalsePositives(ledgerPath, routeKey, 100, compareContext);
   const satisfied = last20.fpCount <= 1 && last100.fpCount < 3;
   return { satisfied, last20, last100 };
 }
 
 /**
- * Variance band check (spike §4.4):
+ * Variance band check (spike §4.4 — Codex 019e27fa iter-3 P0-3 absorb):
  *   outsideBand = current > p95 OR current > median + 2*stdDev
+ *
+ * Bu hybrid pattern "p95+2σ band" olarak adlandırılır (IQR DEĞİL — IQR Q3+1.5*IQR
+ * boxplot outlier kuralı). Hybrid pattern right-skewed metric'ler (LCP/TBT) için
+ * daha conservative; flake budget false-positive risk düşer.
  */
 function outsideVarianceBand(currentValue, stats, metric) {
   const p95 = stats.p95?.[metric];
@@ -261,10 +319,19 @@ function isHardFailActive(baseline, opts) {
   if (!ev.baselineReviewSha) return { active: false, reason: 'missing baselineReviewSha' };
   if (!ev.activatedBy || !ev.activatedAt) return { active: false, reason: 'missing activatedBy/activatedAt' };
   if (opts.acceptWaiver && baseline._hardFailWaiver) {
-    const expires = baseline._hardFailWaiver.expires_at
-      ? new Date(baseline._hardFailWaiver.expires_at)
-      : null;
-    if (expires && expires.getTime() > Date.now()) {
+    // Codex 019e27fa iter-3 P0-4 absorb: date-only `expires_at: "2026-06-01"`
+    // `new Date()` ile UTC midnight expire olur (owner beklentisi
+    // "o gün sonuna kadar"). Date-only string detect edip end-of-day
+    // (23:59:59 UTC) genişlet; full ISO datetime ise olduğu gibi parse.
+    const expiresStr = baseline._hardFailWaiver.expires_at;
+    let expires = null;
+    if (expiresStr) {
+      const dateOnlyMatch = /^\d{4}-\d{2}-\d{2}$/.test(expiresStr);
+      expires = dateOnlyMatch
+        ? new Date(`${expiresStr}T23:59:59.999Z`)
+        : new Date(expiresStr);
+    }
+    if (expires && !Number.isNaN(expires.getTime()) && expires.getTime() > Date.now()) {
       return { active: false, reason: `owner waiver (${baseline._hardFailWaiver.owner}; expires ${baseline._hardFailWaiver.expires_at})` };
     }
   }
@@ -350,11 +417,20 @@ function ensureRouteEntry(baseline, routeKey, opts) {
   return baseline.routes[routeKey];
 }
 
-function checkRoute(routeRun, baseline, opts) {
+function checkRoute(routeRun, baseline, opts, runMeta = null) {
   const routeKey = `${routeRun.route}::${routeRun.mode}`;
   const entry = ensureRouteEntry(baseline, routeKey, opts);
   const stats = computeSlidingStats(entry.history, opts.windowDays);
-  const flake = evaluateFlakeBudget(opts.ledger, routeKey);
+  // Codex 019e27fa iter-3 P0-2 absorb: compareContext per-route + per-artifact
+  // (route satırı + artifact top-level). 5-part join key (route + mode + auth
+  // + build_sha + browser_profile + digest) ledger filter için zorunlu.
+  const compareContext = {
+    authState: routeRun.authState ?? routeRun.auth ?? 'anonymous',
+    build_sha: routeRun.build_sha ?? runMeta?.build_sha,
+    browser_profile: routeRun.browser_profile ?? runMeta?.browser_profile,
+    frontend_image_digest: routeRun.frontend_image_digest ?? runMeta?.frontend_image_digest,
+  };
+  const flake = evaluateFlakeBudget(opts.ledger, routeKey, compareContext);
   const hardFail = isHardFailActive(baseline, opts);
 
   const result = {
@@ -428,8 +504,16 @@ function maybeAppendHistory(routeRun, baseline, opts, runMeta = {}) {
     entry.p95 = stats.p95;
     entry.stdDev = stats.stdDev;
   }
-  const last20 = countFalsePositives(opts.ledger, routeKey, 20);
-  const last100 = countFalsePositives(opts.ledger, routeKey, 100);
+  // Codex 019e27fa iter-3 P0-2 absorb: pushHistory'de de comparable
+  // context filter — newEntry'nin metadata'sından join-key extract.
+  const compareContext = {
+    authState: routeRun.authState ?? routeRun.auth ?? 'anonymous',
+    build_sha: runMeta.build_sha,
+    browser_profile: runMeta.browser_profile,
+    frontend_image_digest: runMeta.frontend_image_digest,
+  };
+  const last20 = countFalsePositives(opts.ledger, routeKey, 20, compareContext);
+  const last100 = countFalsePositives(opts.ledger, routeKey, 100, compareContext);
   entry.flakeBudget.last20Runs_falsePositives = last20.fpCount;
   entry.flakeBudget.last100Runs_falsePositives = last100.fpCount;
   entry.flakeBudget.last20Runs_total = last20.totalCount;
@@ -470,7 +554,15 @@ function main() {
       console.log(`[g2] ${r.route}::${r.mode} skipped (${r.error ?? 'skipped'})`);
       continue;
     }
-    const res = checkRoute(r, baseline, opt);
+    // Codex 019e27fa iter-3 P0-2 absorb: runMeta artifact top-level
+    // pass-through (route satırı eksik build_sha/digest/browser_profile
+    // varsa artifact root'tan al).
+    const runMeta = {
+      build_sha: current.build_sha,
+      frontend_image_digest: current.frontend_image_digest,
+      browser_profile: current.browser_profile,
+    };
+    const res = checkRoute(r, baseline, opt, runMeta);
     report.push(res);
 
     console.log(`[g2] ${res.routeKey}`);

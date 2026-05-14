@@ -112,10 +112,18 @@ jobs:
       - name: Sliding baseline drift check (warn-only on PR, hard-fail eligible on main)
         env:
           FORCE_WARN_ONLY: ${{ (github.event_name == 'pull_request' && '1') || inputs.warn_only || '0' }}
+          # Codex 019e27fa iter-3 P0-4 absorb: --waiver flag CI args'ında olmalı
+          # ki baseline._hardFailWaiver expire-aware bypass çalışsın. Workflow
+          # owner waiver pattern'i default aktif (script `acceptWaiver` opts
+          # guard ediyor; baseline'da waiver yoksa no-op).
+          ACCEPT_WAIVER: ${{ inputs.accept_waiver || '1' }}
         run: |
           ARGS="--baseline tests/perf/baseline.json --current tests/perf/last-run.json --ledger docs/performance/measurements/perf-budget-fp-ledger.jsonl --window-days 14 --variance-band-pct 5"
           if [ "${FORCE_WARN_ONLY}" = "1" ]; then
             ARGS="${ARGS} --warn-only"
+          fi
+          if [ "${ACCEPT_WAIVER}" = "1" ]; then
+            ARGS="${ARGS} --waiver"
           fi
           pnpm exec node scripts/perf/sliding-baseline-check.mjs ${ARGS}
 
