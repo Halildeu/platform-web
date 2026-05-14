@@ -613,16 +613,47 @@ function checkHostLookupCentralization() {
 
   // S7a — forbidden raw-lookup patterns outside the central helper.
   const ALLOWED_HELPER = 'src/app/config/host-mf-instance.ts';
-  const FORBIDDEN = [
+
+  // Codex `019e2597` iter-2 P1: token-level forbidden patterns instead
+  // of brittle line-by-line regex.  Optional chaining, bracket access,
+  // and split-variable lookups all escape a tight `__FEDERATION__\.__INSTANCES__`
+  // matcher.  The intent is: any production source mentioning the
+  // raw federation registry tokens MUST live in the central helper —
+  // there is no legitimate non-helper reason to even reference
+  // `__FEDERATION__` or `__INSTANCES__` after the B5b2-hostfix refactor.
+  const FORBIDDEN_TOKENS = [
     {
-      pattern: /__FEDERATION__\.__INSTANCES__/,
-      label: 'raw __FEDERATION__.__INSTANCES__ lookup (use getHostMfInstance instead)',
+      pattern: /__FEDERATION__/,
+      label: '__FEDERATION__ token (raw federation registry access — must go via getHostMfInstance)',
     },
     {
-      pattern: /(?:function|const)\s+getHostMfInstance\b/,
+      pattern: /__INSTANCES__/,
+      label: '__INSTANCES__ token (raw federation registry access — must go via getHostMfInstance)',
+    },
+    {
+      pattern: /(?:function|const|let|var)\s+getHostMfInstance\b/,
       label: 'local redeclaration of getHostMfInstance (must import from host-mf-instance helper)',
     },
   ];
+
+  /**
+   * Codex `019e2597` iter-2 P3: strip JS-like comments before token
+   * scan so JSDoc/inline trailing comments don't false-positive.
+   * Removes:
+   *   - block comments `/* ... *\/` (greedy across newlines)
+   *   - line comments `// ...`
+   * Preserves the rest of the source verbatim (line numbers shift but
+   * the new representation is what the runtime would see anyway).
+   * NOT a full parser — string literals containing `//` will be over-
+   * stripped — but for source-token scanning this is acceptable since
+   * a string literal containing `__FEDERATION__` would itself be a
+   * regression we'd want to surface.
+   */
+  function stripJsLikeComments(src) {
+    return src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  }
 
   const srcDir = join(SHELL_DIR, 'src');
   const violations = [];
@@ -647,15 +678,22 @@ function checkHostLookupCentralization() {
       if (/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) continue;
       const rel = full.replace(SHELL_DIR + '/', '');
       if (rel === ALLOWED_HELPER) continue;
-      const src = readFileSync(full, 'utf8');
+      const raw = readFileSync(full, 'utf8');
+      // Strip comments first so JSDoc/inline trailing comments don't
+      // generate false-positives on `__FEDERATION__` token mentions in
+      // doc-strings (e.g. the helper's own description of what it does).
+      const src = stripJsLikeComments(raw);
       const lines = src.split('\n');
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        // Cheap comment/JSDoc filter — anything starting with `//`, `*`, or whitespace+`*`.
-        if (/^\s*(\/\/|\*)/.test(line)) continue;
-        for (const { pattern, label } of FORBIDDEN) {
+        for (const { pattern, label } of FORBIDDEN_TOKENS) {
           if (pattern.test(line)) {
-            violations.push({ file: rel, line: i + 1, label, snippet: line.trim().slice(0, 100) });
+            violations.push({
+              file: rel,
+              line: i + 1,
+              label,
+              snippet: line.trim().slice(0, 100),
+            });
           }
         }
       }
@@ -675,16 +713,21 @@ function checkHostLookupCentralization() {
     );
   }
 
-  // S7b — consumers actually import from the central helper.
+  // S7b — consumers actually import from the central helper via the
+  // EXACT expected relative path.  Codex `019e2597` iter-2 P2: a loose
+  // suffix-match `host-mf-instance` would accept
+  // `./not-host-mf-instance`, `./host-mf-instance-copy`, etc.  Pin the
+  // exact two valid relative paths so a typo or hypothetical sibling
+  // helper cannot satisfy the guard:
+  //
+  //   - `./host-mf-instance`         (ensure-remote-shell-services, same directory)
+  //   - `./config/host-mf-instance`  (7 on-demand canary wrappers, one level up)
   const CONSUMERS = [
     'src/app/config/ensure-remote-shell-services.ts',
     ...ON_DEMAND_REGISTRY.map((r) => r.wrapperFile),
   ];
-  // Match any relative import resolving to the host-mf-instance helper:
-  // wrappers under `apps/mfe-shell/src/app/` import via `./config/host-mf-instance`
-  // while ensure-remote-shell-services itself lives in the same directory and
-  // uses `./host-mf-instance`.  Both forms should pass.
-  const HELPER_IMPORT_RE = /from\s+['"][^'"]*host-mf-instance['"]/;
+  const HELPER_IMPORT_RE =
+    /from\s+['"](?:\.\/host-mf-instance|\.\/config\/host-mf-instance)['"]/;
   for (const rel of CONSUMERS) {
     const full = join(SHELL_DIR, rel);
     if (!existsSync(full)) {
