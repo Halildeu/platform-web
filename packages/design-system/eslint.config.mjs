@@ -41,6 +41,10 @@ export default tseslint.config(
       // a defensive ignore here in case a stray local build emits .d.ts
       // into src/ before .gitignore catches it (lint should still skip).
       'src/**/*.d.ts',
+      // Token build artifacts: emitted by build-tokens.mjs and (legacy)
+      // generators for token-types.ts + docs.json. ESLint --fix rewrites
+      // double-quote literals to single-quote, breaking generator round-trip.
+      'src/tokens/build/**',
     ],
   },
   js.configs.recommended,

@@ -17,3 +17,10 @@ apps/mfe-shell/src/app/manifest/page-manifest.schema.json
 # (escape sequences, table alignment) breaks the `--check` freshness gate.
 docs/x-charts-adoption-matrix.md
 docs/x-charts-adoption-matrix.json
+
+# Design system token build artifacts — emitted by build-tokens.mjs (and
+# legacy generators for token-types.ts + docs.json). Prettier reformats
+# CSS pseudo-class selectors (`focus-visible:` → `focus-visible: `), strips
+# semantic underscores inside `color-mix()`, and switches `"x"` → `'x'`
+# quote style; all break round-trip with the generator output.
+packages/design-system/src/tokens/build/
