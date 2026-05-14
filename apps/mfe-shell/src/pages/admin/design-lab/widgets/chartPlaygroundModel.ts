@@ -795,6 +795,12 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     // lab user flip the layered overlay on/off live without an
     // overlay JSON editor.
     'showBubbleOverlay',
+    // PR-X13b (Codex 019e2254): effectScatter overlay toggle. Adds an
+    // animated pulse layer (Bursa Hub, Adana Site) on top of the
+    // choropleth so the design-lab user can preview the highlighted-
+    // point use case. Same toggle pattern as bubble — flag in,
+    // synthetic data baked into ChartPreviewLive.
+    'showEffectScatterOverlay',
     'animate',
     'theme',
     'decal',
@@ -2670,6 +2676,22 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       description:
         'Choropleth + city HQ bubbles (PR-X13a). Bubble symbolSize ∝ √value (area-perceptual scale).',
       statePatch: { showBubbleOverlay: true },
+    },
+    {
+      id: 'with-effect-scatter-overlay',
+      label: 'With Pulse Overlay',
+      tag: 'overlay',
+      description:
+        'Choropleth + animated pulse on critical points (PR-X13b). Pin marker + radar pulse for highlighted lokasyonlar.',
+      statePatch: { showEffectScatterOverlay: true },
+    },
+    {
+      id: 'with-bubble-and-pulse',
+      label: 'Bubble + Pulse Combo',
+      tag: 'overlay',
+      description:
+        'Multi-layer demo — silent bubbles for HQ headcount + animated pulse for critical alerts.',
+      statePatch: { showBubbleOverlay: true, showEffectScatterOverlay: true },
     },
     {
       id: 'no-roam',

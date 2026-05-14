@@ -1519,37 +1519,45 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             // to surface the bubble overlay on top of the choropleth.
             // 3 HQ points use the same İstanbul/Ankara/İzmir cities so
             // the visual narrative is consistent with the base map.
-            overlays={
-              isOn(toggles, 'showBubbleOverlay', false)
-                ? [
-                    {
-                      type: 'bubble',
-                      name: 'HQ Headcount',
-                      data: [
-                        {
-                          name: 'İstanbul HQ',
-                          coordinates: [29.0, 41.0],
-                          value: 1200,
-                        },
-                        {
-                          name: 'Ankara HQ',
-                          coordinates: [32.85, 39.93],
-                          value: 800,
-                        },
-                        {
-                          name: 'İzmir Ofis',
-                          coordinates: [27.14, 38.42],
-                          value: 450,
-                        },
-                      ],
-                      symbol: 'circle',
-                      opacity: 0.7,
-                      showLabels: true,
-                      color: '#dc2626',
-                    },
-                  ]
-                : undefined
-            }
+            overlays={(() => {
+              // PR-X13a + PR-X13b: layered overlays demo for design-lab.
+              // `showBubbleOverlay` toggle adds a bubble (silent scatter,
+              // sqrt-scale symbolSize). `showEffectScatterOverlay` toggle
+              // adds an animated pulse layer for critical alert points.
+              const layers: import('@mfe/x-charts').GeoOverlay[] = [];
+              if (isOn(toggles, 'showBubbleOverlay', false)) {
+                layers.push({
+                  type: 'bubble',
+                  name: 'HQ Headcount',
+                  data: [
+                    { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 1200 },
+                    { name: 'Ankara HQ', coordinates: [32.85, 39.93], value: 800 },
+                    { name: 'İzmir Ofis', coordinates: [27.14, 38.42], value: 450 },
+                  ],
+                  symbol: 'circle',
+                  opacity: 0.7,
+                  showLabels: true,
+                  color: '#dc2626',
+                });
+              }
+              if (isOn(toggles, 'showEffectScatterOverlay', false)) {
+                layers.push({
+                  type: 'effectScatter',
+                  name: 'Critical Alerts',
+                  data: [
+                    { name: 'Bursa Hub', coordinates: [29.06, 40.18], value: 9 },
+                    { name: 'Adana Site', coordinates: [35.32, 37.0], value: 7 },
+                  ],
+                  symbol: 'pin',
+                  symbolSize: 18,
+                  ripplePeriod: 3,
+                  rippleScale: 3,
+                  color: '#f59e0b',
+                  showLabels: true,
+                });
+              }
+              return layers.length > 0 ? layers : undefined;
+            })()}
           />
         </PreviewBox>
       );
