@@ -729,7 +729,11 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       if (typeof module.exportRows !== 'function') return;
       setExporting(true);
       try {
-        const result = await module.exportRows(filters, format === 'excel' ? 'csv' : format);
+        // Plan §7 Adım 4 (Codex 019e258f audit): backend ReportExportController
+        // ExcelStreamingExporter destekliyor (Apache POI XLSX); önceki
+        // `format === 'excel' ? 'csv' : format` workaround eski backend-Excel
+        // desteksiz dönemden kalmıştı — kaldırıldı. Format param direkt passthrough.
+        const result = await module.exportRows(filters, format);
         const objectUrl = window.URL.createObjectURL(result.blob);
         const anchor = document.createElement('a');
         anchor.href = objectUrl;

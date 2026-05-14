@@ -1,6 +1,7 @@
 import type { HrDemographicFilters, HrDemographicRow, DemographicSummary } from './types';
 import { generateMockEmployees, computeSummary } from './mock-data';
 import type { GridRequest, GridResponse } from '../../grid';
+// eslint-disable-next-line no-restricted-imports -- defensive fallback when getShellServices() unavailable (resolveHttp helper below)
 import { api } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
 
@@ -11,7 +12,11 @@ import { getShellServices } from '../../app/services/shell-services';
 const DASHBOARD_KEY = 'hr-demografik';
 
 const resolveHttp = () => {
-  try { return getShellServices().http; } catch { return api; }
+  try {
+    return getShellServices().http;
+  } catch {
+    return api;
+  }
 };
 
 interface DashboardKPI {
@@ -65,8 +70,15 @@ async function fetchLiveDashboardData(): Promise<void> {
 // Public API — tries live data first, falls back to mock
 // ---------------------------------------------------------------------------
 
-// Mock fallback
-const mockRows = generateMockEmployees(2545);
+// Mock fallback — only in dev/staging; production returns empty so users
+// never see fake row data. Live KPIs/charts API zaten mevcut; sadece grid
+// (row-level) mock'lanıyor çünkü dashboard API row-level data dönmez.
+// Plan §7 Adım 3 (Codex 019e258f audit): "prod'da hard error veya empty state".
+// Vite build PROD true bayrağı production environment'da geçerli.
+const IS_PROD: boolean =
+  typeof import.meta !== 'undefined' &&
+  (import.meta as { env?: { PROD?: boolean } }).env?.PROD === true;
+const mockRows = IS_PROD ? [] : generateMockEmployees(2545);
 const mockSummary = computeSummary(mockRows);
 
 export const getSummary = (): DemographicSummary => mockSummary;
