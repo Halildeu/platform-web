@@ -1,0 +1,130 @@
+{
+  "_doc": "G2 fixture: warn-only phase (hard-fail not activated). Drift should report WARN_ONLY tag.",
+  "_phase": "warn-only",
+  "_acceptance": "Codex thread 019e26f9 AGREE",
+  "timestamp": 1778716452886,
+  "routes": {
+    "/login::cold-anonymous": {
+      "history": [
+        {
+          "timestamp": 1762000000000,
+          "build_sha": "h01",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2340,
+            "decodedKB": 9060,
+            "resourceCount": 64,
+            "tbtMs": 70,
+            "longTaskTotalMs": 120,
+            "lcpMs": 1040,
+            "fcpMs": 1020
+          }
+        },
+        {
+          "timestamp": 1762086400000,
+          "build_sha": "h02",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2345,
+            "decodedKB": 9065,
+            "resourceCount": 64,
+            "tbtMs": 72,
+            "longTaskTotalMs": 122,
+            "lcpMs": 1042,
+            "fcpMs": 1023
+          }
+        },
+        {
+          "timestamp": 1762172800000,
+          "build_sha": "h03",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2348,
+            "decodedKB": 9072,
+            "resourceCount": 64,
+            "tbtMs": 74,
+            "longTaskTotalMs": 124,
+            "lcpMs": 1045,
+            "fcpMs": 1025
+          }
+        },
+        {
+          "timestamp": 1762259200000,
+          "build_sha": "h04",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2342,
+            "decodedKB": 9068,
+            "resourceCount": 64,
+            "tbtMs": 71,
+            "longTaskTotalMs": 121,
+            "lcpMs": 1041,
+            "fcpMs": 1022
+          }
+        },
+        {
+          "timestamp": 1762345600000,
+          "build_sha": "h05",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2347,
+            "decodedKB": 9070,
+            "resourceCount": 64,
+            "tbtMs": 73,
+            "longTaskTotalMs": 123,
+            "lcpMs": 1043,
+            "fcpMs": 1024
+          }
+        },
+        {
+          "timestamp": 1762432000000,
+          "build_sha": "h06",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2344,
+            "decodedKB": 9067,
+            "resourceCount": 64,
+            "tbtMs": 70,
+            "longTaskTotalMs": 120,
+            "lcpMs": 1039,
+            "fcpMs": 1021
+          }
+        }
+      ],
+      "windowDays": 14,
+      "median": {},
+      "p95": {},
+      "stdDev": {},
+      "flakeBudget": {
+        "last20Runs_falsePositives": 0,
+        "last100Runs_falsePositives": 0,
+        "varianceBand_percent": 5,
+        "falsePositiveLedgerPath": "docs/performance/measurements/perf-budget-fp-ledger.jsonl"
+      }
+    }
+  }
+}

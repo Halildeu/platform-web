@@ -1,0 +1,21 @@
+{
+  "_doc": "G2 fixture: >5% drift but INSIDE variance band (below p95) → warn/rerun, not HARD_FAIL.",
+  "target": "local",
+  "timestamp": 1762518400000,
+  "runs": 3,
+  "routes": [
+    {
+      "route": "/login",
+      "mode": "cold-anonymous",
+      "auth": "anonymous",
+      "build_sha": "current-rerun",
+      "transferKB": 2550,
+      "decodedKB": 9068,
+      "resourceCount": 64,
+      "tbtMs": 72,
+      "longTaskTotalMs": 122,
+      "lcpMs": 1040,
+      "fcpMs": 1024
+    }
+  ]
+}
