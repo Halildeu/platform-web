@@ -2298,6 +2298,230 @@ describe('GeoMap option shape', () => {
   // A11y SR summary row tests above are the canonical accessibility
   // contract for heatmap density data.
 
+  /* -------------------------------------------------------------- */
+  /*  PR-X13e: marker overlay (Codex thread 019e2614)                */
+  /* -------------------------------------------------------------- */
+
+  it('marker overlay appends a scatter series with constant symbolSize', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'marker',
+            name: 'Branches',
+            data: [
+              { name: 'İstanbul', coordinates: [29.0, 41.0], value: 100 },
+              { name: 'Ankara', coordinates: [32.85, 39.93], value: 50 },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const marker = series()[1];
+    expect(marker.type).toBe('scatter');
+    expect(marker.coordinateSystem).toBe('geo');
+    expect(marker.geoIndex).toBe(0);
+    // Marker is constant-size by design — symbolSize is a number,
+    // NOT a sqrt-scale function (that's bubble's job).
+    expect(typeof marker.symbolSize).toBe('number');
+    expect(marker.symbolSize).toBe(18); // default
+    expect(marker.symbol).toBe('pin'); // default
+  });
+
+  it('marker invalid layer-level symbol falls back to "pin" at runtime', () => {
+    // Codex 019e2614 must-fix #2: bad consumer input doesn't crash.
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'marker',
+            symbol: 'image://evil.com/track.png' as never, // rejected
+            data: [{ name: 'X', coordinates: [29, 41] }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const marker = series()[1];
+    expect(marker.symbol).toBe('pin');
+  });
+
+  it('marker accepts inline path:// SVG verbatim', () => {
+    const path = 'path://M0,0 L20,0 L10,20 Z';
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'marker',
+            symbol: path,
+            data: [{ name: 'X', coordinates: [29, 41] }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    expect(series()[1].symbol).toBe(path);
+  });
+
+  it('marker + heatmap mixed overlays preserve correct visualMap seriesIndex math', () => {
+    // Codex 019e2614 must-fix #7: marker + heatmap → visualMap[1]
+    // pinned to series[2] (base + marker + heatmap).
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'marker',
+            data: [{ name: 'M', coordinates: [29, 41] }],
+          }, // series[1]
+          {
+            type: 'heatmap',
+            data: [{ coordinates: [32, 39], value: 50 }],
+          }, // series[2]
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    expect(allSeries).toHaveLength(3);
+    expect(allSeries[1].type).toBe('scatter'); // marker
+    expect(allSeries[2].type).toBe('heatmap');
+    const opt = lastDispatchedOption();
+    const vms = opt?.visualMap as Array<Record<string, unknown>>;
+    expect(Array.isArray(vms)).toBe(true);
+    expect(vms.length).toBe(2);
+    expect(vms[0].seriesIndex).toBe(0); // base
+    expect(vms[1].seriesIndex).toBe(2); // heatmap (after marker)
+  });
+
+  it('all 5 layer types in one render → 6 series total (base + 5 overlays)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          { type: 'bubble', data: [{ name: 'A', coordinates: [29, 41], value: 1 }] },
+          {
+            type: 'effectScatter',
+            data: [{ name: 'B', coordinates: [32, 39], value: 1 }],
+          },
+          {
+            type: 'flow',
+            data: [{ from: [29, 41], to: [32, 39], value: 1 }],
+          },
+          {
+            type: 'heatmap',
+            data: [{ coordinates: [27, 38], value: 50 }],
+          },
+          {
+            type: 'marker',
+            data: [{ name: 'M', coordinates: [29, 41] }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const allSeries = series();
+    expect(allSeries).toHaveLength(6); // base + 5 overlays
+    expect(allSeries[0].type).toBe('map');
+    expect(allSeries[1].type).toBe('scatter'); // bubble
+    expect(allSeries[2].type).toBe('effectScatter');
+    expect(allSeries[3].type).toBe('lines'); // flow
+    expect(allSeries[4].type).toBe('heatmap');
+    expect(allSeries[5].type).toBe('scatter'); // marker
+  });
+
+  it('marker click → onDataPointClick fires with overlayType=marker', () => {
+    // Codex 019e2614 must-fix #4: marker is point-clickable; uses the
+    // standard wrapper point branch (same path as bubble/effectScatter)
+    // — `_overlay.type === 'marker'` flows through `overlayType` field.
+    const handler = vi.fn();
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'marker',
+            name: 'Branches',
+            data: [{ name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 100 }],
+          },
+        ]}
+        onDataPointClick={handler}
+        animate={false}
+      />,
+    );
+    const registrations = clickListenerRegistrations();
+    const clickHandler = registrations[registrations.length - 1];
+    clickHandler({
+      seriesType: 'scatter',
+      name: 'İstanbul HQ',
+      data: {
+        _overlay: {
+          type: 'marker',
+          layerName: 'Branches',
+          coordinates: [29.0, 41.0],
+          value: 100,
+          category: 'hq',
+        },
+      },
+    });
+    expect(handler).toHaveBeenCalledOnce();
+    const payload = handler.mock.calls[0][0] as {
+      datum: Record<string, unknown>;
+      value?: number;
+      label?: string;
+    };
+    expect(payload.datum.kind).toBe('overlay');
+    expect(payload.datum.overlayType).toBe('marker');
+    expect(payload.datum.layerName).toBe('Branches');
+    expect(payload.datum.coordinates).toEqual([29.0, 41.0]);
+    expect(payload.datum.category).toBe('hq');
+    expect(payload.value).toBe(100);
+    expect(payload.label).toBe('İstanbul HQ');
+  });
+
+  it('marker a11y SR rows: per-marker rows sorted by value desc (point branch)', () => {
+    // Marker uses the standard point branch — same SR walk pattern as
+    // bubble + effectScatter. value desc sort with stable input order
+    // for ties.
+    const { container } = render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'marker',
+            name: 'Branches',
+            data: [
+              { name: 'Ankara', coordinates: [32.85, 39.93], value: 50 },
+              { name: 'İstanbul', coordinates: [29.0, 41.0], value: 100 },
+              { name: 'İzmir', coordinates: [27.14, 38.42], value: 25 },
+            ],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const rows = container.querySelectorAll('table tbody tr');
+    const labels = Array.from(rows)
+      .map((tr) => tr.querySelector('td')?.textContent ?? '')
+      .filter((label) => label.includes('Branches:'));
+    expect(labels).toHaveLength(3);
+    // Sorted by value desc: 100, 50, 25
+    expect(labels[0]).toBe('Branches: İstanbul');
+    expect(labels[1]).toBe('Branches: Ankara');
+    expect(labels[2]).toBe('Branches: İzmir');
+  });
+
   it('overlays trigger explicit option.geo block (shared coord system)', () => {
     render(
       <GeoMap

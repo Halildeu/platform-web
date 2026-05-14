@@ -810,6 +810,11 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     // toggle. Adds a smoothed event-density blob over the choropleth
     // base via ECharts `heatmap` series + dedicated visualMap.
     'showHeatmapOverlay',
+    // PR-X13e (Codex 019e2614 plan-time AGREE): marker overlay
+    // toggle. Adds declarative SVG/icon markers (3 demo branches:
+    // İstanbul HQ diamond, Ankara default pin, İzmir custom star
+    // SVG path). Closes the PR-X13 campaign — 5 layer types total.
+    'showMarkerOverlay',
     'animate',
     'theme',
     'decal',
@@ -2719,16 +2724,25 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       statePatch: { showHeatmapOverlay: true },
     },
     {
-      id: 'with-all-overlays',
-      label: 'All Overlays',
+      id: 'with-marker-overlay',
+      label: 'With Marker Overlay',
       tag: 'overlay',
       description:
-        'Combo demo — choropleth + HQ bubbles + critical pulse + logistics flow + density heatmap (PR-X13a+X13b+X13c+X13d).',
+        'Choropleth + declarative SVG/icon markers (PR-X13e). Built-in pin/diamond presets + custom path:// SVG with safe-symbol validation.',
+      statePatch: { showMarkerOverlay: true },
+    },
+    {
+      id: 'with-all-overlays',
+      label: 'All Overlays (5 types)',
+      tag: 'overlay',
+      description:
+        'PR-X13 campaign closure demo — choropleth + HQ bubbles + critical pulse + logistics flow + density heatmap + branch markers (X13a/b/c/d/e all together).',
       statePatch: {
         showBubbleOverlay: true,
         showEffectScatterOverlay: true,
         showFlowOverlay: true,
         showHeatmapOverlay: true,
+        showMarkerOverlay: true,
       },
     },
     {
