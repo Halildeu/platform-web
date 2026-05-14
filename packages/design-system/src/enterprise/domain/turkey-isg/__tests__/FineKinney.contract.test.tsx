@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 // Auto-generated contract test — do not edit manually
 // Regenerate with: node scripts/ci/generate-contract-tests.mjs --write
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
 import { FineKinney } from '../FineKinney';
-import type { FineKinneyProbability, FineKinneyFrequency, FineKinneySeverity, FineKinneyRisk, FineKinneyLocaleText } from '../FineKinney';
+import type {
+  FineKinneyProbability,
+  FineKinneyFrequency,
+  FineKinneySeverity,
+  FineKinneyRisk,
+  FineKinneyLocaleText,
+} from '../FineKinney';
 
 describe('FineKinney — contract', () => {
   const defaultProps = {
@@ -39,11 +45,16 @@ describe('FineKinney — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _finekinneyprobability: FineKinneyProbability | undefined = undefined; void _finekinneyprobability;
-    const _finekinneyfrequency: FineKinneyFrequency | undefined = undefined; void _finekinneyfrequency;
-    const _finekinneyseverity: FineKinneySeverity | undefined = undefined; void _finekinneyseverity;
-    const _finekinneyrisk: FineKinneyRisk | undefined = undefined; void _finekinneyrisk;
-    const _finekinneylocaletext: FineKinneyLocaleText | undefined = undefined; void _finekinneylocaletext;
+    const _finekinneyprobability: FineKinneyProbability | undefined = undefined;
+    void _finekinneyprobability;
+    const _finekinneyfrequency: FineKinneyFrequency | undefined = undefined;
+    void _finekinneyfrequency;
+    const _finekinneyseverity: FineKinneySeverity | undefined = undefined;
+    void _finekinneyseverity;
+    const _finekinneyrisk: FineKinneyRisk | undefined = undefined;
+    void _finekinneyrisk;
+    const _finekinneylocaletext: FineKinneyLocaleText | undefined = undefined;
+    void _finekinneylocaletext;
     expect(true).toBe(true);
   });
 });
