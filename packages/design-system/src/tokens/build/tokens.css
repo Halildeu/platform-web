@@ -3,7 +3,6 @@
 /* ------------------------------------------------------------------ */
 
 :root {
-
   /* --- color / palette --- */
   --palette-white: #ffffff;
   --palette-black: #000000;
@@ -30,15 +29,19 @@
   --palette-green50: #f0fdf4;
   --palette-green500: #22c55e;
   --palette-green700: #15803d;
+  --palette-green950: #052e16;
   --palette-amber50: #fffbeb;
   --palette-amber500: #f59e0b;
   --palette-amber700: #b45309;
+  --palette-amber950: #451a03;
   --palette-red50: #fef2f2;
   --palette-red500: #ef4444;
   --palette-red700: #b91c1c;
+  --palette-red950: #450a0a;
   --palette-blue50: #eff6ff;
   --palette-blue500: #3b82f6;
   --palette-blue700: #1d4ed8;
+  --palette-blue950: #172554;
 
   /* --- color / semanticColorTokens --- */
   --semantic-color-tokens-surface-default: var(--surface-default);
@@ -163,13 +166,13 @@
 
   /* --- elevation / elevation --- */
   --elevation-none: none;
-  --elevation-xs: 0 1px 2px rgba(0,0,0,0.05);
-  --elevation-sm: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
-  --elevation-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
-  --elevation-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
-  --elevation-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
-  --elevation-2xl: 0 25px 50px -12px rgba(0,0,0,0.25);
-  --elevation-inner: inset 0 2px 4px rgba(0,0,0,0.05);
+  --elevation-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --elevation-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --elevation-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --elevation-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --elevation-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --elevation-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --elevation-inner: inset 0 2px 4px rgba(0, 0, 0, 0.05);
 
   /* --- opacity / opacity --- */
   --opacity-disabled: 0.5;
@@ -243,5 +246,7 @@
   --focus-ring-offset: 2;
   --focus-ring-color: var(--focus-ring, var(--focus-outline, var(--accent-primary)));
   --focus-ring-style: solid;
-  --focus-ring-class: focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[color-mix(in_oklab,var(--focus-ring)_30%,transparent)] focus-visible:ring-offset-2;
+  --focus-ring-class: focus-visible: outline-hidden focus-visible: ring-2
+    focus-visible: ring-[color-mix(in_oklab, var(--focus-ring) _30%, transparent)]
+    focus-visible: ring-offset-2;
 }

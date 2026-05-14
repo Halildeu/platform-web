@@ -175,6 +175,13 @@
     "description": ""
   },
   {
+    "name": "palette.green950",
+    "category": "color",
+    "value": "#052e16",
+    "cssVariable": "--palette-green950",
+    "description": ""
+  },
+  {
     "name": "palette.amber50",
     "category": "color",
     "value": "#fffbeb",
@@ -193,6 +200,13 @@
     "category": "color",
     "value": "#b45309",
     "cssVariable": "--palette-amber700",
+    "description": ""
+  },
+  {
+    "name": "palette.amber950",
+    "category": "color",
+    "value": "#451a03",
+    "cssVariable": "--palette-amber950",
     "description": ""
   },
   {
@@ -217,6 +231,13 @@
     "description": ""
   },
   {
+    "name": "palette.red950",
+    "category": "color",
+    "value": "#450a0a",
+    "cssVariable": "--palette-red950",
+    "description": ""
+  },
+  {
     "name": "palette.blue50",
     "category": "color",
     "value": "#eff6ff",
@@ -235,6 +256,13 @@
     "category": "color",
     "value": "#1d4ed8",
     "cssVariable": "--palette-blue700",
+    "description": ""
+  },
+  {
+    "name": "palette.blue950",
+    "category": "color",
+    "value": "#172554",
+    "cssVariable": "--palette-blue950",
     "description": ""
   },
   {
