@@ -13,7 +13,9 @@ import type { ApprovalStep } from '../ApprovalWorkflow';
 import { BulletChart } from '../BulletChart';
 import { ComparisonTable } from '../index';
 import type { ComparisonRow } from '../index';
-import { DataExportDialog } from '../DataExportDialog';
+// PR #500 moved DataExportDialog out of enterprise/ into the generic
+// components/ surface. The test imports follow the source location.
+import { DataExportDialog } from '../../components/data-export-dialog/DataExportDialog';
 import { FilterPresets } from '../FilterPresets';
 import type { FilterPreset } from '../FilterPresets';
 import { InlineEdit } from '../index';

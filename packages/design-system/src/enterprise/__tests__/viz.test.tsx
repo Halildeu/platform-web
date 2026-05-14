@@ -15,7 +15,9 @@ import { StatusTimeline } from '../StatusTimeline';
 import { NotificationCenter } from '../NotificationCenter';
 import { InlineEdit } from '../index';
 import { FilterPresets } from '../FilterPresets';
-import { DataExportDialog } from '../DataExportDialog';
+// PR #500 moved DataExportDialog out of enterprise/ into the generic
+// components/ surface. The test imports follow the source location.
+import { DataExportDialog } from '../../components/data-export-dialog/DataExportDialog';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';
 import userEvent from '@testing-library/user-event';
 

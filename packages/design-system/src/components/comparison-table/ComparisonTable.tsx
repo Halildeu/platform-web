@@ -11,7 +11,7 @@ import {
   getTrendColor,
   type FormatOptions,
   type TrendDirection,
-} from '../../enterprise/types';
+} from '../../utils/format-helpers';
 
 // ── Types ──
 
