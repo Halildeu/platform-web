@@ -31,6 +31,7 @@ import { getShellServices } from '../services/shell-services';
 // CompanyPicker for the in-page selection prompt.
 import { isTenantSelectionRequiredError } from '../../modules/dynamic-report/api';
 import { resolveErrorMessage } from '../../modules/dynamic-report/error-messages';
+import { applyPivotResultColumns } from '../../modules/dynamic-report/pivot-result-columns';
 import { CompanyPicker } from '../../components/CompanyPicker';
 
 /* ------------------------------------------------------------------ */
@@ -592,6 +593,17 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
     return `${reportCapabilities?.serverSideGrouping ? '1' : '0'}|${groupable}|${aggregatable}|${ssp}|${cpa}|${pivotable}`;
   }, [reportCapabilities]);
 
+  /**
+   * PR-0.4d-fe (Codex thread 019e2695): signature-based churn avoidance
+   * for AG Grid SSRM secondary columns. Without this guard the
+   * datasource would call {@code api.setPivotResultColumns(...)} on
+   * every SSRM block load — AG Grid would replay the column-state
+   * reconciliation each time and the user's variant state could drift.
+   * Storing the last applied signature lets us short-circuit when the
+   * backend returns the same pivot envelope twice in a row.
+   */
+  const lastPivotSignatureRef = React.useRef<string | null>(null);
+
   /* ---- Server-side datasource ---- */
   const createServerSideDatasource = React.useCallback(
     () => ({
@@ -650,7 +662,45 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             groupKeys: ssrmRequest.groupKeys,
           };
           const res: GridResponse<TRow> = await module.fetchRows(filters, req);
-          params.success({ rowData: res.rows, rowCount: res.total });
+
+          /*
+           * PR-0.4d-fe (Codex thread 019e2695): hybrid pivot frontend
+           * wiring. When the response carries pivotResultColumns +
+           * pivotResultFields (server-mode pivot path), build AG Grid
+           * SSRM secondary colDefs and call api.setPivotResultColumns.
+           * Three guard rails:
+           *   1. Alignment guard — backend asserts the invariant at
+           *      construction, but rolling deploy combos (new FE / old
+           *      BE, or vice-versa) can still serve a mismatch.
+           *      Fall back to pivotResultFields-only when columns are
+           *      desynced.
+           *   2. Signature-based churn avoidance — only call
+           *      setPivotResultColumns when the signature actually
+           *      changed (lastPivotSignatureRef).
+           *   3. Stale cleanup — when the latest response no longer
+           *      ships pivot metadata (pivotMode off / capability flip
+           *      / fallback path), clear any previously registered
+           *      secondary columns so the grid doesn't keep showing
+           *      ghost pivot headers.
+           */
+          const pivotApplied = applyPivotResultColumns(
+            params.api,
+            res.pivotResultFields,
+            res.pivotResultColumns,
+            lastPivotSignatureRef,
+          );
+          if (pivotApplied.mode === 'explicit') {
+            params.success({ rowData: res.rows, rowCount: res.total });
+          } else if (pivotApplied.mode === 'fallback') {
+            params.success({
+              rowData: res.rows,
+              rowCount: res.total,
+              pivotResultFields: res.pivotResultFields,
+            });
+          } else {
+            params.success({ rowData: res.rows, rowCount: res.total });
+          }
+
           // PR-FE-3 (Codex 019e08e2 iter-12 REVISE absorb): clear the
           // tenant gate on a successful data fetch — covers the case
           // where the user picks a company AFTER metadata succeeded

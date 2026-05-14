@@ -64,7 +64,38 @@ export type GridRequest = {
    */
   groupKeys?: string[];
 };
-export type GridResponse<T = unknown> = { rows: T[]; total: number };
+/**
+ * PR-0.4d-be backend response envelope record (Codex thread 019e2695).
+ * Mirror of the backend {@code PivotResultColumnDto}; each entry pairs
+ * an SQL alias with the semantic metadata frontend needs to render an
+ * AG Grid SSRM secondary column header without re-fetching report
+ * metadata or re-parsing the alias.
+ */
+export type PivotResultColumn = {
+  field: string;
+  pivotField: string;
+  pivotValue: string;
+  pivotLabel: string;
+  aggFunc: string;
+  valueField: string;
+};
+
+export type GridResponse<T = unknown> = {
+  rows: T[];
+  total: number;
+  /**
+   * PR-0.4d-be: SQL alias list emitted by the backend pivot path.
+   * Optional so flat / grouped responses (the dominant case) stay
+   * byte-for-byte identical.
+   */
+  pivotResultFields?: string[];
+  /**
+   * PR-0.4d-be: alias-aligned semantic metadata. The backend guarantees
+   * the ordering {@code pivotResultColumns[i].field === pivotResultFields[i]};
+   * PR-0.4d-fe additionally guards the invariant client-side.
+   */
+  pivotResultColumns?: PivotResultColumn[];
+};
 export type ColumnDef<TRow = unknown> = {
   field?: string;
   headerName?: string;
