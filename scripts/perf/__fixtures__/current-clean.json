@@ -1,0 +1,21 @@
+{
+  "_doc": "G2 fixture: current run shape matching baseline median (PASS scenario).",
+  "target": "local",
+  "timestamp": 1762518400000,
+  "runs": 3,
+  "routes": [
+    {
+      "route": "/login",
+      "mode": "cold-anonymous",
+      "auth": "anonymous",
+      "build_sha": "current-clean",
+      "transferKB": 2345,
+      "decodedKB": 9068,
+      "resourceCount": 64,
+      "tbtMs": 72,
+      "longTaskTotalMs": 122,
+      "lcpMs": 1040,
+      "fcpMs": 1024
+    }
+  ]
+}

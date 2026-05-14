@@ -1,0 +1,140 @@
+{
+  "_doc": "G2 fixture: hard-fail active + WIDE variance history (median 2350 ± ~200; p95~2700). Used for inside-band scenario where current is >5%>median but <p95.",
+  "_phase": "hard-fail",
+  "_acceptance": "Codex thread 019e26f9 AGREE",
+  "_hardFailActivationDate": "2024-01-01T00:00:00Z",
+  "_hardFailActivation": {
+    "windowsSatisfied": 4,
+    "comparableRuns": 24,
+    "flakeBudgetSatisfied": true,
+    "baselineReviewSha": "deadbeef",
+    "acceptedResidualsRef": "docs/performance/PR-V2.1-G2-sliding-baseline-spike.md",
+    "activatedBy": "perf-owner",
+    "activatedAt": "2024-01-15T00:00:00Z"
+  },
+  "timestamp": 1778716452886,
+  "routes": {
+    "/login::cold-anonymous": {
+      "history": [
+        {
+          "timestamp": 1762000000000,
+          "build_sha": "h01",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2150,
+            "decodedKB": 9060,
+            "resourceCount": 64,
+            "tbtMs": 70,
+            "longTaskTotalMs": 120,
+            "lcpMs": 1040,
+            "fcpMs": 1020
+          }
+        },
+        {
+          "timestamp": 1762086400000,
+          "build_sha": "h02",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2200,
+            "decodedKB": 9065,
+            "resourceCount": 64,
+            "tbtMs": 72,
+            "longTaskTotalMs": 122,
+            "lcpMs": 1042,
+            "fcpMs": 1023
+          }
+        },
+        {
+          "timestamp": 1762172800000,
+          "build_sha": "h03",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2350,
+            "decodedKB": 9072,
+            "resourceCount": 64,
+            "tbtMs": 74,
+            "longTaskTotalMs": 124,
+            "lcpMs": 1045,
+            "fcpMs": 1025
+          }
+        },
+        {
+          "timestamp": 1762259200000,
+          "build_sha": "h04",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2380,
+            "decodedKB": 9068,
+            "resourceCount": 64,
+            "tbtMs": 71,
+            "longTaskTotalMs": 121,
+            "lcpMs": 1041,
+            "fcpMs": 1022
+          }
+        },
+        {
+          "timestamp": 1762345600000,
+          "build_sha": "h05",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2500,
+            "decodedKB": 9070,
+            "resourceCount": 64,
+            "tbtMs": 73,
+            "longTaskTotalMs": 123,
+            "lcpMs": 1043,
+            "fcpMs": 1024
+          }
+        },
+        {
+          "timestamp": 1762432000000,
+          "build_sha": "h06",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2700,
+            "decodedKB": 9067,
+            "resourceCount": 64,
+            "tbtMs": 70,
+            "longTaskTotalMs": 120,
+            "lcpMs": 1039,
+            "fcpMs": 1021
+          }
+        }
+      ],
+      "windowDays": 14,
+      "median": {},
+      "p95": {},
+      "stdDev": {},
+      "flakeBudget": {
+        "last20Runs_falsePositives": 0,
+        "last100Runs_falsePositives": 0,
+        "varianceBand_percent": 5,
+        "falsePositiveLedgerPath": "docs/performance/measurements/perf-budget-fp-ledger.jsonl"
+      }
+    }
+  }
+}

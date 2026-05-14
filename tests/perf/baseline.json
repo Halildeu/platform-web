@@ -1,18 +1,74 @@
 {
-  "_doc": "PERF-INIT-V2 PR-G1: route performance baseline. Updated via `npm run perf:budget:update-baseline` (PR-M1 runner). Regression check fails when current run exceeds baseline by `_regressionPolicy.hardFailRegressionPercent` (5%) in performance-budgets.json.",
-  "_acceptance": "Codex thread 019e1de0 AGREE — warmup 2 weeks warn-only, then 5% hard fail.",
-  "_methodology": "median of 5 runs, foreground only, fixed bundled Chrome version, hidden-page invalid. See scripts/ci/route-performance-budget.mjs.",
-  "_phase": "INITIAL EMPTY — first PR-M1/PR-G1 run on main will populate this file. Subsequent regression checks compare against committed values.",
+  "_doc": "PERF-INIT-V2.1 PR-G2: route performance baseline. Extended schema with sliding history (FIFO 30 entries per route key, 14-day window). Sliding stats (median/p95/stdDev) recomputed by scripts/perf/sliding-baseline-check.mjs --append-history. Hard-fail activation requires _phase=hard-fail + _hardFailActivationDate + complete _hardFailActivation evidence block; see scripts/perf/README.md.",
+  "_phase": "warn-only",
+  "_acceptance": "Codex thread 019e26f9 AGREE — spike PR #489 merged 2026-05-14; G2 impl PR #502 (cross-AI Codex review thread 019e2776 iter-2). Hard-fail flip blocked on (a) 14-day history accumulation, (b) <=1 FP / last 20 + <3 FP / last 100, (c) owner activation.",
+  "_methodology": "median of 5 runs per CI execution, foreground only, fixed bundled Chrome version, hidden-page invalid. See scripts/ci/route-performance-budget.mjs.",
+  "_hardFailActivationDate": null,
+  "_hardFailActivation": null,
+  "_hardFailWaiver": null,
   "timestamp": 1778716452886,
   "routes": {
     "/login::cold-anonymous": {
-      "transferKB": 2343,
-      "decodedKB": 9069,
-      "resourceCount": 64,
-      "tbtMs": 72,
-      "longTaskTotalMs": 122,
-      "lcpMs": 1040,
-      "fcpMs": 1024
+      "history": [
+        {
+          "timestamp": 1778716452886,
+          "build_sha": "legacy-pr-g1",
+          "frontend_image_ref": "",
+          "frontend_image_digest": "",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "cacheMode": "cold",
+          "browserProfile": "playwright-chromium-bundled",
+          "browserVersion": "",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2343,
+            "decodedKB": 9069,
+            "resourceCount": 64,
+            "tbtMs": 72,
+            "longTaskTotalMs": 122,
+            "lcpMs": 1040,
+            "fcpMs": 1024
+          }
+        }
+      ],
+      "windowDays": 14,
+      "median": {
+        "transferKB": 2343,
+        "decodedKB": 9069,
+        "resourceCount": 64,
+        "tbtMs": 72,
+        "longTaskTotalMs": 122,
+        "lcpMs": 1040,
+        "fcpMs": 1024
+      },
+      "p95": {
+        "transferKB": 2343,
+        "decodedKB": 9069,
+        "resourceCount": 64,
+        "tbtMs": 72,
+        "longTaskTotalMs": 122,
+        "lcpMs": 1040,
+        "fcpMs": 1024
+      },
+      "stdDev": {
+        "transferKB": 0,
+        "decodedKB": 0,
+        "resourceCount": 0,
+        "tbtMs": 0,
+        "longTaskTotalMs": 0,
+        "lcpMs": 0,
+        "fcpMs": 0
+      },
+      "flakeBudget": {
+        "last20Runs_falsePositives": 0,
+        "last20Runs_total": 0,
+        "last100Runs_falsePositives": 0,
+        "last100Runs_total": 0,
+        "varianceBand_percent": 5,
+        "falsePositiveLedgerPath": "docs/performance/measurements/perf-budget-fp-ledger.jsonl"
+      }
     }
   }
 }

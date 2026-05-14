@@ -1,0 +1,176 @@
+# PERF-INIT-V2.1 PR-G2: Sliding baseline drift gate + flake budget.
+#
+# Companion to perf-budget.yml. Runs the G2 sliding window check against the
+# last-run artifact produced by route-performance-budget.mjs. Compared to G1
+# (single-snapshot regression), G2 introduces:
+#   - 14-day sliding median + p95 + stdDev per route key
+#   - variance band classification (inside → warn/rerun, outside → fail)
+#   - flake budget tracking with external JSONL ledger
+#   - hard-fail activation gate (phase + eligibility date + evidence block)
+#   - owner waiver support
+#
+# Spike contract: docs/performance/PR-V2.1-G2-sliding-baseline-spike.md
+# Codex thread (spike): 019e26f9 AGREE final
+#
+# Acceptance phases:
+#   - warn-only (default): regressions surface as warnings, exit 0
+#   - hard-fail: regressions outside variance band exit 1 when _hardFailActivation
+#                evidence block is complete and eligibility date passed
+#
+# Sliding history append: opt-in via workflow_dispatch (`append_history=1`)
+# against main only. PR runs and ordinary main pushes stay read-only against
+# committed baseline + ledger; only an owner-triggered dispatch advances the
+# ratchet (commits via bot identity, requires contents: write).
+
+name: PR Performance Drift Gate (PR-G2)
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mfe-shell/**'
+      - 'packages/**'
+      - 'performance-budgets.json'
+      - 'scripts/perf/**'
+      - 'tests/perf/baseline.json'
+      - '.github/workflows/gate-perf-drift.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mfe-shell/**'
+      - 'packages/**'
+      - 'tests/perf/baseline.json'
+      - 'scripts/perf/**'
+      - '.github/workflows/gate-perf-drift.yml'
+  workflow_dispatch:
+    inputs:
+      warn_only:
+        description: 'Force warn-only mode (override baseline._phase)'
+        required: false
+        default: '1'
+      append_history:
+        description: 'Append current run to baseline history FIFO + commit (main only, owner-triggered)'
+        required: false
+        default: '0'
+
+permissions:
+  contents: write # required by --append-history commit step; PR runs stay read-only because that step is guarded
+
+jobs:
+  drift-gate:
+    name: sliding baseline drift gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Build mfe-shell (production preview)
+        run: pnpm --filter mfe-shell build
+
+      - name: Serve production preview (port 5174)
+        run: |
+          pnpm --dir apps/mfe-shell exec vite preview \
+            --host 127.0.0.1 --port 5174 --strictPort --outDir dist &
+          deadline=$(( $(date +%s) + 60 ))
+          until curl -fsI "http://127.0.0.1:5174/login" >/dev/null 2>&1; do
+            if [ $(date +%s) -ge "${deadline}" ]; then
+              echo "FATAL: preview server did not respond within 60s"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "preview server ready"
+        shell: bash
+
+      - name: Capture current run (PR-M1 harness)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          pnpm exec node scripts/ci/route-performance-budget.mjs \
+            --target local --runs 3 --warn-only --routes /login
+
+      - name: Record run outcome to flake-budget ledger (denominator builder)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          pnpm exec node scripts/perf/run-outcome-recorder.mjs \
+            --run tests/perf/last-run.json \
+            --ledger docs/performance/measurements/perf-budget-fp-ledger.jsonl
+
+      - name: Sliding baseline drift check (warn-only on PR, hard-fail eligible on main)
+        env:
+          FORCE_WARN_ONLY: ${{ (github.event_name == 'pull_request' && '1') || inputs.warn_only || '0' }}
+          # Codex 019e27fa iter-3 P0-4 absorb: --waiver flag CI args'ında olmalı
+          # ki baseline._hardFailWaiver expire-aware bypass çalışsın. Workflow
+          # owner waiver pattern'i default aktif (script `acceptWaiver` opts
+          # guard ediyor; baseline'da waiver yoksa no-op).
+          ACCEPT_WAIVER: ${{ inputs.accept_waiver || '1' }}
+        run: |
+          ARGS="--baseline tests/perf/baseline.json --current tests/perf/last-run.json --ledger docs/performance/measurements/perf-budget-fp-ledger.jsonl --window-days 14 --variance-band-pct 5"
+          if [ "${FORCE_WARN_ONLY}" = "1" ]; then
+            ARGS="${ARGS} --warn-only"
+          fi
+          if [ "${ACCEPT_WAIVER}" = "1" ]; then
+            ARGS="${ARGS} --waiver"
+          fi
+          pnpm exec node scripts/perf/sliding-baseline-check.mjs ${ARGS}
+
+      - name: Append history (owner-triggered dispatch on main only)
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.append_history == '1'
+        run: |
+          pnpm exec node scripts/perf/sliding-baseline-check.mjs \
+            --baseline tests/perf/baseline.json \
+            --current tests/perf/last-run.json \
+            --ledger docs/performance/measurements/perf-budget-fp-ledger.jsonl \
+            --append-history \
+            --warn-only
+
+      - name: Commit appended history + ledger (owner-triggered dispatch on main only)
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.append_history == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name 'perf-baseline-bot'
+          git config user.email 'perf-baseline-bot@users.noreply.github.com'
+          git add tests/perf/baseline.json docs/performance/measurements/perf-budget-fp-ledger.jsonl
+          if git diff --cached --quiet; then
+            echo "[g2] no baseline/ledger changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(perf-baseline): G2 ratchet append (run ${{ github.run_id }})"
+          git push origin HEAD:main
+
+      - name: Upload drift-gate artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-drift-gate-${{ github.run_id }}
+          path: |
+            tests/perf/last-run.json
+            tests/perf/baseline.json
+            docs/performance/measurements/perf-budget-fp-ledger.jsonl
+          retention-days: 30
+
+  unit-tests:
+    name: sliding-baseline unit + integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run sliding-baseline smoke
+        run: node scripts/perf/__tests__/sliding-baseline.test.mjs

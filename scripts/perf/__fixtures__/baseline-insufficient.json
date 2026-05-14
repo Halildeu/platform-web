@@ -1,0 +1,58 @@
+{
+  "_doc": "G2 fixture: insufficient history (<3 entries). Sliding stats should return insufficient_history.",
+  "_phase": "warn-only",
+  "_acceptance": "Codex thread 019e26f9 AGREE",
+  "timestamp": 1778716452886,
+  "routes": {
+    "/login::cold-anonymous": {
+      "history": [
+        {
+          "timestamp": 1778716452886,
+          "build_sha": "abc111",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2343,
+            "decodedKB": 9069,
+            "resourceCount": 64,
+            "tbtMs": 72,
+            "longTaskTotalMs": 122,
+            "lcpMs": 1040,
+            "fcpMs": 1024
+          }
+        },
+        {
+          "timestamp": 1778802852886,
+          "build_sha": "abc222",
+          "route": "/login",
+          "mode": "cold-anonymous",
+          "authState": "anonymous",
+          "browserProfile": "playwright-chromium-bundled",
+          "target": "local",
+          "metrics": {
+            "transferKB": 2350,
+            "decodedKB": 9075,
+            "resourceCount": 64,
+            "tbtMs": 75,
+            "longTaskTotalMs": 125,
+            "lcpMs": 1045,
+            "fcpMs": 1028
+          }
+        }
+      ],
+      "windowDays": 14,
+      "median": {},
+      "p95": {},
+      "stdDev": {},
+      "flakeBudget": {
+        "last20Runs_falsePositives": 0,
+        "last100Runs_falsePositives": 0,
+        "varianceBand_percent": 5,
+        "falsePositiveLedgerPath": "docs/performance/measurements/perf-budget-fp-ledger.jsonl"
+      }
+    }
+  }
+}

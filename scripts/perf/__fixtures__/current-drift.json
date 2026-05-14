@@ -1,0 +1,21 @@
+{
+  "_doc": "G2 fixture: current run with >5% transferKB regression outside variance band.",
+  "target": "local",
+  "timestamp": 1762518400000,
+  "runs": 3,
+  "routes": [
+    {
+      "route": "/login",
+      "mode": "cold-anonymous",
+      "auth": "anonymous",
+      "build_sha": "current-drift",
+      "transferKB": 2700,
+      "decodedKB": 9068,
+      "resourceCount": 64,
+      "tbtMs": 95,
+      "longTaskTotalMs": 122,
+      "lcpMs": 1040,
+      "fcpMs": 1024
+    }
+  ]
+}
