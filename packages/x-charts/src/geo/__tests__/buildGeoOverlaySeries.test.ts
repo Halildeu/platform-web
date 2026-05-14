@@ -13,11 +13,20 @@ import {
   buildBubbleLayerSeries,
   buildEffectScatterLayerSeries,
   buildFlowLayerSeries,
+  buildHeatmapLayerSeries,
+  buildGeoOverlayVisualMaps,
   bubbleSymbolSize,
   flowLineWidth,
   flowEdgeName,
+  safeHeatmapIntensity,
 } from '../buildGeoOverlaySeries';
-import type { GeoBubbleLayer, GeoEffectScatterLayer, GeoFlowLayer } from '../geoOverlayTypes';
+import type {
+  GeoBubbleLayer,
+  GeoEffectScatterLayer,
+  GeoFlowLayer,
+  GeoHeatmapLayer,
+  GeoOverlay,
+} from '../geoOverlayTypes';
 
 const sampleBubble = (): GeoBubbleLayer => ({
   type: 'bubble',
@@ -706,5 +715,324 @@ describe('buildGeoOverlaySeries — flow dispatcher integration', () => {
     expect(specs).toHaveLength(1);
     expect(specs[0].geoIndex).toBe(0);
     expect(specs[0].coordinateSystem).toBe('geo');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  PR-X13d: GeoHeatmapLayer tests (Codex thread 019e25ee)             */
+/* ------------------------------------------------------------------ */
+
+const sampleHeatmap = (): GeoHeatmapLayer => ({
+  type: 'heatmap',
+  name: 'Events density',
+  data: [
+    { name: 'İstanbul', coordinates: [29.0, 41.0], value: 87 },
+    { name: 'Ankara', coordinates: [32.85, 39.93], value: 42 },
+    { name: 'İzmir', coordinates: [27.14, 38.42], value: 23 },
+  ],
+});
+
+describe('safeHeatmapIntensity — sanitization helper', () => {
+  it('passes through valid non-negative numbers identity', () => {
+    expect(safeHeatmapIntensity(0)).toBe(0);
+    expect(safeHeatmapIntensity(42)).toBe(42);
+    expect(safeHeatmapIntensity(1234.56)).toBe(1234.56);
+  });
+
+  it('floors negative values to 0', () => {
+    expect(safeHeatmapIntensity(-5)).toBe(0);
+    expect(safeHeatmapIntensity(-0.001)).toBe(0);
+  });
+
+  it('returns 0 for NaN / Infinity / -Infinity', () => {
+    expect(safeHeatmapIntensity(NaN)).toBe(0);
+    expect(safeHeatmapIntensity(Infinity)).toBe(0);
+    expect(safeHeatmapIntensity(-Infinity)).toBe(0);
+  });
+});
+
+describe('buildHeatmapLayerSeries — heatmap layer spec', () => {
+  it('series.type === "heatmap" + coordinateSystem === "geo"', () => {
+    const spec = buildHeatmapLayerSeries(sampleHeatmap(), 0);
+    expect(spec.type).toBe('heatmap');
+    expect(spec.coordinateSystem).toBe('geo');
+  });
+
+  it('geoIndex passed through (shared with base map)', () => {
+    const spec = buildHeatmapLayerSeries(sampleHeatmap(), 0);
+    expect(spec.geoIndex).toBe(0);
+  });
+
+  it('data items are object-format (NOT raw arrays) preserving _overlay', () => {
+    // Codex 019e25ee iter-1 must-fix #5: raw array format would lose
+    // _overlay metadata namespace.
+    const spec = buildHeatmapLayerSeries(sampleHeatmap(), 0);
+    const data = spec.data as Array<{
+      value: [number, number, number];
+      name?: string;
+      _overlay: { type: string; layerName: string; value?: number };
+    }>;
+    expect(data).toHaveLength(3);
+    expect(data[0].value).toEqual([29.0, 41.0, 87]);
+    expect(data[0].name).toBe('İstanbul');
+    expect(data[0]._overlay.type).toBe('heatmap');
+    expect(data[0]._overlay.layerName).toBe('Events density');
+    expect(data[0]._overlay.value).toBe(87);
+  });
+
+  it('series data + _overlay carry the SAME sanitized intensity', () => {
+    // Codex iter-2 must-fix #2: no "visual 0, payload -5" drift —
+    // safeHeatmapIntensity single source of truth.
+    const layer: GeoHeatmapLayer = {
+      type: 'heatmap',
+      data: [
+        { coordinates: [0, 0], value: -10 },
+        { coordinates: [1, 1], value: NaN },
+        { coordinates: [2, 2], value: 50 },
+      ],
+    };
+    const spec = buildHeatmapLayerSeries(layer, 0);
+    const data = spec.data as Array<{
+      value: [number, number, number];
+      _overlay: { value?: number };
+    }>;
+    // All three sanitized: -10 → 0, NaN → 0, 50 → 50
+    expect(data[0].value[2]).toBe(0);
+    expect(data[0]._overlay.value).toBe(0);
+    expect(data[1].value[2]).toBe(0);
+    expect(data[1]._overlay.value).toBe(0);
+    expect(data[2].value[2]).toBe(50);
+    expect(data[2]._overlay.value).toBe(50);
+  });
+
+  it('ECharts canonical defaults: pointSize=20, blurSize=30', () => {
+    const spec = buildHeatmapLayerSeries(sampleHeatmap(), 0);
+    expect(spec.pointSize).toBe(20);
+    expect(spec.blurSize).toBe(30);
+  });
+
+  it('opacity defaults: minOpacity=0, maxOpacity=0.8 (base shines through)', () => {
+    const spec = buildHeatmapLayerSeries(sampleHeatmap(), 0);
+    expect(spec.minOpacity).toBe(0);
+    expect(spec.maxOpacity).toBe(0.8);
+  });
+
+  it('respects per-layer pointSize/blurSize/minOpacity/maxOpacity overrides', () => {
+    const layer: GeoHeatmapLayer = {
+      ...sampleHeatmap(),
+      pointSize: 15,
+      blurSize: 40,
+      minOpacity: 0.1,
+      maxOpacity: 1,
+    };
+    const spec = buildHeatmapLayerSeries(layer, 0);
+    expect(spec.pointSize).toBe(15);
+    expect(spec.blurSize).toBe(40);
+    expect(spec.minOpacity).toBe(0.1);
+    expect(spec.maxOpacity).toBe(1);
+  });
+
+  it('z defaults to 5 (renders above choropleth base)', () => {
+    const spec = buildHeatmapLayerSeries(sampleHeatmap(), 0);
+    expect(spec.z).toBe(5);
+  });
+
+  it('empty data produces empty series.data array', () => {
+    const spec = buildHeatmapLayerSeries({ type: 'heatmap', data: [] }, 0);
+    expect((spec.data as unknown[]).length).toBe(0);
+  });
+
+  it('every datum carries _overlay namespace with heatmap discriminator', () => {
+    const spec = buildHeatmapLayerSeries(sampleHeatmap(), 0);
+    const data = spec.data as Array<{
+      _overlay: { type: string; layerName: string; coordinates: [number, number] };
+    }>;
+    for (const datum of data) {
+      expect(datum._overlay.type).toBe('heatmap');
+      expect(datum._overlay.layerName).toBe('Events density');
+    }
+    expect(data[0]._overlay.coordinates).toEqual([29.0, 41.0]);
+  });
+});
+
+describe('buildGeoOverlayVisualMaps — heatmap visualMap helper', () => {
+  it('returns empty array when overlays undefined', () => {
+    expect(buildGeoOverlayVisualMaps(undefined, 1)).toEqual([]);
+  });
+
+  it('returns empty array when overlays empty', () => {
+    expect(buildGeoOverlayVisualMaps([], 1)).toEqual([]);
+  });
+
+  it('returns empty array when no heatmap layer is present', () => {
+    const overlays: GeoOverlay[] = [
+      sampleBubble(),
+      {
+        type: 'effectScatter',
+        data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+      },
+    ];
+    expect(buildGeoOverlayVisualMaps(overlays, 1)).toEqual([]);
+  });
+
+  it('emits one visualMap entry per heatmap layer', () => {
+    const overlays: GeoOverlay[] = [sampleHeatmap()];
+    const vms = buildGeoOverlayVisualMaps(overlays, 1);
+    expect(vms).toHaveLength(1);
+    expect(vms[0].type).toBe('continuous');
+  });
+
+  it('pins visualMap to overlay series via seriesIndex (= firstOverlayIndex + idx)', () => {
+    const overlays: GeoOverlay[] = [
+      sampleBubble(), // idx 0 → series[1] (non-heatmap, skipped)
+      sampleHeatmap(), // idx 1 → series[2]
+    ];
+    const vms = buildGeoOverlayVisualMaps(overlays, 1);
+    expect(vms).toHaveLength(1);
+    expect(vms[0].seriesIndex).toBe(2); // 1 + idx 1
+  });
+
+  it('dimension is set to 2 (intensity is data[i].value[2])', () => {
+    const vms = buildGeoOverlayVisualMaps([sampleHeatmap()], 1);
+    expect(vms[0].dimension).toBe(2);
+  });
+
+  it('min/max derive from sanitized data when not overridden', () => {
+    const vms = buildGeoOverlayVisualMaps([sampleHeatmap()], 1);
+    // Sample values: 87, 42, 23 → min=23, max=87
+    expect(vms[0].min).toBe(23);
+    expect(vms[0].max).toBe(87);
+  });
+
+  it('layer minIntensity/maxIntensity overrides take precedence', () => {
+    const layer: GeoHeatmapLayer = {
+      ...sampleHeatmap(),
+      minIntensity: 0,
+      maxIntensity: 100,
+    };
+    const vms = buildGeoOverlayVisualMaps([layer], 1);
+    expect(vms[0].min).toBe(0);
+    expect(vms[0].max).toBe(100);
+  });
+
+  it('empty data: min defaults to 0, max defaults to 1', () => {
+    const vms = buildGeoOverlayVisualMaps([{ type: 'heatmap', data: [] }], 1);
+    expect(vms[0].min).toBe(0);
+    expect(vms[0].max).toBe(1);
+  });
+
+  it('non-finite/negative intensities use sanitized values for min/max', () => {
+    const layer: GeoHeatmapLayer = {
+      type: 'heatmap',
+      data: [
+        { coordinates: [0, 0], value: -10 }, // → 0
+        { coordinates: [1, 1], value: NaN }, // → 0
+        { coordinates: [2, 2], value: 50 }, // → 50
+      ],
+    };
+    const vms = buildGeoOverlayVisualMaps([layer], 1);
+    expect(vms[0].min).toBe(0);
+    expect(vms[0].max).toBe(50);
+  });
+
+  it('show defaults to false (legend opt-in)', () => {
+    const vms = buildGeoOverlayVisualMaps([sampleHeatmap()], 1);
+    expect(vms[0].show).toBe(false);
+  });
+
+  it('showLegend: true → show: true', () => {
+    const layer: GeoHeatmapLayer = { ...sampleHeatmap(), showLegend: true };
+    const vms = buildGeoOverlayVisualMaps([layer], 1);
+    expect(vms[0].show).toBe(true);
+  });
+
+  it('colour gradient defaults to 5-stop blue→red density ramp', () => {
+    const vms = buildGeoOverlayVisualMaps([sampleHeatmap()], 1);
+    const inRange = vms[0].inRange as { color: string[] };
+    expect(inRange.color).toEqual(['#313695', '#74add1', '#ffffbf', '#f46d43', '#a50026']);
+  });
+
+  it('colour gradient override propagates', () => {
+    const layer: GeoHeatmapLayer = {
+      ...sampleHeatmap(),
+      colors: ['#000', '#fff'],
+    };
+    const vms = buildGeoOverlayVisualMaps([layer], 1);
+    const inRange = vms[0].inRange as { color: string[] };
+    expect(inRange.color).toEqual(['#000', '#fff']);
+  });
+
+  it('inRange does NOT set opacity (alpha lives on series minOpacity/maxOpacity)', () => {
+    // Codex iter-2 must-fix #3: ECharts geo heatmap ignores
+    // visualMap.inRange.opacity — alpha is series-level only.
+    const vms = buildGeoOverlayVisualMaps([sampleHeatmap()], 1);
+    const inRange = vms[0].inRange as { color: string[]; opacity?: unknown };
+    expect(inRange.opacity).toBeUndefined();
+  });
+
+  it('legend text defaults document density semantic', () => {
+    const vms = buildGeoOverlayVisualMaps([sampleHeatmap()], 1);
+    expect(vms[0].text).toEqual(['Density (high)', 'Density (low)']);
+  });
+
+  it('legend position bottom → bottom/left layout', () => {
+    const layer: GeoHeatmapLayer = {
+      ...sampleHeatmap(),
+      legendPosition: 'bottom',
+    };
+    const vms = buildGeoOverlayVisualMaps([layer], 1);
+    expect(vms[0].orient).toBe('horizontal');
+    expect(vms[0].bottom).toBe(10);
+  });
+
+  it('legend position right → vertical layout', () => {
+    const layer: GeoHeatmapLayer = {
+      ...sampleHeatmap(),
+      legendPosition: 'right',
+    };
+    const vms = buildGeoOverlayVisualMaps([layer], 1);
+    expect(vms[0].orient).toBe('vertical');
+    expect(vms[0].right).toBe(10);
+  });
+
+  it('mixed overlays preserve seriesIndex math for heatmap', () => {
+    const overlays: GeoOverlay[] = [
+      sampleBubble(), // idx 0 → series[1]
+      {
+        type: 'effectScatter',
+        data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+      }, // idx 1 → series[2]
+      sampleHeatmap(), // idx 2 → series[3]
+      sampleHeatmap(), // idx 3 → series[4]
+    ];
+    const vms = buildGeoOverlayVisualMaps(overlays, 1);
+    expect(vms).toHaveLength(2);
+    expect(vms[0].seriesIndex).toBe(3);
+    expect(vms[1].seriesIndex).toBe(4);
+  });
+});
+
+describe('buildGeoOverlaySeries — heatmap dispatcher integration', () => {
+  it('mixed overlays (bubble + heatmap) emits 2 series in order', () => {
+    const specs = buildGeoOverlaySeries([sampleBubble(), sampleHeatmap()], 0);
+    expect(specs).toHaveLength(2);
+    expect(specs[0].type).toBe('scatter');
+    expect(specs[1].type).toBe('heatmap');
+  });
+
+  it('all 4 layer types (bubble + effectScatter + flow + heatmap) emit 4 series in order', () => {
+    const sampleEffect: GeoEffectScatterLayer = {
+      type: 'effectScatter',
+      data: [{ name: 'Bursa', coordinates: [29.06, 40.19], value: 1 }],
+    };
+    const specs = buildGeoOverlaySeries(
+      [sampleBubble(), sampleEffect, sampleFlow(), sampleHeatmap()],
+      0,
+    );
+    expect(specs).toHaveLength(4);
+    expect(specs[0].type).toBe('scatter');
+    expect(specs[1].type).toBe('effectScatter');
+    expect(specs[2].type).toBe('lines');
+    expect(specs[3].type).toBe('heatmap');
   });
 });

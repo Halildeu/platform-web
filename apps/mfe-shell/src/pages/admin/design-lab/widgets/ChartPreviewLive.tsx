@@ -1595,6 +1595,37 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
                   showEffect: true,
                 });
               }
+              // PR-X13d (Codex 019e25ee iter-3 AGREE): heatmap density
+              // overlay. Demo points cluster around the 3 placeholder
+              // GeoJSON cities so the density blob renders inside the
+              // visible viewport. Each point's `value` represents an
+              // event count; ECharts renders a smoothed blob via
+              // pointSize + blurSize and color-codes via the dedicated
+              // heatmap visualMap (separate from the base choropleth).
+              if (isOn(toggles, 'showHeatmapOverlay', false)) {
+                layers.push({
+                  type: 'heatmap',
+                  name: 'Events Density',
+                  data: [
+                    // İstanbul cluster (high density)
+                    { coordinates: [29.0, 41.0], value: 95 },
+                    { coordinates: [29.05, 41.02], value: 80 },
+                    { coordinates: [28.95, 40.98], value: 70 },
+                    { coordinates: [29.1, 41.05], value: 65 },
+                    // Ankara cluster (medium density)
+                    { coordinates: [32.85, 39.93], value: 55 },
+                    { coordinates: [32.9, 39.95], value: 40 },
+                    { coordinates: [32.8, 39.9], value: 35 },
+                    // İzmir cluster (low density)
+                    { coordinates: [27.14, 38.42], value: 30 },
+                    { coordinates: [27.2, 38.45], value: 25 },
+                    { coordinates: [27.1, 38.4], value: 20 },
+                  ],
+                  pointSize: 25,
+                  blurSize: 35,
+                  maxOpacity: 0.7,
+                });
+              }
               return layers.length > 0 ? layers : undefined;
             })()}
           />

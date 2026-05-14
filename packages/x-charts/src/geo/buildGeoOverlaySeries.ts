@@ -16,8 +16,12 @@
  *   - PR-X13c (Codex `019e25d4`): `'flow'` — origin-destination
  *     `lines` with linear width scale (sqrt opt-in). Reduced-motion
  *     via `effect.show: false`.
+ *   - PR-X13d (Codex `019e25ee`): `'heatmap'` — density blobs on geo
+ *     coord system. Emits a dedicated visualMap entry pinned to the
+ *     overlay series (`dimension: 2`). VisualMap helper exported for
+ *     wrapper integration (`buildGeoOverlayVisualMaps`).
  *
- * Future overlays (`'heatmap'`, `'marker'`) append cases below.
+ * Future overlays (`'marker'`) append cases below.
  */
 import type {
   GeoOverlay,
@@ -25,6 +29,8 @@ import type {
   GeoEffectScatterLayer,
   GeoFlowLayer,
   GeoFlowDatum,
+  GeoHeatmapLayer,
+  GeoHeatmapDatum,
   GeoPointDatum,
 } from './geoOverlayTypes';
 
@@ -416,6 +422,151 @@ export function buildFlowLayerSeries(layer: GeoFlowLayer, geoIndex: number): Geo
 }
 
 /* ------------------------------------------------------------------ */
+/*  Heatmap (density on geo) — PR-X13d                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sanitize a heatmap intensity value. Non-finite or negative inputs
+ * floor to 0. Every downstream consumer (series data tuple,
+ * `_overlay.value` metadata, visualMap domain, a11y intensity range)
+ * MUST go through this helper so the "visual 0, payload -5" drift
+ * flagged by Codex 019e25ee iter-2 cannot occur.
+ *
+ * Single source of truth — exported for direct unit testing.
+ */
+export function safeHeatmapIntensity(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return value < 0 ? 0 : value;
+}
+
+/** Default 5-stop density colour ramp (blue → yellow → red). */
+const HEATMAP_DEFAULT_COLORS = ['#313695', '#74add1', '#ffffbf', '#f46d43', '#a50026'];
+
+/**
+ * Build a single heatmap layer spec.
+ *
+ * Wrapper passes the layer + the geo coordinate system index (shared
+ * with the base map, default 0). The ECharts `heatmap` series here
+ * uses `coordinateSystem: 'geo'` so it pans/zooms with the base.
+ *
+ * Data shape is object-form (`{ value: [lng, lat, intensity], name,
+ * _overlay }`) rather than raw arrays — Codex 019e25ee iter-1 must-fix:
+ * raw arrays would lose the `_overlay` metadata namespace and break
+ * tooltip/click/a11y discrimination downstream.
+ */
+export function buildHeatmapLayerSeries(
+  layer: GeoHeatmapLayer,
+  geoIndex: number,
+): GeoOverlaySeriesSpec {
+  const data = layer.data ?? [];
+  const seriesData = data.map((d: GeoHeatmapDatum) => {
+    // Single sanitized value flows through series + _overlay alike —
+    // Codex iter-2 must-fix #2 (no visual/payload drift).
+    const sanitized = safeHeatmapIntensity(d.value);
+    return {
+      value: [d.coordinates[0], d.coordinates[1], sanitized],
+      name: d.name,
+      _overlay: {
+        type: layer.type as 'heatmap',
+        layerName: layer.name ?? 'Density overlay',
+        coordinates: d.coordinates,
+        value: sanitized,
+        category: d.category,
+      },
+    };
+  });
+
+  return {
+    type: 'heatmap',
+    coordinateSystem: 'geo',
+    geoIndex,
+    name: layer.name ?? 'Density overlay',
+    data: seriesData,
+    // ECharts canonical defaults (Codex 019e25ee iter-1 verified vs
+    // echarts@5.6.0 source). `pointSize` is the per-datum spread
+    // radius; `blurSize` smooths transitions between datums.
+    pointSize: layer.pointSize ?? 20,
+    blurSize: layer.blurSize ?? 30,
+    // Alpha lives on the series (Codex iter-2 must-fix #3): ECharts
+    // geo heatmap reads `minOpacity`/`maxOpacity` from the series,
+    // NOT from `visualMap.inRange.opacity`. `maxOpacity` capped <1 so
+    // the base choropleth shines through.
+    minOpacity: layer.minOpacity ?? 0,
+    maxOpacity: layer.maxOpacity ?? 0.8,
+    z: layer.z ?? 5,
+  };
+}
+
+/**
+ * Build the visualMap entries needed by heatmap overlay series.
+ *
+ * Codex 019e25ee plan-time + iter-2 absorb:
+ * - Returns an empty array when no heatmap overlay is present
+ *   (callers spread it — empty spread is a no-op).
+ * - Each heatmap layer emits one visualMap entry pinned to its own
+ *   series via `seriesIndex` (the overlay's slot in the series array
+ *   relative to the base map). `dimension: 2` reads intensity from
+ *   `data[i].value[2]`.
+ * - Legend visibility defaults to hidden (`show: false`) — heatmap
+ *   colour-coding is usually documented externally and stacking
+ *   multiple legends clutters dense maps. Consumers opt in per-layer
+ *   via `showLegend: true`.
+ *
+ * @param overlays Overlay array (may be undefined/empty).
+ * @param firstOverlaySeriesIndex Series index of the FIRST overlay —
+ *   defaults to 1 because the base map sits at `series[0]`.
+ * @returns Zero or more visualMap spec objects (one per heatmap layer).
+ */
+export function buildGeoOverlayVisualMaps(
+  overlays: GeoOverlay[] | undefined,
+  firstOverlaySeriesIndex = 1,
+): GeoOverlaySeriesSpec[] {
+  if (!overlays || overlays.length === 0) return [];
+  const visualMaps: GeoOverlaySeriesSpec[] = [];
+  overlays.forEach((layer, idx) => {
+    if (layer.type !== 'heatmap') return;
+    const seriesIndex = firstOverlaySeriesIndex + idx;
+    const sanitizedValues = layer.data.map((d) => safeHeatmapIntensity(d.value));
+    const min =
+      layer.minIntensity ?? (sanitizedValues.length > 0 ? Math.min(...sanitizedValues) : 0);
+    const max =
+      layer.maxIntensity ?? (sanitizedValues.length > 0 ? Math.max(...sanitizedValues) : 1);
+    // Legend layout: position-driven (top/bottom/left/right). When
+    // hidden, the position fields are still set so toggling
+    // `showLegend: true` doesn't require a re-render shape change.
+    const position = layer.legendPosition;
+    visualMaps.push({
+      type: 'continuous',
+      seriesIndex,
+      // intensity is the third element of `[lng, lat, intensity]`
+      dimension: 2,
+      min,
+      max,
+      calculable: false,
+      show: layer.showLegend ?? false,
+      text: layer.legendText ?? ['Density (high)', 'Density (low)'],
+      orient: position === 'left' || position === 'right' ? 'vertical' : 'horizontal',
+      left: position === 'left' ? 10 : undefined,
+      right: position === 'right' ? 10 : undefined,
+      top:
+        position === 'top'
+          ? 10
+          : position === 'left' || position === 'right'
+            ? 'middle'
+            : undefined,
+      bottom: position === 'bottom' ? 10 : undefined,
+      inRange: {
+        // Alpha intentionally NOT set here — series-level
+        // minOpacity/maxOpacity own that channel for geo heatmap
+        // (Codex iter-2 must-fix #3).
+        color: layer.colors ?? HEATMAP_DEFAULT_COLORS,
+      },
+    });
+  });
+  return visualMaps;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dispatcher — consumers pass `overlays: GeoOverlay[]`               */
 /* ------------------------------------------------------------------ */
 
@@ -443,7 +594,10 @@ export function buildGeoOverlaySeries(
       case 'flow':
         specs.push(buildFlowLayerSeries(layer, geoIndex));
         break;
-      // Future: 'heatmap' | 'marker'
+      case 'heatmap':
+        specs.push(buildHeatmapLayerSeries(layer, geoIndex));
+        break;
+      // Future: 'marker'
       default: {
         // Exhaustiveness guard — TS narrows the union; at runtime an
         // unknown variant is silently dropped (consumer typo
@@ -456,5 +610,5 @@ export function buildGeoOverlaySeries(
   return specs;
 }
 
-// Re-export scale helpers for unit tests.
+// Re-export scale + sanitization helpers for unit tests.
 export { bubbleSymbolSize, flowLineWidth, flowEdgeName };

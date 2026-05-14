@@ -806,6 +806,10 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     // Ankara, İstanbul → İzmir, Ankara → İzmir) drawn via ECharts
     // `lines` series with curved edges + animated trail.
     'showFlowOverlay',
+    // PR-X13d (Codex 019e25ee iter-3 AGREE): heatmap density overlay
+    // toggle. Adds a smoothed event-density blob over the choropleth
+    // base via ECharts `heatmap` series + dedicated visualMap.
+    'showHeatmapOverlay',
     'animate',
     'theme',
     'decal',
@@ -2707,15 +2711,24 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       statePatch: { showFlowOverlay: true },
     },
     {
+      id: 'with-heatmap-overlay',
+      label: 'With Density Overlay',
+      tag: 'overlay',
+      description:
+        'Choropleth + smoothed event density blob (PR-X13d). Dedicated heatmap visualMap + alpha-blended pixels.',
+      statePatch: { showHeatmapOverlay: true },
+    },
+    {
       id: 'with-all-overlays',
       label: 'All Overlays',
       tag: 'overlay',
       description:
-        'Combo demo — choropleth + HQ bubbles + critical pulse + logistics flow lines (PR-X13a+X13b+X13c).',
+        'Combo demo — choropleth + HQ bubbles + critical pulse + logistics flow + density heatmap (PR-X13a+X13b+X13c+X13d).',
       statePatch: {
         showBubbleOverlay: true,
         showEffectScatterOverlay: true,
         showFlowOverlay: true,
+        showHeatmapOverlay: true,
       },
     },
     {
