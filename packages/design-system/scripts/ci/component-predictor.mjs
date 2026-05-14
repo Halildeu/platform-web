@@ -33,14 +33,12 @@ const COMPONENT_KEYWORDS = {
   'PieChart': ['chart', 'pie', 'distribution', 'share', 'percentage'],
   'AreaChart': ['chart', 'area', 'cumulative', 'stack'],
   'BulletChart': ['kpi', 'target', 'actual', 'performance', 'metric'],
-  'GaugeChart': ['gauge', 'speedometer', 'score', 'sla', 'compliance'],
-  'FunnelChart': ['funnel', 'conversion', 'pipeline', 'stage', 'sales'],
-  'RadarChart': ['radar', 'comparison', 'multi-dimension', 'skill', 'competency'],
+  // Phase 1a: GaugeChart, FunnelChart, RadarChart, TreemapChart, WaterfallChart
+  // removed — canonical surface is `@mfe/x-charts`; predictor mapping is for DS
+  // components only.
   'SankeyDiagram': ['flow', 'sankey', 'source', 'destination', 'budget'],
-  'TreemapChart': ['treemap', 'hierarchy', 'proportion', 'budget'],
   'HeatmapCalendar': ['heatmap', 'calendar', 'activity', 'attendance', 'frequency'],
   'ParetoChart': ['pareto', '80-20', 'quality', 'defect', 'complaint'],
-  'WaterfallChart': ['waterfall', 'p&l', 'profit', 'loss', 'breakdown', 'financial'],
   'BoxPlot': ['boxplot', 'distribution', 'statistics', 'outlier', 'salary'],
   'HistogramChart': ['histogram', 'frequency', 'distribution', 'age', 'range'],
   'ControlChart': ['spc', 'control', 'process', 'quality', 'manufacturing'],

@@ -105,11 +105,6 @@
     "slots": []
   },
   {
-    "name": "FunnelChart",
-    "props": [],
-    "slots": []
-  },
-  {
     "name": "GanttTimeline",
     "props": [],
     "slots": []
@@ -165,11 +160,6 @@
     "slots": []
   },
   {
-    "name": "RadarChart",
-    "props": [],
-    "slots": []
-  },
-  {
     "name": "RiskMatrix",
     "props": [],
     "slots": []
@@ -216,11 +206,6 @@
   },
   {
     "name": "Transition",
-    "props": [],
-    "slots": []
-  },
-  {
-    "name": "TreemapChart",
     "props": [],
     "slots": []
   },

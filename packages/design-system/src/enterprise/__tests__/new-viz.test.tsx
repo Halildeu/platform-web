@@ -6,8 +6,7 @@ import React from 'react';
 
 import { FineKinney } from '../FineKinney';
 import type { FineKinneyRisk } from '../FineKinney';
-import { WaterfallChart } from '../WaterfallChart';
-import type { WaterfallItem } from '../WaterfallChart';
+
 import { ParetoChart } from '../ParetoChart';
 import type { ParetoItem } from '../ParetoChart';
 import { HeatmapCalendar } from '../HeatmapCalendar';
@@ -37,12 +36,6 @@ const sampleRisks: FineKinneyRisk[] = [
     severity: 40,
     status: 'in-progress',
   },
-];
-
-const waterfallItems: WaterfallItem[] = [
-  { id: 'rev', label: 'Revenue', value: 1000, type: 'increase' },
-  { id: 'cost', label: 'Costs', value: -400, type: 'decrease' },
-  { id: 'net', label: 'Net', value: 600, type: 'total' },
 ];
 
 const paretoItems: ParetoItem[] = [
@@ -100,41 +93,7 @@ describe('FineKinney', () => {
 });
 
 // ---------------------------------------------------------------------------
-// WaterfallChart
 // ---------------------------------------------------------------------------
-
-describe('WaterfallChart', () => {
-  // PR-C2: WaterfallChart now delegates to @mfe/x-charts. The legacy DS
-  // SVG <rect>-based bar rendering, custom empty-state copy, rect click
-  // surface, and aria-label are no longer part of the rendered output.
-  // Canonical shim contract lives in EnterpriseCharts.shim.test.tsx (and
-  // WaterfallChart.contract.test.tsx).
-  it.skip('renders SVG (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
-  });
-
-  it.skip('renders empty state when no items (legacy DS copy — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
-  });
-
-  it.skip('fires onItemClick handler (legacy DS rect click — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
-  });
-
-  it('returns null when access is hidden', () => {
-    const { container } = render(<WaterfallChart items={waterfallItems} access="hidden" />);
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('has no accessibility violations', async () => {
-    const { container } = render(<WaterfallChart items={waterfallItems} />);
-    await expectNoA11yViolations(container);
-  });
-
-  it.skip('has accessible ARIA structure (legacy DS aria-label — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
-  });
-});
 
 // ---------------------------------------------------------------------------
 // ParetoChart

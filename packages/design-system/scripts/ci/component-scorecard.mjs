@@ -576,9 +576,10 @@ function getImprovements(scores) {
  *
  * Faz 21.6 PR-B (Codex iter-20 AGREE): x-charts wrappers are the canonical
  * source of truth for chart taxonomy. Any DS chart wrapper sharing the same
- * name (BarChart, LineChart, AreaChart, PieChart, FunnelChart, GaugeChart,
- * RadarChart, TreemapChart, WaterfallChart) is a legacy entry whose
- * canonicalId points to the corresponding x-charts wrapper.
+ * name (BarChart, LineChart, AreaChart, PieChart) is a legacy entry whose
+ * canonicalId points to the corresponding x-charts wrapper. The 5
+ * enterprise duplicates (FunnelChart, GaugeChart, RadarChart, TreemapChart,
+ * WaterfallChart) were removed in the Phase 1a triage.
  */
 function buildCanonicalRegistry(allComponents) {
   const registry = new Map();

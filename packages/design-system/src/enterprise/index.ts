@@ -5,12 +5,7 @@
 /* ------------------------------------------------------------------ */
 
 // Shared types & utilities
-export {
-  formatValue,
-  getTrendColor,
-  getTrendIcon,
-  getToneClasses,
-} from './types';
+export { formatValue, getTrendColor, getTrendIcon, getToneClasses } from './types';
 export type {
   NumberFormat,
   FormatOptions,
@@ -34,7 +29,7 @@ export { GanttTimeline } from './GanttTimeline';
 
 // Financial & Analytics
 export { AgingBuckets } from './AgingBuckets';
-export { FunnelChart } from './FunnelChart';
+// FunnelChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 export { ComparisonTable } from './ComparisonTable';
 
 // HR & Training
@@ -43,9 +38,8 @@ export { TrainingTracker } from './TrainingTracker';
 // Visualization
 export { BulletChart } from './BulletChart';
 export { MicroChart } from './MicroChart';
-export { TreemapChart } from './TreemapChart';
+// TreemapChart, RadarChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 export { SankeyDiagram } from './SankeyDiagram';
-export { RadarChart } from './RadarChart';
 
 // Date & Time
 export { DateRangePicker } from './DateRangePicker';
@@ -85,9 +79,7 @@ export type { DataExportDialogLocaleText } from './DataExportDialog';
 export { FineKinney } from './FineKinney';
 export type { FineKinneyProps, FineKinneyRisk } from './FineKinney';
 
-// Waterfall Chart
-export { WaterfallChart } from './WaterfallChart';
-export type { WaterfallChartProps, WaterfallItem } from './WaterfallChart';
+// WaterfallChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 
 // Pareto Chart
 export { ParetoChart } from './ParetoChart';
@@ -101,9 +93,7 @@ export type { HeatmapCalendarProps, HeatmapDay } from './HeatmapCalendar';
 export { OrgChart } from './OrgChart';
 export type { OrgChartProps, OrgChartNode } from './OrgChart';
 
-// Gauge Chart
-export { GaugeChart } from './GaugeChart';
-export type { GaugeChartProps, GaugeThreshold } from './GaugeChart';
+// GaugeChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 
 // Pivot Table
 export { PivotTable } from './PivotTable';
@@ -135,7 +125,12 @@ export type { SWOTMatrixProps, SWOTItem, SWOTQuadrant } from './SWOTMatrix';
 
 // Decision Matrix
 export { DecisionMatrix } from './DecisionMatrix';
-export type { DecisionMatrixProps, DecisionOption, DecisionCriterion, DecisionScore } from './DecisionMatrix';
+export type {
+  DecisionMatrixProps,
+  DecisionOption,
+  DecisionCriterion,
+  DecisionScore,
+} from './DecisionMatrix';
 
 // File Upload
 export { FileUploadZone } from './FileUploadZone';
