@@ -201,39 +201,58 @@ describe('hard-fail activation', () => {
   });
 });
 
-describe('flake budget ledger', () => {
+describe('flake budget ledger (iter-2 absorb: pass+fp tracking)', () => {
   const ledger = join(tmp, 'fp-ledger.jsonl');
 
   it('empty ledger → 0 FPs', () => {
-    assert.equal(countFalsePositives(ledger, '/login::cold-anonymous', 20), 0);
-    assert.equal(countFalsePositives(ledger, '/login::cold-anonymous', 100), 0);
+    const result20 = countFalsePositives(ledger, '/login::cold-anonymous', 20);
+    assert.equal(result20.fpCount, 0);
+    assert.equal(result20.totalCount, 0);
   });
 
-  it('appended entries → count within budget', () => {
+  it('appended entries → fp count + total denominator', () => {
     writeFileSync(ledger, [
-      JSON.stringify({ timestamp: Date.now() - 1000, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', confirmed_fp: true }),
-      JSON.stringify({ timestamp: Date.now() - 2000, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', confirmed_fp: true }),
-      JSON.stringify({ timestamp: Date.now() - 3000, route: '/other', mode: 'cold-anonymous', authState: 'anonymous', confirmed_fp: true }),
+      JSON.stringify({ timestamp: Date.now() - 1000, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'confirmed_fp', is_fp: true }),
+      JSON.stringify({ timestamp: Date.now() - 2000, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'confirmed_fp', is_fp: true }),
+      JSON.stringify({ timestamp: Date.now() - 1500, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'pass', is_fp: false }),
+      JSON.stringify({ timestamp: Date.now() - 1700, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'pass', is_fp: false }),
+      JSON.stringify({ timestamp: Date.now() - 3000, route: '/other', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'confirmed_fp', is_fp: true }),
     ].join('\n') + '\n');
-    assert.equal(countFalsePositives(ledger, '/login::cold-anonymous', 20), 2);
-    assert.equal(countFalsePositives(ledger, '/other::cold-anonymous', 20), 1);
+    const login = countFalsePositives(ledger, '/login::cold-anonymous', 20);
+    assert.equal(login.fpCount, 2);
+    assert.equal(login.totalCount, 4);
+    const other = countFalsePositives(ledger, '/other::cold-anonymous', 20);
+    assert.equal(other.fpCount, 1);
+    assert.equal(other.totalCount, 1);
   });
 
-  it('flake budget evaluator: <=1/20 + <3/100 satisfied', () => {
+  it('legacy fp-only entries normalize to is_fp:true outcome=confirmed_fp', () => {
     writeFileSync(ledger, JSON.stringify({ timestamp: Date.now(), route: '/login', mode: 'cold-anonymous', authState: 'anonymous', confirmed_fp: true }) + '\n');
+    const result = countFalsePositives(ledger, '/login::cold-anonymous', 20);
+    // Legacy fp-only entry: outcome='confirmed_fp', is_fp:true → counted
+    assert.equal(result.fpCount, 1);
+    assert.equal(result.totalCount, 1);
+  });
+
+  it('flake budget evaluator: <=1 FP / last 20 + <3 FP / last 100 satisfied', () => {
+    writeFileSync(ledger, [
+      JSON.stringify({ timestamp: Date.now(), route: '/login', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'confirmed_fp', is_fp: true }),
+      JSON.stringify({ timestamp: Date.now() - 1000, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'pass', is_fp: false }),
+    ].join('\n') + '\n');
     const result = evaluateFlakeBudget(ledger, '/login::cold-anonymous');
     assert.equal(result.satisfied, true);
-    assert.equal(result.last20, 1);
+    assert.equal(result.last20.fpCount, 1);
+    assert.equal(result.last20.totalCount, 2);
   });
 
-  it('flake budget evaluator: >1/20 fails', () => {
+  it('flake budget evaluator: >1 FP / last 20 fails', () => {
     const entries = Array.from({ length: 3 }, (_, i) =>
-      JSON.stringify({ timestamp: Date.now() - i * 1000, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', confirmed_fp: true }),
+      JSON.stringify({ timestamp: Date.now() - i * 1000, route: '/login', mode: 'cold-anonymous', authState: 'anonymous', outcome: 'confirmed_fp', is_fp: true }),
     );
     writeFileSync(ledger, entries.join('\n') + '\n');
     const result = evaluateFlakeBudget(ledger, '/login::cold-anonymous');
     assert.equal(result.satisfied, false);
-    assert.equal(result.last20, 3);
+    assert.equal(result.last20.fpCount, 3);
   });
 });
 
@@ -326,6 +345,109 @@ describe('CLI scenarios', () => {
       '--ledger', ledgerExceeded,
     ]);
     assert.equal(code, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Codex iter-2 (thread 019e2776) regression coverage
+// ---------------------------------------------------------------------------
+
+import { sameContext, pickRoute } from '../flake-budget-tracker.mjs';
+
+describe('flake-budget-tracker sameContext (iter-2 P0-4 fail-closed)', () => {
+  const baseA = {
+    route: '/login',
+    mode: 'cold-anonymous',
+    auth: 'anonymous',
+    build_sha: 'abc123',
+    browser_profile: 'playwright-chromium-bundled',
+  };
+
+  it('identical context → same:true', () => {
+    const res = sameContext(baseA, { ...baseA });
+    assert.equal(res.same, true);
+  });
+
+  it('build_sha missing on either side → fail-closed (same:false)', () => {
+    const noSha = { ...baseA, build_sha: undefined };
+    const res = sameContext(baseA, noSha);
+    assert.equal(res.same, false);
+    assert.match(res.reason, /build_sha missing/);
+  });
+
+  it('browser_profile missing → fail-closed', () => {
+    const noBrowser = { ...baseA, browser_profile: undefined };
+    const res = sameContext(baseA, noBrowser);
+    assert.equal(res.same, false);
+    assert.match(res.reason, /browser_profile missing/);
+  });
+
+  it('different build_sha → mismatch', () => {
+    const res = sameContext(baseA, { ...baseA, build_sha: 'xyz' });
+    assert.equal(res.same, false);
+    assert.match(res.reason, /build_sha mismatch/);
+  });
+
+  it('different browser_profile → mismatch (no tautology)', () => {
+    const res = sameContext(baseA, { ...baseA, browser_profile: 'chrome-canary' });
+    assert.equal(res.same, false);
+    assert.match(res.reason, /browser_profile mismatch/);
+  });
+
+  it('frontend_image_digest both supplied but differ → mismatch', () => {
+    const a = { ...baseA, frontend_image_digest: 'sha256:abc' };
+    const b = { ...baseA, frontend_image_digest: 'sha256:xyz' };
+    const res = sameContext(a, b);
+    assert.equal(res.same, false);
+    assert.match(res.reason, /frontend_image_digest mismatch/);
+  });
+
+  it('frontend_image_digest absent on either side → OK (optional)', () => {
+    const res = sameContext(baseA, { ...baseA });
+    assert.equal(res.same, true);
+  });
+});
+
+describe('G1 backward-compat (iter-2 P1-5)', () => {
+  it('legacy single-snapshot route accepted by baselineMetric resolver pattern', () => {
+    // Mirror the route-performance-budget.mjs baselineMetric() shape.
+    const base = { transferKB: 2343, decodedKB: 9069, tbtMs: 72 };
+    function baselineMetric(metric) {
+      if (base[metric] !== undefined) return base[metric];
+      if (base.median?.[metric] !== undefined) return base.median[metric];
+      if (Array.isArray(base.history) && base.history.length > 0) return base.history[base.history.length - 1].metrics?.[metric];
+      return undefined;
+    }
+    assert.equal(baselineMetric('transferKB'), 2343);
+    assert.equal(baselineMetric('unknown'), undefined);
+  });
+
+  it('extended schema route resolved via .median', () => {
+    const base = {
+      history: [{ metrics: { transferKB: 9999 } }],
+      median: { transferKB: 2345 },
+    };
+    function baselineMetric(metric) {
+      if (base[metric] !== undefined) return base[metric];
+      if (base.median?.[metric] !== undefined) return base.median[metric];
+      if (Array.isArray(base.history) && base.history.length > 0) return base.history[base.history.length - 1].metrics?.[metric];
+      return undefined;
+    }
+    assert.equal(baselineMetric('transferKB'), 2345);
+  });
+
+  it('extended schema route falls back to latest history when median empty', () => {
+    const base = {
+      history: [{ metrics: { transferKB: 2300 } }, { metrics: { transferKB: 2400 } }],
+      median: {},
+    };
+    function baselineMetric(metric) {
+      if (base[metric] !== undefined) return base[metric];
+      if (base.median?.[metric] !== undefined) return base.median[metric];
+      if (Array.isArray(base.history) && base.history.length > 0) return base.history[base.history.length - 1].metrics?.[metric];
+      return undefined;
+    }
+    assert.equal(baselineMetric('transferKB'), 2400);
   });
 });
 

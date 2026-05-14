@@ -17,8 +17,10 @@
 #   - hard-fail: regressions outside variance band exit 1 when _hardFailActivation
 #                evidence block is complete and eligibility date passed
 #
-# Sliding history append: only on main branch (push event); PR runs read-only
-# against the committed baseline + ledger. Avoids PR-driven baseline churn.
+# Sliding history append: opt-in via workflow_dispatch (`append_history=1`)
+# against main only. PR runs and ordinary main pushes stay read-only against
+# committed baseline + ledger; only an owner-triggered dispatch advances the
+# ratchet (commits via bot identity, requires contents: write).
 
 name: PR Performance Drift Gate (PR-G2)
 
@@ -46,12 +48,12 @@ on:
         required: false
         default: '1'
       append_history:
-        description: 'Append current run to baseline history FIFO + commit'
+        description: 'Append current run to baseline history FIFO + commit (main only, owner-triggered)'
         required: false
         default: '0'
 
 permissions:
-  contents: read
+  contents: write # required by --append-history commit step; PR runs stay read-only because that step is guarded
 
 jobs:
   drift-gate:
@@ -93,13 +95,23 @@ jobs:
         shell: bash
 
       - name: Capture current run (PR-M1 harness)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           pnpm exec node scripts/ci/route-performance-budget.mjs \
             --target local --runs 3 --warn-only --routes /login
 
+      - name: Record run outcome to flake-budget ledger (denominator builder)
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          pnpm exec node scripts/perf/run-outcome-recorder.mjs \
+            --run tests/perf/last-run.json \
+            --ledger docs/performance/measurements/perf-budget-fp-ledger.jsonl
+
       - name: Sliding baseline drift check (warn-only on PR, hard-fail eligible on main)
         env:
-          FORCE_WARN_ONLY: ${{ inputs.warn_only || (github.event_name == 'pull_request' && '1') || '0' }}
+          FORCE_WARN_ONLY: ${{ (github.event_name == 'pull_request' && '1') || inputs.warn_only || '0' }}
         run: |
           ARGS="--baseline tests/perf/baseline.json --current tests/perf/last-run.json --ledger docs/performance/measurements/perf-budget-fp-ledger.jsonl --window-days 14 --variance-band-pct 5"
           if [ "${FORCE_WARN_ONLY}" = "1" ]; then
@@ -107,8 +119,8 @@ jobs:
           fi
           pnpm exec node scripts/perf/sliding-baseline-check.mjs ${ARGS}
 
-      - name: Append history (main branch + explicit opt-in only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.append_history == '1'
+      - name: Append history (owner-triggered dispatch on main only)
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.append_history == '1'
         run: |
           pnpm exec node scripts/perf/sliding-baseline-check.mjs \
             --baseline tests/perf/baseline.json \
@@ -116,6 +128,21 @@ jobs:
             --ledger docs/performance/measurements/perf-budget-fp-ledger.jsonl \
             --append-history \
             --warn-only
+
+      - name: Commit appended history + ledger (owner-triggered dispatch on main only)
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.append_history == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name 'perf-baseline-bot'
+          git config user.email 'perf-baseline-bot@users.noreply.github.com'
+          git add tests/perf/baseline.json docs/performance/measurements/perf-budget-fp-ledger.jsonl
+          if git diff --cached --quiet; then
+            echo "[g2] no baseline/ledger changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(perf-baseline): G2 ratchet append (run ${{ github.run_id }})"
+          git push origin HEAD:main
 
       - name: Upload drift-gate artifact
         if: always()

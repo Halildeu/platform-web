@@ -156,16 +156,18 @@ function computeSlidingStats(history, windowDays) {
 }
 
 /**
- * Count false positives in last N comparable runs from JSONL ledger.
- * Ledger entry shape: { timestamp, route, mode, authState, build_sha, confirmed_fp: bool }
- * routeKey format: "<route>::<mode>" (authState carried by ledger entry itself,
- * tracked per route+mode pair; spike §4.2 5-part context still validated by
- * flake-budget-tracker.mjs at append time).
+ * Read comparable run outcomes from JSONL ledger (Codex iter-2 absorb P0-3).
+ * Ledger entry shape — extended:
+ *   { timestamp, route, mode, authState, build_sha, browser_profile,
+ *     outcome: 'pass'|'fail'|'confirmed_fp', is_fp: bool }
+ * Backward compat: legacy fp-only entries (`confirmed_fp:true` only) normalize
+ * to outcome='confirmed_fp', is_fp:true. Such legacy entries count toward FP
+ * but do not contribute pass-side denominator.
  */
-function countFalsePositives(ledgerPath, routeKey, lastN) {
-  if (!existsSync(ledgerPath)) return 0;
+function readLedgerEntries(ledgerPath, routeKey, lastN) {
+  if (!existsSync(ledgerPath)) return [];
   const lines = readFileSync(ledgerPath, 'utf8').split('\n').filter(Boolean);
-  const entries = lines
+  return lines
     .map((l) => {
       try {
         return JSON.parse(l);
@@ -173,20 +175,51 @@ function countFalsePositives(ledgerPath, routeKey, lastN) {
         return null;
       }
     })
-    .filter((e) => e && e.confirmed_fp === true)
-    .filter((e) => `${e.route}::${e.mode}` === routeKey)
+    .filter((e) => e && `${e.route}::${e.mode}` === routeKey)
+    .map((e) => ({
+      ...e,
+      is_fp: e.is_fp === true || e.confirmed_fp === true,
+      outcome: e.outcome ?? (e.confirmed_fp === true ? 'confirmed_fp' : 'unknown'),
+    }))
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, lastN);
-  return entries.length;
 }
 
 /**
- * Spike §4.2 flake budget evaluation. Returns satisfied + reason.
+ * Count false positives in last N comparable runs from JSONL ledger.
+ * Returns {fpCount, totalCount, allEntries} where totalCount = entries with
+ * known outcome (excludes ledgers that only recorded FPs without pass rows).
+ */
+function countFalsePositives(ledgerPath, routeKey, lastN) {
+  const entries = readLedgerEntries(ledgerPath, routeKey, lastN);
+  const known = entries.filter((e) => e.outcome !== 'unknown');
+  const fp = known.filter((e) => e.is_fp === true).length;
+  return { fpCount: fp, totalCount: known.length, allEntries: entries.length };
+}
+
+/**
+ * Spike §4.2 flake budget evaluation — denominator = comparable runs (NOT
+ * ledger entry count). Codex iter-2 absorb P0-3.
+ * Returns:
+ *   {
+ *     satisfied,
+ *     last20: { fpCount, totalCount },
+ *     last100: { fpCount, totalCount },
+ *   }
+ *
+ * Spike contract:
+ *   - last20: fpCount <= 1
+ *   - last100: fpCount < 3
+ *
+ * When totalCount < N (insufficient comparable history), the constraint is
+ * treated as "satisfied" (not yet enough runs to violate), but the evaluator
+ * reports totalCount so hard-fail activation evidence can encode comparableRuns
+ * separately. Spike §4.4 already requires comparableRuns >= 20 in evidence block.
  */
 function evaluateFlakeBudget(ledgerPath, routeKey) {
   const last20 = countFalsePositives(ledgerPath, routeKey, 20);
   const last100 = countFalsePositives(ledgerPath, routeKey, 100);
-  const satisfied = last20 <= 1 && last100 < 3;
+  const satisfied = last20.fpCount <= 1 && last100.fpCount < 3;
   return { satisfied, last20, last100 };
 }
 
@@ -252,8 +285,8 @@ function buildHistoryEntry(run, route) {
     mode: route.mode,
     authState: route.auth ?? 'anonymous',
     cacheMode: route.mode?.includes('warm') ? 'warm' : 'cold',
-    browserProfile: 'playwright-chromium-bundled',
-    browserVersion: run.browserVersion ?? '',
+    browserProfile: run.browser_profile ?? 'playwright-chromium-bundled',
+    browserVersion: run.browser_version ?? run.browserVersion ?? '',
     target: run.target ?? 'local',
     metrics: {
       transferKB: route.transferKB,
@@ -373,10 +406,21 @@ function checkRoute(routeRun, baseline, opts) {
   return result;
 }
 
-function maybeAppendHistory(routeRun, baseline, opts) {
+function maybeAppendHistory(routeRun, baseline, opts, runMeta = {}) {
   const routeKey = `${routeRun.route}::${routeRun.mode}`;
   const entry = ensureRouteEntry(baseline, routeKey, opts);
-  const newEntry = buildHistoryEntry({ timestamp: baseline._currentRunTs ?? Date.now() }, routeRun);
+  const newEntry = buildHistoryEntry(
+    {
+      timestamp: runMeta.timestamp ?? baseline._currentRunTs ?? Date.now(),
+      build_sha: runMeta.build_sha,
+      frontend_image_ref: runMeta.frontend_image_ref,
+      frontend_image_digest: runMeta.frontend_image_digest,
+      browser_profile: runMeta.browser_profile,
+      browser_version: runMeta.browser_version,
+      target: runMeta.target,
+    },
+    routeRun,
+  );
   entry.history = pushFifo(entry.history, newEntry, opts.fifoSize);
   const stats = computeSlidingStats(entry.history, opts.windowDays);
   if (!stats.insufficient) {
@@ -384,8 +428,12 @@ function maybeAppendHistory(routeRun, baseline, opts) {
     entry.p95 = stats.p95;
     entry.stdDev = stats.stdDev;
   }
-  entry.flakeBudget.last20Runs_falsePositives = countFalsePositives(opts.ledger, routeKey, 20);
-  entry.flakeBudget.last100Runs_falsePositives = countFalsePositives(opts.ledger, routeKey, 100);
+  const last20 = countFalsePositives(opts.ledger, routeKey, 20);
+  const last100 = countFalsePositives(opts.ledger, routeKey, 100);
+  entry.flakeBudget.last20Runs_falsePositives = last20.fpCount;
+  entry.flakeBudget.last100Runs_falsePositives = last100.fpCount;
+  entry.flakeBudget.last20Runs_total = last20.totalCount;
+  entry.flakeBudget.last100Runs_total = last100.totalCount;
 }
 
 function main() {
@@ -427,14 +475,14 @@ function main() {
 
     console.log(`[g2] ${res.routeKey}`);
     console.log(`     history.count=${res.stats.count ?? 0} hardFail.active=${res.hardFail.active} reason=${res.hardFail.reason ?? 'eligible'}`);
-    console.log(`     flake last20FP=${res.flake.last20} last100FP=${res.flake.last100} satisfied=${res.flake.satisfied}`);
+    console.log(`     flake last20=${res.flake.last20.fpCount}/${res.flake.last20.totalCount}FP last100=${res.flake.last100.fpCount}/${res.flake.last100.totalCount}FP satisfied=${res.flake.satisfied}`);
     for (const d of res.decisions) {
       console.log(`     ${d}`);
     }
 
     if (!res.flake.satisfied) {
       flakeBudgetExceeded = true;
-      console.error(`     FLAKE_BUDGET_EXCEEDED: last20=${res.flake.last20} (max 1), last100=${res.flake.last100} (max 2)`);
+      console.error(`     FLAKE_BUDGET_EXCEEDED: last20FP=${res.flake.last20.fpCount}/${res.flake.last20.totalCount} (max 1), last100FP=${res.flake.last100.fpCount}/${res.flake.last100.totalCount} (max 2)`);
     }
 
     for (const w of res.warnings) {
@@ -446,7 +494,15 @@ function main() {
     }
 
     if (opt.appendHistory) {
-      maybeAppendHistory(r, baseline, opt);
+      maybeAppendHistory(r, baseline, opt, {
+        timestamp: current.timestamp,
+        build_sha: current.build_sha,
+        frontend_image_ref: current.frontend_image_ref,
+        frontend_image_digest: current.frontend_image_digest,
+        browser_profile: current.browser_profile,
+        browser_version: current.browser_version,
+        target: current.target,
+      });
     }
   }
 
@@ -491,6 +547,7 @@ export {
   percentile,
   stdDev,
   computeSlidingStats,
+  readLedgerEntries,
   countFalsePositives,
   evaluateFlakeBudget,
   outsideVarianceBand,

@@ -77,15 +77,33 @@ function pickRoute(runJson, route, mode) {
   return runJson.routes.find((r) => r.route === route && r.mode === mode) ?? null;
 }
 
+/**
+ * Spike §4.2 5-part context equality. Codex iter-2 absorb P0-4:
+ *   - route, mode, authState always present (per-route summary)
+ *   - build_sha + browser_profile MUST be present; else fail-closed
+ *   - frontend_image_digest optional but compared if both supply
+ *
+ * Returns {same: bool, reason: string}.
+ */
 function sameContext(a, b) {
-  if (!a || !b) return false;
-  return (
-    a.route === b.route &&
-    a.mode === b.mode &&
-    (a.auth ?? 'anonymous') === (b.auth ?? 'anonymous') &&
-    (a.build_sha ?? 'unknown') === (b.build_sha ?? 'unknown') &&
-    'playwright-chromium-bundled' === 'playwright-chromium-bundled'
-  );
+  if (!a || !b) return { same: false, reason: 'missing run summary' };
+  if (a.route !== b.route) return { same: false, reason: `route mismatch (${a.route} vs ${b.route})` };
+  if (a.mode !== b.mode) return { same: false, reason: `mode mismatch (${a.mode} vs ${b.mode})` };
+  const authA = a.auth ?? a.authState ?? 'anonymous';
+  const authB = b.auth ?? b.authState ?? 'anonymous';
+  if (authA !== authB) return { same: false, reason: `auth mismatch (${authA} vs ${authB})` };
+  // build_sha REQUIRED on both sides (fail-closed). 'unknown' shadowed via
+  // missing field detection rather than ?? default.
+  if (!a.build_sha || !b.build_sha) return { same: false, reason: 'build_sha missing on original or rerun (fail-closed)' };
+  if (a.build_sha !== b.build_sha) return { same: false, reason: `build_sha mismatch (${a.build_sha} vs ${b.build_sha})` };
+  // browser_profile REQUIRED on both sides (fail-closed). Tautology removed.
+  if (!a.browser_profile || !b.browser_profile) return { same: false, reason: 'browser_profile missing on original or rerun (fail-closed)' };
+  if (a.browser_profile !== b.browser_profile) return { same: false, reason: `browser_profile mismatch (${a.browser_profile} vs ${b.browser_profile})` };
+  // Optional but compared when both supply
+  if (a.frontend_image_digest && b.frontend_image_digest && a.frontend_image_digest !== b.frontend_image_digest) {
+    return { same: false, reason: `frontend_image_digest mismatch` };
+  }
+  return { same: true, reason: '5-part context identical' };
 }
 
 function main() {
@@ -114,8 +132,9 @@ function main() {
     console.error(`[fp-tracker] route ${opt.route}::${opt.mode} missing from one of original/rerun`);
     process.exit(1);
   }
-  if (!sameContext(o, r)) {
-    console.error('[fp-tracker] context mismatch (route/mode/auth/build_sha differs); not a confirmed FP');
+  const ctx = sameContext(o, r);
+  if (!ctx.same) {
+    console.error(`[fp-tracker] context mismatch: ${ctx.reason}; not a confirmed FP`);
     process.exit(1);
   }
 
@@ -147,9 +166,13 @@ function main() {
     timestamp: Date.now(),
     route: opt.route,
     mode: opt.mode,
-    authState: o.auth ?? 'anonymous',
-    build_sha: o.build_sha ?? process.env.GITHUB_SHA ?? 'unknown',
-    browser_profile: 'playwright-chromium-bundled',
+    authState: o.auth ?? o.authState ?? 'anonymous',
+    build_sha: o.build_sha,
+    browser_profile: o.browser_profile,
+    frontend_image_digest: o.frontend_image_digest ?? null,
+    outcome: 'confirmed_fp',
+    is_fp: true,
+    // confirmed_fp:true kept for backward compat (legacy readers).
     confirmed_fp: true,
     original_metrics: {
       transferKB: o.transferKB,

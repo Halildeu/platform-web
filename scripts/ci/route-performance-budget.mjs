@@ -341,21 +341,39 @@ function evaluate(summary, budget) {
   check('inpMs', summary.inpMs, undefined, 'inpFailMs');
   check('cls', summary.cls, undefined, 'clsFail');
 
-  // Regression check vs baseline (only if baseline exists for this route+mode)
+  // Regression check vs baseline (only if baseline exists for this route+mode).
+  // PR-G2 iter-2 absorb (Codex thread 019e2776 P1-5): support BOTH legacy
+  // single-snapshot baseline shape and extended schema with .history[] +
+  // .median {}. Resolution order:
+  //   1. base.<metric>            (legacy single-snapshot)
+  //   2. base.median.<metric>     (G2 extended schema; recomputed by
+  //                                sliding-baseline-check.mjs --append-history)
+  //   3. latest base.history[].metrics.<metric>  (extended fallback)
   const baseKey = `${budget.route}::${budget.mode}`;
   const base = baseline.routes[baseKey];
+  function baselineMetric(metric) {
+    if (!base) return undefined;
+    if (base[metric] !== undefined) return base[metric];
+    if (base.median && base.median[metric] !== undefined) return base.median[metric];
+    if (Array.isArray(base.history) && base.history.length > 0) {
+      const latest = base.history[base.history.length - 1];
+      return latest.metrics?.[metric];
+    }
+    return undefined;
+  }
   if (base && budgets._regressionPolicy?.hardFailRegressionPercent) {
     const pct = budgets._regressionPolicy.hardFailRegressionPercent;
-    function regression(metric, current, baseValue) {
+    function regression(metric, current) {
+      const baseValue = baselineMetric(metric);
       if (current === undefined || baseValue === undefined) return;
       if (current > baseValue * (1 + pct / 100)) {
         failures.push(`${metric} regression: ${current} vs baseline ${baseValue} (>${pct}%)`);
       }
     }
-    regression('transferKB', summary.transferKB, base.transferKB);
-    regression('decodedKB', summary.decodedKB, base.decodedKB);
-    regression('tbtMs', summary.tbtMs, base.tbtMs);
-    regression('longTaskTotalMs', summary.longTaskTotalMs, base.longTaskTotalMs);
+    regression('transferKB', summary.transferKB);
+    regression('decodedKB', summary.decodedKB);
+    regression('tbtMs', summary.tbtMs);
+    regression('longTaskTotalMs', summary.longTaskTotalMs);
   }
 
   return { pass: failures.length === 0, warnings, failures };
@@ -424,22 +442,37 @@ async function main() {
 
   await browser.close();
 
-  // Write artifacts
+  // Write artifacts. PR-G2 iter-2 absorb (Codex thread 019e2776 #4): emit
+  // ABM-1 join-key fields (build_sha, frontend_image_digest, browser_profile,
+  // target) at the artifact level. G2 sliding-baseline-check.mjs and
+  // run-outcome-recorder.mjs consume these.
   const artifact = {
     target: opt.target,
     timestamp: Date.now(),
     runs: opt.runs,
     methodology: budgets._methodology,
+    build_sha: process.env.GITHUB_SHA ?? null,
+    frontend_image_ref: process.env.FRONTEND_IMAGE_REF ?? null,
+    frontend_image_digest: process.env.FRONTEND_IMAGE_DIGEST ?? null,
+    browser_profile: 'playwright-chromium-bundled',
+    browser_version: process.env.PLAYWRIGHT_CHROMIUM_VERSION ?? null,
     routes: results,
   };
   writeFileSync(lastRunPath, JSON.stringify(artifact, null, 2));
   console.log(`\n[perf-budget] last-run artifact: ${lastRunPath}`);
 
   if (opt.updateBaseline) {
-    const newBaseline = { ...baseline, timestamp: Date.now(), routes: {} };
+    // PR-G2 iter-2 absorb (Codex thread 019e2776 P1-5): preserve extended
+    // schema entries (.history[] + .median/.p95/.stdDev/.flakeBudget) when
+    // updating. Legacy single-snapshot entries stay legacy. Migration to
+    // extended is owned by scripts/perf/sliding-baseline-check.mjs
+    // --append-history (G2 workflow main push opt-in).
+    const newBaseline = { ...baseline, timestamp: Date.now(), routes: { ...baseline.routes } };
     for (const r of results) {
       if (r.skipped || r.error) continue;
-      newBaseline.routes[`${r.route}::${r.mode}`] = {
+      const baseKey = `${r.route}::${r.mode}`;
+      const existing = newBaseline.routes[baseKey];
+      const snapshot = {
         transferKB: r.transferKB,
         decodedKB: r.decodedKB,
         resourceCount: r.resourceCount,
@@ -449,6 +482,14 @@ async function main() {
         fcpMs: r.fcpMs,
         inpMs: r.inpMs,
       };
+      if (existing && Array.isArray(existing.history)) {
+        // Extended schema: rewrite the latest snapshot mirror but keep
+        // history/median/p95/stdDev/flakeBudget intact for G2 to recompute.
+        newBaseline.routes[baseKey] = { ...existing, ...snapshot };
+      } else {
+        // Legacy or new key: write single-snapshot shape.
+        newBaseline.routes[baseKey] = snapshot;
+      }
     }
     writeFileSync(baselinePath, JSON.stringify(newBaseline, null, 2));
     console.log(`[perf-budget] baseline updated: ${baselinePath}`);
