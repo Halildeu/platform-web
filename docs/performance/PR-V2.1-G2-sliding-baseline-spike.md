@@ -93,10 +93,19 @@ Her PR run'da `baseline.json` extend; rolling window'la `current vs median(last 
 ### §4.1 Baseline Schema Extension
 
 ```typescript
+// Codex `019e26f9` tur-1 absorb: full join-key schema (ABM-1 §4.2 align)
 type PerfBaselineEntry = {
   timestamp: number;
   build_sha: string;
-  frontend_image_digest?: string;
+  frontend_image_ref: string;
+  frontend_image_digest: string;
+  route: string;
+  mode: string; // 'cold-anonymous' | 'cold-authenticated' | 'warm-fresh'
+  authState: string; // 'anonymous' | 'test-perf-persona' | ...
+  cacheMode: string; // 'cold' | 'warm-fresh' | 'warm-cached'
+  browserProfile: string; // 'playwright-chromium-bundled'
+  browserVersion: string;
+  target: 'local' | 'testai';
   metrics: {
     transferKB: number;
     decodedKB: number;
@@ -109,23 +118,46 @@ type PerfBaselineEntry = {
 };
 
 type PerfBaselineRoute = {
-  history: PerfBaselineEntry[]; // last 30 runs (FIFO)
-  windowDays: number; // 14 (Codex absorb)
+  history: PerfBaselineEntry[]; // FIFO last 30 comparable accepted baseline entries per route key
+  //   (raise to 50 if cadence > 2/day; Codex tur-1 absorb)
+  windowDays: number; // 14
   median: Record<string, number>;
   stdDev: Record<string, number>;
   p95: Record<string, number>;
   flakeBudget: {
-    last20Runs_falsePositives: number; // Codex absorb: <=1
-    last100Runs_falsePositives: number; // Codex absorb: <3
-    varianceBand_percent: number; // Codex absorb: <5%
+    last20Runs_falsePositives: number; // <=1
+    last100Runs_falsePositives: number; // <3 (sourced from external ledger, not FIFO 30)
+    varianceBand_percent: number; // 5%
+    falsePositiveLedgerPath: string; // 'docs/performance/measurements/perf-budget-fp-ledger.jsonl'
+    //   (Codex tur-1 absorb: FIFO 30 cannot derive <3/100)
   };
+};
+
+type HardFailActivationEvidence = {
+  windowsSatisfied: number; // min 3 ayrı zaman penceresi
+  comparableRuns: number; // min 20 comparable runs
+  flakeBudgetSatisfied: boolean;
+  baselineReviewSha: string; // PR/commit reviewer-approved baseline snapshot
+  acceptedResidualsRef: string; // V3 deferred items + waiver references
+  activatedBy: string; // owner identifier
+  activatedAt: string; // YYYY-MM-DDTHH:MM:SSZ
+};
+
+type OwnerWaiver = {
+  owner: string;
+  reason: string;
+  accepted_risk: string;
+  waived_criteria: string[];
+  expires_at: string; // YYYY-MM-DD
 };
 
 type PerfBaseline = {
   _doc: string;
   _phase: 'warn-only' | 'hard-fail';
   _acceptance: string;
-  _hardFailActivationDate?: string; // YYYY-MM-DD (warn-only → hard transition)
+  _hardFailActivationDate?: string; // earliest eligible date (not proof)
+  _hardFailActivation?: HardFailActivationEvidence; // proof block
+  _hardFailWaiver?: OwnerWaiver; // owner waiver if criteria not met
   routes: Record<string, PerfBaselineRoute>;
 };
 ```
@@ -139,24 +171,55 @@ type PerfBaseline = {
 // False positive definition: aynı route + mode + auth state + BUILD_SHA class
 //   + browser profile; rerun PASS; source/deploy değişmemiş; sentinel fail yok.
 
-function detectFalsePositive(currentRun, baseline) {
-  const variance = computeVariance(currentRun, baseline.median);
+// Codex `019e26f9` tur-1 absorb: variance spike != confirmed FP; separate paths
+function detectOutlierCandidate(currentRun, baseline) {
+  const variance = computeVariance(currentRun.metrics, baseline.median);
   if (variance > baseline.flakeBudget.varianceBand_percent) {
-    // Flag as candidate false positive
     return {
-      isFlake: true,
+      isOutlierCandidate: true,
       variance,
       requiresRerun: true,
     };
   }
-  return { isFlake: false };
+  return { isOutlierCandidate: false };
 }
 
-function updateFlakeBudget(baseline, runResult) {
-  baseline.flakeBudget.last20Runs_falsePositives = countFPLast(20);
-  baseline.flakeBudget.last100Runs_falsePositives = countFPLast(100);
+function confirmFalsePositiveAfterRerun(originalRun, rerunRun, baseline) {
+  // Codex ABM-1 §4.2 false positive definition (5-part context equality):
+  //   - same route + mode + auth state + BUILD_SHA class + browser profile
+  //   - rerun PASS
+  //   - source/deploy unchanged
+  //   - no status writer veya browser sentinel fail
+  const sameContext =
+    originalRun.route === rerunRun.route &&
+    originalRun.mode === rerunRun.mode &&
+    originalRun.authState === rerunRun.authState &&
+    originalRun.build_sha === rerunRun.build_sha &&
+    originalRun.browserProfile === rerunRun.browserProfile;
+  const rerunPassedBudget =
+    computeVariance(rerunRun.metrics, baseline.median) <= baseline.flakeBudget.varianceBand_percent;
+  if (sameContext && rerunPassedBudget) {
+    appendToFalsePositiveLedger(baseline, originalRun);
+    return { confirmedFalsePositive: true };
+  }
+  return { confirmedFalsePositive: false };
+}
+
+function appendToFalsePositiveLedger(baseline, run) {
+  // Append JSONL line to external ledger (FIFO 30 cannot derive <3/100)
+  // ledgerPath: baseline.flakeBudget.falsePositiveLedgerPath
+}
+
+function updateFlakeBudget(baseline) {
+  baseline.flakeBudget.last20Runs_falsePositives = countFPFromLedger(20);
+  baseline.flakeBudget.last100Runs_falsePositives = countFPFromLedger(100);
   if (baseline.flakeBudget.last20Runs_falsePositives > 1) {
-    console.error('FLAKE BUDGET EXCEEDED: >1 FP in last 20 runs');
+    console.error('FLAKE BUDGET EXCEEDED: >1 FP in last 20 comparable runs');
+    process.exit(1);
+  }
+  if (baseline.flakeBudget.last100Runs_falsePositives >= 3) {
+    // Codex tur-1 absorb: contract says <3/100, so >=3 fail
+    console.error('FLAKE BUDGET EXCEEDED: >=3 FP in last 100 comparable runs');
     process.exit(1);
   }
 }
@@ -189,30 +252,65 @@ function computeSlidingBaseline(route, windowDays = 14) {
 
 ```javascript
 // scripts/ci/route-performance-budget.mjs extension
+// Codex `019e26f9` tur-1 absorb: median primary; p95/stdDev variance band
 const baseline = readBaselineJSON();
 const isHardFailActive =
-  baseline._phase === 'hard-fail' && new Date() >= new Date(baseline._hardFailActivationDate);
+  baseline._phase === 'hard-fail' &&
+  new Date() >= new Date(baseline._hardFailActivationDate) &&
+  baseline._hardFailActivation?.windowsSatisfied >= 3 &&
+  baseline._hardFailActivation?.comparableRuns >= 20 &&
+  baseline._hardFailActivation?.flakeBudgetSatisfied === true;
 
-const variance = computeVariance(currentRun, baseline.routes[routeKey].median);
+const routeKey = `${currentRun.route}::${currentRun.mode}::${currentRun.authState}`;
+const baselineMedian = baseline.routes[routeKey].median;
+const baselineP95 = baseline.routes[routeKey].p95;
+const baselineStdDev = baseline.routes[routeKey].stdDev;
 
-if (variance > 5) {
-  if (isHardFailActive) {
-    console.error(`HARD FAIL: variance ${variance}% > 5% threshold`);
-    process.exit(1);
+// Hard-fail rule: current median > baseline median * 1.05 AND outside variance band
+const medianRatio = currentRun.metrics.transferKB / baselineMedian.transferKB;
+const outsideVarianceBand =
+  currentRun.metrics.transferKB > baselineP95.transferKB ||
+  currentRun.metrics.transferKB > baselineMedian.transferKB + 2 * baselineStdDev.transferKB;
+
+if (medianRatio > 1.05) {
+  if (outsideVarianceBand) {
+    if (isHardFailActive) {
+      console.error(
+        `HARD FAIL: median ratio ${medianRatio.toFixed(3)} > 1.05 AND outside variance band`,
+      );
+      process.exit(1);
+    } else {
+      console.warn(
+        `WARN-ONLY: median ratio ${medianRatio.toFixed(3)} > 1.05 (hard-fail eligibility: ${baseline._hardFailActivationDate})`,
+      );
+    }
   } else {
     console.warn(
-      `WARN-ONLY: variance ${variance}% > 5% (hard-fail active ${baseline._hardFailActivationDate})`,
+      `WARN/RERUN candidate: median ratio ${medianRatio.toFixed(3)} > 1.05 but inside variance band → flake tracker decide`,
     );
   }
 }
 ```
 
-**Hard-fail activation criteria** (Codex tur-2 §10.4 absorb):
+**Hard-fail activation criteria** (Codex `019e26f9` tur-1 absorb — `_hardFailActivationDate` earliest eligible date, evidence block proof):
 
-- Min 3 ayrı zaman penceresi veya 20 comparable runs
-- Flake budget §4.2 sağlanmış (`<=1 FP in last 20 runs`)
-- Baseline JSON review edilmiş
-- Accepted residual / hard fail ayrımı PMD'de net
+- Min 3 ayrı zaman penceresi (`windowsSatisfied >= 3`)
+- 20 comparable runs (`comparableRuns >= 20`)
+- Flake budget §4.2 sağlanmış (`flakeBudgetSatisfied === true`)
+- Baseline JSON reviewer-approved snapshot (`baselineReviewSha`)
+- Accepted residuals / waivers explicit (`acceptedResidualsRef`)
+- Owner activation (`activatedBy`, `activatedAt`)
+
+**Owner waiver pattern** (PMD §10.6 + ABM waiver shape reuse):
+
+```yaml
+_hardFailWaiver:
+  owner: 'Halil'
+  reason: 'Faz G cutover-freeze öncesi 20 run threshold sağlanamadı'
+  accepted_risk: 'False-fail riski mevcut; manuel review fallback'
+  waived_criteria: ['comparableRuns_min_20']
+  expires_at: '2026-06-01'
+```
 
 ---
 
@@ -244,10 +342,22 @@ ABM-1 ↔ G2 join key: `build_sha + frontend_image_digest + route/mode/browser p
 
 ## §7. Open Questions
 
-1. **Baseline history rolling FIFO size**: 30 entries makul mi yoksa 50/100 entry (variance band stability vs git diff noise)?
-2. **CI live-vs-local divergence**: PR CI local preview vs testai measurement — Codex `019e269e` §4.2 absorb (G2 flake budget pattern hangi kanal authoritative)?
-3. **Hard-fail activation date**: 2 hafta warmup default (Codex `019e1de0`); flake budget sağlanmazsa erteleme pattern (date push veya owner waiver)?
-4. **`p95` vs `median` regression threshold**: %5 threshold median'a karşı mı yoksa p95'e karşı mı (variance high routes için median daha tolerant)?
+### §7.1 Resolved (Codex `019e26f9` tur-1)
+
+| #                           | Resolution                                                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| FIFO 30 vs 50/100           | FIFO **30 comparable accepted baseline entries per route key**; cadence > 2/day → 50; min compute 3 entries                         |
+| 100-run flake budget source | **External JSONL ledger** (`docs/performance/measurements/perf-budget-fp-ledger.jsonl`) — FIFO 30 cannot derive `<3/100`            |
+| p95 vs median               | **Median primary** baseline; p95/stdDev variance band; hard-fail: `currentMedian > baselineMedian * 1.05 AND outside variance band` |
+| Hard-fail activation        | `_hardFailActivationDate` = earliest eligible; activation evidence block proof; owner waiver pattern (PMD §10.6 reuse)              |
+
+### §7.2 Carried (Implementation PR scope)
+
+| #   | Question                                                                                                                                                                    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | CI live-vs-local divergence: PR CI `local` vs `workflow_dispatch testai` — hangi kanal authoritative for baseline? Local cheaper + reproducible; testai deploy proof signal |
+| 2   | Same provider exception for rerun confirm: `confirmFalsePositiveAfterRerun()` aynı CI runner'da mı yoksa farklı runner ile mi (rerun environment parity)                    |
+| 3   | False positive ledger retention: `<3/100` rolling 100-run window — ledger ne kadar tarihçe tutmalı (90 gün?)                                                                |
 
 ---
 
@@ -256,11 +366,10 @@ ABM-1 ↔ G2 join key: `build_sha + frontend_image_digest + route/mode/browser p
 ```yaml
 Implementer AI: Claude (Anthropic)
 Reviewer AI: Codex (OpenAI)
-Codex thread: N/A
+Codex thread: 019e26f9-5c6d-7bb1-a81e-5fdf403a80bf
 Verdict: AGREE
-Verdict reason: Sliding baseline spike — Option A+lightweight history (FIFO 30 entries); flake budget tracker (ABM-1 coupling); hard-fail activation criteria (Codex tur-2 §10.4 absorb); 6 implementation step ayrı PR scope
+Verdict reason: Tur-1 5 revision absorbed (detectFalsePositive split, 100-run external ledger, schema join key extend, hard-fail activation evidence + owner waiver, median primary + p95/stdDev variance band); tur-2 AGREE final ready_for_merge:true; CI live-vs-local + rerun parity + ledger retention answers resolved Carried Questions
 Same-provider exception: N/A
-Cross-AI exempt reason: Docs-only G2 spike decision record; Codex peer review tur-1 pending — cross-AI HARD RULE post-spike
 ```
 
-🤖 Generated by Claude (Anthropic). Cross-AI Codex peer review pending.
+🤖 Generated by Claude (Anthropic) + Codex (OpenAI) cross-AI peer review chain.
