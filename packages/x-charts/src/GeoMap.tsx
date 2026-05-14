@@ -420,14 +420,19 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
                 }
                 return lines.join('<br/>');
               }
-              // No 'heatmap' tooltip branch by design — Codex 019e25ee
-              // post-impl P1 verified vs echarts@5.6.0 source: geo
-              // heatmap renders ONE raster `ZRImage` with `silent: true`
-              // and emits NO per-datum tooltip event. Adding a branch
-              // here would create a runtime-unreachable code path that
-              // misleads consumers about heatmap interactivity. The
-              // a11y SR summary row (overlay loop below) is the
-              // canonical accessible representation for density data.
+              // 'heatmap' is non-interactive by contract — Codex
+              // 019e25ee post-impl iter-1+iter-2 verified vs
+              // echarts@5.6.0 source: geo heatmap renders ONE raster
+              // `ZRImage` with `silent: true` and emits NO per-datum
+              // tooltip event. Defensive early-return so that any
+              // future ECharts behaviour change OR synthetic test
+              // cannot accidentally render a tooltip via the generic
+              // point branch below. A11y SR summary row (overlay loop
+              // below) is the canonical accessible representation for
+              // density data.
+              if (overlay.type === 'heatmap') {
+                return '';
+              }
               // Point overlay branch (bubble + effectScatter).
               const lines = [`<b>${escapeHtml(p.name ?? '')}</b>`];
               if (overlay.layerName) {
@@ -633,14 +638,19 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
             });
             return;
           }
-          // No 'heatmap' click branch by design — Codex 019e25ee
-          // post-impl P1: ECharts geo heatmap (raster `ZRImage`,
-          // `silent: true`) does not emit per-datum click events. Any
-          // branch here would be runtime-unreachable. Density
-          // visualisation is read-only at the wrapper layer; consumers
-          // who need point-level interactivity should overlay a
-          // transparent `bubble` layer at the same coordinates as a
-          // proxy.
+          // 'heatmap' is non-interactive by contract — Codex 019e25ee
+          // post-impl iter-1+iter-2: ECharts geo heatmap (raster
+          // `ZRImage`, `silent: true`) does not emit per-datum click
+          // events. Defensive early-return so that any future ECharts
+          // behaviour change OR synthetic test cannot accidentally
+          // emit a heatmap click contract via the generic point branch
+          // below. Density visualisation is read-only at the wrapper
+          // layer; consumers who need point-level interactivity should
+          // overlay a transparent `bubble` layer at the same
+          // coordinates as a proxy.
+          if (overlay.type === 'heatmap') {
+            return;
+          }
           // Point overlay (bubble + effectScatter).
           onDataPointClick({
             datum: {
