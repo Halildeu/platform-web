@@ -92,7 +92,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
   it('exposes the Hesaba Geç item when shell auth is SuperAdmin and target is not self', () => {
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    const item = screen.queryByText((content) => content.includes('Hesaba Geç'));
+    const item = screen.queryByText((content) => content.includes('users.actions.impersonate.menu'));
     expect(item).toBeTruthy();
   });
 
@@ -100,21 +100,21 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
     mockShellAuth.isSuperAdmin.mockReturnValue(false);
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
   });
 
   it('hides the item during an active impersonation session', () => {
     mockShellAuth.isImpersonating.mockReturnValue(true);
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
   });
 
   it('hides the item when row.id matches the caller subscriberId (self target)', () => {
     mockShellAuth.getUser.mockReturnValue({ id: 'admin-kc-uuid', subscriberId: '42' });
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
   });
 
   it('hides the item when getShellServices throws (fail-closed)', () => {
@@ -123,7 +123,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
     };
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
   });
 
   it('opens the inline reason modal on click and exposes the submit testid', () => {
