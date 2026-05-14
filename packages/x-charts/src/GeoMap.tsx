@@ -48,6 +48,8 @@ import { scaleFontSize } from './theme/density-helpers';
 import { CHART_CANVAS_HEIGHT } from './chartSize';
 import { formatCompact } from './utils/formatters';
 import { isGeoMapRegistered } from './geo/registerGeoMap';
+import type { GeoOverlay } from './geo/geoOverlayTypes';
+import { buildGeoOverlaySeries } from './geo/buildGeoOverlaySeries';
 import type { EChartsOption } from './renderers/echarts-imports';
 
 /* ------------------------------------------------------------------ */
@@ -159,6 +161,29 @@ export interface GeoMapProps extends AccessControlledProps {
   anomalySummary?: AnomalySummary[];
   /** Custom anomaly announcement formatter. */
   formatAnomalyAnnouncement?: AnomalyAnnouncementFormatter;
+  /**
+   * Optional overlay layers rendered on top of the choropleth base.
+   *
+   * PR-X13a (Codex thread 019e2254): foundation supports `bubble`
+   * layer (scatter on `coordinateSystem: 'geo'`). Future PRs append
+   * layer types via discriminated union (`effectScatter`, `flow`,
+   * `heatmap`, `marker`).
+   *
+   * Each overlay is independently opt-in; mix and match as needed:
+   *
+   * ```tsx
+   * <GeoMap
+   *   mapName="TR"
+   *   data={[{ name: 'İstanbul', value: 5000 }]}
+   *   overlays={[
+   *     { type: 'bubble', data: [
+   *       { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 1200 },
+   *     ]},
+   *   ]}
+   * />
+   * ```
+   */
+  overlays?: GeoOverlay[];
 }
 
 const DEFAULT_VISUALMAP_COLORS = ['#dbeafe', '#93c5fd', '#3b82f6', '#1d4ed8', '#1e3a8a'];
@@ -192,6 +217,7 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       accent: accentPreference = 'auto',
       anomalySummary,
       formatAnomalyAnnouncement,
+      overlays,
       ...rest
     },
     forwardedRef,
@@ -343,7 +369,35 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
               borderWidth: 0.5,
             },
           },
+          // PR-X13a foundation (Codex 019e2254): overlay layers on top
+          // of the choropleth base. The pure builder dispatches on
+          // `layer.type` and emits one ECharts series per overlay.
+          // Empty overlays array → spread is a no-op; back-compat
+          // for existing consumers preserved.
+          ...buildGeoOverlaySeries(overlays, 0),
         ],
+        // PR-X13a: explicit `geo` coordinate system declaration so
+        // overlay scatter/lines/heatmap/custom series can attach via
+        // `coordinateSystem: 'geo'`. The base `map` series already
+        // implies a geo coord, but ECharts requires the standalone
+        // `geo` block when other series want to share that coord.
+        geo: {
+          map: mapName,
+          roam,
+          itemStyle: {
+            areaColor: '#f1f5f9',
+            borderColor: '#cbd5e1',
+            borderWidth: 0.5,
+          },
+          emphasis: {
+            label: { show: false },
+            itemStyle: { areaColor: '#e2e8f0' },
+          },
+          // Hide the standalone geo from visualMap dimension so the
+          // base `map` series alone drives the choropleth gradient;
+          // overlays (scatter etc.) remain unaffected by visualMap.
+          silent: true,
+        },
         aria: {
           enabled: true,
           label: {
@@ -371,6 +425,7 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       title,
       description,
       fmt,
+      overlays,
       decalEnabled,
       decalPatterns,
       densityFontMultiplier,
