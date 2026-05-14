@@ -5,7 +5,7 @@ import React from 'react';
 
 import { BulletChart } from '../BulletChart';
 import { MicroChart } from '../MicroChart';
-import { DateRangePicker } from '../DateRangePicker';
+import { DateRangePicker } from '../index';
 
 import { SankeyDiagram } from '../SankeyDiagram';
 
@@ -13,7 +13,7 @@ import { ProcessFlow } from '../ProcessFlow';
 import { ValueStream } from '../ValueStream';
 import { StatusTimeline } from '../StatusTimeline';
 import { NotificationCenter } from '../NotificationCenter';
-import { InlineEdit } from '../InlineEdit';
+import { InlineEdit } from '../index';
 import { FilterPresets } from '../FilterPresets';
 import { DataExportDialog } from '../DataExportDialog';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';

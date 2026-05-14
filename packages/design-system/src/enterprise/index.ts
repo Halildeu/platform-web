@@ -15,7 +15,10 @@ export type {
 } from './types';
 
 // KPI & Metrics
-export { ExecutiveKPIStrip } from './ExecutiveKPIStrip';
+// ExecutiveKPIStrip moved to ../patterns/executive-kpi-strip/ (Phase 3 adopt).
+// Compat shim re-export — `import { ExecutiveKPIStrip } from '@mfe/design-system/enterprise'`
+// continues to work. Prefer the canonical pattern import going forward.
+export { ExecutiveKPIStrip } from '../patterns/executive-kpi-strip/ExecutiveKPIStrip';
 
 // Workflow & Approvals
 export { ApprovalWorkflow } from './ApprovalWorkflow';
@@ -30,7 +33,8 @@ export { GanttTimeline } from './GanttTimeline';
 // Financial & Analytics
 // AgingBuckets: removed — niche single-purpose finance widget (Phase 1b triage)
 // FunnelChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
-export { ComparisonTable } from './ComparisonTable';
+// ComparisonTable moved to ../components/comparison-table/ (Phase 3 adopt). Compat shim.
+export { ComparisonTable } from '../components/comparison-table/ComparisonTable';
 
 // HR & Training
 // TrainingTracker: removed — domain-specific HR widget, not on generic DS surface (Phase 1b triage)
@@ -42,7 +46,8 @@ export { MicroChart } from './MicroChart';
 export { SankeyDiagram } from './SankeyDiagram';
 
 // Date & Time
-export { DateRangePicker } from './DateRangePicker';
+// DateRangePicker moved to ../components/date-range-picker/ (Phase 3 adopt). Compat shim.
+export { DateRangePicker } from '../components/date-range-picker/DateRangePicker';
 
 // Layout
 export { ThemeLayout } from './ThemeLayout';
@@ -61,7 +66,8 @@ export { NotificationCenter } from './NotificationCenter';
 export type { NotificationCenterLocaleText } from './NotificationCenter';
 
 // Editing
-export { InlineEdit } from './InlineEdit';
+// InlineEdit moved to ../components/inline-edit/ (Phase 3 adopt). Compat shim.
+export { InlineEdit } from '../components/inline-edit/InlineEdit';
 
 // EmptyStateBuilder: removed — simple pattern, blocks/empty-state covers it (Phase 1b triage)
 

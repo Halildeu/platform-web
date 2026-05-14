@@ -40,9 +40,12 @@ describe('InlineEdit — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _inlineedittype: InlineEditType | undefined = undefined; void _inlineedittype;
-    const _selectoption: SelectOption | undefined = undefined; void _selectoption;
-    const _inlineeditprops: InlineEditProps | undefined = undefined; void _inlineeditprops;
+    const _inlineedittype: InlineEditType | undefined = undefined;
+    void _inlineedittype;
+    const _selectoption: SelectOption | undefined = undefined;
+    void _selectoption;
+    const _inlineeditprops: InlineEditProps | undefined = undefined;
+    void _inlineeditprops;
     expect(true).toBe(true);
   });
 });

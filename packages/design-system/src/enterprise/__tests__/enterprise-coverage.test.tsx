@@ -11,12 +11,12 @@ import type { EnterpriseTone } from '../types';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import type { ApprovalStep } from '../ApprovalWorkflow';
 import { BulletChart } from '../BulletChart';
-import { ComparisonTable } from '../ComparisonTable';
-import type { ComparisonRow } from '../ComparisonTable';
+import { ComparisonTable } from '../index';
+import type { ComparisonRow } from '../index';
 import { DataExportDialog } from '../DataExportDialog';
 import { FilterPresets } from '../FilterPresets';
 import type { FilterPreset } from '../FilterPresets';
-import { InlineEdit } from '../InlineEdit';
+import { InlineEdit } from '../index';
 
 // =====================================================================
 // 1. Enterprise types — utility function branches

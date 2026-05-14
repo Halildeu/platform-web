@@ -1,6 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { cn } from '../utils/cn';
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../internal/access-controller';
+import { cn } from '../../utils/cn';
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,7 +65,16 @@ function PencilIcon() {
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );
@@ -69,7 +82,15 @@ function CheckIcon() {
 
 function CloseIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    >
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
@@ -228,7 +249,9 @@ export function InlineEdit({
             disabled={saving}
             className={cn(
               'rounded-xs border bg-[var(--surface-primary)] px-2 py-1 text-sm text-text-primary outline-hidden transition-colors',
-              error ? 'border-state-danger-border focus:ring-1 focus:ring-state-danger-border' : 'border-border-default focus:border-action-primary focus:ring-1 focus:ring-accent-soft',
+              error
+                ? 'border-state-danger-border focus:ring-1 focus:ring-state-danger-border'
+                : 'border-border-default focus:border-action-primary focus:ring-1 focus:ring-accent-soft',
             )}
           >
             {options.map((opt) => (
@@ -251,7 +274,9 @@ export function InlineEdit({
             placeholder={placeholder}
             className={cn(
               'rounded-xs border bg-[var(--surface-primary)] px-2 py-1 text-sm text-text-primary outline-hidden transition-colors',
-              error ? 'border-state-danger-border focus:ring-1 focus:ring-state-danger-border' : 'border-border-default focus:border-action-primary focus:ring-1 focus:ring-accent-soft',
+              error
+                ? 'border-state-danger-border focus:ring-1 focus:ring-state-danger-border'
+                : 'border-border-default focus:border-action-primary focus:ring-1 focus:ring-accent-soft',
             )}
           />
         )}
@@ -265,7 +290,15 @@ export function InlineEdit({
           aria-label="Save"
         >
           {saving ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              className="animate-spin"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
             </svg>
           ) : (
@@ -286,11 +319,9 @@ export function InlineEdit({
       </div>
 
       {/* Error message */}
-      {error && (
-        <span className="text-xs text-state-danger-text px-1">{error}</span>
-      )}
+      {error && <span className="text-xs text-state-danger-text px-1">{error}</span>}
     </div>
   );
 }
 
-InlineEdit.displayName = "InlineEdit";
+InlineEdit.displayName = 'InlineEdit';

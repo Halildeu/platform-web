@@ -3,10 +3,16 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { InlineEdit } from './InlineEdit';
 
 const meta: Meta<typeof InlineEdit> = {
-  title: 'Enterprise/InlineEdit',
+  title: 'Components/InlineEdit',
   component: InlineEdit,
   tags: ['autodocs'],
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof InlineEdit>;
@@ -18,7 +24,10 @@ export const Default: Story = {
   },
   play: async ({ canvasElement }) => {
     const el = canvasElement.querySelector('[data-testid], span, button');
-    if (el) { const dblClick = new MouseEvent('dblclick', { bubbles: true }); el.dispatchEvent(dblClick); }
+    if (el) {
+      const dblClick = new MouseEvent('dblclick', { bubbles: true });
+      el.dispatchEvent(dblClick);
+    }
   },
 };
 

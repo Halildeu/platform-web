@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 // Auto-generated contract test — do not edit manually
 // Regenerate with: node scripts/ci/generate-contract-tests.mjs --write
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
 import { ComparisonTable } from '../ComparisonTable';
-import type { ComparisonRow, ComparisonColumnLabels, ComparisonTableProps } from '../ComparisonTable';
+import type {
+  ComparisonRow,
+  ComparisonColumnLabels,
+  ComparisonTableProps,
+} from '../ComparisonTable';
 
 describe('ComparisonTable — contract', () => {
   const defaultProps = {
@@ -39,9 +43,12 @@ describe('ComparisonTable — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _comparisonrow: ComparisonRow | undefined = undefined; void _comparisonrow;
-    const _comparisoncolumnlabels: ComparisonColumnLabels | undefined = undefined; void _comparisoncolumnlabels;
-    const _comparisontableprops: ComparisonTableProps | undefined = undefined; void _comparisontableprops;
+    const _comparisonrow: ComparisonRow | undefined = undefined;
+    void _comparisonrow;
+    const _comparisoncolumnlabels: ComparisonColumnLabels | undefined = undefined;
+    void _comparisoncolumnlabels;
+    const _comparisontableprops: ComparisonTableProps | undefined = undefined;
+    void _comparisontableprops;
     expect(true).toBe(true);
   });
 });

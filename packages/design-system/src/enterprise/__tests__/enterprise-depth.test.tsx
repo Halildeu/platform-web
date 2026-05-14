@@ -9,18 +9,18 @@ import { MicroChart } from '../MicroChart';
 import { SankeyDiagram } from '../SankeyDiagram';
 
 import { FilterPresets } from '../FilterPresets';
-import { DateRangePicker } from '../DateRangePicker';
-import { InlineEdit } from '../InlineEdit';
+import { DateRangePicker } from '../index';
+import { InlineEdit } from '../index';
 import { DataExportDialog } from '../DataExportDialog';
 import { NotificationCenter } from '../NotificationCenter';
-import { ExecutiveKPIStrip } from '../ExecutiveKPIStrip';
+import { ExecutiveKPIStrip } from '../index';
 import { ProcessFlow } from '../ProcessFlow';
 import { ValueStream } from '../ValueStream';
 import { StatusTimeline } from '../StatusTimeline';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../RiskMatrix';
 import { GanttTimeline } from '../GanttTimeline';
-import { ComparisonTable } from '../ComparisonTable';
+import { ComparisonTable } from '../index';
 import { GovernanceBoard } from '../GovernanceBoard';
 import { ThemeLayout } from '../ThemeLayout';
 

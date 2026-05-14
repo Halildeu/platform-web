@@ -39,11 +39,17 @@ const sampleMetrics: KPIMetric[] = [
 ];
 
 const meta: Meta<typeof ExecutiveKPIStrip> = {
-  title: 'Enterprise/ExecutiveKPIStrip',
+  title: 'Patterns/ExecutiveKPIStrip',
   component: ExecutiveKPIStrip,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof ExecutiveKPIStrip>;

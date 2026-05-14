@@ -1,17 +1,17 @@
 import React from 'react';
-import { cn } from '../utils/cn';
+import { cn } from '../../utils/cn';
 import {
   resolveAccessState,
   accessStyles,
   type AccessControlledProps,
-} from '../internal/access-controller';
+} from '../../internal/access-controller';
 import {
   formatValue,
   getTrendIcon,
   getTrendColor,
   type FormatOptions,
   type TrendDirection,
-} from './types';
+} from '../../enterprise/types';
 
 // ── Types ──
 
@@ -59,7 +59,10 @@ export interface ComparisonTableProps extends AccessControlledProps {
 
 // ── Helpers ──
 
-function computeVariance(actual: number, target: number): { absolute: number; percent: number; direction: TrendDirection } {
+function computeVariance(
+  actual: number,
+  target: number,
+): { absolute: number; percent: number; direction: TrendDirection } {
   const absolute = actual - target;
   const percent = target !== 0 ? (absolute / Math.abs(target)) * 100 : 0;
   const direction: TrendDirection = absolute > 0 ? 'up' : absolute < 0 ? 'down' : 'flat';
@@ -133,7 +136,10 @@ const RowRenderer: React.FC<RowRendererProps> = ({
             {hasChildren && (
               <button
                 className="mr-1.5 text-[10px] text-[var(--text-tertiary)] hover:text-text-primary w-4 shrink-0"
-                onClick={(e) => { e.stopPropagation(); onToggle(row.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(row.id);
+                }}
               >
                 {isExpanded ? '\u25BC' : '\u25B6'}
               </button>
@@ -155,7 +161,8 @@ const RowRenderer: React.FC<RowRendererProps> = ({
 
         {/* Variance */}
         <td className={cn('py-2.5 px-3 text-sm text-right font-mono', varClass)}>
-          {variance.absolute >= 0 ? '+' : ''}{formatValue(variance.absolute, fmt)}
+          {variance.absolute >= 0 ? '+' : ''}
+          {formatValue(variance.absolute, fmt)}
         </td>
 
         {/* Variance % */}
@@ -164,26 +171,26 @@ const RowRenderer: React.FC<RowRendererProps> = ({
             <span style={{ color: getTrendColor(variance.direction, invertVarianceColors) }}>
               {getTrendIcon(variance.direction)}
             </span>
-            <span className="font-mono">
-              {Math.abs(Math.round(variance.percent * 10) / 10)}%
-            </span>
+            <span className="font-mono">{Math.abs(Math.round(variance.percent * 10) / 10)}%</span>
           </span>
         </td>
       </tr>
 
       {/* Children */}
-      {hasChildren && isExpanded && row.children!.map(child => (
-        <RowRenderer
-          key={child.id}
-          row={child}
-          depth={depth + 1}
-          expandedIds={expandedIds}
-          onToggle={onToggle}
-          defaultFormat={defaultFormat}
-          invertVarianceColors={invertVarianceColors}
-          onRowClick={onRowClick}
-        />
-      ))}
+      {hasChildren &&
+        isExpanded &&
+        row.children!.map((child) => (
+          <RowRenderer
+            key={child.id}
+            row={child}
+            depth={depth + 1}
+            expandedIds={expandedIds}
+            onToggle={onToggle}
+            defaultFormat={defaultFormat}
+            invertVarianceColors={invertVarianceColors}
+            onRowClick={onRowClick}
+          />
+        ))}
     </>
   );
 };
@@ -210,7 +217,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
   );
 
   const toggleExpand = (id: string) => {
-    setExpandedIds(prev => {
+    setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -264,7 +271,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
           </thead>
 
           <tbody>
-            {rows.map(row => (
+            {rows.map((row) => (
               <RowRenderer
                 key={row.id}
                 row={row}
@@ -289,11 +296,14 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({
                 {formatValue(totals.target, defaultFormat)}
               </td>
               <td className={cn('py-3 px-3 text-sm text-right font-mono font-bold', totalVarClass)}>
-                {totalVariance.absolute >= 0 ? '+' : ''}{formatValue(totalVariance.absolute, defaultFormat)}
+                {totalVariance.absolute >= 0 ? '+' : ''}
+                {formatValue(totalVariance.absolute, defaultFormat)}
               </td>
               <td className={cn('py-3 px-3 text-sm text-right font-bold', totalVarClass)}>
                 <span className="inline-flex items-center gap-1">
-                  <span style={{ color: getTrendColor(totalVariance.direction, invertVarianceColors) }}>
+                  <span
+                    style={{ color: getTrendColor(totalVariance.direction, invertVarianceColors) }}
+                  >
                     {getTrendIcon(totalVariance.direction)}
                   </span>
                   <span className="font-mono">
