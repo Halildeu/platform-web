@@ -7,19 +7,25 @@
 > `docs/performance/mf-shared-scope-audit.md` (PR-B2) for implementation
 > detail.
 >
-> **Last update (v9):** 2026-05-14 — B5b3 federation guard chain
-> SHIPPED (PRs #463 + #464 + #465 + #466 in tight Codex 4-iter
-> AGREE chain `019e239a`).  Regression protection layer for the
-> sektör-mükemmel baseline: 30 source/build invariants (registry-
-> driven) + 02:00 UTC nightly Playwright runtime smoke + 21 URL
-> patterns asserted (7 direct + 14 auxiliary chunk).  No production
-> code change — guard infrastructure only; v8 measurement holds:
-> /login transfer **-95.2%** (49.1 → 2.34 MB), decoded **-81.5%**
-> (49.05 → 9.09 MB), heap **-83.5%** (242 → 40 MB), resources
-> **-62.6%** (171 → 64), **LCP -68.3% (3,208 → 1,016 ms — sektör
-> MÜKEMMEL ✓✓✓ < 1,500 ms threshold)**, FCP -68.6%, TBT 71 ms
-> (sektör iyi içinde), CLS 0.004 (sektör mükemmel ✓).  See §11
-> revision history.
+> **Last update (v10):** 2026-05-14 — **B3c host edge long-cache LIVE on
+> testai** (platform-web PR #470 + platform-k8s-gitops PR #558, Codex
+> thread `019e240d` 3-iter AGREE).  Hashed Vite chunks `/assets/*` +
+> `/remotes/<remote>/assets/*` serve with `Cache-Control: public,
+> max-age=31536000, immutable` (1y, single line); entry surfaces
+> (`/`, `/index.html`, `*remoteEntry.js`) retain `no-store`; 404
+> stale-bundle responses do NOT inherit long-cache (P1.1 absorb).
+>
+> **Warm-cache /login transfer = 531 KB** (was 2,344 KB cold);
+> **-77% warm-cache reduction** for returning visitors.  Chrome MCP
+> browser smoke verified hashed assets `fromCache: 'CACHE'`
+> (transferSize=0).  Cold-cache baseline unchanged.
+>
+> v9 cumulative measurement (cold-cache) holds: /login transfer
+> **-95.2%** (49.1 → 2.34 MB), decoded **-81.5%** (49.05 → 9.09 MB),
+> heap **-83.5%** (242 → 40 MB), resources **-62.6%** (171 → 64),
+> **LCP -68.3% (3,208 → 1,016 ms — sektör MÜKEMMEL ✓✓✓ < 1,500 ms)**,
+> FCP -68.6%, TBT 71 ms (sektör iyi içinde), CLS 0.004 (sektör
+> mükemmel ✓).  See §11 revision history.
 
 ## §1. Goal
 
