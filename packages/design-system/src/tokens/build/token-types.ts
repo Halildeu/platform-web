@@ -28,15 +28,19 @@ export type PaletteToken =
   | "green50"
   | "green500"
   | "green700"
+  | "green950"
   | "amber50"
   | "amber500"
   | "amber700"
+  | "amber950"
   | "red50"
   | "red500"
   | "red700"
+  | "red950"
   | "blue50"
   | "blue500"
-  | "blue700";
+  | "blue700"
+  | "blue950";
 
 export type SemanticColorTokensToken =
   | "surface-default"

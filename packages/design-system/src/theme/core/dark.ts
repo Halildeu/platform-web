@@ -2,8 +2,8 @@
 /*  Dark theme — semantic token assignments                            */
 /* ------------------------------------------------------------------ */
 
-import { palette } from "../../tokens/color";
-import type { SemanticTokenSet } from "../../tokens/semantic";
+import { palette } from '../../tokens/color';
+import type { SemanticTokenSet } from '../../tokens/semantic';
 
 export const darkTheme: SemanticTokenSet = {
   surfaceDefault: palette.gray800,
@@ -25,13 +25,13 @@ export const darkTheme: SemanticTokenSet = {
   actionPrimaryActive: palette.primary300,
   actionSecondary: palette.gray700,
 
-  stateSuccessBg: "#052e16",
+  stateSuccessBg: palette.green950,
   stateSuccessText: palette.green500,
-  stateWarningBg: "#451a03",
+  stateWarningBg: palette.amber950,
   stateWarningText: palette.amber500,
-  stateErrorBg: "#450a0a",
+  stateErrorBg: palette.red950,
   stateErrorText: palette.red500,
-  stateInfoBg: "#172554",
+  stateInfoBg: palette.blue950,
   stateInfoText: palette.blue500,
 
   focusRing: palette.primary400,

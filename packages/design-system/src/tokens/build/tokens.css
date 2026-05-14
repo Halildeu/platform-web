@@ -30,15 +30,19 @@
   --palette-green50: #f0fdf4;
   --palette-green500: #22c55e;
   --palette-green700: #15803d;
+  --palette-green950: #052e16;
   --palette-amber50: #fffbeb;
   --palette-amber500: #f59e0b;
   --palette-amber700: #b45309;
+  --palette-amber950: #451a03;
   --palette-red50: #fef2f2;
   --palette-red500: #ef4444;
   --palette-red700: #b91c1c;
+  --palette-red950: #450a0a;
   --palette-blue50: #eff6ff;
   --palette-blue500: #3b82f6;
   --palette-blue700: #1d4ed8;
+  --palette-blue950: #172554;
 
   /* --- color / semanticColorTokens --- */
   --semantic-color-tokens-surface-default: var(--surface-default);

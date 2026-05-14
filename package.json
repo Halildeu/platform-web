@@ -241,7 +241,7 @@
     ],
     "*.css": [
       "prettier --write",
-      "stylelint --fix"
+      "stylelint --fix --allow-empty-input"
     ]
   },
   "keywords": [],
