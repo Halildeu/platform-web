@@ -2,8 +2,6 @@ import type { HrDemographicFilters, HrDemographicRow, DemographicSummary } from 
 import { generateMockEmployees, computeSummary } from './mock-data';
 import type { GridRequest, GridResponse } from '../../grid';
 // eslint-disable-next-line no-restricted-imports -- defensive fallback when getShellServices() unavailable (resolveHttp helper below)
-// eslint-disable-next-line no-restricted-imports -- pre-existing fallback path; tracked separately as a shell-services migration.
->>>>>>> 2192487a (fix(hr-demografik): pr-x14 post-impl iter-1 absorb (3 high+medium))
 import { api } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
 // PR-X14 (Codex 019e26a9 post-impl high #2 + iter-2 must-fix): row
