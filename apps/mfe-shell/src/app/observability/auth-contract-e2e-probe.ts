@@ -59,10 +59,51 @@ declare global {
  * cannot be tripped by a global injection in a production build
  * (Codex iter-3 P0 #1 absorb).
  */
+/**
+ * Codex 019e27bf — P1 shell-test-infra fix. Read precedence:
+ * `import.meta.env` (Vite-native, build-time) → guarded `process.env`
+ * (webpack DefinePlugin, hosts that ship a Node-style env shim) →
+ * `window.__env__` / `window.__ENV__` (runtime override set by
+ * Playwright fixtures via addInitScript before bundle boot).
+ *
+ * The previous gate read only `process.env`, which Vite's client
+ * bundle does not unconditionally inline, so the test-mode probe
+ * stayed disabled in dev-mode + production-preview CI runs even when
+ * VITE_AUTH_CONTRACT_E2E was set at the workflow level.
+ */
+const readProbeEnv = (key: string): string => {
+  try {
+    const importMetaEnv = (import.meta as { env?: Record<string, string | undefined> }).env;
+    const fromImportMeta = importMetaEnv?.[key];
+    if (typeof fromImportMeta === 'string' && fromImportMeta.length > 0) {
+      return fromImportMeta;
+    }
+  } catch {
+    /* import.meta unavailable in some compile targets */
+  }
+  try {
+    if (typeof process !== 'undefined' && typeof process.env?.[key] === 'string') {
+      return process.env[key] as string;
+    }
+  } catch {
+    /* ignore — Vite client bundle */
+  }
+  if (typeof window !== 'undefined') {
+    const win = window as Window & {
+      __env__?: Record<string, string | undefined>;
+      __ENV__?: Record<string, string | undefined>;
+    };
+    const candidate = win.__env__?.[key] ?? win.__ENV__?.[key];
+    if (typeof candidate === 'string') {
+      return candidate;
+    }
+  }
+  return '';
+};
+
 export const isAuthContractE2eEnabled = (): boolean => {
-  if (typeof process === 'undefined' || !process.env) return false;
   const flag =
-    process.env.VITE_AUTH_CONTRACT_E2E ?? process.env.NEXT_PUBLIC_AUTH_CONTRACT_E2E ?? '';
+    readProbeEnv('VITE_AUTH_CONTRACT_E2E') || readProbeEnv('NEXT_PUBLIC_AUTH_CONTRACT_E2E');
   return flag === '1' || flag.toLowerCase() === 'true';
 };
 
