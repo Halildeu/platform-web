@@ -39,7 +39,7 @@ const sampleMetrics: KPIMetric[] = [
 ];
 
 const meta: Meta<typeof ExecutiveKPIStrip> = {
-  title: 'Enterprise/ExecutiveKPIStrip',
+  title: 'Patterns/ExecutiveKPIStrip',
   component: ExecutiveKPIStrip,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },

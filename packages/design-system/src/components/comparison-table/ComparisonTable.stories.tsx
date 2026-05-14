@@ -27,7 +27,7 @@ const sampleRows: ComparisonRow[] = [
 ];
 
 const meta: Meta<typeof ComparisonTable> = {
-  title: 'Enterprise/ComparisonTable',
+  title: 'Components/ComparisonTable',
   component: ComparisonTable,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },

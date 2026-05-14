@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { InlineEdit } from './InlineEdit';
 
 const meta: Meta<typeof InlineEdit> = {
-  title: 'Enterprise/InlineEdit',
+  title: 'Components/InlineEdit',
   component: InlineEdit,
   tags: ['autodocs'],
   decorators: [

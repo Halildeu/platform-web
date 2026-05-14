@@ -4,12 +4,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
 import { formatValue, getTrendColor, getTrendIcon, getToneClasses } from '../types';
-import { ExecutiveKPIStrip } from '../ExecutiveKPIStrip';
+import { ExecutiveKPIStrip } from '../index';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../RiskMatrix';
 import { GanttTimeline } from '../GanttTimeline';
 
-import { ComparisonTable } from '../ComparisonTable';
+import { ComparisonTable } from '../index';
 import { GovernanceBoard } from '../GovernanceBoard';
 import { ThemeLayout } from '../ThemeLayout';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';
