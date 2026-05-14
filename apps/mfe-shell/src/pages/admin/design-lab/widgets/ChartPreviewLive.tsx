@@ -1626,6 +1626,47 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
                   maxOpacity: 0.7,
                 });
               }
+              // PR-X13e (Codex 019e2614 plan-time AGREE): marker
+              // overlay demonstrates declarative SVG/icon points.
+              // Demo uses both built-in `pin` preset (default) and a
+              // per-datum `diamond` override + custom `path://` SVG
+              // override to exercise the safe-symbol validation path.
+              if (isOn(toggles, 'showMarkerOverlay', false)) {
+                layers.push({
+                  type: 'marker',
+                  name: 'Branch Locations',
+                  data: [
+                    {
+                      name: 'İstanbul HQ',
+                      coordinates: [29.0, 41.0],
+                      value: 1500,
+                      symbol: 'diamond',
+                      symbolSize: 22,
+                      color: '#7c3aed',
+                    },
+                    {
+                      name: 'Ankara Office',
+                      coordinates: [32.85, 39.93],
+                      value: 800,
+                      // default 'pin' (layer-level)
+                    },
+                    {
+                      name: 'İzmir Branch',
+                      coordinates: [27.14, 38.42],
+                      value: 450,
+                      // Custom SVG path: simple star shape
+                      symbol:
+                        'path://M12,2 L15,9 L22,9 L17,14 L19,21 L12,17 L5,21 L7,14 L2,9 L9,9 Z',
+                      symbolSize: 24,
+                      color: '#f59e0b',
+                    },
+                  ],
+                  symbol: 'pin',
+                  symbolSize: 18,
+                  color: '#0ea5e9',
+                  showLabels: true,
+                });
+              }
               return layers.length > 0 ? layers : undefined;
             })()}
           />

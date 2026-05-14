@@ -453,6 +453,122 @@ export interface GeoHeatmapLayer {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Layer: Marker (icon/SVG points on geo — PR-X13e)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Built-in marker symbol presets — ECharts canonical shapes.
+ *
+ * Distinct from bubble/effectScatter `symbol` (which accepts any
+ * string ECharts knows): marker enforces a curated whitelist plus
+ * `path://...` SVG strings to keep the API safe for consumer-supplied
+ * shapes (Codex 019e2614 plan-time iter must-fix #2).
+ */
+export type GeoMarkerPresetSymbol =
+  | 'circle'
+  | 'rect'
+  | 'roundRect'
+  | 'triangle'
+  | 'diamond'
+  | 'pin'
+  | 'arrow';
+
+/**
+ * Marker symbol — preset name OR inline SVG path string.
+ *
+ * **External image URLs (`image://`, `http(s)://`, `data:`) are
+ * deliberately NOT in this type** (Codex 019e2614 plan-time iter
+ * must-fix #1): the wrapper rejects them at runtime via
+ * `safeGeoMarkerSymbol` to avoid CORS, tracking-pixel, and
+ * arbitrary-URL render-bomb risks. External marker images are out of
+ * scope for PR-X13e; a follow-up PR with explicit allowlist /
+ * same-origin / imported-asset policy could add them.
+ *
+ * The template literal `\`path://${string}\`` provides ergonomics
+ * (autocomplete + obvious intent) — runtime guard remains the
+ * security boundary.
+ */
+export type GeoMarkerSymbol = GeoMarkerPresetSymbol | `path://${string}`;
+
+/**
+ * Single marker datum — point with an icon. Distinct from
+ * `GeoPointDatum` (used by bubble + effectScatter) so marker-only
+ * `symbol` / `symbolSize` overrides don't leak into the bubble +
+ * effectScatter public surface (Codex iter-1 must-fix #3).
+ */
+export interface GeoMarkerDatum {
+  /** Required name (tooltip + a11y label). */
+  name: string;
+  /** `[longitude, latitude]` in WGS84. */
+  coordinates: [number, number];
+  /** Optional metric (shown in tooltip; not used for sizing). */
+  value?: number;
+  /** Per-marker symbol override. */
+  symbol?: GeoMarkerSymbol;
+  /** Per-marker symbol pixel size override. */
+  symbolSize?: number;
+  /** Per-marker color override. */
+  color?: string;
+  /** Optional category bucket. */
+  category?: string | number;
+}
+
+/**
+ * Marker layer — declarative icon/SVG markers at geo coordinates.
+ *
+ * Maps to ECharts `scatter` series with `coordinateSystem: 'geo'`
+ * and a constant `symbolSize` (NOT value-driven — marker semantic is
+ * "show this icon at this location", not "encode magnitude as
+ * symbol area" — that's the bubble overlay's job).
+ *
+ * Use case: branch locations, point-of-interest pins, custom-shape
+ * highlights with consumer-supplied SVG paths. Marker is
+ * point-clickable (uses the standard wrapper tooltip + click + a11y
+ * point branch — no special handling needed at the wrapper layer).
+ *
+ * @see PR-X13e Codex 019e2614 plan-time AGREE
+ */
+export interface GeoMarkerLayer {
+  type: 'marker';
+  /** Layer name (legend label, a11y prefix). */
+  name?: string;
+  /** Marker data. */
+  data: GeoMarkerDatum[];
+  /**
+   * Default symbol for the layer. Consumer-supplied `path://` strings
+   * are validated; invalid input falls back to `'pin'` rather than
+   * crashing the render (Codex iter-1 must-fix #2).
+   * @default 'pin'
+   */
+  symbol?: GeoMarkerSymbol;
+  /**
+   * Default symbol pixel size. Marker is constant-size by design;
+   * use bubble overlay for value-driven sizing.
+   * @default 18
+   */
+  symbolSize?: number;
+  /** Per-layer color (per-datum still wins). */
+  color?: string;
+  /**
+   * Layer opacity.
+   * @default 0.9
+   */
+  opacity?: number;
+  /**
+   * Show data labels next to each marker. Default OFF — map label
+   * collision degrades fast on dense layers; consumer opts in for
+   * sparse marker sets where each label fits.
+   * @default false
+   */
+  showLabels?: boolean;
+  /**
+   * Z-index relative to other overlays.
+   * @default 5
+   */
+  z?: number;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Internal `_overlay` metadata — typed for tooltip/click/a11y       */
 /* ------------------------------------------------------------------ */
 
@@ -471,7 +587,11 @@ export interface GeoHeatmapLayer {
  */
 export type GeoOverlayMeta =
   | {
-      type: 'bubble' | 'effectScatter';
+      // Codex 019e2614 plan-time iter-1 must-fix #4: marker is point-
+      // clickable (uses the same wrapper tooltip/click/a11y point
+      // branch as bubble + effectScatter), so it joins the same union
+      // arm rather than carrying its own variant.
+      type: 'bubble' | 'effectScatter' | 'marker';
       layerName: string;
       coordinates: [number, number];
       value?: number;
@@ -507,19 +627,21 @@ export type GeoOverlayMeta =
 /**
  * Discriminated union of all geo overlay types.
  *
- * Past iters:
+ * Layer types shipped (PR-X13 campaign):
  * - PR-X13a: `'bubble'` (silent scatter, value→symbolSize sqrt scale)
  * - PR-X13b: `'effectScatter'` (animated pulse for highlights)
- * - PR-X13c (this PR): `'flow'` (origin-destination lines, linear width)
- *
- * Future:
- * - PR-X13d: `'heatmap'` (density on geo)
- * - PR-X13e: `'marker'` (declarative SVG/icon markers)
+ * - PR-X13c: `'flow'` (origin-destination lines, linear width)
+ * - PR-X13d: `'heatmap'` (density on geo, dedicated visualMap)
+ * - PR-X13e (this PR): `'marker'` (declarative SVG/icon markers)
  *
  * Wrappers pattern-match on `type` and dispatch to the right ECharts
  * series builder. Adding a new variant is a non-breaking change for
  * consumers since they pass only the variants they need.
  */
-export type GeoOverlay = GeoBubbleLayer | GeoEffectScatterLayer | GeoFlowLayer | GeoHeatmapLayer;
-// Future:
-// | GeoMarkerLayer;
+export type GeoOverlay =
+  | GeoBubbleLayer
+  | GeoEffectScatterLayer
+  | GeoFlowLayer
+  | GeoHeatmapLayer
+  | GeoMarkerLayer;
+// PR-X13 campaign closed — overlay layer family complete.

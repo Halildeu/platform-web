@@ -195,9 +195,15 @@ export interface GeoMapProps extends AccessControlledProps {
    *     accessible representation. Consumers who need point-level
    *     interactivity should overlay a transparent `bubble` layer at
    *     the same coordinates as a proxy.
+   *   - `marker` — declarative SVG/icon points (PR-X13e, Codex thread
+   *     `019e2614`). Built-in preset shapes (`pin`, `circle`, etc.)
+   *     plus consumer-supplied `path://...` SVG strings, validated
+   *     via `safeGeoMarkerSymbol` (whitelist + length cap + external
+   *     URL rejection). Constant `symbolSize` by design — use bubble
+   *     for value-driven sizing. Marker IS point-clickable (joins
+   *     the standard wrapper tooltip/click/a11y point branch).
    *
-   * Future PRs append additional layer types via the discriminated
-   * union: `marker` (icon).
+   * PR-X13 campaign closed (5 layer types).
    *
    * Each overlay is independently opt-in; mix and match as needed:
    *

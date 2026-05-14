@@ -14,17 +14,21 @@ import {
   buildEffectScatterLayerSeries,
   buildFlowLayerSeries,
   buildHeatmapLayerSeries,
+  buildMarkerLayerSeries,
   buildGeoOverlayVisualMaps,
   bubbleSymbolSize,
   flowLineWidth,
   flowEdgeName,
   safeHeatmapIntensity,
+  safeGeoMarkerSymbol,
+  MARKER_PATH_MAX_LENGTH,
 } from '../buildGeoOverlaySeries';
 import type {
   GeoBubbleLayer,
   GeoEffectScatterLayer,
   GeoFlowLayer,
   GeoHeatmapLayer,
+  GeoMarkerLayer,
   GeoOverlay,
 } from '../geoOverlayTypes';
 
@@ -1034,5 +1038,282 @@ describe('buildGeoOverlaySeries — heatmap dispatcher integration', () => {
     expect(specs[1].type).toBe('effectScatter');
     expect(specs[2].type).toBe('lines');
     expect(specs[3].type).toBe('heatmap');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  PR-X13e: GeoMarkerLayer tests (Codex thread 019e2614)              */
+/* ------------------------------------------------------------------ */
+
+const sampleMarker = (): GeoMarkerLayer => ({
+  type: 'marker',
+  name: 'Branch Locations',
+  data: [
+    { name: 'İstanbul HQ', coordinates: [29.0, 41.0], value: 100 },
+    { name: 'Ankara Office', coordinates: [32.85, 39.93], value: 50 },
+    { name: 'İzmir Branch', coordinates: [27.14, 38.42], value: 25 },
+  ],
+});
+
+describe('safeGeoMarkerSymbol — symbol validation helper', () => {
+  it('passes built-in presets verbatim', () => {
+    expect(safeGeoMarkerSymbol('pin')).toBe('pin');
+    expect(safeGeoMarkerSymbol('circle')).toBe('circle');
+    expect(safeGeoMarkerSymbol('rect')).toBe('rect');
+    expect(safeGeoMarkerSymbol('roundRect')).toBe('roundRect');
+    expect(safeGeoMarkerSymbol('triangle')).toBe('triangle');
+    expect(safeGeoMarkerSymbol('diamond')).toBe('diamond');
+    expect(safeGeoMarkerSymbol('arrow')).toBe('arrow');
+  });
+
+  it('accepts inline `path://` SVG strings under length cap', () => {
+    const path = 'path://M0,0 L10,0 L5,10 Z';
+    expect(safeGeoMarkerSymbol(path)).toBe(path);
+  });
+
+  it('rejects `image://` external image URL → "pin" fallback', () => {
+    expect(safeGeoMarkerSymbol('image://https://example.com/icon.png')).toBe('pin');
+    expect(safeGeoMarkerSymbol('image://./local.png')).toBe('pin');
+  });
+
+  it('rejects `http(s)://` URLs → "pin" fallback', () => {
+    expect(safeGeoMarkerSymbol('http://evil.com/track.png')).toBe('pin');
+    expect(safeGeoMarkerSymbol('https://example.com/icon.svg')).toBe('pin');
+  });
+
+  it('rejects `data:` URI scheme → "pin" fallback', () => {
+    expect(safeGeoMarkerSymbol('data:image/png;base64,iVBORw0KGgo=')).toBe('pin');
+  });
+
+  it('rejects `path://image://...` smuggling defence-in-depth', () => {
+    // Codex 019e2614 must-fix #2: defence-in-depth guard against
+    // disguising external URLs inside a `path://` prefix.
+    expect(safeGeoMarkerSymbol('path://image://example.com/x.png')).toBe('pin');
+    expect(safeGeoMarkerSymbol('path://https://example.com/x.svg')).toBe('pin');
+    expect(safeGeoMarkerSymbol('path://data:foo')).toBe('pin');
+  });
+
+  it('rejects oversized `path://` strings → "pin" fallback', () => {
+    const huge = 'path://' + 'M0,0 '.repeat(2000); // ~12 KB
+    expect(huge.length).toBeGreaterThan(MARKER_PATH_MAX_LENGTH);
+    expect(safeGeoMarkerSymbol(huge)).toBe('pin');
+  });
+
+  it('rejects unknown shape names → "pin" fallback', () => {
+    expect(safeGeoMarkerSymbol('star')).toBe('pin'); // not in whitelist
+    expect(safeGeoMarkerSymbol('hexagon')).toBe('pin');
+    expect(safeGeoMarkerSymbol('weird-shape')).toBe('pin');
+  });
+
+  it('rejects non-string inputs → "pin" fallback', () => {
+    expect(safeGeoMarkerSymbol(null)).toBe('pin');
+    expect(safeGeoMarkerSymbol(undefined)).toBe('pin');
+    expect(safeGeoMarkerSymbol(42)).toBe('pin');
+    expect(safeGeoMarkerSymbol({ type: 'pin' })).toBe('pin');
+    expect(safeGeoMarkerSymbol([])).toBe('pin');
+  });
+
+  it('rejects empty string → "pin" fallback', () => {
+    expect(safeGeoMarkerSymbol('')).toBe('pin');
+  });
+
+  it('honours custom fallback when supplied', () => {
+    expect(safeGeoMarkerSymbol(null, 'circle')).toBe('circle');
+    expect(safeGeoMarkerSymbol('image://x.png', 'diamond')).toBe('diamond');
+  });
+});
+
+describe('buildMarkerLayerSeries — marker layer spec', () => {
+  it('series.type === "scatter" + coordinateSystem === "geo"', () => {
+    const spec = buildMarkerLayerSeries(sampleMarker(), 0);
+    expect(spec.type).toBe('scatter');
+    expect(spec.coordinateSystem).toBe('geo');
+    expect(spec.geoIndex).toBe(0);
+  });
+
+  it('symbol defaults to "pin", honours layer-level override', () => {
+    expect(buildMarkerLayerSeries(sampleMarker(), 0).symbol).toBe('pin');
+    expect(buildMarkerLayerSeries({ ...sampleMarker(), symbol: 'diamond' }, 0).symbol).toBe(
+      'diamond',
+    );
+  });
+
+  it('symbolSize defaults to 18 (constant — NOT a function)', () => {
+    const spec = buildMarkerLayerSeries(sampleMarker(), 0);
+    expect(spec.symbolSize).toBe(18);
+    // Bubble uses a function for value-driven sizing; marker is constant.
+    expect(typeof spec.symbolSize).toBe('number');
+  });
+
+  it('layer.symbolSize override propagates', () => {
+    const spec = buildMarkerLayerSeries({ ...sampleMarker(), symbolSize: 32 }, 0);
+    expect(spec.symbolSize).toBe(32);
+  });
+
+  it('layer.symbolSize non-finite → fallback to default 18', () => {
+    const spec = buildMarkerLayerSeries({ ...sampleMarker(), symbolSize: NaN }, 0);
+    expect(spec.symbolSize).toBe(18);
+  });
+
+  it('invalid layer-level symbol falls back to "pin"', () => {
+    // Codex 019e2614 must-fix #2: bad consumer input doesn't crash.
+    const spec = buildMarkerLayerSeries({ ...sampleMarker(), symbol: 'image://x.png' as never }, 0);
+    expect(spec.symbol).toBe('pin');
+  });
+
+  it('opacity defaults to 0.9, honours override', () => {
+    const def = buildMarkerLayerSeries(sampleMarker(), 0);
+    expect((def.itemStyle as { opacity?: number }).opacity).toBe(0.9);
+    const opaque = buildMarkerLayerSeries({ ...sampleMarker(), opacity: 1 }, 0);
+    expect((opaque.itemStyle as { opacity?: number }).opacity).toBe(1);
+  });
+
+  it('showLabels defaults to false (map label collision)', () => {
+    const def = buildMarkerLayerSeries(sampleMarker(), 0);
+    expect((def.label as { show: boolean }).show).toBe(false);
+  });
+
+  it('showLabels=true emits label.show=true with formatter "{b}"', () => {
+    const labeled = buildMarkerLayerSeries({ ...sampleMarker(), showLabels: true }, 0);
+    expect((labeled.label as { show: boolean }).show).toBe(true);
+    expect((labeled.label as { formatter: string }).formatter).toBe('{b}');
+  });
+
+  it('z defaults to 5', () => {
+    expect(buildMarkerLayerSeries(sampleMarker(), 0).z).toBe(5);
+  });
+
+  it('empty data produces empty series.data array', () => {
+    const spec = buildMarkerLayerSeries({ type: 'marker', data: [] }, 0);
+    expect((spec.data as unknown[]).length).toBe(0);
+  });
+
+  it('every datum carries _overlay namespace with marker discriminator', () => {
+    const spec = buildMarkerLayerSeries(sampleMarker(), 0);
+    const data = spec.data as Array<{
+      _overlay: {
+        type: string;
+        layerName: string;
+        coordinates: [number, number];
+        value?: number;
+      };
+    }>;
+    for (const datum of data) {
+      expect(datum._overlay.type).toBe('marker');
+      expect(datum._overlay.layerName).toBe('Branch Locations');
+    }
+    expect(data[0]._overlay.coordinates).toEqual([29.0, 41.0]);
+    expect(data[0]._overlay.value).toBe(100);
+  });
+
+  it('per-datum symbol override propagates and is sanitized', () => {
+    const layer: GeoMarkerLayer = {
+      type: 'marker',
+      data: [
+        { name: 'A', coordinates: [0, 0], symbol: 'diamond' }, // valid preset
+        { name: 'B', coordinates: [1, 1], symbol: 'image://evil.com/x.png' as never }, // invalid
+        { name: 'C', coordinates: [2, 2] }, // no override → undefined (uses layer default)
+      ],
+    };
+    const spec = buildMarkerLayerSeries(layer, 0);
+    const data = spec.data as Array<{ symbol?: string }>;
+    expect(data[0].symbol).toBe('diamond');
+    // Invalid per-datum symbol falls back to layer-level (which itself
+    // defaults to 'pin'). Per-datum sanitization happens before serialisation.
+    expect(data[1].symbol).toBe('pin');
+    // No override → datum.symbol stays undefined; ECharts uses series-level.
+    expect(data[2].symbol).toBeUndefined();
+  });
+
+  it('per-datum symbolSize override propagates', () => {
+    const layer: GeoMarkerLayer = {
+      type: 'marker',
+      data: [
+        { name: 'A', coordinates: [0, 0], symbolSize: 32 },
+        { name: 'B', coordinates: [1, 1] }, // no override
+      ],
+    };
+    const spec = buildMarkerLayerSeries(layer, 0);
+    const data = spec.data as Array<{ symbolSize?: number }>;
+    expect(data[0].symbolSize).toBe(32);
+    expect(data[1].symbolSize).toBeUndefined();
+  });
+
+  it('per-datum non-finite symbolSize → undefined (uses layer default)', () => {
+    const layer: GeoMarkerLayer = {
+      type: 'marker',
+      data: [{ name: 'A', coordinates: [0, 0], symbolSize: NaN }],
+    };
+    const spec = buildMarkerLayerSeries(layer, 0);
+    const data = spec.data as Array<{ symbolSize?: number }>;
+    expect(data[0].symbolSize).toBeUndefined();
+  });
+
+  it('per-datum color override propagates to itemStyle', () => {
+    const layer: GeoMarkerLayer = {
+      type: 'marker',
+      data: [{ name: 'A', coordinates: [0, 0], color: '#ff0000' }],
+    };
+    const spec = buildMarkerLayerSeries(layer, 0);
+    const data = spec.data as Array<{ itemStyle?: { color?: string } }>;
+    expect(data[0].itemStyle?.color).toBe('#ff0000');
+  });
+
+  it('inline path:// SVG layer symbol propagates verbatim', () => {
+    const path = 'path://M0,0 L20,0 L10,20 Z';
+    const spec = buildMarkerLayerSeries({ ...sampleMarker(), symbol: path }, 0);
+    expect(spec.symbol).toBe(path);
+  });
+});
+
+describe('buildGeoOverlaySeries — marker dispatcher integration', () => {
+  it('marker layer emits one scatter series (single overlay = single series invariant)', () => {
+    // Codex 019e2614 must-fix #5: heatmap visualMap helper computes
+    // seriesIndex from overlay index — adding multiple series per
+    // marker layer would drift indexing for marker+heatmap combos.
+    const specs = buildGeoOverlaySeries([sampleMarker()], 0);
+    expect(specs).toHaveLength(1);
+    expect(specs[0].type).toBe('scatter');
+    expect(specs[0].coordinateSystem).toBe('geo');
+    expect(specs[0].geoIndex).toBe(0);
+  });
+
+  it('marker + heatmap mixed: marker series + heatmap series, visualMap helper indexes correctly', () => {
+    // Codex 019e2614 must-fix #7: marker comes first in overlay
+    // array, heatmap second — visualMap.seriesIndex must point to
+    // series[2] (base[0] + marker[1] + heatmap[2]).
+    const overlays: GeoOverlay[] = [
+      sampleMarker(), // idx 0 → series[1] (scatter)
+      {
+        type: 'heatmap',
+        data: [{ coordinates: [29, 41], value: 50 }],
+      }, // idx 1 → series[2] (heatmap)
+    ];
+    const specs = buildGeoOverlaySeries(overlays, 0);
+    expect(specs).toHaveLength(2);
+    expect(specs[0].type).toBe('scatter'); // marker
+    expect(specs[1].type).toBe('heatmap');
+    // VisualMap helper points to heatmap series index 2 (base+marker+heatmap).
+    const vms = buildGeoOverlayVisualMaps(overlays, 1);
+    expect(vms).toHaveLength(1);
+    expect(vms[0].seriesIndex).toBe(2);
+    expect(vms[0].dimension).toBe(2);
+  });
+
+  it('all 5 layer types (bubble + effectScatter + flow + heatmap + marker) emit 5 series in order', () => {
+    const sampleEffect: GeoEffectScatterLayer = {
+      type: 'effectScatter',
+      data: [{ name: 'Bursa', coordinates: [29.06, 40.19], value: 1 }],
+    };
+    const specs = buildGeoOverlaySeries(
+      [sampleBubble(), sampleEffect, sampleFlow(), sampleHeatmap(), sampleMarker()],
+      0,
+    );
+    expect(specs).toHaveLength(5);
+    expect(specs[0].type).toBe('scatter'); // bubble
+    expect(specs[1].type).toBe('effectScatter');
+    expect(specs[2].type).toBe('lines'); // flow
+    expect(specs[3].type).toBe('heatmap');
+    expect(specs[4].type).toBe('scatter'); // marker (also scatter; differentiated by _overlay.type)
   });
 });

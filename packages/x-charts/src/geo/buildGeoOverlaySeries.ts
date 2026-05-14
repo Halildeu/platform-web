@@ -7,7 +7,7 @@
  * pattern from the 3D Extension Pack (Codex thread `019e10ab`
  * iter-4 disipline).
  *
- * Layer types shipped:
+ * Layer types shipped (PR-X13 campaign closed):
  *   - PR-X13a (Codex `019e2254`): `'bubble'` — scatter on
  *     `coordinateSystem: 'geo'`, sqrt-scaled symbolSize.
  *   - PR-X13b (Codex `019e25a2`): `'effectScatter'` — animated pulse
@@ -20,8 +20,10 @@
  *     coord system. Emits a dedicated visualMap entry pinned to the
  *     overlay series (`dimension: 2`). VisualMap helper exported for
  *     wrapper integration (`buildGeoOverlayVisualMaps`).
- *
- * Future overlays (`'marker'`) append cases below.
+ *   - PR-X13e (Codex `019e2614`): `'marker'` — declarative SVG/icon
+ *     markers via `scatter` + curated symbol whitelist + `path://`
+ *     SVG strings. External image URLs (`image://`, `http(s)://`,
+ *     `data:`) rejected at runtime via `safeGeoMarkerSymbol`.
  */
 import type {
   GeoOverlay,
@@ -31,6 +33,9 @@ import type {
   GeoFlowDatum,
   GeoHeatmapLayer,
   GeoHeatmapDatum,
+  GeoMarkerLayer,
+  GeoMarkerDatum,
+  GeoMarkerSymbol,
   GeoPointDatum,
 } from './geoOverlayTypes';
 
@@ -567,6 +572,167 @@ export function buildGeoOverlayVisualMaps(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Marker (icon/SVG points on geo) — PR-X13e                          */
+/* ------------------------------------------------------------------ */
+
+/** Whitelist of safe ECharts symbol presets accepted by marker layer. */
+const MARKER_PRESET_SYMBOLS = new Set([
+  'circle',
+  'rect',
+  'roundRect',
+  'triangle',
+  'diamond',
+  'pin',
+  'arrow',
+]);
+
+/**
+ * Maximum allowed length for `path://` SVG strings. Defensive cap
+ * against accidentally-huge consumer paths that could blow up the
+ * canvas render loop or memory profile. 4 KB is generous — typical
+ * icon paths are 100-500 chars; complex logos rarely exceed 2 KB.
+ */
+const MARKER_PATH_MAX_LENGTH = 4096;
+
+/**
+ * Sanitize a marker symbol string. Rejects external image URLs,
+ * malformed `path://` payloads, and oversized paths. Returns `'pin'`
+ * fallback so a single bad consumer datum cannot crash the entire
+ * GeoMap render (Codex 019e2614 plan-time iter must-fix #2).
+ *
+ * Accepted:
+ *   - Built-in presets: 'circle', 'rect', 'roundRect', 'triangle',
+ *     'diamond', 'pin', 'arrow'
+ *   - `path://...` SVG strings up to {@link MARKER_PATH_MAX_LENGTH}
+ *     bytes that don't look like external URLs in disguise
+ *
+ * Rejected (→ `'pin'` fallback):
+ *   - `image://...`, `http(s)://...`, `data:...` (out of scope —
+ *     external resource fetch / privacy / CORS surface)
+ *   - Empty strings, non-strings, paths > MAX_LENGTH
+ *   - `path://` strings containing the rejected URL prefixes (defence
+ *     in depth against `path://image://...` smuggling)
+ *
+ * Single source of truth for marker symbol validation — exported for
+ * direct unit testing.
+ */
+export function safeGeoMarkerSymbol(
+  symbol: unknown,
+  fallback: GeoMarkerSymbol = 'pin',
+): GeoMarkerSymbol {
+  if (typeof symbol !== 'string' || symbol.length === 0) return fallback;
+  // Reject external URL prefixes (defence in depth — also caught
+  // even when smuggled inside `path://`).
+  const lowered = symbol.toLowerCase();
+  if (
+    lowered.startsWith('image://') ||
+    lowered.startsWith('http://') ||
+    lowered.startsWith('https://') ||
+    lowered.startsWith('data:')
+  ) {
+    return fallback;
+  }
+  // Built-in preset → accept verbatim.
+  if (MARKER_PRESET_SYMBOLS.has(symbol)) return symbol as GeoMarkerSymbol;
+  // Inline `path://` SVG → length-cap check.
+  if (lowered.startsWith('path://')) {
+    if (symbol.length > MARKER_PATH_MAX_LENGTH) return fallback;
+    // Defence-in-depth: reject `path://image://...` smuggling.
+    const inner = lowered.slice('path://'.length);
+    if (
+      inner.startsWith('image://') ||
+      inner.startsWith('http://') ||
+      inner.startsWith('https://') ||
+      inner.startsWith('data:')
+    ) {
+      return fallback;
+    }
+    return symbol as GeoMarkerSymbol;
+  }
+  // Unknown shape — defensive fallback.
+  return fallback;
+}
+
+/**
+ * Build a single marker layer spec.
+ *
+ * Wrapper passes the layer + the geo coordinate system index (shared
+ * with the base map, default 0). Marker uses `scatter` series with
+ * constant `symbolSize` (NOT a function) — marker semantic is "show
+ * this icon at this location", not "encode magnitude as area" — that's
+ * the bubble overlay's job.
+ *
+ * One overlay = one series invariant preserved (Codex iter-1 must-fix
+ * #5): heatmap visualMap helper computes `seriesIndex` from overlay
+ * index, so adding multiple series per layer would drift the indexing.
+ */
+export function buildMarkerLayerSeries(
+  layer: GeoMarkerLayer,
+  geoIndex: number,
+): GeoOverlaySeriesSpec {
+  const data = layer.data ?? [];
+  const layerSymbol = safeGeoMarkerSymbol(layer.symbol, 'pin');
+  const layerSymbolSize =
+    typeof layer.symbolSize === 'number' && Number.isFinite(layer.symbolSize)
+      ? layer.symbolSize
+      : 18;
+
+  const seriesData = data.map((d: GeoMarkerDatum) => {
+    // Per-datum overrides take precedence; invalid per-datum symbol
+    // falls back to layer-level default (which itself is sanitized).
+    const datumSymbol = d.symbol ? safeGeoMarkerSymbol(d.symbol, layerSymbol) : undefined;
+    const datumSize =
+      typeof d.symbolSize === 'number' && Number.isFinite(d.symbolSize) ? d.symbolSize : undefined;
+    return {
+      // Same `[lng, lat, value]` tuple as bubble + effectScatter so
+      // tooltip/click reads consistently.
+      value: [d.coordinates[0], d.coordinates[1], d.value ?? 0],
+      name: d.name,
+      // Symbol/size at datum level wins; absent → layer fallback via
+      // the series-level `symbol` / `symbolSize` props below.
+      symbol: datumSymbol,
+      symbolSize: datumSize,
+      itemStyle: d.color ? { color: d.color } : undefined,
+      _overlay: {
+        type: layer.type as 'marker',
+        layerName: layer.name ?? 'Marker overlay',
+        coordinates: d.coordinates,
+        value: d.value,
+        category: d.category,
+      },
+    };
+  });
+
+  return {
+    type: 'scatter',
+    coordinateSystem: 'geo',
+    geoIndex,
+    name: layer.name ?? 'Marker overlay',
+    data: seriesData,
+    symbol: layerSymbol,
+    symbolSize: layerSymbolSize,
+    itemStyle: {
+      color: layer.color,
+      opacity: layer.opacity ?? 0.9,
+    },
+    label: layer.showLabels
+      ? {
+          show: true,
+          position: 'right',
+          formatter: '{b}',
+          fontSize: 11,
+        }
+      : { show: false },
+    emphasis: {
+      focus: 'self',
+      label: { show: true, fontWeight: 'bold' },
+      itemStyle: { opacity: 1 },
+    },
+    z: layer.z ?? 5,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dispatcher — consumers pass `overlays: GeoOverlay[]`               */
 /* ------------------------------------------------------------------ */
 
@@ -597,7 +763,10 @@ export function buildGeoOverlaySeries(
       case 'heatmap':
         specs.push(buildHeatmapLayerSeries(layer, geoIndex));
         break;
-      // Future: 'marker'
+      case 'marker':
+        specs.push(buildMarkerLayerSeries(layer, geoIndex));
+        break;
+      // PR-X13 campaign closed — all 5 layer types implemented above.
       default: {
         // Exhaustiveness guard — TS narrows the union; at runtime an
         // unknown variant is silently dropped (consumer typo
@@ -612,3 +781,4 @@ export function buildGeoOverlaySeries(
 
 // Re-export scale + sanitization helpers for unit tests.
 export { bubbleSymbolSize, flowLineWidth, flowEdgeName };
+export { MARKER_PATH_MAX_LENGTH };
