@@ -124,7 +124,13 @@ describe('ImpersonateAction — canImpersonate fail-closed gate (Faz 1)', () => 
     render(<ImpersonateAction user={buildUser() as never} />);
     fireEvent.click(screen.getByTestId('impersonate-open-btn'));
     const textarea = screen.getByTestId('impersonate-reason');
-    fireEvent.change(textarea, { target: { value: 'short' } });
+    // The FE `canSubmit` gate enforces a minimum of 10 chars before the
+    // submit button fires; a real-world VALIDATION_ERROR from the backend
+    // usually means the operator's reason failed a server-side rule
+    // (length variant, whitespace-only, etc.) that the FE gate let pass.
+    // Use a 15-char reason so the submit handler actually runs and the
+    // mocked rejection surfaces through friendlyErrorMessage.
+    fireEvent.change(textarea, { target: { value: 'valid 15 chars!' } });
     fireEvent.click(screen.getByTestId('impersonate-submit-btn'));
 
     // The async handler awaits the rejected promise + setState batched
