@@ -178,17 +178,11 @@ describe('findAllComponents — multi-package + filter', () => {
 /*  Faz 21.6 PR-B — provenance (canonicalId/status/replacedBy)      */
 /* ---------------------------------------------------------------- */
 
-const DUPLICATE_NAMES = [
-  'BarChart',
-  'LineChart',
-  'AreaChart',
-  'PieChart',
-  'FunnelChart',
-  'GaugeChart',
-  'RadarChart',
-  'TreemapChart',
-  'WaterfallChart',
-];
+// Phase 1a (2026-05-14): FunnelChart, GaugeChart, RadarChart, TreemapChart,
+// WaterfallChart enterprise duplicates removed. Only the 4 chart wrappers
+// that still ship from `packages/design-system/src/components/charts/` (or
+// similar DS surface) remain as legacy duplicates.
+const DUPLICATE_NAMES = ['BarChart', 'LineChart', 'AreaChart', 'PieChart'];
 
 describe('buildCanonicalRegistry', () => {
   it('maps every x-charts component name to its canonical x-charts id', () => {
@@ -225,7 +219,7 @@ describe('computeProvenance — x-charts entries', () => {
 });
 
 describe('computeProvenance — DS legacy duplicates', () => {
-  it('the 9 duplicate DS chart names → status="legacy"', () => {
+  it('the 4 duplicate DS chart names → status="legacy"', () => {
     const all = findAllComponents(null, null);
     const registry = buildCanonicalRegistry(all);
     for (const dupName of DUPLICATE_NAMES) {
@@ -279,12 +273,12 @@ describe('Codex iter-20 pinned counts', () => {
   // The main scorecard loop applies that filter, so scorecard.json on disk has
   // 1 fewer entry. Both numbers are pinned: raw scan invariant + post-filter
   // invariant (the latter via integration scorecard.json check).
-  it('raw scan total is 232 (218 DS raw + 13 x-charts + 1 small-file passthrough)', () => {
+  it('raw scan total is 227 (213 DS raw + 13 x-charts + 1 small-file passthrough)', () => {
     const all = findAllComponents(null, null);
-    expect(all).toHaveLength(232);
+    expect(all).toHaveLength(227);
   });
 
-  it('raw scan canonical count is 223 (legacy=9, canonical=223 → total 232)', () => {
+  it('raw scan canonical count is 223 (legacy=4, canonical=223 → total 227)', () => {
     const all = findAllComponents(null, null);
     const registry = buildCanonicalRegistry(all);
     let canonicalCount = 0;
@@ -295,7 +289,7 @@ describe('Codex iter-20 pinned counts', () => {
     expect(canonicalCount).toBe(223);
   });
 
-  it('legacy count is exactly 9 — the duplicate chart names (lineCount-independent)', () => {
+  it('legacy count is exactly 4 — the duplicate chart names (lineCount-independent)', () => {
     const all = findAllComponents(null, null);
     const registry = buildCanonicalRegistry(all);
     const legacy = all
@@ -304,7 +298,7 @@ describe('Codex iter-20 pinned counts', () => {
         prov: computeProvenance(cmp, registry),
       }))
       .filter((row: { prov: { status: string } }) => row.prov.status === 'legacy');
-    expect(legacy).toHaveLength(9);
+    expect(legacy).toHaveLength(4);
     const legacyNames = legacy.map(({ cmp }: { cmp: { name: string } }) => cmp.name).sort();
     expect(legacyNames).toEqual([...DUPLICATE_NAMES].sort());
   });

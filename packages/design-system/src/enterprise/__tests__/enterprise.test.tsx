@@ -9,7 +9,7 @@ import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../RiskMatrix';
 import { GanttTimeline } from '../GanttTimeline';
 import { AgingBuckets } from '../AgingBuckets';
-import { FunnelChart } from '../FunnelChart';
+
 import { ComparisonTable } from '../ComparisonTable';
 import { TrainingTracker } from '../TrainingTracker';
 import { GovernanceBoard } from '../GovernanceBoard';
@@ -201,32 +201,6 @@ describe('AgingBuckets', () => {
       region || container.querySelector('[aria-label]') || container.firstElementChild,
     ).toBeTruthy();
     expect(container.innerHTML).toContain('0-30');
-  });
-});
-
-describe('FunnelChart', () => {
-  const stages = [
-    { label: 'Leads', value: 1000 },
-    { label: 'Qualified', value: 600 },
-    { label: 'Won', value: 120 },
-  ];
-
-  it('renders funnel', () => {
-    const { container } = render(<FunnelChart stages={stages} />);
-    expect(container.textContent).toContain('Leads');
-  });
-
-  it('has no accessibility violations', async () => {
-    const { container } = render(<FunnelChart stages={stages} />);
-    await expectNoA11yViolations(container);
-  });
-
-  // PR-C2: FunnelChart now delegates to @mfe/x-charts (canvas-based ECharts).
-  // The legacy DS SVG-specific ARIA assertion no longer reflects the
-  // rendered output. Canonical shim contract lives in
-  // EnterpriseCharts.shim.test.tsx (and FunnelChart.contract.test.tsx).
-  it.skip('has accessible ARIA structure (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
   });
 });
 

@@ -6,9 +6,9 @@ import React from 'react';
 import { BulletChart } from '../BulletChart';
 import { MicroChart } from '../MicroChart';
 import { DateRangePicker } from '../DateRangePicker';
-import { TreemapChart } from '../TreemapChart';
+
 import { SankeyDiagram } from '../SankeyDiagram';
-import { RadarChart } from '../RadarChart';
+
 import { ProcessFlow } from '../ProcessFlow';
 import { ValueStream } from '../ValueStream';
 import { StatusTimeline } from '../StatusTimeline';
@@ -90,29 +90,6 @@ describe('DateRangePicker', () => {
   });
 });
 
-describe('TreemapChart', () => {
-  // PR-C2: TreemapChart now delegates to @mfe/x-charts. Legacy DS
-  // SVG <rect> + aria-label assertions no longer reflect the rendered
-  // output. Canonical shim contract lives in EnterpriseCharts.shim.test.tsx
-  // (and TreemapChart.contract.test.tsx).
-  it.skip('renders items as SVG rects (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
-  });
-
-  it('has no accessibility violations', async () => {
-    const items = [
-      { id: '1', label: 'A', value: 100 },
-      { id: '2', label: 'B', value: 60 },
-    ];
-    const { container } = render(<TreemapChart items={items} />);
-    await expectNoA11yViolations(container);
-  });
-
-  it.skip('has accessible ARIA structure (legacy DS aria-label — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
-  });
-});
-
 describe('SankeyDiagram', () => {
   it('renders nodes and links', () => {
     const nodes = [
@@ -144,31 +121,6 @@ describe('SankeyDiagram', () => {
     const img = screen.getByRole('img');
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('aria-label', 'Sankey diagram');
-  });
-});
-
-describe('RadarChart', () => {
-  // PR-C2: RadarChart now delegates to @mfe/x-charts. Legacy DS SVG
-  // axes/series + aria-label assertions no longer reflect the rendered
-  // output. Canonical shim contract lives in EnterpriseCharts.shim.test.tsx
-  // (and RadarChart.contract.test.tsx).
-  it.skip('renders axes and series (legacy DS SVG impl — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
-  });
-
-  it('has no accessibility violations', async () => {
-    const axes = [
-      { key: 'a', label: 'Speed' },
-      { key: 'b', label: 'Power' },
-      { key: 'c', label: 'Skill' },
-    ];
-    const series = [{ label: 'Player 1', values: { a: 80, b: 60, c: 90 } }];
-    const { container } = render(<RadarChart axes={axes} series={series} />);
-    await expectNoA11yViolations(container);
-  });
-
-  it.skip('has accessible ARIA structure (legacy DS aria-label — see EnterpriseCharts.shim.test.tsx)', () => {
-    /* legacy assertion intentionally removed */
   });
 });
 

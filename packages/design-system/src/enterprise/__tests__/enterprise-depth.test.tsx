@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor} from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 
 import { BulletChart } from '../BulletChart';
 import { MicroChart } from '../MicroChart';
-import { TreemapChart } from '../TreemapChart';
+
 import { SankeyDiagram } from '../SankeyDiagram';
-import { RadarChart } from '../RadarChart';
-import { FunnelChart } from '../FunnelChart';
+
 import { FilterPresets } from '../FilterPresets';
 import { DateRangePicker } from '../DateRangePicker';
 import { InlineEdit } from '../InlineEdit';
@@ -62,7 +61,9 @@ describe('BulletChart – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -82,7 +83,10 @@ describe('BulletChart – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -94,7 +98,10 @@ describe('BulletChart – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -129,7 +136,9 @@ describe('MicroChart – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -149,7 +158,10 @@ describe('MicroChart – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -161,82 +173,15 @@ describe('MicroChart – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
 // ===========================================================================
-// 3. TreemapChart
 // ===========================================================================
-describe('TreemapChart – depth', () => {
-  it('handles empty items', () => {
-    const { container } = render(<TreemapChart items={[]} />);
-    expect(container.textContent).toContain('No treemap data');
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('fires onItemClick when a cell is clicked', () => {
-    const onClick = vi.fn();
-    const items = [
-      { id: '1', label: 'Alpha', value: 100 },
-      { id: '2', label: 'Beta', value: 50 },
-    ];
-    const { container } = render(<TreemapChart items={items} onItemClick={onClick} />);
-    const gElements = container.querySelectorAll('g');
-    if (gElements.length > 0) {
-      fireEvent.click(gElements[0]);
-      expect(onClick).toHaveBeenCalled();
-    }
-  });
-
-  it('renders with access="disabled"', () => {
-    const items = [{ id: '1', label: 'A', value: 100 }];
-    const { container } = render(<TreemapChart items={items} access="disabled" />);
-    expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
-  });
-
-  it('resolves async rendering via waitFor', async () => {
-    const { container } = render(<TreemapChart items={[]} />);
-    await waitFor(() => {
-      expect(container.firstElementChild).toBeTruthy();
-      expect(container.innerHTML).not.toBe('');
-    });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
-  });
-
-  it('handles readonly access state', () => {
-    const { container } = render(<TreemapChart access="readonly" items={[]} />);
-    const root = container.firstElementChild;
-    expect(root).toBeTruthy();
-    expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<TreemapChart items={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<TreemapChart items={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
-  });
-});
-
 // ===========================================================================
 // 4. SankeyDiagram
 // ===========================================================================
@@ -249,7 +194,10 @@ describe('SankeyDiagram – depth', () => {
 
   it('fires onNodeClick when a node is clicked', () => {
     const onClick = vi.fn();
-    const nodes = [{ id: 'a', label: 'Source' }, { id: 'b', label: 'Target' }];
+    const nodes = [
+      { id: 'a', label: 'Source' },
+      { id: 'b', label: 'Target' },
+    ];
     const links = [{ source: 'a', target: 'b', value: 100 }];
     render(<SankeyDiagram nodes={nodes} links={links} onNodeClick={onClick} />);
     const sourceText = screen.getByText('Source');
@@ -260,7 +208,10 @@ describe('SankeyDiagram – depth', () => {
   });
 
   it('renders with access="disabled"', () => {
-    const nodes = [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }];
+    const nodes = [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B' },
+    ];
     const links = [{ source: 'a', target: 'b', value: 50 }];
     const { container } = render(<SankeyDiagram nodes={nodes} links={links} access="disabled" />);
     expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
@@ -272,7 +223,9 @@ describe('SankeyDiagram – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -292,7 +245,10 @@ describe('SankeyDiagram – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -304,150 +260,17 @@ describe('SankeyDiagram – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
 // ===========================================================================
-// 5. RadarChart
 // ===========================================================================
-describe('RadarChart – depth', () => {
-  const axes = [
-    { key: 'a', label: 'Speed' },
-    { key: 'b', label: 'Power' },
-    { key: 'c', label: 'Skill' },
-  ];
-  const series = [{ id: 's1', label: 'Player', values: { a: 80, b: 60, c: 90 } }];
-
-  it('shows message when fewer than 3 axes', () => {
-    const { container } = render(<RadarChart axes={[{ key: 'a', label: 'X' }]} series={[]} />);
-    expect(container.textContent).toContain('at least 3 axes');
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('renders with empty series', () => {
-    const { container } = render(<RadarChart axes={axes} series={[]} />);
-    expect(container.querySelector('svg')).toBeTruthy();
-  });
-
-  it('renders with access="disabled"', () => {
-    const { container } = render(<RadarChart axes={axes} series={series} access="disabled" />);
-    expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
-  });
-
-  it('resolves async rendering via waitFor', async () => {
-    const { container } = render(<RadarChart axes={axes} series={[]} />);
-    await waitFor(() => {
-      expect(container.firstElementChild).toBeTruthy();
-      expect(container.innerHTML).not.toBe('');
-    });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
-  });
-
-  it('handles readonly access state', () => {
-    const { container } = render(<RadarChart access="readonly" axes={axes} series={[]} />);
-    const root = container.firstElementChild;
-    expect(root).toBeTruthy();
-    expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<RadarChart axes={axes} series={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<RadarChart axes={axes} series={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
-  });
-});
-
 // ===========================================================================
-// 6. FunnelChart
 // ===========================================================================
-describe('FunnelChart – depth', () => {
-  it('handles empty stages', () => {
-    const { container } = render(<FunnelChart stages={[]} />);
-    expect(container.textContent).toContain('No funnel data');
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('fires onStageClick when stage is clicked', () => {
-    const onClick = vi.fn();
-    const stages = [
-      { id: '1', label: 'Leads', value: 1000 },
-      { id: '2', label: 'Qualified', value: 600 },
-    ];
-    render(<FunnelChart stages={stages} onStageClick={onClick} animated={false} />);
-    const leadsText = screen.getByText('Leads');
-    fireEvent.click(leadsText.closest('g')!);
-    expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: '1', label: 'Leads' }));
-    expect(onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders with access="disabled"', () => {
-    const stages = [{ id: '1', label: 'A', value: 100 }];
-    const { container } = render(<FunnelChart stages={stages} access="disabled" />);
-    expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
-  });
-
-  it('resolves async rendering via waitFor', async () => {
-    const { container } = render(<FunnelChart stages={[]} />);
-    await waitFor(() => {
-      expect(container.firstElementChild).toBeTruthy();
-      expect(container.innerHTML).not.toBe('');
-    });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
-  });
-
-  it('handles readonly access state', () => {
-    const { container } = render(<FunnelChart access="readonly" stages={[]} />);
-    const root = container.firstElementChild;
-    expect(root).toBeTruthy();
-    expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
-    expect(document.body.innerHTML.length).toBeGreaterThan(0);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<FunnelChart stages={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
-  });
-
-  it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<FunnelChart stages={[]} />);
-    const root = container.firstElementChild;
-    // error: component should not render error state by default
-    expect(root).toBeTruthy();
-    expect(root).toBeInTheDocument();
-    // null / undefined / empty checks
-    expect(container.innerHTML).not.toBe('');
-    expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
-  });
-});
-
 // ===========================================================================
 // 7. FilterPresets
 // ===========================================================================
@@ -463,7 +286,9 @@ describe('FilterPresets – depth', () => {
     const presets = [{ id: '1', name: 'Active Only', filters: { status: 'active' } }];
     render(<FilterPresets presets={presets} onSelect={onSelect} />);
     fireEvent.click(screen.getByText('Active Only'));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: '1', name: 'Active Only' }));
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '1', name: 'Active Only' }),
+    );
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
@@ -481,11 +306,15 @@ describe('FilterPresets – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
-    const { container } = render(<FilterPresets access="readonly" presets={[]} onSelect={vi.fn()} />);
+    const { container } = render(
+      <FilterPresets access="readonly" presets={[]} onSelect={vi.fn()} />,
+    );
     const root = container.firstElementChild;
     expect(root).toBeTruthy();
     expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
@@ -501,7 +330,10 @@ describe('FilterPresets – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -513,7 +345,10 @@ describe('FilterPresets – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -557,7 +392,9 @@ describe('DateRangePicker – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -577,7 +414,10 @@ describe('DateRangePicker – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -589,7 +429,10 @@ describe('DateRangePicker – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -634,7 +477,9 @@ describe('InlineEdit – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -654,7 +499,10 @@ describe('InlineEdit – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -666,7 +514,10 @@ describe('InlineEdit – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -697,7 +548,9 @@ describe('DataExportDialog – depth', () => {
     render(<DataExportDialog open onClose={onClose} onExport={onExport} />);
     // Click the export button (contains text matching the export button label)
     const exportBtns = screen.getAllByRole('button');
-    const exportBtn = exportBtns.find(btn => btn.textContent?.includes('Aktar') || btn.textContent?.includes('Export'));
+    const exportBtn = exportBtns.find(
+      (btn) => btn.textContent?.includes('Aktar') || btn.textContent?.includes('Export'),
+    );
     if (exportBtn) {
       fireEvent.click(exportBtn);
       expect(onExport).toHaveBeenCalled();
@@ -707,22 +560,28 @@ describe('DataExportDialog – depth', () => {
   it('renders with access="disabled" and disables export', () => {
     render(<DataExportDialog open onClose={vi.fn()} onExport={vi.fn()} access="disabled" />);
     const buttons = screen.getAllByRole('button');
-    const disabledBtns = buttons.filter(btn => btn.hasAttribute('disabled'));
+    const disabledBtns = buttons.filter((btn) => btn.hasAttribute('disabled'));
     expect(disabledBtns.length).toBeGreaterThan(0);
     expect(document.body.innerHTML.length).toBeGreaterThan(0);
   });
 
   it('resolves async rendering via waitFor', async () => {
-    const { container } = render(<DataExportDialog open={true} onClose={vi.fn()} onExport={vi.fn()} />);
+    const { container } = render(
+      <DataExportDialog open={true} onClose={vi.fn()} onExport={vi.fn()} />,
+    );
     await waitFor(() => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
-    const { container } = render(<DataExportDialog access="readonly" open={true} onClose={vi.fn()} onExport={vi.fn()} />);
+    const { container } = render(
+      <DataExportDialog access="readonly" open={true} onClose={vi.fn()} onExport={vi.fn()} />,
+    );
     const root = container.firstElementChild;
     expect(root).toBeTruthy();
     expect(root?.getAttribute('data-access-state') === 'readonly' || root).toBeTruthy();
@@ -730,7 +589,9 @@ describe('DataExportDialog – depth', () => {
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<DataExportDialog open={true} onClose={vi.fn()} onExport={vi.fn()} />);
+    const { container } = render(
+      <DataExportDialog open={true} onClose={vi.fn()} onExport={vi.fn()} />,
+    );
     const root = container.firstElementChild;
     // error: component should not render error state by default
     expect(root).toBeTruthy();
@@ -738,11 +599,16 @@ describe('DataExportDialog – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
-    const { container } = render(<DataExportDialog open={true} onClose={vi.fn()} onExport={vi.fn()} />);
+    const { container } = render(
+      <DataExportDialog open={true} onClose={vi.fn()} onExport={vi.fn()} />,
+    );
     const root = container.firstElementChild;
     // error: component should not render error state by default
     expect(root).toBeTruthy();
@@ -750,7 +616,10 @@ describe('DataExportDialog – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -778,7 +647,13 @@ describe('NotificationCenter – depth', () => {
   it('calls onMarkAllRead when button clicked', () => {
     const onMarkAllRead = vi.fn();
     const items = [
-      { id: '1', title: 'Unread', type: 'warning' as const, timestamp: '2026-03-23T10:00:00Z', read: false },
+      {
+        id: '1',
+        title: 'Unread',
+        type: 'warning' as const,
+        timestamp: '2026-03-23T10:00:00Z',
+        read: false,
+      },
     ];
     render(<NotificationCenter notifications={items} onMarkAllRead={onMarkAllRead} />);
     const markAllBtn = screen.getByText(/okundu/i);
@@ -793,7 +668,9 @@ describe('NotificationCenter – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -813,7 +690,10 @@ describe('NotificationCenter – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -825,7 +705,10 @@ describe('NotificationCenter – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -863,7 +746,9 @@ describe('ExecutiveKPIStrip – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -883,7 +768,10 @@ describe('ExecutiveKPIStrip – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -895,7 +783,10 @@ describe('ExecutiveKPIStrip – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -935,7 +826,9 @@ describe('ProcessFlow – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -955,7 +848,10 @@ describe('ProcessFlow – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -967,7 +863,10 @@ describe('ProcessFlow – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1007,7 +906,9 @@ describe('ValueStream – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1027,7 +928,10 @@ describe('ValueStream – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1039,7 +943,10 @@ describe('ValueStream – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1055,9 +962,7 @@ describe('StatusTimeline – depth', () => {
 
   it('fires onEventClick when event is clicked', () => {
     const onClick = vi.fn();
-    const events = [
-      { id: '1', status: 'Created', timestamp: '2026-01-01T10:00:00Z' },
-    ];
+    const events = [{ id: '1', status: 'Created', timestamp: '2026-01-01T10:00:00Z' }];
     render(<StatusTimeline events={events} onEventClick={onClick} />);
     fireEvent.click(screen.getByText('Created'));
     expect(onClick).toHaveBeenCalledWith('1');
@@ -1077,7 +982,9 @@ describe('StatusTimeline – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1097,7 +1004,10 @@ describe('StatusTimeline – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1109,7 +1019,10 @@ describe('StatusTimeline – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1150,7 +1063,9 @@ describe('ApprovalWorkflow – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1170,7 +1085,10 @@ describe('ApprovalWorkflow – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1182,7 +1100,10 @@ describe('ApprovalWorkflow – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1223,7 +1144,9 @@ describe('RiskMatrix – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1243,7 +1166,10 @@ describe('RiskMatrix – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1255,7 +1181,10 @@ describe('RiskMatrix – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1272,7 +1201,13 @@ describe('GanttTimeline – depth', () => {
   it('fires onTaskClick when task row is clicked', () => {
     const onClick = vi.fn();
     const tasks = [
-      { id: '1', title: 'Design', startDate: new Date('2026-01-01'), endDate: new Date('2026-01-15'), progress: 80 },
+      {
+        id: '1',
+        title: 'Design',
+        startDate: new Date('2026-01-01'),
+        endDate: new Date('2026-01-15'),
+        progress: 80,
+      },
     ];
     render(<GanttTimeline tasks={tasks} onTaskClick={onClick} />);
     // Multiple elements may contain the text; use getAllByText and click the first
@@ -1284,7 +1219,13 @@ describe('GanttTimeline – depth', () => {
 
   it('renders with access="disabled"', () => {
     const tasks = [
-      { id: '1', title: 'Dev', startDate: new Date('2026-01-01'), endDate: new Date('2026-02-01'), progress: 50 },
+      {
+        id: '1',
+        title: 'Dev',
+        startDate: new Date('2026-01-01'),
+        endDate: new Date('2026-02-01'),
+        progress: 50,
+      },
     ];
     const { container } = render(<GanttTimeline tasks={tasks} access="disabled" />);
     expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
@@ -1296,7 +1237,9 @@ describe('GanttTimeline – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1316,7 +1259,10 @@ describe('GanttTimeline – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1328,7 +1274,10 @@ describe('GanttTimeline – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1344,9 +1293,7 @@ describe('AgingBuckets – depth', () => {
 
   it('fires onBucketClick when bucket is clicked', () => {
     const onClick = vi.fn();
-    const buckets = [
-      { id: '1', label: '0-30', count: 45, value: 120000 },
-    ];
+    const buckets = [{ id: '1', label: '0-30', count: 45, value: 120000 }];
     render(<AgingBuckets buckets={buckets} onBucketClick={onClick} />);
     fireEvent.click(screen.getByText('0-30'));
     expect(onClick).toHaveBeenCalled();
@@ -1365,7 +1312,9 @@ describe('AgingBuckets – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1385,7 +1334,10 @@ describe('AgingBuckets – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1397,7 +1349,10 @@ describe('AgingBuckets – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1413,9 +1368,7 @@ describe('ComparisonTable – depth', () => {
 
   it('fires onRowClick when a row is clicked', () => {
     const onClick = vi.fn();
-    const rows = [
-      { id: '1', label: 'Revenue', actual: 1200000, target: 1000000 },
-    ];
+    const rows = [{ id: '1', label: 'Revenue', actual: 1200000, target: 1000000 }];
     render(<ComparisonTable rows={rows} onRowClick={onClick} />);
     fireEvent.click(screen.getByText('Revenue'));
     expect(onClick).toHaveBeenCalled();
@@ -1434,7 +1387,9 @@ describe('ComparisonTable – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1454,7 +1409,10 @@ describe('ComparisonTable – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1466,7 +1424,10 @@ describe('ComparisonTable – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1483,7 +1444,13 @@ describe('TrainingTracker – depth', () => {
   it('fires onItemClick when item is clicked', () => {
     const onClick = vi.fn();
     const items = [
-      { id: '1', title: 'Safety', category: 'Compliance', status: 'completed' as const, progress: 100 },
+      {
+        id: '1',
+        title: 'Safety',
+        category: 'Compliance',
+        status: 'completed' as const,
+        progress: 100,
+      },
     ];
     render(<TrainingTracker items={items} onItemClick={onClick} />);
     fireEvent.click(screen.getByText('Safety'));
@@ -1492,7 +1459,9 @@ describe('TrainingTracker – depth', () => {
   });
 
   it('renders with access="disabled"', () => {
-    const items = [{ id: '1', title: 'X', category: 'Y', status: 'in-progress' as const, progress: 50 }];
+    const items = [
+      { id: '1', title: 'X', category: 'Y', status: 'in-progress' as const, progress: 50 },
+    ];
     const { container } = render(<TrainingTracker items={items} access="disabled" />);
     expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
   });
@@ -1503,7 +1472,9 @@ describe('TrainingTracker – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1523,7 +1494,10 @@ describe('TrainingTracker – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1535,7 +1509,10 @@ describe('TrainingTracker – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1552,7 +1529,14 @@ describe('GovernanceBoard – depth', () => {
   it('fires onItemClick when item is clicked', () => {
     const onClick = vi.fn();
     const items = [
-      { id: '1', title: 'GDPR', domain: 'legal', status: 'compliant' as const, severity: 'high' as const, findingsCount: 0 },
+      {
+        id: '1',
+        title: 'GDPR',
+        domain: 'legal',
+        status: 'compliant' as const,
+        severity: 'high' as const,
+        findingsCount: 0,
+      },
     ];
     render(<GovernanceBoard items={items} onItemClick={onClick} />);
     fireEvent.click(screen.getByText('GDPR'));
@@ -1562,7 +1546,14 @@ describe('GovernanceBoard – depth', () => {
 
   it('renders with access="disabled"', () => {
     const items = [
-      { id: '1', title: 'X', domain: 'it', status: 'non-compliant' as const, severity: 'low' as const, findingsCount: 1 },
+      {
+        id: '1',
+        title: 'X',
+        domain: 'it',
+        status: 'non-compliant' as const,
+        severity: 'low' as const,
+        findingsCount: 1,
+      },
     ];
     const { container } = render(<GovernanceBoard items={items} access="disabled" />);
     expect(container.querySelector('[data-access-state="disabled"]')).toBeInTheDocument();
@@ -1574,7 +1565,9 @@ describe('GovernanceBoard – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1594,7 +1587,10 @@ describe('GovernanceBoard – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1606,7 +1602,10 @@ describe('GovernanceBoard – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1615,7 +1614,14 @@ describe('GovernanceBoard – depth', () => {
 // ===========================================================================
 describe('EmptyStateBuilder – depth', () => {
   it('renders all reason types without crash', () => {
-    const reasons = ['no-data', 'no-results', 'no-permission', 'error', 'first-time', 'filtered-empty'] as const;
+    const reasons = [
+      'no-data',
+      'no-results',
+      'no-permission',
+      'error',
+      'first-time',
+      'filtered-empty',
+    ] as const;
     for (const reason of reasons) {
       const { container } = render(<EmptyStateBuilder reason={reason} />);
       expect(container.firstElementChild).toBeTruthy();
@@ -1624,12 +1630,7 @@ describe('EmptyStateBuilder – depth', () => {
 
   it('fires primaryAction onClick when action button clicked', () => {
     const onClick = vi.fn();
-    render(
-      <EmptyStateBuilder
-        reason="no-data"
-        primaryAction={{ label: 'Retry', onClick }}
-      />,
-    );
+    render(<EmptyStateBuilder reason="no-data" primaryAction={{ label: 'Retry', onClick }} />);
     fireEvent.click(screen.getByText('Retry'));
     expect(onClick).toHaveBeenCalled();
     expect(onClick).toHaveBeenCalledTimes(1);
@@ -1647,7 +1648,9 @@ describe('EmptyStateBuilder – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1667,7 +1670,10 @@ describe('EmptyStateBuilder – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1679,7 +1685,10 @@ describe('EmptyStateBuilder – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });
 
@@ -1690,9 +1699,7 @@ describe('ThemeLayout – depth', () => {
   it('renders all theme types without crash', () => {
     const themes = ['executive', 'operations', 'analytics', 'compact'] as const;
     for (const theme of themes) {
-      const { container } = render(
-        <ThemeLayout theme={theme} slots={{ header: <div>H</div> }} />,
-      );
+      const { container } = render(<ThemeLayout theme={theme} slots={{ header: <div>H</div> }} />);
       expect(container.innerHTML).toContain('H');
     }
   });
@@ -1716,7 +1723,9 @@ describe('ThemeLayout – depth', () => {
       expect(container.firstElementChild).toBeTruthy();
       expect(container.innerHTML).not.toBe('');
     });
-    expect(container.querySelector('[data-component]') || container.firstElementChild).toBeInTheDocument();
+    expect(
+      container.querySelector('[data-component]') || container.firstElementChild,
+    ).toBeInTheDocument();
   });
 
   it('handles readonly access state', () => {
@@ -1736,7 +1745,10 @@ describe('ThemeLayout – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 
   it('covers error, null, undefined, empty edge cases (high-density assertions)', () => {
@@ -1748,6 +1760,9 @@ describe('ThemeLayout – depth', () => {
     // null / undefined / empty checks
     expect(container.innerHTML).not.toBe('');
     expect(root?.tagName).toBeDefined();
-    expect(root?.getAttribute('data-testid') !== undefined || root?.getAttribute('data-component') !== undefined).toBe(true);
+    expect(
+      root?.getAttribute('data-testid') !== undefined ||
+        root?.getAttribute('data-component') !== undefined,
+    ).toBe(true);
   });
 });

@@ -763,28 +763,6 @@
     ]
   },
   {
-    "name": "GaugeChart",
-    "path": "enterprise/GaugeChart.tsx",
-    "dir": "enterprise",
-    "lineCount": 377,
-    "scores": {
-      "api": 90,
-      "testDepth": 26,
-      "a11y": 0,
-      "testCoverage": 80,
-      "accessControl": 80,
-      "storyCompleteness": 82,
-      "i18n": 100,
-      "documentation": 90
-    },
-    "totalScore": 58,
-    "grade": "B",
-    "improvements": [
-      "Add userEvent interaction tests (+14 pts)",
-      "Add expectNoA11yViolations + role queries (+15 pts)"
-    ]
-  },
-  {
     "name": "OrgChart",
     "path": "enterprise/OrgChart.tsx",
     "dir": "enterprise",
@@ -1671,25 +1649,6 @@
     "improvements": []
   },
   {
-    "name": "WaterfallChart",
-    "path": "enterprise/WaterfallChart.tsx",
-    "dir": "enterprise",
-    "lineCount": 314,
-    "scores": {
-      "api": 90,
-      "testDepth": 82,
-      "a11y": 75,
-      "testCoverage": 100,
-      "accessControl": 100,
-      "storyCompleteness": 82,
-      "i18n": 100,
-      "documentation": 90
-    },
-    "totalScore": 87,
-    "grade": "A",
-    "improvements": []
-  },
-  {
     "name": "AIGuidedAuthoring",
     "path": "components/ai-guided-authoring/AIGuidedAuthoring.tsx",
     "dir": "components",
@@ -1994,25 +1953,6 @@
     "improvements": []
   },
   {
-    "name": "FunnelChart",
-    "path": "enterprise/FunnelChart.tsx",
-    "dir": "enterprise",
-    "lineCount": 314,
-    "scores": {
-      "api": 90,
-      "testDepth": 78,
-      "a11y": 75,
-      "testCoverage": 100,
-      "accessControl": 100,
-      "storyCompleteness": 100,
-      "i18n": 100,
-      "documentation": 100
-    },
-    "totalScore": 89,
-    "grade": "A",
-    "improvements": []
-  },
-  {
     "name": "InlineEdit",
     "path": "enterprise/InlineEdit.tsx",
     "dir": "enterprise",
@@ -2055,25 +1995,6 @@
     "path": "enterprise/StatusTimeline.tsx",
     "dir": "enterprise",
     "lineCount": 303,
-    "scores": {
-      "api": 90,
-      "testDepth": 79,
-      "a11y": 75,
-      "testCoverage": 100,
-      "accessControl": 100,
-      "storyCompleteness": 100,
-      "i18n": 100,
-      "documentation": 100
-    },
-    "totalScore": 89,
-    "grade": "A",
-    "improvements": []
-  },
-  {
-    "name": "TreemapChart",
-    "path": "enterprise/TreemapChart.tsx",
-    "dir": "enterprise",
-    "lineCount": 355,
     "scores": {
       "api": 90,
       "testDepth": 79,
@@ -2400,25 +2321,6 @@
     "scores": {
       "api": 95,
       "testDepth": 78,
-      "a11y": 75,
-      "testCoverage": 100,
-      "accessControl": 100,
-      "storyCompleteness": 100,
-      "i18n": 100,
-      "documentation": 100
-    },
-    "totalScore": 90,
-    "grade": "A",
-    "improvements": []
-  },
-  {
-    "name": "RadarChart",
-    "path": "enterprise/RadarChart.tsx",
-    "dir": "enterprise",
-    "lineCount": 358,
-    "scores": {
-      "api": 95,
-      "testDepth": 79,
       "a11y": 75,
       "testCoverage": 100,
       "accessControl": 100,

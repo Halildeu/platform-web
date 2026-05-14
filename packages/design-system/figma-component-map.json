@@ -253,17 +253,9 @@
       "figmaUrl": "pending",
       "figmaNodeId": "pending:FormField"
     },
-    "FunnelChart": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:FunnelChart"
-    },
     "GanttTimeline": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:GanttTimeline"
-    },
-    "GaugeChart": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:GaugeChart"
     },
     "GovernanceBoard": {
       "figmaUrl": "pending",
@@ -376,10 +368,6 @@
     "QRCode": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:QRCode"
-    },
-    "RadarChart": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:RadarChart"
     },
     "Radio": {
       "figmaUrl": "pending",
@@ -525,10 +513,6 @@
       "figmaUrl": "pending",
       "figmaNodeId": "pending:Tree"
     },
-    "TreemapChart": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:TreemapChart"
-    },
     "TreeTable": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:TreeTable"
@@ -540,10 +524,6 @@
     "ValueStream": {
       "figmaUrl": "pending",
       "figmaNodeId": "pending:ValueStream"
-    },
-    "WaterfallChart": {
-      "figmaUrl": "pending",
-      "figmaNodeId": "pending:WaterfallChart"
     },
     "Watermark": {
       "figmaUrl": "pending",
