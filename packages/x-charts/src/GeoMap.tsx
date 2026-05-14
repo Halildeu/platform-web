@@ -293,6 +293,14 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
         calculable: true,
         show: showVisualMap,
         textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
+        // Codex 019e25a2 PR-X13a iter-3 absorb: scope the gradient to
+        // the base `map` series only. ECharts' visualMap default
+        // `seriesIndex` is "all series" — without this guard, bubble
+        // overlays (and future flow/heatmap/marker layers) would be
+        // dragged into the choropleth color encoding, overriding
+        // per-layer color contracts. Base map is always at index 0
+        // (overlays splice AFTER it).
+        seriesIndex: 0,
       };
       if (position === 'top') {
         visualMapLayout.top = 10;

@@ -1668,6 +1668,29 @@ describe('GeoMap option shape', () => {
     expect(geoBlock?.map).toBe('TR');
   });
 
+  // Codex 019e25a2 PR-X13a iter-3 absorb: visualMap MUST be scoped
+  // to the base map series only. Without `seriesIndex: 0`, ECharts'
+  // default "all series" target drags bubble overlays into the
+  // choropleth color encoding.
+  it('option.visualMap.seriesIndex pins to base map only (overlay isolation)', () => {
+    render(
+      <GeoMap
+        mapName="TR"
+        data={sampleData}
+        overlays={[
+          {
+            type: 'bubble',
+            data: [{ name: 'X', coordinates: [29, 41], value: 1 }],
+          },
+        ]}
+        animate={false}
+      />,
+    );
+    const opt = lastDispatchedOption();
+    const vm = opt?.visualMap as Record<string, unknown>;
+    expect(vm.seriesIndex).toBe(0);
+  });
+
   // Codex 019e25a2 PR-X13a iter-2 must-fix #1: when base map binds
   // to host geo, region click/tooltip lives on `option.geo`, not on
   // the series. `silent` MUST be falsy (default) so events surface.
