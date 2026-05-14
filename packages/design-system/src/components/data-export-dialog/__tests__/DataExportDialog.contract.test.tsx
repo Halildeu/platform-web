@@ -5,7 +5,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
 import { DataExportDialog } from '../DataExportDialog';
-import type { ExportFormat, ExportScope, RecordCounts, DataExportDialogLocaleText, DataExportDialogProps } from '../DataExportDialog';
+import type {
+  ExportFormat,
+  ExportScope,
+  RecordCounts,
+  DataExportDialogLocaleText,
+  DataExportDialogProps,
+} from '../DataExportDialog';
 
 describe('DataExportDialog — contract', () => {
   const defaultProps = {
@@ -35,11 +41,16 @@ describe('DataExportDialog — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _exportformat: ExportFormat | undefined = undefined; void _exportformat;
-    const _exportscope: ExportScope | undefined = undefined; void _exportscope;
-    const _recordcounts: RecordCounts | undefined = undefined; void _recordcounts;
-    const _dataexportdialoglocaletext: DataExportDialogLocaleText | undefined = undefined; void _dataexportdialoglocaletext;
-    const _dataexportdialogprops: DataExportDialogProps | undefined = undefined; void _dataexportdialogprops;
+    const _exportformat: ExportFormat | undefined = undefined;
+    void _exportformat;
+    const _exportscope: ExportScope | undefined = undefined;
+    void _exportscope;
+    const _recordcounts: RecordCounts | undefined = undefined;
+    void _recordcounts;
+    const _dataexportdialoglocaletext: DataExportDialogLocaleText | undefined = undefined;
+    void _dataexportdialoglocaletext;
+    const _dataexportdialogprops: DataExportDialogProps | undefined = undefined;
+    void _dataexportdialogprops;
     expect(true).toBe(true);
   });
 });

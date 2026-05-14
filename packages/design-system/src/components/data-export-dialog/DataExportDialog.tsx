@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { cn } from '../utils/cn';
+import { cn } from '../../utils/cn';
 import {
   resolveAccessState,
   accessStyles,
   type AccessControlledProps,
-} from '../internal/access-controller';
+} from '../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
