@@ -195,6 +195,8 @@
     "perf:budget:testai": "node ./scripts/ci/route-performance-budget.mjs --target testai",
     "perf:budget:update-baseline": "node ./scripts/ci/route-performance-budget.mjs --target testai --update-baseline",
     "perf:budget:warn-only": "node ./scripts/ci/route-performance-budget.mjs --target testai --warn-only",
+    "perf:auth-storage-setup": "node ./scripts/perf/auth-storage-setup.mjs",
+    "perf:auth-route-budget:testai": "node ./scripts/perf/auth-storage-setup.mjs && PERF_AUTH_STORAGE=tests/perf/.auth-storage.json node ./scripts/ci/route-performance-budget.mjs --target testai --routes /home,/admin/users,/admin/access,/admin/reports/fin-muhasebe-detay --runs 3 --warn-only --auth-storage tests/perf/.auth-storage.json",
     "bundle:analyze": "ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build",
     "perf:css-breakdown": "node ./scripts/ci/css-attribution-breakdown.mjs",
     "perf:css-breakdown:build": "CSS_ATTRIBUTION=1 pnpm --filter mfe-shell build && node ./scripts/ci/css-attribution-breakdown.mjs",
