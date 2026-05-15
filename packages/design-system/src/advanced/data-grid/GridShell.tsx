@@ -21,6 +21,11 @@ import React, {
 // targets). Tested independently in
 // internal/__tests__/drawer-target.test.ts.
 import { isDrawerOpenSafeTarget } from './internal/drawer-target';
+// Codex 019e2de6 (PR-0.5f) — aggregate-explainability tooltips. Pure
+// `tooltipValueGetter` helpers for aggregated group / grand-total /
+// auto-group cells. Tested in
+// __tests__/aggregate-cell-tooltip.test.ts.
+import { getAggregateCellTooltip, getGroupCellTooltip } from './aggregate-cell-tooltip';
 
 /**
  * Codex 019dde93 iter-48 — handler composition utility.
@@ -164,6 +169,13 @@ const DEFAULT_COL_DEF: ColDef = {
   minWidth: 120,
   flex: 1,
   menuTabs: ['generalMenuTab', 'filterMenuTab', 'columnsMenuTab'],
+  // Codex 019e2de6 (PR-0.5f) — aggregate-explainability tooltip.
+  // `getAggregateCellTooltip` returns a string ONLY for aggregated
+  // value cells inside group rows / the grand-total pinned-bottom
+  // row, and `undefined` for leaf cells (AG Grid then shows no
+  // tooltip). Native `tooltipValueGetter` — no custom tooltip
+  // component; see `enableBrowserTooltips={false}` below.
+  tooltipValueGetter: getAggregateCellTooltip,
 };
 
 /* ------------------------------------------------------------------ */
@@ -399,6 +411,10 @@ function GridShellInner<RowData = unknown>(
             floatingFilter: true,
             filter: 'agTextColumnFilter',
             minWidth: 200,
+            // Codex 019e2de6 (PR-0.5f) — auto-group cell tooltip:
+            // group context only (`Grup: <label> · <count> satır`).
+            // Returns `undefined` for non-group cells.
+            tooltipValueGetter: getGroupCellTooltip,
           }}
           // groupTotalRow="bottom" — disabled: duplicates group header values
           pagination
@@ -507,6 +523,12 @@ function GridShellInner<RowData = unknown>(
             ];
           }}
           popupParent={typeof document !== 'undefined' ? document.body : undefined}
+          // Codex 019e2de6 (PR-0.5f) — keep AG Grid's own (custom)
+          // tooltip renderer for the aggregate-explainability
+          // `tooltipValueGetter` strings. Browser-native tooltips are
+          // explicitly disabled so the native AG Grid tooltip
+          // lifecycle owns rendering (no portal / focus debt).
+          enableBrowserTooltips={false}
           {...gridOptions}
           /* Codex 019dde93 iter-48 — handler composition.
              gridOptions spread comes BEFORE the explicit handlers so
