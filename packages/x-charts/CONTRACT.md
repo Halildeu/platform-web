@@ -637,7 +637,7 @@ catalogue grows.
 | HistogramChart | `blocks/histogram-chart/HistogramChart.tsx` | candidate     | migrate as `HistogramChart` in Faz 21.7                                                 |
 | ParetoChart    | `blocks/pareto-chart/ParetoChart.tsx`       | candidate     | migrate as `ParetoChart` in Faz 21.7                                                    |
 | MicroChart     | `blocks/micro-chart/MicroChart.tsx`         | consolidate   | superseded by `MiniChart` + `SparklineChart` in `@mfe/x-charts`; deprecate in PR-C      |
-| OrgChart       | `enterprise/OrgChart.tsx`                   | OUT-OF-SCOPE  | hierarchy visualization, not a chart type. Future `@mfe/hierarchy-viz` package proposal |
+| OrgChart       | `blocks/org-chart/OrgChart.tsx`             | OUT-OF-SCOPE  | hierarchy visualization, not a chart type. Future `@mfe/hierarchy-viz` package proposal |
 
 ### Runtime Dependency Boundary (Faz 21.6 PR-C0)
 
