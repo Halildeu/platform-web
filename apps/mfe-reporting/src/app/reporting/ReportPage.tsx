@@ -792,6 +792,43 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             params.success({ rowData: res.rows, rowCount: res.total });
           }
 
+          /*
+           * PR-0.5a (Codex thread 019e2c61): backend grand-total row
+           * → AG Grid pinnedBottomRowData. The grid surface is a
+           * single shared "pinned-bottom" row across SSRM stores, so
+           * we only apply it on the root-store response and clear it
+           * when the latest root response no longer carries the row
+           * (capability flip, pivot toggle, filter narrowed to empty
+           * set, etc.). Child-store responses leave the pinned row
+           * alone — the global total stays visible while the user
+           * drills into a bucket.
+           *
+           * Root detection mirrors the backend gate
+           * (currentLevel == 0): an empty groupKeys array. Pivot
+           * mode is already excluded backend-side, but defensively
+           * we still clear the pinned row when the response omits
+           * grandTotalRow so a rolling deploy or filter race can't
+           * leave a stale global total dangling on screen.
+           */
+          const isRootRequest =
+            !Array.isArray(ssrmRequest.groupKeys) || ssrmRequest.groupKeys.length === 0;
+          if (isRootRequest) {
+            const pinnedRows =
+              res.grandTotalRow &&
+              typeof res.grandTotalRow === 'object' &&
+              Object.keys(res.grandTotalRow).length > 0
+                ? [res.grandTotalRow as TRow]
+                : [];
+            try {
+              params.api.setGridOption('pinnedBottomRowData', pinnedRows);
+            } catch {
+              // AG Grid api may be torn down mid-flight (component
+              // unmount, route change, etc.). Drop the update
+              // silently — the pinned row is a UX enhancement, not
+              // load-bearing on the data render path.
+            }
+          }
+
           // PR-FE-3 (Codex 019e08e2 iter-12 REVISE absorb): clear the
           // tenant gate on a successful data fetch — covers the case
           // where the user picks a company AFTER metadata succeeded
