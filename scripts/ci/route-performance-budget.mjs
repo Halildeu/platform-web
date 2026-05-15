@@ -199,7 +199,32 @@ async function measureOnce(browser, routeBudget) {
     }
 
     // Wait for perf snapshot harness to attach + LCP to settle
-    await page.waitForFunction(() => typeof (window).__perfSnapshot === 'function', null, { timeout: 5000 });
+    //
+    // Codex `019e2b00` round 5 absorb: SPA cold loads on testai/prod can take
+    // 10+ seconds for the perf-observer chunk to attach (auth bootstrap +
+    // chunk fetch + module init). 5000ms timeout was too tight — manual probe
+    // confirms __perfSnapshot ready around 8-10s post-DCL on testai. Bumped
+    // to 15000ms with diagnostic log so cold-start latency doesn't false-fail.
+    try {
+      await page.waitForFunction(
+        () => typeof (window).__perfSnapshot === 'function',
+        null,
+        { timeout: 15000 },
+      );
+    } catch (e) {
+      // Diagnostic: surface what's actually on window when timeout hits
+      const diag = await page.evaluate(() => ({
+        perfObserverEnable: window.__PERF_OBSERVER_ENABLE ?? null,
+        perfSnapshotType: typeof (window).__perfSnapshot,
+        perfMarkType: typeof (window).__perfMark,
+        pathname: location.pathname,
+        readyState: document.readyState,
+      })).catch(() => null);
+      return {
+        error: `perf-snapshot-not-attached: window.__perfSnapshot did not become a function within 15s on ${checkPath()}; diag=${JSON.stringify(diag)}`,
+        perfSnapshotMissing: true,
+      };
+    }
 
     // PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2): rendered
     // sentinel guard. Each route declares a `sentinel` selector in
