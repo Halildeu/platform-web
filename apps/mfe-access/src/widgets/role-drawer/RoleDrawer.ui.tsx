@@ -75,10 +75,29 @@ interface CatalogReport {
 // (backend's PermissionType enum no longer contains PAGE; valueOf would
 // throw IllegalArgumentException → 500). CatalogPage and pages field
 // removed; the matching state, effects, and render section follow.
+/**
+ * R16 PR-D full (Codex 019e2a83 absorb) — report_group catalog item.
+ *
+ * Backend permission key format: `reports.<GROUP>` (e.g. `reports.FINANCE_REPORTS`).
+ * RoleDrawer save payload'da key olduğu gibi gider; TupleSyncService backend
+ * tarafında OpenFGA `report_group:<objectId>` tuple'a çevirir.
+ *
+ * UI'da dashboard listesinden (`Catalog.reports`) ayrı section render edilir
+ * ("Rapor Yetki Grupları"). Namespace collision yok: HR_ANALYTICS dashboard ≠
+ * HR_REPORTS group.
+ */
+interface CatalogReportGroup {
+  key: string; // "reports.FINANCE_REPORTS"
+  objectId: string; // "FINANCE_REPORTS"
+  label: string; // "Finans Raporları"
+  description?: string;
+}
+
 interface Catalog {
   modules: CatalogModule[];
   actions: CatalogAction[];
   reports: CatalogReport[];
+  reportGroups?: CatalogReportGroup[]; // R16 PR-D full — optional for backward-compat
 }
 interface RoleMember {
   userId: number;
@@ -102,6 +121,7 @@ const buildFallbackCatalog = (role: AccessRole | null): Catalog => ({
   })),
   actions: [],
   reports: [],
+  reportGroups: [], // R16 PR-D full — fallback boş; gerçek catalog backend'den
 });
 
 const RoleDrawer: React.FC<RoleDrawerProps> = ({
@@ -538,23 +558,19 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       for (const [key, grant] of Object.entries(vars.draft.actionGrants)) {
         granules.push({ type: 'action', key, grant });
       }
-      // Codex 019dda1c iter-26: skip catalog-stale report keys (e.g.
-      // legacy group keys from prior versions) so a save does not
-      // re-introduce rows the catalog has dropped.
+      // Codex 019dda1c iter-26: skip catalog-stale report keys.
       //
-      // R16 PR-D0 hotfix (Codex 019e2a5d P0 absorb): `reports.<GROUP>`
-      // prefix'li granule'lar R16 PR-B-2 (#199) ile canlı authz contract'ın
-      // parçası (TupleSyncService key-aware → OpenFGA report_group:<KEY>
-      // tuple; /authz/me.reports canonicalize ALLOW). Catalog henüz
-      // `reportGroups` field'ı içermediği için bu key'ler `validReportKeys`
-      // dışında kalıyor + save sırasında drop ediliyor → R15 regresyon
-      // (ADMIN role panelinde HERHANGI bir dashboard edit sonrası
-      // `reports.FINANCE_REPORTS`/`HR_REPORTS`/`SALES_REPORTS`/
-      // `ANALYTICS_REPORTS` sessizce silinirdi). Preserve workaround:
-      // `reports.` prefix'li keys catalog'da olmasa bile payload'a dahil.
-      // PR-D full adoption (backend catalog `reportGroups` extension + FE
-      // "Rapor Yetki Grupları" panel) ayrı PR'da.
-      const validReportKeys = new Set((catalog?.reports ?? []).map((r) => r.key));
+      // R16 PR-D full (Codex 019e2a83 absorb): catalog.reportGroups field
+      // backend tarafında eklendi (PermissionCatalogService); whitelist
+      // genişledi. PR-D0 hotfix `reports.` prefix preserve guard'ı korundu
+      // (eski sürüm catalog'lar için backward-compat).
+      const validReportKeys = new Set([
+        ...(catalog?.reports ?? []).map((r) => r.key),
+        ...(catalog?.reportGroups ?? []).map((g) => g.key),
+      ]);
+      // Backward-compat preserve: `reports.` prefix'li keys catalog
+      // reportGroups'ta olmasa bile payload'a dahil (eski sürüm catalog'lar
+      // için R15 regression guard).
       const isReportGroupKey = (key: string) => key.startsWith('reports.');
       for (const [key, grant] of Object.entries(vars.draft.reportGrants)) {
         if (!validReportKeys.has(key) && !isReportGroupKey(key)) continue;
@@ -1596,6 +1612,75 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
             });
           })()}
         </div>
+
+        {/* --- RAPOR YETKİ GRUPLARI (R16 PR-D full — Codex 019e2a83 absorb) --- */}
+        {/* Coarse-grained report group permissions (reports.<GROUP>) — backend
+            catalog'da R16 PR-D full ile `reportGroups` field eklendi. Dashboard
+            listesinden (`catalog.reports`) ayrı section; namespace collision yok
+            (HR_ANALYTICS dashboard ≠ HR_REPORTS group). Codex 019e2a5d öneri:
+            "Raporlar altında Rapor Yetki Grupları alt-bölümü". */}
+        {catalog?.reportGroups && catalog.reportGroups.length > 0 && (
+          <>
+            <hr className="border-border-subtle" />
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
+              Rapor Yetki Grupları
+            </h3>
+            <div
+              className="flex flex-col gap-2 rounded-xl border border-border-subtle bg-surface-muted/30 p-4"
+              data-testid="report-groups-panel"
+            >
+              <p className="text-xs text-text-subtle">
+                Coarse-grained report group permissions. Bu yetkiler kullanıcının ilgili
+                kategorideki TÜM raporları görüntüleme/yönetme erişimine etkir.
+              </p>
+              {catalog.reportGroups.map((group) => {
+                const currentGrant = reportGrants[group.key] ?? 'NONE';
+                const normalized: 'NONE' | 'VIEW' | 'MANAGE' =
+                  currentGrant === 'MANAGE'
+                    ? 'MANAGE'
+                    : currentGrant && currentGrant !== 'NONE'
+                      ? 'VIEW'
+                      : 'NONE';
+                return (
+                  <div
+                    key={group.key}
+                    className="flex items-center justify-between gap-3"
+                    data-testid={`report-group-${group.objectId}`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{group.label}</span>
+                      {group.description && (
+                        <span className="text-xs text-text-subtle">{group.description}</span>
+                      )}
+                    </div>
+                    <select
+                      className="rounded-md border border-border-default bg-surface-default px-2 py-1 text-sm disabled:opacity-50"
+                      value={normalized}
+                      disabled={!canEdit}
+                      data-testid={`report-group-select-${group.objectId}`}
+                      onChange={(e) => {
+                        const next = e.target.value as 'NONE' | 'VIEW' | 'MANAGE';
+                        setReportGrants((prev) => {
+                          const updated = { ...prev };
+                          if (next === 'NONE') {
+                            delete updated[group.key];
+                          } else {
+                            updated[group.key] = next;
+                          }
+                          return updated;
+                        });
+                      }}
+                    >
+                      <option value="NONE">Yok</option>
+                      <option value="VIEW">Görüntüleme</option>
+                      <option value="MANAGE">Tam Yetki</option>
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {/* --- ATANMIŞ KİŞİLER --- */}
         <h3 className="text-sm font-semibold uppercase tracking-wide text-text-subtle">
