@@ -1565,8 +1565,8 @@
   },
   {
     "name": "RiskMatrix",
-    "path": "enterprise/RiskMatrix.tsx",
-    "dir": "enterprise",
+    "path": "blocks/risk-matrix/RiskMatrix.tsx",
+    "dir": "blocks",
     "lineCount": 300,
     "scores": {
       "api": 95,

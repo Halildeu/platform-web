@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Auto-generated contract test — do not edit manually
 // Regenerate with: node scripts/ci/generate-contract-tests.mjs --write
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
 import { RiskMatrix } from '../RiskMatrix';
@@ -39,9 +39,12 @@ describe('RiskMatrix — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _riskitem: RiskItem | undefined = undefined; void _riskitem;
-    const _riskmatrixsize: RiskMatrixSize | undefined = undefined; void _riskmatrixsize;
-    const _riskmatrixprops: RiskMatrixProps | undefined = undefined; void _riskmatrixprops;
+    const _riskitem: RiskItem | undefined = undefined;
+    void _riskitem;
+    const _riskmatrixsize: RiskMatrixSize | undefined = undefined;
+    void _riskmatrixsize;
+    const _riskmatrixprops: RiskMatrixProps | undefined = undefined;
+    void _riskmatrixprops;
     expect(true).toBe(true);
   });
 });

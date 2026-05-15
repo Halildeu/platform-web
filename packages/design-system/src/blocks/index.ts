@@ -31,3 +31,6 @@ export { CommentThread } from './comment-thread';
 export { FileUploadZone } from './file-upload-zone';
 export { FilterPresets } from './filter-presets';
 export { ValueStream } from './value-stream';
+
+/* Phase 4 (2026-05-15) — moved from enterprise/ showcase to blocks */
+export { RiskMatrix } from './risk-matrix';
