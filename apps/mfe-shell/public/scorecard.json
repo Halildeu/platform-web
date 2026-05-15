@@ -764,8 +764,8 @@
   },
   {
     "name": "OrgChart",
-    "path": "enterprise/OrgChart.tsx",
-    "dir": "enterprise",
+    "path": "blocks/org-chart/OrgChart.tsx",
+    "dir": "blocks",
     "lineCount": 434,
     "scores": {
       "api": 90,
@@ -786,8 +786,8 @@
   },
   {
     "name": "CommentThread",
-    "path": "enterprise/CommentThread.tsx",
-    "dir": "enterprise",
+    "path": "blocks/comment-thread/CommentThread.tsx",
+    "dir": "blocks",
     "lineCount": 540,
     "scores": {
       "api": 90,
@@ -809,8 +809,8 @@
   },
   {
     "name": "PivotTable",
-    "path": "enterprise/PivotTable.tsx",
-    "dir": "enterprise",
+    "path": "blocks/pivot-table/PivotTable.tsx",
+    "dir": "blocks",
     "lineCount": 510,
     "scores": {
       "api": 95,
@@ -919,8 +919,8 @@
   },
   {
     "name": "FileUploadZone",
-    "path": "enterprise/FileUploadZone.tsx",
-    "dir": "enterprise",
+    "path": "blocks/file-upload-zone/FileUploadZone.tsx",
+    "dir": "blocks",
     "lineCount": 391,
     "scores": {
       "api": 90,
@@ -1527,8 +1527,8 @@
   },
   {
     "name": "HeatmapCalendar",
-    "path": "enterprise/HeatmapCalendar.tsx",
-    "dir": "enterprise",
+    "path": "blocks/heatmap-calendar/HeatmapCalendar.tsx",
+    "dir": "blocks",
     "lineCount": 408,
     "scores": {
       "api": 90,
@@ -2268,8 +2268,8 @@
   },
   {
     "name": "SankeyDiagram",
-    "path": "enterprise/SankeyDiagram.tsx",
-    "dir": "enterprise",
+    "path": "blocks/sankey-diagram/SankeyDiagram.tsx",
+    "dir": "blocks",
     "lineCount": 466,
     "scores": {
       "api": 95,
@@ -2743,8 +2743,8 @@
   },
   {
     "name": "ValueStream",
-    "path": "enterprise/ValueStream.tsx",
-    "dir": "enterprise",
+    "path": "blocks/value-stream/ValueStream.tsx",
+    "dir": "blocks",
     "lineCount": 300,
     "scores": {
       "api": 100,
@@ -3161,8 +3161,8 @@
   },
   {
     "name": "FilterPresets",
-    "path": "enterprise/FilterPresets.tsx",
-    "dir": "enterprise",
+    "path": "blocks/filter-presets/FilterPresets.tsx",
+    "dir": "blocks",
     "lineCount": 346,
     "scores": {
       "api": 95,

@@ -7,14 +7,14 @@ import { BulletChart } from '../index';
 import { MicroChart } from '../index';
 import { DateRangePicker } from '../index';
 
-import { SankeyDiagram } from '../SankeyDiagram';
+import { SankeyDiagram } from '../index';
 
 import { ProcessFlow } from '../index';
-import { ValueStream } from '../ValueStream';
+import { ValueStream } from '../index';
 import { StatusTimeline } from '../index';
 import { NotificationCenter } from '../index';
 import { InlineEdit } from '../index';
-import { FilterPresets } from '../FilterPresets';
+import { FilterPresets } from '../index';
 // PR #500 moved DataExportDialog out of enterprise/ into the generic
 // components/ surface. The test imports follow the source location.
 import { DataExportDialog } from '../../components/data-export-dialog/DataExportDialog';

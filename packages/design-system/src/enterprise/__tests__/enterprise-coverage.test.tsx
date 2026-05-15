@@ -16,8 +16,8 @@ import type { ComparisonRow } from '../index';
 // PR #500 moved DataExportDialog out of enterprise/ into the generic
 // components/ surface. The test imports follow the source location.
 import { DataExportDialog } from '../../components/data-export-dialog/DataExportDialog';
-import { FilterPresets } from '../FilterPresets';
-import type { FilterPreset } from '../FilterPresets';
+import { FilterPresets } from '../index';
+import type { FilterPreset } from '../index';
 import { InlineEdit } from '../index';
 
 // =====================================================================

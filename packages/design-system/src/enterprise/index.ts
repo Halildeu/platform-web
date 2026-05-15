@@ -46,7 +46,8 @@ export { BulletChart } from '../blocks/bullet-chart/BulletChart';
 // MicroChart moved to ../blocks/micro-chart/ (Phase 2b). Compat shim.
 export { MicroChart } from '../blocks/micro-chart/MicroChart';
 // TreemapChart, RadarChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
-export { SankeyDiagram } from './SankeyDiagram';
+// SankeyDiagram moved to ../blocks/sankey-diagram/ (Phase 2c). Compat shim.
+export { SankeyDiagram } from '../blocks/sankey-diagram/SankeyDiagram';
 
 // Date & Time
 // DateRangePicker moved to ../components/date-range-picker/ (Phase 3 adopt). Compat shim.
@@ -60,7 +61,8 @@ export { ThemeLayout } from './ThemeLayout';
 export { ProcessFlow } from '../blocks/process-flow/ProcessFlow';
 export { FlowBuilder } from './FlowBuilder';
 export type { FlowBuilderProps, FlowNode, FlowEdge, FlowNodeType } from './FlowBuilder';
-export { ValueStream } from './ValueStream';
+// ValueStream moved to ../blocks/value-stream/ (Phase 2c). Compat shim.
+export { ValueStream } from '../blocks/value-stream/ValueStream';
 
 // Status & Timeline
 // StatusTimeline moved to ../blocks/status-timeline/ (Phase 2a). Compat shim.
@@ -78,8 +80,9 @@ export { InlineEdit } from '../components/inline-edit/InlineEdit';
 // EmptyStateBuilder: removed — simple pattern, blocks/empty-state covers it (Phase 1b triage)
 
 // Filters
-export { FilterPresets } from './FilterPresets';
-export type { FilterPresetsLocaleText } from './FilterPresets';
+// FilterPresets moved to ../blocks/filter-presets/ (Phase 2c). Compat shim.
+export { FilterPresets } from '../blocks/filter-presets/FilterPresets';
+export type { FilterPresetsLocaleText } from '../blocks/filter-presets/FilterPresets';
 
 // Export
 // DataExportDialog moved to ../components/data-export-dialog/ (Phase 3 follow-up adopt). Compat shim.
@@ -101,22 +104,30 @@ export { ParetoChart } from '../blocks/pareto-chart/ParetoChart';
 export type { ParetoChartProps, ParetoItem } from '../blocks/pareto-chart/ParetoChart';
 
 // Heatmap Calendar
-export { HeatmapCalendar } from './HeatmapCalendar';
-export type { HeatmapCalendarProps, HeatmapDay } from './HeatmapCalendar';
+// HeatmapCalendar moved to ../blocks/heatmap-calendar/ (Phase 2c). Compat shim.
+export { HeatmapCalendar } from '../blocks/heatmap-calendar/HeatmapCalendar';
+export type { HeatmapCalendarProps, HeatmapDay } from '../blocks/heatmap-calendar/HeatmapCalendar';
 
 // Organization Chart
-export { OrgChart } from './OrgChart';
-export type { OrgChartProps, OrgChartNode } from './OrgChart';
+// OrgChart moved to ../blocks/org-chart/ (Phase 2c). Compat shim.
+export { OrgChart } from '../blocks/org-chart/OrgChart';
+export type { OrgChartProps, OrgChartNode } from '../blocks/org-chart/OrgChart';
 
 // GaugeChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 
 // Pivot Table
-export { PivotTable } from './PivotTable';
-export type { PivotTableProps, PivotValueConfig, PivotCellClickEvent } from './PivotTable';
+// PivotTable moved to ../blocks/pivot-table/ (Phase 2c). Compat shim.
+export { PivotTable } from '../blocks/pivot-table/PivotTable';
+export type {
+  PivotTableProps,
+  PivotValueConfig,
+  PivotCellClickEvent,
+} from '../blocks/pivot-table/PivotTable';
 
 // Comment Thread
-export { CommentThread } from './CommentThread';
-export type { CommentThreadProps, Comment } from './CommentThread';
+// CommentThread moved to ../blocks/comment-thread/ (Phase 2c). Compat shim.
+export { CommentThread } from '../blocks/comment-thread/CommentThread';
+export type { CommentThreadProps, Comment } from '../blocks/comment-thread/CommentThread';
 
 // Activity Feed
 // ActivityFeed moved to ../blocks/activity-feed/ (Phase 2a). Compat shim.
@@ -142,7 +153,8 @@ export type { ControlChartProps, ControlChartPoint } from '../blocks/control-cha
 // DecisionMatrix: removed — overlap with SWOTMatrix, weighted-score grid is simple pattern (Phase 1b triage)
 
 // File Upload
-export { FileUploadZone } from './FileUploadZone';
-export type { FileUploadZoneProps, UploadedFile } from './FileUploadZone';
+// FileUploadZone moved to ../blocks/file-upload-zone/ (Phase 2c). Compat shim.
+export { FileUploadZone } from '../blocks/file-upload-zone/FileUploadZone';
+export type { FileUploadZoneProps, UploadedFile } from '../blocks/file-upload-zone/FileUploadZone';
 
 // MetricComparisonCard: removed — overlap with ExecutiveKPIStrip (Phase 1b triage)

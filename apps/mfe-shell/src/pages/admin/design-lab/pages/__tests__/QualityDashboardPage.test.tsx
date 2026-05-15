@@ -273,8 +273,8 @@ const SCORECARD_FIXTURE = [
   },
   {
     name: 'OrgChart',
-    path: 'enterprise/OrgChart.tsx',
-    dir: 'enterprise',
+    path: 'blocks/org-chart/OrgChart.tsx',
+    dir: 'blocks',
     packageId: 'design-system',
     packageName: '@mfe/design-system',
     canonicalId: '@mfe/design-system/OrgChart',

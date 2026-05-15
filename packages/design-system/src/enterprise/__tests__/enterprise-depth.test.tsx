@@ -6,16 +6,16 @@ import React from 'react';
 import { BulletChart } from '../index';
 import { MicroChart } from '../index';
 
-import { SankeyDiagram } from '../SankeyDiagram';
+import { SankeyDiagram } from '../index';
 
-import { FilterPresets } from '../FilterPresets';
+import { FilterPresets } from '../index';
 import { DateRangePicker } from '../index';
 import { InlineEdit } from '../index';
 import { DataExportDialog } from '../index';
 import { NotificationCenter } from '../index';
 import { ExecutiveKPIStrip } from '../index';
 import { ProcessFlow } from '../index';
-import { ValueStream } from '../ValueStream';
+import { ValueStream } from '../index';
 import { StatusTimeline } from '../index';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../RiskMatrix';
