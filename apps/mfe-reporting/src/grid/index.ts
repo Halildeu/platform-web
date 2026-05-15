@@ -154,14 +154,27 @@ export const normalizeServerSideRequest = (request: GridRequest): GridRequest =>
   const hasRowGroup = (request.rowGroupCols?.length ?? 0) > 0;
   const hasPivotCols = (request.pivotCols?.length ?? 0) > 0;
   const pivotMode = request.pivotMode === true;
-  const hasGroupKeys = (request.groupKeys?.length ?? 0) > 0;
 
-  if (hasRowGroup || hasPivotCols || pivotMode || hasGroupKeys) {
+  // PR-0.4g iter-2 (Codex 019e2a7f absorb): an active row-group /
+  // pivot / pivotMode signal short-circuits to a referential
+  // pass-through — drill-down / pivot / grouped paths are all
+  // backend-supported and must not be touched.
+  if (hasRowGroup || hasPivotCols || pivotMode) {
     return request;
   }
 
+  // PR-0.4g iter-2 (Codex 019e2a7f absorb): stale `groupKeys` without
+  // a matching `rowGroupCols` is the same shape of broken-route
+  // snapshot as stale `valueCols`. AG Grid SSRM can briefly emit
+  // {rowGroupCols=[], groupKeys=['…']} when a user removes the last
+  // row-group while an expanded bucket is mounted; the backend
+  // dispatcher would still see grouping intent and 400. Normalising
+  // both fields together keeps the outbound payload internally
+  // consistent regardless of which child-store request raced the
+  // column-state mutation.
   const hasValueCols = (request.valueCols?.length ?? 0) > 0;
-  if (!hasValueCols) {
+  const hasGroupKeys = (request.groupKeys?.length ?? 0) > 0;
+  if (!hasValueCols && !hasGroupKeys) {
     return request;
   }
 

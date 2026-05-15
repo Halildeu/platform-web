@@ -92,6 +92,42 @@ describe('normalizeServerSideRequest', () => {
     expect(out).toBe(req);
   });
 
+  it('drops stale groupKeys when rowGroupCols disappeared (Codex 019e2a7f hardening)', () => {
+    // Rare-but-real child-store race: an expanded bucket is mounted
+    // (groupKeys=['Finans']) while the user removes the last
+    // row-group chip. AG Grid SSRM can emit {rowGroupCols=[],
+    // groupKeys=['Finans'], valueCols=[…]} for the next block before
+    // the column-state mutation propagates. Backend would still see
+    // grouping intent → 400; normaliser must drop the stale groupKeys
+    // alongside valueCols.
+    const req = baseRequest({
+      rowGroupCols: [],
+      pivotCols: [],
+      pivotMode: false,
+      groupKeys: ['Finans'],
+      valueCols: [{ id: 'AMOUNT', field: 'AMOUNT', displayName: 'AMOUNT', aggFunc: 'sum' }],
+    });
+    const out = normalizeServerSideRequest(req);
+    expect(out.valueCols).toEqual([]);
+    expect(out.groupKeys).toEqual([]);
+  });
+
+  it('drops stale groupKeys even without valueCols (broken-route snapshot)', () => {
+    // Defensive: a snapshot with only stale groupKeys is also
+    // semantically inconsistent with a backend-flat path. Same drop
+    // behaviour so the outbound payload stays clean.
+    const req = baseRequest({
+      rowGroupCols: [],
+      pivotCols: [],
+      pivotMode: false,
+      groupKeys: ['Finans'],
+      valueCols: [],
+    });
+    const out = normalizeServerSideRequest(req);
+    expect(out.valueCols).toEqual([]);
+    expect(out.groupKeys).toEqual([]);
+  });
+
   it('returns the same object when there is nothing to normalise (no valueCols)', () => {
     // Flat request without any aggregation columns must skip the
     // {…request} spread so callers can rely on referential equality
