@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import {
-  GroupedCardGallery,
-  GalleryCard,
-} from '@mfe/design-system';
+import { GroupedCardGallery, GalleryCard } from '@mfe/design-system';
 import type { GalleryItem } from '@mfe/design-system';
 import { usePermissions } from '@mfe/auth';
 import { useCatalog, catalogTypeTone } from './useCatalog';
 import type { CatalogItem } from './useCatalog';
+import { getShellServices } from '../services/shell-services';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -30,14 +28,14 @@ const GROUP_ORDER = [
 ];
 
 const GROUP_ICONS: Record<string, string> = {
-  'Denetim': '\uD83D\uDCCB',
+  Denetim: '\uD83D\uDCCB',
   'Erisim & Guvenlik': '\uD83D\uDD10',
-  'Finans': '\uD83D\uDCB0',
-  'Operasyon': '\u2699\uFE0F',
-  'IT': '\uD83D\uDCBB',
-  'Dashboard': '\uD83D\uDCCA',
-  'Diger': '\uD83D\uDCC2',
-  'Genel': '\uD83D\uDCC4',
+  Finans: '\uD83D\uDCB0',
+  Operasyon: '\u2699\uFE0F',
+  IT: '\uD83D\uDCBB',
+  Dashboard: '\uD83D\uDCCA',
+  Diger: '\uD83D\uDCC2',
+  Genel: '\uD83D\uDCC4',
   '\u0130nsan Kaynaklar\u0131': '\uD83D\uDC65',
   'Sat\u0131\u015F': '\uD83D\uDED2',
 };
@@ -47,6 +45,23 @@ const DEBOUNCE_MS = 250;
 /* ------------------------------------------------------------------ */
 /*  Search helper                                                      */
 /* ------------------------------------------------------------------ */
+
+/**
+ * R15 user-visible repair (Codex 019e2aef iter-7). Read the host shell's
+ * canonical `superAdmin` snapshot via the services bridge, with a
+ * fail-closed fallback so a not-yet-wired shell never elevates the gate.
+ * Must be called at render time (NOT memoised with empty deps), because
+ * `ReportingProviders` wires `configureShellServices` from inside a
+ * `useEffect` — a `useMemo([], ...)` would lock in the first-render
+ * fallback value forever and re-introduce the original R15 symptom.
+ */
+function readShellSuperAdmin(): boolean {
+  try {
+    return getShellServices().auth.isSuperAdmin();
+  } catch {
+    return false;
+  }
+}
 
 function filterItems(items: CatalogItem[], query: string): CatalogItem[] {
   if (!query) return items;
@@ -94,15 +109,37 @@ const ReportingHub: React.FC = () => {
   }, []);
 
   // TB-14/18: Filter by reportGroup using canViewReport (deny-default coarse gate)
-  const authorizedItems = useMemo(() => {
-    if (isSuperAdmin()) return items;
-    return items.filter((item) => !item.reportGroup || canViewReport(item.reportGroup));
-  }, [items, canViewReport, isSuperAdmin]);
+  //
+  // R15 user-visible repair (Codex 019e2aef iter-6/7 — mirror of mfe-users PR-C2):
+  // Shell-level superAdmin bridge. `usePermissions().isSuperAdmin()` in this
+  // remote MFE may still resolve to the default `() => false` even after
+  // the federation `@mfe/auth` singleton config — the reporting bundle's
+  // local PermissionContext instance does not always observe the host
+  // shell's PermissionProvider state. Browser-verified bug on testai
+  // 2026-05-15: /authz/me returned superAdmin=true but ReportingHub
+  // dropped 38 of 52 catalog entries because the local context never
+  // received the host state.
+  //
+  // Codex iter-7 hardening: read at render time, NOT inside a useMemo.
+  // `ReportingProviders` wires `configureShellServices` from inside a
+  // `useEffect`, so the first render returns the no-op fallback; a
+  // memo with `[]` deps would lock in `false` and never refresh when
+  // shell wiring completes.
+  const isShellSuperAdmin = readShellSuperAdmin();
 
-  const filteredItems = useMemo(() => filterItems(authorizedItems, query), [authorizedItems, query]);
+  const authorizedItems = useMemo(() => {
+    if (isShellSuperAdmin || isSuperAdmin()) return items;
+    return items.filter((item) => !item.reportGroup || canViewReport(item.reportGroup));
+  }, [items, canViewReport, isSuperAdmin, isShellSuperAdmin]);
+
+  const filteredItems = useMemo(
+    () => filterItems(authorizedItems, query),
+    [authorizedItems, query],
+  );
 
   /* -- Summary ------------------------------------------------------- */
-  const summary = useMemo(() => {
+
+  const _summary = useMemo(() => {
     const dashCount = authorizedItems.filter((i) => i.type === 'dashboard').length;
     const reportCount = authorizedItems.length - dashCount;
     const parts: string[] = [];
@@ -138,15 +175,12 @@ const ReportingHub: React.FC = () => {
     [handleItemClick],
   );
 
-  const summaryFormatter = useCallback(
-    (all: GalleryItem[], filtered: GalleryItem[]) => {
-      if (filtered.length < all.length) {
-        return `${filtered.length} / ${all.length} sonuc`;
-      }
-      return '';
-    },
-    [],
-  );
+  const summaryFormatter = useCallback((all: GalleryItem[], filtered: GalleryItem[]) => {
+    if (filtered.length < all.length) {
+      return `${filtered.length} / ${all.length} sonuc`;
+    }
+    return '';
+  }, []);
 
   /* -- Loading ------------------------------------------------------- */
   if (isLoading && items.length === 0) {
@@ -208,12 +242,20 @@ const ReportingHub: React.FC = () => {
           {isSearching ? (
             <button
               type="button"
-              onClick={() => { setInputValue(''); setQuery(''); }}
+              onClick={() => {
+                setInputValue('');
+                setQuery('');
+              }}
               className="absolute end-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-text-secondary transition hover:text-text-primary"
               aria-label="Temizle"
             >
               <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none">
-                <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path
+                  d="M12 4L4 12M4 4l8 8"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
           ) : (
@@ -238,7 +280,11 @@ const ReportingHub: React.FC = () => {
           items={filteredItems}
           groupBy="category"
           hideSearch
-          defaultExpandedGroups={isSearching ? [...new Set(filteredItems.map((i) => i.category))] : GROUP_ORDER.slice(0, 3)}
+          defaultExpandedGroups={
+            isSearching
+              ? [...new Set(filteredItems.map((i) => i.category))]
+              : GROUP_ORDER.slice(0, 3)
+          }
           groupOrder={GROUP_ORDER}
           onItemClick={handleItemClick}
           renderCard={renderCard}

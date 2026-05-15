@@ -53,6 +53,20 @@ export type RemoteShellServices = {
     isTransportReady: () => boolean;
     getPhase: () => RemoteShellAuthPhase;
     getEpoch: () => number;
+    /**
+     * R15 user-visible repair (Codex 019e2aef iter-6 — mirror of
+     * mfe-users PR-C2 pattern). Shell-level superAdmin gate exposed
+     * so `ReportingHub` can consult the shell singleton instead of
+     * `usePermissions()` from a local `@mfe/auth` `PermissionContext`
+     * that may still resolve to the default `isSuperAdmin: () => false`
+     * even after the federation singleton config — the reporting MFE
+     * bundle's local Context instance does not always observe the
+     * host shell's PermissionProvider state. Browser-verified bug
+     * (testai 2026-05-15): /authz/me returned superAdmin=true but
+     * ReportingHub auth filter dropped 38 of 52 catalog entries
+     * because the local context never received the host state.
+     */
+    isSuperAdmin: () => boolean;
   };
 };
 
@@ -87,6 +101,10 @@ const createNoopServices = (): RemoteShellServices => ({
     isTransportReady: () => false,
     getPhase: () => 'initializing' as const,
     getEpoch: () => 0,
+    // R15 user-visible repair (Codex 019e2aef iter-6): fail-closed
+    // fallback. If shell services have not wired yet, treat the user
+    // as non-super-admin so the report group filter still applies.
+    isSuperAdmin: () => false,
   },
 });
 
