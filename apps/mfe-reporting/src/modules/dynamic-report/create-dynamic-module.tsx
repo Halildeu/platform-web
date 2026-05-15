@@ -3,7 +3,7 @@ import type { SharedReportId } from '@platform/capabilities';
 import type { ReportModule } from '../types';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
 import type { DynamicReportFilters, DynamicReportRow, ReportListItem } from './types';
-import { fetchReportData, exportReportData } from './api';
+import { fetchReportData, exportReportData, fetchFilterValues } from './api';
 import { CompanyPicker } from '../../components/CompanyPicker';
 import {
   fetchMeta as fetchMetaFromCache,
@@ -125,5 +125,7 @@ export const createDynamicReportModule = (
     // snapshot so grouped/pivot exports match the user's on-screen view.
     exportRows: (filters, format, gridState) =>
       exportReportData(report.key, filters, format, gridState),
+    // PR-0.5c (Codex thread 019e2d54): set filter distinct values.
+    fetchFilterValues: (column, search) => fetchFilterValues(report.key, column, search),
   };
 };

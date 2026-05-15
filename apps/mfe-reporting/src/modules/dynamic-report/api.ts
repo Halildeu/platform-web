@@ -7,7 +7,7 @@ import axios, { AxiosError } from 'axios';
 // eslint-disable-next-line no-restricted-imports
 import { api, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
-import type { ExportGridState, GridRequest, GridResponse } from '../../grid';
+import type { ExportGridState, FilterValuesResult, GridRequest, GridResponse } from '../../grid';
 import { normalizeServerSideRequest, requestsGrouping } from '../../grid';
 import type {
   DynamicReportFilters,
@@ -667,3 +667,119 @@ export const exportReportData = async (
 // decision lives inline with the normalisation step now, so the
 // raw-snapshot pre-check is redundant — removed to keep a single
 // source of truth for "is this request grouping".
+
+/*
+ * PR-0.5c (Codex thread 019e2d54): set filter distinct values.
+ *
+ * In-memory cache: the AG Grid set filter `values` callback fires
+ * every time the dropdown opens (with refreshValuesOnOpen=true);
+ * without a cache the user pays a round-trip per open. The value
+ * set is RLS/principal scoped, so the cache key includes BOTH the
+ * company id AND the auth epoch — Codex iter-2 §High: a
+ * logout/re-login/impersonation within the same tab must not serve
+ * the previous principal's distinct values. This mirrors the
+ * epoch-aware invalidation metadata-cache.ts already does.
+ *
+ * The cache lives only in this module's memory (never a shared HTTP
+ * cache). 60s TTL balances freshness against churn.
+ */
+const FILTER_VALUES_CACHE_TTL_MS = 60_000;
+type FilterValuesCacheEntry = { result: FilterValuesResult; expiresAt: number };
+const filterValuesCache = new Map<string, FilterValuesCacheEntry>();
+let filterValuesLastSeenEpoch = -1;
+
+/**
+ * Resolve the current auth epoch; returns -1 when shell-services is
+ * not yet wired (unit tests). The epoch advances on logout /
+ * re-login / impersonation so it is the canonical principal-change
+ * signal.
+ */
+const resolveAuthEpoch = (): number => {
+  try {
+    return getShellServices().auth.getEpoch();
+  } catch {
+    return -1;
+  }
+};
+
+/**
+ * Drop the whole filter-values cache when the auth epoch advances —
+ * the new principal must not see the previous principal's
+ * RLS-scoped distinct values. Called at the top of every
+ * {@link fetchFilterValues} lookup.
+ */
+const ensureFilterValuesEpoch = (epoch: number): void => {
+  if (epoch !== filterValuesLastSeenEpoch) {
+    filterValuesLastSeenEpoch = epoch;
+    filterValuesCache.clear();
+  }
+};
+
+/**
+ * PR-0.5c: fetch a column's distinct values for the AG Grid set
+ * filter dropdown. Backed by {@code GET /api/v1/reports/{key}/filter-values}.
+ *
+ * <p>A 60s in-memory cache keyed by {@code [authEpoch, reportKey,
+ * companyId, column, search]} (JSON-encoded — printable, collision-
+ * safe) avoids a backend round-trip on every dropdown open. The
+ * cache is per browser tab (module memory) and epoch-invalidated so
+ * a principal switch can never leak RLS-scoped values.
+ */
+export const fetchFilterValues = async (
+  reportKey: string,
+  column: string,
+  search?: string,
+): Promise<FilterValuesResult> => {
+  const trimmedSearch = search?.trim() ?? '';
+  const companyId = resolveCompanyId() ?? '';
+  const authEpoch = resolveAuthEpoch();
+  ensureFilterValuesEpoch(authEpoch);
+
+  // JSON.stringify keeps the key printable + collision-safe (a
+  // column name containing the old space separator would have
+  // collided; the array form cannot). Codex iter-2 §Medium: the
+  // previous template-literal separator embedded NUL bytes into
+  // the source file — replaced entirely.
+  const cacheKey = JSON.stringify([authEpoch, reportKey, companyId, column, trimmedSearch]);
+
+  const cached = filterValuesCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.result;
+  }
+
+  const client = resolveHttpClient();
+  const params = new URLSearchParams();
+  params.set('column', column);
+  if (trimmedSearch) {
+    params.set('search', trimmedSearch);
+  }
+
+  const { data } = await client.get<{
+    values?: Array<string | number | boolean | null>;
+    limit?: number;
+    truncated?: boolean;
+  }>(`${REPORTS_BASE}/${reportKey}/filter-values?${params.toString()}`, {
+    headers: buildCompanyHeaders(),
+  });
+
+  const result: FilterValuesResult = {
+    values: Array.isArray(data?.values) ? data.values : [],
+    limit: typeof data?.limit === 'number' ? data.limit : 0,
+    truncated: data?.truncated === true,
+  };
+
+  filterValuesCache.set(cacheKey, {
+    result,
+    expiresAt: Date.now() + FILTER_VALUES_CACHE_TTL_MS,
+  });
+  return result;
+};
+
+/**
+ * PR-0.5c: drop every cached filter-values entry. Exposed so a
+ * future "refresh filters" affordance (or a company switch) can
+ * force the next dropdown open to re-fetch.
+ */
+export const clearFilterValuesCache = (): void => {
+  filterValuesCache.clear();
+};

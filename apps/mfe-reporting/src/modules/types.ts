@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 import type { SharedReportId } from '@platform/capabilities';
-import type { ColumnDef, ExportGridState, GridRequest, GridResponse } from '../grid';
+import type {
+  ColumnDef,
+  ExportGridState,
+  FilterValuesResult,
+  GridRequest,
+  GridResponse,
+} from '../grid';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
 import type { ReportCapabilities } from './dynamic-report/types';
 
@@ -64,6 +70,16 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
     format: 'csv' | 'excel',
     gridState?: ExportGridState,
   ) => Promise<{ blob: Blob; filename: string }>;
+
+  /**
+   * PR-0.5c (Codex thread 019e2d54): fetch a column's distinct values
+   * for the AG Grid set filter dropdown. When present, ReportPage
+   * wires this into {@code filterParams.values} for every
+   * {@code agSetColumnFilter} column. Modules whose backend predates
+   * the {@code GET /filter-values} endpoint leave it undefined →
+   * ReportPage falls back to AG Grid's default (empty) set filter.
+   */
+  fetchFilterValues?: (column: string, search?: string) => Promise<FilterValuesResult>;
 
   /**
    * Filter field keys that the user MUST set before the report can render

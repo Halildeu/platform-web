@@ -100,6 +100,22 @@ export type ExportGridState = {
   sortModel?: SortModelItem[];
 };
 
+/**
+ * PR-0.5c (Codex thread 019e2d54): result of the set-filter
+ * distinct-values lookup ({@code GET /api/v1/reports/{key}/filter-values}).
+ * Mirrors the backend {@code FilterValuesResponseDto}.
+ *
+ * <p>{@code values} are raw column values — a {@code null} entry maps
+ * to AG Grid's "(Blanks)" row. {@code truncated} is {@code true} when
+ * the column has more than {@code limit} distinct values, so the
+ * frontend can surface a "showing first N" hint.
+ */
+export type FilterValuesResult = {
+  values: Array<string | number | boolean | null>;
+  limit: number;
+  truncated: boolean;
+};
+
 export type GridResponse<T = unknown> = {
   rows: T[];
   total: number;
