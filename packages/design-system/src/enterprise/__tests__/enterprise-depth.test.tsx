@@ -11,7 +11,7 @@ import { SankeyDiagram } from '../SankeyDiagram';
 import { FilterPresets } from '../FilterPresets';
 import { DateRangePicker } from '../index';
 import { InlineEdit } from '../index';
-import { DataExportDialog } from '../DataExportDialog';
+import { DataExportDialog } from '../index';
 import { NotificationCenter } from '../NotificationCenter';
 import { ExecutiveKPIStrip } from '../index';
 import { ProcessFlow } from '../ProcessFlow';
