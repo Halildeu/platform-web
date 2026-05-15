@@ -22,7 +22,7 @@ import { RiskMatrix } from '../index';
 import { GanttTimeline } from '../index';
 import { ComparisonTable } from '../index';
 import { GovernanceBoard } from '../index';
-import { ThemeLayout } from '../ThemeLayout';
+import { ThemeLayout } from '../index';
 
 // ===========================================================================
 // 1. BulletChart

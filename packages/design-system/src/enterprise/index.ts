@@ -57,7 +57,8 @@ export { SankeyDiagram } from '../blocks/sankey-diagram/SankeyDiagram';
 export { DateRangePicker } from '../components/date-range-picker/DateRangePicker';
 
 // Layout
-export { ThemeLayout } from './ThemeLayout';
+// ThemeLayout moved to ../patterns/theme-layout/ (Phase 4 — layout pattern). Compat shim.
+export { ThemeLayout } from '../patterns/theme-layout/ThemeLayout';
 
 // Process & Flow
 // ProcessFlow moved to ../blocks/process-flow/ (Phase 2a). Compat shim.
