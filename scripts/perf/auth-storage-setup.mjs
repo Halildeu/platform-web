@@ -22,7 +22,8 @@
  * `serban.shell.authState`, etc.) are correctly populated.
  *
  * Env (required):
- *   PERF_AUTH_USERNAME       — default "perf-test"
+ *   PERF_AUTH_USERNAME       — default "d35-admin" (allowlist email → superAdmin=True;
+ *                               use "perf-test" for non-admin persona scenarios)
  *   PERF_AUTH_PASSWORD       — required (GHA secret PERF_AUTH_PASSWORD)
  *   PERF_AUTH_APP_ORIGIN     — default https://testai.acik.com
  *   PERF_AUTH_OUTPUT         — default tests/perf/.auth-storage.json (gitignored)
@@ -36,7 +37,7 @@ import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-const USERNAME = process.env.PERF_AUTH_USERNAME ?? 'perf-test';
+const USERNAME = process.env.PERF_AUTH_USERNAME ?? 'd35-admin';
 const PASSWORD = process.env.PERF_AUTH_PASSWORD;
 const APP_ORIGIN = process.env.PERF_AUTH_APP_ORIGIN ?? 'https://testai.acik.com';
 const OUTPUT_PATH = process.env.PERF_AUTH_OUTPUT ?? 'tests/perf/.auth-storage.json';

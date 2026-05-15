@@ -59,7 +59,10 @@ env:
   PERF_WARN_ONLY: ${{ inputs.warn_only || '1' }}
   PERF_TARGET: testai
   PERF_RUNS: '3' # M2a1 N≥3 minimum
-  PERF_AUTH_USERNAME: perf-test
+  # d35-admin persona (allowlist email d35-admin@example.com → superAdmin=True via
+  # PERMISSION_BOOTSTRAP_DEFAULT_ADMIN_ASSIGNMENTS_ADMIN_EMAILS owner-action 2026-05-15).
+  # perf-test persona kept as test fixture but has no admin grants → /admin/* fail validity.
+  PERF_AUTH_USERNAME: d35-admin
   PERF_AUTH_REALM: platform-test
   PERF_AUTH_CLIENT_ID: frontend
   PERF_AUTH_KEYCLOAK_BASE: https://testai.acik.com
