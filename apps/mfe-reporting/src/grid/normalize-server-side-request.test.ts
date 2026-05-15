@@ -136,4 +136,121 @@ describe('normalizeServerSideRequest', () => {
     const out = normalizeServerSideRequest(req);
     expect(out).toBe(req);
   });
+
+  // ── PR-0.4g2 (2026-05-15): incomplete pivot state degradation ─
+
+  describe('incomplete pivot state degradation', () => {
+    it('drops pivotMode + pivotCols + valueCols when row-group is missing', () => {
+      // Live testai bug: user toggles Pivot Mode on, drags BA into
+      // Column Labels, then removes the row-group chip → backend
+      // single-level pivot needs rowGroupCols.size==1 → 400.
+      const req = baseRequest({
+        rowGroupCols: [],
+        pivotMode: true,
+        pivotCols: [{ id: 'BA', field: 'BA', displayName: 'BA', aggFunc: null }],
+        valueCols: [{ id: 'AMOUNT', field: 'AMOUNT', displayName: 'AMOUNT', aggFunc: 'sum' }],
+      });
+      const out = normalizeServerSideRequest(req);
+      expect(out.pivotMode).toBe(false);
+      expect(out.pivotCols).toEqual([]);
+      expect(out.valueCols).toEqual([]);
+      expect(out.groupKeys).toEqual([]);
+    });
+
+    it('degrades to grouped when pivotMode + rowGroup but no pivot column', () => {
+      // Live testai bug: user removes the Column Labels chip while
+      // pivotMode is still on → backend pivot needs pivotCols.size==1.
+      // Keep rowGroupCols + valueCols so the grouped path renders.
+      const req = baseRequest({
+        rowGroupCols: [
+          { id: 'CATEGORY', field: 'CATEGORY', displayName: 'CATEGORY', aggFunc: null },
+        ],
+        pivotMode: true,
+        pivotCols: [],
+        valueCols: [{ id: 'AMOUNT', field: 'AMOUNT', displayName: 'AMOUNT', aggFunc: 'sum' }],
+      });
+      const out = normalizeServerSideRequest(req);
+      expect(out.pivotMode).toBe(false);
+      expect(out.pivotCols).toEqual([]);
+      expect(out.rowGroupCols).toHaveLength(1);
+      expect(out.valueCols).toHaveLength(1); // grouped path keeps aggregations
+    });
+
+    it('degrades to grouped when pivotMode + rowGroup + pivotCols but no value columns (iter-2)', () => {
+      // Codex 019e2a7f iter-2 absorb. Live bug: user removes the
+      // Values chip while pivotMode + rowGroup + pivotCols are still
+      // populated. Backend pivot aliases need an aggregation per
+      // bucket; without valueCols there's nothing to materialise →
+      // GROUPING_NOT_SUPPORTED 400. Degrade to grouped (drop
+      // pivotMode + pivotCols + groupKeys) so the row-group buckets
+      // still render while the user picks a new value column.
+      const req = baseRequest({
+        rowGroupCols: [
+          { id: 'ACCOUNT_CODE', field: 'ACCOUNT_CODE', displayName: 'Hesap Kodu', aggFunc: null },
+        ],
+        pivotMode: true,
+        pivotCols: [{ id: 'BA', field: 'BA', displayName: 'BA', aggFunc: null }],
+        valueCols: [],
+      });
+      const out = normalizeServerSideRequest(req);
+      expect(out.pivotMode).toBe(false);
+      expect(out.pivotCols).toEqual([]);
+      expect(out.rowGroupCols).toHaveLength(1);
+      expect(out.valueCols).toEqual([]);
+      expect(out.groupKeys).toEqual([]);
+    });
+
+    it('strips groupKeys from a complete pivot state (PR-0.4b single-level only)', () => {
+      // pivotMode + rowGroup + pivotCols are all set, but an expanded
+      // pivot bucket pushed a non-empty groupKeys. PR-0.4b backend
+      // rejects expanded pivot; strip groupKeys so the single-level
+      // pivot path serves the top-level buckets instead.
+      const req = baseRequest({
+        rowGroupCols: [
+          { id: 'CATEGORY', field: 'CATEGORY', displayName: 'CATEGORY', aggFunc: null },
+        ],
+        pivotMode: true,
+        pivotCols: [{ id: 'BA', field: 'BA', displayName: 'BA', aggFunc: null }],
+        valueCols: [{ id: 'AMOUNT', field: 'AMOUNT', displayName: 'AMOUNT', aggFunc: 'sum' }],
+        groupKeys: ['Finans'],
+      });
+      const out = normalizeServerSideRequest(req);
+      expect(out.pivotMode).toBe(true);
+      expect(out.pivotCols).toHaveLength(1);
+      expect(out.rowGroupCols).toHaveLength(1);
+      expect(out.valueCols).toHaveLength(1);
+      expect(out.groupKeys).toEqual([]);
+    });
+
+    it('keeps complete pivot state untouched (single-level pivot ready)', () => {
+      const req = baseRequest({
+        rowGroupCols: [
+          { id: 'CATEGORY', field: 'CATEGORY', displayName: 'CATEGORY', aggFunc: null },
+        ],
+        pivotMode: true,
+        pivotCols: [{ id: 'BA', field: 'BA', displayName: 'BA', aggFunc: null }],
+        valueCols: [{ id: 'AMOUNT', field: 'AMOUNT', displayName: 'AMOUNT', aggFunc: 'sum' }],
+      });
+      const out = normalizeServerSideRequest(req);
+      expect(out).toBe(req);
+    });
+
+    it('drops every grouping signal when pivotMode is on but nothing else is set', () => {
+      // The "toggle pivot mode and nothing else" case. Backend can't
+      // honour pivotMode without rowGroupCols / pivotCols, so degrade
+      // to flat data so the user sees something while picking the
+      // missing columns.
+      const req = baseRequest({
+        rowGroupCols: [],
+        pivotMode: true,
+        pivotCols: [],
+        valueCols: [],
+      });
+      const out = normalizeServerSideRequest(req);
+      expect(out.pivotMode).toBe(false);
+      expect(out.pivotCols).toEqual([]);
+      expect(out.valueCols).toEqual([]);
+      expect(out.groupKeys).toEqual([]);
+    });
+  });
 });
