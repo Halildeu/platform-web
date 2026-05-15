@@ -426,8 +426,8 @@ describe('PR-0.5e — column events persist a draft', () => {
     await waitForMount(mock);
 
     mock.applyColumnStateMock.mockClear();
-    mock.getColumnStateMock.mockClear();
     mock.setColumnState([{ colId: 'name', width: 150, pinned: null, hide: false }]);
+    const setItemSpy = vi.spyOn(window.Storage.prototype, 'setItem');
 
     // Three events inside the debounce window.
     act(() => {
@@ -435,11 +435,14 @@ describe('PR-0.5e — column events persist a draft', () => {
       mock.emit('columnPinned', {});
       mock.emit('columnMoved', {});
     });
-    // Before the debounce fires — no snapshot taken yet.
-    expect(mock.getColumnStateMock).not.toHaveBeenCalled();
+    // Before the debounce fires — nothing has been persisted yet
+    // (post-finding-2 the snapshot is captured per event into
+    // `pendingDraftRef`, but the WRITE is still debounced).
+    expect(setItemSpy).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(300));
-    // Exactly one snapshot → one persist.
-    expect(mock.getColumnStateMock).toHaveBeenCalledTimes(1);
+    // Three rapid events collapse into exactly one persisted write.
+    expect(setItemSpy).toHaveBeenCalledTimes(1);
+    setItemSpy.mockRestore();
   });
 });
 
@@ -702,6 +705,202 @@ describe('PR-0.5e — per-variant draft isolation on switch', () => {
       expect(
         mock.getColumnStateMock().find((c: Record<string, unknown>) => c.colId === 'name')?.width,
       ).toBe(600);
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Codex 019e2de0 REVISE finding 1 — no-variant default-scope draft   */
+/* ------------------------------------------------------------------ */
+
+describe('PR-0.5e — finding 1: no-variant draft is restored on mount', () => {
+  it('restores the default-scope draft on mount when variants = []', async () => {
+    // No backend variants at all.
+    mockFetch.mockResolvedValue([]);
+    // A draft persisted under the no-variant ("default") scope.
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: null,
+        schemaFingerprint: FINGERPRINT,
+      },
+      [
+        { colId: 'name', width: 421, pinned: 'left' },
+        { colId: 'email', width: 100 },
+        { colId: 'role', width: 100 },
+      ],
+    );
+
+    const { mock } = renderVariant();
+
+    // The variant-less mount must still overlay the default-scope draft
+    // — the pre-fix code early-returned on `variants.length === 0` and
+    // only applied a draft inside the `target` variant branch.
+    await waitFor(() => {
+      expect(mock.applyColumnStateMock).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      const name = mock
+        .getColumnStateMock()
+        .find((c: Record<string, unknown>) => c.colId === 'name');
+      expect(name?.width).toBe(421);
+      expect(name?.pinned).toBe('left');
+    });
+  });
+
+  it('surfaces the dirty indicator for a no-variant default-scope draft', async () => {
+    mockFetch.mockResolvedValue([]);
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: null,
+        schemaFingerprint: FINGERPRINT,
+      },
+      [{ colId: 'name', width: 311 }],
+    );
+    const { findByTestId } = renderVariant();
+    expect(await findByTestId('variant-layout-draft-indicator')).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Codex 019e2de0 REVISE finding 2 — debounce snapshot at event time  */
+/* ------------------------------------------------------------------ */
+
+describe('PR-0.5e — finding 2: debounce persists the right scope / last mutation', () => {
+  it("resize then switch variant before the debounce fires → A's layout persists to A's scope, not B's", async () => {
+    const VARIANT_B = makeVariant({
+      id: 'variant-B',
+      name: 'Varyant B',
+      isUserSelected: false,
+      isUserDefault: false,
+    });
+    mockFetch.mockResolvedValue([{ ...VARIANT_A, isUserSelected: true }, VARIANT_B]);
+
+    vi.useFakeTimers();
+    const { mock } = renderVariant();
+    await waitForMount(mock);
+
+    // Resize while variant A is active — pending snapshot captured for A.
+    mock.setColumnState([
+      { colId: 'name', width: 765, pinned: null, hide: false },
+      { colId: 'email', width: 100, pinned: null, hide: false },
+      { colId: 'role', width: 100, pinned: null, hide: false },
+    ]);
+    act(() => mock.emit('columnResized', { finished: true }));
+
+    // Switch to variant B BEFORE the ~250ms debounce fires.
+    const select = document.querySelector(
+      'select[data-testid="variant-select"]',
+    ) as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'variant-B';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Now let the pending debounce fire.
+    act(() => vi.advanceTimersByTime(300));
+
+    // A's scope got the resize (width 765); B's scope was NOT polluted.
+    const draftA = readRawDraft('variant-A');
+    expect(draftA).toBeDefined();
+    expect(draftA.columns.find((c: { colId: string }) => c.colId === 'name')?.width).toBe(765);
+    expect(readRawDraft('variant-B')).toBeUndefined();
+  });
+
+  it('resize then unmount before the debounce fires → the mutation is still flushed', async () => {
+    vi.useFakeTimers();
+    const { mock, unmount } = renderVariant();
+    await waitForMount(mock);
+
+    // Resize, then unmount inside the debounce window — the pre-fix
+    // cleanup cleared the timer and silently dropped this write.
+    mock.setColumnState([
+      { colId: 'name', width: 654, pinned: null, hide: false },
+      { colId: 'email', width: 100, pinned: null, hide: false },
+      { colId: 'role', width: 100, pinned: null, hide: false },
+    ]);
+    act(() => mock.emit('columnResized', { finished: true }));
+
+    // Unmount BEFORE advancing the timer — cleanup must flush the ref.
+    act(() => {
+      unmount();
+    });
+
+    const stored = readRawDraft('variant-A');
+    expect(stored).toBeDefined();
+    expect(stored.columns.find((c: { colId: string }) => c.colId === 'name')?.width).toBe(654);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Codex 019e2de0 REVISE finding 3 — schema fingerprint re-apply      */
+/* ------------------------------------------------------------------ */
+
+describe('PR-0.5e — finding 3: draft overlay retried on schema change', () => {
+  it('re-overlays the draft when columnDefIds change after the first apply', async () => {
+    // The real schema's columns arrive AFTER the first mount apply.
+    const LATE_COLUMN_IDS = ['name', 'email', 'role', 'createdAt'];
+    const lateFingerprint = computeSchemaFingerprint(LATE_COLUMN_IDS);
+
+    // A draft persisted for variant A under the LATE (real) schema.
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: 'variant-A',
+        schemaFingerprint: lateFingerprint,
+      },
+      [
+        { colId: 'name', width: 537, pinned: 'left' },
+        { colId: 'email', width: 100 },
+        { colId: 'role', width: 100 },
+      ],
+    );
+
+    const mock = createMockGridApi();
+    // First render with the INITIAL (incomplete) column set — its
+    // fingerprint does not match the stored draft, so no overlay yet.
+    const { rerender } = render(
+      <VariantIntegration
+        gridId={GRID_ID}
+        gridSchemaVersion={SCHEMA_VERSION}
+        gridApi={mock.api}
+        draftIdentity={IDENTITY}
+        columnDefIds={COLUMN_IDS}
+      />,
+    );
+    await waitFor(() => {
+      expect(mock.applyColumnStateMock).toHaveBeenCalled();
+    });
+    // Initial schema → no draft applied (fingerprint mismatch).
+    expect(
+      mock.getColumnStateMock().find((c: Record<string, unknown>) => c.colId === 'name')?.width,
+    ).toBe(100);
+
+    mock.applyColumnStateMock.mockClear();
+
+    // Async column metadata arrives → columnDefIds change → fingerprint
+    // changes → the auto-apply effect must retry the layout overlay.
+    rerender(
+      <VariantIntegration
+        gridId={GRID_ID}
+        gridSchemaVersion={SCHEMA_VERSION}
+        gridApi={mock.api}
+        draftIdentity={IDENTITY}
+        columnDefIds={LATE_COLUMN_IDS}
+      />,
+    );
+
+    await waitFor(() => {
+      const name = mock
+        .getColumnStateMock()
+        .find((c: Record<string, unknown>) => c.colId === 'name');
+      expect(name?.width).toBe(537);
+      expect(name?.pinned).toBe('left');
     });
   });
 });

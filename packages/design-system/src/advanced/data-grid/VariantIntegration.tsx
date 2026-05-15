@@ -40,6 +40,7 @@ import {
   type DraftScope,
   type LayoutDraft,
   applyDraftOverColumnState,
+  buildDraftKey,
   clearDraft,
   computeSchemaFingerprint,
   readDraft,
@@ -444,6 +445,26 @@ export const VariantIntegration = <RowData = unknown,>({
   // indicator UI.
   const isApplyingStateRef = useRef(false);
   const [draftDirty, setDraftDirty] = useState(false);
+  /*
+   * PR-0.5e (Codex 019e2de0 REVISE finding 3) — the schema fingerprint
+   * the draft overlay was LAST applied for. When `schemaFingerprint`
+   * changes after the first apply (async colDef metadata for flat
+   * reports) the layout-draft overlay must be retried for the new
+   * schema. This is a layout-overlay-only re-apply — it never re-runs
+   * the full variant/filter restore.
+   */
+  const lastAppliedSchemaRef = useRef<string | null>(null);
+  /*
+   * PR-0.5e (Codex 019e2de0 REVISE finding 2) — the last pending draft
+   * snapshot, captured AT EVENT TIME. The debounce timer writes this
+   * ref and the effect cleanup flushes it, so the final mutation lands
+   * in the correct scope even across a variant switch or an
+   * unmount/reload that happens inside the debounce window.
+   */
+  const pendingDraftRef = useRef<{
+    scope: DraftScope;
+    columnState: unknown;
+  } | null>(null);
   // Identity-aware draft enablement: the draft layer is OFF unless the
   // consumer passed a stable identity discriminator.
   const draftEnabled = typeof draftIdentity === 'string' && draftIdentity.trim().length > 0;
@@ -517,7 +538,55 @@ export const VariantIntegration = <RowData = unknown,>({
 
   // ── Auto-apply on first load ───────────────────────────────────────
   useEffect(() => {
-    if (!gridApi || variants.length === 0 || appliedRef.current) return;
+    if (!gridApi) return;
+
+    /*
+     * PR-0.5e (Codex 019e2de0 REVISE finding 3) — layout-overlay-only
+     * re-apply on schema change. The variant restore already ran
+     * (`appliedRef.current` set), but `schemaFingerprint` has changed
+     * since — e.g. flat-report colDef metadata arrived async. Re-read
+     * the draft for the NEW schema and re-overlay it WITHOUT re-running
+     * `applyVariantState` (no filter/sort/pivot re-apply).
+     */
+    if (appliedRef.current && draftEnabled) {
+      if (lastAppliedSchemaRef.current !== schemaFingerprint) {
+        isApplyingStateRef.current = true;
+        try {
+          const draft = readDraft(buildScope(appliedRef.current));
+          applyDraftLayer(gridApi, draft);
+          setDraftDirty(draft !== null);
+        } finally {
+          isApplyingStateRef.current = false;
+        }
+        lastAppliedSchemaRef.current = schemaFingerprint;
+      }
+      return;
+    }
+    if (appliedRef.current) return;
+
+    if (variants.length === 0) {
+      /*
+       * PR-0.5e (Codex 019e2de0 REVISE finding 1) — no-variant /
+       * "no variant selected" surface. There is no backend variant to
+       * restore, but the draft layer must still honour the design's
+       * "working layout draft even without a variant": read + overlay
+       * the `default`-scope draft (buildScope(null)) and mark dirty.
+       * appliedRef stays null so a real variant arriving later still
+       * runs its own restore.
+       */
+      if (draftEnabled && lastAppliedSchemaRef.current !== schemaFingerprint) {
+        isApplyingStateRef.current = true;
+        try {
+          const draft = readDraft(buildScope(null));
+          applyDraftLayer(gridApi, draft);
+          setDraftDirty(draft !== null);
+        } finally {
+          isApplyingStateRef.current = false;
+        }
+        lastAppliedSchemaRef.current = schemaFingerprint;
+      }
+      return;
+    }
 
     // Priority: requested initial variant → user selected → user default → global default → first compatible
     const requested = activeId
@@ -550,6 +619,7 @@ export const VariantIntegration = <RowData = unknown,>({
         isApplyingStateRef.current = false;
       }
       appliedRef.current = target.id;
+      lastAppliedSchemaRef.current = schemaFingerprint;
       setInternalActiveId(target.id);
       onActiveVariantChange?.(target.id);
     }
@@ -561,6 +631,7 @@ export const VariantIntegration = <RowData = unknown,>({
     sanitizeColumnState,
     sanitizePivotMode,
     draftEnabled,
+    schemaFingerprint,
     buildScope,
   ]);
 
@@ -605,15 +676,42 @@ export const VariantIntegration = <RowData = unknown,>({
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const persistDraft = () => {
-      if (isApplyingStateRef.current) return;
-      const columnState = gridApi.getColumnState?.() ?? [];
-      const draft = writeDraft(buildScope(appliedRef.current), columnState);
-      setDraftDirty(draft !== null);
+    /*
+     * PR-0.5e (Codex 019e2de0 REVISE finding 2) — flush whatever is in
+     * `pendingDraftRef`. The scope + columnState were captured AT EVENT
+     * TIME, so a write that fires after a variant switch still lands in
+     * the scope the mutation actually happened in (variant A), never
+     * the scope that happens to be active when the timer runs.
+     */
+    const flushPendingDraft = () => {
+      const pending = pendingDraftRef.current;
+      pendingDraftRef.current = null;
+      if (!pending) return;
+      const draft = writeDraft(pending.scope, pending.columnState);
+      // Only reflect the dirty state when the flushed scope is still the
+      // active one — flushing variant A's pending write must not flip
+      // the indicator for the now-selected variant B.
+      if (buildDraftKey(pending.scope) === buildDraftKey(buildScope(appliedRef.current))) {
+        setDraftDirty(draft !== null);
+      }
     };
 
+    const persistDraft = () => {
+      debounceTimer = null;
+      flushPendingDraft();
+    };
+
+    /*
+     * Snapshot `{ scope, columnState }` AT EVENT TIME into
+     * `pendingDraftRef` so the eventual write can't pick up a stale
+     * scope. The timer just flushes the ref.
+     */
     const schedulePersist = () => {
       if (isApplyingStateRef.current) return;
+      pendingDraftRef.current = {
+        scope: buildScope(appliedRef.current),
+        columnState: gridApi.getColumnState?.() ?? [],
+      };
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(persistDraft, 250);
     };
@@ -635,6 +733,14 @@ export const VariantIntegration = <RowData = unknown,>({
 
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
+      /*
+       * PR-0.5e (Codex 019e2de0 REVISE finding 2) — flush the pending
+       * draft BEFORE detaching. If a reload/unmount or a buildScope
+       * dependency change lands inside the ~250ms debounce window, the
+       * last resize/pin would otherwise be silently dropped — directly
+       * defeating the "resize then reload preserves" acceptance.
+       */
+      flushPendingDraft();
       try {
         gridApi.removeEventListener?.('columnResized', handleColumnResized);
         gridApi.removeEventListener?.('columnPinned', handleColumnPinned);
@@ -677,6 +783,10 @@ export const VariantIntegration = <RowData = unknown,>({
         isApplyingStateRef.current = false;
       }
       appliedRef.current = variantId;
+      // PR-0.5e — the draft overlay just ran for the current schema;
+      // keep the finding-3 schema-change tracker in sync so the
+      // auto-apply effect does not redundantly re-overlay.
+      lastAppliedSchemaRef.current = schemaFingerprint;
       setInternalActiveId(variantId);
       onActiveVariantChange?.(variantId);
 
@@ -701,6 +811,7 @@ export const VariantIntegration = <RowData = unknown,>({
       sanitizeColumnState,
       sanitizePivotMode,
       draftEnabled,
+      schemaFingerprint,
       buildScope,
     ],
   );
@@ -718,8 +829,29 @@ export const VariantIntegration = <RowData = unknown,>({
         gridApi.refreshServerSide?.({ purge: true });
       }
     }
+    /*
+     * PR-0.5e (Codex 019e2de0 REVISE finding 1) — deselecting a variant
+     * drops onto the no-variant ("default") surface, which has its OWN
+     * draft scope. Overlay that default-scope draft (so a working
+     * layout the user built without a variant survives) and recompute
+     * the dirty indicator against the default scope instead of leaving
+     * it stale from the variant that was just deselected. Reset
+     * `lastAppliedSchemaRef` so the auto-apply effect treats the
+     * default surface as a fresh apply target.
+     */
+    if (draftEnabled && gridApi) {
+      isApplyingStateRef.current = true;
+      try {
+        const draft = readDraft(buildScope(null));
+        applyDraftLayer(gridApi, draft);
+        setDraftDirty(draft !== null);
+      } finally {
+        isApplyingStateRef.current = false;
+      }
+      lastAppliedSchemaRef.current = schemaFingerprint;
+    }
     onActiveVariantChange?.(null);
-  }, [gridApi, onActiveVariantChange]);
+  }, [gridApi, onActiveVariantChange, draftEnabled, schemaFingerprint, buildScope]);
 
   const handleSave = useCallback(
     async (variantId: string) => {
@@ -738,10 +870,13 @@ export const VariantIntegration = <RowData = unknown,>({
          * persists the current layout INTO the variant; the transient
          * draft is now redundant, so clear it and drop the dirty
          * indicator. `collectGridState` above already captured the
-         * live layout, so no information is lost.
+         * live layout, so no information is lost. Also drop any
+         * in-flight debounced write (finding 2) so a timer firing
+         * after the save can't resurrect the just-cleared draft.
          */
         if (draftEnabled) {
           clearDraft(buildScope(variantId));
+          pendingDraftRef.current = null;
           setDraftDirty(false);
         }
       } catch {
@@ -766,6 +901,12 @@ export const VariantIntegration = <RowData = unknown,>({
     if (!draftEnabled) return;
     const variantId = appliedRef.current;
     clearDraft(buildScope(variantId));
+    /*
+     * PR-0.5e (Codex 019e2de0 REVISE finding 2) — drop any in-flight
+     * debounced write. Without this, a timer that fires just after the
+     * reset would re-persist the very draft the user just discarded.
+     */
+    pendingDraftRef.current = null;
     setDraftDirty(false);
     if (!gridApi) return;
     const variant = variantId ? variants.find((v) => v.id === variantId) : undefined;
@@ -780,7 +921,17 @@ export const VariantIntegration = <RowData = unknown,>({
     } finally {
       isApplyingStateRef.current = false;
     }
-  }, [draftEnabled, buildScope, gridApi, variants, sanitizeColumnState, sanitizePivotMode]);
+    // Keep the finding-3 schema tracker aligned with the reapplied base.
+    lastAppliedSchemaRef.current = schemaFingerprint;
+  }, [
+    draftEnabled,
+    buildScope,
+    gridApi,
+    variants,
+    schemaFingerprint,
+    sanitizeColumnState,
+    sanitizePivotMode,
+  ]);
 
   const handleCreate = useCallback(async () => {
     if (!gridApi) return;
