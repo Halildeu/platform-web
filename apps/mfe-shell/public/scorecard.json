@@ -854,7 +854,7 @@
   {
     "name": "ActivityFeed",
     "path": "blocks/activity-feed/ActivityFeed.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 399,
     "scores": {
       "api": 90,
@@ -876,7 +876,7 @@
   {
     "name": "BoxPlot",
     "path": "blocks/box-plot/BoxPlot.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 589,
     "scores": {
       "api": 90,
@@ -898,7 +898,7 @@
   {
     "name": "ControlChart",
     "path": "blocks/control-chart/ControlChart.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 571,
     "scores": {
       "api": 90,
@@ -942,7 +942,7 @@
   {
     "name": "HistogramChart",
     "path": "blocks/histogram-chart/HistogramChart.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 509,
     "scores": {
       "api": 90,
@@ -1547,7 +1547,7 @@
   {
     "name": "ParetoChart",
     "path": "blocks/pareto-chart/ParetoChart.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 389,
     "scores": {
       "api": 90,
@@ -1908,7 +1908,7 @@
   {
     "name": "MicroChart",
     "path": "blocks/micro-chart/MicroChart.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 366,
     "scores": {
       "api": 90,
@@ -1927,7 +1927,7 @@
   {
     "name": "StatusTimeline",
     "path": "blocks/status-timeline/StatusTimeline.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 303,
     "scores": {
       "api": 90,
@@ -2250,7 +2250,7 @@
   {
     "name": "GanttTimeline",
     "path": "blocks/gantt-timeline/GanttTimeline.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 455,
     "scores": {
       "api": 95,
@@ -2706,7 +2706,7 @@
   {
     "name": "NotificationCenter",
     "path": "blocks/notification-center/NotificationCenter.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 403,
     "scores": {
       "api": 100,
@@ -2725,7 +2725,7 @@
   {
     "name": "ProcessFlow",
     "path": "blocks/process-flow/ProcessFlow.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 476,
     "scores": {
       "api": 100,
@@ -3523,7 +3523,7 @@
   {
     "name": "BulletChart",
     "path": "blocks/bullet-chart/BulletChart.tsx",
-    "dir": "enterprise",
+    "dir": "blocks",
     "lineCount": 320,
     "scores": {
       "api": 90,
