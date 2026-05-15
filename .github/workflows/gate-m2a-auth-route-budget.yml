@@ -3,7 +3,8 @@
 # Codex consensus chain:
 #   - 019e2a4f Q1 Option B verdict: M2a yapılmalı (ABM-1 reclassification ≠ M2a)
 #   - 019e2a4f Q3 "M2a0 daraltılmış scope" pragmatik exec
-#   - 019e2b00 post-impl peer review round 3 AGREE — ready_to_merge: true
+#   - 019e2b00 post-impl peer review round 4 RED → round 5 AGREE absorb (ready_to_merge: true conditional on
+#     CI PASS + last-run.json artifact 4 routes runs>=3 measurementInvalid!=true error/skipped yok)
 #
 # Pattern (Codex Option B birebir):
 #   1. Runtime-generated storageState (committed fixture YOK) via scripts/perf/auth-storage-setup.mjs
