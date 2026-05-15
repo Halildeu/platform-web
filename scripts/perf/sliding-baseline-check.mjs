@@ -104,6 +104,19 @@ function printUsage() {
   );
 }
 
+// PERF-INIT-V2.1 M2a1 measurement chain LIVE (PR #527) revealed CLS regression
+// signal critical (/home cold-authenticated CLS 0.362 vs leader target ≤0.10).
+// Codex `019e2d16` REVISE absorb (platform-k8s-gitops PR #703): CLS metric
+// V3 hard-flip baseline ratification enabler — extend TRACKED_METRICS to
+// include CLS (and INP for future RUM acceptance) so sliding baseline median/
+// p95/stdDev computation covers CWV layout/interaction signals, not just
+// byte/timing.
+//
+// Schema impact:
+// - tests/perf/baseline.json history entries already record cls field
+//   (M2a1 measurement artifact captures it)
+// - sliding-baseline-check stats per-route now include cls history
+// - Hard-flip activation regressionGuard can use cls history p95/stdDev
 const TRACKED_METRICS = [
   'transferKB',
   'decodedKB',
@@ -112,6 +125,8 @@ const TRACKED_METRICS = [
   'longTaskTotalMs',
   'lcpMs',
   'fcpMs',
+  'cls',
+  'inpMs',
 ];
 
 /**
