@@ -587,7 +587,10 @@ export const exportReportData = async (
    */
   if (mode === 'raw') {
     const params = new URLSearchParams();
-    const search = filters.search?.trim();
+    // PR-0.5b2 iter-2 §P2: prefer the grid toolbar quick-filter so
+    // "ham veri" honours the on-screen quick search; fall back to
+    // the report filter drawer's search field.
+    const search = gridState?.quickFilterText?.trim() || filters.search?.trim();
     if (search) {
       params.set('search', search);
     }
@@ -700,7 +703,13 @@ export const exportReportData = async (
   // PR-0.5b2: a 'view'-mode snapshot that normalised to flat also
   // lands here; its filename still carries the -gorunum suffix.
   const params = new URLSearchParams();
-  const search = filters.search?.trim();
+  // PR-0.5b2 iter-2 §P2: for a 'view' export that fell to flat,
+  // prefer the grid quick-filter; the legacy path (mode undefined)
+  // keeps its byte-for-byte behaviour using only filters.search.
+  const search =
+    mode === 'view'
+      ? gridState?.quickFilterText?.trim() || filters.search?.trim()
+      : filters.search?.trim();
   if (search) {
     params.set('search', search);
   }

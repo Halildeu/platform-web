@@ -98,6 +98,13 @@ export type ExportGridState = {
   pivotMode?: boolean;
   filterModel?: FilterModel;
   sortModel?: SortModelItem[];
+  /**
+   * PR-0.5b2 (Codex thread 019e2d85 iter-2 §P2): the AG Grid toolbar
+   * quick-filter text. Captured into the snapshot so a "ham veri" /
+   * "mevcut görünüm" export honours the on-screen quick search the
+   * same way it honours the column filters and sort.
+   */
+  quickFilterText?: string;
 };
 
 /**

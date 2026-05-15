@@ -62,7 +62,7 @@ describe('GridToolbar — PR-0.5b2 raw vs view export', () => {
     expect(screen.queryByTitle('İndir')).not.toBeInTheDocument();
   });
 
-  it('supportsViewExport=true → single İndir dropdown, no bare format buttons', () => {
+  it('supportsViewExport=true (server mode) → single İndir dropdown, no bare format buttons', () => {
     render(
       <GridToolbar
         {...baseProps}
@@ -75,6 +75,32 @@ describe('GridToolbar — PR-0.5b2 raw vs view export', () => {
     // the bare format buttons are gone — the dropdown holds them
     expect(screen.queryByTitle('Excel')).not.toBeInTheDocument();
     expect(screen.queryByTitle('CSV')).not.toBeInTheDocument();
+  });
+
+  it('supportsViewExport=true but client mode → legacy 2-button (Codex iter-2 §P1)', () => {
+    // In client mode AG Grid's built-in export runs and ignores
+    // exportMode — a dropdown there would be a fake choice. The
+    // toolbar must fall back to the two-button layout.
+    render(
+      <GridToolbar
+        {...baseProps}
+        isServerMode={false}
+        gridApi={exportGridApi}
+        onServerExport={vi.fn()}
+        supportsViewExport
+      />,
+    );
+    expect(screen.queryByTitle('İndir')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Excel')).toBeInTheDocument();
+    expect(screen.getByTitle('CSV')).toBeInTheDocument();
+  });
+
+  it('supportsViewExport=true but onServerExport absent → legacy 2-button', () => {
+    // No server export callback → the raw/view split has nowhere to
+    // dispatch; fall back to the two-button layout.
+    render(<GridToolbar {...baseProps} gridApi={exportGridApi} supportsViewExport />);
+    expect(screen.queryByTitle('İndir')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Excel')).toBeInTheDocument();
   });
 
   it('İndir dropdown is closed until clicked', () => {

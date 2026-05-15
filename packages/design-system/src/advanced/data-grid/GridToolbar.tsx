@@ -223,8 +223,16 @@ export const GridToolbar = <RowData = unknown,>({
   const [quickFilter, setQuickFilter] = useState(quickFilterInitialValue);
   const [exporting, setExporting] = useState<'excel' | 'csv' | null>(null);
   // PR-0.5b2 (Codex 019e2d85): "İndir" dropdown open state — only
-  // used when supportsViewExport is true.
+  // used when showViewExport is true.
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  /*
+   * PR-0.5b2 iter-2 §P1: the raw/view dropdown is shown only when the
+   * server export path is actually wired. In client mode AG Grid's
+   * built-in export runs and ignores exportMode, so a dropdown there
+   * would present fake choices. A non-grouping server report keeps
+   * the legacy two-button layout too (raw == view for flat data).
+   */
+  const showViewExport = supportsViewExport && isServerMode && Boolean(onServerExport);
 
   const handleQuickFilterChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -344,13 +352,16 @@ export const GridToolbar = <RowData = unknown,>({
       <div className="flex-1" />
 
       {/*
-        Export controls. PR-0.5b2 (Codex 019e2d85):
-        - supportsViewExport=false → legacy 2-button Excel + CSV
-          (no grouping/pivot, so raw == view; mode left undefined).
-        - supportsViewExport=true → single "İndir" dropdown offering
-          raw-data and current-view variants, each with Excel + CSV.
+        Export controls. PR-0.5b2 (Codex 019e2d85, iter-2 §P1):
+        - showViewExport → single "İndir" dropdown with raw-data +
+          current-view variants. Gated on isServerMode && onServerExport
+          because the raw/view split only exists on the server export
+          path — in client mode AG Grid's built-in export ignores the
+          exportMode, so a dropdown there would offer fake choices.
+        - otherwise → legacy 2-button Excel + CSV (client AG Grid
+          export, or a non-grouping server report).
       */}
-      {exportConfig && !isFullscreen && !supportsViewExport && (
+      {exportConfig && !isFullscreen && !showViewExport && (
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -377,7 +388,7 @@ export const GridToolbar = <RowData = unknown,>({
         </div>
       )}
 
-      {exportConfig && !isFullscreen && supportsViewExport && (
+      {exportConfig && !isFullscreen && showViewExport && (
         <div className="relative" data-component="grid-export-menu">
           <button
             type="button"

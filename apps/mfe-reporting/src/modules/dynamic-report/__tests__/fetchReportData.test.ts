@@ -700,6 +700,58 @@ describe('exportReportData raw vs view mode (PR-0.5b2)', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
     expect(res.filename).toBe('any.csv');
   });
+
+  it("mode='raw' prefers the grid quick-filter over filters.search (Codex iter-2 §P2)", async () => {
+    // The toolbar quick-filter is what the user sees applied to the
+    // grid on screen; a raw export must honour it rather than the
+    // (possibly stale) filter-drawer search field.
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData(
+      'any',
+      { search: 'drawer-search' },
+      'csv',
+      {
+        rowGroupCols: [],
+        valueCols: [],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+        quickFilterText: 'toolbar-quick',
+      },
+      'raw',
+    );
+
+    const url = mockGet.mock.calls[0]?.[0] as string;
+    expect(url).toContain('search=toolbar-quick');
+    expect(url).not.toContain('drawer-search');
+  });
+
+  it("mode='raw' falls back to filters.search when no quick-filter is set", async () => {
+    // No toolbar quick-filter in the snapshot → the report filter
+    // drawer's search field is the only signal; it must still reach
+    // the export query string.
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData(
+      'any',
+      { search: 'drawer-search' },
+      'csv',
+      {
+        rowGroupCols: [],
+        valueCols: [],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      },
+      'raw',
+    );
+
+    const url = mockGet.mock.calls[0]?.[0] as string;
+    expect(url).toContain('search=drawer-search');
+  });
 });
 
 /*
