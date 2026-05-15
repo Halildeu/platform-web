@@ -489,9 +489,40 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         if (c.valueGetter) colDef.valueGetter = c.valueGetter as ColDef<TRow>['valueGetter'];
         if (c.filterParams) colDef.filterParams = c.filterParams;
         if (c.cellClass) colDef.cellClass = c.cellClass;
+
+        /*
+         * PR-0.5c (Codex thread 019e2d54): wire the set filter
+         * dropdown to the backend distinct-values endpoint. For an
+         * agSetColumnFilter column whose module exposes
+         * fetchFilterValues, register an async `values` callback so
+         * AG Grid lazily fetches the column's distinct values when
+         * the dropdown opens — instead of needing the whole SSRM
+         * dataset client-side.
+         *
+         * On fetch failure the callback resolves to an empty list so
+         * the dropdown degrades gracefully (AG Grid shows "no
+         * values" rather than hanging). The field guard is
+         * defensive — a set filter without a field can't address a
+         * backend column.
+         */
+        if (
+          colDef.filter === 'agSetColumnFilter' &&
+          typeof module.fetchFilterValues === 'function' &&
+          c.field
+        ) {
+          const setFilterField = c.field;
+          colDef.filterParams = {
+            ...(colDef.filterParams ?? {}),
+            values: (valuesParams: { success: (values: unknown[]) => void }) => {
+              module.fetchFilterValues!(setFilterField)
+                .then((res) => valuesParams.success(res.values))
+                .catch(() => valuesParams.success([]));
+            },
+          };
+        }
         return colDef;
       }),
-    [columns],
+    [columns, module],
   );
 
   /*

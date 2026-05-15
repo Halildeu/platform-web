@@ -54,7 +54,13 @@ vi.mock('@mfe/shared-http', () => ({
 }));
 
 // Import AFTER the mocks so resolveHttpClient picks up the stub.
-import { exportReportData, fetchReportData, ReportQueryError } from '../api';
+import {
+  clearFilterValuesCache,
+  exportReportData,
+  fetchFilterValues,
+  fetchReportData,
+  ReportQueryError,
+} from '../api';
 
 describe('requestsGrouping', () => {
   it('returns false on a flat request', () => {
@@ -562,5 +568,104 @@ describe('exportReportData routing (PR-0.5b export path)', () => {
         sortModel: [],
       }),
     ).rejects.toThrow('Rapor verileri için yetki bulunmuyor');
+  });
+});
+
+/*
+ * PR-0.5c (Codex thread 019e2d54): fetchFilterValues — set filter
+ * distinct values lookup with a 60s in-memory cache.
+ */
+describe('fetchFilterValues (PR-0.5c set filter values)', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockPost.mockReset();
+    clearFilterValuesCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('GETs /filter-values with the column param and maps the response', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { values: ['Ankara', 'Istanbul', null], limit: 1000, truncated: false },
+    });
+
+    const result = await fetchFilterValues('any', 'city');
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    const url = mockGet.mock.calls[0]?.[0] as string;
+    expect(url.startsWith('/v1/reports/any/filter-values?')).toBe(true);
+    expect(url).toContain('column=city');
+    expect(result.values).toEqual(['Ankara', 'Istanbul', null]);
+    expect(result.limit).toBe(1000);
+    expect(result.truncated).toBe(false);
+  });
+
+  it('forwards the search param when provided', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { values: ['Istanbul'], limit: 1000, truncated: false },
+    });
+
+    await fetchFilterValues('any', 'city', 'ist');
+
+    const url = mockGet.mock.calls[0]?.[0] as string;
+    expect(url).toContain('search=ist');
+  });
+
+  it('caches the result — a second identical call does not hit the network', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { values: ['Ankara'], limit: 1000, truncated: false },
+    });
+
+    const first = await fetchFilterValues('any', 'city');
+    const second = await fetchFilterValues('any', 'city');
+
+    expect(mockGet).toHaveBeenCalledTimes(1); // cache hit on the 2nd
+    expect(second).toEqual(first);
+  });
+
+  it('different column / search → separate cache entries', async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: { values: ['A'], limit: 1000, truncated: false } })
+      .mockResolvedValueOnce({ data: { values: ['B'], limit: 1000, truncated: false } });
+
+    await fetchFilterValues('any', 'city');
+    await fetchFilterValues('any', 'region');
+
+    expect(mockGet).toHaveBeenCalledTimes(2); // distinct keys → 2 fetches
+  });
+
+  it('clearFilterValuesCache forces the next call to re-fetch', async () => {
+    mockGet
+      .mockResolvedValueOnce({ data: { values: ['A'], limit: 1000, truncated: false } })
+      .mockResolvedValueOnce({ data: { values: ['A2'], limit: 1000, truncated: false } });
+
+    await fetchFilterValues('any', 'city');
+    clearFilterValuesCache();
+    const afterClear = await fetchFilterValues('any', 'city');
+
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(afterClear.values).toEqual(['A2']);
+  });
+
+  it('malformed response (no values array) degrades to empty list', async () => {
+    mockGet.mockResolvedValueOnce({ data: { limit: 1000 } });
+
+    const result = await fetchFilterValues('any', 'city');
+
+    expect(result.values).toEqual([]);
+    expect(result.truncated).toBe(false);
+  });
+
+  it('truncated flag round-trips from the backend response', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { values: ['A', 'B'], limit: 2, truncated: true },
+    });
+
+    const result = await fetchFilterValues('any', 'city');
+
+    expect(result.truncated).toBe(true);
+    expect(result.limit).toBe(2);
   });
 });

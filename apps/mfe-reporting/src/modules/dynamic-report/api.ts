@@ -7,7 +7,7 @@ import axios, { AxiosError } from 'axios';
 // eslint-disable-next-line no-restricted-imports
 import { api, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
-import type { ExportGridState, GridRequest, GridResponse } from '../../grid';
+import type { ExportGridState, FilterValuesResult, GridRequest, GridResponse } from '../../grid';
 import { normalizeServerSideRequest, requestsGrouping } from '../../grid';
 import type {
   DynamicReportFilters,
@@ -667,3 +667,77 @@ export const exportReportData = async (
 // decision lives inline with the normalisation step now, so the
 // raw-snapshot pre-check is redundant — removed to keep a single
 // source of truth for "is this request grouping".
+
+/*
+ * PR-0.5c (Codex thread 019e2d54): set filter distinct values.
+ *
+ * In-memory cache: the AG Grid set filter `values` callback fires
+ * every time the dropdown opens; without a cache the user pays a
+ * round-trip per open. Codex noted the result is user/company/RLS
+ * scoped, so the cache key includes the company id and the cache
+ * lives only in this module's memory (never a shared HTTP cache).
+ * 60s TTL balances freshness against churn.
+ */
+const FILTER_VALUES_CACHE_TTL_MS = 60_000;
+type FilterValuesCacheEntry = { result: FilterValuesResult; expiresAt: number };
+const filterValuesCache = new Map<string, FilterValuesCacheEntry>();
+
+/**
+ * PR-0.5c: fetch a column's distinct values for the AG Grid set
+ * filter dropdown. Backed by {@code GET /api/v1/reports/{key}/filter-values}.
+ *
+ * <p>A 60s in-memory cache keyed by {@code reportKey + companyId +
+ * column + search} avoids a backend round-trip on every dropdown
+ * open. The cache is per browser tab (module memory) — never an
+ * HTTP shared cache, since the value set is RLS/company scoped.
+ */
+export const fetchFilterValues = async (
+  reportKey: string,
+  column: string,
+  search?: string,
+): Promise<FilterValuesResult> => {
+  const trimmedSearch = search?.trim() ?? '';
+  const companyId = resolveCompanyId() ?? '';
+  const cacheKey = `${reportKey} ${companyId} ${column} ${trimmedSearch}`;
+
+  const cached = filterValuesCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.result;
+  }
+
+  const client = resolveHttpClient();
+  const params = new URLSearchParams();
+  params.set('column', column);
+  if (trimmedSearch) {
+    params.set('search', trimmedSearch);
+  }
+
+  const { data } = await client.get<{
+    values?: Array<string | number | boolean | null>;
+    limit?: number;
+    truncated?: boolean;
+  }>(`${REPORTS_BASE}/${reportKey}/filter-values?${params.toString()}`, {
+    headers: buildCompanyHeaders(),
+  });
+
+  const result: FilterValuesResult = {
+    values: Array.isArray(data?.values) ? data.values : [],
+    limit: typeof data?.limit === 'number' ? data.limit : 0,
+    truncated: data?.truncated === true,
+  };
+
+  filterValuesCache.set(cacheKey, {
+    result,
+    expiresAt: Date.now() + FILTER_VALUES_CACHE_TTL_MS,
+  });
+  return result;
+};
+
+/**
+ * PR-0.5c: drop every cached filter-values entry. Exposed so a
+ * future "refresh filters" affordance (or a company switch) can
+ * force the next dropdown open to re-fetch.
+ */
+export const clearFilterValuesCache = (): void => {
+  filterValuesCache.clear();
+};
