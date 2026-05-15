@@ -73,7 +73,9 @@ type _BlockPropsSurface = [
   GovernanceBoardProps,
   ApprovalWorkflowProps,
 ];
- 
+
+// The declaration alone forces tsc to resolve _BlockPropsSurface — and thus
+// every imported block Props type. `_`-prefix exempts it from no-unused-vars.
 const _typeSurfaceCheck = (_: _BlockPropsSurface): void => void 0;
 
 /** The 22 components moved into blocks/ across Phase 2 & 4. */
