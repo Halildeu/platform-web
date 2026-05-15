@@ -21,7 +21,8 @@ export type {
 export { ExecutiveKPIStrip } from '../patterns/executive-kpi-strip/ExecutiveKPIStrip';
 
 // Workflow & Approvals
-export { ApprovalWorkflow } from './ApprovalWorkflow';
+// ApprovalWorkflow moved to ../blocks/approval-workflow/ (Phase 4). Compat shim.
+export { ApprovalWorkflow } from '../blocks/approval-workflow/ApprovalWorkflow';
 
 // Risk & Governance
 // RiskMatrix moved to ../blocks/risk-matrix/ (Phase 4). Compat shim.

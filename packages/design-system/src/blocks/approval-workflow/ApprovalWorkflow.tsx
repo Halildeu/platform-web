@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { resolveAccessState, accessStyles } from '../internal/access-controller';
-import type { AccessLevel } from '../internal/access-controller';
+import { resolveAccessState, accessStyles } from '../../internal/access-controller';
+import type { AccessLevel } from '../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -109,7 +109,14 @@ function StatusIcon({ status, size = 24 }: { status: ApprovalStepStatus; size?: 
 // ---------------------------------------------------------------------------
 
 function Avatar({ assignee, size = 28 }: { assignee: ApprovalAssignee; size?: number }) {
-  const initials = assignee.initials ?? assignee.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const initials =
+    assignee.initials ??
+    assignee.name
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
 
   if (assignee.avatarUrl) {
     return (
@@ -139,22 +146,34 @@ function Avatar({ assignee, size = 28 }: { assignee: ApprovalAssignee; size?: nu
 // Connector line
 // ---------------------------------------------------------------------------
 
-function Connector({ completed, orientation }: { completed: boolean; orientation: 'horizontal' | 'vertical' }) {
-  const base = orientation === 'horizontal'
-    ? 'flex-1 h-0.5 min-w-[16px] self-center mx-1'
-    : 'w-0.5 min-h-[24px] self-center my-1 ml-[11px]';
+function Connector({
+  completed,
+  orientation,
+}: {
+  completed: boolean;
+  orientation: 'horizontal' | 'vertical';
+}) {
+  const base =
+    orientation === 'horizontal'
+      ? 'flex-1 h-0.5 min-w-[16px] self-center mx-1'
+      : 'w-0.5 min-h-[24px] self-center my-1 ml-[11px]';
 
   return (
     <div
       className={`${base} ${completed ? 'bg-state-success-text' : 'border-border-default'}`}
-      style={completed ? undefined : {
-        backgroundImage: orientation === 'horizontal'
-          ? 'repeating-linear-gradient(to right, var(--border-default), var(--border-default) 4px, transparent 4px, transparent 8px)'
-          : 'repeating-linear-gradient(to bottom, var(--border-default), var(--border-default) 4px, transparent 4px, transparent 8px)',
-        backgroundSize: orientation === 'horizontal' ? '8px 2px' : '2px 8px',
-        height: orientation === 'horizontal' ? '2px' : undefined,
-        width: orientation === 'vertical' ? '2px' : undefined,
-      }}
+      style={
+        completed
+          ? undefined
+          : {
+              backgroundImage:
+                orientation === 'horizontal'
+                  ? 'repeating-linear-gradient(to right, var(--border-default), var(--border-default) 4px, transparent 4px, transparent 8px)'
+                  : 'repeating-linear-gradient(to bottom, var(--border-default), var(--border-default) 4px, transparent 4px, transparent 8px)',
+              backgroundSize: orientation === 'horizontal' ? '8px 2px' : '2px 8px',
+              height: orientation === 'horizontal' ? '2px' : undefined,
+              width: orientation === 'vertical' ? '2px' : undefined,
+            }
+      }
       aria-hidden="true"
     />
   );
@@ -168,8 +187,11 @@ function formatTimestamp(iso: string): string {
   try {
     const d = new Date(iso);
     return new Intl.DateTimeFormat('tr-TR', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     }).format(d);
   } catch {
     return iso;
@@ -191,7 +213,16 @@ interface StepCardProps {
   onDelegate?: (assignee: string) => void;
 }
 
-function StepCard({ step, isCurrent, compact, orientation, canAct, onApprove, onReject, onDelegate }: StepCardProps) {
+function StepCard({
+  step,
+  isCurrent,
+  compact,
+  orientation,
+  canAct,
+  onApprove,
+  onReject,
+  onDelegate,
+}: StepCardProps) {
   const [showRejectBox, setShowRejectBox] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
   const [showDelegateBox, setShowDelegateBox] = useState(false);
@@ -223,7 +254,8 @@ function StepCard({ step, isCurrent, compact, orientation, canAct, onApprove, on
     }
   }, [delegateValue, onDelegate]);
 
-  const _isCompleted = step.status === 'approved' || step.status === 'rejected' || step.status === 'skipped';
+  const _isCompleted =
+    step.status === 'approved' || step.status === 'rejected' || step.status === 'skipped';
   const widthClass = orientation === 'horizontal' ? 'min-w-[160px] max-w-[220px] flex-1' : 'w-full';
 
   return (
@@ -324,7 +356,10 @@ function StepCard({ step, isCurrent, compact, orientation, canAct, onApprove, on
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowRejectBox(false); setRejectComment(''); }}
+                  onClick={() => {
+                    setShowRejectBox(false);
+                    setRejectComment('');
+                  }}
                   className="px-2 py-0.5 text-[10px] rounded-xs border border-border-default text-text-secondary focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   Cancel
@@ -344,7 +379,9 @@ function StepCard({ step, isCurrent, compact, orientation, canAct, onApprove, on
                 placeholder="New assignee name or email"
                 className="text-xs rounded-xs border border-border-default bg-surface-default text-text-primary p-1.5 focus:outline-hidden focus:ring-1 focus:ring-[var(--focus-ring)]"
                 aria-label="New assignee"
-                onKeyDown={(e) => { if (e.key === 'Enter') handleDelegateSubmit(); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleDelegateSubmit();
+                }}
               />
               <div className="flex gap-1">
                 <button
@@ -357,7 +394,10 @@ function StepCard({ step, isCurrent, compact, orientation, canAct, onApprove, on
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowDelegateBox(false); setDelegateValue(''); }}
+                  onClick={() => {
+                    setShowDelegateBox(false);
+                    setDelegateValue('');
+                  }}
                   className="px-2 py-0.5 text-[10px] rounded-xs border border-border-default text-text-secondary focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   Cancel
@@ -393,14 +433,16 @@ export function ApprovalWorkflow({
   if (isHidden) return null;
 
   // Derive current step if not provided: first step that is pending or in-review
-  const activeIndex = currentStepIndex ?? steps.findIndex(s => s.status === 'pending' || s.status === 'in-review');
+  const activeIndex =
+    currentStepIndex ?? steps.findIndex((s) => s.status === 'pending' || s.status === 'in-review');
   const resolvedActiveIndex = activeIndex === -1 ? steps.length - 1 : activeIndex;
 
   const canAct = !isDisabled && !isReadonly;
 
-  const containerClass = orientation === 'horizontal'
-    ? 'flex flex-row items-start overflow-x-auto'
-    : 'flex flex-col items-stretch';
+  const containerClass =
+    orientation === 'horizontal'
+      ? 'flex flex-row items-start overflow-x-auto'
+      : 'flex flex-col items-stretch';
 
   return (
     <div
@@ -414,7 +456,8 @@ export function ApprovalWorkflow({
     >
       {steps.map((step, idx) => {
         const isCurrent = idx === resolvedActiveIndex;
-        const isCompleted = step.status === 'approved' || step.status === 'rejected' || step.status === 'skipped';
+        const isCompleted =
+          step.status === 'approved' || step.status === 'rejected' || step.status === 'skipped';
 
         return (
           <React.Fragment key={step.id}>
@@ -431,8 +474,14 @@ export function ApprovalWorkflow({
               orientation={orientation}
               canAct={canAct}
               onApprove={isCurrent && onApprove ? () => onApprove(step.id) : undefined}
-              onReject={isCurrent && onReject ? (comment: string) => onReject(step.id, comment) : undefined}
-              onDelegate={isCurrent && onDelegate ? (assignee: string) => onDelegate(step.id, assignee) : undefined}
+              onReject={
+                isCurrent && onReject ? (comment: string) => onReject(step.id, comment) : undefined
+              }
+              onDelegate={
+                isCurrent && onDelegate
+                  ? (assignee: string) => onDelegate(step.id, assignee)
+                  : undefined
+              }
             />
           </React.Fragment>
         );
@@ -441,6 +490,6 @@ export function ApprovalWorkflow({
   );
 }
 
-ApprovalWorkflow.displayName = "ApprovalWorkflow";
+ApprovalWorkflow.displayName = 'ApprovalWorkflow';
 
 export default ApprovalWorkflow;

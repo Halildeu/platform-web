@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Generated depth test — regenerate: node scripts/ci/generate-depth-tests.mjs --write
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 
 afterEach(cleanup);
