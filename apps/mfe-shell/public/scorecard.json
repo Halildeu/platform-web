@@ -1679,8 +1679,8 @@
   },
   {
     "name": "ThemeLayout",
-    "path": "enterprise/ThemeLayout.tsx",
-    "dir": "enterprise",
+    "path": "patterns/theme-layout/ThemeLayout.tsx",
+    "dir": "patterns",
     "lineCount": 257,
     "scores": {
       "api": 95,

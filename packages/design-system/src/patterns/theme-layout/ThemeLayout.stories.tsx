@@ -34,10 +34,16 @@ const sampleSlots = {
 };
 
 const meta: Meta<typeof ThemeLayout> = {
-  title: 'Enterprise/ThemeLayout',
+  title: 'Patterns/ThemeLayout',
   component: ThemeLayout,
   tags: ['autodocs'],
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof ThemeLayout>;

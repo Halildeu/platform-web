@@ -75,3 +75,7 @@ export type {
 
 /* Phase 3 (2026-05-14) — adopted from enterprise/ as a page-region KPI pattern */
 export { ExecutiveKPIStrip } from './executive-kpi-strip';
+
+/* Phase 4 (2026-05-15) — adopted from enterprise/ as a slot-based layout pattern */
+export { ThemeLayout } from './theme-layout';
+export type { LayoutTheme, ThemeLayoutSlots, ThemeLayoutProps } from './theme-layout';

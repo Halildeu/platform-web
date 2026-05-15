@@ -11,7 +11,7 @@ import { GanttTimeline } from '../index';
 
 import { ComparisonTable } from '../index';
 import { GovernanceBoard } from '../index';
-import { ThemeLayout } from '../ThemeLayout';
+import { ThemeLayout } from '../index';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';
 import userEvent from '@testing-library/user-event';
 

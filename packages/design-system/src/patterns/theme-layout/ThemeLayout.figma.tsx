@@ -9,12 +9,9 @@ figma.connect(ThemeLayout, 'FIGMA_URL_PLACEHOLDER', {
       analytics: 'analytics',
       compact: 'compact',
     }),
-    access: figma.enum('Access', {
-      ../internal/access-controller: '../internal/access-controller',
-    }),
     accessReason: figma.string('AccessReason'),
   },
-  example: ({ theme, access, accessReason }) => (
-    <ThemeLayout theme={theme} access={access} accessReason={accessReason} />
+  example: ({ theme, accessReason }) => (
+    <ThemeLayout theme={theme} slots={{}} accessReason={accessReason} />
   ),
 });
