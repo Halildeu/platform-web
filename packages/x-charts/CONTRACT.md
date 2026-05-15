@@ -630,14 +630,14 @@ catalogue grows.
 
 ### DS-only enterprise chart candidates (Faz 21.7+ migration scope)
 
-| Chart          | DS path                         | x-charts plan | Decision                                                                                |
-| -------------- | ------------------------------- | ------------- | --------------------------------------------------------------------------------------- |
-| BulletChart    | `enterprise/BulletChart.tsx`    | candidate     | migrate as `BulletChart` in Faz 21.7                                                    |
-| ControlChart   | `enterprise/ControlChart.tsx`   | candidate     | migrate as `ControlChart` in Faz 21.7                                                   |
-| HistogramChart | `enterprise/HistogramChart.tsx` | candidate     | migrate as `HistogramChart` in Faz 21.7                                                 |
-| ParetoChart    | `enterprise/ParetoChart.tsx`    | candidate     | migrate as `ParetoChart` in Faz 21.7                                                    |
-| MicroChart     | `enterprise/MicroChart.tsx`     | consolidate   | superseded by `MiniChart` + `SparklineChart` in `@mfe/x-charts`; deprecate in PR-C      |
-| OrgChart       | `enterprise/OrgChart.tsx`       | OUT-OF-SCOPE  | hierarchy visualization, not a chart type. Future `@mfe/hierarchy-viz` package proposal |
+| Chart          | DS path                                     | x-charts plan | Decision                                                                                |
+| -------------- | ------------------------------------------- | ------------- | --------------------------------------------------------------------------------------- |
+| BulletChart    | `blocks/bullet-chart/BulletChart.tsx`       | candidate     | migrate as `BulletChart` in Faz 21.7                                                    |
+| ControlChart   | `blocks/control-chart/ControlChart.tsx`     | candidate     | migrate as `ControlChart` in Faz 21.7                                                   |
+| HistogramChart | `blocks/histogram-chart/HistogramChart.tsx` | candidate     | migrate as `HistogramChart` in Faz 21.7                                                 |
+| ParetoChart    | `blocks/pareto-chart/ParetoChart.tsx`       | candidate     | migrate as `ParetoChart` in Faz 21.7                                                    |
+| MicroChart     | `blocks/micro-chart/MicroChart.tsx`         | consolidate   | superseded by `MiniChart` + `SparklineChart` in `@mfe/x-charts`; deprecate in PR-C      |
+| OrgChart       | `enterprise/OrgChart.tsx`                   | OUT-OF-SCOPE  | hierarchy visualization, not a chart type. Future `@mfe/hierarchy-viz` package proposal |
 
 ### Runtime Dependency Boundary (Faz 21.6 PR-C0)
 

@@ -41,8 +41,10 @@ export { ComparisonTable } from '../components/comparison-table/ComparisonTable'
 // TrainingTracker: removed — domain-specific HR widget, not on generic DS surface (Phase 1b triage)
 
 // Visualization
-export { BulletChart } from './BulletChart';
-export { MicroChart } from './MicroChart';
+// BulletChart moved to ../blocks/bullet-chart/ (Phase 2b). Compat shim.
+export { BulletChart } from '../blocks/bullet-chart/BulletChart';
+// MicroChart moved to ../blocks/micro-chart/ (Phase 2b). Compat shim.
+export { MicroChart } from '../blocks/micro-chart/MicroChart';
 // TreemapChart, RadarChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 export { SankeyDiagram } from './SankeyDiagram';
 
@@ -94,8 +96,9 @@ export type { FineKinneyProps, FineKinneyRisk } from './domain/turkey-isg/FineKi
 // WaterfallChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 
 // Pareto Chart
-export { ParetoChart } from './ParetoChart';
-export type { ParetoChartProps, ParetoItem } from './ParetoChart';
+// ParetoChart moved to ../blocks/pareto-chart/ (Phase 2b). Compat shim.
+export { ParetoChart } from '../blocks/pareto-chart/ParetoChart';
+export type { ParetoChartProps, ParetoItem } from '../blocks/pareto-chart/ParetoChart';
 
 // Heatmap Calendar
 export { HeatmapCalendar } from './HeatmapCalendar';
@@ -121,16 +124,19 @@ export { ActivityFeed } from '../blocks/activity-feed/ActivityFeed';
 export type { ActivityFeedProps, ActivityItem } from '../blocks/activity-feed/ActivityFeed';
 
 // Box Plot
-export { BoxPlot } from './BoxPlot';
-export type { BoxPlotProps, BoxPlotData } from './BoxPlot';
+// BoxPlot moved to ../blocks/box-plot/ (Phase 2b). Compat shim.
+export { BoxPlot } from '../blocks/box-plot/BoxPlot';
+export type { BoxPlotProps, BoxPlotData } from '../blocks/box-plot/BoxPlot';
 
 // Histogram Chart
-export { HistogramChart } from './HistogramChart';
-export type { HistogramChartProps, HistogramBin } from './HistogramChart';
+// HistogramChart moved to ../blocks/histogram-chart/ (Phase 2b). Compat shim.
+export { HistogramChart } from '../blocks/histogram-chart/HistogramChart';
+export type { HistogramChartProps, HistogramBin } from '../blocks/histogram-chart/HistogramChart';
 
 // Control Chart
-export { ControlChart } from './ControlChart';
-export type { ControlChartProps, ControlChartPoint } from './ControlChart';
+// ControlChart moved to ../blocks/control-chart/ (Phase 2b). Compat shim.
+export { ControlChart } from '../blocks/control-chart/ControlChart';
+export type { ControlChartProps, ControlChartPoint } from '../blocks/control-chart/ControlChart';
 
 // SWOTMatrix: removed — 4-quadrant grid is a simple pattern (Phase 1b triage)
 // DecisionMatrix: removed — overlap with SWOTMatrix, weighted-score grid is simple pattern (Phase 1b triage)

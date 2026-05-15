@@ -299,6 +299,56 @@ export const blockRegistry: BlockRegistry = {
       components: ['Card', 'Text'],
       tags: ['process', 'workflow', 'flow', 'steps'],
     },
+
+    // Phase 2b (2026-05-15) — chart-adjacent
+    {
+      id: 'bullet-chart',
+      name: 'BulletChart',
+      category: 'dashboard',
+      description: 'Single-metric bullet chart with ranges and target marker',
+      components: ['Card', 'Text'],
+      tags: ['bullet', 'chart', 'kpi', 'performance'],
+    },
+    {
+      id: 'micro-chart',
+      name: 'MicroChart',
+      category: 'dashboard',
+      description: 'Tiny inline sparkline/waffle/donut/progress chart family',
+      components: ['Text'],
+      tags: ['sparkline', 'mini', 'inline', 'chart'],
+    },
+    {
+      id: 'box-plot',
+      name: 'BoxPlot',
+      category: 'dashboard',
+      description: 'Statistical box plot with quartiles, median, outliers',
+      components: ['Card', 'Text'],
+      tags: ['boxplot', 'statistics', 'distribution'],
+    },
+    {
+      id: 'histogram-chart',
+      name: 'HistogramChart',
+      category: 'dashboard',
+      description: 'Histogram chart with binned frequency distribution',
+      components: ['Card', 'Text'],
+      tags: ['histogram', 'frequency', 'distribution'],
+    },
+    {
+      id: 'control-chart',
+      name: 'ControlChart',
+      category: 'dashboard',
+      description: 'Statistical process control chart with UCL/LCL bands',
+      components: ['Card', 'Text'],
+      tags: ['spc', 'control', 'process', 'quality'],
+    },
+    {
+      id: 'pareto-chart',
+      name: 'ParetoChart',
+      category: 'dashboard',
+      description: 'Pareto chart with 80/20 cumulative ranking',
+      components: ['Card', 'Text'],
+      tags: ['pareto', '80-20', 'ranking', 'defect'],
+    },
   ],
 };
 
