@@ -118,6 +118,27 @@
       "_note": "AG Grid Enterprise + ECharts heavy route. Sentinel REQUIRES grid root (.ag-root-wrapper or .ag-root) — heading-only would false-pass when the grid is still mounting (Codex 019e2112 P0 fix). Current baseline (2026-05-11): warm 6591 KB, decoded 49966 KB, TBT 2937ms, 10 long tasks / 3437ms total."
     },
     {
+      "route": "/admin/reports/users",
+      "mode": "cold-authenticated",
+      "auth": "authenticated",
+      "sentinel": ".ag-root-wrapper, .ag-root",
+      "transferWarnKB": 5000,
+      "transferFailKB": 8000,
+      "decodedFailKB": 22000,
+      "resourceFailCount": 220,
+      "tbtFailMs": 600,
+      "longTaskMaxFailMs": 400,
+      "longTaskCountFail": 4,
+      "longTaskTotalFailMs": 600,
+      "lcpFailMs": 2500,
+      "inpFailMs": 200,
+      "clsFail": 0.1,
+      "leaderTransferKB": 4000,
+      "leaderDecodedKB": 12000,
+      "leaderTbtMs": 50,
+      "_note": "PERF-INIT-V2.1 PR-V2.1-M2a1 (Codex 019e2b00 round 8 absorb): Static reports.users module — AG Grid Enterprise coverage equivalent to fin-muhasebe-detay but available without dynamic report seed data (fin-muhasebe-detay deep-link needs MSSQL Workcube yearly schema seed; reports.users registered via SHARED_REPORT_CATALOG, no DB dependency). Used as M2a1 4th measurement route until fin-muhasebe-detay seed lands."
+    },
+    {
       "route": "/home -> /admin/reports/fin-muhasebe-detay",
       "mode": "soft-navigation",
       "auth": "authenticated",

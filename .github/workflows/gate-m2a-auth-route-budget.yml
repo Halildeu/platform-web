@@ -18,7 +18,7 @@
 #   - /home
 #   - /admin/users
 #   - /admin/access (redirects to /access/roles)
-#   - /admin/reports/fin-muhasebe-detay
+#   - /admin/reports/users
 #
 # Required GHA secrets:
 #   - PERF_AUTH_PASSWORD: perf-test persona password (32 char rotated 2026-05-15)
@@ -33,7 +33,7 @@ on:
       - 'apps/mfe-shell/**'
       # Remote MFEs surfaced by measured routes (Codex `019e2b00` round 4 REVISE:
       # measured routes include /admin/users (mfe-users), /admin/access (mfe-access),
-      # /admin/reports/fin-muhasebe-detay (mfe-reporting) — workflow must trigger on
+      # /admin/reports/users (mfe-reporting) — workflow must trigger on
       # those remote changes so M2a1 gate doesn't silently miss regressions)
       - 'apps/mfe-users/**'
       - 'apps/mfe-access/**'
@@ -130,14 +130,14 @@ jobs:
             pnpm exec node scripts/ci/route-performance-budget.mjs \
               --target "${PERF_TARGET}" \
               --runs "${PERF_RUNS}" \
-              --routes "/home,/admin/users,/admin/access,/admin/reports/fin-muhasebe-detay" \
+              --routes "/home,/admin/users,/admin/access,/admin/reports/users" \
               --auth-storage tests/perf/.auth-storage.json \
               --warn-only
           else
             pnpm exec node scripts/ci/route-performance-budget.mjs \
               --target "${PERF_TARGET}" \
               --runs "${PERF_RUNS}" \
-              --routes "/home,/admin/users,/admin/access,/admin/reports/fin-muhasebe-detay" \
+              --routes "/home,/admin/users,/admin/access,/admin/reports/users" \
               --auth-storage tests/perf/.auth-storage.json \
               --require-baseline
           fi
