@@ -2686,8 +2686,8 @@
   },
   {
     "name": "GovernanceBoard",
-    "path": "enterprise/GovernanceBoard.tsx",
-    "dir": "enterprise",
+    "path": "blocks/governance-board/GovernanceBoard.tsx",
+    "dir": "blocks",
     "lineCount": 275,
     "scores": {
       "api": 100,
