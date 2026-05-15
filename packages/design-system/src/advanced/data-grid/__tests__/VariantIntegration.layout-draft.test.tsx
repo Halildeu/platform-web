@@ -763,6 +763,65 @@ describe('PR-0.5e — finding 1: no-variant draft is restored on mount', () => {
     const { findByTestId } = renderVariant();
     expect(await findByTestId('variant-layout-draft-indicator')).toBeInTheDocument();
   });
+
+  it('restores the default-scope draft when variants exist but none is a resolvable target', async () => {
+    /*
+     * Codex 019e2de0 REVISE iter-2 finding 1 — `variants` is NON-empty
+     * but no entry is selectable: not user-selected, not default, not
+     * compatible. `target` resolves to undefined and the pre-iter-2
+     * mount effect silently exited with no `else` fallback, so the
+     * default-scope draft was never overlaid on reload even though that
+     * surface is a "no variant selected / default colDef" surface.
+     */
+    const INCOMPATIBLE_A = makeVariant({
+      id: 'variant-A',
+      isUserSelected: false,
+      isUserDefault: false,
+      isGlobalDefault: false,
+      isCompatible: false,
+    });
+    const INCOMPATIBLE_B = makeVariant({
+      id: 'variant-B',
+      name: 'Varyant B',
+      isUserSelected: false,
+      isUserDefault: false,
+      isGlobalDefault: false,
+      isCompatible: false,
+    });
+    mockFetch.mockResolvedValue([INCOMPATIBLE_A, INCOMPATIBLE_B]);
+
+    // A draft persisted under the no-variant ("default") scope.
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: null,
+        schemaFingerprint: FINGERPRINT,
+      },
+      [
+        { colId: 'name', width: 488, pinned: 'left' },
+        { colId: 'email', width: 100 },
+        { colId: 'role', width: 100 },
+      ],
+    );
+
+    const { mock, findByTestId } = renderVariant();
+
+    await waitFor(() => {
+      expect(mock.applyColumnStateMock).toHaveBeenCalled();
+    });
+    // The default-scope draft must be applied even though saved
+    // variants exist — none of them resolved as the mount target.
+    await waitFor(() => {
+      const name = mock
+        .getColumnStateMock()
+        .find((c: Record<string, unknown>) => c.colId === 'name');
+      expect(name?.width).toBe(488);
+      expect(name?.pinned).toBe('left');
+    });
+    // …and the dirty indicator is set for that default-scope draft.
+    expect(await findByTestId('variant-layout-draft-indicator')).toBeInTheDocument();
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -833,6 +892,136 @@ describe('PR-0.5e — finding 2: debounce persists the right scope / last mutati
     const stored = readRawDraft('variant-A');
     expect(stored).toBeDefined();
     expect(stored.columns.find((c: { colId: string }) => c.colId === 'name')?.width).toBe(654);
+  });
+
+  it("resize in A, switch to B, reset B before the debounce → A's pending draft is flushed to A's scope", async () => {
+    /*
+     * Codex 019e2de0 REVISE iter-2 finding 2 — `handleResetDraft`
+     * cleared the pending snapshot with a blanket
+     * `pendingDraftRef.current = null`, dropping ALL pending regardless
+     * of scope. The scope-aware clear must instead flush A's still-
+     * pending resize to A's OWN scope before clearing the ref.
+     *
+     * Variant B is given its own pre-existing draft so the reset
+     * control (rendered only when the dirty indicator is up) is present
+     * after the switch to B; resetting B exercises the scope-aware
+     * clear against A's still-pending mutation.
+     */
+    const VARIANT_B = makeVariant({
+      id: 'variant-B',
+      name: 'Varyant B',
+      isUserSelected: false,
+      isUserDefault: false,
+    });
+    mockFetch.mockResolvedValue([{ ...VARIANT_A, isUserSelected: true }, VARIANT_B]);
+    // Variant B already has a draft → its reset/dirty UI is available.
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: 'variant-B',
+        schemaFingerprint: FINGERPRINT,
+      },
+      [
+        { colId: 'name', width: 555 },
+        { colId: 'email', width: 100 },
+        { colId: 'role', width: 100 },
+      ],
+    );
+
+    vi.useFakeTimers();
+    const { mock, getByTestId } = renderVariant();
+    await waitForMount(mock);
+
+    // Resize in variant A — the pending snapshot is captured for A's scope.
+    mock.setColumnState([
+      { colId: 'name', width: 842, pinned: null, hide: false },
+      { colId: 'email', width: 100, pinned: null, hide: false },
+      { colId: 'role', width: 100, pinned: null, hide: false },
+    ]);
+    act(() => mock.emit('columnResized', { finished: true }));
+
+    // Switch to variant B BEFORE A's ~250ms debounce fires.
+    const select = document.querySelector(
+      'select[data-testid="variant-select"]',
+    ) as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'variant-B';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Click reset while on variant B — must NOT discard A's pending draft.
+    act(() => {
+      getByTestId('variant-layout-draft-reset').click();
+    });
+    // Drain any timers — A's flush already happened synchronously inside
+    // the scope-aware clear; B's scope must stay clean (reset cleared it).
+    act(() => vi.advanceTimersByTime(300));
+
+    const draftA = readRawDraft('variant-A');
+    expect(draftA).toBeDefined();
+    expect(draftA.columns.find((c: { colId: string }) => c.colId === 'name')?.width).toBe(842);
+    // B's reset cleared B's own draft; A's flush did not pollute B.
+    expect(readRawDraft('variant-B')).toBeUndefined();
+  });
+
+  it("resize in A, switch to B, save B before the debounce → A's pending draft is flushed to A's scope", async () => {
+    /*
+     * Codex 019e2de0 REVISE iter-2 finding 2 — same data-loss edge via
+     * `handleSave`. Saving variant B must flush variant A's still-
+     * pending resize to A's own scope rather than dropping it.
+     */
+    const VARIANT_B = makeVariant({
+      id: 'variant-B',
+      name: 'Varyant B',
+      isUserSelected: false,
+      isUserDefault: false,
+    });
+    mockFetch.mockResolvedValue([{ ...VARIANT_A, isUserSelected: true }, VARIANT_B]);
+
+    vi.useFakeTimers();
+    const { mock } = renderVariant();
+    await waitForMount(mock);
+
+    // Resize in variant A — pending snapshot captured for A's scope.
+    mock.setColumnState([
+      { colId: 'name', width: 913, pinned: null, hide: false },
+      { colId: 'email', width: 100, pinned: null, hide: false },
+      { colId: 'role', width: 100, pinned: null, hide: false },
+    ]);
+    act(() => mock.emit('columnResized', { finished: true }));
+
+    // Switch to variant B BEFORE A's debounce fires.
+    const select = document.querySelector(
+      'select[data-testid="variant-select"]',
+    ) as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'variant-B';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Save variant B (toolbar Save button) — must NOT discard A's pending draft.
+    const saveButton = document.querySelector(
+      'button[title="Save current state to variant"]',
+    ) as HTMLButtonElement;
+    expect(saveButton).not.toBeNull();
+    await act(async () => {
+      saveButton.click();
+      await Promise.resolve();
+    });
+    await vi.waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalled();
+    });
+    act(() => vi.advanceTimersByTime(300));
+
+    // A's resize survived in A's own scope; B's scope was not polluted
+    // by A's pending mutation.
+    const draftA = readRawDraft('variant-A');
+    expect(draftA).toBeDefined();
+    expect(draftA.columns.find((c: { colId: string }) => c.colId === 'name')?.width).toBe(913);
+    expect(readRawDraft('variant-B')).toBeUndefined();
   });
 });
 

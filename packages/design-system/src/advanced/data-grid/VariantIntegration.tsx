@@ -498,6 +498,58 @@ export const VariantIntegration = <RowData = unknown,>({
     [gridId, draftIdentity, schemaFingerprint],
   );
 
+  /*
+   * PR-0.5e (Codex 019e2de0 REVISE iter-2 finding 1) — restore the
+   * `default`-scope draft (buildScope(null)) onto the grid. This is the
+   * "no variant selected / colDef default" working surface: there is no
+   * backend variant to restore, but a layout draft the user built on
+   * that surface must still survive a reload.
+   *
+   * Extracted into a named helper so it can be called from BOTH mount
+   * auto-apply branches that land on the default surface:
+   *  - `variants.length === 0` (no saved variants at all), and
+   *  - `!target` (saved variants exist but none is selectable / default
+   *    / compatible — `target` stays undefined).
+   *
+   * The `isApplyingStateRef` guard is raised so the programmatic overlay
+   * is not captured by the column-event listeners as a fresh draft
+   * write. Returns nothing; sets `draftDirty` from the draft presence.
+   */
+  const applyDefaultDraftScope = useCallback(() => {
+    if (!gridApi || !draftEnabled) return;
+    isApplyingStateRef.current = true;
+    try {
+      const draft = readDraft(buildScope(null));
+      applyDraftLayer(gridApi, draft);
+      setDraftDirty(draft !== null);
+    } finally {
+      isApplyingStateRef.current = false;
+    }
+  }, [gridApi, draftEnabled, buildScope]);
+
+  /*
+   * PR-0.5e (Codex 019e2de0 REVISE iter-2 finding 2) — scope-aware
+   * pending-draft clear. `handleSave` / `handleResetDraft` must drop the
+   * in-flight debounced snapshot so a timer firing after the
+   * save/reset can't resurrect the just-cleared draft — but a blanket
+   * `pendingDraftRef.current = null` also discards a pending mutation
+   * that belongs to a DIFFERENT scope (the user resized in variant A,
+   * switched to B, then saved/reset B before A's ~250ms debounce
+   * fired → A's resize is silently lost).
+   *
+   * This helper instead flushes a pending mutation whose scope differs
+   * from the one being saved/reset to ITS OWN scope before clearing the
+   * ref, and only drops a pending mutation that targets the SAME scope.
+   */
+  const clearOrFlushPendingDraftForScope = useCallback((scopeToClear: DraftScope) => {
+    const pending = pendingDraftRef.current;
+    if (!pending) return;
+    if (buildDraftKey(pending.scope) !== buildDraftKey(scopeToClear)) {
+      writeDraft(pending.scope, pending.columnState);
+    }
+    pendingDraftRef.current = null;
+  }, []);
+
   // ── Accordion ──────────────────────────────────────────────────────
   const accordion = useAccordion({ multiple: false });
 
@@ -575,14 +627,7 @@ export const VariantIntegration = <RowData = unknown,>({
        * runs its own restore.
        */
       if (draftEnabled && lastAppliedSchemaRef.current !== schemaFingerprint) {
-        isApplyingStateRef.current = true;
-        try {
-          const draft = readDraft(buildScope(null));
-          applyDraftLayer(gridApi, draft);
-          setDraftDirty(draft !== null);
-        } finally {
-          isApplyingStateRef.current = false;
-        }
+        applyDefaultDraftScope();
         lastAppliedSchemaRef.current = schemaFingerprint;
       }
       return;
@@ -598,31 +643,49 @@ export const VariantIntegration = <RowData = unknown,>({
     const firstCompatible = variants.find((v) => v.isCompatible !== false);
 
     const target = requested ?? selected ?? userDefault ?? globalDefault ?? firstCompatible;
-    if (target) {
+    if (!target) {
       /*
-       * PR-0.5e (Codex 019e2de0) — restore order: colDef defaults →
-       * variant → draft overlay LAST. The `isApplyingStateRef` guard is
-       * raised across BOTH the variant apply and the draft overlay so
-       * the column-event listeners (resize/pin/move) treat the whole
-       * programmatic restore as a single non-user mutation and do NOT
-       * write a redundant draft back.
+       * PR-0.5e (Codex 019e2de0 REVISE iter-2 finding 1) — saved
+       * variants exist but NONE is resolvable as a target (nothing
+       * selected / default / compatible). `target` stays undefined and
+       * the user is on the same "no variant selected / colDef default"
+       * surface as the `variants.length === 0` case — an event write
+       * there goes to the default scope, so the default-scope draft
+       * must be restored here too. Without this the effect would
+       * silently exit and the draft would never be re-applied on
+       * reload. `appliedRef` stays null so a variant becoming
+       * resolvable later still runs its own restore.
        */
-      isApplyingStateRef.current = true;
-      try {
-        applyVariantState(gridApi, target.state, { sanitizeColumnState, sanitizePivotMode });
-        if (draftEnabled) {
-          const draft = readDraft(buildScope(target.id));
-          applyDraftLayer(gridApi, draft);
-          setDraftDirty(draft !== null);
-        }
-      } finally {
-        isApplyingStateRef.current = false;
+      if (draftEnabled && lastAppliedSchemaRef.current !== schemaFingerprint) {
+        applyDefaultDraftScope();
+        lastAppliedSchemaRef.current = schemaFingerprint;
       }
-      appliedRef.current = target.id;
-      lastAppliedSchemaRef.current = schemaFingerprint;
-      setInternalActiveId(target.id);
-      onActiveVariantChange?.(target.id);
+      return;
     }
+
+    /*
+     * PR-0.5e (Codex 019e2de0) — restore order: colDef defaults →
+     * variant → draft overlay LAST. The `isApplyingStateRef` guard is
+     * raised across BOTH the variant apply and the draft overlay so
+     * the column-event listeners (resize/pin/move) treat the whole
+     * programmatic restore as a single non-user mutation and do NOT
+     * write a redundant draft back.
+     */
+    isApplyingStateRef.current = true;
+    try {
+      applyVariantState(gridApi, target.state, { sanitizeColumnState, sanitizePivotMode });
+      if (draftEnabled) {
+        const draft = readDraft(buildScope(target.id));
+        applyDraftLayer(gridApi, draft);
+        setDraftDirty(draft !== null);
+      }
+    } finally {
+      isApplyingStateRef.current = false;
+    }
+    appliedRef.current = target.id;
+    lastAppliedSchemaRef.current = schemaFingerprint;
+    setInternalActiveId(target.id);
+    onActiveVariantChange?.(target.id);
   }, [
     activeId,
     gridApi,
@@ -633,6 +696,7 @@ export const VariantIntegration = <RowData = unknown,>({
     draftEnabled,
     schemaFingerprint,
     buildScope,
+    applyDefaultDraftScope,
   ]);
 
   // ── Close manager on outside click ─────────────────────────────────
@@ -872,11 +936,14 @@ export const VariantIntegration = <RowData = unknown,>({
          * indicator. `collectGridState` above already captured the
          * live layout, so no information is lost. Also drop any
          * in-flight debounced write (finding 2) so a timer firing
-         * after the save can't resurrect the just-cleared draft.
+         * after the save can't resurrect the just-cleared draft —
+         * scope-aware (REVISE iter-2 finding 2) so a pending mutation
+         * for a DIFFERENT variant's scope is flushed to its own scope
+         * instead of being silently dropped.
          */
         if (draftEnabled) {
           clearDraft(buildScope(variantId));
-          pendingDraftRef.current = null;
+          clearOrFlushPendingDraftForScope(buildScope(variantId));
           setDraftDirty(false);
         }
       } catch {
@@ -885,7 +952,14 @@ export const VariantIntegration = <RowData = unknown,>({
         setPendingAction(null);
       }
     },
-    [gridApi, gridSchemaVersion, loadVariants, draftEnabled, buildScope],
+    [
+      gridApi,
+      gridSchemaVersion,
+      loadVariants,
+      draftEnabled,
+      buildScope,
+      clearOrFlushPendingDraftForScope,
+    ],
   );
 
   /*
@@ -905,8 +979,12 @@ export const VariantIntegration = <RowData = unknown,>({
      * PR-0.5e (Codex 019e2de0 REVISE finding 2) — drop any in-flight
      * debounced write. Without this, a timer that fires just after the
      * reset would re-persist the very draft the user just discarded.
+     * Scope-aware (REVISE iter-2 finding 2): a pending mutation for a
+     * DIFFERENT scope is flushed to its own scope first, so resetting
+     * variant B can't silently drop variant A's not-yet-debounced
+     * resize.
      */
-    pendingDraftRef.current = null;
+    clearOrFlushPendingDraftForScope(buildScope(variantId));
     setDraftDirty(false);
     if (!gridApi) return;
     const variant = variantId ? variants.find((v) => v.id === variantId) : undefined;
@@ -926,6 +1004,7 @@ export const VariantIntegration = <RowData = unknown,>({
   }, [
     draftEnabled,
     buildScope,
+    clearOrFlushPendingDraftForScope,
     gridApi,
     variants,
     schemaFingerprint,
