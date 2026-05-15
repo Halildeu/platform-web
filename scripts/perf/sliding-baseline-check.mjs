@@ -41,7 +41,10 @@
  * Owner waiver (spike §4.4): baseline._hardFailWaiver.expires_at in future → bypass.
  */
 
-import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
+// CodeQL #60 fix: existsSync removed — replaced by try/catch on readFileSync to
+// avoid TOCTOU race (js/file-system-race warning). appendFileSync retained for
+// ledger writes; mkdirSync recursive:true is idempotent and race-safe.
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const DEFAULTS = {
@@ -175,8 +178,16 @@ function computeSlidingStats(history, windowDays) {
  * varsa fail-closed (entry filtered out — comparable değil sayılır).
  */
 function readLedgerEntries(ledgerPath, routeKey, lastN, compareContext = null) {
-  if (!existsSync(ledgerPath)) return [];
-  const lines = readFileSync(ledgerPath, 'utf8').split('\n').filter(Boolean);
+  // CodeQL #60 fix companion: existsSync + readFileSync TOCTOU race → direct read,
+  // ENOENT → empty ledger (same semantic as pre-existence check).
+  let raw;
+  try {
+    raw = readFileSync(ledgerPath, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return [];
+    throw err;
+  }
+  const lines = raw.split('\n').filter(Boolean);
   const entries = lines
     .map((l) => {
       try {
@@ -523,17 +534,25 @@ function maybeAppendHistory(routeRun, baseline, opts, runMeta = {}) {
 function main() {
   const opt = parseArgs(process.argv.slice(2));
 
-  if (!existsSync(opt.baseline)) {
-    console.error(`[g2] FATAL: baseline file missing: ${opt.baseline}`);
+  // CodeQL #60 fix: existsSync + readFileSync TOCTOU race ("js/file-system-race"
+  // warning at sliding-baseline-check.mjs:604). Replace pre-check + read with
+  // direct read in try/catch — covers ENOENT (file deleted) and EACCES (perm) atomically.
+  let baseline;
+  let current;
+  try {
+    baseline = JSON.parse(readFileSync(opt.baseline, 'utf8'));
+  } catch (err) {
+    const code = err.code ? ` (${err.code})` : '';
+    console.error(`[g2] FATAL: baseline file missing or unreadable: ${opt.baseline}${code}`);
     process.exit(3);
   }
-  if (!existsSync(opt.current)) {
-    console.error(`[g2] FATAL: current run file missing: ${opt.current}`);
+  try {
+    current = JSON.parse(readFileSync(opt.current, 'utf8'));
+  } catch (err) {
+    const code = err.code ? ` (${err.code})` : '';
+    console.error(`[g2] FATAL: current run file missing or unreadable: ${opt.current}${code}`);
     process.exit(3);
   }
-
-  const baseline = JSON.parse(readFileSync(opt.baseline, 'utf8'));
-  const current = JSON.parse(readFileSync(opt.current, 'utf8'));
   if (!baseline.routes) baseline.routes = {};
 
   const routes = Array.isArray(current.routes) ? current.routes : [];
