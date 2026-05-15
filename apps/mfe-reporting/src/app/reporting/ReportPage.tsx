@@ -6,7 +6,11 @@ import {
   createPageLayoutBreadcrumbItems,
   createPageLayoutPreset,
 } from '@mfe/design-system';
-import { EntityGridTemplate, buildEntityGridQueryParams } from '../../grid';
+import {
+  EntityGridTemplate,
+  buildEntityGridQueryParams,
+  normalizeServerSideRequest,
+} from '../../grid';
 import type { GridRequest, GridResponse, ColumnDef } from '../../grid';
 import type {
   ColDef,
@@ -649,7 +653,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             startRow?: number;
             endRow?: number;
           };
-          const req: GridRequest = {
+          const reqRaw: GridRequest = {
             page: baseParams.page,
             pageSize: baseParams.pageSize,
             sortModel:
@@ -669,6 +673,16 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             pivotMode: ssrmRequest.pivotMode,
             groupKeys: ssrmRequest.groupKeys,
           };
+          // PR-0.4g (variant-state sync fix): AG Grid SSRM keeps
+          // valueCols populated from the variant state even after the
+          // user drags the last row-group chip off the panel. Without
+          // this normalisation the backend dispatcher sees
+          // {rowGroupCols=[], valueCols=[…], pivotMode=false} and trips
+          // GROUPING_NOT_SUPPORTED because requestsGrouping() treats a
+          // stale valueCols as grouping intent. The normaliser drops
+          // valueCols + groupKeys when no grouping/pivot/expansion is
+          // requested so the backend payload degrades to a flat query.
+          const req = normalizeServerSideRequest(reqRaw);
           const res: GridResponse<TRow> = await module.fetchRows(filters, req);
 
           /*
