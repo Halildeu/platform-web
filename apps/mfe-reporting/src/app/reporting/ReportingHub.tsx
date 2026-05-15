@@ -46,6 +46,23 @@ const DEBOUNCE_MS = 250;
 /*  Search helper                                                      */
 /* ------------------------------------------------------------------ */
 
+/**
+ * R15 user-visible repair (Codex 019e2aef iter-7). Read the host shell's
+ * canonical `superAdmin` snapshot via the services bridge, with a
+ * fail-closed fallback so a not-yet-wired shell never elevates the gate.
+ * Must be called at render time (NOT memoised with empty deps), because
+ * `ReportingProviders` wires `configureShellServices` from inside a
+ * `useEffect` — a `useMemo([], ...)` would lock in the first-render
+ * fallback value forever and re-introduce the original R15 symptom.
+ */
+function readShellSuperAdmin(): boolean {
+  try {
+    return getShellServices().auth.isSuperAdmin();
+  } catch {
+    return false;
+  }
+}
+
 function filterItems(items: CatalogItem[], query: string): CatalogItem[] {
   if (!query) return items;
   const lower = query.toLowerCase();
@@ -93,7 +110,7 @@ const ReportingHub: React.FC = () => {
 
   // TB-14/18: Filter by reportGroup using canViewReport (deny-default coarse gate)
   //
-  // R15 user-visible repair (Codex 019e2aef iter-6 — mirror of mfe-users PR-C2):
+  // R15 user-visible repair (Codex 019e2aef iter-6/7 — mirror of mfe-users PR-C2):
   // Shell-level superAdmin bridge. `usePermissions().isSuperAdmin()` in this
   // remote MFE may still resolve to the default `() => false` even after
   // the federation `@mfe/auth` singleton config — the reporting bundle's
@@ -101,19 +118,14 @@ const ReportingHub: React.FC = () => {
   // shell's PermissionProvider state. Browser-verified bug on testai
   // 2026-05-15: /authz/me returned superAdmin=true but ReportingHub
   // dropped 38 of 52 catalog entries because the local context never
-  // received the host state. Consulting the shell singleton via
-  // `getShellServices().auth.isSuperAdmin()` short-circuits the gate
-  // when the user is a super-admin per the host's canonical authz
-  // snapshot. The local `usePermissions()` path is kept as a secondary
-  // signal so role/reportGroup-grant flows still work for non-super
-  // admins even if shell wiring has not completed yet.
-  const isShellSuperAdmin = useMemo(() => {
-    try {
-      return getShellServices().auth.isSuperAdmin();
-    } catch {
-      return false;
-    }
-  }, []);
+  // received the host state.
+  //
+  // Codex iter-7 hardening: read at render time, NOT inside a useMemo.
+  // `ReportingProviders` wires `configureShellServices` from inside a
+  // `useEffect`, so the first render returns the no-op fallback; a
+  // memo with `[]` deps would lock in `false` and never refresh when
+  // shell wiring completes.
+  const isShellSuperAdmin = readShellSuperAdmin();
 
   const authorizedItems = useMemo(() => {
     if (isShellSuperAdmin || isSuperAdmin()) return items;
@@ -126,7 +138,7 @@ const ReportingHub: React.FC = () => {
   );
 
   /* -- Summary ------------------------------------------------------- */
-   
+
   const _summary = useMemo(() => {
     const dashCount = authorizedItems.filter((i) => i.type === 'dashboard').length;
     const reportCount = authorizedItems.length - dashCount;
