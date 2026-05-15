@@ -133,6 +133,13 @@ if (process.env.NODE_ENV === 'development') {
 
 import { createRoot } from 'react-dom/client';
 import ShellApp from './ShellApp';
+// Codex 019e27bf fresh-context audit follow-up — defensive hardening
+// for the React root mount layer. Without this boundary an uncaught
+// throw inside AppProviders / providers / remote-mounted MFEs left
+// document.body empty (see run 25881861854 diagnostic dump). The
+// boundary turns that opaque blank-body failure into a visible
+// fallback DOM + `window.__shellRootError` snapshot.
+import RootErrorBoundary from './RootErrorBoundary';
 
 // PERF-INIT-V2 PR-B1a: AG Grid Enterprise license setter moved out of
 // shell bootstrap. Each grid-using MFE (mfe-users/access/reporting/audit)
@@ -146,4 +153,8 @@ if (!container) {
   throw new Error('Uygulama baslatilamadi: root elementi bulunamadi.');
 }
 const root = createRoot(container);
-root.render(<ShellApp />);
+root.render(
+  <RootErrorBoundary>
+    <ShellApp />
+  </RootErrorBoundary>,
+);
