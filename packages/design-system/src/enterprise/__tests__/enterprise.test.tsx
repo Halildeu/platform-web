@@ -7,7 +7,7 @@ import { formatValue, getTrendColor, getTrendIcon, getToneClasses } from '../typ
 import { ExecutiveKPIStrip } from '../index';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../RiskMatrix';
-import { GanttTimeline } from '../GanttTimeline';
+import { GanttTimeline } from '../index';
 
 import { ComparisonTable } from '../index';
 import { GovernanceBoard } from '../GovernanceBoard';

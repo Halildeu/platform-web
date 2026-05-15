@@ -8,7 +8,5 @@ figma.connect(ProcessFlow, 'FIGMA_URL_PLACEHOLDER', {
       vertical: 'vertical',
     }),
   },
-  example: ({ orientation }) => (
-    <ProcessFlow orientation={orientation} />
-  ),
+  example: ({ orientation }) => <ProcessFlow orientation={orientation} />,
 });

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Auto-generated contract test — do not edit manually
 // Regenerate with: node scripts/ci/generate-contract-tests.mjs --write
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
 import { GanttTimeline } from '../GanttTimeline';
@@ -39,9 +39,12 @@ describe('GanttTimeline — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _gantttask: GanttTask | undefined = undefined; void _gantttask;
-    const _ganttviewmode: GanttViewMode | undefined = undefined; void _ganttviewmode;
-    const _gantttimelineprops: GanttTimelineProps | undefined = undefined; void _gantttimelineprops;
+    const _gantttask: GanttTask | undefined = undefined;
+    void _gantttask;
+    const _ganttviewmode: GanttViewMode | undefined = undefined;
+    void _ganttviewmode;
+    const _gantttimelineprops: GanttTimelineProps | undefined = undefined;
+    void _gantttimelineprops;
     expect(true).toBe(true);
   });
 });

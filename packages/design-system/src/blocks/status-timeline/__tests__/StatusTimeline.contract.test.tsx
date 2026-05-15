@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Auto-generated contract test — do not edit manually
 // Regenerate with: node scripts/ci/generate-contract-tests.mjs --write
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
 import { StatusTimeline } from '../StatusTimeline';
@@ -39,8 +39,10 @@ describe('StatusTimeline — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _statustimelineevent: StatusTimelineEvent | undefined = undefined; void _statustimelineevent;
-    const _statustimelineprops: StatusTimelineProps | undefined = undefined; void _statustimelineprops;
+    const _statustimelineevent: StatusTimelineEvent | undefined = undefined;
+    void _statustimelineevent;
+    const _statustimelineprops: StatusTimelineProps | undefined = undefined;
+    void _statustimelineprops;
     expect(true).toBe(true);
   });
 });

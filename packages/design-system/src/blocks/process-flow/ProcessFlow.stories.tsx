@@ -26,11 +26,17 @@ const sampleEdges: ProcessEdge[] = [
 ];
 
 const meta: Meta<typeof ProcessFlow> = {
-  title: 'Enterprise/ProcessFlow',
+  title: 'Blocks/Review/ProcessFlow',
   component: ProcessFlow,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof ProcessFlow>;

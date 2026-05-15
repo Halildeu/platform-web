@@ -9,10 +9,10 @@ import { DateRangePicker } from '../index';
 
 import { SankeyDiagram } from '../SankeyDiagram';
 
-import { ProcessFlow } from '../ProcessFlow';
+import { ProcessFlow } from '../index';
 import { ValueStream } from '../ValueStream';
-import { StatusTimeline } from '../StatusTimeline';
-import { NotificationCenter } from '../NotificationCenter';
+import { StatusTimeline } from '../index';
+import { NotificationCenter } from '../index';
 import { InlineEdit } from '../index';
 import { FilterPresets } from '../FilterPresets';
 // PR #500 moved DataExportDialog out of enterprise/ into the generic

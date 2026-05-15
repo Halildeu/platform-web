@@ -1,6 +1,10 @@
 import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
-import { cn } from '../utils/cn';
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../internal/access-controller';
+import { cn } from '../../utils/cn';
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -189,14 +193,38 @@ function renderNodeShape(
   switch (type) {
     case 'start':
       return (
-        <circle cx={x} cy={y} r={CIRCLE_R} fill="var(--state-success-text)" fillOpacity={0.2} stroke="var(--state-success-text)" strokeWidth={sw} strokeDasharray={dashArray} /
-        >
+        <circle
+          cx={x}
+          cy={y}
+          r={CIRCLE_R}
+          fill="var(--state-success-text)"
+          fillOpacity={0.2}
+          stroke="var(--state-success-text)"
+          strokeWidth={sw}
+          strokeDasharray={dashArray}
+        />
       );
     case 'end':
       return (
         <g>
-          <circle cx={x} cy={y} r={CIRCLE_R} fill="var(--state-error-text)" fillOpacity={0.2} stroke="var(--state-error-text)" strokeWidth={4} strokeDasharray={dashArray} />
-          <circle cx={x} cy={y} r={CIRCLE_R - 6} fill="var(--state-error-text)" fillOpacity={0.4} stroke="none" />
+          <circle
+            cx={x}
+            cy={y}
+            r={CIRCLE_R}
+            fill="var(--state-error-text)"
+            fillOpacity={0.2}
+            stroke="var(--state-error-text)"
+            strokeWidth={4}
+            strokeDasharray={dashArray}
+          />
+          <circle
+            cx={x}
+            cy={y}
+            r={CIRCLE_R - 6}
+            fill="var(--state-error-text)"
+            fillOpacity={0.4}
+            stroke="none"
+          />
         </g>
       );
     case 'task':
@@ -217,19 +245,57 @@ function renderNodeShape(
     case 'decision': {
       const half = 30;
       const pts = `${x},${y - half} ${x + half},${y} ${x},${y + half} ${x - half},${y}`;
-      return <polygon points={pts} fill="var(--state-warning-text)" fillOpacity={0.2} stroke="var(--state-warning-text)" strokeWidth={sw} strokeDasharray={dashArray} />;
+      return (
+        <polygon
+          points={pts}
+          fill="var(--state-warning-text)"
+          fillOpacity={0.2}
+          stroke="var(--state-warning-text)"
+          strokeWidth={sw}
+          strokeDasharray={dashArray}
+        />
+      );
     }
     case 'subprocess':
       return (
         <g>
-          <rect x={x - NODE_W / 2} y={y - NODE_H / 2} width={NODE_W} height={NODE_H} rx={4} fill={fill} fillOpacity={0.2} stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray} />
-          <rect x={x - NODE_W / 2 + 4} y={y - NODE_H / 2 + 4} width={NODE_W - 8} height={NODE_H - 8} rx={2} fill="none" stroke={stroke} strokeWidth={1} />
+          <rect
+            x={x - NODE_W / 2}
+            y={y - NODE_H / 2}
+            width={NODE_W}
+            height={NODE_H}
+            rx={4}
+            fill={fill}
+            fillOpacity={0.2}
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeDasharray={dashArray}
+          />
+          <rect
+            x={x - NODE_W / 2 + 4}
+            y={y - NODE_H / 2 + 4}
+            width={NODE_W - 8}
+            height={NODE_H - 8}
+            rx={2}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={1}
+          />
         </g>
       );
     case 'timer':
       return (
         <g>
-          <circle cx={x} cy={y} r={CIRCLE_R} fill={fill} fillOpacity={0.2} stroke={stroke} strokeWidth={sw} strokeDasharray="4 2" />
+          <circle
+            cx={x}
+            cy={y}
+            r={CIRCLE_R}
+            fill={fill}
+            fillOpacity={0.2}
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeDasharray="4 2"
+          />
           {/* Clock icon */}
           <line x1={x} y1={y - 8} x2={x} y2={y} stroke={stroke} strokeWidth={1.5} />
           <line x1={x} y1={y} x2={x + 6} y2={y + 4} stroke={stroke} strokeWidth={1.5} />
@@ -240,9 +306,25 @@ function renderNodeShape(
       const h = NODE_H * 0.55;
       return (
         <g>
-          <rect x={x - w / 2} y={y - h / 2} width={w} height={h} rx={2} fill={fill} fillOpacity={0.2} stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray} />
+          <rect
+            x={x - w / 2}
+            y={y - h / 2}
+            width={w}
+            height={h}
+            rx={2}
+            fill={fill}
+            fillOpacity={0.2}
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeDasharray={dashArray}
+          />
           {/* Envelope flap */}
-          <polyline points={`${x - w / 2},${y - h / 2} ${x},${y + 2} ${x + w / 2},${y - h / 2}`} fill="none" stroke={stroke} strokeWidth={1.5} />
+          <polyline
+            points={`${x - w / 2},${y - h / 2} ${x},${y + 2} ${x + w / 2},${y - h / 2}`}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={1.5}
+          />
         </g>
       );
     }
@@ -251,7 +333,14 @@ function renderNodeShape(
       const pts = `${x},${y - half} ${x + half},${y} ${x},${y + half} ${x - half},${y}`;
       return (
         <g>
-          <polygon points={pts} fill={fill} fillOpacity={0.2} stroke={stroke} strokeWidth={sw} strokeDasharray={dashArray} />
+          <polygon
+            points={pts}
+            fill={fill}
+            fillOpacity={0.2}
+            stroke={stroke}
+            strokeWidth={sw}
+            strokeDasharray={dashArray}
+          />
           {/* Plus sign */}
           <line x1={x - 10} y1={y} x2={x + 10} y2={y} stroke={stroke} strokeWidth={2} />
           <line x1={x} y1={y - 10} x2={x} y2={y + 10} stroke={stroke} strokeWidth={2} />
@@ -260,7 +349,17 @@ function renderNodeShape(
     }
     default:
       return (
-        <rect x={x - NODE_W / 2} y={y - NODE_H / 2} width={NODE_W} height={NODE_H} rx={4} fill={fill} fillOpacity={0.2} stroke={stroke} strokeWidth={sw} />
+        <rect
+          x={x - NODE_W / 2}
+          y={y - NODE_H / 2}
+          width={NODE_W}
+          height={NODE_H}
+          rx={4}
+          fill={fill}
+          fillOpacity={0.2}
+          stroke={stroke}
+          strokeWidth={sw}
+        />
       );
   }
 }
@@ -281,8 +380,22 @@ function StatusBadge({ status, x, y }: { status: ProcessNodeStatus; x: number; y
   };
   return (
     <g>
-      <circle cx={x + NODE_W / 2 - 8} cy={y - NODE_H / 2 + 4} r={9} fill={color} stroke="var(--surface-default)" strokeWidth={1.5} />
-      <text x={x + NODE_W / 2 - 8} y={y - NODE_H / 2 + 8} textAnchor="middle" fontSize={10} fill="var(--text-inverse)" fontWeight="bold">
+      <circle
+        cx={x + NODE_W / 2 - 8}
+        cy={y - NODE_H / 2 + 4}
+        r={9}
+        fill={color}
+        stroke="var(--surface-default)"
+        strokeWidth={1.5}
+      />
+      <text
+        x={x + NODE_W / 2 - 8}
+        y={y - NODE_H / 2 + 8}
+        textAnchor="middle"
+        fontSize={10}
+        fill="var(--text-inverse)"
+        fontWeight="bold"
+      >
         {labels[status]}
       </text>
     </g>
@@ -295,8 +408,22 @@ function StatusBadge({ status, x, y }: { status: ProcessNodeStatus; x: number; y
 
 function ActivePulse({ x, y }: { x: number; y: number }) {
   return (
-    <circle cx={x} cy={y} r={CIRCLE_R + 6} fill="none" stroke="var(--action-primary)" strokeWidth={1.5} opacity={0.5}>
-      <animate attributeName="r" from={String(CIRCLE_R + 2)} to={String(CIRCLE_R + 16)} dur="1.5s" repeatCount="indefinite" />
+    <circle
+      cx={x}
+      cy={y}
+      r={CIRCLE_R + 6}
+      fill="none"
+      stroke="var(--action-primary)"
+      strokeWidth={1.5}
+      opacity={0.5}
+    >
+      <animate
+        attributeName="r"
+        from={String(CIRCLE_R + 2)}
+        to={String(CIRCLE_R + 16)}
+        dur="1.5s"
+        repeatCount="indefinite"
+      />
       <animate attributeName="opacity" from="0.6" to="0" dur="1.5s" repeatCount="indefinite" />
     </circle>
   );
@@ -306,12 +433,7 @@ function ActivePulse({ x, y }: { x: number; y: number }) {
 // Edge rendering
 // ---------------------------------------------------------------------------
 
-function renderEdge(
-  fromNode: LayoutNode,
-  toNode: LayoutNode,
-  label?: string,
-  highlight?: boolean,
-) {
+function renderEdge(fromNode: LayoutNode, toNode: LayoutNode, label?: string, highlight?: boolean) {
   const stroke = highlight ? 'var(--state-info-text)' : 'var(--border-strong)';
   const sw = highlight ? 2.5 : 1.5;
   const mx = (fromNode.x + toNode.x) / 2;
@@ -326,7 +448,15 @@ function renderEdge(
   return (
     <g key={`edge-${fromNode.id}-${toNode.id}`}>
       <defs>
-        <marker id={`arrow-${fromNode.id}-${toNode.id}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker
+          id={`arrow-${fromNode.id}-${toNode.id}`}
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
           <path d="M 0 0 L 10 5 L 0 10 z" fill={stroke} />
         </marker>
       </defs>
@@ -338,7 +468,14 @@ function renderEdge(
         markerEnd={`url(#arrow-${fromNode.id}-${toNode.id})`}
       />
       {label && (
-        <text x={mx} y={my - 6} textAnchor="middle" fontSize={10} fill="var(--text-secondary)" className="pointer-events-none">
+        <text
+          x={mx}
+          y={my - 6}
+          textAnchor="middle"
+          fontSize={10}
+          fill="var(--text-secondary)"
+          className="pointer-events-none"
+        >
           {label}
         </text>
       )}
@@ -412,13 +549,22 @@ export function ProcessFlow({
   return (
     <div
       ref={containerRef}
-      className={cn('relative overflow-auto rounded-lg border border-border-default bg-[var(--surface-primary)]', accessStyles(state), className)}
+      className={cn(
+        'relative overflow-auto rounded-lg border border-border-default bg-[var(--surface-primary)]',
+        accessStyles(state),
+        className,
+      )}
       data-access-state={state}
       role="figure"
       aria-label="Process flow diagram"
       title={accessReason}
     >
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} xmlns="http://www.w3.org/2000/svg">
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        xmlns="http://www.w3.org/2000/svg"
+      >
         {/* Edges */}
         {edges.map((e) => {
           const from = nodePositions.get(e.from);
@@ -472,4 +618,4 @@ export function ProcessFlow({
   );
 }
 
-ProcessFlow.displayName = "ProcessFlow";
+ProcessFlow.displayName = 'ProcessFlow';
