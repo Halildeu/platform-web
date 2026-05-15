@@ -24,7 +24,8 @@ export { ExecutiveKPIStrip } from '../patterns/executive-kpi-strip/ExecutiveKPIS
 export { ApprovalWorkflow } from './ApprovalWorkflow';
 
 // Risk & Governance
-export { RiskMatrix } from './RiskMatrix';
+// RiskMatrix moved to ../blocks/risk-matrix/ (Phase 4). Compat shim.
+export { RiskMatrix } from '../blocks/risk-matrix/RiskMatrix';
 export { GovernanceBoard } from './GovernanceBoard';
 
 // Project & Timeline

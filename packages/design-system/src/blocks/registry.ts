@@ -415,6 +415,16 @@ export const blockRegistry: BlockRegistry = {
       components: ['Card', 'Text'],
       tags: ['value', 'stream', 'lean', 'vsm', 'process'],
     },
+
+    // Phase 4 (2026-05-15) — moved from enterprise/ showcase
+    {
+      id: 'risk-matrix',
+      name: 'RiskMatrix',
+      category: 'review',
+      description: 'Likelihood vs impact risk matrix with risk items plotted',
+      components: ['Card', 'Text', 'Badge'],
+      tags: ['risk', 'matrix', 'review', 'likelihood', 'impact'],
+    },
   ],
 };
 

@@ -18,7 +18,7 @@ import { ProcessFlow } from '../index';
 import { ValueStream } from '../index';
 import { StatusTimeline } from '../index';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
-import { RiskMatrix } from '../RiskMatrix';
+import { RiskMatrix } from '../index';
 import { GanttTimeline } from '../index';
 import { ComparisonTable } from '../index';
 import { GovernanceBoard } from '../GovernanceBoard';

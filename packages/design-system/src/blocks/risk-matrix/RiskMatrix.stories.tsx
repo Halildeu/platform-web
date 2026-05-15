@@ -14,11 +14,17 @@ const sampleRisks: RiskItem[] = [
 ];
 
 const meta: Meta<typeof RiskMatrix> = {
-  title: 'Enterprise/RiskMatrix',
+  title: 'Blocks/Review/RiskMatrix',
   component: RiskMatrix,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof RiskMatrix>;
