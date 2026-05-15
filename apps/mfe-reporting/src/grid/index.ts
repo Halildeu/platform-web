@@ -128,3 +128,46 @@ export const requestsGrouping = (request: GridRequest): boolean =>
   (request.pivotCols?.length ?? 0) > 0 ||
   request.pivotMode === true ||
   (request.groupKeys?.length ?? 0) > 0;
+
+/**
+ * PR-0.4g (2026-05-15) — variant-state sync fix. AG Grid SSRM keeps
+ * {@link GridRequest#valueCols} populated even after the user drags the
+ * last row-group chip off the panel (the request snapshot mirrors the
+ * column model, which still carries the variant's aggregation
+ * preferences). The backend's {@code ReportQueryRequestDto.requestsGrouping()}
+ * treats a non-empty {@code valueCols} as grouping intent, so the
+ * downstream dispatcher trips {@code GROUPING_NOT_SUPPORTED} the moment
+ * row-group is cleared but the aggregations are not.
+ *
+ * <p>This normaliser runs before the request is handed to the SSRM
+ * datasource so the backend payload stays internally consistent:
+ * when there is no row-group, no pivot, and no ancestor expansion,
+ * {@code valueCols} and {@code groupKeys} are also dropped. The
+ * normalised request degrades to a flat query, which is what the user
+ * sees on screen after removing the last row-group chip.
+ *
+ * <p>Pivot and ancestor-expansion paths are left untouched — the
+ * normaliser is opt-in for the "no group / no pivot / no expansion"
+ * combination only.
+ */
+export const normalizeServerSideRequest = (request: GridRequest): GridRequest => {
+  const hasRowGroup = (request.rowGroupCols?.length ?? 0) > 0;
+  const hasPivotCols = (request.pivotCols?.length ?? 0) > 0;
+  const pivotMode = request.pivotMode === true;
+  const hasGroupKeys = (request.groupKeys?.length ?? 0) > 0;
+
+  if (hasRowGroup || hasPivotCols || pivotMode || hasGroupKeys) {
+    return request;
+  }
+
+  const hasValueCols = (request.valueCols?.length ?? 0) > 0;
+  if (!hasValueCols) {
+    return request;
+  }
+
+  return {
+    ...request,
+    valueCols: [],
+    groupKeys: [],
+  };
+};
