@@ -5,7 +5,7 @@ import React from 'react';
 
 import { formatValue, getTrendColor, getTrendIcon, getToneClasses } from '../types';
 import { ExecutiveKPIStrip } from '../index';
-import { ApprovalWorkflow } from '../ApprovalWorkflow';
+import { ApprovalWorkflow } from '../index';
 import { RiskMatrix } from '../index';
 import { GanttTimeline } from '../index';
 

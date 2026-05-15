@@ -3142,8 +3142,8 @@
   },
   {
     "name": "ApprovalWorkflow",
-    "path": "enterprise/ApprovalWorkflow.tsx",
-    "dir": "enterprise",
+    "path": "blocks/approval-workflow/ApprovalWorkflow.tsx",
+    "dir": "blocks",
     "lineCount": 447,
     "scores": {
       "api": 100,

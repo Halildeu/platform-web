@@ -35,3 +35,4 @@ export { ValueStream } from './value-stream';
 /* Phase 4 (2026-05-15) — moved from enterprise/ showcase to blocks */
 export { RiskMatrix } from './risk-matrix';
 export { GovernanceBoard } from './governance-board';
+export { ApprovalWorkflow } from './approval-workflow';

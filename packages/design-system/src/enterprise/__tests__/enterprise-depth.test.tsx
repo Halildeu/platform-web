@@ -17,7 +17,7 @@ import { ExecutiveKPIStrip } from '../index';
 import { ProcessFlow } from '../index';
 import { ValueStream } from '../index';
 import { StatusTimeline } from '../index';
-import { ApprovalWorkflow } from '../ApprovalWorkflow';
+import { ApprovalWorkflow } from '../index';
 import { RiskMatrix } from '../index';
 import { GanttTimeline } from '../index';
 import { ComparisonTable } from '../index';

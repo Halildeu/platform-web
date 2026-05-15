@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
 // Auto-generated contract test — do not edit manually
 // Regenerate with: node scripts/ci/generate-contract-tests.mjs --write
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
-import type { ApprovalStepStatus, ApprovalAssignee, ApprovalStep, ApprovalWorkflowProps } from '../ApprovalWorkflow';
+import type {
+  ApprovalStepStatus,
+  ApprovalAssignee,
+  ApprovalStep,
+  ApprovalWorkflowProps,
+} from '../ApprovalWorkflow';
 
 describe('ApprovalWorkflow — contract', () => {
   const defaultProps = {
@@ -39,10 +44,14 @@ describe('ApprovalWorkflow — contract', () => {
 
   it('exports expected types', () => {
     // Type-level check — if this compiles, types are exported correctly
-    const _approvalstepstatus: ApprovalStepStatus | undefined = undefined; void _approvalstepstatus;
-    const _approvalassignee: ApprovalAssignee | undefined = undefined; void _approvalassignee;
-    const _approvalstep: ApprovalStep | undefined = undefined; void _approvalstep;
-    const _approvalworkflowprops: ApprovalWorkflowProps | undefined = undefined; void _approvalworkflowprops;
+    const _approvalstepstatus: ApprovalStepStatus | undefined = undefined;
+    void _approvalstepstatus;
+    const _approvalassignee: ApprovalAssignee | undefined = undefined;
+    void _approvalassignee;
+    const _approvalstep: ApprovalStep | undefined = undefined;
+    void _approvalstep;
+    const _approvalworkflowprops: ApprovalWorkflowProps | undefined = undefined;
+    void _approvalworkflowprops;
     expect(true).toBe(true);
   });
 });
