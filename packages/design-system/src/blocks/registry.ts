@@ -272,22 +272,9 @@ export const blockRegistry: BlockRegistry = {
     },
 
     // Phase 2a (2026-05-14) — moved from enterprise/
-    {
-      id: 'activity-feed',
-      name: 'ActivityFeed',
-      category: 'dashboard',
-      description: 'Chronological activity feed with avatars and timestamps',
-      components: ['Avatar', 'Text', 'Badge'],
-      tags: ['activity', 'feed', 'event', 'log'],
-    },
-    {
-      id: 'notification-center',
-      name: 'NotificationCenter',
-      category: 'admin',
-      description: 'Notification inbox panel with read/unread state and bulk actions',
-      components: ['Drawer', 'Badge', 'Button'],
-      tags: ['notification', 'inbox', 'alert'],
-    },
+    // NOTE: activity-feed and notification-center placeholders already exist
+    // above (registry.ts:24, :132); we keep those entries and only add the
+    // 3 net-new blocks here.
     {
       id: 'status-timeline',
       name: 'StatusTimeline',
