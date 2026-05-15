@@ -8,47 +8,12 @@ import { useUsersI18n } from '../../../i18n/useUsersI18n';
 import { pushToast } from '../../../shared/notifications';
 import { getShellServices } from '../../../app/services/shell-services';
 
-// Codex 019e2022 follow-up — row-level impersonate quick action.
-// Mirrors ImpersonateAction's friendlyErrorMessage map so the row-level
-// menu item surfaces the same localized backend messages without the
-// operator having to navigate into the user-detail drawer first.
-const ROW_IMPERSONATE_ERROR_MESSAGES: Record<string, string> = {
-  SELF_IMPERSONATION_FORBIDDEN: 'Kendi hesabını impersonate edemezsin.',
-  TARGET_USER_DISABLED: 'Pasif kullanıcı için impersonation başlatılamaz.',
-  TARGET_SUBJECT_UNRESOLVABLE:
-    'Hedef kullanıcının Keycloak eşlemesi eksik (kc_subject backfill bekleniyor). Operatöre bildirin.',
-  ADMIN_IDENTITY_MISSING:
-    'Admin kimliği eksik. Çıkış yapıp tekrar giriş yapın veya KC userId attribute kontrolü gerekiyor.',
-  INSUFFICIENT_AUTHORITY: 'Bu işlem için süper admin yetkisi gerekiyor.',
-  NESTED_IMPERSONATION_FORBIDDEN:
-    'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
-  ACTIVE_SESSION_EXISTS: 'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
-  ACTIVE_IMPERSONATION_EXISTS:
-    'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
-  TARGET_SUBJECT_MISMATCH:
-    'KC token-exchange hedef kullanıcı kontrolü tutmadı (audit poisoning koruması).',
-  EXCHANGED_TOKEN_NOT_BROKER_ISSUED: 'KC token-exchange yanıtı broker-imzalı değil.',
-  EXCHANGED_TOKEN_EXPIRED: 'KC tarafından dönen token süresi dolmuş.',
-  TOKEN_EXCHANGE_FAILED: 'Keycloak token-exchange başarısız.',
-  SESSION_PERSIST_FAILED: 'Impersonation oturumu kaydedilemedi (permission-service hatası).',
-};
-
-const friendlyRowImpersonateError = (err: unknown): string => {
-  if (err instanceof Error) {
-    const withCode = err as Error & { errorCode?: string };
-    // Codex 019e1e0f BUG #3: VALIDATION_ERROR carries the localized
-    // backend message verbatim.
-    if (withCode.errorCode === 'VALIDATION_ERROR' && err.message) {
-      return err.message;
-    }
-    const codeFromMessage = err.message?.match(/^[A-Z_]+/)?.[0];
-    if (codeFromMessage && ROW_IMPERSONATE_ERROR_MESSAGES[codeFromMessage]) {
-      return ROW_IMPERSONATE_ERROR_MESSAGES[codeFromMessage];
-    }
-    return err.message;
-  }
-  return 'Impersonation başlatılamadı.';
-};
+// Codex 019e27bf fresh-context audit follow-up — single source of truth
+// for impersonation error code → Turkish UI message mapping. Previously
+// duplicated as ROW_IMPERSONATE_ERROR_MESSAGES inline; now imported from
+// the shared helper that ImpersonateAction.tsx also consumes, so adding
+// a new backend error code requires only one edit.
+import { friendlyImpersonationErrorMessage as friendlyRowImpersonateError } from '../lib/impersonation-error-messages';
 
 interface UserActionsProps {
   user: UserSummary;

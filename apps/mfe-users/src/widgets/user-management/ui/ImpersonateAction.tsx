@@ -37,55 +37,15 @@ interface ImpersonateActionProps {
   user: Pick<UserDetail, 'id' | 'email' | 'fullName'>;
 }
 
-/**
- * Codex 019e1bed AGREE — backend errorCode → Turkish UI message mapping.
- * Generic Error.message falls through when the code is unknown so the
- * orchestration's existing failure modes (network errors, etc.) still
- * surface a useful string.
- */
-const ERROR_CODE_MESSAGES: Record<string, string> = {
-  SELF_IMPERSONATION_FORBIDDEN: 'Kendi hesabını impersonate edemezsin.',
-  TARGET_USER_DISABLED: 'Pasif kullanıcı için impersonation başlatılamaz.',
-  TARGET_SUBJECT_UNRESOLVABLE:
-    'Hedef kullanıcının Keycloak eşlemesi eksik (kc_subject backfill bekleniyor). Operatöre bildirin.',
-  ADMIN_IDENTITY_MISSING:
-    'Admin kimliği eksik. Çıkış yapıp tekrar giriş yapın veya KC userId attribute kontrolü gerekiyor.',
-  INSUFFICIENT_AUTHORITY: 'Bu işlem için süper admin yetkisi gerekiyor.',
-  NESTED_IMPERSONATION_FORBIDDEN:
-    'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
-  ACTIVE_SESSION_EXISTS: 'Zaten aktif bir impersonation oturumu var. Önce mevcut oturumu durdurun.',
-  TARGET_SUBJECT_MISMATCH:
-    'KC token-exchange hedef kullanıcı kontrolü tutmadı (audit poisoning koruması).',
-  EXCHANGED_TOKEN_NOT_BROKER_ISSUED: 'KC token-exchange yanıtı broker-imzalı değil.',
-  EXCHANGED_TOKEN_EXPIRED: 'KC tarafından dönen token süresi dolmuş.',
-  TOKEN_EXCHANGE_FAILED: 'Keycloak token-exchange başarısız.',
-  SESSION_PERSIST_FAILED: 'Impersonation oturumu kaydedilemedi (permission-service hatası).',
-};
-
-const friendlyErrorMessage = (err: unknown): string => {
-  if (err instanceof Error) {
-    // Codex 019e1e0f BUG #3 follow-up: orchestration adapter wraps
-    // Spring's `MethodArgumentNotValidException` (400 with shape
-    // `{error: "VALIDATION_ERROR", fieldErrors: [...]}`) into a regular
-    // Error whose `errorCode` property is "VALIDATION_ERROR" and whose
-    // `message` is the localized field message (e.g.
-    // "boyut '10' ile '500' arasında olmalı"). Prefer this verbatim
-    // over the generic ERROR_CODE_MESSAGES fallback because the
-    // backend already localized it via Spring's Turkish ValidationMessages.
-    const withCode = err as Error & { errorCode?: string };
-    if (withCode.errorCode === 'VALIDATION_ERROR' && err.message) {
-      return err.message;
-    }
-    // Orchestration surfaces errorCode in error.message when backend
-    // returns a structured StartResponse with errorCode set.
-    const msg = err.message ?? '';
-    for (const [code, friendly] of Object.entries(ERROR_CODE_MESSAGES)) {
-      if (msg.includes(code)) return friendly;
-    }
-    return msg || 'Impersonation başlatılamadı. Lütfen tekrar deneyin.';
-  }
-  return 'Impersonation başlatılamadı. Lütfen tekrar deneyin.';
-};
+// Codex 019e27bf fresh-context audit follow-up — single source of
+// truth moved to ../lib/impersonation-error-messages. UserActions.ui.tsx
+// shares the same helper so adding a new backend error code requires
+// only one edit. The drawer's previous in-file map+function used to
+// drift from the row-level menu's copy.
+import {
+  IMPERSONATION_ERROR_MESSAGES as ERROR_CODE_MESSAGES,
+  friendlyImpersonationErrorMessage as friendlyErrorMessage,
+} from '../lib/impersonation-error-messages';
 
 export const ImpersonateAction: React.FC<ImpersonateActionProps> = ({ user }) => {
   const [open, setOpen] = useState(false);
