@@ -9,8 +9,8 @@ import type { FineKinneyRisk } from '../index';
 
 import { ParetoChart } from '../index';
 import type { ParetoItem } from '../index';
-import { HeatmapCalendar } from '../HeatmapCalendar';
-import type { HeatmapDay } from '../HeatmapCalendar';
+import { HeatmapCalendar } from '../index';
+import type { HeatmapDay } from '../index';
 import { expectNoA11yViolations } from '../../__tests__/a11y-utils';
 
 // ---------------------------------------------------------------------------

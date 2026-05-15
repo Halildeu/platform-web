@@ -21,3 +21,13 @@ export { BoxPlot } from './box-plot';
 export { HistogramChart } from './histogram-chart';
 export { ControlChart } from './control-chart';
 export { ParetoChart } from './pareto-chart';
+
+/* Phase 2c (2026-05-15) — moved from enterprise/ workspace blocks */
+export { SankeyDiagram } from './sankey-diagram';
+export { HeatmapCalendar } from './heatmap-calendar';
+export { OrgChart } from './org-chart';
+export { PivotTable } from './pivot-table';
+export { CommentThread } from './comment-thread';
+export { FileUploadZone } from './file-upload-zone';
+export { FilterPresets } from './filter-presets';
+export { ValueStream } from './value-stream';
