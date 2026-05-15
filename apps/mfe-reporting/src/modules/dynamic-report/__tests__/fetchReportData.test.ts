@@ -466,6 +466,84 @@ describe('exportReportData routing (PR-0.5b export path)', () => {
     });
   });
 
+  // PR-0.5b iter-2 absorb (Codex 019e2cfe Finding #1): normalisation
+  // happens before dispatch. Stale/incomplete snapshots that collapse
+  // to flat must NOT POST; backend would 400 GROUPING_NOT_SUPPORTED.
+  it('stale valueCols only (no rowGroup) normalises to flat and uses GET /export', async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'csv', {
+      rowGroupCols: [],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
+      pivotCols: [],
+      pivotMode: false,
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('pivotMode only (no rowGroup) normalises to flat and uses GET /export', async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'csv', {
+      rowGroupCols: [],
+      valueCols: [],
+      pivotCols: [{ id: 'ba', field: 'ba', displayName: 'B/A' } as any],
+      pivotMode: true,
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('incomplete pivot (rowGroup but no pivotCols) normalises to grouped (POSTs without pivotMode)', async () => {
+    mockPost.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'csv', {
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
+      pivotCols: [],
+      pivotMode: true, // incomplete: no pivotCols
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    // Normalizer dropped pivotMode → backend dispatches to grouped.
+    expect(body.pivotMode).toBe(false);
+  });
+
+  it('POST 400 with non-JSON Blob falls back to generic ReportQueryError', async () => {
+    // Codex iter-2 §3 defensive: empty / non-JSON body must not crash
+    // the error parser.
+    mockPost.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 400, data: new Blob(['plain text error']) },
+    });
+
+    await expect(
+      exportReportData('any', { search: '' }, 'csv', {
+        rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+        valueCols: [
+          { id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any,
+        ],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      }),
+    ).rejects.toMatchObject({
+      name: 'ReportQueryError',
+      message: expect.stringContaining('BAD_REQUEST'),
+    });
+  });
+
   it('POST 401 maps to authorization error message', async () => {
     mockPost.mockRejectedValueOnce({
       isAxiosError: true,

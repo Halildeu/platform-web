@@ -45,7 +45,9 @@ export const auditReportModule: ReportModule<AuditFilters, AuditRow> = {
           >
             <option value="ALL">{t('reports.filters.all')}</option>
             {LEVELS.map((level) => (
-              <option key={level} value={level}>{level}</option>
+              <option key={level} value={level}>
+                {level}
+              </option>
             ))}
           </select>
         </label>
@@ -54,18 +56,49 @@ export const auditReportModule: ReportModule<AuditFilters, AuditRow> = {
   },
   getColumnMeta: (): ColumnMeta[] => [
     { field: 'id', headerNameKey: 'reports.audit.columns.eventId', columnType: 'text', width: 140 },
-    { field: 'userEmail', headerNameKey: 'reports.audit.columns.userEmail', columnType: 'text', flex: 1.4 },
-    { field: 'service', headerNameKey: 'reports.audit.columns.service', columnType: 'text', flex: 1 },
-    { field: 'action', headerNameKey: 'reports.audit.columns.action', columnType: 'text', flex: 1.2 },
     {
-      field: 'level', headerNameKey: 'reports.audit.columns.level', columnType: 'badge', width: 120,
+      field: 'userEmail',
+      headerNameKey: 'reports.audit.columns.userEmail',
+      columnType: 'text',
+      flex: 1.4,
+    },
+    {
+      field: 'service',
+      headerNameKey: 'reports.audit.columns.service',
+      columnType: 'text',
+      flex: 1,
+    },
+    {
+      field: 'action',
+      headerNameKey: 'reports.audit.columns.action',
+      columnType: 'text',
+      flex: 1.2,
+    },
+    {
+      field: 'level',
+      headerNameKey: 'reports.audit.columns.level',
+      columnType: 'badge',
+      width: 120,
       variantMap: { INFO: 'info', WARN: 'warning', ERROR: 'danger' },
       defaultVariant: 'default',
       filterValues: ['INFO', 'WARN', 'ERROR'],
     },
-    { field: 'timestamp', headerNameKey: 'reports.audit.columns.timestamp', columnType: 'date', flex: 1.2 },
+    {
+      field: 'timestamp',
+      headerNameKey: 'reports.audit.columns.timestamp',
+      columnType: 'date',
+      flex: 1.2,
+    },
   ],
   getColumns: () => [],
   fetchRows: (filters, request) => fetchAuditReport(filters, request),
-  exportRows: (filters, format) => exportAuditReport(filters, format),
+  // PR-0.5b (Codex thread 019e2cd7 + 019e2cfe iter-2 absorb): the
+  // ReportModule.exportRows contract now uses 'csv' | 'excel' end-to-
+  // end (cleanup of the legacy 'csv' | 'json' contract drift). The
+  // audit endpoint still emits a JSON file (legacy server contract),
+  // not an .xlsx workbook, so map 'excel' → 'json' at the boundary
+  // and surface the resulting .json blob. A future PR could rename
+  // audit's "json" export to "excel" + actually emit xlsx, but
+  // that's a backend-shape change outside PR-0.5b scope.
+  exportRows: (filters, format) => exportAuditReport(filters, format === 'csv' ? 'csv' : 'json'),
 };

@@ -558,21 +558,24 @@ export const exportReportData = async (
   const extension = format === 'csv' ? 'csv' : 'xlsx';
 
   /*
-   * PR-0.5b (Codex thread 019e2cd7): dispatch decision
-   * - Flat / no grouping intent → GET /export (backward compat)
-   * - Grouping or pivot intent → POST /export with the normalised
-   *   request body so the backend matches the same view shape the
-   *   live /query path resolves.
+   * PR-0.5b (Codex thread 019e2cd7 post-impl REVISE absorb): dispatch
+   * decision is made AFTER normalization, mirroring the SSRM data
+   * path's ordering (ReportPage normalises before fetchReportData
+   * routes on requestsGrouping(normalised)).
    *
-   * The {@link normalizeServerSideRequest} reuse means a stale
-   * valueCols/pivotCols/groupKeys snapshot degrades to the closest
-   * backend-supported shape on the export path identical to the
-   * SSRM datasource path — no separate normalisation drift.
+   * Why normalize-then-route: normalizeServerSideRequest collapses
+   * incomplete pivot / stale valueCols / stale groupKeys snapshots
+   * to the closest backend-supported shape. A snapshot that looked
+   * "pivoty" before the normalizer can resolve to a flat request
+   * after it (e.g. pivotMode=true + no rowGroup → flat; valueCols
+   * with no rowGroup + no expansion → flat). Calling POST /export
+   * for those would trip GROUPING_NOT_SUPPORTED on the backend;
+   * the legacy GET /export is the right destination.
    */
-  if (gridState && gridStateRequestsGrouping(gridState)) {
+  if (gridState) {
     const normalised = normalizeServerSideRequest({
       page: 1,
-      pageSize: 0,
+      pageSize: 1,
       rowGroupCols: gridState.rowGroupCols,
       valueCols: gridState.valueCols,
       pivotCols: gridState.pivotCols,
@@ -581,53 +584,67 @@ export const exportReportData = async (
       sortModel: gridState.sortModel,
     });
 
-    const body = {
-      format: wireFormat,
-      rowGroupCols: normalised.rowGroupCols ?? [],
-      valueCols: normalised.valueCols ?? [],
-      pivotCols: normalised.pivotCols ?? [],
-      pivotMode: normalised.pivotMode ?? false,
-      filterModel: normalised.filterModel ?? {},
-      sortModel: normalised.sortModel ?? [],
-    };
+    if (requestsGrouping(normalised)) {
+      const body = {
+        format: wireFormat,
+        rowGroupCols: normalised.rowGroupCols ?? [],
+        valueCols: normalised.valueCols ?? [],
+        pivotCols: normalised.pivotCols ?? [],
+        pivotMode: normalised.pivotMode ?? false,
+        filterModel: normalised.filterModel ?? {},
+        sortModel: normalised.sortModel ?? [],
+      };
 
-    try {
-      const { data } = await client.post<Blob>(`${REPORTS_BASE}/${reportKey}/export`, body, {
-        responseType: 'blob',
-        headers: buildCompanyHeaders(),
-      });
-      return { blob: data, filename: `${reportKey}.${extension}` };
-    } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        const response = error as AxiosError<ErrorResponse & { code?: string; message?: string }>;
-        const status = response.response?.status;
-        if (status === 401 || status === 403) {
-          throw new Error('Rapor verileri için yetki bulunmuyor', { cause: error });
-        }
-        if (status === 400) {
-          // POST /export returns the same structured ReportQueryError
-          // envelope as /query, but the body arrives as a Blob (we
-          // told axios responseType=blob). Read the blob as JSON so
-          // the user-facing toast surfaces the canonical code.
-          const blob = response.response?.data as unknown;
-          let code = 'BAD_REQUEST';
-          let message = 'Export reddedildi';
-          try {
-            if (blob instanceof Blob) {
-              const text = await blob.text();
-              const parsed = JSON.parse(text) as { code?: string; message?: string };
-              if (parsed.code) code = parsed.code;
-              if (parsed.message) message = parsed.message;
-            }
-          } catch {
-            // body wasn't JSON — fall through to generic message
+      try {
+        const { data } = await client.post<Blob>(`${REPORTS_BASE}/${reportKey}/export`, body, {
+          responseType: 'blob',
+          headers: buildCompanyHeaders(),
+        });
+        return { blob: data, filename: `${reportKey}.${extension}` };
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error)) {
+          const response = error as AxiosError<ErrorResponse & { code?: string; message?: string }>;
+          const status = response.response?.status;
+          if (status === 401 || status === 403) {
+            throw new Error('Rapor verileri için yetki bulunmuyor', { cause: error });
           }
-          throw new ReportQueryError(code, `[${code}] ${message}`, 400);
+          if (status === 400) {
+            // POST /export returns the same structured ReportQueryError
+            // envelope as /query, but the body arrives as a Blob (we
+            // told axios responseType=blob). Read the blob as JSON so
+            // the user-facing toast surfaces the canonical code.
+            // Codex iter-2 §3: also tolerate the legacy `{error: ...}`
+            // shape just in case a sub-handler emits it on this path.
+            const blob = response.response?.data as unknown;
+            let code = 'BAD_REQUEST';
+            let message = 'Export reddedildi';
+            try {
+              if (blob instanceof Blob) {
+                const text = await blob.text();
+                if (text && text.trim().length > 0) {
+                  const parsed = JSON.parse(text) as {
+                    code?: string;
+                    error?: string;
+                    message?: string;
+                  };
+                  if (parsed.code) code = parsed.code;
+                  else if (parsed.error) code = parsed.error;
+                  if (parsed.message) message = parsed.message;
+                }
+              }
+            } catch {
+              // body wasn't JSON — fall through to generic message
+            }
+            throw new ReportQueryError(code, `[${code}] ${message}`, 400);
+          }
+          throw new Error(`Export başlatılamadı (HTTP ${status ?? '??'})`, { cause: error });
         }
-        throw new Error(`Export başlatılamadı (HTTP ${status ?? '??'})`, { cause: error });
+        throw new Error('Export başlatılamadı', { cause: error });
       }
-      throw new Error('Export başlatılamadı', { cause: error });
     }
+    // gridState present but normalised to flat → fall through to
+    // the legacy GET /export path; backend has no grouped contract
+    // to honour on this shape.
   }
 
   // Flat fallback — keep the legacy GET /export path so non-grouping
@@ -646,12 +663,7 @@ export const exportReportData = async (
   return { blob: data, filename: `${reportKey}.${extension}` };
 };
 
-/**
- * True iff the captured grid state expresses any grouping/pivot intent.
- * Matches {@link requestsGrouping} on the shared GridRequest contract.
- */
-const gridStateRequestsGrouping = (state: ExportGridState): boolean =>
-  (state.rowGroupCols?.length ?? 0) > 0 ||
-  (state.valueCols?.length ?? 0) > 0 ||
-  (state.pivotCols?.length ?? 0) > 0 ||
-  state.pivotMode === true;
+// PR-0.5b iter-2 absorb (Codex 019e2cfe Finding #1): the dispatch
+// decision lives inline with the normalisation step now, so the
+// raw-snapshot pre-check is redundant — removed to keep a single
+// source of truth for "is this request grouping".
