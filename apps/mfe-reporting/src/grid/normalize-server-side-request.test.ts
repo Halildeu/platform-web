@@ -176,6 +176,30 @@ describe('normalizeServerSideRequest', () => {
       expect(out.valueCols).toHaveLength(1); // grouped path keeps aggregations
     });
 
+    it('degrades to grouped when pivotMode + rowGroup + pivotCols but no value columns (iter-2)', () => {
+      // Codex 019e2a7f iter-2 absorb. Live bug: user removes the
+      // Values chip while pivotMode + rowGroup + pivotCols are still
+      // populated. Backend pivot aliases need an aggregation per
+      // bucket; without valueCols there's nothing to materialise →
+      // GROUPING_NOT_SUPPORTED 400. Degrade to grouped (drop
+      // pivotMode + pivotCols + groupKeys) so the row-group buckets
+      // still render while the user picks a new value column.
+      const req = baseRequest({
+        rowGroupCols: [
+          { id: 'ACCOUNT_CODE', field: 'ACCOUNT_CODE', displayName: 'Hesap Kodu', aggFunc: null },
+        ],
+        pivotMode: true,
+        pivotCols: [{ id: 'BA', field: 'BA', displayName: 'BA', aggFunc: null }],
+        valueCols: [],
+      });
+      const out = normalizeServerSideRequest(req);
+      expect(out.pivotMode).toBe(false);
+      expect(out.pivotCols).toEqual([]);
+      expect(out.rowGroupCols).toHaveLength(1);
+      expect(out.valueCols).toEqual([]);
+      expect(out.groupKeys).toEqual([]);
+    });
+
     it('strips groupKeys from a complete pivot state (PR-0.4b single-level only)', () => {
       // pivotMode + rowGroup + pivotCols are all set, but an expanded
       // pivot bucket pushed a non-empty groupKeys. PR-0.4b backend

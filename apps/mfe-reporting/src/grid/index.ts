@@ -146,9 +146,21 @@ export const requestsGrouping = (request: GridRequest): boolean =>
  * normalised request degrades to a flat query, which is what the user
  * sees on screen after removing the last row-group chip.
  *
- * <p>Pivot and ancestor-expansion paths are left untouched — the
- * normaliser is opt-in for the "no group / no pivot / no expansion"
- * combination only.
+ * <p>PR-0.4g2 (2026-05-15) extends the normaliser to the pivot-mode
+ * surface. PR-0.4d-fe2 lit up the AG Grid pivot UI; chip removals
+ * during normal user interactions can leave pivotMode=true with an
+ * incomplete config (missing rowGroup, pivot column, or value
+ * column), which the backend single-level pivot dispatcher cannot
+ * honour. The normaliser now degrades incomplete pivot snapshots to
+ * the closest backend-supported shape so the grid keeps rendering
+ * data while the user iterates:
+ *   - pivotMode + no rowGroup → flat (drop everything)
+ *   - pivotMode + rowGroup + no pivotCols → grouped (drop pivotMode)
+ *   - pivotMode + rowGroup + pivotCols + no valueCols → grouped (drop pivotMode)
+ *   - pivotMode + complete state + non-empty groupKeys → strip
+ *     groupKeys (PR-0.4b single-level pivot only; multi-level
+ *     expansion is PR-0.4e roadmap)
+ *   - complete pivot state → referential pass-through
  */
 export const normalizeServerSideRequest = (request: GridRequest): GridRequest => {
   const hasRowGroup = (request.rowGroupCols?.length ?? 0) > 0;
@@ -195,6 +207,21 @@ export const normalizeServerSideRequest = (request: GridRequest): GridRequest =>
         ...request,
         pivotMode: false,
         pivotCols: [],
+      };
+    }
+    if (!hasValueCols) {
+      // PR-0.4g2 iter-2 (Codex 019e2a7f absorb): pivotMode + rowGroup
+      // + pivotCols but no value column. Backend single-level pivot
+      // builds aliases as `pvt__<pivot>__<value>__<aggFunc>__<valueField>`
+      // — without aggregations there's nothing to materialise per
+      // bucket. Degrade to a plain grouped request (drop pivotMode,
+      // pivotCols, groupKeys) so the grid renders the bare row-group
+      // buckets while the user is still picking a value column.
+      return {
+        ...request,
+        pivotMode: false,
+        pivotCols: [],
+        groupKeys: [],
       };
     }
     if (hasGroupKeys) {
