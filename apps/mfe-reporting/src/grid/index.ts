@@ -154,26 +154,79 @@ export const normalizeServerSideRequest = (request: GridRequest): GridRequest =>
   const hasRowGroup = (request.rowGroupCols?.length ?? 0) > 0;
   const hasPivotCols = (request.pivotCols?.length ?? 0) > 0;
   const pivotMode = request.pivotMode === true;
+  const hasValueCols = (request.valueCols?.length ?? 0) > 0;
+  const hasGroupKeys = (request.groupKeys?.length ?? 0) > 0;
 
-  // PR-0.4g iter-2 (Codex 019e2a7f absorb): an active row-group /
-  // pivot / pivotMode signal short-circuits to a referential
-  // pass-through — drill-down / pivot / grouped paths are all
-  // backend-supported and must not be touched.
-  if (hasRowGroup || hasPivotCols || pivotMode) {
+  // PR-0.4g2 (2026-05-15): incomplete pivot state degradation. The
+  // backend single-level pivot dispatcher requires pivotMode=true
+  // AND rowGroupCols.size==1 AND pivotCols.size==1 AND
+  // groupKeys.isEmpty(). AG Grid emits partial state during normal
+  // user interactions:
+  //   - user removes the row-group chip while keeping pivotMode on
+  //   - user removes the pivot column chip while keeping pivotMode on
+  //   - user removes the value column chip
+  //   - user drills into a pivot bucket (groupKeys populated)
+  // Each leaves a snapshot the backend cannot honour, surfacing as
+  // GROUPING_NOT_SUPPORTED 400 + the "Bu kolonla gruplama
+  // desteklenmiyor" toast. The normaliser degrades these snapshots
+  // gracefully so the grid renders data the user can iterate on:
+  //   - pivotMode + no rowGroup AND no pivotCols → flat (drop all)
+  //   - pivotMode + no rowGroup BUT has pivotCols → flat (drop all)
+  //   - pivotMode + rowGroup BUT no pivotCols → grouped (drop pivotMode)
+  //   - pivotMode + rowGroup + pivotCols + groupKeys → strip groupKeys
+  //     (multi-level pivot expansion is PR-0.4e roadmap)
+  if (pivotMode) {
+    if (!hasRowGroup) {
+      // Without a row-group the pivot SQL cannot bucket rows. Drop
+      // every grouping field so the request degrades to a flat query.
+      return {
+        ...request,
+        pivotMode: false,
+        pivotCols: [],
+        valueCols: [],
+        groupKeys: [],
+      };
+    }
+    if (!hasPivotCols) {
+      // Has rowGroup but no pivot column → degrade to a plain grouped
+      // query. Keep rowGroupCols + valueCols + groupKeys so the
+      // grouped path renders the aggregations the user already chose.
+      return {
+        ...request,
+        pivotMode: false,
+        pivotCols: [],
+      };
+    }
+    if (hasGroupKeys) {
+      // PR-0.4b single-level pivot rejects expanded pivot buckets
+      // (multi-level pivot expansion is PR-0.4e). Strip groupKeys
+      // so the dispatcher routes to the single-level pivot path
+      // instead of tripping GROUPING_NOT_SUPPORTED.
+      return {
+        ...request,
+        groupKeys: [],
+      };
+    }
+    // Pivot state complete — backend single-level pivot will succeed.
     return request;
   }
 
-  // PR-0.4g iter-2 (Codex 019e2a7f absorb): stale `groupKeys` without
-  // a matching `rowGroupCols` is the same shape of broken-route
-  // snapshot as stale `valueCols`. AG Grid SSRM can briefly emit
+  // PR-0.4g iter-2 (Codex 019e2a7f absorb): an active row-group /
+  // pivot-cols signal short-circuits to referential pass-through —
+  // drill-down / pivot / grouped paths are all backend-supported.
+  if (hasRowGroup || hasPivotCols) {
+    return request;
+  }
+
+  // PR-0.4g iter-2: stale `groupKeys` without a matching
+  // `rowGroupCols` is the same shape of broken-route snapshot as
+  // stale `valueCols`. AG Grid SSRM can briefly emit
   // {rowGroupCols=[], groupKeys=['…']} when a user removes the last
   // row-group while an expanded bucket is mounted; the backend
   // dispatcher would still see grouping intent and 400. Normalising
   // both fields together keeps the outbound payload internally
   // consistent regardless of which child-store request raced the
   // column-state mutation.
-  const hasValueCols = (request.valueCols?.length ?? 0) > 0;
-  const hasGroupKeys = (request.groupKeys?.length ?? 0) > 0;
   if (!hasValueCols && !hasGroupKeys) {
     return request;
   }
