@@ -1,10 +1,10 @@
 import React from 'react';
-import { cn } from '../utils/cn';
+import { cn } from '../../utils/cn';
 import {
   resolveAccessState,
   accessStyles,
   type AccessControlledProps,
-} from '../internal/access-controller';
+} from '../../internal/access-controller';
 
 // ── Types ──
 
@@ -57,10 +57,14 @@ function daysBetween(a: Date, b: Date): number {
 
 function getColumnWidth(mode: GanttViewMode): number {
   switch (mode) {
-    case 'day': return 36;
-    case 'week': return 20;
-    case 'month': return 6;
-    case 'quarter': return 2;
+    case 'day':
+      return 36;
+    case 'week':
+      return 20;
+    case 'month':
+      return 6;
+    case 'quarter':
+      return 2;
   }
 }
 
@@ -95,10 +99,18 @@ function getTimeSlots(start: Date, end: Date, mode: GanttViewMode): Date[] {
   while (current <= end) {
     slots.push(new Date(current));
     switch (mode) {
-      case 'day': current.setDate(current.getDate() + 1); break;
-      case 'week': current.setDate(current.getDate() + 7); break;
-      case 'month': current.setMonth(current.getMonth() + 1); break;
-      case 'quarter': current.setMonth(current.getMonth() + 3); break;
+      case 'day':
+        current.setDate(current.getDate() + 1);
+        break;
+      case 'week':
+        current.setDate(current.getDate() + 7);
+        break;
+      case 'month':
+        current.setMonth(current.getMonth() + 1);
+        break;
+      case 'quarter':
+        current.setMonth(current.getMonth() + 3);
+        break;
     }
   }
   return slots;
@@ -172,7 +184,12 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
   if (accessState.isHidden) return null;
 
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
-  const [dragging, setDragging] = React.useState<{ taskId: string; startX: number; originalStart: Date; originalEnd: Date } | null>(null);
+  const [dragging, setDragging] = React.useState<{
+    taskId: string;
+    startX: number;
+    originalStart: Date;
+    originalEnd: Date;
+  } | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   const { rangeStart, rangeEnd } = computeDateRange(tasks);
@@ -196,10 +213,17 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
   }, [tasks, groupBy]);
 
   // Flatten visible rows
-  const visibleRows: Array<{ type: 'group'; label: string; key: string; count: number } | { type: 'task'; task: GanttTask }> = [];
+  const visibleRows: Array<
+    { type: 'group'; label: string; key: string; count: number } | { type: 'task'; task: GanttTask }
+  > = [];
   for (const group of groups) {
     if (groupBy) {
-      visibleRows.push({ type: 'group', label: group.label, key: group.key, count: group.tasks.length });
+      visibleRows.push({
+        type: 'group',
+        label: group.label,
+        key: group.key,
+        count: group.tasks.length,
+      });
       if (collapsedGroups.has(group.key)) continue;
     }
     for (const task of group.tasks) {
@@ -208,7 +232,7 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
   }
 
   const toggleGroup = (key: string) => {
-    setCollapsedGroups(prev => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -238,7 +262,12 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
   const handleMouseDown = (e: React.MouseEvent, task: GanttTask) => {
     if (!onTaskDrag || accessState.isReadonly || accessState.isDisabled) return;
     e.preventDefault();
-    setDragging({ taskId: task.id, startX: e.clientX, originalStart: task.startDate, originalEnd: task.endDate });
+    setDragging({
+      taskId: task.id,
+      startX: e.clientX,
+      originalStart: task.startDate,
+      originalEnd: task.endDate,
+    });
   };
 
   React.useEffect(() => {
@@ -250,7 +279,7 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
       if (deltaDays === 0) return;
       const newStart = addDays(dragging.originalStart, deltaDays);
       const newEnd = addDays(dragging.originalEnd, deltaDays);
-      onTaskDrag?.(tasks.find(t => t.id === dragging.taskId)!, newStart, newEnd);
+      onTaskDrag?.(tasks.find((t) => t.id === dragging.taskId)!, newStart, newEnd);
     };
     const handleMouseUp = () => setDragging(null);
     window.addEventListener('mousemove', handleMouseMove);
@@ -265,17 +294,26 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
 
   return (
     <div
-      className={cn('border border-border-default rounded-lg overflow-hidden bg-surface-default', accessStyles(accessState.state), className)}
+      className={cn(
+        'border border-border-default rounded-lg overflow-hidden bg-surface-default',
+        accessStyles(accessState.state),
+        className,
+      )}
       data-component="gantt-timeline"
       data-access-state={accessState.state}
       title={accessReason}
     >
       <div className="flex overflow-x-auto" ref={containerRef}>
         {/* Left: Task labels */}
-        <div className="shrink-0 border-r border-border-default" style={{ width: TASK_LABEL_WIDTH }}>
+        <div
+          className="shrink-0 border-r border-border-default"
+          style={{ width: TASK_LABEL_WIDTH }}
+        >
           {/* Header */}
           <div className="h-10 border-b border-border-default bg-surface-muted px-3 flex items-center">
-            <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Tasks</span>
+            <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
+              Tasks
+            </span>
           </div>
           {/* Rows */}
           {visibleRows.map((row, i) => (
@@ -289,7 +327,9 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                   className="flex items-center gap-1 text-xs font-semibold text-text-primary w-full text-left"
                   onClick={() => toggleGroup(row.key)}
                 >
-                  <span className="text-[10px]">{collapsedGroups.has(row.key) ? '\u25B6' : '\u25BC'}</span>
+                  <span className="text-[10px]">
+                    {collapsedGroups.has(row.key) ? '\u25B6' : '\u25BC'}
+                  </span>
                   {row.label}
                   <span className="ml-auto text-[var(--text-tertiary)]">({row.count})</span>
                 </button>
@@ -297,12 +337,22 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                 <span
                   role={onTaskClick ? 'button' : undefined}
                   tabIndex={onTaskClick ? 0 : undefined}
-                  className={cn('text-sm text-text-primary truncate', onTaskClick && 'cursor-pointer hover:underline')}
+                  className={cn(
+                    'text-sm text-text-primary truncate',
+                    onTaskClick && 'cursor-pointer hover:underline',
+                  )}
                   onClick={() => onTaskClick?.(row.task)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTaskClick?.(row.task); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onTaskClick?.(row.task);
+                    }
+                  }}
                   title={row.task.title}
                 >
-                  {row.task.type === 'milestone' && <span className="mr-1 text-state-warning-text">{'\u25C6'}</span>}
+                  {row.task.type === 'milestone' && (
+                    <span className="mr-1 text-state-warning-text">{'\u25C6'}</span>
+                  )}
                   {row.task.title}
                 </span>
               )}
@@ -313,9 +363,13 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
         {/* Right: Timeline area */}
         <div className="flex-1 overflow-x-auto">
           {/* Time header */}
-          <div className="flex h-10 border-b border-border-default bg-surface-muted" style={{ width: timelineWidth }}>
+          <div
+            className="flex h-10 border-b border-border-default bg-surface-muted"
+            style={{ width: timelineWidth }}
+          >
             {timeSlots.map((slot, i) => {
-              const slotDays = viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : viewMode === 'month' ? 30 : 90;
+              const slotDays =
+                viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : viewMode === 'month' ? 30 : 90;
               return (
                 <div
                   key={i}
@@ -334,7 +388,8 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
           <div className="relative" style={{ width: timelineWidth, height: totalHeight }}>
             {/* Grid lines */}
             {timeSlots.map((_, i) => {
-              const slotDays = viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : viewMode === 'month' ? 30 : 90;
+              const slotDays =
+                viewMode === 'day' ? 1 : viewMode === 'week' ? 7 : viewMode === 'month' ? 30 : 90;
               return (
                 <div
                   key={i}
@@ -348,7 +403,10 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
             {visibleRows.map((_, i) => (
               <div
                 key={i}
-                className={cn('absolute left-0 right-0 border-b border-border-subtle', i % 2 === 0 && 'bg-surface-muted/30')}
+                className={cn(
+                  'absolute left-0 right-0 border-b border-border-subtle',
+                  i % 2 === 0 && 'bg-surface-muted/30',
+                )}
                 style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
               />
             ))}
@@ -358,7 +416,10 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
               if (row.type !== 'task') return null;
               const t = row.task;
               const left = daysBetween(rangeStart, toDate(t.startDate)) * colWidth;
-              const width = Math.max(daysBetween(toDate(t.startDate), toDate(t.endDate)) * colWidth, 8);
+              const width = Math.max(
+                daysBetween(toDate(t.startDate), toDate(t.endDate)) * colWidth,
+                8,
+              );
               const barColor = t.color ?? 'var(--interactive-primary)';
               const progress = Math.min(Math.max(t.progress ?? 0, 0), 100);
 
@@ -371,7 +432,12 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                     className="absolute flex items-center justify-center cursor-pointer"
                     style={{ left: left - 8, top: i * ROW_HEIGHT + 8, width: 24, height: 24 }}
                     onClick={() => onTaskClick?.(t)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTaskClick?.(t); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onTaskClick?.(t);
+                      }
+                    }}
                     title={t.title}
                   >
                     <svg width="20" height="20" viewBox="0 0 20 20">
@@ -386,15 +452,27 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
                   key={t.id}
                   role={onTaskClick ? 'button' : undefined}
                   tabIndex={onTaskClick ? 0 : undefined}
-                  className={cn('absolute rounded-xs overflow-hidden', onTaskClick && 'cursor-pointer', onTaskDrag && 'cursor-grab active:cursor-grabbing')}
+                  className={cn(
+                    'absolute rounded-xs overflow-hidden',
+                    onTaskClick && 'cursor-pointer',
+                    onTaskDrag && 'cursor-grab active:cursor-grabbing',
+                  )}
                   style={{ left, top: i * ROW_HEIGHT + 10, width, height: ROW_HEIGHT - 20 }}
                   onClick={() => onTaskClick?.(t)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTaskClick?.(t); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onTaskClick?.(t);
+                    }
+                  }}
                   onMouseDown={(e) => handleMouseDown(e, t)}
                   title={`${t.title} (${progress}%)`}
                 >
                   {/* Background */}
-                  <div className="absolute inset-0 rounded-xs opacity-30" style={{ backgroundColor: barColor }} />
+                  <div
+                    className="absolute inset-0 rounded-xs opacity-30"
+                    style={{ backgroundColor: barColor }}
+                  />
                   {/* Progress fill */}
                   <div
                     className="absolute inset-y-0 left-0 rounded-xs"
@@ -422,12 +500,16 @@ export const GanttTimeline: React.FC<GanttTimelineProps> = ({
 
             {/* Dependency arrows (SVG overlay) */}
             {showDependencies && (
-              <svg className="absolute inset-0 pointer-events-none" width={timelineWidth} height={totalHeight}>
+              <svg
+                className="absolute inset-0 pointer-events-none"
+                width={timelineWidth}
+                height={totalHeight}
+              >
                 {visibleRows.map((row) => {
                   if (row.type !== 'task' || !row.task.dependencies?.length) return null;
                   const toPos = taskPositionMap.get(row.task.id);
                   if (!toPos) return null;
-                  return row.task.dependencies.map(depId => {
+                  return row.task.dependencies.map((depId) => {
                     const fromPos = taskPositionMap.get(depId);
                     if (!fromPos) return null;
                     return (

@@ -38,7 +38,7 @@ const WEIGHTS = {
 };
 
 const COMPONENT_DIRS = [
-  'primitives', 'components', 'patterns', 'enterprise',
+  'primitives', 'components', 'patterns', 'enterprise', 'blocks',
   'advanced', 'form', 'motion', 'internal', 'providers',
   'performance',
 ];

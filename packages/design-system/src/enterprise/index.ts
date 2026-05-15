@@ -28,7 +28,8 @@ export { RiskMatrix } from './RiskMatrix';
 export { GovernanceBoard } from './GovernanceBoard';
 
 // Project & Timeline
-export { GanttTimeline } from './GanttTimeline';
+// GanttTimeline moved to ../blocks/gantt-timeline/ (Phase 2a). Compat shim.
+export { GanttTimeline } from '../blocks/gantt-timeline/GanttTimeline';
 
 // Financial & Analytics
 // AgingBuckets: removed — niche single-purpose finance widget (Phase 1b triage)
@@ -53,17 +54,20 @@ export { DateRangePicker } from '../components/date-range-picker/DateRangePicker
 export { ThemeLayout } from './ThemeLayout';
 
 // Process & Flow
-export { ProcessFlow } from './ProcessFlow';
+// ProcessFlow moved to ../blocks/process-flow/ (Phase 2a). Compat shim.
+export { ProcessFlow } from '../blocks/process-flow/ProcessFlow';
 export { FlowBuilder } from './FlowBuilder';
 export type { FlowBuilderProps, FlowNode, FlowEdge, FlowNodeType } from './FlowBuilder';
 export { ValueStream } from './ValueStream';
 
 // Status & Timeline
-export { StatusTimeline } from './StatusTimeline';
+// StatusTimeline moved to ../blocks/status-timeline/ (Phase 2a). Compat shim.
+export { StatusTimeline } from '../blocks/status-timeline/StatusTimeline';
 
 // Notifications
-export { NotificationCenter } from './NotificationCenter';
-export type { NotificationCenterLocaleText } from './NotificationCenter';
+// NotificationCenter moved to ../blocks/notification-center/ (Phase 2a). Compat shim.
+export { NotificationCenter } from '../blocks/notification-center/NotificationCenter';
+export type { NotificationCenterLocaleText } from '../blocks/notification-center/NotificationCenter';
 
 // Editing
 // InlineEdit moved to ../components/inline-edit/ (Phase 3 adopt). Compat shim.
@@ -112,8 +116,9 @@ export { CommentThread } from './CommentThread';
 export type { CommentThreadProps, Comment } from './CommentThread';
 
 // Activity Feed
-export { ActivityFeed } from './ActivityFeed';
-export type { ActivityFeedProps, ActivityItem } from './ActivityFeed';
+// ActivityFeed moved to ../blocks/activity-feed/ (Phase 2a). Compat shim.
+export { ActivityFeed } from '../blocks/activity-feed/ActivityFeed';
+export type { ActivityFeedProps, ActivityItem } from '../blocks/activity-feed/ActivityFeed';
 
 // Box Plot
 export { BoxPlot } from './BoxPlot';

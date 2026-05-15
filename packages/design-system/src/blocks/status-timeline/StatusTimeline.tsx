@@ -1,6 +1,10 @@
 import React, { useMemo } from 'react';
-import { cn } from '../utils/cn';
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../internal/access-controller';
+import { cn } from '../../utils/cn';
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -204,9 +208,7 @@ function EventCard({
           <>
             {/* Actor */}
             {event.actor && (
-              <span className="mt-0.5 text-xs font-medium text-text-primary">
-                {event.actor}
-              </span>
+              <span className="mt-0.5 text-xs font-medium text-text-primary">{event.actor}</span>
             )}
 
             {/* Description */}
@@ -269,12 +271,7 @@ export function StatusTimeline({
       aria-label="Status timeline"
       title={accessReason}
     >
-      <div
-        className={cn(
-          'flex',
-          isH ? 'flex-row items-start overflow-x-auto' : 'flex-col',
-        )}
-      >
+      <div className={cn('flex', isH ? 'flex-row items-start overflow-x-auto' : 'flex-col')}>
         {events.map((event, i) => (
           <React.Fragment key={event.id}>
             <EventCard
@@ -286,11 +283,7 @@ export function StatusTimeline({
               onClick={onEventClick ? () => onEventClick(event.id) : undefined}
             />
             {i < events.length - 1 && (
-              <ConnectorLine
-                orientation={orientation}
-                duration={durations[i]}
-                compact={compact}
-              />
+              <ConnectorLine orientation={orientation} duration={durations[i]} compact={compact} />
             )}
           </React.Fragment>
         ))}
@@ -299,4 +292,4 @@ export function StatusTimeline({
   );
 }
 
-StatusTimeline.displayName = "StatusTimeline";
+StatusTimeline.displayName = 'StatusTimeline';

@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { cn } from '../utils/cn';
+import { cn } from '../../utils/cn';
 import {
   resolveAccessState,
   accessStyles,
   type AccessControlledProps,
-} from '../internal/access-controller';
+} from '../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,19 +69,29 @@ export interface ActivityFeedProps extends AccessControlledProps {
 // Constants
 // ---------------------------------------------------------------------------
 
-const TYPE_CONFIG: Record<
-  ActivityItem['type'],
-  { icon: string; color: string; bgColor: string }
-> = {
-  create: { icon: '+', color: 'var(--state-success-text)', bgColor: 'var(--state-success-bg)' },
-  update: { icon: '~', color: 'var(--state-info-text)', bgColor: 'var(--state-info-bg)' },
-  delete: { icon: '-', color: 'var(--state-error-text)', bgColor: 'var(--state-error-bg)' },
-  comment: { icon: '\u2709', color: 'var(--text-secondary)', bgColor: 'var(--surface-muted)' },
-  approve: { icon: '\u2713', color: 'var(--state-success-text)', bgColor: 'var(--state-success-bg)' },
-  assign: { icon: '\u2192', color: 'var(--state-warning-text)', bgColor: 'var(--state-warning-bg)' },
-  complete: { icon: '\u2714', color: 'var(--state-success-text)', bgColor: 'var(--state-success-bg)' },
-  alert: { icon: '!', color: 'var(--state-error-text)', bgColor: 'var(--state-error-bg)' },
-};
+const TYPE_CONFIG: Record<ActivityItem['type'], { icon: string; color: string; bgColor: string }> =
+  {
+    create: { icon: '+', color: 'var(--state-success-text)', bgColor: 'var(--state-success-bg)' },
+    update: { icon: '~', color: 'var(--state-info-text)', bgColor: 'var(--state-info-bg)' },
+    delete: { icon: '-', color: 'var(--state-error-text)', bgColor: 'var(--state-error-bg)' },
+    comment: { icon: '\u2709', color: 'var(--text-secondary)', bgColor: 'var(--surface-muted)' },
+    approve: {
+      icon: '\u2713',
+      color: 'var(--state-success-text)',
+      bgColor: 'var(--state-success-bg)',
+    },
+    assign: {
+      icon: '\u2192',
+      color: 'var(--state-warning-text)',
+      bgColor: 'var(--state-warning-bg)',
+    },
+    complete: {
+      icon: '\u2714',
+      color: 'var(--state-success-text)',
+      bgColor: 'var(--state-success-bg)',
+    },
+    alert: { icon: '!', color: 'var(--state-error-text)', bgColor: 'var(--state-error-bg)' },
+  };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -238,13 +248,9 @@ const ActivityRow: React.FC<ActivityRowProps> = ({ item, isLast, canInteract, on
           <span className="text-sm font-semibold text-[var(--text-primary)]">
             {item.actor.name}
           </span>
-          <span className="text-sm text-[var(--text-secondary)]">
-            {item.description}
-          </span>
+          <span className="text-sm text-[var(--text-secondary)]">{item.description}</span>
           {item.target && (
-            <span className="text-sm font-medium text-[var(--text-accent)]">
-              {item.target}
-            </span>
+            <span className="text-sm font-medium text-[var(--text-accent)]">{item.target}</span>
           )}
         </div>
         <span className="text-xs text-[var(--text-tertiary)] mt-0.5 block">

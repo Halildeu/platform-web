@@ -1,6 +1,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { cn } from '../utils/cn';
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../internal/access-controller';
+import { cn } from '../../utils/cn';
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -178,7 +182,12 @@ function NotificationRow({
       <TypeIcon type={item.type} />
 
       <div className="flex-1 min-w-0">
-        <p className={cn('text-sm leading-snug', isUnread ? 'font-semibold text-text-primary' : 'text-text-primary')}>
+        <p
+          className={cn(
+            'text-sm leading-snug',
+            isUnread ? 'font-semibold text-text-primary' : 'text-text-primary',
+          )}
+        >
           {item.title}
         </p>
         {item.message && (
@@ -215,7 +224,15 @@ function NotificationRow({
             onDismiss(item.id);
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
@@ -270,10 +287,7 @@ export function NotificationCenter({
     action: localeText?.groupAction ?? DEFAULT_GROUP_LABELS.action,
   };
 
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
-  );
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   const visibleItems = expanded ? notifications : notifications.slice(0, maxVisible);
   const hiddenCount = notifications.length - maxVisible;
@@ -330,7 +344,15 @@ export function NotificationCenter({
       <div className="flex-1 overflow-y-auto">
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-text-secondary">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-2 opacity-40">
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="mb-2 opacity-40"
+            >
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
@@ -399,4 +421,4 @@ export function NotificationCenter({
   );
 }
 
-NotificationCenter.displayName = "NotificationCenter";
+NotificationCenter.displayName = 'NotificationCenter';

@@ -853,7 +853,7 @@
   },
   {
     "name": "ActivityFeed",
-    "path": "enterprise/ActivityFeed.tsx",
+    "path": "blocks/activity-feed/ActivityFeed.tsx",
     "dir": "enterprise",
     "lineCount": 399,
     "scores": {
@@ -1926,7 +1926,7 @@
   },
   {
     "name": "StatusTimeline",
-    "path": "enterprise/StatusTimeline.tsx",
+    "path": "blocks/status-timeline/StatusTimeline.tsx",
     "dir": "enterprise",
     "lineCount": 303,
     "scores": {
@@ -2249,7 +2249,7 @@
   },
   {
     "name": "GanttTimeline",
-    "path": "enterprise/GanttTimeline.tsx",
+    "path": "blocks/gantt-timeline/GanttTimeline.tsx",
     "dir": "enterprise",
     "lineCount": 455,
     "scores": {
@@ -2705,7 +2705,7 @@
   },
   {
     "name": "NotificationCenter",
-    "path": "enterprise/NotificationCenter.tsx",
+    "path": "blocks/notification-center/NotificationCenter.tsx",
     "dir": "enterprise",
     "lineCount": 403,
     "scores": {
@@ -2724,7 +2724,7 @@
   },
   {
     "name": "ProcessFlow",
-    "path": "enterprise/ProcessFlow.tsx",
+    "path": "blocks/process-flow/ProcessFlow.tsx",
     "dir": "enterprise",
     "lineCount": 476,
     "scores": {

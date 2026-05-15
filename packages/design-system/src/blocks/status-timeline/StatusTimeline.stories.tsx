@@ -4,20 +4,62 @@ import { StatusTimeline } from './StatusTimeline';
 import type { StatusTimelineEvent } from './StatusTimeline';
 
 const orderEvents: StatusTimelineEvent[] = [
-  { id: 'e1', status: 'created', timestamp: '2024-03-10T09:00:00Z', actor: 'System', description: 'Order #1042 created' },
-  { id: 'e2', status: 'pending', timestamp: '2024-03-10T09:15:00Z', actor: 'System', description: 'Awaiting payment confirmation' },
-  { id: 'e3', status: 'in-progress', timestamp: '2024-03-10T10:30:00Z', actor: 'Ayse Demir', description: 'Payment received, processing started' },
-  { id: 'e4', status: 'in-review', timestamp: '2024-03-11T14:00:00Z', actor: 'Mehmet Kaya', description: 'Quality review in progress' },
-  { id: 'e5', status: 'approved', timestamp: '2024-03-11T16:45:00Z', actor: 'Fatma Yilmaz', description: 'Order approved for shipment' },
-  { id: 'e6', status: 'completed', timestamp: '2024-03-12T11:00:00Z', actor: 'System', description: 'Order delivered successfully' },
+  {
+    id: 'e1',
+    status: 'created',
+    timestamp: '2024-03-10T09:00:00Z',
+    actor: 'System',
+    description: 'Order #1042 created',
+  },
+  {
+    id: 'e2',
+    status: 'pending',
+    timestamp: '2024-03-10T09:15:00Z',
+    actor: 'System',
+    description: 'Awaiting payment confirmation',
+  },
+  {
+    id: 'e3',
+    status: 'in-progress',
+    timestamp: '2024-03-10T10:30:00Z',
+    actor: 'Ayse Demir',
+    description: 'Payment received, processing started',
+  },
+  {
+    id: 'e4',
+    status: 'in-review',
+    timestamp: '2024-03-11T14:00:00Z',
+    actor: 'Mehmet Kaya',
+    description: 'Quality review in progress',
+  },
+  {
+    id: 'e5',
+    status: 'approved',
+    timestamp: '2024-03-11T16:45:00Z',
+    actor: 'Fatma Yilmaz',
+    description: 'Order approved for shipment',
+  },
+  {
+    id: 'e6',
+    status: 'completed',
+    timestamp: '2024-03-12T11:00:00Z',
+    actor: 'System',
+    description: 'Order delivered successfully',
+  },
 ];
 
 const meta: Meta<typeof StatusTimeline> = {
-  title: 'Enterprise/StatusTimeline',
+  title: 'Blocks/Review/StatusTimeline',
   component: StatusTimeline,
   tags: ['autodocs'],
   argTypes: { disabled: { control: 'boolean' } },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof StatusTimeline>;
@@ -50,7 +92,13 @@ export const WithRejection: Story = {
   args: {
     events: [
       ...orderEvents.slice(0, 4),
-      { id: 'e-rej', status: 'rejected', timestamp: '2024-03-11T17:00:00Z', actor: 'Ali Ozturk', description: 'Order rejected due to stock unavailability' },
+      {
+        id: 'e-rej',
+        status: 'rejected',
+        timestamp: '2024-03-11T17:00:00Z',
+        actor: 'Ali Ozturk',
+        description: 'Order rejected due to stock unavailability',
+      },
     ],
     statusColors: {
       created: 'var(--action-primary)',
