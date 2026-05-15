@@ -183,6 +183,17 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
     [reportCapabilities],
   );
   /*
+   * PR-0.5b2 (Codex thread 019e2d85): a report supports the "raw vs
+   * view" export split iff its backend can produce a grouped/pivot
+   * "current view" export — i.e. it declares serverSideGrouping or
+   * serverSidePivoting. For a flat-only report the two modes
+   * coincide, so the toolbar keeps the legacy two-button Excel/CSV
+   * layout (supportsViewExport=false → no "İndir" dropdown).
+   */
+  const supportsViewExport =
+    reportCapabilities?.serverSideGrouping === true ||
+    reportCapabilities?.serverSidePivoting === true;
+  /*
    * PR-0.4a (Codex 019e2695 hybrid pivot design): pivot capability
    * derivation. Two independent flags + an allowlist:
    *
@@ -1077,7 +1088,15 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
 
   /* ---- Server export handler ---- */
   const handleServerExport = React.useCallback(
-    async (format: 'excel' | 'csv') => {
+    async (
+      format: 'excel' | 'csv',
+      params?: {
+        filterModel?: Record<string, unknown>;
+        sortModel?: unknown[];
+        quickFilterText?: string;
+        exportMode?: 'raw' | 'view';
+      },
+    ) => {
       if (typeof module.exportRows !== 'function') return;
       setExporting(true);
       try {
@@ -1090,8 +1109,24 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         // state snapshot so grouped/pivot exports go through the new
         // POST /export path. Flat / no-grouping snapshots fall back
         // to the legacy GET /export inside exportReportData.
-        const gridState = captureExportGridState(gridApi);
-        const result = await module.exportRows(filters, format, gridState);
+        //
+        // PR-0.5b2 (Codex thread 019e2d85): raw vs view export.
+        //   - exportMode='raw'  → flat detail rows; grouping/pivot
+        //     ignored, but the on-screen column filters + sort still
+        //     apply (Codex netleştirme: "ham veri = ekrandaki
+        //     filter/sort uygulanmış flat detay").
+        //   - exportMode='view' → the PR-0.5b grouped/pivot "current
+        //     view" snapshot.
+        //   - exportMode undefined → legacy two-button path on a
+        //     non-grouping report; gridState stays undefined and
+        //     exportReportData keeps its byte-for-byte flat GET
+        //     behaviour.
+        // gridState is captured for BOTH raw and view modes — raw
+        // needs the filterModel/sortModel slices even though it
+        // discards the grouping/pivot slices.
+        const exportMode = params?.exportMode;
+        const gridState = exportMode ? captureExportGridState(gridApi) : undefined;
+        const result = await module.exportRows(filters, format, gridState, exportMode);
         const objectUrl = window.URL.createObjectURL(result.blob);
         const anchor = document.createElement('a');
         anchor.href = objectUrl;
@@ -1243,6 +1278,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           resetFiltersLabel={t('reports.filters.reset')}
           exportConfig={exportConfig}
           onServerExport={exportEnabled ? handleServerExport : undefined}
+          supportsViewExport={supportsViewExport}
         />
       </PageLayout>
     </div>

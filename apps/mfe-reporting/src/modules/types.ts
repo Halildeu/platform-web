@@ -69,6 +69,13 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
     filters: TFilters,
     format: 'csv' | 'excel',
     gridState?: ExportGridState,
+    /**
+     * PR-0.5b2 (Codex thread 019e2d85): export mode. {@code 'raw'}
+     * forces a flat detail-row export (grouping/pivot ignored);
+     * {@code 'view'} (default) keeps the PR-0.5b grouped/pivot
+     * "current view" behaviour.
+     */
+    mode?: 'raw' | 'view',
   ) => Promise<{ blob: Blob; filename: string }>;
 
   /**
