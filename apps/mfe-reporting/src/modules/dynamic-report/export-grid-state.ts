@@ -27,18 +27,6 @@ export const captureExportGridState = (api: GridApi | null): ExportGridState | u
     const pivotMode = api.isPivotMode();
     const filterModel = (api.getFilterModel() as FilterModel | null) ?? undefined;
     const sortModel = extractSortModel(api);
-    // PR-0.5b2 iter-2 §P2: capture the toolbar quick-filter so a
-    // raw / view export honours the on-screen quick search. Best
-    // effort — a grid api without getGridOption (older AG Grid, a
-    // partial stub) must yield `undefined` here, NOT collapse the
-    // whole snapshot to undefined via the outer catch.
-    let quickFilterText: string | undefined;
-    if (typeof api.getGridOption === 'function') {
-      const rawQuickFilter = api.getGridOption('quickFilterText');
-      if (typeof rawQuickFilter === 'string' && rawQuickFilter.trim().length > 0) {
-        quickFilterText = rawQuickFilter;
-      }
-    }
 
     return {
       rowGroupCols,
@@ -47,7 +35,6 @@ export const captureExportGridState = (api: GridApi | null): ExportGridState | u
       pivotMode,
       filterModel,
       sortModel,
-      quickFilterText,
     };
   } catch {
     return undefined;

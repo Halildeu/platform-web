@@ -149,60 +149,6 @@ describe('captureExportGridState', () => {
     const state = captureExportGridState(api);
     expect(state?.filterModel).toBeUndefined();
   });
-
-  /*
-   * PR-0.5b2 iter-2 §P2 (Codex 019e2d85): capture the toolbar
-   * quick-filter so a raw / view export honours the on-screen quick
-   * search. The capture is best-effort — a grid api without
-   * getGridOption must NOT collapse the whole snapshot.
-   */
-  it('captures quickFilterText from the grid quick-filter option (PR-0.5b2 §P2)', () => {
-    const api = {
-      getRowGroupColumns: () => [],
-      getValueColumns: () => [],
-      getPivotColumns: () => [],
-      isPivotMode: () => false,
-      getFilterModel: () => null,
-      getColumnState: () => [],
-      getGridOption: (key: string) => (key === 'quickFilterText' ? 'istanbul' : undefined),
-    } as unknown as GridApi;
-
-    const state = captureExportGridState(api);
-    expect(state?.quickFilterText).toBe('istanbul');
-  });
-
-  it('omits quickFilterText when the quick-filter is empty / whitespace', () => {
-    const api = {
-      getRowGroupColumns: () => [],
-      getValueColumns: () => [],
-      getPivotColumns: () => [],
-      isPivotMode: () => false,
-      getFilterModel: () => null,
-      getColumnState: () => [],
-      getGridOption: (key: string) => (key === 'quickFilterText' ? '   ' : undefined),
-    } as unknown as GridApi;
-
-    const state = captureExportGridState(api);
-    expect(state?.quickFilterText).toBeUndefined();
-  });
-
-  it('survives a grid api without getGridOption (older AG Grid / partial stub)', () => {
-    // The mock apis above intentionally omit getGridOption; the
-    // capture must still return a defined snapshot with
-    // quickFilterText undefined — NOT collapse via the outer catch.
-    const api = {
-      getRowGroupColumns: () => [],
-      getValueColumns: () => [],
-      getPivotColumns: () => [],
-      isPivotMode: () => false,
-      getFilterModel: () => null,
-      getColumnState: () => [],
-    } as unknown as GridApi;
-
-    const state = captureExportGridState(api);
-    expect(state).toBeDefined();
-    expect(state?.quickFilterText).toBeUndefined();
-  });
 });
 
 describe('exportReportData POST dispatch', () => {
