@@ -5,7 +5,7 @@ import {
   accessStyles,
   type AccessControlledProps,
 } from '../../internal/access-controller';
-import { formatValue, type FormatOptions } from '../../enterprise/types';
+import { formatValue, type FormatOptions } from '../../utils/format-helpers';
 
 // ── Types ──
 
