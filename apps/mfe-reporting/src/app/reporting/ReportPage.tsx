@@ -40,6 +40,7 @@ import {
   applyGrandTotalPinnedRow,
   isRootSsrmRequest,
 } from '../../modules/dynamic-report/grand-total-pinned-row';
+import { captureExportGridState } from '../../modules/dynamic-report/export-grid-state';
 import { CompanyPicker } from '../../components/CompanyPicker';
 
 /* ------------------------------------------------------------------ */
@@ -1046,7 +1047,13 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         // ExcelStreamingExporter destekliyor (Apache POI XLSX); önceki
         // `format === 'excel' ? 'csv' : format` workaround eski backend-Excel
         // desteksiz dönemden kalmıştı — kaldırıldı. Format param direkt passthrough.
-        const result = await module.exportRows(filters, format);
+        //
+        // PR-0.5b (Codex thread 019e2cd7): capture the AG Grid SSRM
+        // state snapshot so grouped/pivot exports go through the new
+        // POST /export path. Flat / no-grouping snapshots fall back
+        // to the legacy GET /export inside exportReportData.
+        const gridState = captureExportGridState(gridApi);
+        const result = await module.exportRows(filters, format, gridState);
         const objectUrl = window.URL.createObjectURL(result.blob);
         const anchor = document.createElement('a');
         anchor.href = objectUrl;
@@ -1069,7 +1076,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         setExporting(false);
       }
     },
-    [module, filters, t],
+    [module, filters, t, gridApi],
   );
 
   /* ---- Loading skeleton ---- */

@@ -121,6 +121,9 @@ export const createDynamicReportModule = (
     getCapabilities: () => getCachedCapabilities(report.key),
     getColumns: () => [],
     fetchRows: (filters, request) => fetchReportData(report.key, filters, request),
-    exportRows: (filters, format) => exportReportData(report.key, filters, format),
+    // PR-0.5b (Codex thread 019e2cd7): forward the optional grid-state
+    // snapshot so grouped/pivot exports match the user's on-screen view.
+    exportRows: (filters, format, gridState) =>
+      exportReportData(report.key, filters, format, gridState),
   };
 };
