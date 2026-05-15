@@ -33,6 +33,7 @@ import {
   outsideVarianceBand,
   isHardFailActive,
   checkRoute,
+  buildHistoryEntry,
 } from '../sliding-baseline-check.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -405,6 +406,71 @@ describe('flake-budget-tracker sameContext (iter-2 P0-4 fail-closed)', () => {
   it('frontend_image_digest absent on either side → OK (optional)', () => {
     const res = sameContext(baseA, { ...baseA });
     assert.equal(res.same, true);
+  });
+});
+
+describe('V3 hard-flip CLS + INP tracking (Codex `019e2d16` round 2 absorb)', () => {
+  it('buildHistoryEntry records cls when provided in route', () => {
+    const run = {
+      timestamp: 1700000000000,
+      target: 'testai',
+      build_sha: 'abc123',
+    };
+    const route = {
+      route: '/home',
+      mode: 'cold-authenticated',
+      auth: 'authenticated',
+      transferKB: 9276,
+      decodedKB: 34544,
+      cls: 0.362,
+      inpMs: 150,
+    };
+    const entry = buildHistoryEntry(run, route);
+    assert.equal(entry.metrics.cls, 0.362, 'cls written to history metrics');
+    assert.equal(entry.metrics.inpMs, 150, 'inpMs written to history metrics');
+    assert.equal(entry.metrics.transferKB, 9276, 'existing fields unaffected');
+  });
+
+  it('buildHistoryEntry handles undefined cls/inpMs gracefully (legacy compat)', () => {
+    const run = { timestamp: 1700000000000, target: 'local' };
+    const route = {
+      route: '/login',
+      mode: 'cold-anonymous',
+      transferKB: 2343,
+      decodedKB: 9068,
+      // no cls/inpMs
+    };
+    const entry = buildHistoryEntry(run, route);
+    assert.equal(entry.metrics.cls, undefined);
+    assert.equal(entry.metrics.inpMs, undefined);
+    assert.equal(entry.metrics.transferKB, 2343);
+  });
+
+  it('computeSlidingStats produces cls median/p95/stdDev from history', () => {
+    const history = [
+      { timestamp: Date.now() - 86400000 * 1, metrics: { cls: 0.10 } },
+      { timestamp: Date.now() - 86400000 * 2, metrics: { cls: 0.15 } },
+      { timestamp: Date.now() - 86400000 * 3, metrics: { cls: 0.36 } },
+      { timestamp: Date.now() - 86400000 * 4, metrics: { cls: 0.12 } },
+      { timestamp: Date.now() - 86400000 * 5, metrics: { cls: 0.20 } },
+    ];
+    const stats = computeSlidingStats(history, 14);
+    assert.equal(stats.insufficient, undefined, 'stats not insufficient');
+    assert.equal(typeof stats.median.cls, 'number', 'cls median computed');
+    assert.equal(typeof stats.p95.cls, 'number', 'cls p95 computed');
+    assert.equal(typeof stats.stdDev.cls, 'number', 'cls stdDev computed');
+  });
+
+  it('computeSlidingStats handles mixed history with cls absent in some entries', () => {
+    const history = [
+      { timestamp: Date.now() - 86400000 * 1, metrics: { transferKB: 100, cls: 0.10 } },
+      { timestamp: Date.now() - 86400000 * 2, metrics: { transferKB: 110 } }, // no cls
+      { timestamp: Date.now() - 86400000 * 3, metrics: { transferKB: 105, cls: 0.15 } },
+    ];
+    const stats = computeSlidingStats(history, 14);
+    // cls median should compute from 2 valid entries (median filters undefined)
+    assert.equal(stats.median.cls, 0.125, 'cls median from valid entries');
+    assert.equal(stats.median.transferKB, 105, 'transferKB median unaffected');
   });
 });
 
