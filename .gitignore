@@ -52,3 +52,8 @@ apps/*/dist/
 # sourcemap normalization, and build hash variance kirletir diff trail).
 docs/performance/css-breakdown.html
 docs/performance/css-breakdown.json
+
+# PERF-INIT-V2.1 PR-V2.1-M2a1: runtime-generated auth storageState
+# (NOT committed — credential material in JWT; runtime-gen pattern per
+# Codex `019e2b00` round 3 AGREE: "committed fixture YOK").
+tests/perf/.auth-storage.json

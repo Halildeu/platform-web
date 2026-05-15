@@ -1,0 +1,153 @@
+# PERF-INIT-V2.1 PR-V2.1-M2a1: Authenticated route 4 × N≥3 budget measurement gate.
+#
+# Codex consensus chain:
+#   - 019e2a4f Q1 Option B verdict: M2a yapılmalı (ABM-1 reclassification ≠ M2a)
+#   - 019e2a4f Q3 "M2a0 daraltılmış scope" pragmatik exec
+#   - 019e2b00 post-impl peer review round 4 RED → round 5 AGREE absorb (ready_to_merge: true conditional on
+#     CI PASS + last-run.json artifact 4 routes runs>=3 measurementInvalid!=true error/skipped yok)
+#
+# Pattern (Codex Option B birebir):
+#   1. Runtime-generated storageState (committed fixture YOK) via scripts/perf/auth-storage-setup.mjs
+#   2. Real frontend OIDC client `frontend` (platform-test realm, Keycloak discovery output)
+#   3. 4 route × N≥3 measurement matrix against testai.acik.com (where Keycloak + frontend live)
+#   4. Rendered sentinel + BUILD_SHA + browser/cache metadata
+#   5. Warn-only baseline seed phase (PMD v9.1 §138 M2a1 ilk ölçüm baseline seed)
+#      Sonuçlar iyi/kötü diye değil — ölçüm zincirini ve route baseline'ı başlatmak.
+#
+# 4 routes (cold-authenticated, performance-budgets.json):
+#   - /home
+#   - /admin/users
+#   - /admin/access (redirects to /access/roles)
+#   - /admin/reports/users
+#
+# Required GHA secrets:
+#   - PERF_AUTH_PASSWORD: perf-test persona password (32 char rotated 2026-05-15)
+#                        Set via: gh secret set PERF_AUTH_PASSWORD --repo Halildeu/platform-web
+
+name: M2a authenticated route budget (PR-V2.1-M2a1)
+
+on:
+  pull_request:
+    paths:
+      # Shell (auth bootstrap + protected route harness)
+      - 'apps/mfe-shell/**'
+      # Remote MFEs surfaced by measured routes (Codex `019e2b00` round 4 REVISE:
+      # measured routes include /admin/users (mfe-users), /admin/access (mfe-access),
+      # /admin/reports/users (mfe-reporting) — workflow must trigger on
+      # those remote changes so M2a1 gate doesn't silently miss regressions)
+      - 'apps/mfe-users/**'
+      - 'apps/mfe-access/**'
+      - 'apps/mfe-reporting/**'
+      - 'apps/mfe-audit/**'
+      # Shared packages (auth, http transport, design system, types)
+      - 'packages/**'
+      # Perf infrastructure
+      - 'performance-budgets.json'
+      - 'scripts/ci/route-performance-budget.mjs'
+      - 'scripts/perf/auth-storage-setup.mjs'
+      - 'tests/perf/baseline.json'
+      - '.github/workflows/gate-m2a-auth-route-budget.yml'
+  workflow_dispatch:
+    inputs:
+      warn_only:
+        description: 'Warn-only mode (M2a1 baseline seed: keep 1 — flip to 0 only after baseline ratification)'
+        required: false
+        default: '1'
+
+env:
+  # M2a1 ilk ölçüm warn-only baseline seed phase (PMD v9.1 §138 + Codex Option B)
+  PERF_WARN_ONLY: ${{ inputs.warn_only || '1' }}
+  PERF_TARGET: testai
+  PERF_RUNS: '3' # M2a1 N≥3 minimum
+  # d35-admin persona (allowlist email d35-admin@example.com → superAdmin=True via
+  # PERMISSION_BOOTSTRAP_DEFAULT_ADMIN_ASSIGNMENTS_ADMIN_EMAILS owner-action 2026-05-15).
+  # perf-test persona kept as test fixture but has no admin grants → /admin/* fail validity.
+  PERF_AUTH_USERNAME: d35-admin
+  PERF_AUTH_REALM: platform-test
+  PERF_AUTH_CLIENT_ID: frontend
+  PERF_AUTH_KEYCLOAK_BASE: https://testai.acik.com
+  PERF_AUTH_APP_ORIGIN: https://testai.acik.com
+
+jobs:
+  m2a-auth-route-budget:
+    name: M2a authenticated 4 route × N≥3 measurement
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Diagnostic — testai.acik.com reachability from GHA runner
+        run: |
+          echo "=== DNS resolution ==="
+          getent hosts testai.acik.com || true
+          echo "=== HTTPS reachability ==="
+          curl -sS -o /tmp/login-probe.html \
+            --connect-timeout 30 --max-time 60 \
+            -w "resolved_ip=%{remote_ip}\nhttp_code=%{http_code}\ntime_namelookup=%{time_namelookup}s\ntime_connect=%{time_connect}s\ntime_total=%{time_total}s\ndownload_bytes=%{size_download}\n" \
+            "https://testai.acik.com/login" || echo "curl-failed-exit=$?"
+          echo "=== Token endpoint POST (verifies cluster auth path) ==="
+          curl -sS -o /tmp/probe-token.json \
+            --connect-timeout 30 --max-time 60 \
+            -w "http_code=%{http_code} time=%{time_total}s\n" \
+            -X POST "https://testai.acik.com/realms/platform-test/protocol/openid-connect/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "username=perf-test&password=__diagnostic_invalid__&grant_type=password&client_id=frontend" \
+            || echo "token-curl-failed-exit=$?"
+          echo "=== Login page download summary ==="
+          ls -la /tmp/login-probe.html 2>&1
+          head -c 200 /tmp/login-probe.html 2>&1
+          echo ""
+
+      - name: Generate runtime storageState (no committed fixture)
+        env:
+          PERF_AUTH_PASSWORD: ${{ secrets.PERF_AUTH_PASSWORD }}
+        run: |
+          if [ -z "${PERF_AUTH_PASSWORD}" ]; then
+            echo "FATAL: PERF_AUTH_PASSWORD GHA secret not set"
+            echo "Set via: gh secret set PERF_AUTH_PASSWORD --repo Halildeu/platform-web"
+            exit 1
+          fi
+          pnpm exec node scripts/perf/auth-storage-setup.mjs
+
+      - name: M2a1 authenticated route budget (4 routes × N≥3, warn-only baseline seed)
+        env:
+          PERF_AUTH_PASSWORD: ${{ secrets.PERF_AUTH_PASSWORD }}
+        run: |
+          if [ "${PERF_WARN_ONLY}" = "1" ]; then
+            pnpm exec node scripts/ci/route-performance-budget.mjs \
+              --target "${PERF_TARGET}" \
+              --runs "${PERF_RUNS}" \
+              --routes "/home,/admin/users,/admin/access,/admin/reports/users" \
+              --auth-storage tests/perf/.auth-storage.json \
+              --warn-only
+          else
+            pnpm exec node scripts/ci/route-performance-budget.mjs \
+              --target "${PERF_TARGET}" \
+              --runs "${PERF_RUNS}" \
+              --routes "/home,/admin/users,/admin/access,/admin/reports/users" \
+              --auth-storage tests/perf/.auth-storage.json \
+              --require-baseline
+          fi
+
+      - name: Upload M2a1 measurement artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2a1-auth-route-budget-results
+          path: |
+            tests/perf/last-run.json
+            tests/perf/bundle-stats/
+          retention-days: 30
