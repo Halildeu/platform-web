@@ -2,52 +2,45 @@
 /**
  * PERF-INIT-V2.1 PR-V2.1-M2a1: Authenticated route storageState runtime generator.
  *
- * Codex thread `019e2b00` REVISE notu birebir uyumlu: runtime-generated
- * storageState, **committed fixture YOK**. Real frontend OIDC client
- * (`frontend` — platform-test realm) ile direct access grant + injection.
+ * Codex thread `019e2b00` round 4 RED → REVISE absorb:
+ * - Direct grant + multi-key localStorage WRONG (frontend doesn't read those keys)
+ * - Repo canonical keys: `token`, `user`, `tokenExpiresAt` (auth.slice.ts loadPersistedAuth)
+ * - Use Playwright standardFlow browser login → app self-populates correct localStorage
  *
- * Why direct grant injection (not browser standardFlow):
- *   - CI: deterministic, no nginx /admin/realms/* dependency, no browser flake
- *   - Token: same JWT a browser login would produce (azp=frontend, aud=audience list)
- *   - Storage: same shape route-budget runner expects (cookies + localStorage)
+ * Pattern (Codex round 4 spesifik öneri):
+ *   1. Chromium launch (headless)
+ *   2. Navigate to `${APP_ORIGIN}/login`
+ *   3. Click corporate-login-button → Keycloak SSO redirect
+ *   4. On Keycloak login page: fill username + password, submit
+ *   5. Redirect back to app, wait for auth-ready (transportReady phase or
+ *      protected route render)
+ *   6. context.storageState({ path }) → save (cookies + canonical localStorage)
+ *   7. Stdout meta-only (no token literal, no credential material)
  *
- * Cluster-internal nginx 405 issue (Codex 019e2b00): admin REST not edge-routed.
- * Public token endpoint /realms/<realm>/protocol/openid-connect/token IS routed.
- * So direct grant via testai.acik.com public token endpoint works.
+ * This produces storageState matching what the app's own auth bootstrap
+ * creates, so all canonical keys (`token`, `user`, `tokenExpiresAt`,
+ * `serban.shell.authState`, etc.) are correctly populated.
  *
  * Env (required):
  *   PERF_AUTH_USERNAME       — default "perf-test"
  *   PERF_AUTH_PASSWORD       — required (GHA secret PERF_AUTH_PASSWORD)
- *   PERF_AUTH_REALM          — default "platform-test"
- *   PERF_AUTH_CLIENT_ID      — default "frontend"
- *   PERF_AUTH_KEYCLOAK_BASE  — default https://testai.acik.com (testai target)
- *   PERF_AUTH_APP_ORIGIN     — default https://testai.acik.com (where storageState binds cookies/localStorage)
+ *   PERF_AUTH_APP_ORIGIN     — default https://testai.acik.com
  *   PERF_AUTH_OUTPUT         — default tests/perf/.auth-storage.json (gitignored)
- *
- * Output format:
- *   Playwright storageState shape: { cookies: [...], origins: [{origin, localStorage: [...]}] }
- *
- * Usage (CI):
- *   node scripts/perf/auth-storage-setup.mjs
- *   PERF_AUTH_STORAGE=tests/perf/.auth-storage.json pnpm perf:budget:testai
+ *   PERF_AUTH_TIMEOUT_MS     — default 60000 (login + redirect + auth-ready)
  *
  * Audit trail (no credential material in output):
- *   - "auth_setup: username=<USER> realm=<REALM> client_id=<CLIENT> http=200 token_jwt_parts=3"
- *
- * Cross-AI: thread `019e2b00` round 3 AGREE — implementer Claude, reviewer Codex.
+ *   - "auth_setup: username=<USER> app_origin=<ORIGIN> login_button_clicked=true keycloak_form_filled=true callback_received=true auth_ready=true storage_written=true keys=<N>"
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { chromium } from 'playwright';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { URL } from 'node:url';
 
 const USERNAME = process.env.PERF_AUTH_USERNAME ?? 'perf-test';
 const PASSWORD = process.env.PERF_AUTH_PASSWORD;
-const REALM = process.env.PERF_AUTH_REALM ?? 'platform-test';
-const CLIENT_ID = process.env.PERF_AUTH_CLIENT_ID ?? 'frontend';
-const KEYCLOAK_BASE = process.env.PERF_AUTH_KEYCLOAK_BASE ?? 'https://testai.acik.com';
 const APP_ORIGIN = process.env.PERF_AUTH_APP_ORIGIN ?? 'https://testai.acik.com';
 const OUTPUT_PATH = process.env.PERF_AUTH_OUTPUT ?? 'tests/perf/.auth-storage.json';
+const TIMEOUT_MS = Number(process.env.PERF_AUTH_TIMEOUT_MS ?? 60000);
 
 function die(msg, exitCode = 1) {
   console.error(`[auth-storage-setup] FATAL: ${msg}`);
@@ -61,134 +54,125 @@ if (!PASSWORD) {
   );
 }
 
-const tokenUrl = `${KEYCLOAK_BASE}/realms/${REALM}/protocol/openid-connect/token`;
-
-async function fetchTokens() {
-  const body = new URLSearchParams({
-    username: USERNAME,
-    password: PASSWORD,
-    grant_type: 'password',
-    client_id: CLIENT_ID,
-    scope: 'openid email profile',
-  }).toString();
-
-  let res;
-  try {
-    res = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    });
-  } catch (e) {
-    die(`token endpoint fetch failed: ${e.message ?? e}`);
-  }
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '<no body>');
-    // Truncate to avoid leaking token-like material from error body
-    const safe = txt.length > 256 ? txt.slice(0, 256) + '...' : txt;
-    die(`token grant http=${res.status}: ${safe}`);
-  }
-
-  const data = await res.json();
-  for (const k of ['access_token', 'refresh_token', 'token_type', 'expires_in']) {
-    if (!data[k]) die(`token response missing field: ${k}`);
-  }
-  // Audit log (no token material)
-  const parts = data.access_token.split('.');
-  console.log(
-    `[auth-storage-setup] auth_setup: username=${USERNAME} realm=${REALM} client_id=${CLIENT_ID} http=200 ` +
-      `token_jwt_parts=${parts.length} token_type=${data.token_type} expires_in=${data.expires_in}`,
-  );
-  return data;
-}
-
-function buildStorageState(tokens) {
-  // Build Playwright storageState shape. Frontend (testai.acik.com) uses
-  // keycloak-js library; the OIDC token is typically stored in localStorage
-  // under a key derived from realm/client. Inspect frontend behavior to
-  // confirm key shape — common patterns:
-  //   - `kc-callback-<state>` (auth code flow temp)
-  //   - `oidc.user:<authority>:<client_id>` (oidc-client-ts)
-  //   - Direct key like `oidc.id_token`, `oidc.access_token`
-  //
-  // For platform-web frontend, the canonical storage shape is documented in
-  // apps/mfe-shell/src/auth/ or packages/auth/. Playwright runner reads this
-  // back via browser.newContext({ storageState }) — the app's auth bootstrap
-  // checks localStorage on mount to determine signed-in state.
-  //
-  // Token claims expectations (Keycloak frontend client):
-  //   - iss: https://testai.acik.com/realms/platform-test
-  //   - azp: frontend
-  //   - preferred_username: perf-test
-  //   - aud: ['notification-orchestrator', 'auth-service', 'account']
-  //
-  // The runtime injection here uses a defensive multi-key pattern: writes
-  // the token under multiple known keys so the frontend auth bootstrap
-  // (whichever pattern it uses) picks it up. Frontend can also be updated
-  // to read from a canonical M2a1-specific key if needed (PR-M2a1.2).
-
-  const origin = new URL(APP_ORIGIN).origin;
-  const issuerUrl = `${KEYCLOAK_BASE}/realms/${REALM}`;
-
-  // oidc-client-ts canonical key (most common pattern in React/Vite apps)
-  const oidcUserKey = `oidc.user:${issuerUrl}:${CLIENT_ID}`;
-  const oidcUserVal = JSON.stringify({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    token_type: tokens.token_type,
-    expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
-    scope: tokens.scope ?? 'openid email profile',
-    session_state: tokens.session_state ?? null,
-    profile: { preferred_username: USERNAME, sub: null, email: `${USERNAME}@local` },
+async function performStandardFlowLogin() {
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    ignoreHTTPSErrors: true,
+    viewport: { width: 1440, height: 900 },
   });
+  const page = await context.newPage();
 
-  // Generic / keycloak-js fallback keys
-  const kcTokenKey = 'kc-token';
-  const kcTokenVal = tokens.access_token;
-  const kcRefreshKey = 'kc-refreshToken';
-  const kcRefreshVal = tokens.refresh_token;
+  let loginButtonClicked = false;
+  let keycloakFormFilled = false;
+  let callbackReceived = false;
+  let authReady = false;
 
-  return {
-    cookies: [
-      // Some apps set HTTP-only cookies via SSR; for SPA frontend most state
-      // lives in localStorage. Empty cookie array is fine for SPA-only auth.
-    ],
-    origins: [
-      {
-        origin,
-        localStorage: [
-          { name: oidcUserKey, value: oidcUserVal },
-          { name: kcTokenKey, value: kcTokenVal },
-          { name: kcRefreshKey, value: kcRefreshVal },
-          // Marker for debugging — non-sensitive metadata
-          {
-            name: 'perf-auth-storage-meta',
-            value: JSON.stringify({
-              realm: REALM,
-              client_id: CLIENT_ID,
-              username: USERNAME,
-              generated_at: new Date().toISOString(),
-              source: 'perf-auth-storage-setup.mjs',
-            }),
-          },
-        ],
+  try {
+    // Step 1: Navigate to /login
+    await page.goto(`${APP_ORIGIN}/login`, { waitUntil: 'load', timeout: TIMEOUT_MS });
+
+    // Step 2: Wait for corporate-login-button to be visible + click
+    await page.waitForSelector('[data-testid="corporate-login-button"]', {
+      state: 'visible',
+      timeout: 10000,
+    });
+    await page.click('[data-testid="corporate-login-button"]');
+    loginButtonClicked = true;
+
+    // Step 3: Wait for Keycloak login page (URL contains /realms/<realm>/protocol/openid-connect/auth or /login-actions)
+    await page.waitForURL(
+      (url) => url.pathname.includes('/realms/') || url.pathname.includes('/login-actions/'),
+      { timeout: TIMEOUT_MS },
+    );
+
+    // Step 4: Fill Keycloak login form. Keycloak default form has:
+    //   input#username, input#password, input[type="submit"] or button#kc-login
+    await page.waitForSelector('input#username, input[name="username"]', {
+      state: 'visible',
+      timeout: 10000,
+    });
+    await page.fill('input#username, input[name="username"]', USERNAME);
+    await page.fill('input#password, input[name="password"]', PASSWORD);
+    keycloakFormFilled = true;
+
+    // Step 5: Submit (button#kc-login or input[type=submit])
+    await Promise.all([
+      page.waitForURL((url) => url.origin === APP_ORIGIN, { timeout: TIMEOUT_MS }),
+      page.click('button#kc-login, input[type="submit"][name="login"], input[type="submit"]'),
+    ]);
+    callbackReceived = true;
+
+    // Step 6: Wait for app auth-ready. Multiple signals possible:
+    //   - localStorage `token` populated (loadPersistedAuth wrote it)
+    //   - URL on a protected route (not /login)
+    //   - data-testid or selector indicating app shell loaded
+    await page.waitForFunction(
+      () => {
+        try {
+          const token = window.localStorage.getItem('token');
+          const user = window.localStorage.getItem('user');
+          return Boolean(token && user);
+        } catch {
+          return false;
+        }
       },
-    ],
-  };
+      { timeout: TIMEOUT_MS, polling: 250 },
+    );
+    authReady = true;
+
+    // Step 7: Save storageState (canonical app-populated localStorage + cookies)
+    const outPath = resolve(process.cwd(), OUTPUT_PATH);
+    mkdirSync(dirname(outPath), { recursive: true });
+    await context.storageState({ path: outPath });
+
+    // Audit log (NO credential material)
+    const raw = readFileSync(outPath, 'utf8');
+    const storage = JSON.parse(raw);
+    const localStorageCount = storage.origins[0]?.localStorage?.length ?? 0;
+    const cookieCount = storage.cookies?.length ?? 0;
+    const localStorageKeys = storage.origins[0]?.localStorage?.map((e) => e.name) ?? [];
+    console.log(
+      `[auth-storage-setup] auth_setup: username=${USERNAME} app_origin=${APP_ORIGIN} ` +
+        `login_button_clicked=${loginButtonClicked} keycloak_form_filled=${keycloakFormFilled} ` +
+        `callback_received=${callbackReceived} auth_ready=${authReady} ` +
+        `storage_written=true cookies=${cookieCount} localStorage_keys_count=${localStorageCount}`,
+    );
+
+    // Sanity check: required canonical keys present
+    const canonical = ['token', 'user', 'tokenExpiresAt'];
+    const missing = canonical.filter((k) => !localStorageKeys.includes(k));
+    if (missing.length > 0) {
+      // tokenExpiresAt may be absent for some auth paths; token + user required
+      const requiredMissing = missing.filter((k) => k === 'token' || k === 'user');
+      if (requiredMissing.length > 0) {
+        die(
+          `storageState saved but canonical key(s) missing: ${requiredMissing.join(', ')}. ` +
+            `Login flow likely failed silently. localStorage keys: ${localStorageKeys.join(', ')}`,
+        );
+      } else {
+        console.warn(
+          `[auth-storage-setup] warning: optional canonical key(s) missing: ${missing.join(', ')}. ` +
+            `Required (token, user) present; continuing.`,
+        );
+      }
+    }
+  } finally {
+    await context.close();
+    await browser.close();
+  }
 }
 
 async function main() {
-  const tokens = await fetchTokens();
-  const storage = buildStorageState(tokens);
+  try {
+    await performStandardFlowLogin();
+  } catch (e) {
+    die(`standardFlow login failed: ${e.message ?? e}`);
+  }
 
   const outPath = resolve(process.cwd(), OUTPUT_PATH);
-  mkdirSync(dirname(outPath), { recursive: true });
-  writeFileSync(outPath, JSON.stringify(storage, null, 2));
-
-  // Audit: report file path + size, but never log token content
-  const size = JSON.stringify(storage).length;
-  console.log(`[auth-storage-setup] written: ${outPath} size=${size} keys=${storage.origins[0].localStorage.length}`);
+  if (!existsSync(outPath)) {
+    die(`storageState file not written at ${outPath}`);
+  }
 }
 
-main().catch((e) => die(e.message ?? e));
+main();

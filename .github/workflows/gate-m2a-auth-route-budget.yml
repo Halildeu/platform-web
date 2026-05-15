@@ -28,13 +28,23 @@ name: M2a authenticated route budget (PR-V2.1-M2a1)
 on:
   pull_request:
     paths:
+      # Shell (auth bootstrap + protected route harness)
       - 'apps/mfe-shell/**'
+      # Remote MFEs surfaced by measured routes (Codex `019e2b00` round 4 REVISE:
+      # measured routes include /admin/users (mfe-users), /admin/access (mfe-access),
+      # /admin/reports/fin-muhasebe-detay (mfe-reporting) — workflow must trigger on
+      # those remote changes so M2a1 gate doesn't silently miss regressions)
+      - 'apps/mfe-users/**'
+      - 'apps/mfe-access/**'
+      - 'apps/mfe-reporting/**'
+      - 'apps/mfe-audit/**'
+      # Shared packages (auth, http transport, design system, types)
       - 'packages/**'
+      # Perf infrastructure
       - 'performance-budgets.json'
       - 'scripts/ci/route-performance-budget.mjs'
       - 'scripts/perf/auth-storage-setup.mjs'
       - 'tests/perf/baseline.json'
-      - 'tests/perf/auth-route-budget.spec.ts'
       - '.github/workflows/gate-m2a-auth-route-budget.yml'
   workflow_dispatch:
     inputs:

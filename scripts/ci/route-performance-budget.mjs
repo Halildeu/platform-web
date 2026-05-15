@@ -405,7 +405,15 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
   const results = [];
-  let anyFail = false;
+
+  // Codex thread `019e2b00` round 4 RED absorb: separate measurement validity
+  // failures from budget threshold failures. `--warn-only` ONLY masks threshold
+  // breaches (anyThresholdFail), NEVER validity errors (anyValidityFail). M2a1
+  // ilk ölçüm: "ölçüm zinciri kuruldu" iddiası ancak validity failures hard
+  // fail kalırsa anlamlı — auth-storage missing, redirect to /login, sentinel
+  // missing, no valid runs gibi hatalar warn-only ile susturulmamalı.
+  let anyValidityFail = false;
+  let anyThresholdFail = false;
 
   for (const routeBudget of targetRoutes) {
     const summary = await measureRoute(browser, routeBudget);
@@ -414,10 +422,13 @@ async function main() {
     // surface as failures, not silently swallowed. Skipped routes that are
     // not explicitly marked advisory also count as failures (otherwise an
     // empty matrix would always "pass").
+    //
+    // Codex `019e2b00` round 4: errors are VALIDITY failures (hard-fail
+    // regardless of --warn-only).
     if (summary.error) {
       console.log(`  -> ERROR: ${summary.error}`);
-      results.push({ ...routeBudget, ...summary });
-      anyFail = true;
+      results.push({ ...routeBudget, ...summary, measurementInvalid: true });
+      anyValidityFail = true;
       continue;
     }
     if (summary.skipped) {
@@ -425,9 +436,9 @@ async function main() {
         console.log(`  -> skipped (advisory, no fail)`);
       } else {
         console.log(`  -> skipped (FAIL — runner does not implement mode=${routeBudget.mode} yet)`);
-        anyFail = true;
+        anyValidityFail = true;
       }
-      results.push({ ...routeBudget, skipped: true });
+      results.push({ ...routeBudget, skipped: true, measurementInvalid: true });
       continue;
     }
 
@@ -436,7 +447,10 @@ async function main() {
     for (const w of evalResult.warnings) console.log(`     WARN  ${w}`);
     for (const f of evalResult.failures) console.log(`     FAIL  ${f}`);
 
-    if (!evalResult.pass) anyFail = true;
+    if (!evalResult.pass) {
+      // Budget threshold breach — eligible for --warn-only mask
+      anyThresholdFail = true;
+    }
     results.push({ ...routeBudget, ...summary, ...evalResult });
   }
 
@@ -495,12 +509,18 @@ async function main() {
     console.log(`[perf-budget] baseline updated: ${baselinePath}`);
   }
 
-  if (anyFail) {
+  // Codex `019e2b00` round 4 RED absorb: validity failures hard-fail regardless
+  // of --warn-only; only budget threshold failures eligible for warn-only mask.
+  if (anyValidityFail) {
+    console.log('\n[perf-budget] VALIDITY FAILURES present (auth/redirect/sentinel/skipped); exit 1 (--warn-only does NOT mask validity)');
+    process.exit(1);
+  }
+  if (anyThresholdFail) {
     if (opt.warnOnly) {
-      console.log('\n[perf-budget] FAILURES present but --warn-only set; exit 0');
+      console.log('\n[perf-budget] BUDGET THRESHOLD FAILURES present but --warn-only set; exit 0');
       process.exit(0);
     }
-    console.log('\n[perf-budget] FAILURES present; exit 1');
+    console.log('\n[perf-budget] BUDGET THRESHOLD FAILURES present; exit 1');
     process.exit(1);
   }
   console.log('\n[perf-budget] ALL PASS');
