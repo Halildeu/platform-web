@@ -875,7 +875,7 @@
   },
   {
     "name": "BoxPlot",
-    "path": "enterprise/BoxPlot.tsx",
+    "path": "blocks/box-plot/BoxPlot.tsx",
     "dir": "enterprise",
     "lineCount": 589,
     "scores": {
@@ -897,7 +897,7 @@
   },
   {
     "name": "ControlChart",
-    "path": "enterprise/ControlChart.tsx",
+    "path": "blocks/control-chart/ControlChart.tsx",
     "dir": "enterprise",
     "lineCount": 571,
     "scores": {
@@ -941,7 +941,7 @@
   },
   {
     "name": "HistogramChart",
-    "path": "enterprise/HistogramChart.tsx",
+    "path": "blocks/histogram-chart/HistogramChart.tsx",
     "dir": "enterprise",
     "lineCount": 509,
     "scores": {
@@ -1546,7 +1546,7 @@
   },
   {
     "name": "ParetoChart",
-    "path": "enterprise/ParetoChart.tsx",
+    "path": "blocks/pareto-chart/ParetoChart.tsx",
     "dir": "enterprise",
     "lineCount": 389,
     "scores": {
@@ -1907,7 +1907,7 @@
   },
   {
     "name": "MicroChart",
-    "path": "enterprise/MicroChart.tsx",
+    "path": "blocks/micro-chart/MicroChart.tsx",
     "dir": "enterprise",
     "lineCount": 366,
     "scores": {
@@ -3522,7 +3522,7 @@
   },
   {
     "name": "BulletChart",
-    "path": "enterprise/BulletChart.tsx",
+    "path": "blocks/bullet-chart/BulletChart.tsx",
     "dir": "enterprise",
     "lineCount": 320,
     "scores": {

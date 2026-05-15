@@ -10,7 +10,7 @@ import type { EnterpriseTone } from '../types';
 // --- Component imports ---
 import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import type { ApprovalStep } from '../ApprovalWorkflow';
-import { BulletChart } from '../BulletChart';
+import { BulletChart } from '../index';
 import { ComparisonTable } from '../index';
 import type { ComparisonRow } from '../index';
 // PR #500 moved DataExportDialog out of enterprise/ into the generic
