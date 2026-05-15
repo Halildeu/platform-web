@@ -80,6 +80,26 @@ export type PivotResultColumn = {
   valueField: string;
 };
 
+/**
+ * PR-0.5b (Codex thread 019e2cd7): AG Grid state snapshot that gets
+ * forwarded to {@code POST /api/v1/reports/{key}/export} so the
+ * exported file matches the user's on-screen view (row grouping,
+ * value aggregations, pivot toggle, filter, sort).
+ *
+ * <p>{@code startRow}/{@code endRow}/{@code groupKeys} are
+ * intentionally absent — export ships every leaf bucket / pivot
+ * column combination, not the user's current SSRM expansion
+ * frontier or cache window.
+ */
+export type ExportGridState = {
+  rowGroupCols?: ColumnVO[];
+  valueCols?: ColumnVO[];
+  pivotCols?: ColumnVO[];
+  pivotMode?: boolean;
+  filterModel?: FilterModel;
+  sortModel?: SortModelItem[];
+};
+
 export type GridResponse<T = unknown> = {
   rows: T[];
   total: number;

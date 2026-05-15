@@ -74,4 +74,17 @@ describe('resolveErrorMessage', () => {
   it('exposes a frozen mapping so production code cannot mutate it', () => {
     expect(Object.isFrozen(REPORT_QUERY_ERROR_MESSAGES)).toBe(true);
   });
+
+  // PR-0.5b (Codex 019e2cfe Finding #3): backend export path emits
+  // these codes; resolver must produce Turkish copy instead of the
+  // raw `[CODE] message` envelope.
+  it('maps PIVOT_NOT_CONFIGURED to its Turkish copy', () => {
+    const error = { code: 'PIVOT_NOT_CONFIGURED', message: '[PIVOT_NOT_CONFIGURED] ...' };
+    expect(resolveErrorMessage(error)).toBe(REPORT_QUERY_ERROR_MESSAGES.PIVOT_NOT_CONFIGURED);
+  });
+
+  it('maps PIVOT_BUDGET_EXCEEDED to its Turkish copy', () => {
+    const error = { code: 'PIVOT_BUDGET_EXCEEDED', message: '[PIVOT_BUDGET_EXCEEDED] ...' };
+    expect(resolveErrorMessage(error)).toBe(REPORT_QUERY_ERROR_MESSAGES.PIVOT_BUDGET_EXCEEDED);
+  });
 });

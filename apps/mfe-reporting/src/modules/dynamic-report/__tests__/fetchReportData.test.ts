@@ -54,7 +54,7 @@ vi.mock('@mfe/shared-http', () => ({
 }));
 
 // Import AFTER the mocks so resolveHttpClient picks up the stub.
-import { fetchReportData, ReportQueryError } from '../api';
+import { exportReportData, fetchReportData, ReportQueryError } from '../api';
 
 describe('requestsGrouping', () => {
   it('returns false on a flat request', () => {
@@ -340,5 +340,227 @@ describe('fetchReportData routing (PR-0.2 SSRM data path)', () => {
     const res = await fetchReportData('any', { search: '' }, req);
 
     expect(res.grandTotalRow).toBeUndefined();
+  });
+});
+
+/*
+ * PR-0.5b (Codex thread 019e2cd7): exportReportData dispatch tests.
+ * Grouping/pivot grid state → POST /export with normalised body;
+ * flat / no grid state → legacy GET /export.
+ */
+describe('exportReportData routing (PR-0.5b export path)', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockPost.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('flat call (no gridState) uses GET /export', async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: 'hello' }, 'csv');
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+    const url = mockGet.mock.calls[0]?.[0] as string;
+    expect(url.startsWith('/v1/reports/any/export?')).toBe(true);
+    expect(url).toContain('format=csv');
+    expect(url).toContain('search=hello');
+  });
+
+  it('grouping intent in gridState dispatches POST /export', async () => {
+    mockPost.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'excel', {
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+      valueCols: [
+        {
+          id: 'amount',
+          field: 'amount',
+          displayName: 'Amount',
+          aggFunc: 'sum',
+        } as any,
+      ],
+      pivotCols: [],
+      pivotMode: false,
+      filterModel: { category: { type: 'equals', filter: 'FIN' } },
+      sortModel: [{ colId: 'category', sort: 'asc' }],
+    });
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [url, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(url).toBe('/v1/reports/any/export');
+    expect(body.format).toBe('xlsx');
+    expect(Array.isArray(body.rowGroupCols)).toBe(true);
+    expect((body.rowGroupCols as any[])[0]?.field).toBe('category');
+    expect((body.valueCols as any[])[0]?.aggFunc).toBe('sum');
+    expect(body.pivotMode).toBe(false);
+    expect(body.filterModel).toEqual({
+      category: { type: 'equals', filter: 'FIN' },
+    });
+  });
+
+  it('pivot intent in gridState dispatches POST /export with pivot fields', async () => {
+    mockPost.mockResolvedValueOnce({ data: new Blob(['xlsx content']) });
+
+    await exportReportData('any', { search: '' }, 'excel', {
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
+      pivotCols: [{ id: 'ba', field: 'ba', displayName: 'B/A' } as any],
+      pivotMode: true,
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body.pivotMode).toBe(true);
+    expect((body.pivotCols as any[])[0]?.field).toBe('ba');
+  });
+
+  it('flat gridState (no grouping intent) falls through to GET /export', async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'csv', {
+      rowGroupCols: [],
+      valueCols: [],
+      pivotCols: [],
+      pivotMode: false,
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('POST 400 parses structured ReportQueryError from blob body', async () => {
+    const errorPayload = JSON.stringify({
+      code: 'INVALID_AGGREGATION_REQUEST',
+      message: 'valueCols field is not aggregatable: note',
+    });
+    mockPost.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 400,
+        data: new Blob([errorPayload], { type: 'application/json' }),
+      },
+    });
+
+    await expect(
+      exportReportData('any', { search: '' }, 'csv', {
+        rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+        valueCols: [{ id: 'note', field: 'note', displayName: 'Note', aggFunc: 'sum' } as any],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      }),
+    ).rejects.toMatchObject({
+      name: 'ReportQueryError',
+      message: expect.stringContaining('INVALID_AGGREGATION_REQUEST'),
+    });
+  });
+
+  // PR-0.5b iter-2 absorb (Codex 019e2cfe Finding #1): normalisation
+  // happens before dispatch. Stale/incomplete snapshots that collapse
+  // to flat must NOT POST; backend would 400 GROUPING_NOT_SUPPORTED.
+  it('stale valueCols only (no rowGroup) normalises to flat and uses GET /export', async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'csv', {
+      rowGroupCols: [],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
+      pivotCols: [],
+      pivotMode: false,
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('pivotMode only (no rowGroup) normalises to flat and uses GET /export', async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'csv', {
+      rowGroupCols: [],
+      valueCols: [],
+      pivotCols: [{ id: 'ba', field: 'ba', displayName: 'B/A' } as any],
+      pivotMode: true,
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('incomplete pivot (rowGroup but no pivotCols) normalises to grouped (POSTs without pivotMode)', async () => {
+    mockPost.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData('any', { search: '' }, 'csv', {
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
+      pivotCols: [],
+      pivotMode: true, // incomplete: no pivotCols
+      filterModel: {},
+      sortModel: [],
+    });
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const [, body] = mockPost.mock.calls[0] as [string, Record<string, unknown>];
+    // Normalizer dropped pivotMode → backend dispatches to grouped.
+    expect(body.pivotMode).toBe(false);
+  });
+
+  it('POST 400 with non-JSON Blob falls back to generic ReportQueryError', async () => {
+    // Codex iter-2 §3 defensive: empty / non-JSON body must not crash
+    // the error parser.
+    mockPost.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 400, data: new Blob(['plain text error']) },
+    });
+
+    await expect(
+      exportReportData('any', { search: '' }, 'csv', {
+        rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+        valueCols: [
+          { id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any,
+        ],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      }),
+    ).rejects.toMatchObject({
+      name: 'ReportQueryError',
+      message: expect.stringContaining('BAD_REQUEST'),
+    });
+  });
+
+  it('POST 401 maps to authorization error message', async () => {
+    mockPost.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 401, data: new Blob([]) },
+    });
+
+    await expect(
+      exportReportData('any', { search: '' }, 'csv', {
+        rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+        valueCols: [
+          { id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any,
+        ],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      }),
+    ).rejects.toThrow('Rapor verileri için yetki bulunmuyor');
   });
 });

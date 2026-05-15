@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { SharedReportId } from '@platform/capabilities';
-import type { ColumnDef, GridRequest, GridResponse } from '../grid';
+import type { ColumnDef, ExportGridState, GridRequest, GridResponse } from '../grid';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
 import type { ReportCapabilities } from './dynamic-report/types';
 
@@ -61,7 +61,8 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
   renderDetail?: (row: TRow | null, t: TranslateFn) => ReactNode;
   exportRows?: (
     filters: TFilters,
-    format: 'csv' | 'json',
+    format: 'csv' | 'excel',
+    gridState?: ExportGridState,
   ) => Promise<{ blob: Blob; filename: string }>;
 
   /**

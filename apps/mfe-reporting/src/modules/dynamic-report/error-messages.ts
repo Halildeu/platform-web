@@ -46,6 +46,16 @@ export const REPORT_QUERY_ERROR_MESSAGES: Readonly<Record<string, string>> = Obj
     'Bu kolonla gruplama desteklenmiyor. Lütfen gruplanabilir bir kolon seçin.',
   INVALID_AGGREGATION_REQUEST:
     'Toplama hesaplama isteği geçersiz. Sadece desteklenen kolon ve fonksiyonları kullanın.',
+  // PR-0.5b (Codex 019e2cfe Finding #3): export path pivot-specific
+  // 400 codes raised by the backend's ReportExportController. The
+  // live /query path doesn't emit these (it skips the pivot dispatch
+  // when pivotValues/pivotBudget aren't configured) but export
+  // surfaces them so the FE can render a usable toast instead of
+  // a raw `[CODE] message` envelope.
+  PIVOT_NOT_CONFIGURED:
+    'Pivot dışa aktarım için rapor şeması "pivotValues" listesi içermiyor. Rapor yöneticisinden registry tanımına eklenmesini isteyin.',
+  PIVOT_BUDGET_EXCEEDED:
+    'Pivot çıktısı kolon bütçesini aşıyor. Daha az pivot değeri veya değer kolonu seçin.',
   INVALID_GROUP_KEY: 'Grup anahtarı geçersiz. Sayısal kolonlarda metinsel değer kullanmayın.',
   ANCESTOR_FILTER_COLLISION:
     'Filtre çakışması: bu kolonda hem genişletme yolu hem ayrı bir filtre tanımlı.',
