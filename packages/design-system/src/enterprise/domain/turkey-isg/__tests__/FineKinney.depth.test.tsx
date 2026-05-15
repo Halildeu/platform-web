@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Generated depth test — regenerate: node scripts/ci/generate-depth-tests.mjs --write
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { FineKinney } from '../FineKinney';
@@ -14,12 +14,18 @@ const requiredProps = {
 describe('FineKinney — depth', () => {
   describe('FineKinney — depth: prop combinations', () => {
     it('renders with showControls + showStatus + compact simultaneously', () => {
-      render(<FineKinney {...requiredProps} showControls showStatus compact>Stressed</FineKinney>);
+      render(
+        <FineKinney {...requiredProps} showControls showStatus compact>
+          Stressed
+        </FineKinney>,
+      );
       expect(screen.queryByText('Stressed') || document.body.firstElementChild).toBeTruthy();
     });
 
     it('does not crash with all boolean props toggled', () => {
-      const { container } = render(<FineKinney {...requiredProps} showControls showStatus compact />);
+      const { container } = render(
+        <FineKinney {...requiredProps} showControls showStatus compact />,
+      );
       expect(container.firstElementChild).toBeTruthy();
     });
   });

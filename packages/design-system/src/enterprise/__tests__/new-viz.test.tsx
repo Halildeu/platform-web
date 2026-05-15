@@ -4,8 +4,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
-import { FineKinney } from '../FineKinney';
-import type { FineKinneyRisk } from '../FineKinney';
+import { FineKinney } from '../index';
+import type { FineKinneyRisk } from '../index';
 
 import { ParetoChart } from '../ParetoChart';
 import type { ParetoItem } from '../ParetoChart';

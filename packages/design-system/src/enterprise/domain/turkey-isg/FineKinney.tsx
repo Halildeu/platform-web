@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { cn } from '../utils/cn';
+import { cn } from '../../../utils/cn';
 import {
   resolveAccessState,
   accessStyles,
   type AccessControlledProps,
-} from '../internal/access-controller';
+} from '../../../internal/access-controller';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -289,13 +289,7 @@ export const FineKinney: React.FC<FineKinneyProps> = ({
 
   if (risks.length === 0) {
     return (
-      <div
-        className={cn(
-          'p-8 text-center text-sm',
-          'text-[var(--text-tertiary)]',
-          className,
-        )}
-      >
+      <div className={cn('p-8 text-center text-sm', 'text-[var(--text-tertiary)]', className)}>
         Kayıtlı risk bulunamadı
       </div>
     );
@@ -355,19 +349,109 @@ export const FineKinney: React.FC<FineKinneyProps> = ({
         <table className="w-full border-collapse" role="table">
           <thead>
             <tr className="bg-[var(--surface-subtle)]">
-              <th className={cn('text-left font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)]')}>{t.hazard}</th>
-              <th className={cn('text-center font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)] whitespace-nowrap')}>{t.probability}</th>
-              <th className={cn('text-center font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)] whitespace-nowrap')}>{t.frequency}</th>
-              <th className={cn('text-center font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)] whitespace-nowrap')}>{t.severity}</th>
-              <th className={cn('text-center font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)] whitespace-nowrap')}>{t.riskScore}</th>
-              <th className={cn('text-center font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)]')}>{t.level}</th>
+              <th
+                className={cn(
+                  'text-left font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)]',
+                )}
+              >
+                {t.hazard}
+              </th>
+              <th
+                className={cn(
+                  'text-center font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)] whitespace-nowrap',
+                )}
+              >
+                {t.probability}
+              </th>
+              <th
+                className={cn(
+                  'text-center font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)] whitespace-nowrap',
+                )}
+              >
+                {t.frequency}
+              </th>
+              <th
+                className={cn(
+                  'text-center font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)] whitespace-nowrap',
+                )}
+              >
+                {t.severity}
+              </th>
+              <th
+                className={cn(
+                  'text-center font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)] whitespace-nowrap',
+                )}
+              >
+                {t.riskScore}
+              </th>
+              <th
+                className={cn(
+                  'text-center font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)]',
+                )}
+              >
+                {t.level}
+              </th>
               {showControls && (
-                <th className={cn('text-left font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)]')}>{t.controls}</th>
+                <th
+                  className={cn(
+                    'text-left font-semibold',
+                    fontSize,
+                    rowPadding,
+                    'text-[var(--text-primary)]',
+                  )}
+                >
+                  {t.controls}
+                </th>
               )}
-              <th className={cn('text-left font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)]')}>{t.responsible}</th>
-              <th className={cn('text-left font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)] whitespace-nowrap')}>{t.deadline}</th>
+              <th
+                className={cn(
+                  'text-left font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)]',
+                )}
+              >
+                {t.responsible}
+              </th>
+              <th
+                className={cn(
+                  'text-left font-semibold',
+                  fontSize,
+                  rowPadding,
+                  'text-[var(--text-primary)] whitespace-nowrap',
+                )}
+              >
+                {t.deadline}
+              </th>
               {showStatus && (
-                <th className={cn('text-center font-semibold', fontSize, rowPadding, 'text-[var(--text-primary)]')}>{t.status}</th>
+                <th
+                  className={cn(
+                    'text-center font-semibold',
+                    fontSize,
+                    rowPadding,
+                    'text-[var(--text-primary)]',
+                  )}
+                >
+                  {t.status}
+                </th>
               )}
             </tr>
           </thead>
@@ -411,15 +495,36 @@ export const FineKinney: React.FC<FineKinneyProps> = ({
                     )}
                   </td>
                   {/* P */}
-                  <td className={cn('text-center tabular-nums', fontSize, rowPadding, 'text-[var(--text-secondary)]')}>
+                  <td
+                    className={cn(
+                      'text-center tabular-nums',
+                      fontSize,
+                      rowPadding,
+                      'text-[var(--text-secondary)]',
+                    )}
+                  >
                     {risk.probability}
                   </td>
                   {/* F */}
-                  <td className={cn('text-center tabular-nums', fontSize, rowPadding, 'text-[var(--text-secondary)]')}>
+                  <td
+                    className={cn(
+                      'text-center tabular-nums',
+                      fontSize,
+                      rowPadding,
+                      'text-[var(--text-secondary)]',
+                    )}
+                  >
                     {risk.frequency}
                   </td>
                   {/* S */}
-                  <td className={cn('text-center tabular-nums', fontSize, rowPadding, 'text-[var(--text-secondary)]')}>
+                  <td
+                    className={cn(
+                      'text-center tabular-nums',
+                      fontSize,
+                      rowPadding,
+                      'text-[var(--text-secondary)]',
+                    )}
+                  >
                     {risk.severity}
                   </td>
                   {/* Score */}
@@ -447,11 +552,20 @@ export const FineKinney: React.FC<FineKinneyProps> = ({
                   </td>
                   {/* Controls */}
                   {showControls && (
-                    <td className={cn('text-left', fontSize, rowPadding, 'text-[var(--text-secondary)] max-w-[200px]')}>
+                    <td
+                      className={cn(
+                        'text-left',
+                        fontSize,
+                        rowPadding,
+                        'text-[var(--text-secondary)] max-w-[200px]',
+                      )}
+                    >
                       {risk.controls && risk.controls.length > 0 ? (
                         <ul className="list-disc list-inside space-y-0.5">
                           {risk.controls.map((ctrl, idx) => (
-                            <li key={idx} className="truncate">{ctrl}</li>
+                            <li key={idx} className="truncate">
+                              {ctrl}
+                            </li>
                           ))}
                         </ul>
                       ) : (
@@ -460,11 +574,25 @@ export const FineKinney: React.FC<FineKinneyProps> = ({
                     </td>
                   )}
                   {/* Responsible */}
-                  <td className={cn('text-left', fontSize, rowPadding, 'text-[var(--text-secondary)] whitespace-nowrap')}>
+                  <td
+                    className={cn(
+                      'text-left',
+                      fontSize,
+                      rowPadding,
+                      'text-[var(--text-secondary)] whitespace-nowrap',
+                    )}
+                  >
                     {risk.responsiblePerson || '—'}
                   </td>
                   {/* Deadline */}
-                  <td className={cn('text-left tabular-nums', fontSize, rowPadding, 'text-[var(--text-secondary)] whitespace-nowrap')}>
+                  <td
+                    className={cn(
+                      'text-left tabular-nums',
+                      fontSize,
+                      rowPadding,
+                      'text-[var(--text-secondary)] whitespace-nowrap',
+                    )}
+                  >
                     {risk.deadline || '—'}
                   </td>
                   {/* Status */}

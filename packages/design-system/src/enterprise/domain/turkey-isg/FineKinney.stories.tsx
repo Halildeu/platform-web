@@ -95,7 +95,7 @@ const highRisks: FineKinneyRisk[] = [
 ];
 
 const meta: Meta<typeof FineKinney> = {
-  title: 'Enterprise/FineKinney',
+  title: 'Enterprise/Domain/Turkey-ISG/FineKinney',
   component: FineKinney,
   tags: ['autodocs'],
   argTypes: {
@@ -107,7 +107,13 @@ const meta: Meta<typeof FineKinney> = {
       options: ['full', 'readonly', 'disabled', 'hidden'],
     },
   },
-  decorators: [(Story) => <div style={{ padding: '1rem' }}><Story /></div>],
+  decorators: [
+    (Story) => (
+      <div style={{ padding: '1rem' }}>
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 type Story = StoryObj<typeof FineKinney>;

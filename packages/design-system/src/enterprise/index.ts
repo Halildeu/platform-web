@@ -81,8 +81,11 @@ export { DataExportDialog } from '../components/data-export-dialog/DataExportDia
 export type { DataExportDialogLocaleText } from '../components/data-export-dialog/DataExportDialog';
 
 // Fine-Kinney Risk Assessment
-export { FineKinney } from './FineKinney';
-export type { FineKinneyProps, FineKinneyRisk } from './FineKinney';
+// FineKinney moved to ./domain/turkey-isg/ (Codex peer review opsiyon c —
+// Türkçe ISG regülasyon spesifik domain). Compat shim — eski import surface
+// korunuyor; canonical path: `enterprise/domain/turkey-isg/`.
+export { FineKinney } from './domain/turkey-isg/FineKinney';
+export type { FineKinneyProps, FineKinneyRisk } from './domain/turkey-isg/FineKinney';
 
 // WaterfallChart: removed — canonical surface is `@mfe/x-charts` (Phase 1a triage)
 
