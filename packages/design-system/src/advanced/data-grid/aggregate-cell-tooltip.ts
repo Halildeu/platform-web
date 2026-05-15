@@ -165,6 +165,42 @@ function resolveColDef<TData, TValue>(
 }
 
 /**
+ * Runtime type guard: does the (untyped) `column` handle expose a
+ * callable `getAggFunc`? AG Grid's `Column` does; `ColumnGroup` does
+ * not. Used to read the LIVE aggregation function off the column.
+ */
+function hasGetAggFunc(
+  column: unknown,
+): column is { getAggFunc: () => AggregateTooltipColDef['aggFunc'] | undefined } {
+  return (
+    typeof column === 'object' &&
+    column !== null &&
+    typeof (column as { getAggFunc?: unknown }).getAggFunc === 'function'
+  );
+}
+
+/**
+ * Resolve the cell's aggregation function. Codex 019e2de6 post-impl
+ * review: the reporting flow sets `aggFunc` at RUNTIME via
+ * `api.applyColumnState({ state: [{ colId, aggFunc }] })` (the
+ * "Sütun Hesaplama" context menu, PR #272c/PR-0.5d) and on saved
+ * variant restore — `ReportPage` never writes `aggFunc` onto the
+ * static colDef. So `params.column.getAggFunc()` (the live column
+ * state) is authoritative; `colDef.aggFunc` is only the fallback for
+ * a column statically configured with an aggregation.
+ */
+function resolveAggFunc<TData, TValue>(
+  params: AggregateTooltipParams<TData, TValue>,
+  colDef: AggregateTooltipColDef | null,
+): AggregateTooltipColDef['aggFunc'] | undefined {
+  if (hasGetAggFunc(params.column)) {
+    const liveAggFunc = params.column.getAggFunc();
+    if (liveAggFunc !== null && liveAggFunc !== undefined) return liveAggFunc;
+  }
+  return colDef?.aggFunc;
+}
+
+/**
  * Column display name: header name when present, else the field, else
  * the colId, else a neutral fallback.
  */
@@ -300,7 +336,10 @@ export function getAggregateCellTooltip<TData = unknown, TValue = unknown>(
   if (!hasRenderableValue(params.value)) return undefined;
 
   const colDef = resolveColDef(params);
-  const aggLabel = resolveAggFuncLabel(colDef?.aggFunc);
+  // Codex 019e2de6 post-impl: prefer the LIVE column aggFunc over the
+  // static colDef — runtime aggregation switches (PR-0.5d menu) and
+  // variant restores write column state, not colDef.aggFunc.
+  const aggLabel = resolveAggFuncLabel(resolveAggFunc(params, colDef));
   const columnName = resolveColumnDisplayName(colDef);
   const formattedValue = resolveFormattedValue(params, colDef);
   if (formattedValue === undefined) return undefined;

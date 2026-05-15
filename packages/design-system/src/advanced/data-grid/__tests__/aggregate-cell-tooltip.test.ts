@@ -211,6 +211,56 @@ describe('getAggregateCellTooltip — aggFunc labels', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  getAggregateCellTooltip — live aggFunc (Codex 019e2de6 post-impl)   */
+/*                                                                     */
+/*  The reporting flow sets aggFunc at RUNTIME via applyColumnState     */
+/*  (the "Sütun Hesaplama" menu / variant restore), not on the static  */
+/*  colDef — so column.getAggFunc() is authoritative.                  */
+/* ------------------------------------------------------------------ */
+
+describe('getAggregateCellTooltip — live aggFunc resolution', () => {
+  it('32. resolves the live aggFunc from column.getAggFunc() when colDef.aggFunc is absent', () => {
+    const params = groupAggregateCell({
+      colDef: { headerName: 'Tutar TL', field: 'amount' },
+      column: { getAggFunc: () => 'sum' },
+    });
+    expect(getAggregateCellTooltip(params)).toContain('Toplam(Tutar TL)');
+  });
+
+  it('33. live column.getAggFunc() overrides a stale colDef.aggFunc', () => {
+    const params = groupAggregateCell({
+      colDef: { headerName: 'Tutar TL', field: 'amount', aggFunc: 'avg' },
+      column: { getAggFunc: () => 'sum' },
+    });
+    expect(getAggregateCellTooltip(params)).toContain('Toplam(Tutar TL)');
+  });
+
+  it('34. grand-total cell also resolves the live aggFunc from column.getAggFunc()', () => {
+    const params = grandTotalCell({
+      colDef: { headerName: 'Tutar TL', field: 'amount', aggFunc: 'avg' },
+      column: { getAggFunc: () => 'sum' },
+    });
+    expect(getAggregateCellTooltip(params)).toBe('Genel toplam · Toplam(Tutar TL): 9.876.543,21');
+  });
+
+  it('35. live callable aggFunc → neutral "Agregasyon" label', () => {
+    const params = groupAggregateCell({
+      colDef: { headerName: 'Tutar TL', field: 'amount', aggFunc: 'sum' },
+      column: { getAggFunc: () => () => 0 },
+    });
+    expect(getAggregateCellTooltip(params)).toContain('Agregasyon(Tutar TL)');
+  });
+
+  it('36. falls back to colDef.aggFunc when column.getAggFunc() returns null', () => {
+    const params = groupAggregateCell({
+      colDef: { headerName: 'Tutar TL', field: 'amount', aggFunc: 'count' },
+      column: { getAggFunc: () => null },
+    });
+    expect(getAggregateCellTooltip(params)).toContain('Adet(Tutar TL)');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  getAggregateCellTooltip — column display name fallback             */
 /* ------------------------------------------------------------------ */
 
