@@ -13,7 +13,7 @@ import type { ApprovalStep } from '../ApprovalWorkflow';
 import { BulletChart } from '../BulletChart';
 import { ComparisonTable } from '../index';
 import type { ComparisonRow } from '../index';
-import { DataExportDialog } from '../DataExportDialog';
+import { DataExportDialog } from '../index';
 import { FilterPresets } from '../FilterPresets';
 import type { FilterPreset } from '../FilterPresets';
 import { InlineEdit } from '../index';
