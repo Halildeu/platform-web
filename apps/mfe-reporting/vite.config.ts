@@ -74,6 +74,18 @@ const sharedProdOnly = {
   '@mfe/design-system': singleton('@mfe/design-system', false),
   '@mfe/shared-http': singleton('@mfe/shared-http', false),
   '@mfe/i18n-dicts': singleton('@mfe/i18n-dicts', false),
+  // R15 user-visible repair follow-up (Codex 019e2aef iter-3):
+  // mfe-reporting was missing the `@mfe/auth` shared singleton, so its
+  // `useAuthz()` hook resolved against a fresh React Context whose
+  // default value is `isSuperAdmin: () => false` / `canViewReport: () => false`.
+  // Even after the host shell's PermissionProvider had `superAdmin: true`
+  // and 4 reportGroup MANAGE grants, the reporting bundle inside the
+  // module-federation boundary never observed it. ReportingHub's filter
+  // (`m() ? d : d.filter(e => !e.reportGroup || p(e.reportGroup))`) then
+  // dropped all 31 dynamic reports. Same pattern fix already lives in
+  // mfe-users (PR around Codex thread 019e1bed) and mfe-access — adding
+  // it here closes the cross-MFE singleton gap.
+  '@mfe/auth': { singleton: true, requiredVersion: false as const },
 };
 
 /* ------------------------------------------------------------------ */
@@ -135,6 +147,12 @@ export default defineConfig(({ mode }) => {
         {
           find: '@mfe/shared-http',
           replacement: path.resolve(__dirname, '../../packages/shared-http/src'),
+        },
+        {
+          // R15 follow-up: alias @mfe/auth so the dev build resolves to the
+          // host's PermissionProvider source. Mirrors mfe-users vite alias.
+          find: '@mfe/auth',
+          replacement: path.resolve(__dirname, '../../packages/auth/src'),
         },
         {
           find: '@tanstack/react-query',
