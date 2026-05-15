@@ -4,6 +4,41 @@ export type DynamicReportFilters = {
 
 export type DynamicReportRow = Record<string, unknown>;
 
+/**
+ * PR-0.4d-be backend response envelope record (Codex thread 019e2695).
+ * Each entry pairs an SQL alias with the semantic metadata frontend
+ * needs to render an AG Grid SSRM secondary column header without
+ * re-fetching report metadata or re-parsing the alias.
+ *
+ * Ordering invariant (backend-enforced): the i-th entry matches
+ * pivotResultFields[i] one-for-one; the frontend can index either list
+ * with the same row pointer. PR-0.4d-fe additionally guards the
+ * invariant client-side (rollout drift defence).
+ */
+export type PivotResultColumn = {
+  field: string;
+  pivotField: string;
+  pivotValue: string;
+  pivotLabel: string;
+  aggFunc: string;
+  valueField: string;
+};
+
+/**
+ * PR-0.4d-be: paginated response shape returned from
+ * {@code POST /api/v1/reports/{key}/query}. Pivot-only fields stay
+ * optional so non-pivot responses continue to deserialise cleanly
+ * (backend uses {@code @JsonInclude(NON_EMPTY)}).
+ */
+export type DynamicReportQueryResponse = {
+  items: DynamicReportRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pivotResultFields?: string[];
+  pivotResultColumns?: PivotResultColumn[];
+};
+
 export type ReportColumnMeta = {
   field: string;
   headerName: string;

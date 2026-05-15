@@ -22,6 +22,21 @@ type PagedResultDto = {
   total: number;
   page: number;
   pageSize: number;
+  // PR-0.4d-be (Codex thread 019e2695) — pivot-only response fields.
+  // Optional so non-pivot responses (the @JsonInclude(NON_EMPTY) backend
+  // path) keep parsing cleanly. PR-0.4d-fe consumes both:
+  // pivotResultColumns drives the semantic AG Grid SSRM secondary
+  // headers; pivotResultFields stays the canonical row-data key list
+  // for fallback registrations.
+  pivotResultFields?: string[];
+  pivotResultColumns?: Array<{
+    field: string;
+    pivotField: string;
+    pivotValue: string;
+    pivotLabel: string;
+    aggFunc: string;
+    valueField: string;
+  }>;
 };
 
 type ErrorResponse = {
@@ -369,9 +384,20 @@ const fetchReportDataGrouped = async (
       headers: buildCompanyHeaders(),
     });
     const items = Array.isArray(data?.items) ? data.items : [];
+    // PR-0.4d-be (Codex thread 019e2695): pass the pivot envelope through
+    // to the SSRM datasource so ReportPage can register secondary
+    // columns. Non-pivot responses leave the fields undefined; the
+    // caller treats undefined as "no pivot info to wire" and falls
+    // back to the legacy flat / grouped registration path.
     return {
       rows: items,
       total: typeof data?.total === 'number' ? data.total : items.length,
+      pivotResultFields: Array.isArray(data?.pivotResultFields)
+        ? data.pivotResultFields
+        : undefined,
+      pivotResultColumns: Array.isArray(data?.pivotResultColumns)
+        ? data.pivotResultColumns
+        : undefined,
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {

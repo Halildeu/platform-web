@@ -1,0 +1,199 @@
+/**
+ * PR-0.4d-fe (Codex thread 019e2695): AG Grid SSRM secondary column
+ * registration helpers. Keep the wiring isolated from the giant
+ * ReportPage.tsx so the alignment guard + signature-based churn
+ * avoidance + stale cleanup can be unit-tested without spinning up
+ * a full render.
+ */
+import type { GridApi } from 'ag-grid-community';
+import type { PivotResultColumn } from '../../grid';
+
+/**
+ * Outcome of {@link applyPivotResultColumns}. The datasource branches
+ * on this to decide whether to forward {@code pivotResultFields} to
+ * {@code params.success} (fallback path) or not (explicit path /
+ * cleared / no-op).
+ */
+export type PivotApplyMode =
+  | { mode: 'explicit'; secondaryColDefs: PivotSecondaryColDef[] }
+  | { mode: 'fallback'; pivotResultFields: string[] }
+  | { mode: 'cleared' }
+  | { mode: 'noop' };
+
+/**
+ * Minimal AG Grid secondary column shape. Captured locally so the
+ * helper stays free of the {@code ag-grid-community} ColDef surface
+ * (the real type evolves with every AG Grid major; this projection is
+ * the subset SSRM secondary registration accepts).
+ *
+ * The {@code colId} is the SQL alias from the backend; AG Grid uses it
+ * to address row-data fields, so it MUST match the response row key.
+ * The {@code headerName} carries the localised pivot label; the
+ * frontend renders it as a plain string (no HTML — Codex iter-2
+ * defence-in-depth).
+ */
+export type PivotSecondaryColDef = {
+  colId: string;
+  field: string;
+  headerName: string;
+  // Carry the raw metadata so future PRs (header grouping, custom
+  // cellRenderer per aggFunc, etc.) can read it off the colDef instead
+  // of plumbing the original PivotResultColumn through again.
+  pivotField: string;
+  pivotValue: string;
+  pivotLabel: string;
+  aggFunc: string;
+  valueField: string;
+};
+
+/**
+ * PR-0.4d-fe alignment guard. The backend asserts the invariant at
+ * construction (canonical constructor on {@code PivotedBuiltQuery}),
+ * but rolling-deploy combos (new FE / old BE, BE cache eviction race,
+ * etc.) can still serve a mismatch. When that happens the frontend
+ * falls back to the {@code pivotResultFields}-only path rather than
+ * surfacing the broken metadata to AG Grid.
+ */
+export const isAlignedPivotEnvelope = (
+  fields: string[] | undefined,
+  columns: PivotResultColumn[] | undefined,
+): columns is PivotResultColumn[] => {
+  if (!fields?.length || !columns?.length) return false;
+  if (fields.length !== columns.length) return false;
+  return columns.every((col, index) => col.field === fields[index]);
+};
+
+/**
+ * Compute a deterministic signature for the supplied pivot envelope.
+ * Used by {@link applyPivotResultColumns} to short-circuit identical
+ * back-to-back responses; AG Grid's secondary column reconciliation is
+ * expensive and can churn variant state.
+ */
+const pivotEnvelopeSignature = (columns: PivotResultColumn[]): string =>
+  columns.map((c) => `${c.field}|${c.pivotLabel}|${c.aggFunc}|${c.valueField}`).join(',');
+
+/**
+ * Render the AG Grid SSRM secondary header for one pivot result
+ * column. Multi-valueCol reports otherwise collide on a bare
+ * {@code pivotLabel}; appending the agg/value pair keeps every header
+ * unique while staying readable in Turkish. Examples:
+ *
+ *   Aktif / Toplam Tutar
+ *   Aktif / Ortalama Adet
+ *   Pasif / Toplam Tutar
+ *
+ * Frontend renders {@code headerName} as a plain string (Codex iter-2
+ * P3): no HTML injection through registry-supplied labels.
+ */
+export const buildPivotSecondaryHeader = (column: PivotResultColumn): string => {
+  // Flat disambiguation is intentional in PR-0.4d-fe: every secondary
+  // header ships the agg/value pair so multi-valueCol reports never
+  // collide on a bare label. A follow-up PR can promote this to a
+  // grouped secondary colDef (parent = pivot label, children = one
+  // colDef per agg/value pair) without changing this helper's signature
+  // — the metadata fields are already on the resulting PivotSecondaryColDef.
+  return `${column.pivotLabel} / ${column.aggFunc.toUpperCase()}(${column.valueField})`;
+};
+
+/**
+ * Apply the latest pivot envelope to the AG Grid SSRM secondary
+ * columns. Returns a {@link PivotApplyMode} the datasource branches
+ * on to decide whether to forward {@code pivotResultFields} on the
+ * fallback path.
+ *
+ * Codex thread 019e2695 PR-0.4d-fe spec:
+ *   - Mode separation: explicit colDefs are only registered when the
+ *     response carries an aligned {@code pivotResultColumns} list.
+ *   - Signature-based avoidance: identical back-to-back signatures
+ *     short-circuit so AG Grid never re-applies the same column state
+ *     mid-scroll.
+ *   - Stale cleanup: when the latest response no longer ships pivot
+ *     metadata, clear any previously registered secondary columns so
+ *     a ghost header doesn't outlive the pivotMode toggle.
+ */
+export const applyPivotResultColumns = (
+  api: GridApi | null | undefined,
+  pivotResultFields: string[] | undefined,
+  pivotResultColumns: PivotResultColumn[] | undefined,
+  lastSignatureRef: { current: string | null },
+): PivotApplyMode => {
+  // PR-0.4d-fe iter-2 (Codex 019e2695 P1 absorb): null api still has a
+  // useful fallback path — if the response carries `pivotResultFields`
+  // (old backend without `pivotResultColumns`, or rolling deploy serving
+  // only the alias list), the datasource can still hand the list to
+  // `params.success` so AG Grid registers row-data keys.
+  if (!api) {
+    return pivotResultFields?.length ? { mode: 'fallback', pivotResultFields } : { mode: 'noop' };
+  }
+
+  const apiWithPivot = api as GridApi & {
+    setPivotResultColumns?: (columns: unknown[] | null) => void;
+  };
+  const canSetExplicit = typeof apiWithPivot.setPivotResultColumns === 'function';
+
+  // Codex 019e2695 iter-2 P1 absorb: align desync OR missing columns
+  // both fall back to the pivotResultFields-only path. The previous
+  // shape only caught the "both present, desynced" case; a real-world
+  // rolling deploy where the backend serves `pivotResultFields` alone
+  // (PR-0.4b only, no PR-0.4d-be yet) silently slipped into the
+  // no-pivot-metadata clear branch and AG Grid never received the
+  // alias list.
+  const aligned = isAlignedPivotEnvelope(pivotResultFields, pivotResultColumns);
+  if (pivotResultFields?.length && !aligned) {
+    if (lastSignatureRef.current !== null && canSetExplicit) {
+      apiWithPivot.setPivotResultColumns([]);
+    }
+    lastSignatureRef.current = null;
+    return { mode: 'fallback', pivotResultFields };
+  }
+
+  // Aligned envelope but the AG Grid build doesn't expose
+  // `setPivotResultColumns` (older minor, restrictive test mock). Fall
+  // back to AG Grid's native `pivotResultFields` success path so the
+  // grid at least registers the row-data keys; metadata
+  // (label/agg/value) won't be surfaced but the data renders.
+  if (aligned && !canSetExplicit) {
+    lastSignatureRef.current = null;
+    return { mode: 'fallback', pivotResultFields: pivotResultFields as string[] };
+  }
+
+  // No pivot metadata in the response. Either the request wasn't a
+  // pivot request, or the report degraded back to flat/grouped — in
+  // both cases we need to clear any previously registered secondary
+  // columns so the grid doesn't keep showing ghost pivot headers.
+  if (!aligned) {
+    if (lastSignatureRef.current !== null) {
+      lastSignatureRef.current = null;
+      if (canSetExplicit) {
+        apiWithPivot.setPivotResultColumns([]);
+      }
+      return { mode: 'cleared' };
+    }
+    return { mode: 'noop' };
+  }
+
+  // Aligned envelope + AG Grid supports setPivotResultColumns → build
+  // the explicit secondary colDefs.
+  const signature = pivotEnvelopeSignature(pivotResultColumns as PivotResultColumn[]);
+  if (signature === lastSignatureRef.current) {
+    return { mode: 'noop' };
+  }
+  lastSignatureRef.current = signature;
+
+  const secondaryColDefs: PivotSecondaryColDef[] = (pivotResultColumns as PivotResultColumn[]).map(
+    (col) => ({
+      colId: col.field,
+      field: col.field,
+      headerName: buildPivotSecondaryHeader(col),
+      pivotField: col.pivotField,
+      pivotValue: col.pivotValue,
+      pivotLabel: col.pivotLabel,
+      aggFunc: col.aggFunc,
+      valueField: col.valueField,
+    }),
+  );
+
+  apiWithPivot.setPivotResultColumns!(secondaryColDefs);
+
+  return { mode: 'explicit', secondaryColDefs };
+};
