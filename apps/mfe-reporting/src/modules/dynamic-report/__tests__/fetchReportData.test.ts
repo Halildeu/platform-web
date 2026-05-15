@@ -75,9 +75,7 @@ describe('requestsGrouping', () => {
     const req: GridRequest = {
       page: 1,
       pageSize: 50,
-      valueCols: [
-        { id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any,
-      ],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
     };
     expect(requestsGrouping(req)).toBe(true);
   });
@@ -131,12 +129,8 @@ describe('fetchReportData routing (PR-0.2 SSRM data path)', () => {
       pageSize: 50,
       startRow: 0,
       endRow: 50,
-      rowGroupCols: [
-        { id: 'category', field: 'category', displayName: 'Category' } as any,
-      ],
-      valueCols: [
-        { id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any,
-      ],
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
     };
     const res = await fetchReportData('any', { search: '' }, req);
 
@@ -270,5 +264,81 @@ describe('fetchReportData routing (PR-0.2 SSRM data path)', () => {
     await expect(fetchReportData('any', { search: '' }, req)).rejects.toThrow(
       'Rapor verileri için yetki bulunmuyor',
     );
+  });
+
+  /*
+   * PR-0.5a (Codex thread 019e2c61): grand total row response
+   * forwarding. The backend emits an optional grandTotalRow on root
+   * grouped requests; the API layer must surface it on GridResponse
+   * so ReportPage can wire pinnedBottomRowData. Null values inside
+   * the row are legitimate (empty filter set, weightedavg denominator
+   * zero, percentile over empty set).
+   */
+  it('forwards grandTotalRow when backend emits it on a root grouped response', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        items: [{ category: 'FIN', _rowCount: 12, amount: 1234.56 }],
+        total: 5,
+        page: 1,
+        pageSize: 50,
+        grandTotalRow: { amount: 9999.99, median_amount: null },
+      },
+    });
+    const req: GridRequest = {
+      page: 1,
+      pageSize: 50,
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+      valueCols: [{ id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any],
+    };
+
+    const res = await fetchReportData('any', { search: '' }, req);
+
+    expect(res.grandTotalRow).toEqual({ amount: 9999.99, median_amount: null });
+  });
+
+  it('leaves grandTotalRow undefined when backend omits it (child / flat / pivot)', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        items: [{ category: 'FIN', _rowCount: 12 }],
+        total: 1,
+        page: 1,
+        pageSize: 50,
+        // grandTotalRow intentionally absent — backend's @JsonInclude(NON_NULL)
+        // path on child-store / pivot / flat responses.
+      },
+    });
+    const req: GridRequest = {
+      page: 1,
+      pageSize: 50,
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+      groupKeys: ['FIN'],
+    };
+
+    const res = await fetchReportData('any', { search: '' }, req);
+
+    expect(res.grandTotalRow).toBeUndefined();
+  });
+
+  it('drops malformed grandTotalRow values defensively (rolling-deploy mismatch)', async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 50,
+        // Primitive / array shapes shouldn't be possible per the
+        // backend contract; defensive guard for rolling deploys.
+        grandTotalRow: 'not-an-object',
+      },
+    });
+    const req: GridRequest = {
+      page: 1,
+      pageSize: 50,
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+    };
+
+    const res = await fetchReportData('any', { search: '' }, req);
+
+    expect(res.grandTotalRow).toBeUndefined();
   });
 });

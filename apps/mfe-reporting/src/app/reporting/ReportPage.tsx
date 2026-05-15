@@ -36,6 +36,10 @@ import { getShellServices } from '../services/shell-services';
 import { isTenantSelectionRequiredError } from '../../modules/dynamic-report/api';
 import { resolveErrorMessage } from '../../modules/dynamic-report/error-messages';
 import { applyPivotResultColumns } from '../../modules/dynamic-report/pivot-result-columns';
+import {
+  applyGrandTotalPinnedRow,
+  isRootSsrmRequest,
+} from '../../modules/dynamic-report/grand-total-pinned-row';
 import { CompanyPicker } from '../../components/CompanyPicker';
 
 /* ------------------------------------------------------------------ */
@@ -685,6 +689,21 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
    */
   const lastPivotSignatureRef = React.useRef<string | null>(null);
 
+  /*
+   * PR-0.5a (Codex thread 019e2ca8 post-impl REVISE absorb): root-store
+   * request epoch guard for the pinned-bottom grand-total row.
+   *
+   * AG Grid SSRM can race two root-store requests against each other
+   * (rapid filter / sort changes, navigation, etc.). Without an epoch
+   * the older response can land AFTER the newer one and stomp the
+   * pinned-bottom row with stale aggregates. Each normalized root
+   * request bumps the epoch; only the response whose request id still
+   * matches the latest epoch is allowed to write to
+   * `pinnedBottomRowData`. Child-store requests don't bump the epoch
+   * — they leave the global pinned row alone by design.
+   */
+  const latestRootRequestIdRef = React.useRef(0);
+
   /* ---- Server-side datasource ---- */
   const createServerSideDatasource = React.useCallback(
     () => ({
@@ -752,6 +771,35 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           // valueCols + groupKeys when no grouping/pivot/expansion is
           // requested so the backend payload degrades to a flat query.
           const req = normalizeServerSideRequest(reqRaw);
+
+          /*
+           * PR-0.5a (Codex thread 019e2ca8 post-impl REVISE absorb):
+           * snapshot the normalized root-detection + epoch BEFORE
+           * fetch. Two reasons we use {@code req} (normalized) instead
+           * of {@code ssrmRequest} (raw):
+           *
+           *   1. normalizeServerSideRequest degrades pivot+groupKeys
+           *      to root pivot ({@code groupKeys=[]}), incomplete
+           *      pivot to grouped, and stale valueCols/groupKeys to
+           *      flat. The backend sees the normalized payload and
+           *      decides whether to emit grandTotalRow against the
+           *      NORMALIZED request shape. Using raw ssrmRequest
+           *      here would mismatch: pivot drill snapshots show
+           *      non-empty groupKeys raw but [] normalized, so we'd
+           *      decide isRootRequest=false while the backend
+           *      treated it as root and (correctly) omitted
+           *      grandTotalRow — the stale pinned row would persist.
+           *
+           *   2. AG Grid SSRM can race two root requests against each
+           *      other (rapid filter / sort, navigation, etc.); the
+           *      older response can land AFTER the newer one and
+           *      stomp pinnedBottomRowData with stale aggregates.
+           *      Epoch counter (only bumped by root requests) lets
+           *      us drop the late writer when the latest id moved on.
+           */
+          const isRootRequest = isRootSsrmRequest(req);
+          const rootRequestId = isRootRequest ? ++latestRootRequestIdRef.current : null;
+
           const res: GridResponse<TRow> = await module.fetchRows(filters, req);
 
           /*
@@ -791,6 +839,32 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           } else {
             params.success({ rowData: res.rows, rowCount: res.total });
           }
+
+          /*
+           * PR-0.5a (Codex threads 019e2c61 plan-time, 019e2ca8
+           * post-impl): backend grand-total row → AG Grid
+           * pinnedBottomRowData. The grid surface is a single shared
+           * "pinned-bottom" row across SSRM stores, so we only apply
+           * it on the root-store response and clear it when the
+           * latest root response no longer carries the row
+           * (capability flip, pivot toggle, filter narrowed to empty
+           * set, etc.). Child-store responses leave the pinned row
+           * alone — the global total stays visible while the user
+           * drills into a bucket.
+           *
+           * The {@code isRootRequest} + {@code rootRequestId}
+           * snapshot was taken from the NORMALIZED request before
+           * fetch (see above for the rationale); we re-check the
+           * epoch here so an out-of-order late root response can't
+           * stomp pinnedBottomRowData with stale aggregates.
+           */
+          applyGrandTotalPinnedRow({
+            api: params.api,
+            req,
+            res,
+            rootRequestId,
+            latestRootRequestId: latestRootRequestIdRef.current,
+          });
 
           // PR-FE-3 (Codex 019e08e2 iter-12 REVISE absorb): clear the
           // tenant gate on a successful data fetch — covers the case

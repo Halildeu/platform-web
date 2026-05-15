@@ -37,6 +37,14 @@ type PagedResultDto = {
     aggFunc: string;
     valueField: string;
   }>;
+  // PR-0.5a (Codex thread 019e2c61): grand-total row over the
+  // RLS+filter-narrowed source set. Backend emits this only on root
+  // grouped (non-pivot) requests with non-empty aggregations; absent
+  // on flat, pivot, and child-store responses thanks to backend's
+  // @JsonInclude(NON_NULL). Map keys match aggregation aliases,
+  // values may be null (empty filter SUM/AVG, weightedavg denominator
+  // zero, percentile over empty set).
+  grandTotalRow?: Record<string, unknown> | null;
 };
 
 type ErrorResponse = {
@@ -398,6 +406,19 @@ const fetchReportDataGrouped = async (
       pivotResultColumns: Array.isArray(data?.pivotResultColumns)
         ? data.pivotResultColumns
         : undefined,
+      // PR-0.5a (Codex thread 019e2c61): forward the optional
+      // grand-total row when present. Empty object collapses to
+      // undefined so the caller can treat it uniformly with the
+      // absent-field case. Non-object responses are dropped
+      // defensively (backend contract is Map<String, Object>; a
+      // primitive or array here would be a rolling-deploy mismatch
+      // and the existing grid render must keep going).
+      grandTotalRow:
+        data?.grandTotalRow &&
+        typeof data.grandTotalRow === 'object' &&
+        !Array.isArray(data.grandTotalRow)
+          ? (data.grandTotalRow as Record<string, unknown>)
+          : undefined,
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {

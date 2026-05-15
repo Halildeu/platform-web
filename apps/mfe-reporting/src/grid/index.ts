@@ -95,6 +95,23 @@ export type GridResponse<T = unknown> = {
    * PR-0.4d-fe additionally guards the invariant client-side.
    */
   pivotResultColumns?: PivotResultColumn[];
+  /**
+   * PR-0.5a (2026-05-15, Codex thread 019e2c61): grand total row over
+   * the RLS+filter-narrowed source set. The backend emits this only on
+   * root SSRM store requests for non-pivot grouped queries with
+   * non-empty aggregations. Map keys match the aggregation alias
+   * (= column field), values mirror the bucket aggregate (sum / avg /
+   * weightedavg / percentile etc.). The frontend binds this Map to AG
+   * Grid's {@code pinnedBottomRowData}; child-store / flat / pivot
+   * responses omit the field entirely so the dominant flow keeps its
+   * byte-for-byte response shape.
+   *
+   * <p>Values may legitimately be {@code null} — an empty filter set
+   * yields null SUM/AVG/STDEV, weightedavg with zero denominator
+   * yields null, and PERCENTILE_CONT over an empty rowset yields
+   * null. Consumers must tolerate null values.
+   */
+  grandTotalRow?: Record<string, unknown> | null;
 };
 export type ColumnDef<TRow = unknown> = {
   field?: string;
