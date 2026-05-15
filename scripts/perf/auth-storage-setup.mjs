@@ -68,13 +68,19 @@ async function performStandardFlowLogin() {
   let authReady = false;
 
   try {
-    // Step 1: Navigate to /login
-    await page.goto(`${APP_ORIGIN}/login`, { waitUntil: 'load', timeout: TIMEOUT_MS });
+    // Step 1: Navigate to /login (waitUntil 'domcontentloaded' — 'load' too
+    // strict; SPA bundles may have long-tail XHR/WebSocket that never settles
+    // within 60s on GHA cold runners, even when DOM is interactive)
+    await page.goto(`${APP_ORIGIN}/login`, {
+      waitUntil: 'domcontentloaded',
+      timeout: TIMEOUT_MS,
+    });
 
     // Step 2: Wait for corporate-login-button to be visible + click
+    // (separate selector wait covers React hydration delay after DOMContentLoaded)
     await page.waitForSelector('[data-testid="corporate-login-button"]', {
       state: 'visible',
-      timeout: 10000,
+      timeout: 30000,
     });
     await page.click('[data-testid="corporate-login-button"]');
     loginButtonClicked = true;
