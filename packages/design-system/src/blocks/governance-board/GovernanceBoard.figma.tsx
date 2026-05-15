@@ -9,7 +9,5 @@ figma.connect(GovernanceBoard, 'FIGMA_URL_PLACEHOLDER', {
       severity: 'severity',
     }),
   },
-  example: ({ groupBy }) => (
-    <GovernanceBoard groupBy={groupBy} />
-  ),
+  example: ({ groupBy }) => <GovernanceBoard groupBy={groupBy} />,
 });

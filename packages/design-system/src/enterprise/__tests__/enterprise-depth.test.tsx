@@ -21,7 +21,7 @@ import { ApprovalWorkflow } from '../ApprovalWorkflow';
 import { RiskMatrix } from '../index';
 import { GanttTimeline } from '../index';
 import { ComparisonTable } from '../index';
-import { GovernanceBoard } from '../GovernanceBoard';
+import { GovernanceBoard } from '../index';
 import { ThemeLayout } from '../ThemeLayout';
 
 // ===========================================================================

@@ -26,7 +26,8 @@ export { ApprovalWorkflow } from './ApprovalWorkflow';
 // Risk & Governance
 // RiskMatrix moved to ../blocks/risk-matrix/ (Phase 4). Compat shim.
 export { RiskMatrix } from '../blocks/risk-matrix/RiskMatrix';
-export { GovernanceBoard } from './GovernanceBoard';
+// GovernanceBoard moved to ../blocks/governance-board/ (Phase 4). Compat shim.
+export { GovernanceBoard } from '../blocks/governance-board/GovernanceBoard';
 
 // Project & Timeline
 // GanttTimeline moved to ../blocks/gantt-timeline/ (Phase 2a). Compat shim.

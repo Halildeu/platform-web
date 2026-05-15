@@ -1,14 +1,18 @@
 import React from 'react';
-import { cn } from '../utils/cn';
+import { cn } from '../../utils/cn';
 import {
   resolveAccessState,
   accessStyles,
   type AccessControlledProps,
-} from '../internal/access-controller';
+} from '../../internal/access-controller';
 
 // ── Types ──
 
-export type ComplianceStatus = 'compliant' | 'non-compliant' | 'partially-compliant' | 'not-assessed';
+export type ComplianceStatus =
+  | 'compliant'
+  | 'non-compliant'
+  | 'partially-compliant'
+  | 'not-assessed';
 export type SeverityLevel = 'critical' | 'high' | 'medium' | 'low';
 
 export interface GovernanceItem {
@@ -45,32 +49,83 @@ export interface GovernanceBoardProps extends AccessControlledProps {
 
 // ── Status & Severity config ──
 
-const STATUS_CONFIG: Record<ComplianceStatus, { label: string; bg: string; text: string; dot: string }> = {
-  'compliant': { label: 'Compliant', bg: 'bg-state-success-bg', text: 'text-state-success-text', dot: 'bg-state-success-text' },
-  'non-compliant': { label: 'Non-Compliant', bg: 'bg-state-danger-bg', text: 'text-state-danger-text', dot: 'bg-state-danger-text' },
-  'partially-compliant': { label: 'Partial', bg: 'bg-state-warning-bg', text: 'text-state-warning-text', dot: 'bg-state-warning-text' },
-  'not-assessed': { label: 'Not Assessed', bg: 'bg-surface-muted', text: 'text-[var(--text-tertiary)]', dot: 'bg-[var(--text-tertiary)]' },
+const STATUS_CONFIG: Record<
+  ComplianceStatus,
+  { label: string; bg: string; text: string; dot: string }
+> = {
+  compliant: {
+    label: 'Compliant',
+    bg: 'bg-state-success-bg',
+    text: 'text-state-success-text',
+    dot: 'bg-state-success-text',
+  },
+  'non-compliant': {
+    label: 'Non-Compliant',
+    bg: 'bg-state-danger-bg',
+    text: 'text-state-danger-text',
+    dot: 'bg-state-danger-text',
+  },
+  'partially-compliant': {
+    label: 'Partial',
+    bg: 'bg-state-warning-bg',
+    text: 'text-state-warning-text',
+    dot: 'bg-state-warning-text',
+  },
+  'not-assessed': {
+    label: 'Not Assessed',
+    bg: 'bg-surface-muted',
+    text: 'text-[var(--text-tertiary)]',
+    dot: 'bg-[var(--text-tertiary)]',
+  },
 };
 
-const SEVERITY_CONFIG: Record<SeverityLevel, { label: string; borderColor: string; textColor: string }> = {
-  critical: { label: 'Critical', borderColor: 'border-l-[var(--state-error-text)]', textColor: 'text-state-danger-text' },
-  high: { label: 'High', borderColor: 'border-l-[var(--state-warning-text)]', textColor: 'text-state-warning-text' },
-  medium: { label: 'Medium', borderColor: 'border-l-[var(--state-warning-text)]', textColor: 'text-state-warning-text' },
-  low: { label: 'Low', borderColor: 'border-l-[var(--state-success-text)]', textColor: 'text-state-success-text' },
+const SEVERITY_CONFIG: Record<
+  SeverityLevel,
+  { label: string; borderColor: string; textColor: string }
+> = {
+  critical: {
+    label: 'Critical',
+    borderColor: 'border-l-[var(--state-error-text)]',
+    textColor: 'text-state-danger-text',
+  },
+  high: {
+    label: 'High',
+    borderColor: 'border-l-[var(--state-warning-text)]',
+    textColor: 'text-state-warning-text',
+  },
+  medium: {
+    label: 'Medium',
+    borderColor: 'border-l-[var(--state-warning-text)]',
+    textColor: 'text-state-warning-text',
+  },
+  low: {
+    label: 'Low',
+    borderColor: 'border-l-[var(--state-success-text)]',
+    textColor: 'text-state-success-text',
+  },
 };
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function groupItems(items: GovernanceItem[], groupBy: GovernanceGroupBy): Map<string, GovernanceItem[]> {
+function groupItems(
+  items: GovernanceItem[],
+  groupBy: GovernanceGroupBy,
+): Map<string, GovernanceItem[]> {
   const map = new Map<string, GovernanceItem[]>();
   for (const item of items) {
     let key: string;
     switch (groupBy) {
-      case 'domain': key = item.domain; break;
-      case 'status': key = STATUS_CONFIG[item.status].label; break;
-      case 'severity': key = SEVERITY_CONFIG[item.severity].label; break;
+      case 'domain':
+        key = item.domain;
+        break;
+      case 'status':
+        key = STATUS_CONFIG[item.status].label;
+        break;
+      case 'severity':
+        key = SEVERITY_CONFIG[item.severity].label;
+        break;
     }
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(item);
@@ -86,7 +141,7 @@ interface SummaryStripProps {
 
 const SummaryStrip: React.FC<SummaryStripProps> = ({ items }) => {
   const counts: Record<ComplianceStatus, number> = {
-    'compliant': 0,
+    compliant: 0,
     'non-compliant': 0,
     'partially-compliant': 0,
     'not-assessed': 0,
@@ -103,7 +158,13 @@ const SummaryStrip: React.FC<SummaryStripProps> = ({ items }) => {
           <div key={status} className="flex items-center gap-2">
             <div className={cn('h-2.5 w-2.5 rounded-full', cfg.dot)} />
             <span className="text-xs font-medium text-text-secondary">{cfg.label}</span>
-            <span className={cn('inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold', cfg.bg, cfg.text)}>
+            <span
+              className={cn(
+                'inline-flex min-w-[20px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold',
+                cfg.bg,
+                cfg.text,
+              )}
+            >
               {count}
             </span>
           </div>
@@ -133,7 +194,7 @@ export const GovernanceBoard: React.FC<GovernanceBoardProps> = ({
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
 
   const toggleGroup = (key: string) => {
-    setCollapsedGroups(prev => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -163,8 +224,8 @@ export const GovernanceBoard: React.FC<GovernanceBoardProps> = ({
           const isCollapsed = collapsedGroups.has(groupKey);
 
           // Group-level stats
-          const nonCompliantCount = groupItems.filter(i => i.status === 'non-compliant').length;
-          const criticalCount = groupItems.filter(i => i.severity === 'critical').length;
+          const nonCompliantCount = groupItems.filter((i) => i.status === 'non-compliant').length;
+          const criticalCount = groupItems.filter((i) => i.severity === 'critical').length;
 
           return (
             <div key={groupKey}>
@@ -193,7 +254,7 @@ export const GovernanceBoard: React.FC<GovernanceBoardProps> = ({
               {/* Items */}
               {!isCollapsed && (
                 <div className="divide-y divide-border-subtle">
-                  {groupItems.map(item => {
+                  {groupItems.map((item) => {
                     const statusCfg = STATUS_CONFIG[item.status];
                     const severityCfg = SEVERITY_CONFIG[item.severity];
                     const isReviewOverdue = item.nextReviewDate && item.nextReviewDate < new Date();
@@ -228,12 +289,22 @@ export const GovernanceBoard: React.FC<GovernanceBoardProps> = ({
                               </span>
                             )}
                             {item.findingsCount > 0 && (
-                              <span className={cn('flex items-center gap-1', item.findingsCount > 3 ? 'text-state-danger-text' : '')}>
+                              <span
+                                className={cn(
+                                  'flex items-center gap-1',
+                                  item.findingsCount > 3 ? 'text-state-danger-text' : '',
+                                )}
+                              >
                                 {item.findingsCount} finding{item.findingsCount !== 1 ? 's' : ''}
                               </span>
                             )}
                             {item.nextReviewDate && (
-                              <span className={cn('flex items-center gap-1', isReviewOverdue ? 'text-state-danger-text font-medium' : '')}>
+                              <span
+                                className={cn(
+                                  'flex items-center gap-1',
+                                  isReviewOverdue ? 'text-state-danger-text font-medium' : '',
+                                )}
+                              >
                                 Review: {formatDate(item.nextReviewDate)}
                                 {isReviewOverdue && ' (overdue)'}
                               </span>
@@ -242,12 +313,23 @@ export const GovernanceBoard: React.FC<GovernanceBoardProps> = ({
                         </div>
 
                         {/* Severity indicator */}
-                        <span className={cn('inline-flex items-center rounded-xs px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide shrink-0', severityCfg.textColor)}>
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-xs px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide shrink-0',
+                            severityCfg.textColor,
+                          )}
+                        >
                           {severityCfg.label}
                         </span>
 
                         {/* Status badge */}
-                        <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold shrink-0', statusCfg.bg, statusCfg.text)}>
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold shrink-0',
+                            statusCfg.bg,
+                            statusCfg.text,
+                          )}
+                        >
                           {statusCfg.label}
                         </span>
                       </div>
