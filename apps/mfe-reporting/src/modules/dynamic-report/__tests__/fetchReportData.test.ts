@@ -578,6 +578,131 @@ describe('exportReportData routing (PR-0.5b export path)', () => {
 });
 
 /*
+ * PR-0.5b2 (Codex thread 019e2d85): raw vs view export mode.
+ *   - mode='raw'  → always GET /export, grouping/pivot discarded,
+ *     filter/sort still forwarded; filename -ham-veri suffix.
+ *   - mode='view' → PR-0.5b grouped/pivot behaviour; -gorunum suffix.
+ *   - mode=undefined → legacy path, bare ${reportKey} filename.
+ */
+describe('exportReportData raw vs view mode (PR-0.5b2)', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockPost.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("mode='raw' ignores a grouping gridState and uses GET /export", async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    const res = await exportReportData(
+      'any',
+      { search: '' },
+      'csv',
+      {
+        // a fully grouped snapshot — raw mode must still flatten it
+        rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+        valueCols: [
+          { id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any,
+        ],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      },
+      'raw',
+    );
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(res.filename).toBe('any-ham-veri.csv');
+  });
+
+  it("mode='raw' forwards the grid filterModel + sortModel to GET /export", async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    await exportReportData(
+      'any',
+      { search: '' },
+      'excel',
+      {
+        rowGroupCols: [],
+        valueCols: [],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: { category: { type: 'equals', filter: 'FIN' } },
+        sortModel: [{ colId: 'amount', sort: 'desc' }],
+      },
+      'raw',
+    );
+
+    const url = mockGet.mock.calls[0]?.[0] as string;
+    expect(url).toContain('format=xlsx');
+    expect(url).toContain('advancedFilter=');
+    expect(url).toContain('sort=');
+    // the filter value round-trips through the query string
+    expect(decodeURIComponent(url)).toContain('"filter":"FIN"');
+  });
+
+  it("mode='view' with a grouping gridState POSTs and uses the -gorunum filename", async () => {
+    mockPost.mockResolvedValueOnce({ data: new Blob(['xlsx content']) });
+
+    const res = await exportReportData(
+      'any',
+      { search: '' },
+      'excel',
+      {
+        rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+        valueCols: [
+          { id: 'amount', field: 'amount', displayName: 'Amount', aggFunc: 'sum' } as any,
+        ],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      },
+      'view',
+    );
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(res.filename).toBe('any-gorunum.xlsx');
+  });
+
+  it("mode='view' with a flat gridState falls to GET but keeps the -gorunum filename", async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    const res = await exportReportData(
+      'any',
+      { search: '' },
+      'csv',
+      {
+        rowGroupCols: [],
+        valueCols: [],
+        pivotCols: [],
+        pivotMode: false,
+        filterModel: {},
+        sortModel: [],
+      },
+      'view',
+    );
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(res.filename).toBe('any-gorunum.csv');
+  });
+
+  it('mode=undefined keeps the legacy bare filename (no suffix)', async () => {
+    mockGet.mockResolvedValueOnce({ data: new Blob(['csv content']) });
+
+    const res = await exportReportData('any', { search: '' }, 'csv');
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(res.filename).toBe('any.csv');
+  });
+});
+
+/*
  * PR-0.5c (Codex thread 019e2d54): fetchFilterValues — set filter
  * distinct values lookup with a 60s in-memory cache.
  */

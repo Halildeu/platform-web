@@ -552,10 +552,58 @@ export const exportReportData = async (
   filters: DynamicReportFilters,
   format: 'csv' | 'excel',
   gridState?: ExportGridState,
+  /**
+   * PR-0.5b2 (Codex thread 019e2d85): export mode.
+   *   - 'raw'      → flat detail rows; grouping/pivot ignored, but
+   *                  the on-screen column filters + sort still apply.
+   *                  Always routes to GET /export.
+   *   - 'view'     → the PR-0.5b grouped/pivot "current view"
+   *                  behaviour (normalize-then-route).
+   *   - undefined  → legacy two-button path; identical to the
+   *                  pre-PR-0.5b2 behaviour (filename has no suffix).
+   */
+  mode?: 'raw' | 'view',
 ): Promise<{ blob: Blob; filename: string }> => {
   const client = resolveHttpClient();
   const wireFormat = format === 'csv' ? 'csv' : 'xlsx';
   const extension = format === 'csv' ? 'csv' : 'xlsx';
+
+  // PR-0.5b2: filename suffix distinguishes the two downloads so a
+  // raw Excel and a view Excel of the same report don't collide in
+  // the browser's download folder. Legacy path (mode undefined)
+  // keeps the bare `${reportKey}.${ext}` filename unchanged.
+  const filenameFor = (m: 'raw' | 'view' | undefined): string => {
+    if (m === 'raw') return `${reportKey}-ham-veri.${extension}`;
+    if (m === 'view') return `${reportKey}-gorunum.${extension}`;
+    return `${reportKey}.${extension}`;
+  };
+
+  /*
+   * PR-0.5b2 raw mode: always a flat GET /export. The grid's
+   * grouping/pivot is discarded, but the on-screen column
+   * filters + sort ARE forwarded (advancedFilter + sort query
+   * params) so "ham veri" still respects what the user filtered
+   * on screen — Codex 019e2d85 netleştirme.
+   */
+  if (mode === 'raw') {
+    const params = new URLSearchParams();
+    const search = filters.search?.trim();
+    if (search) {
+      params.set('search', search);
+    }
+    params.set('format', wireFormat);
+    if (gridState?.filterModel && Object.keys(gridState.filterModel).length > 0) {
+      params.set('advancedFilter', JSON.stringify(gridState.filterModel));
+    }
+    if (gridState?.sortModel && gridState.sortModel.length > 0) {
+      params.set('sort', JSON.stringify(gridState.sortModel));
+    }
+    const { data } = await client.get<Blob>(
+      `${REPORTS_BASE}/${reportKey}/export?${params.toString()}`,
+      { responseType: 'blob', headers: buildCompanyHeaders() },
+    );
+    return { blob: data, filename: filenameFor('raw') };
+  }
 
   /*
    * PR-0.5b (Codex thread 019e2cd7 post-impl REVISE absorb): dispatch
@@ -600,7 +648,7 @@ export const exportReportData = async (
           responseType: 'blob',
           headers: buildCompanyHeaders(),
         });
-        return { blob: data, filename: `${reportKey}.${extension}` };
+        return { blob: data, filename: filenameFor(mode) };
       } catch (error: unknown) {
         if (axios.isAxiosError(error)) {
           const response = error as AxiosError<ErrorResponse & { code?: string; message?: string }>;
@@ -649,18 +697,28 @@ export const exportReportData = async (
 
   // Flat fallback — keep the legacy GET /export path so non-grouping
   // callers (dashboards, simple flat exports) stay byte-for-byte.
+  // PR-0.5b2: a 'view'-mode snapshot that normalised to flat also
+  // lands here; its filename still carries the -gorunum suffix.
   const params = new URLSearchParams();
   const search = filters.search?.trim();
   if (search) {
     params.set('search', search);
   }
   params.set('format', wireFormat);
+  // PR-0.5b2: a 'view' export whose grid is flat still wants the
+  // on-screen filter/sort forwarded.
+  if (mode === 'view' && gridState?.filterModel && Object.keys(gridState.filterModel).length > 0) {
+    params.set('advancedFilter', JSON.stringify(gridState.filterModel));
+  }
+  if (mode === 'view' && gridState?.sortModel && gridState.sortModel.length > 0) {
+    params.set('sort', JSON.stringify(gridState.sortModel));
+  }
 
   const { data } = await client.get<Blob>(
     `${REPORTS_BASE}/${reportKey}/export?${params.toString()}`,
     { responseType: 'blob', headers: buildCompanyHeaders() },
   );
-  return { blob: data, filename: `${reportKey}.${extension}` };
+  return { blob: data, filename: filenameFor(mode) };
 };
 
 // PR-0.5b iter-2 absorb (Codex 019e2cfe Finding #1): the dispatch

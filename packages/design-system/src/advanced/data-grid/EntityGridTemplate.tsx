@@ -10,7 +10,7 @@
  * This is the main public API for grid consumers in the monorepo.
  * AG Grid v34.3.1 compatible.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ColDef as AgColDef,
   GridOptions as AgGridOptions,
@@ -20,20 +20,24 @@ import type {
   ExcelStyle as AgExcelStyle,
   ProcessCellForExportParams as AgProcessCellForExportParams,
   IServerSideDatasource as AgIServerSideDatasource,
-} from "ag-grid-community";
+} from 'ag-grid-community';
 
-import { resolveAccessState, accessStyles, type AccessControlledProps } from '../../internal/access-controller';
-import { GridShell, type GridShellApi, type GridTheme, type GridDensity } from "./GridShell";
-import { GridToolbar, type GridToolbarMessages } from "./GridToolbar";
+import {
+  resolveAccessState,
+  accessStyles,
+  type AccessControlledProps,
+} from '../../internal/access-controller';
+import { GridShell, type GridShellApi, type GridTheme, type GridDensity } from './GridShell';
+import { GridToolbar, type GridToolbarMessages } from './GridToolbar';
 import {
   VariantIntegration,
   type VariantIntegrationMessages,
   type VariantColumnState,
-} from "./VariantIntegration";
-import { ServerPaginationFooter } from "./ServerPaginationFooter";
-import { useDatasourceModeAdapter, type DataSourceMode } from "./DatasourceModeAdapter";
-import { TablePagination, useAgGridTablePagination } from "./TablePagination";
-import { FilterBuilderButton } from "./filter-builder";
+} from './VariantIntegration';
+import { ServerPaginationFooter } from './ServerPaginationFooter';
+import { useDatasourceModeAdapter, type DataSourceMode } from './DatasourceModeAdapter';
+import { useAgGridTablePagination } from './TablePagination';
+import { FilterBuilderButton } from './filter-builder';
 
 /* ------------------------------------------------------------------ */
 /*  Re-exported AG Grid types (convenience for consumers)              */
@@ -174,7 +178,7 @@ export interface EntityGridTemplateMessages {
   saveTitle?: string;
 }
 
-type ThemeValue = "quartz" | "balham" | "material" | "alpine";
+type ThemeValue = 'quartz' | 'balham' | 'material' | 'alpine';
 
 /** Props for the EntityGridTemplate component. */
 export interface EntityGridTemplateProps<
@@ -241,8 +245,20 @@ export interface EntityGridTemplateProps<
   /** Server-side export callback — called by toolbar Excel/CSV buttons in server mode. */
   onServerExport?: (
     format: 'excel' | 'csv',
-    params: { filterModel: Record<string, unknown>; sortModel: unknown[]; quickFilterText: string },
+    params: {
+      filterModel: Record<string, unknown>;
+      sortModel: unknown[];
+      quickFilterText: string;
+      /** PR-0.5b2 (Codex 019e2d85): 'raw' vs 'view' export mode. */
+      exportMode?: 'raw' | 'view';
+    },
   ) => Promise<void>;
+  /**
+   * PR-0.5b2 (Codex thread 019e2d85): when true, the toolbar export
+   * control becomes an "İndir" dropdown with raw-data + current-view
+   * variants. Forwarded verbatim to {@link GridToolbar}.
+   */
+  supportsViewExport?: boolean;
   variantModalTitle?: string;
   variantNewButtonLabel?: string;
   variantNamePlaceholder?: string;
@@ -253,12 +269,12 @@ export interface EntityGridTemplateProps<
   canDemoteVariantToPersonal?: boolean;
   /** Whether user can delete global variants */
   canDeleteGlobalVariant?: boolean;
-  rowSelection?: GridOptions<RowData>["rowSelection"];
-  dataSourceMode?: "server" | "client";
+  rowSelection?: GridOptions<RowData>['rowSelection'];
+  dataSourceMode?: 'server' | 'client';
   createServerSideDatasource?: (params: {
     gridApi: GridApi<RowData>;
   }) => IServerSideDatasource | null | undefined;
-  onEffectiveModeChange?: (mode: "server" | "client") => void;
+  onEffectiveModeChange?: (mode: 'server' | 'client') => void;
   /**
    * PR #272c (reporting hardening, 2026-05): forwarded to the embedded
    * {@link VariantIntegration} so a saved variant carrying
@@ -276,16 +292,14 @@ export interface EntityGridTemplateProps<
    */
   sanitizeVariantColumnState?: (state: VariantColumnState) => VariantColumnState;
   /** Companion sanitizer for {@code pivotMode}. Return the value to apply. */
-  sanitizeVariantPivotMode?: (
-    pivotMode: boolean | undefined,
-  ) => boolean | undefined;
+  sanitizeVariantPivotMode?: (pivotMode: boolean | undefined) => boolean | undefined;
 }
 
 /* ------------------------------------------------------------------ */
 /*  EntityGridTemplate orchestrator                                    */
 /* ------------------------------------------------------------------ */
 
-/** Full-featured entity grid orchestrator combining GridShell, toolbar, pagination, and variant management. 
+/** Full-featured entity grid orchestrator combining GridShell, toolbar, pagination, and variant management.
  * @example
  * ```tsx
  * <EntityGridTemplate />
@@ -322,10 +336,14 @@ export function EntityGridTemplate<
     filterBuilderPrefix,
     footerStartSlot,
     exportConfig,
+    supportsViewExport,
     quickFilterPlaceholder,
-    initialTheme = "quartz",
+    initialTheme = 'quartz',
     themeOptions,
-    pageSizeOptions = [10, 20, 50, 100],
+    // pageSizeOptions kept on the props contract; the rendered tree
+    // no longer reads it (pagination refactor residue). Prefixed to
+    // satisfy unused-vars without an API change.
+    pageSizeOptions: _pageSizeOptions = [10, 20, 50, 100],
     quickFilterInitialValue,
     initialVariantId,
     messages,
@@ -333,7 +351,7 @@ export function EntityGridTemplate<
     canDemoteVariantToPersonal = process.env.NODE_ENV !== 'production',
     canDeleteGlobalVariant = process.env.NODE_ENV !== 'production',
     rowSelection,
-    dataSourceMode = "server",
+    dataSourceMode = 'server',
     createServerSideDatasource,
     onEffectiveModeChange,
     onServerExport,
@@ -344,12 +362,12 @@ export function EntityGridTemplate<
   } = props;
 
   const accessState = resolveAccessState(access);
-  if (accessState.isHidden) return <></> as unknown as React.ReactElement;
+  if (accessState.isHidden) return (<></>) as unknown as React.ReactElement;
 
   // ── State ──────────────────────────────────────────────────────
   const [gridApi, setGridApi] = useState<GridApi<RowData> | null>(null);
   const [theme, setTheme] = useState<GridTheme>(initialTheme);
-  const [density, setDensity] = useState<GridDensity>("comfortable");
+  const [density, setDensity] = useState<GridDensity>('comfortable');
   const [activeVariantId, setActiveVariantId] = useState<string | null>(initialVariantId ?? null);
   const gridShellRef = useRef<GridShellApi<RowData>>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -388,7 +406,7 @@ export function EntityGridTemplate<
   });
 
   // ── Pagination (client mode only) ──────────────────────────────
-  const isServerMode = dataSourceMode === "server";
+  const isServerMode = dataSourceMode === 'server';
   const pagination = useAgGridTablePagination<RowData>({
     initialPageSize: pageSizeProp ?? 20,
     totalItems: total ?? rowData?.length ?? 0,
@@ -499,7 +517,13 @@ export function EntityGridTemplate<
   };
 
   // ── Client pagination page change ──────────────────────────────
-  const handlePageChange = useCallback(
+  // PR-0.5b2 incidental cleanup: these handlers + pageSizeOptions
+  // are no longer wired into the rendered tree (an earlier
+  // pagination refactor left them dangling). Underscore-prefixed to
+  // keep the unused-vars lint clean — lint-staged surfaced these
+  // pre-existing warnings when the file was touched for the
+  // supportsViewExport prop forwarding.
+  const _handlePageChange = useCallback(
     (nextPage: number) => {
       pagination.handlePageChange(nextPage);
       onPageChange?.(nextPage, pagination.pageSize);
@@ -507,7 +531,7 @@ export function EntityGridTemplate<
     [pagination, onPageChange],
   );
 
-  const handlePageSizeChange = useCallback(
+  const _handlePageSizeChange = useCallback(
     (nextPageSize: number) => {
       pagination.handlePageSizeChange(nextPageSize);
       onPageChange?.(1, nextPageSize);
@@ -536,25 +560,23 @@ export function EntityGridTemplate<
         quickFilterInitialValue={quickFilterInitialValue}
         exportConfig={exportConfig}
         onServerExport={onServerExport}
+        supportsViewExport={supportsViewExport}
         onRequestFullscreen={effectiveFullscreenHandler}
         isFullscreen={effectiveFullscreen}
         messages={toolbarMessages}
-        extras={<>
-          {gridApi && (
-            <QuickGroupMenu
-              gridApi={gridApi}
-              columnDefs={columnDefs}
-            />
-          )}
-          {gridApi && (
-            <FilterBuilderButton
-              gridApi={gridApi}
-              columnDefs={columnDefs}
-              prefixContent={filterBuilderPrefix}
-            />
-          )}
-          {toolbarExtras}
-        </>}
+        extras={
+          <>
+            {gridApi && <QuickGroupMenu gridApi={gridApi} columnDefs={columnDefs} />}
+            {gridApi && (
+              <FilterBuilderButton
+                gridApi={gridApi}
+                columnDefs={columnDefs}
+                prefixContent={filterBuilderPrefix}
+              />
+            )}
+            {toolbarExtras}
+          </>
+        }
         variantSlot={
           <VariantIntegration<RowData>
             gridId={gridId}
@@ -603,7 +625,7 @@ export function EntityGridTemplate<
   );
 }
 
-EntityGridTemplate.displayName = "EntityGridTemplate";
+EntityGridTemplate.displayName = 'EntityGridTemplate';
 
 export default EntityGridTemplate;
 
@@ -666,9 +688,20 @@ function QuickGroupMenu<RowData>({
         className="flex h-8 items-center gap-1 rounded-md bg-surface-muted px-2.5 text-xs font-medium text-text-secondary hover:bg-surface-raised"
         title="Hizli gruplama"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-          <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
         </svg>
         Grupla
       </button>
