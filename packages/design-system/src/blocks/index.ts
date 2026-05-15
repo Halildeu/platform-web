@@ -7,32 +7,36 @@ export {
   getBlock,
 } from './registry';
 
+/* Component re-exports use `export *` so each block's value AND its public
+ * type surface (e.g. RiskMatrixProps, ActivityItem) reach this barrel — and,
+ * via the root index.ts re-export, the canonical `@mfe/design-system` surface. */
+
 /* Phase 2a (2026-05-14) — moved from enterprise/ dashboard/event blocks */
-export { ActivityFeed } from './activity-feed';
-export { NotificationCenter } from './notification-center';
-export { StatusTimeline } from './status-timeline';
-export { GanttTimeline } from './gantt-timeline';
-export { ProcessFlow } from './process-flow';
+export * from './activity-feed';
+export * from './notification-center';
+export * from './status-timeline';
+export * from './gantt-timeline';
+export * from './process-flow';
 
 /* Phase 2b (2026-05-15) — moved from enterprise/ chart-adjacent blocks */
-export { BulletChart } from './bullet-chart';
-export { MicroChart } from './micro-chart';
-export { BoxPlot } from './box-plot';
-export { HistogramChart } from './histogram-chart';
-export { ControlChart } from './control-chart';
-export { ParetoChart } from './pareto-chart';
+export * from './bullet-chart';
+export * from './micro-chart';
+export * from './box-plot';
+export * from './histogram-chart';
+export * from './control-chart';
+export * from './pareto-chart';
 
 /* Phase 2c (2026-05-15) — moved from enterprise/ workspace blocks */
-export { SankeyDiagram } from './sankey-diagram';
-export { HeatmapCalendar } from './heatmap-calendar';
-export { OrgChart } from './org-chart';
-export { PivotTable } from './pivot-table';
-export { CommentThread } from './comment-thread';
-export { FileUploadZone } from './file-upload-zone';
-export { FilterPresets } from './filter-presets';
-export { ValueStream } from './value-stream';
+export * from './sankey-diagram';
+export * from './heatmap-calendar';
+export * from './org-chart';
+export * from './pivot-table';
+export * from './comment-thread';
+export * from './file-upload-zone';
+export * from './filter-presets';
+export * from './value-stream';
 
 /* Phase 4 (2026-05-15) — moved from enterprise/ showcase to blocks */
-export { RiskMatrix } from './risk-matrix';
-export { GovernanceBoard } from './governance-board';
-export { ApprovalWorkflow } from './approval-workflow';
+export * from './risk-matrix';
+export * from './governance-board';
+export * from './approval-workflow';

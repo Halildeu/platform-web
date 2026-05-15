@@ -32,6 +32,11 @@
       "import": "./dist/esm/patterns/index.js",
       "require": "./dist/cjs/patterns/index.cjs"
     },
+    "./blocks": {
+      "types": "./dist/blocks/index.d.ts",
+      "import": "./dist/esm/blocks/index.js",
+      "require": "./dist/cjs/blocks/index.cjs"
+    },
     "./providers": {
       "types": "./dist/providers/index.d.ts",
       "import": "./dist/esm/providers/index.js",

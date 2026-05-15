@@ -10,6 +10,8 @@ const entry = [
   'src/primitives/index.ts',
   'src/components/index.ts',
   'src/patterns/index.ts',
+  // Blocks — component-marketplace surface (Phase 4.6 public wiring)
+  'src/blocks/index.ts',
   'src/providers/index.ts',
   'src/theme/index.ts',
   'src/a11y/index.ts',
