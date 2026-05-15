@@ -8,6 +8,7 @@ import { setupAgGridLicense } from '@mfe/design-system';
 // See mfe-users bootstrap comment.
 import '@mfe/design-system/advanced/data-grid/setup';
 import ReportingApp from './reporting/ReportingApp';
+import { ReportingProviders } from './reporting/ReportingProviders';
 import { configureShellServices } from './services/shell-services';
 
 // AG Grid Enterprise lisansını AgGridReact ilk render'dan ÖNCE set et.
@@ -23,10 +24,17 @@ const container = document.getElementById('root');
 if (container) {
   configureShellServices({});
   const root = createRoot(container);
+  // R15 hotfix follow-up (Codex 019e2aef peer review): standalone bootstrap
+  // must wrap ReportingApp in ReportingProviders, because useCatalog now
+  // calls useQuery() which requires a QueryClientProvider ancestor. Without
+  // this wrapper, the standalone MFE root would crash with
+  // "No QueryClient set, use QueryClientProvider to set one".
   root.render(
     <React.StrictMode>
       <BrowserRouter>
-        <ReportingApp />
+        <ReportingProviders>
+          <ReportingApp />
+        </ReportingProviders>
       </BrowserRouter>
     </React.StrictMode>,
   );

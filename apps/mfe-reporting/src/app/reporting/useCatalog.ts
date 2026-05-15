@@ -98,16 +98,20 @@ export function useCatalog() {
     return listSharedReportsForChannel('web').map(mapStatic);
   }, []);
 
-  // R15 user-visible repair hotfix (Codex 019e2a83 follow-up):
-  // Önceki useState/useEffect + Promise.all + active flag patterni
-  // StrictMode mount-unmount-remount race'inde `setDynamicReports`
-  // çağrılmadan `active=false` set ediliyordu → dynamicReports
-  // hep [] kalıyor → 31 backend report UI'da hiç render edilmiyor
-  // (sadece 12 dashboard + 2 extra = 14 entry görünüyordu; 31 report
-  // tamamen filter ediliyordu). React Query mount/unmount race'i
-  // built-in çözer; cache + retry + deduping ile production-grade.
-  // Browser smoke (testai cluster) kanıtladı: /api/v1/reports 200 + 31
-  // entry array geldiği halde gridCardsCount=0 (Grid badge'li card yok).
+  // R15 user-visible repair hotfix (Codex 019e2a83 / 019e2aef follow-up).
+  //
+  // Symptom (proven via browser smoke on testai cluster, 2026-05-15):
+  // backend /api/v1/reports returned 31 items and /api/v1/dashboards
+  // returned 12, but /admin/reports rendered only 14 entries with zero
+  // Grid-badged cards. All 31 dynamic reports were missing from the UI.
+  //
+  // Root cause: the previous useState + useEffect([]) + Promise.all
+  // pattern with an `active` cleanup flag was racy under certain
+  // mount/unmount sequences (StrictMode dev double-invoke, lazy MFE
+  // remount, suspense boundary). React Query removes the race entirely
+  // because the cache lives outside component lifecycle and resolved
+  // data survives remounts. This is a defensive refactor, not a precise
+  // reproduction-bound fix.
   const reportsQuery = useQuery<ReportListItem[]>({
     queryKey: ['catalog', 'dynamic-reports'],
     queryFn: () =>
