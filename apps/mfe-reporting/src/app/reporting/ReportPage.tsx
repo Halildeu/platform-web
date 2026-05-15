@@ -201,12 +201,81 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   );
   const rowGroupingEnabled = dataSourceMode !== 'server' || serverSideGroupingEnabled;
 
+  /*
+   * PR-0.4d-fe2 (2026-05-15) — AG Grid SSRM pivot UI wiring. The
+   * backend pivot path (PR-0.4b / PR-0.4d-be) is live and the
+   * frontend already consumes `pivotResultColumns` via
+   * {@link applyPivotResultColumns}. But without an AG Grid pivot
+   * drop zone the end-user can never get a request into the pivot
+   * branch — server-mode reports were rendering the row-group panel
+   * only. This derived gate flips the pivot toolpanel + pivot drop
+   * zone on for reports that advertise either backend or client
+   * pivot capability, gated by mode (client pivot only makes sense
+   * in client mode).
+   */
+  const pivotEnabled = React.useMemo(() => {
+    const serverPivot = reportCapabilities?.serverSidePivoting === true;
+    const clientPivot =
+      reportCapabilities?.clientPivotAllowed === true && dataSourceMode === 'client';
+    return serverPivot || clientPivot;
+  }, [reportCapabilities, dataSourceMode]);
+
+  /*
+   * AG Grid Enterprise side bar config. We expose the columns +
+   * filters tool panels whenever grouping or pivoting is enabled
+   * for this report so the user can manipulate row-groups / value
+   * columns / pivot columns without leaving the grid. Capability
+   * gating mirrors {@link rowGroupingEnabled} / {@link pivotEnabled}
+   * — a non-grouped flat report keeps the legacy minimal chrome.
+   */
+  const sideBar = React.useMemo(() => {
+    if (!rowGroupingEnabled && !pivotEnabled) return undefined;
+    return {
+      toolPanels: [
+        {
+          id: 'columns',
+          labelDefault: 'Sütunlar',
+          labelKey: 'columns',
+          iconKey: 'columns',
+          toolPanel: 'agColumnsToolPanel',
+          toolPanelParams: {
+            suppressRowGroups: !rowGroupingEnabled,
+            suppressValues: !rowGroupingEnabled,
+            suppressPivots: !pivotEnabled,
+            suppressPivotMode: !pivotEnabled,
+          },
+        },
+        {
+          id: 'filters',
+          labelDefault: 'Filtreler',
+          labelKey: 'filters',
+          iconKey: 'filter',
+          toolPanel: 'agFiltersToolPanel',
+        },
+      ],
+      // Keep the side bar collapsed by default so flat reports that
+      // happen to advertise grouping don't surprise the user with an
+      // extra panel taking screen real estate.
+      defaultToolPanel: undefined,
+    };
+  }, [rowGroupingEnabled, pivotEnabled]);
+
   /* ---- Grid options (matching UsersGrid standard) ---- */
   const gridOptions = React.useMemo<GridOptions<TRow>>(
     () => ({
       cellSelection: true,
       multiSortKey: 'ctrl' as const,
       rowGroupPanelShow: rowGroupingEnabled ? ('always' as const) : ('never' as const),
+      // PR-0.4d-fe2: pivot drop zone — capability-gated. The native
+      // AG Grid panel sits next to the row-group panel and accepts
+      // any column with `enablePivot: true` (PR-0.4a wired the
+      // per-column flag from the backend's `pivotableFields` list).
+      pivotPanelShow: pivotEnabled ? ('always' as const) : ('never' as const),
+      // PR-0.4d-fe2: side bar (columns + filters tool panels) so the
+      // user can toggle pivot mode + manage value columns from the
+      // grid chrome. Undefined = use AG Grid's legacy minimal layout
+      // (no side bar) for flat reports.
+      sideBar,
       // PR-0.4d-fe (Codex thread 019e2695 iter-2 P2 absorb): align AG
       // Grid's SSRM secondary-field separator with the backend alias
       // contract (`pvt__<pivot>__<value>__<func>__<valueField>`). When
@@ -219,7 +288,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
         ? { cacheBlockSize: SERVER_CACHE_BLOCK_SIZE, maxBlocksInCache: 1 }
         : {}),
     }),
-    [dataSourceMode, rowGroupingEnabled],
+    [dataSourceMode, rowGroupingEnabled, pivotEnabled, sideBar],
   );
 
   /*
