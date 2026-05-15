@@ -513,6 +513,13 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           const setFilterField = c.field;
           colDef.filterParams = {
             ...(colDef.filterParams ?? {}),
+            // Codex 019e2d54 iter-2 §Medium: refreshValuesOnOpen makes
+            // AG Grid re-invoke the async `values` callback on every
+            // dropdown open. Without it the callback only fires once
+            // per filter instance and the 60s api-layer TTL never
+            // matters. With it the cache absorbs repeated opens
+            // within the window and re-fetches once expired.
+            refreshValuesOnOpen: true,
             values: (valuesParams: { success: (values: unknown[]) => void }) => {
               module.fetchFilterValues!(setFilterField)
                 .then((res) => valuesParams.success(res.values))

@@ -672,24 +672,58 @@ export const exportReportData = async (
  * PR-0.5c (Codex thread 019e2d54): set filter distinct values.
  *
  * In-memory cache: the AG Grid set filter `values` callback fires
- * every time the dropdown opens; without a cache the user pays a
- * round-trip per open. Codex noted the result is user/company/RLS
- * scoped, so the cache key includes the company id and the cache
- * lives only in this module's memory (never a shared HTTP cache).
- * 60s TTL balances freshness against churn.
+ * every time the dropdown opens (with refreshValuesOnOpen=true);
+ * without a cache the user pays a round-trip per open. The value
+ * set is RLS/principal scoped, so the cache key includes BOTH the
+ * company id AND the auth epoch — Codex iter-2 §High: a
+ * logout/re-login/impersonation within the same tab must not serve
+ * the previous principal's distinct values. This mirrors the
+ * epoch-aware invalidation metadata-cache.ts already does.
+ *
+ * The cache lives only in this module's memory (never a shared HTTP
+ * cache). 60s TTL balances freshness against churn.
  */
 const FILTER_VALUES_CACHE_TTL_MS = 60_000;
 type FilterValuesCacheEntry = { result: FilterValuesResult; expiresAt: number };
 const filterValuesCache = new Map<string, FilterValuesCacheEntry>();
+let filterValuesLastSeenEpoch = -1;
+
+/**
+ * Resolve the current auth epoch; returns -1 when shell-services is
+ * not yet wired (unit tests). The epoch advances on logout /
+ * re-login / impersonation so it is the canonical principal-change
+ * signal.
+ */
+const resolveAuthEpoch = (): number => {
+  try {
+    return getShellServices().auth.getEpoch();
+  } catch {
+    return -1;
+  }
+};
+
+/**
+ * Drop the whole filter-values cache when the auth epoch advances —
+ * the new principal must not see the previous principal's
+ * RLS-scoped distinct values. Called at the top of every
+ * {@link fetchFilterValues} lookup.
+ */
+const ensureFilterValuesEpoch = (epoch: number): void => {
+  if (epoch !== filterValuesLastSeenEpoch) {
+    filterValuesLastSeenEpoch = epoch;
+    filterValuesCache.clear();
+  }
+};
 
 /**
  * PR-0.5c: fetch a column's distinct values for the AG Grid set
  * filter dropdown. Backed by {@code GET /api/v1/reports/{key}/filter-values}.
  *
- * <p>A 60s in-memory cache keyed by {@code reportKey + companyId +
- * column + search} avoids a backend round-trip on every dropdown
- * open. The cache is per browser tab (module memory) — never an
- * HTTP shared cache, since the value set is RLS/company scoped.
+ * <p>A 60s in-memory cache keyed by {@code [authEpoch, reportKey,
+ * companyId, column, search]} (JSON-encoded — printable, collision-
+ * safe) avoids a backend round-trip on every dropdown open. The
+ * cache is per browser tab (module memory) and epoch-invalidated so
+ * a principal switch can never leak RLS-scoped values.
  */
 export const fetchFilterValues = async (
   reportKey: string,
@@ -698,7 +732,15 @@ export const fetchFilterValues = async (
 ): Promise<FilterValuesResult> => {
   const trimmedSearch = search?.trim() ?? '';
   const companyId = resolveCompanyId() ?? '';
-  const cacheKey = `${reportKey} ${companyId} ${column} ${trimmedSearch}`;
+  const authEpoch = resolveAuthEpoch();
+  ensureFilterValuesEpoch(authEpoch);
+
+  // JSON.stringify keeps the key printable + collision-safe (a
+  // column name containing the old space separator would have
+  // collided; the array form cannot). Codex iter-2 §Medium: the
+  // previous template-literal separator embedded NUL bytes into
+  // the source file — replaced entirely.
+  const cacheKey = JSON.stringify([authEpoch, reportKey, companyId, column, trimmedSearch]);
 
   const cached = filterValuesCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {

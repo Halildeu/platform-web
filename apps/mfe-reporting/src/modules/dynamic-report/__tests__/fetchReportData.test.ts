@@ -23,20 +23,26 @@ import { requestsGrouping } from '../../../grid';
  * so the factories can reference them without hitting Temporal Dead
  * Zone when vitest hoists vi.mock() to the top of the file.
  */
-const { mockGet, mockPost, stubClient } = vi.hoisted(() => {
+const { mockGet, mockPost, stubClient, authEpochHolder } = vi.hoisted(() => {
   const mockGet = vi.fn();
   const mockPost = vi.fn();
   return {
     mockGet,
     mockPost,
     stubClient: { get: mockGet, post: mockPost },
+    // PR-0.5c: mutable auth epoch so a test can bump it between two
+    // fetchFilterValues() calls and assert the cache invalidates.
+    authEpochHolder: { value: 1 },
   };
 });
 
 vi.mock('../../../app/services/shell-services', () => ({
   getShellServices: () => ({
     http: stubClient,
-    auth: { getUser: () => ({ permissions: [] }) },
+    auth: {
+      getUser: () => ({ permissions: [] }),
+      getEpoch: () => authEpochHolder.value,
+    },
   }),
 }));
 
@@ -667,5 +673,28 @@ describe('fetchFilterValues (PR-0.5c set filter values)', () => {
 
     expect(result.truncated).toBe(true);
     expect(result.limit).toBe(2);
+  });
+
+  it('auth epoch change invalidates the cache (Codex iter-2 §High)', async () => {
+    // Same column, same company — but a principal switch (logout /
+    // re-login / impersonation bumps the auth epoch). The new
+    // principal must NOT see the previous principal's RLS-scoped
+    // distinct values from cache.
+    authEpochHolder.value = 1;
+    mockGet
+      .mockResolvedValueOnce({ data: { values: ['principal-1'], limit: 1000, truncated: false } })
+      .mockResolvedValueOnce({ data: { values: ['principal-2'], limit: 1000, truncated: false } });
+
+    const first = await fetchFilterValues('any', 'city');
+    expect(first.values).toEqual(['principal-1']);
+
+    // epoch bump → next call must re-fetch, not serve the cache
+    authEpochHolder.value = 2;
+    const afterEpochBump = await fetchFilterValues('any', 'city');
+
+    expect(mockGet).toHaveBeenCalledTimes(2);
+    expect(afterEpochBump.values).toEqual(['principal-2']);
+    // restore for any later test
+    authEpochHolder.value = 1;
   });
 });
