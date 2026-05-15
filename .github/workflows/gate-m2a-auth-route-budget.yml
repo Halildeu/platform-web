@@ -86,6 +86,28 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install chromium --with-deps
 
+      - name: Diagnostic — testai.acik.com reachability from GHA runner
+        run: |
+          echo "=== DNS resolution ==="
+          getent hosts testai.acik.com || true
+          echo "=== HTTPS reachability ==="
+          curl -sS -o /tmp/login-probe.html \
+            --connect-timeout 30 --max-time 60 \
+            -w "resolved_ip=%{remote_ip}\nhttp_code=%{http_code}\ntime_namelookup=%{time_namelookup}s\ntime_connect=%{time_connect}s\ntime_total=%{time_total}s\ndownload_bytes=%{size_download}\n" \
+            "https://testai.acik.com/login" || echo "curl-failed-exit=$?"
+          echo "=== Token endpoint POST (verifies cluster auth path) ==="
+          curl -sS -o /tmp/probe-token.json \
+            --connect-timeout 30 --max-time 60 \
+            -w "http_code=%{http_code} time=%{time_total}s\n" \
+            -X POST "https://testai.acik.com/realms/platform-test/protocol/openid-connect/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "username=perf-test&password=__diagnostic_invalid__&grant_type=password&client_id=frontend" \
+            || echo "token-curl-failed-exit=$?"
+          echo "=== Login page download summary ==="
+          ls -la /tmp/login-probe.html 2>&1
+          head -c 200 /tmp/login-probe.html 2>&1
+          echo ""
+
       - name: Generate runtime storageState (no committed fixture)
         env:
           PERF_AUTH_PASSWORD: ${{ secrets.PERF_AUTH_PASSWORD }}
