@@ -541,9 +541,23 @@ const RoleDrawer: React.FC<RoleDrawerProps> = ({
       // Codex 019dda1c iter-26: skip catalog-stale report keys (e.g.
       // legacy group keys from prior versions) so a save does not
       // re-introduce rows the catalog has dropped.
+      //
+      // R16 PR-D0 hotfix (Codex 019e2a5d P0 absorb): `reports.<GROUP>`
+      // prefix'li granule'lar R16 PR-B-2 (#199) ile canlı authz contract'ın
+      // parçası (TupleSyncService key-aware → OpenFGA report_group:<KEY>
+      // tuple; /authz/me.reports canonicalize ALLOW). Catalog henüz
+      // `reportGroups` field'ı içermediği için bu key'ler `validReportKeys`
+      // dışında kalıyor + save sırasında drop ediliyor → R15 regresyon
+      // (ADMIN role panelinde HERHANGI bir dashboard edit sonrası
+      // `reports.FINANCE_REPORTS`/`HR_REPORTS`/`SALES_REPORTS`/
+      // `ANALYTICS_REPORTS` sessizce silinirdi). Preserve workaround:
+      // `reports.` prefix'li keys catalog'da olmasa bile payload'a dahil.
+      // PR-D full adoption (backend catalog `reportGroups` extension + FE
+      // "Rapor Yetki Grupları" panel) ayrı PR'da.
       const validReportKeys = new Set((catalog?.reports ?? []).map((r) => r.key));
+      const isReportGroupKey = (key: string) => key.startsWith('reports.');
       for (const [key, grant] of Object.entries(vars.draft.reportGrants)) {
-        if (!validReportKeys.has(key)) continue;
+        if (!validReportKeys.has(key) && !isReportGroupKey(key)) continue;
         granules.push({ type: 'report', key, grant });
       }
       // PAGE granules removed in iter-27 — backend rejects them at
