@@ -4,6 +4,7 @@
   "_phase": "PR-M1 scaffold + advisory matrix. Hard gate enforcement (auth fixture + warm cache priming + INP interaction injection + baseline ratchet) deferred to PR-G1.",
   "_acceptance": "Codex thread 019e1de0 AGREE",
   "_methodology": "median of 5 runs, foreground only, fixed Chrome version (Playwright bundled), CPU/network profile noted, hidden-page invalid",
+  "_dualBudgetProfiles": "PERF-INIT-V2.1 dual budget (Phase 3). Cold-authenticated routes carry nested regressionGuard (current-baseline + tolerance — V3 hard-flip exit-1 gate) and targetBudget (V3 leader-target acceptance tracker) objects. Profile objects use the SAME suffixed threshold keys as the flat schema (transferFailKB / decodedFailKB / lcpFailMs / clsFail). Read via route-performance-budget.mjs --budget-profile regressionGuard|targetBudget; default (no flag) = flat schema. Source values: PERF-DEBT-V3-backlog-tracking.md §5.1/§5.2 in the platform-k8s-gitops repo.",
   "routes": [
     {
       "route": "/login",
@@ -44,6 +45,18 @@
       "leaderTransferKB": 1500,
       "leaderDecodedKB": 6000,
       "leaderTbtMs": 50,
+      "regressionGuard": {
+        "transferFailKB": 10000,
+        "decodedFailKB": 38000,
+        "lcpFailMs": 2400,
+        "clsFail": 0.4
+      },
+      "targetBudget": {
+        "transferFailKB": 3000,
+        "decodedFailKB": 12000,
+        "lcpFailMs": 1200,
+        "clsFail": 0.1
+      },
       "_note": "Current baseline (2026-05-11): cold transfer 14419 KB, decoded 49947 KB, TBT 2937ms. Hard pass requires PR-B1a + PR-B1b + PR-B2 rollout."
     },
     {
@@ -79,6 +92,18 @@
       "clsFail": 0.1,
       "leaderTransferKB": 3000,
       "leaderDecodedKB": 8000,
+      "regressionGuard": {
+        "transferFailKB": 10500,
+        "decodedFailKB": 38000,
+        "lcpFailMs": 5400,
+        "clsFail": 0.1
+      },
+      "targetBudget": {
+        "transferFailKB": 6000,
+        "decodedFailKB": 18000,
+        "lcpFailMs": 1500,
+        "clsFail": 0.1
+      },
       "_note": "Grid route — AG Grid Community + filter/sort/pagination. Sentinel uses page heading; grid load is independent (data API may fail in testai without seed)."
     },
     {
@@ -94,6 +119,18 @@
       "tbtFailMs": 600,
       "leaderTransferKB": 3000,
       "leaderDecodedKB": 8000,
+      "regressionGuard": {
+        "transferFailKB": 10500,
+        "decodedFailKB": 40000,
+        "lcpFailMs": 5000,
+        "clsFail": 0.1
+      },
+      "targetBudget": {
+        "transferFailKB": 6000,
+        "decodedFailKB": 18000,
+        "lcpFailMs": 1500,
+        "clsFail": 0.1
+      },
       "_note": "mfe-access wildcard route redirects /admin/access/* → /access/roles (AccessApp.ui.tsx line 82). expectedPath declares canonical post-redirect target so PR-B5c-lite redirect guard does not false-fail."
     },
     {
@@ -136,6 +173,18 @@
       "leaderTransferKB": 4000,
       "leaderDecodedKB": 12000,
       "leaderTbtMs": 50,
+      "regressionGuard": {
+        "transferFailKB": 10500,
+        "decodedFailKB": 38000,
+        "lcpFailMs": 5100,
+        "clsFail": 0.2
+      },
+      "targetBudget": {
+        "transferFailKB": 5000,
+        "decodedFailKB": 16000,
+        "lcpFailMs": 1500,
+        "clsFail": 0.1
+      },
       "_note": "PERF-INIT-V2.1 PR-V2.1-M2a1 (Codex 019e2b00 round 8 absorb): Static reports.users module — AG Grid Enterprise coverage equivalent to fin-muhasebe-detay but available without dynamic report seed data (fin-muhasebe-detay deep-link needs MSSQL Workcube yearly schema seed; reports.users registered via SHARED_REPORT_CATALOG, no DB dependency). Used as M2a1 4th measurement route until fin-muhasebe-detay seed lands."
     },
     {

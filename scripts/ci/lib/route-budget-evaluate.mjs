@@ -10,7 +10,8 @@
  * imports) — pure functions only.
  *
  * Dual budget design (Codex `019e2cbf` strategic warning + `019e2d16` §0
- * REVISE absorb — see docs/performance/PERF-DEBT-V3-backlog-tracking.md §5):
+ * REVISE absorb — see PERF-DEBT-V3-backlog-tracking.md §5 in the
+ * platform-k8s-gitops repo):
  *   - Pre-Phase-2 the runner read budget thresholds from the FLAT route entry
  *     (`transferFailKB`, `lcpFailMs`, `clsFail`, ...).
  *   - Phase 2 adds an optional `budgetProfile` selector. When set, thresholds
