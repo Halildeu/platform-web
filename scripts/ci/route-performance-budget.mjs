@@ -30,6 +30,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { evaluate } from './lib/route-budget-evaluate.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = join(__dirname, '..', '..');
@@ -41,6 +43,7 @@ const opt = {
   updateBaseline: false,
   warnOnly: false,
   authStorageState: null,
+  budgetProfile: null,
 };
 
 for (let i = 0; i < args.length; i += 1) {
@@ -52,6 +55,17 @@ for (let i = 0; i < args.length; i += 1) {
   else if (a === '--auth-storage') opt.authStorageState = args[++i];
   else if (a === '--routes') opt.routesFilter = args[++i].split(',');
   else if (a === '--require-baseline') opt.requireBaseline = true;
+  else if (a === '--budget-profile') {
+    // Fail-closed (Codex 019e2f6c P2): a missing/empty/flag-shaped value would
+    // silently fall back to flat schema — a Phase 4 CI wiring bug (empty env)
+    // could then run legacy budgets while believing the hard-flip is active.
+    const profileVal = args[++i];
+    if (profileVal === undefined || profileVal.trim() === '' || profileVal.startsWith('--')) {
+      console.error(`[perf-budget] FATAL: --budget-profile requires a non-empty profile name (got: ${profileVal === undefined ? '<missing>' : JSON.stringify(profileVal)})`);
+      process.exit(2);
+    }
+    opt.budgetProfile = profileVal;
+  }
   else if (a === '--help' || a === '-h') {
     console.log(
       `Usage: node scripts/ci/route-performance-budget.mjs [options]\n\n` +
@@ -61,6 +75,8 @@ for (let i = 0; i < args.length; i += 1) {
       `  --update-baseline           write tests/perf/baseline.json\n` +
       `  --warn-only                 never exit 1 (warmup mode)\n` +
       `  --require-baseline          fail if tests/perf/baseline.json has no routes (hard-flip guard)\n` +
+      `  --budget-profile NAME       read thresholds from the budget[NAME] nested profile\n` +
+      `                              (regressionGuard|targetBudget); default: flat schema\n` +
       `  --auth-storage PATH         Playwright storageState JSON for auth fixture`,
     );
     process.exit(0);
@@ -337,73 +353,6 @@ async function measureRoute(browser, routeBudget) {
   return summary;
 }
 
-/** Evaluate measurements against a budget. Returns { pass, warnings, failures }. */
-function evaluate(summary, budget) {
-  const warnings = [];
-  const failures = [];
-
-  function check(metric, value, warnKey, failKey, op = 'lte') {
-    const warn = budget[warnKey];
-    const fail = budget[failKey];
-    if (value === undefined) return;
-    const cmp = op === 'lte' ? (v, t) => v > t : (v, t) => v < t;
-    if (fail !== undefined && cmp(value, fail)) {
-      failures.push(`${metric}=${value} (fail threshold ${fail})`);
-    } else if (warn !== undefined && cmp(value, warn)) {
-      warnings.push(`${metric}=${value} (warn threshold ${warn})`);
-    }
-  }
-
-  check('transferKB', summary.transferKB, 'transferWarnKB', 'transferFailKB');
-  check('decodedKB', summary.decodedKB, undefined, 'decodedFailKB');
-  check('resourceCount', summary.resourceCount, undefined, 'resourceFailCount');
-  check('tbtMs', summary.tbtMs, undefined, 'tbtFailMs');
-  check('longTaskMaxMs', summary.longTaskMaxMs, undefined, 'longTaskMaxFailMs');
-  check('longTaskCount', summary.longTaskCount, undefined, 'longTaskCountFail');
-  check('longTaskTotalMs', summary.longTaskTotalMs, undefined, 'longTaskTotalFailMs');
-  check('lcpMs', summary.lcpMs, undefined, 'lcpFailMs');
-  check('fcpMs', summary.fcpMs, undefined, 'fcpFailMs');
-  check('inpMs', summary.inpMs, undefined, 'inpFailMs');
-  check('cls', summary.cls, undefined, 'clsFail');
-
-  // Regression check vs baseline (only if baseline exists for this route+mode).
-  // PR-G2 iter-2 absorb (Codex thread 019e2776 P1-5): support BOTH legacy
-  // single-snapshot baseline shape and extended schema with .history[] +
-  // .median {}. Resolution order:
-  //   1. base.<metric>            (legacy single-snapshot)
-  //   2. base.median.<metric>     (G2 extended schema; recomputed by
-  //                                sliding-baseline-check.mjs --append-history)
-  //   3. latest base.history[].metrics.<metric>  (extended fallback)
-  const baseKey = `${budget.route}::${budget.mode}`;
-  const base = baseline.routes[baseKey];
-  function baselineMetric(metric) {
-    if (!base) return undefined;
-    if (base[metric] !== undefined) return base[metric];
-    if (base.median && base.median[metric] !== undefined) return base.median[metric];
-    if (Array.isArray(base.history) && base.history.length > 0) {
-      const latest = base.history[base.history.length - 1];
-      return latest.metrics?.[metric];
-    }
-    return undefined;
-  }
-  if (base && budgets._regressionPolicy?.hardFailRegressionPercent) {
-    const pct = budgets._regressionPolicy.hardFailRegressionPercent;
-    function regression(metric, current) {
-      const baseValue = baselineMetric(metric);
-      if (current === undefined || baseValue === undefined) return;
-      if (current > baseValue * (1 + pct / 100)) {
-        failures.push(`${metric} regression: ${current} vs baseline ${baseValue} (>${pct}%)`);
-      }
-    }
-    regression('transferKB', summary.transferKB);
-    regression('decodedKB', summary.decodedKB);
-    regression('tbtMs', summary.tbtMs);
-    regression('longTaskTotalMs', summary.longTaskTotalMs);
-  }
-
-  return { pass: failures.length === 0, warnings, failures };
-}
-
 async function main() {
   // Fail-closed guard for hard-flip phase: refuse to run without a populated
   // baseline.json when `--require-baseline` is set. Prevents the first
@@ -426,6 +375,10 @@ async function main() {
     console.error(`[perf-budget] FATAL: --routes filter matched no entries in performance-budgets.json`);
     console.error(`              Requested: ${opt.routesFilter.join(', ')}`);
     process.exit(2);
+  }
+
+  if (opt.budgetProfile) {
+    console.log(`[perf-budget] budget-profile active: ${opt.budgetProfile} (thresholds read from nested profile object)`);
   }
 
   const browser = await chromium.launch({ headless: true });
@@ -467,7 +420,22 @@ async function main() {
       continue;
     }
 
-    const evalResult = evaluate(summary, routeBudget);
+    const evalResult = evaluate(summary, routeBudget, {
+      budgetProfile: opt.budgetProfile,
+      baseline,
+      regressionPolicy: budgets._regressionPolicy,
+    });
+
+    // Phase 2 fail-closed: a requested --budget-profile that is not defined
+    // for this route is a configuration validity error — hard-fail, never
+    // masked by --warn-only (same class as auth/redirect/sentinel errors).
+    if (evalResult.validityError) {
+      console.log(`  -> ERROR (config): ${evalResult.validityError}`);
+      results.push({ ...routeBudget, ...summary, measurementInvalid: true, error: evalResult.validityError });
+      anyValidityFail = true;
+      continue;
+    }
+
     console.log(`  -> ${evalResult.pass ? 'PASS' : 'FAIL'}`);
     for (const w of evalResult.warnings) console.log(`     WARN  ${w}`);
     for (const f of evalResult.failures) console.log(`     FAIL  ${f}`);
