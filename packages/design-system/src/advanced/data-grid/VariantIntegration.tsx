@@ -469,11 +469,11 @@ export const VariantIntegration = <RowData = unknown,>({
    *
    * Like the schema re-apply this is a layout-overlay-ONLY re-apply —
    * it never re-runs `applyVariantState` (no filter/sort/pivot
-   * re-apply). `' :initial'` is an impossible variant id used as
+   * re-apply). `'__initial__'` is an impossible variant id used as
    * the "never applied a variant yet" sentinel so the very first
    * `target`-path apply is not mistaken for a transition.
    */
-  const lastAppliedVariantRef = useRef<string | null>(' :initial');
+  const lastAppliedVariantRef = useRef<string | null>('__initial__');
   /*
    * PR-0.5e (Codex 019e2de0 REVISE finding 2) — the last pending draft
    * snapshot, captured AT EVENT TIME. The debounce timer writes this
