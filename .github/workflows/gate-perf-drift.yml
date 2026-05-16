@@ -31,6 +31,8 @@ on:
       - 'packages/**'
       - 'performance-budgets.json'
       - 'scripts/perf/**'
+      - 'scripts/ci/route-performance-budget.mjs'
+      - 'scripts/ci/lib/route-budget-evaluate.mjs'
       - 'tests/perf/baseline.json'
       - '.github/workflows/gate-perf-drift.yml'
   push:
@@ -40,6 +42,8 @@ on:
       - 'packages/**'
       - 'tests/perf/baseline.json'
       - 'scripts/perf/**'
+      - 'scripts/ci/route-performance-budget.mjs'
+      - 'scripts/ci/lib/route-budget-evaluate.mjs'
       - '.github/workflows/gate-perf-drift.yml'
   workflow_dispatch:
     inputs:

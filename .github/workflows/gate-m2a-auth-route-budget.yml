@@ -44,6 +44,7 @@ on:
       # Perf infrastructure
       - 'performance-budgets.json'
       - 'scripts/ci/route-performance-budget.mjs'
+      - 'scripts/ci/lib/route-budget-evaluate.mjs'
       - 'scripts/perf/auth-storage-setup.mjs'
       - 'tests/perf/baseline.json'
       - '.github/workflows/gate-m2a-auth-route-budget.yml'

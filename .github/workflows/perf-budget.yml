@@ -27,6 +27,8 @@ on:
       - 'packages/**'
       - 'performance-budgets.json'
       - 'scripts/ci/route-performance-budget.mjs'
+      - 'scripts/ci/lib/route-budget-evaluate.mjs'
+      - 'scripts/ci/__tests__/route-budget-evaluate.test.mjs'
       - 'scripts/ci/bundle-taxonomy.mjs'
       - 'scripts/ci/duplicate-package-detector.mjs'
       - 'scripts/ci/css-attribution-breakdown.mjs'
@@ -196,3 +198,18 @@ jobs:
         run: pnpm lighthouse:ci
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN || '' }}
+
+  # PERF-INIT-V2.1 dual budget Phase 2: pure evaluation-core unit tests.
+  # Mirrors gate-perf-drift.yml's `unit-tests` job pattern. The lib + test
+  # are dependency-free (no Playwright graph), so this runs install-free.
+  unit-tests:
+    name: route-budget evaluate unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run route-budget-evaluate unit tests
+        run: node --test scripts/ci/__tests__/route-budget-evaluate.test.mjs
