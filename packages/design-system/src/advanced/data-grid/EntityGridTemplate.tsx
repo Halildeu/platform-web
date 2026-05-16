@@ -176,6 +176,13 @@ export interface EntityGridTemplateMessages {
   newVariantUnsetPersonalDefaultTitle?: string;
   newVariantSetPersonalDefaultTitle?: string;
   saveTitle?: string;
+  // PR-0.5e (Codex thread 019e2de0) — local working-layout draft.
+  /** Dirty indicator copy shown when unsaved layout changes exist. */
+  layoutDraftDirtyLabel?: string;
+  /** "Kaydedilmiş görünüme dön" reset control label. */
+  layoutDraftResetLabel?: string;
+  /** Tooltip for the reset control. */
+  layoutDraftResetTitle?: string;
 }
 
 type ThemeValue = 'quartz' | 'balham' | 'material' | 'alpine';
@@ -293,6 +300,25 @@ export interface EntityGridTemplateProps<
   sanitizeVariantColumnState?: (state: VariantColumnState) => VariantColumnState;
   /** Companion sanitizer for {@code pivotMode}. Return the value to apply. */
   sanitizeVariantPivotMode?: (pivotMode: boolean | undefined) => boolean | undefined;
+  /**
+   * PR-0.5e (Codex thread 019e2de0) — local working-layout draft.
+   *
+   * When provided, the embedded {@link VariantIntegration} auto-persists
+   * a layout-only draft (column width / pinned / order / hide) to
+   * {@code localStorage} on resize/pin/move WITHOUT touching the backend
+   * variant. On the next mount the draft is overlaid on top of the
+   * selected/default variant so the user's last working layout survives
+   * a reload even when they never clicked "Kaydet".
+   *
+   * Pass a stable per-user/tenant discriminator (e.g.
+   * {@code `${tenantId}:${userId}`}); when omitted the draft layer stays
+   * DISABLED and the grid keeps the legacy variant-only behaviour.
+   *
+   * The draft's schema fingerprint is derived automatically from
+   * {@link columnDefs} (their {@code field}/{@code colId}); a column
+   * add/remove discards stale drafts, a pure reorder keeps them.
+   */
+  layoutDraftIdentity?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -359,6 +385,7 @@ export function EntityGridTemplate<
     accessReason,
     sanitizeVariantColumnState,
     sanitizeVariantPivotMode,
+    layoutDraftIdentity,
   } = props;
 
   const accessState = resolveAccessState(access);
@@ -514,7 +541,31 @@ export function EntityGridTemplate<
     variantNameEmptyLabel: messages?.variantNameEmptyLabel,
     variantNameUpdatedLabel: messages?.variantNameUpdatedLabel,
     variantNameUpdateFailedLabel: messages?.variantNameUpdateFailedLabel,
+    // PR-0.5e — local working-layout draft.
+    draftDirtyLabel: messages?.layoutDraftDirtyLabel,
+    draftResetLabel: messages?.layoutDraftResetLabel,
+    draftResetTitle: messages?.layoutDraftResetTitle,
   };
+
+  /*
+   * PR-0.5e (Codex 019e2de0) — column identifiers for the draft schema
+   * fingerprint. Derived from the colDef field/colId set; an
+   * add/remove changes the fingerprint (stale draft discarded), a
+   * pure reorder keeps it (computeSchemaFingerprint is order-free).
+   */
+  const columnDefIds = React.useMemo(
+    () =>
+      // PR-0.5e fix: `columnDefs` is optional on EntityGridTemplateProps —
+      // the contract test (and any minimal-props consumer) renders without
+      // it, so guard the `.map` against an undefined column list.
+      (columnDefs ?? []).map((cd) => {
+        const candidate = cd as { colId?: unknown; field?: unknown };
+        if (typeof candidate.colId === 'string') return candidate.colId;
+        if (typeof candidate.field === 'string') return candidate.field;
+        return undefined;
+      }),
+    [columnDefs],
+  );
 
   // ── Client pagination page change ──────────────────────────────
   // PR-0.5b2 incidental cleanup: these handlers + pageSizeOptions
@@ -590,6 +641,8 @@ export function EntityGridTemplate<
             canDeleteGlobal={canDeleteGlobalVariant}
             sanitizeColumnState={sanitizeVariantColumnState}
             sanitizePivotMode={sanitizeVariantPivotMode}
+            draftIdentity={layoutDraftIdentity}
+            columnDefIds={columnDefIds}
           />
         }
       />

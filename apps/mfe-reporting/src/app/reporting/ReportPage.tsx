@@ -72,6 +72,48 @@ const readCurrentPermissions = (): string[] => {
   }
 };
 
+// Mirror of dynamic-report/api.ts COMPANY_ID_STORAGE_KEY — the company
+// id WorkspaceSwitcher persists. Kept local to avoid an import cycle.
+const COMPANY_ID_STORAGE_KEY = 'reporting:currentCompanyId';
+
+/**
+ * PR-0.5e (Codex thread 019e2de0) — stable per-user/tenant identity
+ * discriminator for the grid layout-draft localStorage key. The draft
+ * layer scopes its key by this string so one user's transient layout
+ * never leaks into another user's (shared device) and a company switch
+ * gets its own draft surface. Resolved best-effort from the shell auth
+ * user (`subscriberId` → `id` → `email`) plus the active company id;
+ * returns undefined when no identity is resolvable, which disables the
+ * draft layer (graceful — variant-only behaviour preserved).
+ */
+const readLayoutDraftIdentity = (): string | undefined => {
+  let userKey: string | undefined;
+  try {
+    const user = getShellServices().auth.getUser() as {
+      subscriberId?: unknown;
+      id?: unknown;
+      email?: unknown;
+    } | null;
+    if (user) {
+      const candidate = user.subscriberId ?? user.id ?? user.email;
+      if (
+        (typeof candidate === 'string' || typeof candidate === 'number') &&
+        String(candidate).trim().length > 0
+      ) {
+        userKey = String(candidate).trim();
+      }
+    }
+  } catch {
+    // shell-services not registered (e.g. unit tests) — no user key.
+  }
+  let companyKey = '';
+  if (typeof window !== 'undefined' && window.localStorage) {
+    companyKey = window.localStorage.getItem(COMPANY_ID_STORAGE_KEY)?.trim() ?? '';
+  }
+  if (!userKey && !companyKey) return undefined;
+  return `${userKey ?? 'anon'}@${companyKey || 'no-company'}`;
+};
+
 const SERVER_CACHE_BLOCK_SIZE = 50;
 
 /* ------------------------------------------------------------------ */
@@ -1086,6 +1128,19 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
 
   const initialVariantId = searchParams.get('variant') ?? undefined;
 
+  /*
+   * PR-0.5e (Codex thread 019e2de0) — local working-layout draft
+   * identity. Scopes the draft localStorage key to this user + company
+   * so a transient column layout never bleeds across users on a shared
+   * device. Keyed by location (matching the `permissions` memo above)
+   * so a route/company change re-derives it; undefined when no identity
+   * resolvable → draft layer stays off.
+   */
+  const layoutDraftIdentity = React.useMemo(
+    () => readLayoutDraftIdentity(),
+    [location.key, location.pathname],
+  );
+
   /* ---- Server export handler ---- */
   const handleServerExport = React.useCallback(
     async (
@@ -1232,6 +1287,7 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
           dataSourceMode={dataSourceMode}
           sanitizeVariantColumnState={sanitizeVariantColumnState}
           sanitizeVariantPivotMode={sanitizeVariantPivotMode}
+          layoutDraftIdentity={layoutDraftIdentity}
           createServerSideDatasource={
             dataSourceMode === 'server' ? () => createServerSideDatasource() : undefined
           }

@@ -47,6 +47,22 @@ export type {
   GridVariantState,
 } from './VariantIntegration';
 
+// --- Column layout draft (PR-0.5e — local working-layout persistence) ---
+export {
+  LAYOUT_DRAFT_NAMESPACE,
+  LAYOUT_DRAFT_TTL_MS,
+  DEFAULT_VARIANT_KEY,
+  buildDraftKey,
+  serializeColumnState,
+  computeSchemaFingerprint,
+  readDraft,
+  writeDraft,
+  clearDraft,
+  isDraftDirty,
+  applyDraftOverColumnState,
+} from './column-layout-draft';
+export type { DraftColumnState, LayoutDraft, DraftScope } from './column-layout-draft';
+
 // --- DatasourceModeAdapter ---
 export { useDatasourceModeAdapter } from './DatasourceModeAdapter';
 export type {
