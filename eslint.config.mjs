@@ -216,4 +216,103 @@ export default tseslint.config(
       ],
     },
   },
+  /* ----------------------------------------------------------------- */
+  /*  Grid contract enforcement — all data grids MUST go through the    */
+  /*  design-system `EntityGridTemplate` + `ColumnMeta` column-system   */
+  /*  (`packages/design-system/src/advanced/data-grid/`). Direct        */
+  /*  `ag-grid-react` / `AgGridReact` imports bypass the contract       */
+  /*  (no toolbar / variant / responsive column system / a11y          */
+  /*  baseline) and let grid behaviour drift per-app.                   */
+  /*                                                                    */
+  /*  This rule blocks the import everywhere; the override block right  */
+  /*  below exempts the legitimate locations:                           */
+  /*   - the contract's own internals (GridShell wraps AgGridReact);     */
+  /*   - `packages/x-data-grid/**` (the enterprise grid kit);            */
+  /*   - `CompensationDashboard.tsx`, a documented permanent exception   */
+  /*     (lightweight read-only chart-summary grids — see CONTRIBUTING). */
+  /* ----------------------------------------------------------------- */
+  {
+    files: ['**/*.{ts,tsx,js,jsx}'],
+    ignores: [
+      '**/__tests__/**',
+      '**/*.{spec,test}.{ts,tsx,js,jsx}',
+      'tests/**',
+      '**/*.stories.{ts,tsx}',
+      '**/*.figma.{ts,tsx}',
+      // Build / bundle config reference `ag-grid-react` as a Module-
+      // Federation shared-singleton string, not as a real import — but
+      // these are excluded for clarity (the rule only targets imports).
+      '**/vite.config.{ts,js}',
+      '**/tsup.config.{ts,js}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'ag-grid-react',
+              message:
+                'Data grids MUST use the design-system contract: `EntityGridTemplate` + `ColumnMeta` from @mfe/design-system (packages/design-system/src/advanced/data-grid). Direct AgGridReact use bypasses the toolbar / variant / responsive column system. A direct AgGridReact import requires a documented exception — see the grid-contract section in CONTRIBUTING.md.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  /* ----------------------------------------------------------------- */
+  /*  Grid contract — allowed-path exemption. These locations are the   */
+  /*  legitimate homes of a direct `ag-grid-react` import; the          */
+  /*  ag-grid restriction above is switched OFF here. After             */
+  /*  AuditEventFeed + GridTabPanel were migrated to the contract, the  */
+  /*  ONLY remaining exempt app file is CompensationDashboard.tsx       */
+  /*  (documented permanent exception).                                 */
+  /*                                                                    */
+  /*  `packages/**` paths simply turn the rule off. CompensationDash-   */
+  /*  board.tsx lives under apps/mfe-reporting/** which is also         */
+  /*  governed by the PR-HTTP-3 `@mfe/shared-http` restriction above —  */
+  /*  so its exemption RESTATES that restriction (minus the ag-grid     */
+  /*  path) instead of a blanket `off`, keeping the shell-http guard    */
+  /*  intact for this file.                                             */
+  /* ----------------------------------------------------------------- */
+  {
+    files: [
+      // The contract's own internals — GridShell legitimately wraps
+      // AgGridReact here; this IS the single allowed wrapper.
+      'packages/design-system/src/advanced/data-grid/**/*.{ts,tsx}',
+      // The enterprise grid kit (pivot / tree / master-detail / etc.).
+      'packages/x-data-grid/**/*.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
+  {
+    // Documented permanent exception (Part 4): lightweight read-only
+    // chart-summary grids, no toolbar / variant needed. The ag-grid
+    // path is dropped; the PR-HTTP-3 shell-http restriction is kept.
+    files: ['apps/mfe-reporting/src/modules/hr-compensation-report/CompensationDashboard.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'warn',
+        {
+          paths: [
+            {
+              name: '@mfe/shared-http',
+              importNames: ['api', 'ApiInstance'],
+              message:
+                'Remote MFEs MUST consume the shell-injected http client via getShellServices().http (defined in src/app/services/shell-services.ts). Importing `api` directly bypasses the shell\'s auth.ready() gate registered via registerAuthReadyResolver() (PR-HTTP-3), which can re-introduce the pre-cookie 401-storm surface.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['axios'],
+              message:
+                'Remote MFEs MUST NOT import axios directly. Use getShellServices().http (which returns the shell-owned, auth-ready-gated axios instance) for protected calls.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
