@@ -1093,3 +1093,186 @@ describe('PR-0.5e — finding 3: draft overlay retried on schema change', () => 
     });
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  PR-0.5e fix — draft overlay retried on async VARIANT resolution    */
+/*  (the bug proven live on testai.acik.com: a pinned column draft was */
+/*   written under the resolved variant's scope but, on reload, the    */
+/*   mount restore ran while the variant list was still loading — it   */
+/*   read the `default` scope, missed the draft, and never re-read it  */
+/*   once the variant resolved.)                                       */
+/* ------------------------------------------------------------------ */
+
+describe('PR-0.5e fix — draft overlay retried on async variant resolution', () => {
+  /**
+   * A deferred promise whose resolution is driven by the test, so the
+   * component can be observed in the "variants still loading" window
+   * BEFORE the variant list arrives.
+   */
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  }
+
+  it('re-overlays the variant-scoped draft when the variant resolves after mount', async () => {
+    // The draft is keyed by the RESOLVED variant id — exactly the live
+    // bug shape: it lives under variant A's scope, NOT the `default`
+    // scope the mount restore reads while the list is still loading.
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: 'variant-A',
+        schemaFingerprint: FINGERPRINT,
+      },
+      [
+        { colId: 'name', width: 612, pinned: 'left' },
+        { colId: 'email', width: 100 },
+        { colId: 'role', width: 100 },
+      ],
+    );
+
+    // The variant fetch is deferred — the mount restore effect runs
+    // FIRST, while `variants` is still []. It lands on the
+    // `applyDefaultDraftScope` (no-variant) path and reads the `default`
+    // scope, which has no draft.
+    const variantsLate = deferred<GridVariant[]>();
+    mockFetch.mockReturnValue(variantsLate.promise);
+
+    const { mock } = renderVariant();
+
+    // Mount restore has run against the still-empty variant list:
+    // the column listeners are wired and the no-variant default-scope
+    // draft path executed — but the variant-A draft was NOT applied.
+    await waitFor(() => {
+      expect(mock.hasListener('columnResized')).toBe(true);
+    });
+    expect(
+      mock.getColumnStateMock().find((c: Record<string, unknown>) => c.colId === 'name')?.width,
+    ).toBe(100);
+
+    // Now the variant list resolves — variant A becomes the selected
+    // variant. The fix must re-read + overlay variant A's layout draft
+    // for the now-resolved variant scope.
+    await act(async () => {
+      variantsLate.resolve([VARIANT_A]);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const name = mock
+        .getColumnStateMock()
+        .find((c: Record<string, unknown>) => c.colId === 'name');
+      expect(name?.width).toBe(612);
+      expect(name?.pinned).toBe('left');
+    });
+  });
+
+  it('sets the dirty indicator once the async-resolved variant draft is overlaid', async () => {
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: 'variant-A',
+        schemaFingerprint: FINGERPRINT,
+      },
+      [{ colId: 'name', width: 477, pinned: 'left' }],
+    );
+
+    const variantsLate = deferred<GridVariant[]>();
+    mockFetch.mockReturnValue(variantsLate.promise);
+
+    const { mock, queryByTestId, findByTestId } = renderVariant();
+
+    await waitFor(() => {
+      expect(mock.hasListener('columnResized')).toBe(true);
+    });
+    // No draft on the default scope → indicator absent while loading.
+    expect(queryByTestId('variant-layout-draft-indicator')).not.toBeInTheDocument();
+
+    await act(async () => {
+      variantsLate.resolve([VARIANT_A]);
+      await Promise.resolve();
+    });
+
+    // The variant resolved → variant A's draft overlaid → dirty.
+    expect(await findByTestId('variant-layout-draft-indicator')).toBeInTheDocument();
+  });
+
+  it('re-overlays the draft for the new scope when the controlled variant transitions A → B', async () => {
+    /*
+     * The mount applies variant A (the user-selected variant). Then the
+     * controlled `activeVariantId` prop transitions to variant B — a
+     * deep-link / parent-driven variant change that does NOT go through
+     * the in-component `handleSelect`. The auto-apply effect sees
+     * `appliedRef.current` already set, so its `appliedRef.current`
+     * early-return fires; without the variant-id transition guard the
+     * effect re-applies nothing and variant B's layout draft is never
+     * overlaid.
+     */
+    const VARIANT_B = makeVariant({
+      id: 'variant-B',
+      name: 'Varyant B',
+      isUserSelected: false,
+      isUserDefault: false,
+    });
+    mockFetch.mockResolvedValue([{ ...VARIANT_A, isUserSelected: true }, VARIANT_B]);
+    // Variant B has its OWN layout draft (name pinned right, widened).
+    writeDraft(
+      {
+        gridId: GRID_ID,
+        identity: IDENTITY,
+        variantId: 'variant-B',
+        schemaFingerprint: FINGERPRINT,
+      },
+      [
+        { colId: 'name', width: 733, pinned: 'right' },
+        { colId: 'email', width: 100 },
+        { colId: 'role', width: 100 },
+      ],
+    );
+
+    const mock = createMockGridApi();
+    const { rerender } = render(
+      <VariantIntegration
+        gridId={GRID_ID}
+        gridSchemaVersion={SCHEMA_VERSION}
+        gridApi={mock.api}
+        draftIdentity={IDENTITY}
+        columnDefIds={COLUMN_IDS}
+      />,
+    );
+    // Mount applied variant A (no A draft) → name stays 100.
+    await waitFor(() => {
+      expect(mock.applyColumnStateMock).toHaveBeenCalled();
+    });
+    expect(
+      mock.getColumnStateMock().find((c: Record<string, unknown>) => c.colId === 'name')?.width,
+    ).toBe(100);
+
+    // Controlled variant id transitions A → B (deep-link / parent-driven).
+    rerender(
+      <VariantIntegration
+        gridId={GRID_ID}
+        gridSchemaVersion={SCHEMA_VERSION}
+        gridApi={mock.api}
+        activeVariantId="variant-B"
+        draftIdentity={IDENTITY}
+        columnDefIds={COLUMN_IDS}
+      />,
+    );
+
+    // The overlay must follow the resolved variant id — variant B's own
+    // draft (name 733, pinned right), not variant A's.
+    await waitFor(() => {
+      const name = mock
+        .getColumnStateMock()
+        .find((c: Record<string, unknown>) => c.colId === 'name');
+      expect(name?.width).toBe(733);
+      expect(name?.pinned).toBe('right');
+    });
+  });
+});
