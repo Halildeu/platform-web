@@ -239,6 +239,51 @@ export interface VariantIntegrationProps<RowData = unknown> extends AccessContro
 export type VariantColumnState = NonNullable<GridVariantState['columnState']>;
 
 /* ------------------------------------------------------------------ */
+/*  Layout-draft event-source guard (PR-0.5e bugfix)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * AG Grid 34 `ColumnEventType` values that represent a genuine
+ * USER-initiated column layout action (resize / move / pin / show-hide
+ * via drag, the columns tool panel, or a column/context menu).
+ *
+ * Every OTHER `ColumnEventType` — `'api'`, `'flex'`, `'sizeColumnsToFit'`,
+ * `'autosizeColumns'`, `'autosizeColumnHeaderHeight'`, `'gridInitializing'`,
+ * `'gridOptionsChanged'`, `'rowModelUpdated'`, `'rowDataUpdated'`,
+ * `'columnRowGroupChanged'`, `'filterChanged'`, … — is fired by the grid
+ * itself while it loads, applies a variant, materialises the row-group /
+ * selection auto-columns, or auto-sizes columns after the server data
+ * arrives. Those programmatic events MUST NOT be captured as an
+ * "unsaved layout" draft: doing so wrote a draft on a plain page load
+ * with zero user interaction, which lit the "Kaydedilmemiş görünüm
+ * değişiklikleri" badge permanently (it re-armed inside the draft TTL
+ * on every refresh).
+ *
+ * An allowlist (default = ignore) is used deliberately: the full
+ * `ColumnEventType` union is known and finite, so the allowlist is
+ * exhaustive, and a never-captured genuine source is a smaller failure
+ * than a programmatic event masquerading as a user edit.
+ */
+const USER_COLUMN_EVENT_SOURCES: ReadonlySet<string> = new Set([
+  'uiColumnResized',
+  'uiColumnMoved',
+  'uiColumnDragged',
+  'uiColumnExpanded',
+  'toolPanelUi',
+  'toolPanelDragAndDrop',
+  'contextMenu',
+  'columnMenu',
+]);
+
+/**
+ * Whether an AG Grid column event was triggered by a user layout
+ * action (and so should arm the layout-draft auto-persist) rather than
+ * by the grid's own programmatic column work.
+ */
+const isUserColumnEvent = (event: { source?: string } | undefined): boolean =>
+  typeof event?.source === 'string' && USER_COLUMN_EVENT_SOURCES.has(event.source);
+
+/* ------------------------------------------------------------------ */
 /*  State collection (v34 GridApi)                                     */
 /* ------------------------------------------------------------------ */
 
@@ -838,15 +883,32 @@ export const VariantIntegration = <RowData = unknown,>({
       debounceTimer = setTimeout(persistDraft, 250);
     };
 
-    // Resize fires continuously during a drag — only the terminal event
-    // (`finished: true`) should produce a draft write.
-    const handleColumnResized = (event: { finished?: boolean }) => {
+    // Only USER-initiated column events arm the draft auto-persist.
+    // Programmatic events (`source: 'api' | 'flex' | 'sizeColumnsToFit'
+    // | 'gridInitializing' | …`) fire while the grid loads / applies a
+    // variant / auto-sizes after server data — capturing those wrote a
+    // spurious draft on a plain reload and lit the unsaved-changes
+    // badge permanently. See {@link USER_COLUMN_EVENT_SOURCES}.
+    //
+    // Resize also fires continuously during a drag — only the terminal
+    // event (`finished: true`) should produce a draft write.
+    const handleColumnResized = (event: { finished?: boolean; source?: string }) => {
       if (event?.finished !== true) return;
+      if (!isUserColumnEvent(event)) return;
       schedulePersist();
     };
-    const handleColumnPinned = () => schedulePersist();
-    const handleColumnMoved = () => schedulePersist();
-    const handleColumnVisible = () => schedulePersist();
+    const handleColumnPinned = (event: { source?: string }) => {
+      if (!isUserColumnEvent(event)) return;
+      schedulePersist();
+    };
+    const handleColumnMoved = (event: { source?: string }) => {
+      if (!isUserColumnEvent(event)) return;
+      schedulePersist();
+    };
+    const handleColumnVisible = (event: { source?: string }) => {
+      if (!isUserColumnEvent(event)) return;
+      schedulePersist();
+    };
 
     gridApi.addEventListener?.('columnResized', handleColumnResized);
     gridApi.addEventListener?.('columnPinned', handleColumnPinned);
