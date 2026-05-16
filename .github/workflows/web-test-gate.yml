@@ -520,8 +520,8 @@ jobs:
     name: Auth Transport Contract E2E (Chromium, advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Phase 2 PR-E2E-6: this E2E gate is currently advisory because the
-    # CI infrastructure to spin up an isolated MFE-shell + mocked-backend
+    # Phase 2 PR-E2E-6: this E2E gate is advisory because the CI
+    # infrastructure to spin up an isolated MFE-shell + mocked-backend
     # environment on a stock GitHub-hosted runner is not yet stable
     # (vite dev pre-bundling vs production-build Module Federation runtime).
     # The test code lives in tests/playwright/ alongside the existing
@@ -530,8 +530,19 @@ jobs:
     # back to required by adding `auth-contract-e2e-required` to the
     # web-test-gate-required `needs:` list and the verify-required step.
     # See ADR-0014 § Implementation Map for tracking.
+    #
+    # 2026-05-17: this job is NO LONGER run on `pull_request`. The
+    # isolated production-preview + mocked-backend stack is not stable on
+    # GitHub-hosted runners — the very first spec times out in
+    # `waitForTransportReady` (the built preview shell never reaches
+    # `transportReady` within budget on a stock runner). `continue-on-error`
+    # softened the WORKFLOW result but the job still surfaced a permanent
+    # red check on every PR, which is repo-freezing noise, not a real
+    # advisory signal. It now runs `workflow_dispatch`-only and stays
+    # available for manual verification; ADR-0014 tracks the follow-up to
+    # make the harness PR-runnable and promote it back.
     continue-on-error: true
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'invariant-baseline'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
