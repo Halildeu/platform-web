@@ -1,6 +1,14 @@
 /* ------------------------------------------------------------------ */
 /*  Data Grid — AG Grid wrapper components                             */
 /*                                                                     */
+/*  GRID CONTRACT: All data grids in the platform MUST use             */
+/*  `EntityGridTemplate` + `ColumnMeta` from this barrel. A direct     */
+/*  `AgGridReact` import bypasses the toolbar / variant / responsive   */
+/*  column system and requires a documented exception — see the        */
+/*  grid-contract section in CONTRIBUTING.md. Enforced via the          */
+/*  `no-restricted-syntax` ag-grid-react import rule in                 */
+/*  `eslint.config.mjs`.                                                */
+/*                                                                     */
 /*  PERF-INIT-V2 PR-B1a: the previous `import './setup'` side-effect   */
 /*  here cascaded through the root `@mfe/design-system` barrel into    */
 /*  every consumer (including shell HomePage which only needs          */

@@ -216,4 +216,82 @@ export default tseslint.config(
       ],
     },
   },
+  /* ----------------------------------------------------------------- */
+  /*  Grid contract enforcement — all data grids MUST go through the    */
+  /*  design-system `EntityGridTemplate` + `ColumnMeta` column-system   */
+  /*  (`packages/design-system/src/advanced/data-grid/`). Direct        */
+  /*  `ag-grid-react` / `AgGridReact` imports bypass the contract       */
+  /*  (no toolbar / variant / responsive column system / a11y          */
+  /*  baseline) and let grid behaviour drift per-app.                   */
+  /*                                                                    */
+  /*  IMPLEMENTATION NOTE — why `no-restricted-syntax`, not             */
+  /*  `no-restricted-imports`: the PR-HTTP-3 block above already owns   */
+  /*  the `no-restricted-imports` rule key for the remote-MFE file set. */
+  /*  In ESLint flat config, two configs targeting the SAME rule key    */
+  /*  do NOT merge their options — the last matching config wins        */
+  /*  outright. Re-declaring `no-restricted-imports` here would silently */
+  /*  DROP the shell-http restriction for every remote-MFE file. The    */
+  /*  ag-grid ban is therefore expressed as a `no-restricted-syntax`    */
+  /*  selector (`ImportDeclaration[source.value='ag-grid-react']`),     */
+  /*  a different rule key, so the two restrictions coexist.            */
+  /*                                                                    */
+  /*  This rule blocks the import everywhere; the override block right  */
+  /*  below exempts the legitimate locations:                           */
+  /*   - the contract's own internals (GridShell wraps AgGridReact);     */
+  /*   - `packages/x-data-grid/**` (the enterprise grid kit);            */
+  /*   - `CompensationDashboard.tsx`, a documented permanent exception   */
+  /*     (lightweight read-only chart-summary grids — see CONTRIBUTING). */
+  /* ----------------------------------------------------------------- */
+  {
+    files: ['**/*.{ts,tsx,js,jsx}'],
+    ignores: [
+      '**/__tests__/**',
+      '**/*.{spec,test}.{ts,tsx,js,jsx}',
+      'tests/**',
+      '**/*.stories.{ts,tsx}',
+      '**/*.figma.{ts,tsx}',
+      // Build / bundle config reference `ag-grid-react` as a Module-
+      // Federation shared-singleton string, not as a real import — but
+      // these are excluded for clarity (the rule only targets imports).
+      '**/vite.config.{ts,js}',
+      '**/tsup.config.{ts,js}',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "ImportDeclaration[source.value='ag-grid-react']",
+          message:
+            'Data grids MUST use the design-system contract: `EntityGridTemplate` + `ColumnMeta` from @mfe/design-system (packages/design-system/src/advanced/data-grid). Direct AgGridReact use bypasses the toolbar / variant / responsive column system. A direct AgGridReact import requires a documented exception — see the grid-contract section in CONTRIBUTING.md.',
+        },
+      ],
+    },
+  },
+  /* ----------------------------------------------------------------- */
+  /*  Grid contract — allowed-path exemption. These locations are the   */
+  /*  legitimate homes of a direct `ag-grid-react` import; the          */
+  /*  `no-restricted-syntax` ag-grid ban above is switched OFF here.    */
+  /*  Because the ban uses its own rule key (NOT                         */
+  /*  `no-restricted-imports`), turning it off here cannot disturb the  */
+  /*  PR-HTTP-3 `@mfe/shared-http` restriction — that restriction stays */
+  /*  fully intact for `CompensationDashboard.tsx` (a remote-MFE file)  */
+  /*  with no need to restate it. After AuditEventFeed + GridTabPanel   */
+  /*  were migrated to the contract, the ONLY remaining exempt app file */
+  /*  is CompensationDashboard.tsx (documented permanent exception).    */
+  /* ----------------------------------------------------------------- */
+  {
+    files: [
+      // The contract's own internals — GridShell legitimately wraps
+      // AgGridReact here; this IS the single allowed wrapper.
+      'packages/design-system/src/advanced/data-grid/**/*.{ts,tsx}',
+      // The enterprise grid kit (pivot / tree / master-detail / etc.).
+      'packages/x-data-grid/**/*.{ts,tsx}',
+      // Documented permanent exception (Part 4): lightweight read-only
+      // chart-summary grids, no toolbar / variant needed.
+      'apps/mfe-reporting/src/modules/hr-compensation-report/CompensationDashboard.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
 );

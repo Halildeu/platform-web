@@ -11,6 +11,7 @@ import {
 } from '@mfe/x-charts';
 import type { ChartClickEvent, CrossFilterEntry } from '@mfe/x-charts';
 import { KPICard as XKPICard } from '@mfe/x-charts';
+// ESLint exception: lightweight read-only chart-summary grid, no toolbar/variant needed — see CONTRIBUTING grid-contract section.
 import { AgGridReact } from 'ag-grid-react';
 import type { ColDef } from 'ag-grid-community';
 import type { CrossFilter } from './crossFilterTypes';

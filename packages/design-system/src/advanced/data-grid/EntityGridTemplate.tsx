@@ -366,10 +366,10 @@ export function EntityGridTemplate<
     quickFilterPlaceholder,
     initialTheme = 'quartz',
     themeOptions,
-    // pageSizeOptions kept on the props contract; the rendered tree
-    // no longer reads it (pagination refactor residue). Prefixed to
-    // satisfy unused-vars without an API change.
-    pageSizeOptions: _pageSizeOptions = [10, 20, 50, 100],
+    // `pageSizeOptions` is read via `props.pageSizeOptions` directly
+    // (see `serverFooterPageSizeOptions` below) — keeping it out of
+    // this destructure avoids a defaulted binding that would mask
+    // "consumer passed nothing" vs "consumer passed the default".
     quickFilterInitialValue,
     initialVariantId,
     messages,
@@ -424,16 +424,35 @@ export function EntityGridTemplate<
   const effectiveFullscreen = isFullscreen || isContainerFullscreen;
   const effectiveFullscreenHandler = onRequestFullscreen ?? handleToggleFullscreen;
 
+  // ── Pagination (client mode only) ──────────────────────────────
+  const isServerMode = dataSourceMode === 'server';
+
+  /*
+   * Codex 019e2f86 (REVISE finding 3) — server-mode page/block-size
+   * propagation. When a consumer passes `pageSize` (e.g. audit's
+   * 10-row cadence), the SSRM stack must honour it end-to-end:
+   *   - the SSRM block cache (`cacheBlockSize`) so the datasource is
+   *     asked for `pageSize` rows per block, not the adapter's 100;
+   *   - AG Grid's `paginationPageSize` (via the GridShell gridOptions
+   *     slot) so the page shows `pageSize` rows, not GridShell's 50;
+   *   - the `ServerPaginationFooter` size selector options so the
+   *     passed `pageSize` is selectable / shown as the active value.
+   * When `pageSize` is omitted the legacy defaults are kept.
+   */
+  const effectiveServerPageSize =
+    isServerMode && typeof pageSizeProp === 'number' && pageSizeProp > 0 ? pageSizeProp : undefined;
+
   // ── Datasource mode adapter ────────────────────────────────────
   const { rowModelType, attachDatasource } = useDatasourceModeAdapter({
     mode: dataSourceMode as DataSourceMode,
     gridApi,
     createServerSideDatasource,
     onEffectiveModeChange,
+    // SSRM block size follows the consumer's page size so a 10-row
+    // page fetches a 10-row block (instead of the adapter's 100).
+    cacheBlockSize: effectiveServerPageSize,
   });
 
-  // ── Pagination (client mode only) ──────────────────────────────
-  const isServerMode = dataSourceMode === 'server';
   const pagination = useAgGridTablePagination<RowData>({
     initialPageSize: pageSizeProp ?? 20,
     totalItems: total ?? rowData?.length ?? 0,
@@ -590,6 +609,57 @@ export function EntityGridTemplate<
     [pagination, onPageChange],
   );
 
+  /*
+   * Codex 019e2f86 (REVISE finding 3) — inject the consumer's server
+   * page size into the GridShell `gridOptions` slot. GridShell
+   * hardcodes `paginationPageSize={50}` on `AgGridReact` but spreads
+   * `gridOptions` AFTER it, so a `paginationPageSize` key here wins.
+   * The consumer's own `gridOptions` keys still take precedence (an
+   * explicit `gridOptions.paginationPageSize` is not overridden).
+   */
+  const effectiveGridOptions = React.useMemo<GridOptions<RowData> | undefined>(() => {
+    if (effectiveServerPageSize === undefined) return gridOptions;
+    return {
+      paginationPageSize: effectiveServerPageSize,
+      ...gridOptions,
+    };
+  }, [gridOptions, effectiveServerPageSize]);
+
+  /*
+   * Codex 019e2f86 (REVISE finding 3) — page-size selector options
+   * for the SSRM footer. The footer keeps its own [25,50,100,200]
+   * default UNLESS the consumer pinned a `pageSize` and/or passed an
+   * explicit `pageSizeOptions`:
+   *   - explicit `pageSizeOptions` → that list is the base;
+   *   - else (only `pageSize` pinned) → the footer's own
+   *     [25,50,100,200] default is the base, so a pinned `pageSize`
+   *     of 10 yields the [10,25,50,100,200] selector audit had pre-
+   *     migration (the option set is NOT collapsed to a single entry).
+   * The pinned `pageSize` is folded in either way (so the
+   * `<select value>` always has a match), deduped, sorted ascending.
+   * Returning `undefined` leaves the footer default untouched — no
+   * behaviour change for server-mode consumers that pass neither.
+   */
+  const consumerPageSizeOptions = props.pageSizeOptions;
+  const serverFooterPageSizeOptions = React.useMemo<number[] | undefined>(() => {
+    if (!isServerMode) return undefined;
+    if (effectiveServerPageSize === undefined && consumerPageSizeOptions === undefined) {
+      // Neither prop set — let ServerPaginationFooter keep its default.
+      return undefined;
+    }
+    // Base = explicit consumer options, else the footer's own default
+    // (kept in sync with ServerPaginationFooter's `pageSizeOptions`
+    // default) so a lone pinned `pageSize` still gets a full selector.
+    const base = consumerPageSizeOptions ?? [25, 50, 100, 200];
+    const merged = [
+      ...base,
+      ...(effectiveServerPageSize === undefined ? [] : [effectiveServerPageSize]),
+    ];
+    const unique = Array.from(new Set(merged.filter((n) => typeof n === 'number' && n > 0)));
+    if (unique.length === 0) return undefined;
+    return unique.sort((a, b) => a - b);
+  }, [isServerMode, consumerPageSizeOptions, effectiveServerPageSize]);
+
   return (
     <div
       ref={containerRef}
@@ -653,7 +723,7 @@ export function EntityGridTemplate<
         gridKey={`${gridId}-${dataSourceMode}`}
         columnDefs={columnDefs}
         defaultColDef={defaultColDef}
-        gridOptions={gridOptions}
+        gridOptions={effectiveGridOptions}
         rowData={isServerMode ? undefined : rowData}
         rowModelType={rowModelType}
         sideBar={sideBar}
@@ -672,7 +742,11 @@ export function EntityGridTemplate<
         className={effectiveFullscreen ? 'min-h-0 flex-1' : 'min-h-[400px]'}
       >
         {/* Unified pagination footer — same layout for both server and client modes */}
-        <ServerPaginationFooter gridApi={gridApi} startSlot={footerStartSlot} />
+        <ServerPaginationFooter
+          gridApi={gridApi}
+          startSlot={footerStartSlot}
+          pageSizeOptions={serverFooterPageSizeOptions}
+        />
       </GridShell>
     </div>
   );

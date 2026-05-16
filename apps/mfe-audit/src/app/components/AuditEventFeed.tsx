@@ -1,15 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import type { IGetRowsParams, IDatasource } from 'ag-grid-community';
-import {
-  TablePagination,
-  useAgGridTablePagination,
-  type AgGridTablePaginationApi,
-} from '@mfe/design-system';
-// Side-effect: ensures all AG Grid modules are registered (including InfiniteRowModelModule)
+import type {
+  ColDef,
+  GridReadyEvent,
+  GridOptions,
+  GridApi,
+  IServerSideGetRowsParams,
+  IServerSideDatasource,
+} from 'ag-grid-community';
+// Side-effect: ensures all AG Grid modules are registered.
 import '@mfe/design-system/advanced/data-grid/setup';
 import { useResponsiveColumnDefs, type ColumnMeta } from '@mfe/design-system/advanced/data-grid';
-import { ColDef, GridReadyEvent, GridOptions } from 'ag-grid-community';
+// Grid-contract migration (PR grid-contract): AuditEventFeed renders
+// through the design-system `EntityGridTemplate` instead of a raw
+// `AgGridReact`. Lazy-loaded so the heavy AG Grid bundle stays off the
+// audit cold-load path — same pattern as `UsersGrid.ui.tsx`.
+const EntityGridTemplate = React.lazy(() =>
+  import('@mfe/design-system').then((m) => ({ default: m.EntityGridTemplate })),
+);
 import './audit-event-feed.css';
 import { AuditEvent } from '../types/audit-event';
 import {
@@ -25,8 +32,10 @@ import { parseAuditFeedSearch } from '../utils/audit-feed-deeplink';
 import { useWindowSearch } from '../hooks/useWindowSearch';
 
 const DEFAULT_PAGE_SIZE = 10;
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 200];
 const AUDIT_EXPORT_PERMISSION = 'AUDIT-EXPORT';
+
+const GRID_ID = 'mfe-audit/audit-event-feed';
+const GRID_SCHEMA_VERSION = 1;
 
 // Module registration delegated to @mfe/design-system/advanced/data-grid/setup (single owner)
 
@@ -102,37 +111,54 @@ export const auditColumnMeta: ColumnMeta[] = [
 // `headerNameKey` values double as the rendered labels.
 const auditHeaderTranslator = (key: string): string => key;
 
+/*
+ * Grid-contract migration note — InfiniteRowModel → SSRM.
+ *
+ * The pre-migration grid used AG Grid's infinite row model
+ * (`rowModelType: 'infinite'` + `IDatasource`) with a bespoke
+ * `TablePagination` footer. `EntityGridTemplate`'s server mode uses
+ * the Server-Side Row Model (`IServerSideDatasource`) and owns
+ * pagination internally via `ServerPaginationFooter`. The audit
+ * datasource is therefore re-expressed as an SSRM datasource: the
+ * SSRM `request` carries `startRow` / `endRow` / `sortModel`, and the
+ * block is resolved into the 0-indexed `page` + `pageSize` that
+ * `fetchAuditEvents` expects. Behaviour (same data, same paging) is
+ * preserved.
+ */
+
+// `AgGridApi` surface used for SSRM refresh — `refreshServerSide` is
+// the SSRM analogue of the old infinite-model `refreshInfiniteCache`.
+type AuditGridApi = GridApi<AuditEvent> & {
+  refreshServerSide?: (params?: { purge?: boolean }) => void;
+};
+
+type ServerSideParamsWithCallbacks = IServerSideGetRowsParams<AuditEvent> & {
+  success?: (payload: { rowData: AuditEvent[]; rowCount: number }) => void;
+  fail?: () => void;
+};
+
 export const AuditEventFeed: React.FC = () => {
   const locationSearch = useWindowSearch();
   const initialDeepLink = useRef(
     parseAuditFeedSearch(typeof window !== 'undefined' ? window.location.search : ''),
   );
-  const gridRef = useRef<AgGridReact<AuditEvent>>(null);
+  const gridApiRef = useRef<AuditGridApi | null>(null);
   const [filters, setFilters] = useState(initialDeepLink.current.filters);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(initialDeepLink.current.auditId);
   const [isLive, setIsLive] = useState(false);
   const [currentSort, setCurrentSort] = useState<string | undefined>(undefined);
-  const [totalItems, setTotalItems] = useState(0);
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
-  const {
-    gridApi,
-    gridApiRef,
-    pageSize,
-    pageSizeRef,
-    paginationSnapshot,
-    registerGridApi,
-    refreshPaginationSnapshot,
-    handlePageChange,
-    handlePageSizeChange,
-  } = useAgGridTablePagination<AuditEvent>({
-    initialPageSize: DEFAULT_PAGE_SIZE,
-    totalItems,
-    syncPageSizeToGrid: (api, nextPageSize) => {
-      api.setGridOption?.('cacheBlockSize', nextPageSize);
-    },
-  });
+
+  // SSRM `getRows` runs inside a stable datasource closure, so the
+  // latest `filters` value is read through a ref — a filter change
+  // updates the ref then triggers `refreshServerSide`.
+  const filtersRef = useRef(filters);
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
   const initialAuditIdRef = useRef<string | null>(initialDeepLink.current.auditId);
   const lastSearchRef = useRef<string>(locationSearch);
   const activeRequestRef = useRef<AbortController | null>(null);
@@ -191,99 +217,104 @@ export const AuditEventFeed: React.FC = () => {
     }
   }, [shellServices, emitTelemetry]);
 
-  const requestAuditRows = useCallback(
-    // AG Grid v34 dropped the row-data generic from `IGetRowsParams`;
-    // the `successCallback` it surfaces takes `any[]` and the row
-    // shape is enforced via `getRowId` + the data we feed in. Keeping
-    // the param signature non-generic matches the v34 type.
-    async ({ startRow, successCallback, failCallback, sortModel }: IGetRowsParams) => {
-      // Cancel any in-flight request before starting a new one
-      activeRequestRef.current?.abort();
-      const controller = new AbortController();
-      activeRequestRef.current = controller;
-      try {
-        const resolvedPageSize = pageSizeRef.current;
-        const page = Math.floor(startRow / resolvedPageSize);
-        const sort =
-          sortModel && sortModel[0] ? `${sortModel[0].colId},${sortModel[0].sort}` : undefined;
-        const requestedAuditId = initialAuditIdRef.current ?? undefined;
-        setCurrentSort(sort);
-        const response = await fetchAuditEvents({
-          page,
-          pageSize: resolvedPageSize,
-          auditId: requestedAuditId,
-          sort,
-          filters:
-            filters.userEmail || filters.service || filters.level || filters.action
-              ? filters
-              : undefined,
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted) return;
-        setTotalItems(response.total);
-        successCallback(response.events, response.total);
-        if (!response.fallback && !userManagedLiveRef.current) {
-          setIsLive(true);
-        }
-        emitTelemetry('fe.audit.grid_fetch', {
-          page,
-          pageSize: resolvedPageSize,
-          returned: response.events.length,
-          total: response.total,
-          sort,
-          filters,
-          fallback: response.fallback === true,
-        });
-        if (initialAuditIdRef.current && !deeplinkResolvedRef.current) {
-          const matched = response.events.some((event) => event.id === initialAuditIdRef.current);
-          if (matched) {
-            deeplinkResolvedRef.current = true;
-            emitTelemetry('fe.audit.deeplink_resolved', {
-              auditId: initialAuditIdRef.current,
-              page,
-            });
-          }
-        }
-      } catch (error: unknown) {
-        if (error instanceof Error && error.name === 'AbortError') return;
-        console.error('Audit events fetch failed', error);
-        failCallback();
-        emitTelemetry('fe.audit.grid_fetch_failed', {
-          filters,
-          sort: currentSort,
-        });
-      }
-    },
-    [currentSort, emitTelemetry, filters, pageSizeRef],
-  );
-
-  const datasource = useMemo<IDatasource>(
-    () => ({
-      getRows: (params) => {
-        requestAuditRows(params);
-      },
-    }),
-    [requestAuditRows],
-  );
-
-  const onGridReady = useCallback(
-    (event: GridReadyEvent<AuditEvent>) => {
-      // AG Grid v34 tightened `GridApi` typing; the structural overlap
-      // with `AgGridTablePaginationApi` is real (every method we list
-      // does live on `GridApi`) but TS can't see through the
-      // `Record<string, unknown>` intersection. The `unknown`
-      // round-trip cast acknowledges that and keeps the call site
-      // honest — AG Grid still hands us the same instance at runtime.
-      registerGridApi(event.api as unknown as AgGridTablePaginationApi<AuditEvent>);
-    },
-    [registerGridApi],
-  );
-
   const refreshData = useCallback(() => {
     const api = gridApiRef.current;
-    if (api) {
-      api.refreshInfiniteCache?.();
-    }
+    api?.refreshServerSide?.({ purge: true });
+  }, []);
+
+  /*
+   * SSRM datasource factory passed to `EntityGridTemplate`. The
+   * `createServerSideDatasource` contract receives `{ gridApi }` and
+   * returns an `IServerSideDatasource`. The closure is stable across
+   * filter changes — the latest filters/sort are pulled from refs so
+   * a filter change only needs a `refreshServerSide` call.
+   */
+  const createServerSideDatasource = useCallback(
+    (_params: { gridApi: GridApi<AuditEvent> }): IServerSideDatasource => ({
+      getRows: async (params: IServerSideGetRowsParams<AuditEvent>) => {
+        // Cancel any in-flight request before starting a new one.
+        activeRequestRef.current?.abort();
+        const controller = new AbortController();
+        activeRequestRef.current = controller;
+
+        const callbacks = params as ServerSideParamsWithCallbacks;
+        const succeed = (events: AuditEvent[], total: number) => {
+          callbacks.success?.({ rowData: events, rowCount: total });
+        };
+        const failRequest = () => {
+          callbacks.fail?.();
+        };
+
+        try {
+          const { startRow, endRow, sortModel } = params.request;
+          const resolvedStart = startRow ?? 0;
+          const blockSize = Math.max(
+            (endRow ?? resolvedStart + DEFAULT_PAGE_SIZE) - resolvedStart,
+            1,
+          );
+          const page = Math.floor(resolvedStart / blockSize);
+          const sort =
+            sortModel && sortModel[0] ? `${sortModel[0].colId},${sortModel[0].sort}` : undefined;
+          const requestedAuditId = initialAuditIdRef.current ?? undefined;
+          const activeFilters = filtersRef.current;
+          setCurrentSort(sort);
+
+          const response = await fetchAuditEvents({
+            page,
+            pageSize: blockSize,
+            auditId: requestedAuditId,
+            sort,
+            filters:
+              activeFilters.userEmail ||
+              activeFilters.service ||
+              activeFilters.level ||
+              activeFilters.action
+                ? activeFilters
+                : undefined,
+            signal: controller.signal,
+          });
+          if (controller.signal.aborted) return;
+
+          succeed(response.events, response.total);
+
+          if (!response.fallback && !userManagedLiveRef.current) {
+            setIsLive(true);
+          }
+          emitTelemetry('fe.audit.grid_fetch', {
+            page,
+            pageSize: blockSize,
+            returned: response.events.length,
+            total: response.total,
+            sort,
+            filters: activeFilters,
+            fallback: response.fallback === true,
+          });
+          if (initialAuditIdRef.current && !deeplinkResolvedRef.current) {
+            const matched = response.events.some((event) => event.id === initialAuditIdRef.current);
+            if (matched) {
+              deeplinkResolvedRef.current = true;
+              emitTelemetry('fe.audit.deeplink_resolved', {
+                auditId: initialAuditIdRef.current,
+                page,
+              });
+            }
+          }
+        } catch (error: unknown) {
+          if (error instanceof Error && error.name === 'AbortError') return;
+          console.error('Audit events fetch failed', error);
+          failRequest();
+          emitTelemetry('fe.audit.grid_fetch_failed', {
+            filters: filtersRef.current,
+            sort: currentSort,
+          });
+        }
+      },
+    }),
+    [currentSort, emitTelemetry],
+  );
+
+  const handleGridReady = useCallback((event: GridReadyEvent<AuditEvent>) => {
+    gridApiRef.current = event.api as AuditGridApi;
   }, []);
 
   useEffect(() => {
@@ -292,6 +323,13 @@ export const AuditEventFeed: React.FC = () => {
     }
     lastSearchRef.current = locationSearch;
     const deepLink = parseAuditFeedSearch(locationSearch);
+    // `refreshServerSide` triggers the SSRM datasource's `getRows`
+    // synchronously; `getRows` reads the active filter from
+    // `filtersRef.current`. The `filters` state setter only flushes
+    // the ref via a post-render effect, so the ref MUST be set to the
+    // next filters synchronously here — otherwise the deeplink refresh
+    // fetches with the stale (previous) filter set.
+    filtersRef.current = deepLink.filters;
     setFilters(deepLink.filters);
     setHighlightId(deepLink.auditId);
     initialAuditIdRef.current = deepLink.auditId;
@@ -303,7 +341,7 @@ export const AuditEventFeed: React.FC = () => {
       api.paginationGoToFirstPage?.();
     }
     refreshData();
-  }, [gridApiRef, locationSearch, refreshData]);
+  }, [locationSearch, refreshData]);
 
   const handleLiveEvent = useCallback(
     (event: AuditEvent) => {
@@ -337,12 +375,20 @@ export const AuditEventFeed: React.FC = () => {
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       const formData = new FormData(e.currentTarget);
-      setFilters({
+      const nextFilters = {
         userEmail: (formData.get('userEmail') as string) ?? '',
         service: (formData.get('service') as string) ?? '',
         level: (formData.get('level') as string) ?? '',
         action: (formData.get('action') as string) ?? '',
-      });
+      };
+      // `refreshData` → `refreshServerSide` runs the SSRM `getRows`
+      // synchronously, and `getRows` reads `filtersRef.current`. The
+      // `setFilters` state update only flushes the ref on the next
+      // render (post-render effect), so the ref MUST be assigned the
+      // next filters synchronously here — otherwise the refresh fetches
+      // the OLD filter set and the applied filter is silently dropped.
+      filtersRef.current = nextFilters;
+      setFilters(nextFilters);
       const api = gridApiRef.current;
       if (api && (api.getDisplayedRowCount?.() ?? 0) > 0) {
         api.ensureIndexVisible?.(0, 'top');
@@ -364,27 +410,19 @@ export const AuditEventFeed: React.FC = () => {
   // Viewport-aware column derivation — `useResponsiveColumnDefs`
   // (PR #236) re-derives only when the viewport crosses a breakpoint
   // bucket (640 / 768 / 1024 / 1280), so drag-resize within a single
-  // bucket is free.
-  const responsiveColumnDefs = useResponsiveColumnDefs<AuditEvent>({
+  // bucket is free. Output is forwarded verbatim to
+  // `EntityGridTemplate`'s `columnDefs` prop.
+  const columnDefs = useResponsiveColumnDefs<AuditEvent>({
     columns: auditColumnMeta,
     t: auditHeaderTranslator,
   }) as ColDef<AuditEvent>[];
 
-  // `columnDefs` is passed as a separate prop to <AgGridReact /> below
-  // (not folded into `gridOptions`) so viewport-bucket transitions
-  // propagate to AG Grid via React's diff cycle. AG Grid treats a
-  // `gridOptions` change as initial-config-only, but `columnDefs`
-  // prop is reactive.
+  // Grid behaviour passed through `EntityGridTemplate` → `GridShell`
+  // → `AgGridReact` via the `gridOptions` slot. Row-click drawer-open
+  // and the highlight row class are audit-specific; `GridShell`
+  // composes the consumer's `onRowClicked` with its own handlers.
   const gridOptions = useMemo<GridOptions<AuditEvent>>(
     () => ({
-      defaultColDef: { resizable: true, sortable: true, filter: false },
-      rowModelType: 'infinite',
-      maxBlocksInCache: 3,
-      cacheBlockSize: pageSize,
-      pagination: true,
-      paginationPageSize: pageSize,
-      suppressPaginationPanel: true,
-      animateRows: true,
       rowSelection: {
         mode: 'singleRow',
         enableClickSelection: true,
@@ -404,47 +442,30 @@ export const AuditEventFeed: React.FC = () => {
       },
       rowClassRules,
     }),
-    [emitTelemetry, pageSize, rowClassRules],
+    [emitTelemetry, rowClassRules],
   );
 
   useEffect(() => {
-    if (gridApi) {
-      gridApi.setGridOption?.('cacheBlockSize', pageSize);
-      gridApi.setGridOption?.('datasource', datasource);
-      refreshPaginationSnapshot(gridApi);
-    }
-  }, [datasource, gridApi, pageSize, refreshPaginationSnapshot]);
-
-  useEffect(() => {
-    if (!highlightId || !gridApi) {
+    const api = gridApiRef.current;
+    if (!highlightId || !api) {
       return;
     }
     let matched = false;
-    // `forEachNode`'s callback receives the structural node shape
-    // declared in `AgGridTablePaginationApi` (loose `data?: unknown`).
-    // Cast to AuditEvent at the access point so we don't poison the
-    // shared design-system type with audit-specific knowledge.
-    gridApi.forEachNode?.((node) => {
+    // `forEachNode`'s callback node carries a loosely-typed `data`;
+    // cast at the access point so audit knowledge doesn't leak into
+    // the shared grid types.
+    api.forEachNode?.((node) => {
       const auditData = node.data as AuditEvent | undefined;
       if (auditData?.id === highlightId) {
         matched = true;
         node.setSelected(true);
-        gridApi.ensureNodeVisible?.(node, 'middle');
+        api.ensureNodeVisible?.(node, 'middle');
       }
     });
-    if (!matched && (gridApi.getDisplayedRowCount?.() ?? 0) > 0) {
-      gridApi.ensureIndexVisible?.(0, 'top');
+    if (!matched && (api.getDisplayedRowCount?.() ?? 0) > 0) {
+      api.ensureIndexVisible?.(0, 'top');
     }
-  }, [highlightId, gridApi, emitTelemetry]);
-
-  const paginationLocaleText = useMemo(
-    () => ({
-      rowsPerPageLabel: 'Page size:',
-      rangeLabel: (start: number, end: number, count: number) =>
-        `${start}-${end} / ${count} records · Page ${paginationSnapshot.page} / ${paginationSnapshot.totalPages}`,
-    }),
-    [paginationSnapshot.page, paginationSnapshot.totalPages],
-  );
+  }, [highlightId]);
 
   const handleExport = useCallback(
     async (format: 'csv' | 'json') => {
@@ -607,31 +628,26 @@ export const AuditEventFeed: React.FC = () => {
         </div>
       ) : null}
 
+      {/*
+        `data-testid="audit-grid"` is preserved (Playwright e2e —
+        `tests/playwright/access_audit.grid.pagination.runtime.spec.ts`
+        and `pw_scenarios.yml` query this wrapper + the AG-Grid
+        `.ag-center-cols-container` row). `EntityGridTemplate` renders
+        its own container inside.
+      */}
       <div data-testid="audit-grid" className="audit-grid-shell">
-        <div className="ag-theme-quartz audit-grid">
-          <AgGridReact<AuditEvent>
-            ref={gridRef}
-            columnDefs={responsiveColumnDefs}
+        <React.Suspense fallback={<div style={{ height: 320 }} />}>
+          <EntityGridTemplate<AuditEvent>
+            gridId={GRID_ID}
+            gridSchemaVersion={GRID_SCHEMA_VERSION}
+            columnDefs={columnDefs}
             gridOptions={gridOptions}
-            onGridReady={onGridReady}
-            onPaginationChanged={() => refreshPaginationSnapshot()}
-            onModelUpdated={() => refreshPaginationSnapshot()}
+            dataSourceMode="server"
+            pageSize={DEFAULT_PAGE_SIZE}
+            createServerSideDatasource={createServerSideDatasource}
+            onGridReady={handleGridReady}
           />
-        </div>
-        <div className="audit-pagination-shell">
-          <TablePagination
-            totalItems={paginationSnapshot.totalItems}
-            page={paginationSnapshot.page}
-            pageSize={paginationSnapshot.pageSize}
-            onPageChange={handlePageChange}
-            onPageSizeChange={handlePageSizeChange}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            showFirstLastButtons
-            access={gridApi ? 'full' : 'disabled'}
-            className="w-full justify-between rounded-none border-0 bg-transparent p-0 shadow-none"
-            localeText={paginationLocaleText}
-          />
-        </div>
+        </React.Suspense>
       </div>
 
       <AuditDetailDrawer
