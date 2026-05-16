@@ -33,6 +33,33 @@ import {
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Auth Transport Contract (PR-E2E-6)', () => {
+  // CI cold-start absorber. On a fresh GitHub-hosted runner the FIRST
+  // browser navigation pays the entire Module Federation host warm-up
+  // (V8 compile of the built bundle + the auth-FSM bootstrap chain),
+  // which has repeatedly pushed test #1's `waitForTransportReady` past
+  // its 25 s ceiling — and because this block runs `mode: 'serial'`,
+  // that single cold-start timeout then skips the other 6 tests
+  // (PR #310 advisory demotion + #338-#342 follow-ups all hit exactly
+  // this). This `beforeAll` pays the cold-start ONCE on a throwaway
+  // page with a generous 90 s budget, so the 7 real tests below run
+  // against a warm preview server + warm V8 code cache and keep the
+  // tight 25 s `waitForTransportReady` that still surfaces a genuine
+  // FSM regression.
+  test.beforeAll(async ({ browser, baseURL }) => {
+    test.setTimeout(90_000);
+    const root = baseURL ?? 'http://localhost:3000';
+    const warmupPage = await browser.newPage();
+    try {
+      await installAuthTransportProbe(warmupPage);
+      await installMockKeycloakToken(warmupPage, buildMockJwt());
+      await mockBootstrapEndpoints(warmupPage, { allowedModules: ['USER_MANAGEMENT'] });
+      await warmupPage.goto(`${root}/admin/users`, { waitUntil: 'domcontentloaded' });
+      await waitForTransportReady(warmupPage, 80_000);
+    } finally {
+      await warmupPage.close();
+    }
+  });
+
   test('only allowlisted requests fire before transportReady', async ({ page, baseURL }) => {
     const root = baseURL ?? 'http://localhost:3000';
     const mockToken = buildMockJwt();
