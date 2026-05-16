@@ -455,6 +455,26 @@ export const VariantIntegration = <RowData = unknown,>({
    */
   const lastAppliedSchemaRef = useRef<string | null>(null);
   /*
+   * PR-0.5e fix — the variant id the draft overlay was LAST applied
+   * for. Mirror of `lastAppliedSchemaRef` for the variant axis.
+   *
+   * The draft is keyed by the RESOLVED variant id. On reload the
+   * variant list is fetched async, so the mount restore can run while
+   * no variant is resolved yet (it lands on the `default`-scope draft).
+   * When the variant subsequently resolves — or the controlled
+   * `activeVariantId` transitions A→B after the first apply — the draft
+   * for the now-resolved variant scope must be re-read and re-overlaid;
+   * otherwise the `appliedRef.current` early-return swallows it and the
+   * persisted layout (e.g. a pinned column) is silently dropped.
+   *
+   * Like the schema re-apply this is a layout-overlay-ONLY re-apply —
+   * it never re-runs `applyVariantState` (no filter/sort/pivot
+   * re-apply). `' :initial'` is an impossible variant id used as
+   * the "never applied a variant yet" sentinel so the very first
+   * `target`-path apply is not mistaken for a transition.
+   */
+  const lastAppliedVariantRef = useRef<string | null>(' :initial');
+  /*
    * PR-0.5e (Codex 019e2de0 REVISE finding 2) — the last pending draft
    * snapshot, captured AT EVENT TIME. The debounce timer writes this
    * ref and the effect cleanup flushes it, so the final mutation lands
@@ -569,6 +589,29 @@ export const VariantIntegration = <RowData = unknown,>({
     [variants],
   );
 
+  /*
+   * PR-0.5e fix — resolve the variant the grid should currently reflect.
+   * Priority: requested initial variant → user selected → user default
+   * → global default → first compatible. Returns `undefined` when no
+   * variant is resolvable (the "no variant / colDef default" surface).
+   *
+   * Extracted from the auto-apply effect so the same resolution can be
+   * consulted from the `appliedRef.current` early-return branch to
+   * detect a variant-id transition (variant resolves async after mount,
+   * or the controlled `activeVariantId` moves A→B).
+   */
+  const resolveTargetVariant = useCallback((): GridVariant | undefined => {
+    if (variants.length === 0) return undefined;
+    const requested = activeId
+      ? variants.find((v) => v.id === activeId && v.isCompatible !== false)
+      : null;
+    const selected = variants.find((v) => v.isUserSelected);
+    const userDefault = variants.find((v) => v.isUserDefault);
+    const globalDefault = variants.find((v) => v.isGlobalDefault);
+    const firstCompatible = variants.find((v) => v.isCompatible !== false);
+    return requested ?? selected ?? userDefault ?? globalDefault ?? firstCompatible;
+  }, [variants, activeId]);
+
   // ── Fetch variants ─────────────────────────────────────────────────
   const loadVariants = useCallback(async () => {
     try {
@@ -593,24 +636,44 @@ export const VariantIntegration = <RowData = unknown,>({
     if (!gridApi) return;
 
     /*
-     * PR-0.5e (Codex 019e2de0 REVISE finding 3) — layout-overlay-only
-     * re-apply on schema change. The variant restore already ran
-     * (`appliedRef.current` set), but `schemaFingerprint` has changed
-     * since — e.g. flat-report colDef metadata arrived async. Re-read
-     * the draft for the NEW schema and re-overlay it WITHOUT re-running
-     * `applyVariantState` (no filter/sort/pivot re-apply).
+     * PR-0.5e (Codex 019e2de0 REVISE finding 3 + PR-0.5e variant-id
+     * fix) — layout-overlay-only re-apply after the first variant
+     * restore (`appliedRef.current` is set). Two async-ordering races
+     * can leave the layout draft un-applied even though the variant
+     * restore already ran:
+     *
+     *  - `schemaFingerprint` changed since — flat-report colDef
+     *    metadata arrived async (finding 3).
+     *  - the RESOLVED variant id changed since — the variant list
+     *    resolved async after mount, or the controlled `activeVariantId`
+     *    moved A→B (PR-0.5e variant-id fix). The draft is keyed by the
+     *    resolved variant id, so a transition needs a fresh re-read for
+     *    the new variant's scope.
+     *
+     * Either way the recovery is the SAME layout-overlay-only re-apply:
+     * re-read the draft for `buildScope(currentVariantId)` and re-overlay
+     * it WITHOUT re-running `applyVariantState` (no filter/sort/pivot
+     * re-apply — those stay variant-only / explicit-save).
      */
     if (appliedRef.current && draftEnabled) {
-      if (lastAppliedSchemaRef.current !== schemaFingerprint) {
+      const resolvedVariantId = resolveTargetVariant()?.id ?? appliedRef.current;
+      const variantChanged = lastAppliedVariantRef.current !== resolvedVariantId;
+      const schemaChanged = lastAppliedSchemaRef.current !== schemaFingerprint;
+      if (variantChanged || schemaChanged) {
+        // A variant-id transition moves the draft scope to the newly
+        // resolved variant; keep `appliedRef` aligned so subsequent
+        // column-event writes + the dirty recompute target that scope.
+        appliedRef.current = resolvedVariantId;
         isApplyingStateRef.current = true;
         try {
-          const draft = readDraft(buildScope(appliedRef.current));
+          const draft = readDraft(buildScope(resolvedVariantId));
           applyDraftLayer(gridApi, draft);
           setDraftDirty(draft !== null);
         } finally {
           isApplyingStateRef.current = false;
         }
         lastAppliedSchemaRef.current = schemaFingerprint;
+        lastAppliedVariantRef.current = resolvedVariantId;
       }
       return;
     }
@@ -634,15 +697,7 @@ export const VariantIntegration = <RowData = unknown,>({
     }
 
     // Priority: requested initial variant → user selected → user default → global default → first compatible
-    const requested = activeId
-      ? variants.find((v) => v.id === activeId && v.isCompatible !== false)
-      : null;
-    const selected = variants.find((v) => v.isUserSelected);
-    const userDefault = variants.find((v) => v.isUserDefault);
-    const globalDefault = variants.find((v) => v.isGlobalDefault);
-    const firstCompatible = variants.find((v) => v.isCompatible !== false);
-
-    const target = requested ?? selected ?? userDefault ?? globalDefault ?? firstCompatible;
+    const target = resolveTargetVariant();
     if (!target) {
       /*
        * PR-0.5e (Codex 019e2de0 REVISE iter-2 finding 1) — saved
@@ -684,12 +739,15 @@ export const VariantIntegration = <RowData = unknown,>({
     }
     appliedRef.current = target.id;
     lastAppliedSchemaRef.current = schemaFingerprint;
+    // PR-0.5e fix — record the variant the draft overlay just ran for
+    // so a later variant-id transition is detected as a transition.
+    lastAppliedVariantRef.current = target.id;
     setInternalActiveId(target.id);
     onActiveVariantChange?.(target.id);
   }, [
-    activeId,
     gridApi,
     variants,
+    resolveTargetVariant,
     onActiveVariantChange,
     sanitizeColumnState,
     sanitizePivotMode,
@@ -847,10 +905,11 @@ export const VariantIntegration = <RowData = unknown,>({
         isApplyingStateRef.current = false;
       }
       appliedRef.current = variantId;
-      // PR-0.5e — the draft overlay just ran for the current schema;
-      // keep the finding-3 schema-change tracker in sync so the
-      // auto-apply effect does not redundantly re-overlay.
+      // PR-0.5e — the draft overlay just ran for the current schema +
+      // variant; keep the schema- and variant-change trackers in sync
+      // so the auto-apply effect does not redundantly re-overlay.
       lastAppliedSchemaRef.current = schemaFingerprint;
+      lastAppliedVariantRef.current = variantId;
       setInternalActiveId(variantId);
       onActiveVariantChange?.(variantId);
 
@@ -913,6 +972,10 @@ export const VariantIntegration = <RowData = unknown,>({
         isApplyingStateRef.current = false;
       }
       lastAppliedSchemaRef.current = schemaFingerprint;
+      // PR-0.5e fix — the default-scope draft is now the applied
+      // overlay; align the variant-change tracker with the no-variant
+      // surface (`appliedRef.current` is null).
+      lastAppliedVariantRef.current = null;
     }
     onActiveVariantChange?.(null);
   }, [gridApi, onActiveVariantChange, draftEnabled, schemaFingerprint, buildScope]);
@@ -1056,6 +1119,10 @@ export const VariantIntegration = <RowData = unknown,>({
         if (activeId === variantId) {
           setInternalActiveId(null);
           appliedRef.current = null;
+          // PR-0.5e fix — the applied variant was deleted; clear the
+          // variant-change tracker so the auto-apply effect treats the
+          // next resolved variant (or default surface) as a fresh apply.
+          lastAppliedVariantRef.current = null;
           onActiveVariantChange?.(null);
         }
         setConfirmDeleteId(null);
