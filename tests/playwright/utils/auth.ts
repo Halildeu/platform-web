@@ -40,7 +40,10 @@ const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
       return null;
     }
     const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + (4 - (normalized.length % 4 || 4)) % 4, '=');
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4 || 4)) % 4),
+      '=',
+    );
     const decoded = Buffer.from(padded, 'base64').toString('utf8');
     return JSON.parse(decoded) as Record<string, unknown>;
   } catch {
@@ -53,14 +56,20 @@ const extractJwtRoles = (claims: Record<string, unknown> | null): string[] => {
     return [];
   }
   const realmAccess = claims.realm_access as { roles?: unknown } | undefined;
-  const resourceAccess = claims.resource_access as Record<string, { roles?: unknown } | undefined> | undefined;
+  const resourceAccess = claims.resource_access as
+    | Record<string, { roles?: unknown } | undefined>
+    | undefined;
   const frontendRoles = resourceAccess?.frontend?.roles;
   const roles = [
     ...(Array.isArray(realmAccess?.roles) ? realmAccess.roles : []),
     ...(Array.isArray(frontendRoles) ? frontendRoles : []),
   ];
   return roles
-    .map((value) => String(value ?? '').trim().toUpperCase())
+    .map((value) =>
+      String(value ?? '')
+        .trim()
+        .toUpperCase(),
+    )
     .filter(Boolean);
 };
 
@@ -69,18 +78,11 @@ const buildInjectedUserProfile = (token: string, permissions: string[]): TestUse
   const tokenRoles = extractJwtRoles(claims);
   const email =
     String(
-      claims?.email ??
-      claims?.preferred_username ??
-      claims?.sub ??
-      'runtime@test.local',
+      claims?.email ?? claims?.preferred_username ?? claims?.sub ?? 'runtime@test.local',
     ).trim() || 'runtime@test.local';
   const fullName =
-    String(
-      claims?.name ??
-      claims?.given_name ??
-      claims?.preferred_username ??
-      email,
-    ).trim() || email;
+    String(claims?.name ?? claims?.given_name ?? claims?.preferred_username ?? email).trim() ||
+    email;
   const effectivePermissions = permissions.length > 0 ? permissions : tokenRoles;
   const effectiveRole = tokenRoles.includes('ADMIN') ? 'ADMIN' : (tokenRoles[0] ?? 'USER');
 
@@ -94,17 +96,16 @@ const buildInjectedUserProfile = (token: string, permissions: string[]): TestUse
 };
 
 const sanitizeBase64 = (value: string) =>
-  value
-    .replace(/=+$/, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+  value.replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
 
 export const buildTestToken = (permissions: string[] = []): TestSession => {
   const tokenPayload: TestTokenPayload = {
     permissions,
     sessionTimeoutMinutes: 60,
   };
-  const encodedPayload = sanitizeBase64(Buffer.from(JSON.stringify(tokenPayload)).toString('base64'));
+  const encodedPayload = sanitizeBase64(
+    Buffer.from(JSON.stringify(tokenPayload)).toString('base64'),
+  );
 
   const user: TestUserProfile = {
     id: 'e03-runtime-user',
@@ -136,7 +137,9 @@ const installFakeAuthEnv = async (page: Page, permissions: string[]) => {
   const resolvedPermissions = readFakeAuthPermissions(permissions);
   await page.addInitScript(
     ({ nextPermissions }) => {
-      const current = (window as Window & { __env__?: Record<string, string>; __ENV__?: Record<string, string> }).__env__ ?? {};
+      const current =
+        (window as Window & { __env__?: Record<string, string>; __ENV__?: Record<string, string> })
+          .__env__ ?? {};
       const merged = {
         ...current,
         VITE_AUTH_MODE: 'permitAll',
@@ -147,8 +150,12 @@ const installFakeAuthEnv = async (page: Page, permissions: string[]) => {
         VITE_FAKE_AUTH_DISPLAY: 'Runtime Test User',
         VITE_FAKE_AUTH_ROLE: 'ADMIN',
       };
-      (window as Window & { __env__?: Record<string, string>; __ENV__?: Record<string, string> }).__env__ = merged;
-      (window as Window & { __env__?: Record<string, string>; __ENV__?: Record<string, string> }).__ENV__ = merged;
+      (
+        window as Window & { __env__?: Record<string, string>; __ENV__?: Record<string, string> }
+      ).__env__ = merged;
+      (
+        window as Window & { __env__?: Record<string, string>; __ENV__?: Record<string, string> }
+      ).__ENV__ = merged;
     },
     { nextPermissions: resolvedPermissions },
   );
@@ -203,12 +210,17 @@ const fetchClientCredentialsToken = async (): Promise<string> => {
     const err = String(errorHint.error ?? '').trim();
     const desc = String(errorHint.error_description ?? '').trim();
     const details = [err, desc].filter(Boolean).join(' ');
-    throw new Error(details ? `TOKEN_ENDPOINT_FAILED (${status}): ${details}` : `TOKEN_ENDPOINT_FAILED (${status})`);
+    throw new Error(
+      details
+        ? `TOKEN_ENDPOINT_FAILED (${status}): ${details}`
+        : `TOKEN_ENDPOINT_FAILED (${status})`,
+    );
   }
 
   const expiresInRaw = (payload as { expires_in?: unknown } | null)?.expires_in;
   const expiresInSec = typeof expiresInRaw === 'number' ? expiresInRaw : Number(expiresInRaw ?? 0);
-  const ttlMs = Number.isFinite(expiresInSec) && expiresInSec > 0 ? expiresInSec * 1000 : SESSION_TTL_MS;
+  const ttlMs =
+    Number.isFinite(expiresInSec) && expiresInSec > 0 ? expiresInSec * 1000 : SESSION_TTL_MS;
   cachedToken = { token: accessToken, expiresAtMs: Date.now() + ttlMs };
 
   return accessToken;
@@ -221,7 +233,8 @@ export const buildAuthSession = async (permissions: string[] = []): Promise<Test
   }
 
   const injectedToken = readInjectedToken();
-  const token = injectedToken || (hasTokenEndpointConfig() ? await fetchClientCredentialsToken() : '');
+  const token =
+    injectedToken || (hasTokenEndpointConfig() ? await fetchClientCredentialsToken() : '');
   if (!token) throw new Error('TOKEN_NOT_PROVIDED');
 
   return {
@@ -230,7 +243,11 @@ export const buildAuthSession = async (permissions: string[] = []): Promise<Test
   };
 };
 
-export const applyAuthState = async (page: Page, session: TestSession, ttlMs: number = SESSION_TTL_MS) => {
+export const applyAuthState = async (
+  page: Page,
+  session: TestSession,
+  ttlMs: number = SESSION_TTL_MS,
+) => {
   await page.evaluate(
     ([channelName, token, profile, ttl, eventName]) => {
       const payload = { token, profile, expiresAt: Date.now() + ttl };
@@ -276,14 +293,26 @@ const installSessionState = async (page: Page, session: TestSession, expiresAtMs
 };
 
 const waitForShellStore = async (page: Page) => {
-  await page.waitForFunction(() => typeof (window as any).__shellStore !== 'undefined', { timeout: AUTH_WAIT_TIMEOUT_MS });
+  // Playwright signature is waitForFunction(pageFunction, arg, options).
+  // The probe takes no arg, so the { timeout } options object MUST be the
+  // 3rd parameter. Passed 2nd it silently becomes the (ignored) page-function
+  // argument and waitForFunction falls back to the 15s config actionTimeout —
+  // making AUTH_WAIT_TIMEOUT_MS dead code (same class of bug PR #558 fixed in
+  // utils/auth-contract.ts's waitForTransportReady).
+  await page.waitForFunction(() => typeof (window as any).__shellStore !== 'undefined', undefined, {
+    timeout: AUTH_WAIT_TIMEOUT_MS,
+  });
 };
 
 const waitForAuthState = async (page: Page) => {
-  await page.waitForFunction(() => {
-    const state = (window as any).__shellStore?.getState?.()?.auth;
-    return Boolean(state?.initialized && state?.token);
-  }, { timeout: AUTH_WAIT_TIMEOUT_MS });
+  await page.waitForFunction(
+    () => {
+      const state = (window as any).__shellStore?.getState?.()?.auth;
+      return Boolean(state?.initialized && state?.token);
+    },
+    undefined,
+    { timeout: AUTH_WAIT_TIMEOUT_MS },
+  );
 };
 
 export const authenticateAndNavigate = async (
@@ -296,7 +325,11 @@ export const authenticateAndNavigate = async (
     const root = baseURL ?? 'http://localhost:3000';
     await installFakeAuthEnv(page, permissions);
     await page.goto(`${root}${targetPath}`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => typeof (window as any).__shellStore !== 'undefined', { timeout: 30_000 });
+    await page.waitForFunction(
+      () => typeof (window as any).__shellStore !== 'undefined',
+      undefined,
+      { timeout: 30_000 },
+    );
     return { session: buildTestToken(readFakeAuthPermissions(permissions)), root };
   }
   const session = await buildAuthSession(permissions);
@@ -310,7 +343,9 @@ export const authenticateAndNavigate = async (
 
   // Full navigation is more stable than pushState for remote-mounted routes.
   await page.goto(`${root}${targetPath}`, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction((nextPath) => window.location.pathname === nextPath, targetPath, { timeout: AUTH_WAIT_TIMEOUT_MS });
+  await page.waitForFunction((nextPath) => window.location.pathname === nextPath, targetPath, {
+    timeout: AUTH_WAIT_TIMEOUT_MS,
+  });
   await waitForShellStore(page);
   await installSessionState(page, session, expiresAt);
   await applyAuthState(page, session);
