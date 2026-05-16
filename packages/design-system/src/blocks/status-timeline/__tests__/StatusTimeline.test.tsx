@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 import { StatusTimeline } from '../StatusTimeline';
@@ -14,6 +14,15 @@ describe('StatusTimeline', () => {
     ];
     const { container } = render(<StatusTimeline events={events} />);
     expect(container.textContent).toContain('Created');
+  });
+
+  it('fires onEventClick when event is clicked', () => {
+    const onClick = vi.fn();
+    const events = [{ id: '1', status: 'Created', timestamp: '2026-01-01T10:00:00Z' }];
+    render(<StatusTimeline events={events} onEventClick={onClick} />);
+    fireEvent.click(screen.getByText('Created'));
+    expect(onClick).toHaveBeenCalledWith('1');
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it('has no accessibility violations', async () => {

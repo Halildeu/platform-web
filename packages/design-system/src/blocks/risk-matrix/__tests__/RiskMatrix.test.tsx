@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 import { RiskMatrix } from '../RiskMatrix';
@@ -15,6 +15,19 @@ describe('RiskMatrix', () => {
   it('renders grid', () => {
     const { container } = render(<RiskMatrix risks={risks} />);
     expect(container.firstElementChild).toBeTruthy();
+  });
+
+  it('fires onCellClick with the cell risks and coordinates', () => {
+    const onCellClick = vi.fn();
+    const cellRisks = [
+      { id: '1', title: 'Data breach', likelihood: 3 as const, impact: 5 as const },
+    ];
+    render(<RiskMatrix risks={cellRisks} onCellClick={onCellClick} />);
+    // A populated, clickable cell is exposed as role="button" with an
+    // aria-label encoding its likelihood/impact coordinates.
+    fireEvent.click(screen.getByRole('button', { name: /Likelihood 3, Impact 5/ }));
+    expect(onCellClick).toHaveBeenCalledTimes(1);
+    expect(onCellClick).toHaveBeenCalledWith(cellRisks, 3, 5);
   });
 
   it('access="hidden" renders nothing', () => {

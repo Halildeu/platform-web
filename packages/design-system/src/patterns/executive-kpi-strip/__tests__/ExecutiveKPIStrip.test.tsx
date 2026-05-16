@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 import { ExecutiveKPIStrip } from '../ExecutiveKPIStrip';
@@ -8,8 +8,8 @@ import { expectNoA11yViolations } from '../../../__tests__/a11y-utils';
 
 describe('ExecutiveKPIStrip', () => {
   const metrics = [
-    { key: 'rev', label: 'Revenue', value: 1200000, format: 'currency' as const },
-    { key: 'conv', label: 'Conversion', value: 23.5, format: 'percent' as const, target: 30 },
+    { id: 'rev', label: 'Revenue', value: 1200000, format: { format: 'currency' as const } },
+    { id: 'conv', label: 'Conversion', value: 23.5, format: { format: 'percent' as const } },
   ];
 
   it('renders metrics', () => {
@@ -26,6 +26,14 @@ describe('ExecutiveKPIStrip', () => {
   it('access="hidden" renders nothing', () => {
     const { container } = render(<ExecutiveKPIStrip metrics={metrics} access="hidden" />);
     expect(container.innerHTML).toBe('');
+  });
+
+  it('fires onMetricClick when metric card is clicked', () => {
+    const onClick = vi.fn();
+    render(<ExecutiveKPIStrip metrics={metrics} onMetricClick={onClick} />);
+    fireEvent.click(screen.getByText('Revenue'));
+    expect(onClick).toHaveBeenCalledWith('rev');
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it('has no accessibility violations', async () => {

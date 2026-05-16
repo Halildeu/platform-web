@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 import { GanttTimeline } from '../GanttTimeline';
@@ -15,6 +15,16 @@ describe('GanttTimeline', () => {
   it('renders timeline', () => {
     const { container } = render(<GanttTimeline tasks={tasks} />);
     expect(container.textContent).toContain('Design');
+  });
+
+  it('fires onTaskClick when task row is clicked', () => {
+    const onClick = vi.fn();
+    render(<GanttTimeline tasks={tasks} onTaskClick={onClick} />);
+    // The title may appear in multiple places (row label + bar) — click the first.
+    const elements = screen.getAllByText('Design');
+    fireEvent.click(elements[0]);
+    expect(onClick).toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it('has no accessibility violations', async () => {
