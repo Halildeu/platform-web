@@ -41,9 +41,10 @@ item 4 closure — no new numbered ADR is created.
   `PivotGrid`, `EditableGrid`) plus composition hooks
   (`useColumnBuilder`, `useGridExport`).
 
-Repo signal (2026-05): ~59 `EntityGridTemplate` references vs ~8
-`@mfe/x-data-grid` package-level references monorepo-wide — consumers
-already converge on the template.
+Repo signal (2026-05): across `apps/` + `packages/` source,
+`EntityGridTemplate` is referenced in dozens of files while direct
+raw-`AgGridReact` mounts are confined to two reporting modules (see
+exceptions below) — consumers already converge on the template.
 
 **Decision**
 

@@ -11,7 +11,12 @@
  * mevcut local formatlama logic'i kaldırılır + bu hook setine geçilir.
  *
  * Codex 019e2a83 plan-time önerisi: kozmetik dalga 5 sub-item; PR-1/2/3
- * MERGED + PR-4 ADR-0019 MERGED + bu PR-5 adoption sample (reference).
+ * MERGED + PR-5 bu adoption sample (reference). PR-4 canonical grid
+ * kararı `docs/01-architecture/f6-docs-dx/component-selection-guide.md`
+ * "Canonical Grid Decision — Adım 14 PR-4" bölümünde (platform-web
+ * PR #548) — daha önce bu yorumdaki "ADR-0019 MERGED" iddiası
+ * gerçek değildi (öyle bir ADR / PR yok); Codex 019e2d64 audit
+ * absorb ile düzeltildi.
  *
  * @see {@link useReportFormatter}
  * @see {@link FilterFormStyle}
