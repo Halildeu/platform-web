@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs';
 // Faz 21.8 PR-X8: inline modulepreload helper to break the
 // auth ↔ design-system MF loadShare runtime cycle.
 import { mfPreloadHelperIsolation } from '../../scripts/vite-plugins/mf-preload-helper-isolation';
+// PERF-INIT-V2.1 V3-B1a: optional bundle analyzer (ANALYZE_BUNDLE=1 gated).
+import { bundleVisualizer } from '../../scripts/vite-plugins/bundle-visualizer';
 
 function readEnvString(keys: string[], fallback: string): string {
   for (const key of keys) {
@@ -107,6 +109,8 @@ export default defineConfig(({ mode }) => {
     publicDir: 'public',
 
     plugins: [
+      // PERF-INIT-V2.1 V3-B1a: bundle analyzer (env-gated, returns [] when off)
+      ...bundleVisualizer({ mfeName: 'mfe-reporting' }),
       react(),
       federation({
         name: 'mfe_reporting',
