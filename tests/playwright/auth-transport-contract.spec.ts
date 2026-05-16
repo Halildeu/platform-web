@@ -41,12 +41,12 @@ test.describe('Auth Transport Contract (PR-E2E-6)', () => {
   // that single cold-start timeout then skips the other 6 tests
   // (PR #310 advisory demotion + #338-#342 follow-ups all hit exactly
   // this). This `beforeAll` pays the cold-start ONCE on a throwaway
-  // page with a generous 90 s budget, so the 7 real tests below run
+  // page with a generous 120 s budget, so the 7 real tests below run
   // against a warm preview server + warm V8 code cache and keep the
   // tight 25 s `waitForTransportReady` that still surfaces a genuine
   // FSM regression.
   test.beforeAll(async ({ browser, baseURL }) => {
-    test.setTimeout(90_000);
+    test.setTimeout(120_000);
     const root = baseURL ?? 'http://localhost:3000';
     const warmupPage = await browser.newPage();
     try {
@@ -315,6 +315,10 @@ test.describe('Auth Transport Contract (PR-E2E-6)', () => {
     await page.goto(`${root}/login`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(
       () => Boolean((window as unknown as { __authContractProbe?: unknown }).__authContractProbe),
+      // arg / options: `{ timeout }` must be the 3rd `waitForFunction`
+      // parameter — same fix as waitForTransportReady in
+      // utils/auth-contract.ts (2nd slot is the page-function arg).
+      undefined,
       { timeout: 5_000 },
     );
 
