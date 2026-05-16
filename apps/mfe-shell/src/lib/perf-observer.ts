@@ -57,10 +57,46 @@ export interface ResourceSummary {
   heapUsedMB?: number;
 }
 
+/**
+ * Compact, JSON-serialisable rect. Native `DOMRectReadOnly` does not survive
+ * the Playwright `page.evaluate` boundary, so layout-shift rects are flattened.
+ */
+export interface RectLite {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * One layout-shift source — the element that moved, with its before/after
+ * rects. `node` is a readable selector-ish identifier (the live DOM Node
+ * itself cannot cross the synthetic-harness JSON boundary).
+ */
+export interface LayoutShiftSource {
+  node: string;
+  previousRect: RectLite;
+  currentRect: RectLite;
+}
+
+/**
+ * One recorded layout-shift entry with per-shift source attribution. The CLS
+ * metric (vitals.CLS) stays the Web Vitals session-window sum; `clsShifts` is
+ * the orthogonal attribution channel — it answers "which element moved" so CLS
+ * regressions can be diagnosed instead of merely measured.
+ */
+export interface ClsShiftRecord {
+  value: number;
+  startTime: number;
+  sources: LayoutShiftSource[];
+}
+
 export interface PerfSnapshot {
   url: string;
   ts: number;
   vitals: Partial<Record<WebVitalEntry['name'], WebVitalEntry>>;
+  /** Per-shift CLS source attribution (orthogonal to vitals.CLS). */
+  clsShifts: ClsShiftRecord[];
   longTasks: LongTaskEntry[];
   longTaskCount: number;
   longTaskTotalMs: number;
@@ -116,6 +152,7 @@ interface ObserverState {
   longTasks: LongTaskEntry[];
   vitals: Partial<Record<WebVitalEntry['name'], WebVitalEntry>>;
   clsValue: number;
+  clsShifts: ClsShiftRecord[];
   inpValue: number;
   unsupported: string[];
   sinks: Sink[];
@@ -174,6 +211,81 @@ function dispatchMark(m: CustomMark): void {
   }
 }
 
+// --- CLS source attribution ------------------------------------------------
+
+/**
+ * A native `LayoutShift` attribution source. Typed locally because the DOM lib
+ * does not ship `LayoutShift` / `LayoutShiftAttribution` in all TS configs.
+ */
+interface LayoutShiftAttribution {
+  node?: Node | null;
+  previousRect: DOMRectReadOnly;
+  currentRect: DOMRectReadOnly;
+}
+
+// Bound memory on long synthetic runs. A 15-30s route capture rarely emits
+// more than ~30 shifts; the cap is a defensive ceiling, and eviction keeps the
+// largest-value shifts (the attribution-relevant ones).
+const MAX_CLS_SHIFTS = 60;
+const MAX_SOURCES_PER_SHIFT = 5;
+
+/** Flatten a DOMRect to a compact, JSON-serialisable rect. */
+export function rectLite(r: DOMRectReadOnly | undefined | null): RectLite {
+  return {
+    x: Math.round(r?.x ?? 0),
+    y: Math.round(r?.y ?? 0),
+    width: Math.round(r?.width ?? 0),
+    height: Math.round(r?.height ?? 0),
+  };
+}
+
+/**
+ * Produce a readable, PII-free identifier for a layout-shift source node:
+ * `parentTag#parentId > tag#id.firstClass[data-testid]`. Text nodes resolve to
+ * their parent element; a detached/absent node yields a sentinel string.
+ */
+export function describeNode(node: Node | null | undefined): string {
+  if (!node) return '(detached)';
+  const el: Element | null = node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
+  if (!el) return '(non-element)';
+  const tag = el.tagName.toLowerCase();
+  const id = el.id ? `#${el.id}` : '';
+  const cls = el.classList && el.classList.length > 0 ? `.${el.classList[0]}` : '';
+  const testId = el.getAttribute('data-testid');
+  const tid = testId ? `[data-testid="${testId}"]` : '';
+  const parent = el.parentElement;
+  const parentDesc = parent
+    ? `${parent.tagName.toLowerCase()}${parent.id ? `#${parent.id}` : ''} > `
+    : '';
+  return `${parentDesc}${tag}${id}${cls}${tid}`;
+}
+
+/**
+ * Record one layout-shift entry's source attribution into observer state.
+ * Orthogonal to the CLS metric computation — never mutates `clsValue`.
+ */
+function recordClsShift(
+  value: number,
+  startTime: number,
+  sources: LayoutShiftAttribution[] | undefined,
+): void {
+  if (!_state) return;
+  const mapped: LayoutShiftSource[] = (sources ?? []).slice(0, MAX_SOURCES_PER_SHIFT).map((s) => ({
+    node: describeNode(s.node),
+    previousRect: rectLite(s.previousRect),
+    currentRect: rectLite(s.currentRect),
+  }));
+  _state.clsShifts.push({ value, startTime: Math.round(startTime), sources: mapped });
+  if (_state.clsShifts.length > MAX_CLS_SHIFTS) {
+    // Evict the smallest-value shift so dominant shifts survive the cap.
+    let minIdx = 0;
+    for (let i = 1; i < _state.clsShifts.length; i += 1) {
+      if (_state.clsShifts[i].value < _state.clsShifts[minIdx].value) minIdx = i;
+    }
+    _state.clsShifts.splice(minIdx, 1);
+  }
+}
+
 /**
  * Setup all PerformanceObservers. Returns a disposer that unobserves and
  * tears down state. Safe to call once at bootstrap.
@@ -196,6 +308,7 @@ export function setupPerformanceObservers(sinks: Sink[] = []): () => void {
     longTasks: [],
     vitals: {},
     clsValue: 0,
+    clsShifts: [],
     inpValue: 0,
     unsupported: [],
     sinks,
@@ -265,8 +378,12 @@ export function setupPerformanceObservers(sinks: Sink[] = []): () => void {
     for (const e of list.getEntries() as (PerformanceEntry & {
       value: number;
       hadRecentInput: boolean;
+      sources?: LayoutShiftAttribution[];
     })[]) {
       if (e.hadRecentInput) continue;
+      // Attribution channel: record which element(s) moved. Orthogonal to the
+      // session-window CLS sum below — capture happens once per real shift.
+      recordClsShift(e.value, e.startTime, e.sources);
       const firstEntry = sessionEntries[0];
       const lastEntry = sessionEntries[sessionEntries.length - 1];
       // Continue session if within 1s of last entry AND within 5s of first.
@@ -423,6 +540,7 @@ export function captureSnapshot(): PerfSnapshot {
     url: typeof window !== 'undefined' ? window.location.href : '',
     ts: Date.now(),
     vitals: _state?.vitals ?? {},
+    clsShifts: _state?.clsShifts ?? [],
     longTasks,
     longTaskCount: longTasks.length,
     longTaskTotalMs: Math.round(longTaskTotalMs),

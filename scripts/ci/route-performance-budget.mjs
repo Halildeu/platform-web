@@ -293,6 +293,25 @@ async function measureOnce(browser, routeBudget) {
   }
 }
 
+/**
+ * Pick the most informative CLS source attribution across runs: take the
+ * snapshot with the highest CLS and return its largest shifts (capped). This
+ * surfaces "which element moved" in last-run.json without bloating it.
+ */
+function topClsShifts(snaps, limit = 8) {
+  let worst = null;
+  let worstCls = -1;
+  for (const s of snaps) {
+    const c = s?.vitals?.CLS?.value ?? 0;
+    if (c > worstCls) {
+      worstCls = c;
+      worst = s;
+    }
+  }
+  const shifts = Array.isArray(worst?.clsShifts) ? worst.clsShifts : [];
+  return [...shifts].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, limit);
+}
+
 /** Run N times and compute median per metric. */
 async function measureRoute(browser, routeBudget) {
   const route = routeBudget.route;
@@ -346,9 +365,21 @@ async function measureRoute(browser, routeBudget) {
     fcpMs: median(snaps.map((s) => s.vitals?.FCP?.value)),
     inpMs: median(snaps.map((s) => s.vitals?.INP?.value)),
     cls: median(snaps.map((s) => s.vitals?.CLS?.value)),
+    clsShifts: topClsShifts(snaps),
     ttfbMs: median(snaps.map((s) => s.vitals?.TTFB?.value)),
     timestamp: Date.now(),
   };
+
+  if (summary.clsShifts.length > 0) {
+    console.log(
+      `  -> CLS attribution (worst run, top ${summary.clsShifts.length} shift${summary.clsShifts.length === 1 ? '' : 's'}):`,
+    );
+    for (const sh of summary.clsShifts) {
+      const v = typeof sh.value === 'number' ? sh.value.toFixed(4) : String(sh.value);
+      const src = sh.sources && sh.sources[0] ? sh.sources[0].node : '(no source)';
+      console.log(`     value=${v} @${sh.startTime}ms  ${src}`);
+    }
+  }
 
   return summary;
 }
