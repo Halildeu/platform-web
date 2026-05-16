@@ -188,11 +188,29 @@ function buildRemotes(
     endpointAdmin: endpointAdminEnabled,
   };
 
-  // All remotes must be declared so MF plugin can resolve their imports
-  // at static analysis time. Disabled remotes use a stub entry that returns
-  // empty modules — the dynamic import() in shell-services-wiring.ts
-  // will catch the error and gracefully skip.
-  const STUB = 'data:text/javascript,export default {}; export function configureShellServices(){}';
+  // All remotes must be declared so the MF plugin can resolve their imports
+  // at static-analysis time. Disabled remotes get a STUB entry.
+  //
+  // The STUB MUST be a valid Module Federation container — it has to export
+  // `init` and `get`. The @module-federation/vite plugin emits a
+  // `mf-entry-bootstrap-0.js` that EAGERLY `runtime.loadRemote(...)`s every
+  // remote module at host bootstrap and gates the real app chunk import on
+  // `await Promise.all(...)`. If a disabled remote's entry is not a valid
+  // container, `loadRemote` rejects with MF `#RUNTIME-002` ("The remote
+  // entry interface does not contain 'init'"), `Promise.all` rejects, the
+  // app chunk is never imported, and the shell white-screens — no React
+  // mount, no Redux store, no logs. The previous `export default {}` stub
+  // had neither `init` nor `get`, so it triggered exactly that: it is the
+  // root cause of the Auth Transport Contract E2E `waitForTransportReady`
+  // timeout (the FSM probe never exists because the app never boots).
+  //
+  // `get` resolves to an empty module so `loadRemote` settles gracefully
+  // instead of throwing; `createLazyRemoteModule`'s `isValidRemoteComponent`
+  // guard then renders the classified "remote unavailable" fallback if a
+  // disabled route is navigated to. The `configureShellServices` no-op
+  // keeps `import('mfe_*/shell-services')` consumers happy.
+  const STUB =
+    'data:text/javascript,export function init(){}export function get(){return Promise.resolve(function(){return{default:null,configureShellServices:function(){}}})}export default{init,get};export function configureShellServices(){}';
   const remoteEntries = {
     suggestions: readEnvString(
       ['MFE_SUGGESTIONS_URL', 'VITE_MFE_SUGGESTIONS_URL'],
@@ -341,10 +359,11 @@ function buildRemotes(
           },
         }),
     // FE-001 reapply build-time omit (post-#284): when the flag is
-    // OFF, the manifest entry is omitted entirely. STUB pattern was
-    // tried in PR #258/#280 and crashed live MF runtime with
-    // #RUNTIME-002 because the data URI does not satisfy init()/get().
-    // The lazy-routes.ts companion check tree-shakes the static
+    // OFF, the manifest entry is omitted entirely. The earlier
+    // INVALID stub (no init/get) tried in PR #258/#280 crashed live
+    // MF runtime with #RUNTIME-002; the STUB above is now a valid
+    // container, but build-time omit is still preferred here because
+    // the lazy-routes.ts companion check also tree-shakes the static
     // import in the same build, so neither side references the
     // remote when disabled.
     ...(enabled.endpointAdmin
