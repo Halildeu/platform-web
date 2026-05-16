@@ -6,7 +6,8 @@
 /*  `AgGridReact` import bypasses the toolbar / variant / responsive   */
 /*  column system and requires a documented exception — see the        */
 /*  grid-contract section in CONTRIBUTING.md. Enforced via the          */
-/*  `no-restricted-imports` rule in `eslint.config.mjs`.                */
+/*  `no-restricted-syntax` ag-grid-react import rule in                 */
+/*  `eslint.config.mjs`.                                                */
 /*                                                                     */
 /*  PERF-INIT-V2 PR-B1a: the previous `import './setup'` side-effect   */
 /*  here cascaded through the root `@mfe/design-system` barrel into    */
