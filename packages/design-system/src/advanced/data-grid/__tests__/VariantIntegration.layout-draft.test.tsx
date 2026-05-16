@@ -331,7 +331,7 @@ describe('PR-0.5e — column events persist a draft', () => {
       { colId: 'email', width: 100, pinned: null, hide: false },
       { colId: 'role', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
     act(() => vi.advanceTimersByTime(300));
 
     const stored = readRawDraft('variant-A');
@@ -362,7 +362,7 @@ describe('PR-0.5e — column events persist a draft', () => {
       { colId: 'email', width: 100, pinned: null, hide: false },
       { colId: 'role', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnPinned', {}));
+    act(() => mock.emit('columnPinned', { source: 'contextMenu' }));
     act(() => vi.advanceTimersByTime(300));
 
     const stored = readRawDraft('variant-A');
@@ -379,7 +379,7 @@ describe('PR-0.5e — column events persist a draft', () => {
       { colId: 'name', width: 100, pinned: null, hide: false },
       { colId: 'email', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnMoved', {}));
+    act(() => mock.emit('columnMoved', { source: 'uiColumnMoved' }));
     act(() => vi.advanceTimersByTime(300));
 
     const stored = readRawDraft('variant-A');
@@ -408,7 +408,7 @@ describe('PR-0.5e — column events persist a draft', () => {
         pivot: true,
       },
     ]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
     act(() => vi.advanceTimersByTime(300));
 
     const stored = readRawDraft('variant-A');
@@ -431,9 +431,9 @@ describe('PR-0.5e — column events persist a draft', () => {
 
     // Three events inside the debounce window.
     act(() => {
-      mock.emit('columnResized', { finished: true });
-      mock.emit('columnPinned', {});
-      mock.emit('columnMoved', {});
+      mock.emit('columnResized', { finished: true, source: 'uiColumnResized' });
+      mock.emit('columnPinned', { source: 'contextMenu' });
+      mock.emit('columnMoved', { source: 'uiColumnMoved' });
     });
     // Before the debounce fires — nothing has been persisted yet
     // (post-finding-2 the snapshot is captured per event into
@@ -443,6 +443,104 @@ describe('PR-0.5e — column events persist a draft', () => {
     // Three rapid events collapse into exactly one persisted write.
     expect(setItemSpy).toHaveBeenCalledTimes(1);
     setItemSpy.mockRestore();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Event-source guard — programmatic events must NOT write a draft    */
+/* ------------------------------------------------------------------ */
+
+describe('PR-0.5e bugfix — only USER column events write a draft', () => {
+  /*
+   * Regression guard for the "Kaydedilmemiş görünüm değişiklikleri"
+   * badge that stayed lit on every page refresh. AG Grid fires
+   * `columnResized` / `columnMoved` / … with a programmatic
+   * `ColumnEventType` source (`api`, `flex`, `sizeColumnsToFit`,
+   * `autosizeColumns`, `gridInitializing`, `rowModelUpdated`, …) while
+   * it loads, applies a variant and materialises the row-group /
+   * selection auto-columns. Those must NOT be captured as an unsaved
+   * layout draft — only genuine user actions may.
+   */
+
+  it.each(['api', 'flex', 'sizeColumnsToFit', 'autosizeColumns', 'gridInitializing'])(
+    'a finished resize with programmatic source "%s" does NOT write a draft',
+    async (source) => {
+      vi.useFakeTimers();
+      const { mock } = renderVariant();
+      await waitForMount(mock);
+
+      mock.setColumnState([{ colId: 'name', width: 280, pinned: null, hide: false }]);
+      act(() => mock.emit('columnResized', { finished: true, source }));
+      act(() => vi.advanceTimersByTime(500));
+
+      expect(readRawDraft('variant-A')).toBeUndefined();
+    },
+  );
+
+  it('a column event with NO source does NOT write a draft', async () => {
+    vi.useFakeTimers();
+    const { mock } = renderVariant();
+    await waitForMount(mock);
+
+    mock.setColumnState([{ colId: 'name', width: 280, pinned: null, hide: false }]);
+    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnPinned', {}));
+    act(() => mock.emit('columnMoved', {}));
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(readRawDraft('variant-A')).toBeUndefined();
+  });
+
+  it('programmatic pin / move / visible events do NOT write a draft', async () => {
+    vi.useFakeTimers();
+    const { mock } = renderVariant();
+    await waitForMount(mock);
+
+    mock.setColumnState([{ colId: 'name', width: 100, pinned: 'left', hide: true }]);
+    act(() => mock.emit('columnPinned', { source: 'api' }));
+    act(() => mock.emit('columnMoved', { source: 'rowModelUpdated' }));
+    act(() => mock.emit('columnVisible', { source: 'flex' }));
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(readRawDraft('variant-A')).toBeUndefined();
+  });
+
+  it('a user resize STILL writes a draft (the feature is preserved)', async () => {
+    vi.useFakeTimers();
+    const { mock } = renderVariant();
+    await waitForMount(mock);
+
+    mock.setColumnState([{ colId: 'name', width: 321, pinned: null, hide: false }]);
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
+    act(() => vi.advanceTimersByTime(300));
+
+    const stored = readRawDraft('variant-A');
+    expect(stored).toBeDefined();
+    expect(stored.columns.find((c: { colId: string }) => c.colId === 'name')?.width).toBe(321);
+  });
+
+  it('a tool-panel show/hide STILL writes a draft', async () => {
+    vi.useFakeTimers();
+    const { mock } = renderVariant();
+    await waitForMount(mock);
+
+    mock.setColumnState([{ colId: 'name', width: 100, pinned: null, hide: true }]);
+    act(() => mock.emit('columnVisible', { source: 'toolPanelUi' }));
+    act(() => vi.advanceTimersByTime(300));
+
+    expect(readRawDraft('variant-A')).toBeDefined();
+  });
+
+  it('does NOT surface the dirty indicator after a programmatic-source resize', async () => {
+    vi.useFakeTimers();
+    const { mock, queryByTestId } = renderVariant();
+    await waitForMount(mock);
+
+    mock.setColumnState([{ colId: 'name', width: 260, pinned: null, hide: false }]);
+    act(() => mock.emit('columnResized', { finished: true, source: 'api' }));
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(queryByTestId('variant-layout-draft-indicator')).not.toBeInTheDocument();
   });
 });
 
@@ -475,8 +573,8 @@ describe('PR-0.5e — isApplyingState guard', () => {
     // Simulate AG Grid firing column events DURING the programmatic
     // restore (guard is up). These must be ignored.
     act(() => {
-      mock.emit('columnResized', { finished: true });
-      mock.emit('columnMoved', {});
+      mock.emit('columnResized', { finished: true, source: 'uiColumnResized' });
+      mock.emit('columnMoved', { source: 'uiColumnMoved' });
     });
     act(() => vi.advanceTimersByTime(300));
 
@@ -522,7 +620,7 @@ describe('PR-0.5e — dirty indicator, save, reset', () => {
 
     // Resize → draft written → indicator appears.
     mock.setColumnState([{ colId: 'name', width: 260, pinned: null, hide: false }]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
     act(() => vi.advanceTimersByTime(300));
     await vi.waitFor(() => {
       expect(queryByTestId('variant-layout-draft-indicator')).toBeInTheDocument();
@@ -550,7 +648,7 @@ describe('PR-0.5e — dirty indicator, save, reset', () => {
       { colId: 'email', width: 100, pinned: null, hide: false },
       { colId: 'role', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
     act(() => vi.advanceTimersByTime(300));
 
     mock.applyColumnStateMock.mockClear();
@@ -572,7 +670,7 @@ describe('PR-0.5e — dirty indicator, save, reset', () => {
 
     // Create a draft via a resize.
     mock.setColumnState([{ colId: 'name', width: 270, pinned: null, hide: false }]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
     act(() => vi.advanceTimersByTime(300));
     expect(readRawDraft('variant-A')).toBeDefined();
 
@@ -614,7 +712,7 @@ describe('PR-0.5e — draft layer off without draftIdentity', () => {
     const { mock } = renderVariant({ draftIdentity: '' });
     await vi.waitFor(() => expect(mock.applyColumnStateMock).toHaveBeenCalled());
     // No listener registered → emitting is a no-op, nothing persists.
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
     act(() => vi.advanceTimersByTime(500));
     expect(window.localStorage.getItem(LAYOUT_DRAFT_NAMESPACE)).toBeNull();
   });
@@ -848,7 +946,7 @@ describe('PR-0.5e — finding 2: debounce persists the right scope / last mutati
       { colId: 'email', width: 100, pinned: null, hide: false },
       { colId: 'role', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
 
     // Switch to variant B BEFORE the ~250ms debounce fires.
     const select = document.querySelector(
@@ -882,7 +980,7 @@ describe('PR-0.5e — finding 2: debounce persists the right scope / last mutati
       { colId: 'email', width: 100, pinned: null, hide: false },
       { colId: 'role', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
 
     // Unmount BEFORE advancing the timer — cleanup must flush the ref.
     act(() => {
@@ -939,7 +1037,7 @@ describe('PR-0.5e — finding 2: debounce persists the right scope / last mutati
       { colId: 'email', width: 100, pinned: null, hide: false },
       { colId: 'role', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
 
     // Switch to variant B BEFORE A's ~250ms debounce fires.
     const select = document.querySelector(
@@ -990,7 +1088,7 @@ describe('PR-0.5e — finding 2: debounce persists the right scope / last mutati
       { colId: 'email', width: 100, pinned: null, hide: false },
       { colId: 'role', width: 100, pinned: null, hide: false },
     ]);
-    act(() => mock.emit('columnResized', { finished: true }));
+    act(() => mock.emit('columnResized', { finished: true, source: 'uiColumnResized' }));
 
     // Switch to variant B BEFORE A's debounce fires.
     const select = document.querySelector(
