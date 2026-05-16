@@ -70,7 +70,10 @@ export type ChartA11yKind =
   // Faz 21.11 P1c — Globe wrapper (geo sphere with multi-layer
   // scatter3D / lines3D / bar3D on `coordinateSystem: 'globe'`).
   // Codex thread `019e10f8` iter-1.
-  | 'globe';
+  | 'globe'
+  // PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link
+  // tree (ECharts `tree` series). Org-chart / hierarchy use-case.
+  | 'tree';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -193,6 +196,10 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   // family is deferred. Codex thread `019e10d7` iter-2.
   surface3d: '3D surface chart',
   lines3d: '3D line chart',
+  // Faz 21.11 P1c — Globe (geo sphere).
+  globe: 'Globe chart',
+  // PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link tree.
+  tree: 'Tree chart',
 };
 
 const defaultFormatter = (v: number): string =>

@@ -51,6 +51,9 @@ const CHARTS = [
   ['gauge-chart', 'GaugeChart'],
   ['radar-chart', 'RadarChart'],
   ['treemap-chart', 'TreemapChart'],
+  // PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link
+  // tree (org-chart). ECharts Depth campaign first wrapper.
+  ['tree-chart', 'TreeChart'],
   ['heatmap-chart', 'HeatmapChart'],
   ['waterfall-chart', 'WaterfallChart'],
   ['funnel-chart', 'FunnelChart'],

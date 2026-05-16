@@ -60,6 +60,10 @@ export { RadarChart } from './RadarChart';
 export type { RadarChartProps } from './RadarChart';
 export { TreemapChart } from './TreemapChart';
 export type { TreemapChartProps } from './TreemapChart';
+// PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link tree
+// — ECharts Depth campaign first wrapper. Org-chart use-case.
+export { TreeChart } from './TreeChart';
+export type { TreeChartProps, TreeNode, TreeLayout, TreeOrient } from './TreeChart';
 export { HeatmapChart } from './HeatmapChart';
 export type { HeatmapChartProps } from './HeatmapChart';
 export { GaugeChart } from './GaugeChart';

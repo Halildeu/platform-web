@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-14T16:17:05.450Z",
+  "generatedAt": "2026-05-16T22:29:26.667Z",
   "totalConsumers": 43,
   "byBucket": {
     "production": 20,
@@ -370,6 +370,7 @@
         "SparklineChart",
         "SunburstChart",
         "Surface3D",
+        "TreeChart",
         "TreemapChart",
         "WaterfallChart",
         "ensureGeoMapRegistered",

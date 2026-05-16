@@ -518,6 +518,32 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // PR-X16a (Codex 019e32da AGREE): hierarchical node-link tree.
+  // `layout`/`orient` drive orthogonal vs radial; `initialTreeDepth`
+  // collapses deep levels; `expandAndCollapse`/`roam` interaction.
+  'tree-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'size',
+    'layout',
+    'orient',
+    'initialTreeDepth',
+    'expandAndCollapse',
+    'roam',
+    'symbolSize',
+    'showLabels',
+    'animate',
+    'valueFormatter',
+    'valueColumnHeader',
+    'onDataPointClick',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',

@@ -63,6 +63,12 @@ import { EffectScatterChart } from 'echarts/charts';
 import { LinesChart } from 'echarts/charts';
 import { SankeyChart } from 'echarts/charts';
 import { TreemapChart } from 'echarts/charts';
+// PR-X16a (Codex thread 019e32da plan-time AGREE): hierarchical
+// node-link tree (`tree` series). Org-chart / hierarchy use-case.
+// Distinct from `TreemapChart` (area-partition hierarchy) and
+// `SunburstChart` (radial-partition hierarchy) — Tree is the
+// expand/collapse node-link form.
+import { TreeChart } from 'echarts/charts';
 import { RadarChart } from 'echarts/charts';
 import { GaugeChart } from 'echarts/charts';
 import { FunnelChart } from 'echarts/charts';
@@ -160,6 +166,7 @@ export function registerECharts(): void {
     LinesChart, // PR-X13c: origin-destination flow lines on geo coord system
     SankeyChart,
     TreemapChart,
+    TreeChart, // PR-X16a: hierarchical node-link tree (org-chart / hierarchy)
     RadarChart,
     GaugeChart,
     FunnelChart,
