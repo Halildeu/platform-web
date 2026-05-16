@@ -288,6 +288,10 @@ test.describe('Auth Transport Contract (PR-E2E-6)', () => {
     await page.goto(`${root}/login`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(
       () => Boolean((window as unknown as { __authContractProbe?: unknown }).__authContractProbe),
+      // arg / options: `{ timeout }` must be the 3rd `waitForFunction`
+      // parameter — same fix as waitForTransportReady in
+      // utils/auth-contract.ts (2nd slot is the page-function arg).
+      undefined,
       { timeout: 5_000 },
     );
 

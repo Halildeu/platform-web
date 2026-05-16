@@ -231,6 +231,14 @@ export const waitForTransportReady = async (page: Page, timeoutMs = 25_000): Pro
       const store = probe?.store ?? fallback;
       return store?.getState()?.auth?.phase === 'transportReady';
     },
+    // Playwright signature is `waitForFunction(pageFunction, arg, options)`.
+    // The probe takes no arg, so `{ timeout }` MUST be the 3rd parameter.
+    // It used to be passed 2nd — silently becoming the page-function
+    // ARGUMENT — so `waitForFunction` always fell back to the config
+    // `actionTimeout` (15 s) and every `timeoutMs` value here (the
+    // 10→15→25 s bumps across PR #310 + #338-#342) was dead code. That
+    // is the real cause of the CI `Timeout 15000ms exceeded` failures.
+    undefined,
     { timeout: timeoutMs },
   );
 };
