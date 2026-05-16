@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { describeNode, rectLite } from '../perf-observer';
+import { describeNode, rectLite, sanitizeToken } from '../perf-observer';
 
 /**
  * PERF-INIT-V2 PR-B5c-lite (Codex thread 019e20fa iter-2 finding):
@@ -166,5 +166,40 @@ describe('describeNode (CLS source identifier)', () => {
     const text = document.createTextNode('hello');
     parent.appendChild(text);
     expect(describeNode(text)).toBe('p#msg');
+  });
+
+  it('redacts a dynamic id embedded in a source node', () => {
+    const el = document.createElement('tr');
+    el.id = 'report-row-1234567';
+    el.setAttribute('data-testid', 'user-john@example.com');
+    expect(describeNode(el)).toBe('tr#report-row-[n][data-testid="[email]"]');
+  });
+});
+
+describe('sanitizeToken (attribution value redaction)', () => {
+  it('redacts an email-shaped value', () => {
+    expect(sanitizeToken('row-user@example.com')).toBe('[email]');
+  });
+
+  it('redacts a UUID', () => {
+    expect(sanitizeToken('item-12345678-1234-1234-1234-123456789abc')).toBe('item-[uuid]');
+  });
+
+  it('redacts a long digit run (likely a record id)', () => {
+    expect(sanitizeToken('report-1234567')).toBe('report-[n]');
+  });
+
+  it('keeps short digit runs (structural)', () => {
+    expect(sanitizeToken('col-42')).toBe('col-42');
+  });
+
+  it('length-caps an oversized token', () => {
+    const out = sanitizeToken('a'.repeat(60));
+    expect(out.length).toBe(41);
+    expect(out.endsWith('…')).toBe(true);
+  });
+
+  it('passes a clean structural token through unchanged', () => {
+    expect(sanitizeToken('layout-main')).toBe('layout-main');
   });
 });

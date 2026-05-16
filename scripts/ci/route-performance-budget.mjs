@@ -295,8 +295,10 @@ async function measureOnce(browser, routeBudget) {
 
 /**
  * Pick the most informative CLS source attribution across runs: take the
- * snapshot with the highest CLS and return its largest shifts (capped). This
- * surfaces "which element moved" in last-run.json without bloating it.
+ * snapshot with the highest CLS and return its largest shifts (capped) plus
+ * that run's CLS. Surfaces "which element moved" in last-run.json without
+ * bloating it. `runCls` keeps the worst-run attribution from being confused
+ * with the median `cls` metric.
  */
 function topClsShifts(snaps, limit = 8) {
   let worst = null;
@@ -309,7 +311,10 @@ function topClsShifts(snaps, limit = 8) {
     }
   }
   const shifts = Array.isArray(worst?.clsShifts) ? worst.clsShifts : [];
-  return [...shifts].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, limit);
+  return {
+    shifts: [...shifts].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, limit),
+    runCls: worst ? worstCls : null,
+  };
 }
 
 /** Run N times and compute median per metric. */
@@ -344,6 +349,7 @@ async function measureRoute(browser, routeBudget) {
     return { error: `no valid runs (invalid=${invalidCount})` };
   }
 
+  const clsAttribution = topClsShifts(snaps);
   const summary = {
     route,
     mode,
@@ -365,14 +371,20 @@ async function measureRoute(browser, routeBudget) {
     fcpMs: median(snaps.map((s) => s.vitals?.FCP?.value)),
     inpMs: median(snaps.map((s) => s.vitals?.INP?.value)),
     cls: median(snaps.map((s) => s.vitals?.CLS?.value)),
-    clsShifts: topClsShifts(snaps),
+    // clsShifts comes from the WORST run (highest CLS) for attribution clarity;
+    // clsShiftsRunCls is that run's CLS so it is never confused with the
+    // median `cls` above.
+    clsShifts: clsAttribution.shifts,
+    clsShiftsRunCls: clsAttribution.runCls,
     ttfbMs: median(snaps.map((s) => s.vitals?.TTFB?.value)),
     timestamp: Date.now(),
   };
 
   if (summary.clsShifts.length > 0) {
+    const runClsStr =
+      typeof summary.clsShiftsRunCls === 'number' ? summary.clsShiftsRunCls.toFixed(4) : 'n/a';
     console.log(
-      `  -> CLS attribution (worst run, top ${summary.clsShifts.length} shift${summary.clsShifts.length === 1 ? '' : 's'}):`,
+      `  -> CLS attribution (worst run cls=${runClsStr}, top ${summary.clsShifts.length} shift${summary.clsShifts.length === 1 ? '' : 's'}):`,
     );
     for (const sh of summary.clsShifts) {
       const v = typeof sh.value === 'number' ? sh.value.toFixed(4) : String(sh.value);

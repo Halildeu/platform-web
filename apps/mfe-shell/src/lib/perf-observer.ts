@@ -239,24 +239,48 @@ export function rectLite(r: DOMRectReadOnly | undefined | null): RectLite {
   };
 }
 
+// Cap on an attribute token's length before it enters a CI log / the
+// last-run.json artifact.
+const ATTR_TOKEN_MAX_LEN = 40;
+
 /**
- * Produce a readable, PII-free identifier for a layout-shift source node:
+ * Redact dynamic-looking fragments from a DOM attribute value before it enters
+ * an attribution string. Layout-shift sources can be list rows etc. whose
+ * id / data-testid embed record keys; emails, UUIDs and long digit runs are
+ * redacted and the token is length-capped so the channel stays structural.
+ */
+export function sanitizeToken(raw: string): string {
+  let v = raw
+    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, '[email]')
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[uuid]')
+    .replace(/\d{5,}/g, '[n]');
+  if (v.length > ATTR_TOKEN_MAX_LEN) v = `${v.slice(0, ATTR_TOKEN_MAX_LEN)}…`;
+  return v;
+}
+
+/**
+ * Produce a readable identifier for a layout-shift source node:
  * `parentTag#parentId > tag#id.firstClass[data-testid]`. Text nodes resolve to
  * their parent element; a detached/absent node yields a sentinel string.
+ *
+ * The identifier carries NO element text content, and every attribute value
+ * (id / class / data-testid) is passed through `sanitizeToken` — emails,
+ * UUIDs and long digit runs redacted, length capped. This is a text-free +
+ * pattern-redacted channel, NOT a hard PII guarantee: a static attribute value
+ * embedding sensitive text in another shape is still surfaced.
  */
 export function describeNode(node: Node | null | undefined): string {
   if (!node) return '(detached)';
   const el: Element | null = node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
   if (!el) return '(non-element)';
   const tag = el.tagName.toLowerCase();
-  const id = el.id ? `#${el.id}` : '';
-  const cls = el.classList && el.classList.length > 0 ? `.${el.classList[0]}` : '';
+  const id = el.id ? `#${sanitizeToken(el.id)}` : '';
+  const cls = el.classList && el.classList.length > 0 ? `.${sanitizeToken(el.classList[0])}` : '';
   const testId = el.getAttribute('data-testid');
-  const tid = testId ? `[data-testid="${testId}"]` : '';
+  const tid = testId ? `[data-testid="${sanitizeToken(testId)}"]` : '';
   const parent = el.parentElement;
-  const parentDesc = parent
-    ? `${parent.tagName.toLowerCase()}${parent.id ? `#${parent.id}` : ''} > `
-    : '';
+  const parentId = parent && parent.id ? `#${sanitizeToken(parent.id)}` : '';
+  const parentDesc = parent ? `${parent.tagName.toLowerCase()}${parentId} > ` : '';
   return `${parentDesc}${tag}${id}${cls}${tid}`;
 }
 
@@ -381,9 +405,14 @@ export function setupPerformanceObservers(sinks: Sink[] = []): () => void {
       sources?: LayoutShiftAttribution[];
     })[]) {
       if (e.hadRecentInput) continue;
-      // Attribution channel: record which element(s) moved. Orthogonal to the
-      // session-window CLS sum below — capture happens once per real shift.
-      recordClsShift(e.value, e.startTime, e.sources);
+      // Attribution channel: record which element(s) moved. Hard-isolated in a
+      // try/catch — attribution must NEVER throw into the CLS metric path
+      // (session-window sum + dispatchVital) below.
+      try {
+        recordClsShift(e.value, e.startTime, e.sources);
+      } catch {
+        /* attribution failure must not affect CLS metric computation */
+      }
       const firstEntry = sessionEntries[0];
       const lastEntry = sessionEntries[sessionEntries.length - 1];
       // Continue session if within 1s of last entry AND within 5s of first.
