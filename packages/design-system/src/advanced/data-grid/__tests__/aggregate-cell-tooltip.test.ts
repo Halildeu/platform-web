@@ -125,7 +125,7 @@ describe('getAggregateCellTooltip — value formatting', () => {
     );
   });
 
-  it('8. falls back to String(value) when neither valueFormatted nor a formatter exist', () => {
+  it('8. falls back to a locale-formatted number when neither valueFormatted nor a formatter exist', () => {
     const params = groupAggregateCell({
       value: 500,
       valueFormatted: undefined,
@@ -136,7 +136,7 @@ describe('getAggregateCellTooltip — value formatting', () => {
     );
   });
 
-  it('9. swallows a throwing valueFormatter and falls back to String(value)', () => {
+  it('9. swallows a throwing valueFormatter and falls back to a locale-formatted number', () => {
     const params = groupAggregateCell({
       value: 500,
       valueFormatted: undefined,
@@ -164,6 +164,44 @@ describe('getAggregateCellTooltip — value formatting', () => {
       },
     };
     expect(getAggregateCellTooltip(params)).toBe('Bucket · 5 satır · Adet(Adet): 1.000');
+  });
+
+  it('37. tier-3 locale-formats a large number when no valueFormatted / formatter exists', () => {
+    // column-system number/currency columns format the cell via a
+    // `cellRenderer` and put an EXPORT getter on `valueFormatter`, so a
+    // group-aggregate tooltip reaches the tier-3 fallback with a raw
+    // number — which must still be locale-formatted, not raw-stringified.
+    const params = groupAggregateCell({
+      value: 1234567,
+      valueFormatted: undefined,
+      colDef: { headerName: 'Tutar TL', field: 'amount', aggFunc: 'sum' },
+    });
+    expect(getAggregateCellTooltip(params)).toBe(
+      'ADC2 - Turkcell · 1.234 satır · Toplam(Tutar TL): 1.234.567',
+    );
+  });
+
+  it('38. tier-3 locale-formats a raw float — no float-noise leak (PR-0.5f live fix)', () => {
+    const params = groupAggregateCell({
+      value: -824820919.1300002,
+      valueFormatted: undefined,
+      colDef: { headerName: 'Tutar TL', field: 'amount', aggFunc: 'sum' },
+    });
+    const tip = getAggregateCellTooltip(params);
+    expect(tip).toBe('ADC2 - Turkcell · 1.234 satır · Toplam(Tutar TL): -824.820.919,13');
+    // the raw IEEE-754 artifact must never reach the tooltip
+    expect(tip).not.toContain('1300002');
+  });
+
+  it('39. tier-4 String()-falls-back for a non-numeric value', () => {
+    const params = groupAggregateCell({
+      value: 'PENDING',
+      valueFormatted: undefined,
+      colDef: { headerName: 'Tutar TL', field: 'amount', aggFunc: 'sum' },
+    });
+    expect(getAggregateCellTooltip(params)).toBe(
+      'ADC2 - Turkcell · 1.234 satır · Toplam(Tutar TL): PENDING',
+    );
   });
 });
 

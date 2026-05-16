@@ -233,13 +233,13 @@ function resolveRowCount(node: AggregateTooltipRowNode | null | undefined): numb
   return null;
 }
 
-/** Locale used for the row-count thousands separator (matches the grid). */
-const ROW_COUNT_LOCALE = 'tr-TR';
+/** Locale for tooltip number formatting — matches the grid's tr-TR locale. */
+const GRID_LOCALE = 'tr-TR';
 
 /** Format a row count with locale-aware grouping (`1234` → `1.234`). */
 function formatRowCount(count: number): string {
   try {
-    return count.toLocaleString(ROW_COUNT_LOCALE);
+    return count.toLocaleString(GRID_LOCALE);
   } catch {
     return String(count);
   }
@@ -263,7 +263,12 @@ function hasRenderableValue(value: unknown): boolean {
  *   1. `params.valueFormatted` — AG Grid already formatted the cell.
  *   2. The column's `valueFormatter` — re-run it against this param so
  *      the tooltip never shows a raw DB number unformatted.
- *   3. `String(value)` — safe last resort.
+ *   3. Locale-formatted number — `column-system` columns format the
+ *      visible cell via a `cellRenderer` (which a tooltip getter cannot
+ *      invoke) and carry an EXPORT value-getter on `valueFormatter`, so
+ *      a finite number reaching this tier is locale-formatted rather
+ *      than raw-stringified (no `-824820919.1300002` leaking through).
+ *   4. `String(value)` — non-numeric last resort.
  *
  * Returns `undefined` only when the value itself is not renderable
  * (caller already guards this, but kept defensive).
@@ -294,7 +299,23 @@ function resolveFormattedValue<TData, TValue>(
     }
   }
 
-  return String(params.value);
+  // Tier 3 — no AG Grid `valueFormatted`, no usable display formatter.
+  // `column-system` columns format the visible cell via a `cellRenderer`
+  // and put an EXPORT value-getter on `valueFormatter`, so a raw
+  // `String()` here would leak the unformatted DB float into the
+  // tooltip (e.g. `-824820919.1300002`). Locale-format a finite number
+  // so the tooltip stays readable and consistent with the grid locale.
+  const rawValue = params.value;
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+    try {
+      return rawValue.toLocaleString(GRID_LOCALE);
+    } catch {
+      return String(rawValue);
+    }
+  }
+
+  // Tier 4 — non-numeric last resort.
+  return String(rawValue);
 }
 
 /* ------------------------------------------------------------------ */
