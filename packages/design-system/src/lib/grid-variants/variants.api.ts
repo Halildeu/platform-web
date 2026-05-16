@@ -1,7 +1,10 @@
 import { GridVariant, GridVariantState } from '@mfe/shared-types';
 import { isAxiosError } from 'axios';
-import { api, getGatewayBaseUrl } from '@mfe/shared-http';
-import { buildAuthHeaders, registerTokenResolver as registerSharedTokenResolver } from '../auth/token-resolver';
+import { api, getGatewayBaseUrl, resolveAuthToken } from '@mfe/shared-http';
+import {
+  buildAuthHeaders,
+  registerTokenResolver as registerSharedTokenResolver,
+} from '../auth/token-resolver';
 
 type VariantDto = {
   id?: string | number;
@@ -48,12 +51,17 @@ const resolveVariantsFetchBaseUrl = (): string => {
   }
 
   const origin =
-    typeof window !== 'undefined' && window.location?.origin ? window.location.origin : FALLBACK_FETCH_ORIGIN;
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : FALLBACK_FETCH_ORIGIN;
   return new URL(`${trimLeadingSlash(gatewayBaseUrl)}/`, `${origin}/`).toString();
 };
 
 const buildVariantsFetchUrl = (suffix = ''): string =>
-  new URL(`${trimLeadingSlash(VARIANTS_BASE_URL)}${suffix}`, resolveVariantsFetchBaseUrl()).toString();
+  new URL(
+    `${trimLeadingSlash(VARIANTS_BASE_URL)}${suffix}`,
+    resolveVariantsFetchBaseUrl(),
+  ).toString();
 
 const findGridIdByVariant = (variantId: string): string | undefined => {
   if (!hasBrowserEnv()) return undefined;
@@ -212,14 +220,31 @@ export interface UpdateVariantPreferencePayload {
   isSelected?: boolean;
 }
 
-const hasBrowserEnv = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const hasBrowserEnv = () =>
+  typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
-export const registerGridVariantsTokenResolver = (resolver?: Parameters<typeof registerSharedTokenResolver>[0]) => {
+export const registerGridVariantsTokenResolver = (
+  resolver?: Parameters<typeof registerSharedTokenResolver>[0],
+) => {
   registerSharedTokenResolver(resolver);
 };
 
 const getAuthHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = { ...buildAuthHeaders() };
+  // Fallback: the raw-fetch variant calls below authenticate via the
+  // design-system grid-variants token resolver (registerGridVariantsTokenResolver).
+  // When no consumer registered one — the default across every MFE — that
+  // resolver yields null, the Authorization header is omitted, and the
+  // gateway 401s the request (the gateway requires a Bearer header on all
+  // non-SSE routes by design). Fall back to the shell-wired @mfe/shared-http
+  // auth token: the exact same source the shared axios `api` interceptor
+  // uses, so variant requests authenticate identically to /api/v1/reports.
+  if (!headers.Authorization) {
+    const sharedToken = resolveAuthToken();
+    if (sharedToken) {
+      headers.Authorization = `Bearer ${sharedToken}`;
+    }
+  }
   if (hasBrowserEnv()) {
     const internalApiKey = window.localStorage.getItem('internalApiKey');
     if (internalApiKey) {
@@ -301,24 +326,31 @@ const readLocalVariants = (gridId: string): GridVariant[] => {
     if (!parsed || typeof parsed !== 'object') return [];
     const list = parsed[gridId];
     if (!Array.isArray(list)) return [];
-    return list.map((item) => ({
-      ...item,
-      name: sanitizeVariantName((item as VariantWire).name),
-      state: sanitizeVariantState((item as VariantWire).state),
-      isDefault: parseBoolean((item as VariantWire).isDefault),
-      isGlobal: parseBoolean((item as VariantWire).isGlobal),
-      isGlobalDefault: parseBoolean((item as VariantWire).isGlobalDefault),
-      isUserDefault: parseBoolean((item as VariantWire).isUserDefault),
-      isUserSelected: parseBoolean((item as VariantWire).isUserSelected),
-      isCompatible: (item as VariantWire).isCompatible === undefined
-        ? true
-        : parseBoolean((item as VariantWire).isCompatible, true),
-      sortOrder: (typeof (item as VariantWire).sortOrder === 'number'
-        ? (item as VariantWire).sortOrder
-        : Number((item as VariantWire).sortOrder ?? 0)) as number,
-      createdAt: (typeof (item as VariantWire).createdAt === 'string' ? (item as VariantWire).createdAt : new Date().toISOString()) as string,
-      updatedAt: (typeof (item as VariantWire).updatedAt === 'string' ? (item as VariantWire).updatedAt : new Date().toISOString()) as string,
-    })).sort(compareGridVariants);
+    return list
+      .map((item) => ({
+        ...item,
+        name: sanitizeVariantName((item as VariantWire).name),
+        state: sanitizeVariantState((item as VariantWire).state),
+        isDefault: parseBoolean((item as VariantWire).isDefault),
+        isGlobal: parseBoolean((item as VariantWire).isGlobal),
+        isGlobalDefault: parseBoolean((item as VariantWire).isGlobalDefault),
+        isUserDefault: parseBoolean((item as VariantWire).isUserDefault),
+        isUserSelected: parseBoolean((item as VariantWire).isUserSelected),
+        isCompatible:
+          (item as VariantWire).isCompatible === undefined
+            ? true
+            : parseBoolean((item as VariantWire).isCompatible, true),
+        sortOrder: (typeof (item as VariantWire).sortOrder === 'number'
+          ? (item as VariantWire).sortOrder
+          : Number((item as VariantWire).sortOrder ?? 0)) as number,
+        createdAt: (typeof (item as VariantWire).createdAt === 'string'
+          ? (item as VariantWire).createdAt
+          : new Date().toISOString()) as string,
+        updatedAt: (typeof (item as VariantWire).updatedAt === 'string'
+          ? (item as VariantWire).updatedAt
+          : new Date().toISOString()) as string,
+      }))
+      .sort(compareGridVariants);
   } catch (error) {
     console.warn('Varyant yerel verisi okunamadı', error);
     return [];
@@ -338,8 +370,10 @@ const readLocalPreference = (gridId: string): PersistedVariantPreference | undef
       return undefined;
     }
     return {
-      defaultVariantId: typeof pref.defaultVariantId === 'string' ? pref.defaultVariantId : undefined,
-      selectedVariantId: typeof pref.selectedVariantId === 'string' ? pref.selectedVariantId : undefined,
+      defaultVariantId:
+        typeof pref.defaultVariantId === 'string' ? pref.defaultVariantId : undefined,
+      selectedVariantId:
+        typeof pref.selectedVariantId === 'string' ? pref.selectedVariantId : undefined,
     };
   } catch (error) {
     console.warn('Varyant tercih verisi okunamadı', error);
@@ -353,7 +387,7 @@ const writeLocalPreference = (gridId: string, pref: PersistedVariantPreference |
   }
   try {
     const raw = window.localStorage.getItem(LOCAL_PREFERENCE_NAMESPACE);
-    const parsed = raw ? JSON.parse(raw) as PersistedPreferencesState : {};
+    const parsed = raw ? (JSON.parse(raw) as PersistedPreferencesState) : {};
     if (!pref || (!pref.defaultVariantId && !pref.selectedVariantId)) {
       delete parsed[gridId];
     } else {
@@ -397,7 +431,7 @@ const writeLocalVariants = (gridId: string, variants: GridVariant[]) => {
   }
   try {
     const raw = window.localStorage.getItem(LOCAL_STORAGE_NAMESPACE);
-    const parsed = raw ? JSON.parse(raw) as PersistedVariantsState : {};
+    const parsed = raw ? (JSON.parse(raw) as PersistedVariantsState) : {};
     parsed[gridId] = variants;
     window.localStorage.setItem(LOCAL_STORAGE_NAMESPACE, JSON.stringify(parsed));
   } catch (error) {
@@ -447,10 +481,7 @@ const isGlobalCacheExpired = (gridId: string): boolean => {
  * Global varyant değişiklik tespiti — server updatedAt vs local cache.
  * Değişmişse true döner → yeniden çekilmeli.
  */
-const hasGlobalVariantsChanged = (
-  gridId: string,
-  serverVariants: GridVariant[],
-): boolean => {
+const hasGlobalVariantsChanged = (gridId: string, serverVariants: GridVariant[]): boolean => {
   const cached = readLocalVariants(gridId).filter((v) => v.isGlobal);
   const serverGlobals = serverVariants.filter((v) => v.isGlobal);
 
@@ -505,10 +536,7 @@ const upsertLocalVariant = (gridId: string, variant: GridVariant): GridVariant[]
     state: sanitizeVariantState(variant.state),
     isCompatible: parseBoolean(variant.isCompatible, true),
     isUserDefault: parseBoolean(variant.isUserDefault),
-    isUserSelected: parseBoolean(
-      variant.isUserSelected,
-      parseBoolean(variant.isUserDefault),
-    ),
+    isUserSelected: parseBoolean(variant.isUserSelected, parseBoolean(variant.isUserDefault)),
     sortOrder: ensureSortOrder(variant.sortOrder, maxExistingOrder + 1),
   };
 
@@ -525,35 +553,43 @@ const makeLocalVariant = (
   base?: GridVariant,
 ): GridVariant => {
   const now = new Date().toISOString();
-  const id = base?.id ?? (typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `local-${Date.now()}`);
+  const id =
+    base?.id ??
+    (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `local-${Date.now()}`);
   const state =
     'state' in payload && payload.state !== undefined
       ? payload.state
-      : base?.state ?? { columnState: [] };
-  const isGlobal = 'isGlobal' in payload && payload.isGlobal !== undefined
-    ? parseBoolean(payload.isGlobal)
-    : parseBoolean(base?.isGlobal);
-  const isGlobalDefaultCandidate = 'isGlobalDefault' in payload && payload.isGlobalDefault !== undefined
-    ? parseBoolean(payload.isGlobalDefault)
-    : parseBoolean(base?.isGlobalDefault);
+      : (base?.state ?? { columnState: [] });
+  const isGlobal =
+    'isGlobal' in payload && payload.isGlobal !== undefined
+      ? parseBoolean(payload.isGlobal)
+      : parseBoolean(base?.isGlobal);
+  const isGlobalDefaultCandidate =
+    'isGlobalDefault' in payload && payload.isGlobalDefault !== undefined
+      ? parseBoolean(payload.isGlobalDefault)
+      : parseBoolean(base?.isGlobalDefault);
   const derivedDefault = isGlobal
     ? false
-    : ('isDefault' in payload && payload.isDefault !== undefined
+    : 'isDefault' in payload && payload.isDefault !== undefined
       ? parseBoolean(payload.isDefault)
-      : parseBoolean(base?.isDefault));
-  const userDefault = 'isUserDefault' in payload && (payload as VariantWire).isUserDefault !== undefined
-    ? parseBoolean((payload as VariantWire).isUserDefault)
-    : parseBoolean(base?.isUserDefault, derivedDefault);
-  const userSelected = 'isUserSelected' in payload && (payload as VariantWire).isUserSelected !== undefined
-    ? parseBoolean((payload as VariantWire).isUserSelected)
-    : parseBoolean(base?.isUserSelected, derivedDefault);
+      : parseBoolean(base?.isDefault);
+  const userDefault =
+    'isUserDefault' in payload && (payload as VariantWire).isUserDefault !== undefined
+      ? parseBoolean((payload as VariantWire).isUserDefault)
+      : parseBoolean(base?.isUserDefault, derivedDefault);
+  const userSelected =
+    'isUserSelected' in payload && (payload as VariantWire).isUserSelected !== undefined
+      ? parseBoolean((payload as VariantWire).isUserSelected)
+      : parseBoolean(base?.isUserSelected, derivedDefault);
   return {
     id,
     gridId,
     name: sanitizeVariantName(
-      'name' in payload && payload.name !== undefined ? payload.name : base?.name ?? 'Yerel Varyant',
+      'name' in payload && payload.name !== undefined
+        ? payload.name
+        : (base?.name ?? 'Yerel Varyant'),
     ),
     isDefault: derivedDefault,
     isGlobal,
@@ -587,7 +623,11 @@ export const onGlobalVariantChange = (listener: GlobalChangeListener): (() => vo
 
 const notifyGlobalChange = (gridId: string, changed: GridVariant[]): void => {
   for (const listener of _globalChangeListeners) {
-    try { listener(gridId, changed); } catch { /* silent */ }
+    try {
+      listener(gridId, changed);
+    } catch {
+      /* silent */
+    }
   }
 };
 
@@ -595,7 +635,6 @@ export const fetchGridVariants = async (gridId: string): Promise<GridVariant[]> 
   // Kişisel variant'lar her zaman local'dan okunabilir (hızlı)
   // Global variant'lar cache süresi dolmuşsa server'dan yenilenir
   const localVariants = readLocalVariants(gridId);
-  const personalLocal = localVariants.filter((v) => !v.isGlobal);
   const globalCacheOk = !isGlobalCacheExpired(gridId);
 
   // Global cache hâlâ taze ve local'da veri var → hızlı dönüş
@@ -605,9 +644,12 @@ export const fetchGridVariants = async (gridId: string): Promise<GridVariant[]> 
 
   if (typeof fetch === 'function') {
     try {
-      const res = await fetchWithTimeout(buildVariantsFetchUrl(`?gridId=${encodeURIComponent(gridId)}`), {
-        headers: getAuthHeaders(),
-      });
+      const res = await fetchWithTimeout(
+        buildVariantsFetchUrl(`?gridId=${encodeURIComponent(gridId)}`),
+        {
+          headers: getAuthHeaders(),
+        },
+      );
       if (!res.ok) {
         throw new Error(`fetch error ${res.status}`);
       }
@@ -628,7 +670,10 @@ export const fetchGridVariants = async (gridId: string): Promise<GridVariant[]> 
       writeGlobalCacheTs(gridId);
 
       if (globalChanged && normalized.some((v) => v.isGlobal)) {
-        notifyGlobalChange(gridId, normalized.filter((v) => v.isGlobal));
+        notifyGlobalChange(
+          gridId,
+          normalized.filter((v) => v.isGlobal),
+        );
       }
 
       return normalized;
@@ -658,7 +703,9 @@ export const fetchGridVariants = async (gridId: string): Promise<GridVariant[]> 
     let enhanced = normalized;
 
     if (preference?.defaultVariantId && !hasServerUserDefault) {
-      const index = enhanced.findIndex((variant) => variant.id === preference.defaultVariantId && variant.isCompatible);
+      const index = enhanced.findIndex(
+        (variant) => variant.id === preference.defaultVariantId && variant.isCompatible,
+      );
       if (index >= 0) {
         enhanced = enhanced.map((variant, idx) =>
           idx === index
@@ -673,7 +720,9 @@ export const fetchGridVariants = async (gridId: string): Promise<GridVariant[]> 
     }
 
     if (preference?.selectedVariantId && !hasServerUserSelected) {
-      const index = enhanced.findIndex((variant) => variant.id === preference.selectedVariantId && variant.isCompatible);
+      const index = enhanced.findIndex(
+        (variant) => variant.id === preference.selectedVariantId && variant.isCompatible,
+      );
       if (index >= 0) {
         enhanced = enhanced.map((variant, idx) =>
           idx === index
@@ -692,7 +741,10 @@ export const fetchGridVariants = async (gridId: string): Promise<GridVariant[]> 
     /* Never wipe localStorage on server errors — local data is the safety net.
        A 404 may be a transient API issue, not proof that no variants exist. */
     if (isAxiosError(error) && error.response?.status === 404 && fallback.length > 0) {
-      console.warn('[grid-variants] 404 ignored — returning local fallback (%d variants).', fallback.length);
+      console.warn(
+        '[grid-variants] 404 ignored — returning local fallback (%d variants).',
+        fallback.length,
+      );
       return fallback;
     }
     console.warn('Sunucu erişilemedi, yerel varyantlar kullanılıyor.', error);
@@ -700,7 +752,9 @@ export const fetchGridVariants = async (gridId: string): Promise<GridVariant[]> 
   }
 };
 
-export const createGridVariant = async (payload: CreateGridVariantPayload): Promise<GridVariant> => {
+export const createGridVariant = async (
+  payload: CreateGridVariantPayload,
+): Promise<GridVariant> => {
   if (typeof fetch === 'function') {
     try {
       const res = await fetchWithTimeout(buildVariantsFetchUrl(), {
@@ -739,7 +793,9 @@ export const createGridVariant = async (payload: CreateGridVariantPayload): Prom
   }
 };
 
-export const updateGridVariant = async (payload: UpdateGridVariantPayload): Promise<GridVariant> => {
+export const updateGridVariant = async (
+  payload: UpdateGridVariantPayload,
+): Promise<GridVariant> => {
   const { id, ...body } = payload;
   try {
     const response = await api.put<VariantDto>(
@@ -753,13 +809,16 @@ export const updateGridVariant = async (payload: UpdateGridVariantPayload): Prom
     return normalized;
   } catch (error) {
     console.warn('Sunucuya varyant güncellemesi yapılamadı, yerel veriler güncelleniyor.', error);
-    const lookupGridId = payload.gridId
-      ?? (() => {
+    const lookupGridId =
+      payload.gridId ??
+      (() => {
         const all = hasBrowserEnv() ? window.localStorage.getItem(LOCAL_STORAGE_NAMESPACE) : null;
         if (!all) return undefined;
         try {
           const parsed = JSON.parse(all) as PersistedVariantsState;
-          return Object.entries(parsed).find(([, list]) => list.some((variant) => variant.id === id))?.[0];
+          return Object.entries(parsed).find(([, list]) =>
+            list.some((variant) => variant.id === id),
+          )?.[0];
         } catch {
           return undefined;
         }
@@ -788,7 +847,10 @@ export const cloneGridVariant = async (payload: CloneGridVariantPayload): Promis
     if (!source) throw new Error(`Variant ${variantId} not found in local storage`);
     const cloned: GridVariant = {
       ...source,
-      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `clone-${Date.now()}`,
+      id:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `clone-${Date.now()}`,
       name: `${source.name} (Kopya)`,
       isGlobal: false,
       isGlobalDefault: false,
@@ -817,12 +879,17 @@ export const cloneGridVariant = async (payload: CloneGridVariantPayload): Promis
     upsertLocalVariant(normalized.gridId, normalized);
     return normalized;
   } catch (error) {
-    console.warn('Global varyant kişisel kopyaya dönüştürülemedi, yerel kopya oluşturuluyor.', error);
+    console.warn(
+      'Global varyant kişisel kopyaya dönüştürülemedi, yerel kopya oluşturuluyor.',
+      error,
+    );
     return localClone();
   }
 };
 
-export const updateVariantPreference = async (payload: UpdateVariantPreferencePayload): Promise<GridVariant> => {
+export const updateVariantPreference = async (
+  payload: UpdateVariantPreferencePayload,
+): Promise<GridVariant> => {
   const { variantId, ...body } = payload;
   const fallbackUpdate = (): GridVariant => {
     const gridId = payload.gridId ?? 'unknown-grid';
@@ -833,12 +900,16 @@ export const updateVariantPreference = async (payload: UpdateVariantPreferencePa
     }));
     writeLocalVariants(gridId, updated);
     const target = updated.find((v) => v.id === variantId);
-    return target ?? makeLocalVariant(gridId, { id: variantId, ...body } as UpdateGridVariantPayload);
+    return (
+      target ?? makeLocalVariant(gridId, { id: variantId, ...body } as UpdateGridVariantPayload)
+    );
   };
   const enforceSingleUserDefault = (gridId: string, target: GridVariant): GridVariant[] => {
     const raw = hasBrowserEnv() ? window.localStorage.getItem(LOCAL_STORAGE_NAMESPACE) : null;
     const parsed: PersistedVariantsState = raw ? (JSON.parse(raw) as PersistedVariantsState) : {};
-    const existing = Array.isArray(parsed[gridId]) ? (parsed[gridId] as GridVariant[]) : readLocalVariants(gridId);
+    const existing = Array.isArray(parsed[gridId])
+      ? (parsed[gridId] as GridVariant[])
+      : readLocalVariants(gridId);
 
     const merged = existing.map((variant) =>
       variant.id === target.id
@@ -853,7 +924,11 @@ export const updateVariantPreference = async (payload: UpdateVariantPreferencePa
     );
 
     if (!merged.some((v) => v.id === target.id)) {
-      merged.push({ ...target, isUserSelected: target.isUserSelected, isUserDefault: target.isUserDefault });
+      merged.push({
+        ...target,
+        isUserSelected: target.isUserSelected,
+        isUserDefault: target.isUserDefault,
+      });
     }
 
     parsed[gridId] = merged;
@@ -865,17 +940,21 @@ export const updateVariantPreference = async (payload: UpdateVariantPreferencePa
   };
   if (typeof fetch === 'function') {
     try {
-      const res = await fetchWithTimeout(buildVariantsFetchUrl(`/${encodeURIComponent(variantId)}/preference`), {
-        method: 'PATCH',
-        headers: getJsonHeaders(),
-        body: JSON.stringify(body),
-      });
+      const res = await fetchWithTimeout(
+        buildVariantsFetchUrl(`/${encodeURIComponent(variantId)}/preference`),
+        {
+          method: 'PATCH',
+          headers: getJsonHeaders(),
+          body: JSON.stringify(body),
+        },
+      );
       if (!res.ok) {
         throw new Error(`fetch error ${res.status}`);
       }
       const updated = (await res.json()) as VariantDto;
       const normalized: GridVariant = mapVariantDtoToGridVariant(updated);
-      const gridKey = payload.gridId ?? normalized.gridId ?? findGridIdByVariant(variantId) ?? 'unknown-grid';
+      const gridKey =
+        payload.gridId ?? normalized.gridId ?? findGridIdByVariant(variantId) ?? 'unknown-grid';
       const merged = enforceSingleUserDefault(gridKey, normalized);
       writeLocalVariants(gridKey, merged);
       writeLocalPreference(gridKey, {
@@ -899,7 +978,8 @@ export const updateVariantPreference = async (payload: UpdateVariantPreferencePa
     );
     const updated = response.data as VariantDto;
     const normalized: GridVariant = mapVariantDtoToGridVariant(updated);
-    const gridKey = payload.gridId ?? normalized.gridId ?? findGridIdByVariant(variantId) ?? 'unknown-grid';
+    const gridKey =
+      payload.gridId ?? normalized.gridId ?? findGridIdByVariant(variantId) ?? 'unknown-grid';
     const merged = enforceSingleUserDefault(gridKey, normalized);
     writeLocalVariants(gridKey, merged);
     const nextPreference: PersistedVariantPreference | undefined =
