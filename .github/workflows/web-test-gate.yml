@@ -569,6 +569,15 @@ jobs:
           SHELL_ENABLE_ACCESS_REMOTE: '0'
           VITE_SHELL_ENABLE_AUDIT_REMOTE: '0'
           SHELL_ENABLE_AUDIT_REMOTE: '0'
+          # schema-explorer is the 8th MF remote. Without disabling it the
+          # production build keeps its dev remoteEntry (localhost:3008),
+          # which is unreachable on the CI runner → `net::ERR_CONNECTION_
+          # REFUSED` → `[ Federation Runtime ]` crash → blank shell → the
+          # auth FSM never reaches `transportReady` and the whole serial
+          # block times out. The other 7 remotes were already disabled
+          # here; schema-explorer was simply missed.
+          VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '0'
+          SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '0'
         run: pnpm --filter mfe-shell build
       - name: Serve built bundle (preview)
         env:
