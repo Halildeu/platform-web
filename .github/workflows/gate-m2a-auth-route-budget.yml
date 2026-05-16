@@ -26,28 +26,23 @@
 
 name: M2a authenticated route budget (PR-V2.1-M2a1)
 
+# 2026-05-17: the `pull_request:` trigger is REMOVED. This job ran on
+# every PR but failed 15/15 (never once green): its "Diagnostic —
+# testai.acik.com reachability" step — and every step after — must
+# reach https://testai.acik.com, and GitHub-hosted runners cannot
+# TCP-connect to testai.acik.com:443 (curl exit 28, http_code=000 —
+# DNS resolves to 212.115.26.190 but the SYN to the Turkey-hosted edge
+# gets no response: a firewall / network-path block on GHA Azure IP
+# ranges). Measuring the LIVE cluster needs a self-hosted runner on
+# staging-sw — the pattern deploy-testai.yml (platform-k8s-gitops)
+# already uses — and platform-web has no self-hosted runner registered.
+# Until the runner architecture is resolved (register a self-hosted
+# runner / relocate the job / measure a local preview build / retire
+# M2a), the job is `workflow_dispatch`-only so it stops adding a
+# permanent-red noise check to every PR. The previous `pull_request:`
+# paths filter is preserved in git history — restore it once M2a can
+# actually run green.
 on:
-  pull_request:
-    paths:
-      # Shell (auth bootstrap + protected route harness)
-      - 'apps/mfe-shell/**'
-      # Remote MFEs surfaced by measured routes (Codex `019e2b00` round 4 REVISE:
-      # measured routes include /admin/users (mfe-users), /admin/access (mfe-access),
-      # /admin/reports/users (mfe-reporting) — workflow must trigger on
-      # those remote changes so M2a1 gate doesn't silently miss regressions)
-      - 'apps/mfe-users/**'
-      - 'apps/mfe-access/**'
-      - 'apps/mfe-reporting/**'
-      - 'apps/mfe-audit/**'
-      # Shared packages (auth, http transport, design system, types)
-      - 'packages/**'
-      # Perf infrastructure
-      - 'performance-budgets.json'
-      - 'scripts/ci/route-performance-budget.mjs'
-      - 'scripts/ci/lib/route-budget-evaluate.mjs'
-      - 'scripts/perf/auth-storage-setup.mjs'
-      - 'tests/perf/baseline.json'
-      - '.github/workflows/gate-m2a-auth-route-budget.yml'
   workflow_dispatch:
     inputs:
       warn_only:
@@ -108,8 +103,12 @@ jobs:
             -d "username=perf-test&password=__diagnostic_invalid__&grant_type=password&client_id=frontend" \
             || echo "token-curl-failed-exit=$?"
           echo "=== Login page download summary ==="
-          ls -la /tmp/login-probe.html 2>&1
-          head -c 200 /tmp/login-probe.html 2>&1
+          # `|| true`: this step is purely informational — every curl
+          # above is `|| echo`-guarded, so a failed curl must not crash
+          # the step. When curl cannot reach testai it writes no file,
+          # and an unguarded `ls` would exit 2 and fail the whole job.
+          ls -la /tmp/login-probe.html 2>&1 || true
+          head -c 200 /tmp/login-probe.html 2>&1 || true
           echo ""
 
       - name: Generate runtime storageState (no committed fixture)
