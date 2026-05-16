@@ -66,9 +66,14 @@ export * from './patterns';
 /* ---- Blocks (component-marketplace surface) ---- */
 // Domain-agnostic building blocks moved here from enterprise/ in Phase 2 & 4.
 // `@mfe/design-system` (root) is the canonical import; `@mfe/design-system/blocks`
-// is the tree-shakeable deep import. The legacy `enterprise/` barrel re-exports
-// these as @deprecated compat shims (Phase 4.5).
+// is the tree-shakeable deep import.
 export * from './blocks';
+
+/* ---- Enterprise (domain-specific showcase) ---- */
+// After Phase 5, enterprise/ holds only genuine domain-specific residents:
+// FlowBuilder and FineKinney. Re-exported here so the catalog-documented
+// `import { FlowBuilder } from '@mfe/design-system'` resolves.
+export * from './enterprise';
 
 /* ---- Advanced ---- */
 // Re-exported from barrel for backward compatibility.

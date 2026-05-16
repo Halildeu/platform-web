@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 import { ProcessFlow } from '../ProcessFlow';
@@ -19,6 +19,19 @@ describe('ProcessFlow', () => {
     ];
     const { container } = render(<ProcessFlow nodes={nodes} edges={edges} />);
     expect(container.textContent).toContain('Begin');
+  });
+
+  it('fires onNodeClick when node is clicked', () => {
+    const onClick = vi.fn();
+    const nodes = [
+      { id: '1', type: 'start' as const, label: 'Begin' },
+      { id: '2', type: 'end' as const, label: 'Done' },
+    ];
+    const edges = [{ from: '1', to: '2' }];
+    render(<ProcessFlow nodes={nodes} edges={edges} onNodeClick={onClick} />);
+    fireEvent.click(screen.getByText('Begin'));
+    expect(onClick).toHaveBeenCalledWith('1');
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it('has no accessibility violations', async () => {
