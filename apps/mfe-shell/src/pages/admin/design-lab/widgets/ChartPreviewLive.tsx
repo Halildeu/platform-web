@@ -20,6 +20,7 @@ import {
   GaugeChart,
   RadarChart,
   TreemapChart,
+  TreeChart,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -804,6 +805,76 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             onNodeClick={getCallbackPreset(getEnum(toggles, 'onNodeClick', 'noop'))}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link
+    // tree — ECharts Depth campaign. Org-chart sample: a leadership
+    // hierarchy with departman → unvan structure.
+    case 'tree-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <TreeChart
+            data={[
+              {
+                name: 'Genel Müdür',
+                children: [
+                  {
+                    name: 'İK Direktörü',
+                    children: [
+                      { name: 'İşe Alım Uzmanı', value: 8 },
+                      { name: 'İK Operasyon Uzmanı', value: 12 },
+                      { name: 'Bordro Uzmanı', value: 5 },
+                    ],
+                  },
+                  {
+                    name: 'Mühendislik Direktörü',
+                    children: [
+                      { name: 'Frontend Ekibi', value: 20 },
+                      { name: 'Backend Ekibi', value: 25 },
+                      { name: 'DevOps Ekibi', value: 9 },
+                    ],
+                  },
+                  {
+                    name: 'Finans Direktörü',
+                    children: [
+                      { name: 'Muhasebe', value: 14 },
+                      { name: 'Bütçe Planlama', value: 6 },
+                    ],
+                  },
+                ],
+              },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            size={sizeFor('lg')}
+            layout={getEnum(toggles, 'layout', 'orthogonal')}
+            orient={getEnum(toggles, 'orient', 'LR')}
+            initialTreeDepth={getNum(toggles, 'initialTreeDepth', 2)}
+            expandAndCollapse={isOn(toggles, 'expandAndCollapse', true)}
+            roam={isOn(toggles, 'roam', false)}
+            symbolSize={getNum(toggles, 'symbolSize', 10)}
+            showLabels={isOn(toggles, 'showLabels', true)}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            valueColumnHeader={getStr(toggles, 'valueColumnHeader', 'Personel')}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}

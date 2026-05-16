@@ -247,6 +247,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'sankey',
   },
+  // PR-X16a (Codex thread 019e32da AGREE): ECharts Depth campaign —
+  // hierarchical node-link tree (org-chart / expand-collapse hierarchy).
+  {
+    id: 'tree-chart',
+    name: 'TreeChart',
+    description: 'Hiyerarsik node-link agac, orthogonal/radial, expand-collapse.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'treemap',
+  },
   // Interaction
   {
     id: 'chart-container',
@@ -479,7 +489,7 @@ const ChartsListing: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-text-primary">Charts</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          @mfe/x-charts — 23 chart tipi (19 2D + 4 3D), cross-filter, AI, performance. ECharts +
+          @mfe/x-charts — 24 chart tipi (20 2D + 4 3D), cross-filter, AI, performance. ECharts +
           echarts-gl engine.
         </p>
         <div className="mt-3 flex gap-2 text-xs text-text-tertiary">

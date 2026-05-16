@@ -156,6 +156,21 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'self', label: 'self' },
     { value: 'none', label: 'none' },
   ],
+  // PR-X16a (Codex 019e32da): TreeChart layout/orient. `TreeLayout` and
+  // `TreeOrient` are exported type aliases in `packages/x-charts/src/
+  // TreeChart.tsx`; the prop catalog stores the alias name (not the
+  // resolved literal union), so they need an explicit table here — same
+  // pattern as `SunburstHighlightPolicy` above.
+  TreeLayout: [
+    { value: 'orthogonal', label: 'orthogonal (default)' },
+    { value: 'radial', label: 'radial' },
+  ],
+  TreeOrient: [
+    { value: 'LR', label: 'LR (left → right)' },
+    { value: 'RL', label: 'RL (right → left)' },
+    { value: 'TB', label: 'TB (top → bottom)' },
+    { value: 'BT', label: 'BT (bottom → top)' },
+  ],
 };
 
 const ACCESS_LEVEL_INLINE = '"full" | "readonly" | "disabled" | "hidden"';
@@ -511,6 +526,34 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'leafDepth',
     'visibleMin',
     'animate',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
+  // PR-X16a (Codex 019e32da AGREE): hierarchical node-link tree.
+  // `layout`/`orient` drive orthogonal vs radial; `initialTreeDepth`
+  // collapses deep levels; `expandAndCollapse`/`roam` interaction.
+  'tree-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'size',
+    'layout',
+    'orient',
+    'initialTreeDepth',
+    'expandAndCollapse',
+    'roam',
+    'symbolSize',
+    'showLabels',
+    'animate',
+    // `valueFormatter` + `onDataPointClick` are function props — they are
+    // preset-driven (COMPLEX_PROP_PRESETS), NOT LIVE_PROP_SUPPORT
+    // primitives, mirroring treemap-chart. `valueColumnHeader` IS a real
+    // string primitive and stays here.
+    'valueColumnHeader',
     'theme',
     'decal',
     'density',
@@ -884,6 +927,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'funnel-chart',
       'sankey-chart',
       'sunburst-chart',
+      // PR-X16a (Codex 019e32da): TreeChart node value formatting.
+      'tree-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -912,6 +957,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'funnel-chart',
       'sankey-chart',
       'sunburst-chart',
+      // PR-X16a (Codex 019e32da): TreeChart node-click cross-filter.
+      'tree-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1098,6 +1145,26 @@ export const PLAYGROUND_DEFAULT_OVERRIDES: Record<string, PlaygroundValue> = {
   'scatter-chart.yLabel': 'Y',
 };
 
+/**
+ * Per-`{chartId}.{propName}` editor-kind overrides. A few props have a
+ * TypeScript type the generic `getEditorKind` heuristic cannot classify
+ * into a useful control:
+ *
+ *   - `tree-chart.roam` is `boolean | 'scale' | 'move'` — a mixed
+ *     boolean / string-literal union. `getEnumOptions` rejects it (not a
+ *     pure string-literal union), so it falls through to `complex`
+ *     (read-only) even though it IS a live-forwarded prop. The playground
+ *     exposes it as a plain on/off `boolean` toggle; the `'scale'` /
+ *     `'move'` partial-roam granularity stays a code/API-only refinement
+ *     (cf. the deliberately-deferred `SankeyFocusMode`).
+ *
+ * Keep this list minimal — prefer a real enum table in
+ * `KNOWN_ENUM_OPTIONS` whenever the prop is a pure string-literal union.
+ */
+export const PROP_EDITOR_KIND_OVERRIDES: Record<string, EditorKind> = {
+  'tree-chart.roam': 'boolean',
+};
+
 /* ================================================================== */
 /*  Descriptor builder                                                 */
 /* ================================================================== */
@@ -1107,6 +1174,13 @@ export function buildDescriptor(chartId: string, prop: ChartProp): EditorDescrip
   const category = getCategory(prop);
   const overrideKey = `${chartId}.${prop.name}`;
   const overrideDefault = PLAYGROUND_DEFAULT_OVERRIDES[overrideKey];
+
+  // Per-prop editor-kind override — for props whose TS type the generic
+  // `getEditorKind` heuristic cannot map to a useful control (see
+  // `PROP_EDITOR_KIND_OVERRIDES`). Applied before the preset upgrade so
+  // an overridden prop is treated as its real kind, not `complex`.
+  const kindOverride = PROP_EDITOR_KIND_OVERRIDES[overrideKey];
+  if (kindOverride) kind = kindOverride;
 
   // Faz 21.10 PR-FE-Playground-3: complex props with a registered preset
   // dropdown become live-editable via the preset selector. The first preset
@@ -1647,6 +1721,38 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // PR-X16a (Codex 019e32da): TreeChart org-hierarchy scaffold so the
+  // generated snippet compiles end-to-end (`const sampleData = [...]`).
+  'tree-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'TreeChart hierarchy (org chart)',
+        jsLiteral: `[
+  {
+    name: 'Genel Müdür',
+    children: [
+      {
+        name: 'İK Direktörü',
+        children: [
+          { name: 'İşe Alım', value: 8 },
+          { name: 'İK Operasyon', value: 12 },
+        ],
+      },
+      {
+        name: 'Mühendislik Direktörü',
+        children: [
+          { name: 'Frontend', value: 20 },
+          { name: 'Backend', value: 25 },
+        ],
+      },
+    ],
+  },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -1993,6 +2099,58 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       label: 'Read-only Access',
       tag: 'access',
       description: 'Visible but non-interactive — click + drill no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // PR-X16a (Codex 019e32da): hierarchical node-link tree presets.
+  'tree-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Orthogonal left-to-right org hierarchy.',
+      statePatch: {},
+    },
+    {
+      id: 'radial',
+      label: 'Radial Layout',
+      tag: 'layout',
+      description: 'Root at centre, descendants on concentric rings.',
+      statePatch: { layout: 'radial' },
+    },
+    {
+      id: 'expanded',
+      label: 'Fully Expanded',
+      tag: 'depth',
+      description: 'Expand every level on first render (initialTreeDepth=4).',
+      statePatch: { initialTreeDepth: 4 },
+    },
+    {
+      id: 'collapsed',
+      label: 'Collapsed Branches',
+      tag: 'depth',
+      description: 'Show only the root + its direct children (initialTreeDepth=1).',
+      statePatch: { initialTreeDepth: 1 },
+    },
+    {
+      id: 'with-roam',
+      label: 'Pan + Zoom',
+      tag: 'interaction',
+      description: 'Enable mouse pan + scroll-zoom on the canvas.',
+      statePatch: { roam: true },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
       statePatch: { access: 'readonly' },
     },
   ],

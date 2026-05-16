@@ -12,12 +12,7 @@
       "id": "foundations",
       "title": "Foundations",
       "description": "Theme, tokens, accessibility, runtime helpers ve kalite altyapisi",
-      "groupIds": [
-        "theme_tokens",
-        "a11y_i18n",
-        "dev_diagnostics",
-        "runtime_utilities"
-      ]
+      "groupIds": ["theme_tokens", "a11y_i18n", "dev_diagnostics", "runtime_utilities"]
     },
     {
       "id": "components",
@@ -46,19 +41,13 @@
       "id": "recipes",
       "title": "Recipes",
       "description": "Tekrarlanabilir workflow, state ve task odakli kullanim kaliplari",
-      "groupIds": [
-        "tables_grid_addons",
-        "ai_native_helpers"
-      ]
+      "groupIds": ["tables_grid_addons", "ai_native_helpers"]
     },
     {
       "id": "pages",
       "title": "Pages / Templates",
       "description": "Sayfa iskeletleri, page shell building blocklari ve tam template yuzeyleri",
-      "groupIds": [
-        "layout_surfaces",
-        "page_blocks"
-      ]
+      "groupIds": ["layout_surfaces", "page_blocks"]
     },
     {
       "id": "apis",
@@ -106,22 +95,57 @@
     {
       "id": "charts_enterprise",
       "title": "Enterprise Charts",
-      "subgroups": ["GaugeChart", "RadarChart", "TreemapChart", "HeatmapChart", "WaterfallChart", "FunnelChart", "SankeyChart", "SunburstChart"]
+      "subgroups": [
+        "GaugeChart",
+        "RadarChart",
+        "TreemapChart",
+        "TreeChart",
+        "HeatmapChart",
+        "WaterfallChart",
+        "FunnelChart",
+        "SankeyChart",
+        "SunburstChart"
+      ]
     },
     {
       "id": "charts_interaction",
       "title": "Interaction & Composition",
-      "subgroups": ["ChartContainer", "ChartDashboard", "ChartToolbar", "CrossFilterProvider", "DrillDownBreadcrumb", "KPICard", "SparklineChart", "StatWidget"]
+      "subgroups": [
+        "ChartContainer",
+        "ChartDashboard",
+        "ChartToolbar",
+        "CrossFilterProvider",
+        "DrillDownBreadcrumb",
+        "KPICard",
+        "SparklineChart",
+        "StatWidget"
+      ]
     },
     {
       "id": "charts_ai",
       "title": "AI & Transforms",
-      "subgroups": ["nlToChartSpec", "suggestChartType", "detectAnomalies", "identifyTrends", "generateChartDescription", "movingAverage", "linearRegression"]
+      "subgroups": [
+        "nlToChartSpec",
+        "suggestChartType",
+        "detectAnomalies",
+        "identifyTrends",
+        "generateChartDescription",
+        "movingAverage",
+        "linearRegression"
+      ]
     },
     {
       "id": "charts_perf",
       "title": "Performance & Infra",
-      "subgroups": ["downsampleLTTB", "useProgressiveRender", "useLazyChart", "LRUCache", "lazyChartImport", "useChartExport", "useDashboardState"]
+      "subgroups": [
+        "downsampleLTTB",
+        "useProgressiveRender",
+        "useLazyChart",
+        "LRUCache",
+        "lazyChartImport",
+        "useChartExport",
+        "useDashboardState"
+      ]
     },
     {
       "id": "enterprise",
@@ -338,20 +362,12 @@
     {
       "id": "state_feedback",
       "title": "State & Feedback",
-      "subgroups": [
-        "Toast / Snackbar",
-        "Inline notifications"
-      ]
+      "subgroups": ["Toast / Snackbar", "Inline notifications"]
     },
     {
       "id": "layout",
       "title": "Layout Components",
-      "subgroups": [
-        "Card",
-        "Stack",
-        "Master-detail",
-        "Smart dashboard"
-      ]
+      "subgroups": ["Card", "Stack", "Master-detail", "Smart dashboard"]
     },
     {
       "id": "overlays_portals",
@@ -616,27 +632,73 @@
     {
       "id": "hooks",
       "label": "Hooks",
-      "subgroups": ["useToast", "useAsyncCombobox", "useGridVariants", "useAgGridTablePagination", "useScheduler"]
+      "subgroups": [
+        "useToast",
+        "useAsyncCombobox",
+        "useGridVariants",
+        "useAgGridTablePagination",
+        "useScheduler"
+      ]
     },
     {
       "id": "utilities",
       "label": "Utilities",
-      "subgroups": ["buildAuthHeaders", "buildEntityGridQueryParams", "createAccordionPreset", "createBreadcrumbItemsFromRoute", "createMenuBarPreset", "createNavigationRailPreset", "createPageLayoutPreset", "createSegmentedPreset", "resolveAccessState", "resolveMenuBarActiveValue", "resolveNavigationRailActiveValue", "resolveSegmentedNextValue", "shouldBlockInteraction"]
+      "subgroups": [
+        "buildAuthHeaders",
+        "buildEntityGridQueryParams",
+        "createAccordionPreset",
+        "createBreadcrumbItemsFromRoute",
+        "createMenuBarPreset",
+        "createNavigationRailPreset",
+        "createPageLayoutPreset",
+        "createSegmentedPreset",
+        "resolveAccessState",
+        "resolveMenuBarActiveValue",
+        "resolveNavigationRailActiveValue",
+        "resolveSegmentedNextValue",
+        "shouldBlockInteraction"
+      ]
     },
     {
       "id": "theme_api",
       "label": "Theme API",
-      "subgroups": ["getThemeAxes", "getThemeContract", "getResolvedToken", "registerTokenResolver", "resetTokenResolver", "subscribeThemeAxes", "updateThemeAxes"]
+      "subgroups": [
+        "getThemeAxes",
+        "getThemeContract",
+        "getResolvedToken",
+        "registerTokenResolver",
+        "resetTokenResolver",
+        "subscribeThemeAxes",
+        "updateThemeAxes"
+      ]
     },
     {
       "id": "theme_setters",
       "label": "Theme Setters",
-      "subgroups": ["setAppearance", "setDensity", "setElevation", "setMotion", "setRadius", "setOverlayIntensity", "setOverlayOpacity", "setSurfaceTone", "setTableSurfaceTone", "resolveThemeModeKey", "toggleVariantDefault"]
+      "subgroups": [
+        "setAppearance",
+        "setDensity",
+        "setElevation",
+        "setMotion",
+        "setRadius",
+        "setOverlayIntensity",
+        "setOverlayOpacity",
+        "setSurfaceTone",
+        "setTableSurfaceTone",
+        "resolveThemeModeKey",
+        "toggleVariantDefault"
+      ]
     },
     {
       "id": "constants",
       "label": "Constants",
-      "subgroups": ["THEME_APPEARANCE_OPTIONS", "THEME_DENSITY_OPTIONS", "THEME_ELEVATION_OPTIONS", "THEME_MOTION_OPTIONS", "THEME_RADIUS_OPTIONS"]
+      "subgroups": [
+        "THEME_APPEARANCE_OPTIONS",
+        "THEME_DENSITY_OPTIONS",
+        "THEME_ELEVATION_OPTIONS",
+        "THEME_MOTION_OPTIONS",
+        "THEME_RADIUS_OPTIONS"
+      ]
     },
     {
       "id": "hocs",

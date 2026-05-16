@@ -784,6 +784,7 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
     'gauge-chart',
     'radar-chart',
     'treemap-chart',
+    'tree-chart',
     'heatmap-chart',
     'waterfall-chart',
     'funnel-chart',
@@ -854,6 +855,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'gauge-chart': 19,
     'radar-chart': 16,
     'treemap-chart': 15,
+    'tree-chart': 19, // PR-X16a: 19 primitives (valueFormatter/onDataPointClick are preset-driven)
     'heatmap-chart': 15,
     'waterfall-chart': 15,
     'funnel-chart': 19,
@@ -871,6 +873,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'gauge-chart': 3, // + thresholds
     'radar-chart': 2,
     'treemap-chart': 3, // + onNodeClick
+    'tree-chart': 2, // PR-X16a: valueFormatter + onDataPointClick
     'heatmap-chart': 4, // + onCellClick + colors
     'waterfall-chart': 2,
     'funnel-chart': 2,
@@ -879,10 +882,17 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   };
 
   // PR-A2c-wire bumped scatter-chart primitives 17 → 18 (`enableBrush`)
-  // and added 2 public ScatterChart props (`enableBrush`,
-  // `onBrushSelection`) to the catalog → 264 → 266. Coverage:
-  // 211 (primitives) + 34 (presets) = 245 / 266 ≈ %92.1.
-  const TOTAL_CATALOG_PROPS = 266;
+  // and added 2 public ScatterChart props to the catalog → 264 → 266.
+  // PR-X16a enrols TreeChart in the curated lock: +19 primitives, +2
+  // presets, +24 catalog props. Coverage: 230 (primitives) + 36
+  // (presets) = 266 / 290 ≈ %91.7.
+  //
+  // NOTE: this lock is a CURATED subset — the PR-X12+ campaign charts
+  // (graph / geo-map / box-plot / candlestick / pictorial-bar /
+  // parallel-coordinates) are intentionally NOT enrolled here, so
+  // `TOTAL_CATALOG_PROPS` is the subset catalog total, not the whole
+  // catalog. Enrolling them is a separate coverage-lock follow-up.
+  const TOTAL_CATALOG_PROPS = 290;
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
   const PRESET_TOTAL = Object.values(PRESET_COUNTS).reduce((a, b) => a + b, 0);
   const EXPECTED_TOTAL = PRIMITIVE_TOTAL + PRESET_TOTAL;
