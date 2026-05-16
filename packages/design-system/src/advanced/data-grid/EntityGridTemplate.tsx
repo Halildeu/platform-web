@@ -555,7 +555,10 @@ export function EntityGridTemplate<
    */
   const columnDefIds = React.useMemo(
     () =>
-      columnDefs.map((cd) => {
+      // PR-0.5e fix: `columnDefs` is optional on EntityGridTemplateProps —
+      // the contract test (and any minimal-props consumer) renders without
+      // it, so guard the `.map` against an undefined column list.
+      (columnDefs ?? []).map((cd) => {
         const candidate = cd as { colId?: unknown; field?: unknown };
         if (typeof candidate.colId === 'string') return candidate.colId;
         if (typeof candidate.field === 'string') return candidate.field;
