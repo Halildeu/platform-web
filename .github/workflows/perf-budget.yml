@@ -74,6 +74,17 @@ jobs:
         run: pnpm exec playwright install chromium --with-deps
 
       - name: Build mfe-shell (production preview)
+        # PERF-INIT-V2.1 perf-pipeline fix: this gate serves a STANDALONE shell
+        # preview with no MFE remote dev servers. Eager mode emits synchronous
+        # remoteEntry.js fetches (localhost:300x) at bootstrap →
+        # ERR_CONNECTION_REFUSED → the app fails to paint (NO_FCP) →
+        # perf-observer never attaches window.__perfSnapshot. The on-demand
+        # build omits remotes from the federation manifest so the standalone
+        # preview renders. The measured /login route content is shell-only;
+        # CI intentionally measures a standalone on-demand shell preview,
+        # while the canonical eager artifact stays covered by size-limit.
+        env:
+          MFE_ON_DEMAND_BOOTSTRAP: '1'
         run: pnpm --filter mfe-shell build
 
       - name: Serve production preview (SPA-aware Vite preview, port 5174)
@@ -189,6 +200,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build mfe-shell (production preview)
+        # PERF-INIT-V2.1 perf-pipeline fix: this gate serves a STANDALONE shell
+        # preview with no MFE remote dev servers. Eager mode emits synchronous
+        # remoteEntry.js fetches (localhost:300x) at bootstrap →
+        # ERR_CONNECTION_REFUSED → the app fails to paint (NO_FCP) →
+        # perf-observer never attaches window.__perfSnapshot. The on-demand
+        # build omits remotes from the federation manifest so the standalone
+        # preview renders. The measured /login route content is shell-only;
+        # CI intentionally measures a standalone on-demand shell preview,
+        # while the canonical eager artifact stays covered by size-limit.
+        env:
+          MFE_ON_DEMAND_BOOTSTRAP: '1'
         run: pnpm --filter mfe-shell build
 
       - name: Install Chrome for Lighthouse
