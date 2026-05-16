@@ -2,7 +2,7 @@
 
 > **Belge tipi**: Runbook
 > **Scope**: PERF-INIT-V2 PMD §4.2 PR-A0
-> **Status**: Scaffold (canary mfe-shell first; diğer MFE'ler sonraki PR'larda)
+> **Status**: 7-MFE LIVE (PERF-INIT-V2.1 V3-B1a — 7 MFE entegre; bulgular: `bundle-duplication-v3b1a.md`)
 
 ---
 
@@ -35,11 +35,11 @@ PR-B1a (AG Grid lazy split) + PR-B1b (design-system light entry) + PR-B2 (MF sha
 ### 3.1 Per-MFE bundle stats üretmek
 
 ```bash
-# Tek MFE (canary):
+# Tek MFE (hızlı canary):
 ANALYZE_BUNDLE=1 pnpm --filter mfe-shell build
 
-# Tüm MFE'ler (sonraki PR'larda her vite.config.ts'e plug eklendikçe):
-ANALYZE_BUNDLE=1 pnpm -r --filter 'mfe-*' build
+# 7 MFE'nin tamamı (V3-B1a) — temizler + build eder + detector --require-mfes:
+npm run bundle:analyze:all
 ```
 
 Çıktı:
@@ -163,7 +163,7 @@ Bu kanıt zemini olmadan PR-B1a/B1b/B2 effort'unu doğrulayamayız.
 
 **Bu PR'da YOK** (sonraki PR'lara):
 
-- Diğer 7 MFE vite.config.ts'lerine plug ekleme (her biri ayrı PR veya batch PR)
+- ~~Diğer 7 MFE vite.config.ts'lerine plug ekleme~~ → **TAMAMLANDI**: PERF-INIT-V2.1 V3-B1a (6 kalan MFE entegre, 7-MFE LIVE)
 - CI workflow integration (PR-G1 scope)
 - Auth storage state generator (PR-S1.b/B4 conditional)
 - Long task attribution otomatik parser (manuel Playwright trace + `perfSnapshot.longTasks` cross-analiz; CDP Chrome trace PR-A0.b)
@@ -172,7 +172,7 @@ Bu kanıt zemini olmadan PR-B1a/B1b/B2 effort'unu doğrulayamayız.
 
 ## 9. Bilinen sınırlar
 
-1. **`mfe-shell` canary**: bu PR sadece mfe-shell için bundle stats üretir. Duplicate detector `mfeCount >= 2` filtresi uyguladığı için tek MFE'de **duplicates listesi boş çıkar** (cross-MFE duplicate ancak 2+ MFE entegre olduğunda anlam taşır). Diğer 7 MFE'lerin integration PR'ları (per-MFE veya batch) sonra gelecek.
+1. ~~**`mfe-shell` canary**~~ → **7-MFE LIVE** (PERF-INIT-V2.1 V3-B1a): 7 MFE'nin tamamı `bundleVisualizer` plugin'ine bağlı; duplicate detector cross-MFE raporunu üretir. Bulgular + ham sayılar: `bundle-duplication-v3b1a.md`. (PR-A0'da yalnız mfe-shell canary entegreydi; cross-MFE duplicate listesi boş çıkıyordu.)
 2. **Auth storage**: testai için real-user storage state PR-S1.b veya B4 conditional ile üretilecek. Authenticated route'lar `--auth-storage` zorunlu (script fail-fast).
 3. **Trace formatı**: Playwright trace (`trace.zip`), Chrome DevTools formatı değil. CDP `Tracing.start`/`Tracing.end` ile gerçek Chrome trace PR-A0.b scope.
 4. **Long-task root-cause**: otomatik parser yok; `taxonomy.json` `perfSnapshot.longTasks` + Playwright trace cross-analiz manuel (gelecek PR).
@@ -197,9 +197,10 @@ npm run dev &
 node scripts/ci/bundle-taxonomy.mjs --target local --routes /login
 
 # package.json wrapper:
-npm run bundle:analyze            # ANALYZE_BUNDLE=1 build for mfe-shell
+npm run bundle:analyze            # ANALYZE_BUNDLE=1 build for mfe-shell (canary)
+npm run bundle:analyze:all        # clean + 7-MFE ANALYZE build + detector (V3-B1a)
 npm run bundle:taxonomy           # Playwright runner
-npm run bundle:duplicates         # aggregator
+npm run bundle:duplicates         # aggregator (existing stats)
 ```
 
 ---

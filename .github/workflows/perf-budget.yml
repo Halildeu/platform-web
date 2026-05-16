@@ -29,6 +29,7 @@ on:
       - 'scripts/ci/route-performance-budget.mjs'
       - 'scripts/ci/lib/route-budget-evaluate.mjs'
       - 'scripts/ci/__tests__/route-budget-evaluate.test.mjs'
+      - 'scripts/ci/__tests__/duplicate-package-detector.test.mjs'
       - 'scripts/ci/bundle-taxonomy.mjs'
       - 'scripts/ci/duplicate-package-detector.mjs'
       - 'scripts/ci/css-attribution-breakdown.mjs'
@@ -221,11 +222,11 @@ jobs:
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN || '' }}
 
-  # PERF-INIT-V2.1 dual budget Phase 2: pure evaluation-core unit tests.
-  # Mirrors gate-perf-drift.yml's `unit-tests` job pattern. The lib + test
+  # PERF-INIT-V2.1 dual budget Phase 2 + V3-B1a: pure perf ci-script unit tests.
+  # Mirrors gate-perf-drift.yml's `unit-tests` job pattern. The libs + tests
   # are dependency-free (no Playwright graph), so this runs install-free.
   unit-tests:
-    name: route-budget evaluate unit tests
+    name: perf ci-script unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -233,5 +234,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run route-budget-evaluate unit tests
-        run: node --test scripts/ci/__tests__/route-budget-evaluate.test.mjs
+      - name: Run perf ci-script unit tests
+        run: node --test scripts/ci/__tests__/route-budget-evaluate.test.mjs scripts/ci/__tests__/duplicate-package-detector.test.mjs

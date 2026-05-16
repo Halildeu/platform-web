@@ -46,12 +46,20 @@ archive/
 public/design-tokens.source.json
 web/.eslintcache
 apps/*/dist/
+# run-web-build-guard.sh build log directory (generated each `npm run build`)
+/logs/
 
 # PERF-INIT-V2 PR-B3d0-impl: source-map-explorer CSS attribution artifacts
 # (generated; CI uploads them, never commit — node_modules paths,
 # sourcemap normalization, and build hash variance kirletir diff trail).
 docs/performance/css-breakdown.html
 docs/performance/css-breakdown.json
+
+# PERF-INIT-V2.1 V3-B1a: ANALYZE_BUNDLE bundle-stats artifacts
+# (rollup-plugin-visualizer stats.json/treemap.html + duplicates.json —
+# generated, large, build-hash variant; regenerate via ANALYZE_BUNDLE=1
+# build + scripts/ci/duplicate-package-detector.mjs).
+tests/perf/bundle-stats/
 
 # PERF-INIT-V2.1 PR-V2.1-M2a1: runtime-generated auth storageState
 # (NOT committed — credential material in JWT; runtime-gen pattern per
