@@ -113,10 +113,10 @@ describe('shouldExposeGlobal (perf-observer exposure contract)', () => {
 });
 
 /**
- * PERF-INIT-V2.1 V3-B2 PR1: CLS source attribution helpers. `describeNode` and
- * `rectLite` are pure — they flatten a layout-shift source into a JSON-safe,
- * PII-free record so CLS regressions can be diagnosed ("which element moved"),
- * not merely measured.
+ * PERF-INIT-V2.1 V3-B2 PR1: CLS source attribution helpers. `describeNode`,
+ * `rectLite` and `sanitizeToken` are pure — they flatten a layout-shift source
+ * into a JSON-safe, text-free + pattern-redacted record so CLS regressions can
+ * be diagnosed ("which element moved"), not merely measured.
  */
 describe('rectLite (CLS attribution rect flattening)', () => {
   it('flattens and rounds a rect', () => {
