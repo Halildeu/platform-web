@@ -104,3 +104,69 @@ describe('bundle guard — echarts-gl shell impact', () => {
     expect(source).toMatch(ALLOWED_DYNAMIC_IMPORT_RE);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  PR-X16 — lazy ECharts depth feature modules                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * PR-X16 ECharts Depth campaign: depth charts lazy-register their
+ * ECharts modules by dynamic-importing the direct
+ * `echarts/lib/chart/<name>` (and later `echarts/lib/component/<name>`)
+ * side-effect path. A STATIC import of any `echarts/lib/*` deep path
+ * would pull that module into the eager bundle graph, defeating the
+ * lazy split and risking the CONTRACT §8 bundle cap.
+ *
+ * `scripts/ci/x-charts-bundle-check.mjs` externalises the lazy
+ * `echarts/lib/chart/*` paths in `contractTotal`; this guard is the
+ * honesty backstop — it ensures that external mark cannot mask a
+ * static-import regression that drags a depth chart back into the
+ * eager graph.
+ *
+ * Allowed: dynamic `import('echarts/lib/...')` inside
+ * `renderers/registerEChartsFeature.ts` ONLY.
+ */
+const LAZY_FEATURE_ALLOWED_HOST = path.join('renderers', 'registerEChartsFeature.ts');
+
+/** Static import / re-export of any `echarts/lib/*` deep path. */
+const FORBIDDEN_LIB_STATIC_RE =
+  /^[ \t]*(?:import[ \t]+(?:[^'"]*['"]echarts\/lib\/[^'"]*['"]|['"]echarts\/lib\/[^'"]*['"])|export[ \t]+[^;]*from[ \t]+['"]echarts\/lib\/[^'"]*['"])/m;
+
+/**
+ * Dynamic `import('echarts/lib/...')` call expression. No `/g` flag —
+ * `.test()` is then stateless, so reusing the regex across files cannot
+ * produce `lastIndex`-drift false negatives.
+ */
+const LIB_DYNAMIC_IMPORT_RE = /import\s*\(\s*['"]echarts\/lib\/[^'"]*['"]\s*\)/;
+
+describe('bundle guard — lazy ECharts depth feature modules', () => {
+  it('no source file ANYWHERE statically imports an echarts/lib/* deep path', async () => {
+    const offenders: string[] = [];
+    for await (const file of walkTs(SRC_ROOT)) {
+      const rel = path.relative(SRC_ROOT, file);
+      const source = await readFile(file, 'utf-8');
+      if (FORBIDDEN_LIB_STATIC_RE.test(source)) {
+        offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('dynamic `import("echarts/lib/*")` lives ONLY in renderers/registerEChartsFeature.ts', async () => {
+    const offenders: string[] = [];
+    for await (const file of walkTs(SRC_ROOT)) {
+      const rel = path.relative(SRC_ROOT, file);
+      const source = await readFile(file, 'utf-8');
+      if (LIB_DYNAMIC_IMPORT_RE.test(source) && rel !== LAZY_FEATURE_ALLOWED_HOST) {
+        offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the allowed host (registerEChartsFeature.ts) DOES dynamic-import a feature module', async () => {
+    const file = path.join(SRC_ROOT, LAZY_FEATURE_ALLOWED_HOST);
+    const source = await readFile(file, 'utf-8');
+    expect(LIB_DYNAMIC_IMPORT_RE.test(source)).toBe(true);
+  });
+});

@@ -19,6 +19,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 
 import { TreeChart, linearizeTreeForA11y, countDescendants, type TreeNode } from '../TreeChart';
+import {
+  markEChartsFeatureRegisteredForTest,
+  resetEChartsFeatureRegistration,
+} from '../renderers/registerEChartsFeature';
 
 /* ------------------------------------------------------------------ */
 /*  Fixtures                                                           */
@@ -56,9 +60,16 @@ const treeSeries = (): Record<string, unknown> => {
 beforeEach(() => {
   resetEChartsMock();
   installJsdomPolyfills();
+  // PR-X16a: TreeChart lazy-registers the `tree` series via
+  // useRequiredEChartsFeature. The echarts-mock fixture stubs the
+  // renderer, so pre-mark `tree` registered — this keeps the hook
+  // synchronously `ready` and the option-shape assertions below
+  // synchronous (no real dynamic import in the jsdom runtime).
+  markEChartsFeatureRegisteredForTest('tree');
 });
 afterEach(() => {
   restoreJsdomPolyfills();
+  resetEChartsFeatureRegistration();
 });
 
 /* ------------------------------------------------------------------ */

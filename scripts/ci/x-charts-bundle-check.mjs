@@ -182,6 +182,27 @@ const ECHARTS_GL_EXTERNAL = [
   "zrender/*",
 ];
 
+// PR-X16 ECharts Depth campaign — the depth charts (Tree, and later
+// Calendar/Polar/ThemeRiver/Gantt) are lazy-registered via
+// `renderers/registerEChartsFeature.ts`, which dynamic-imports the
+// direct `echarts/lib/chart/<name>` side-effect module. Like the
+// echarts-gl chunk, that lazy module is loaded ONLY on first mount of
+// the corresponding wrapper and is NOT part of the CONTRACT §7/§8
+// initial chart artifact a consumer ships up-front — so it stays
+// external in `contractTotal` (it is already external in
+// `wrapperOnly` via the blanket `echarts/*`).
+//
+// HONESTY GUARD: `src/__tests__/bundle-guard.test.ts` locks every
+// dynamic `import('echarts/lib/chart/*')` to `registerEChartsFeature.ts`
+// and forbids any static import of those deep paths. Without that guard
+// this external mark could silently mask a regression that pulls a
+// depth chart back into the eager graph; with it, such a regression
+// fails the bundle-guard test instead.
+const ECHARTS_LAZY_FEATURE_EXTERNAL = [
+  "echarts/lib/chart/tree",
+  "echarts/lib/chart/tree/*",
+];
+
 const WRAPPER_ONLY_EXTERNAL = [
   ...ALWAYS_EXTERNAL,
   ...ECHARTS_GL_EXTERNAL,
@@ -190,7 +211,11 @@ const WRAPPER_ONLY_EXTERNAL = [
   "echarts-extension-amap",
 ];
 
-const CONTRACT_TOTAL_EXTERNAL = [...ALWAYS_EXTERNAL, ...ECHARTS_GL_EXTERNAL];
+const CONTRACT_TOTAL_EXTERNAL = [
+  ...ALWAYS_EXTERNAL,
+  ...ECHARTS_GL_EXTERNAL,
+  ...ECHARTS_LAZY_FEATURE_EXTERNAL,
+];
 
 /* ------------------------------------------------------------------ */
 /*  A0 spike — synthetic single-chart probe + module signature scan    */

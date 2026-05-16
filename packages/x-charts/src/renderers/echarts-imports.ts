@@ -63,12 +63,14 @@ import { EffectScatterChart } from 'echarts/charts';
 import { LinesChart } from 'echarts/charts';
 import { SankeyChart } from 'echarts/charts';
 import { TreemapChart } from 'echarts/charts';
-// PR-X16a (Codex thread 019e32da plan-time AGREE): hierarchical
-// node-link tree (`tree` series). Org-chart / hierarchy use-case.
-// Distinct from `TreemapChart` (area-partition hierarchy) and
-// `SunburstChart` (radial-partition hierarchy) — Tree is the
-// expand/collapse node-link form.
-import { TreeChart } from 'echarts/charts';
+// PR-X16a TreeChart (`tree` series — hierarchical node-link / org-chart
+// hierarchy) is intentionally NOT eager-registered here: adding it to
+// the base register pushed the CONTRACT §8 `contractTotal` bundle over
+// the 350 KB gzip hard cap. It is lazy-registered on first TreeChart
+// mount via `renderers/registerEChartsFeature.ts` (Codex thread
+// 019e32da iter-2, "Option 3 hybrid lazy register"). The rest of the
+// PR-X16 depth campaign (Calendar/Polar/ThemeRiver/Gantt) follows the
+// same lazy pattern.
 import { RadarChart } from 'echarts/charts';
 import { GaugeChart } from 'echarts/charts';
 import { FunnelChart } from 'echarts/charts';
@@ -166,7 +168,7 @@ export function registerECharts(): void {
     LinesChart, // PR-X13c: origin-destination flow lines on geo coord system
     SankeyChart,
     TreemapChart,
-    TreeChart, // PR-X16a: hierarchical node-link tree (org-chart / hierarchy)
+    // TreeChart — lazy-registered (registerEChartsFeature.ts); see import note above.
     RadarChart,
     GaugeChart,
     FunnelChart,

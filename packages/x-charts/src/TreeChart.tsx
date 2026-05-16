@@ -24,7 +24,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
@@ -172,6 +172,14 @@ export interface TreeChartProps extends AccessControlledProps {
 
 const DEFAULT_PALETTE = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6'];
 
+/**
+ * Stable empty option dispatched while the lazy `tree` series module is
+ * still loading. A module constant (not an inline `{}`) so the
+ * renderer's option-update effect does not thrash across the brief
+ * loading window before {@link useRequiredEChartsFeature} reports ready.
+ */
+const EMPTY_TREE_OPTION: EChartsOption = {};
+
 /* ------------------------------------------------------------------ */
 /*  Helpers (exported for unit tests)                                  */
 /* ------------------------------------------------------------------ */
@@ -281,6 +289,14 @@ const TreeChartInner = React.forwardRef<
   const height = CHART_CANVAS_HEIGHT[size];
   const isEmpty = !data || data.length === 0;
 
+  // PR-X16a: the `tree` series is NOT in the eager ECharts register
+  // (it would push the CONTRACT §8 bundle over the 350 KB gzip cap).
+  // Lazy-register it on first non-empty mount; the option below is held
+  // back (`null`) until the feature reports `ready`, so we never
+  // dispatch `series.type='tree'` before ECharts knows that type.
+  const treeFeature = useRequiredEChartsFeature('tree', { enabled: !isEmpty });
+  const treeFeatureReady = treeFeature.status === 'ready';
+
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
   const breakpoint = useResponsiveBreakpoint(ownContainerRef);
   const fmt = valueFormatter ?? formatCompact;
@@ -294,7 +310,9 @@ const TreeChartInner = React.forwardRef<
     });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Hold the option back until BOTH (a) data exists and (b) the lazy
+    // `tree` series module has registered — see `treeFeature` above.
+    if (isEmpty || !treeFeatureReady) return null;
 
     // Radial layout ignores `orient` (ECharts native). Orthogonal
     // honours it. Keeping the prop on the wrapper but dropping it from
@@ -396,6 +414,7 @@ const TreeChartInner = React.forwardRef<
     fmt,
     animate,
     isEmpty,
+    treeFeatureReady,
     decalEnabled,
     decalPatterns,
     densityFontMultiplier,
@@ -436,7 +455,7 @@ const TreeChartInner = React.forwardRef<
   );
 
   const { containerRef, instance } = useEChartsRenderer({
-    option: option ?? ({} as EChartsOption),
+    option: option ?? EMPTY_TREE_OPTION,
     theme: themeObject,
     respectReducedMotion: true,
     onClick: onDataPointClick ? handleClick : undefined,
