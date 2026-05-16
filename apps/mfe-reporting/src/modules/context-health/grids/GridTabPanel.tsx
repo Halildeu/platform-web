@@ -136,6 +136,16 @@ const GridTabPanel: React.FC<Props> = ({ grids, activeGridId, gridData, onSelect
         // which was re-rendered with fresh `columnDefs`/`rowData`).
         gridKey={activeGridId ?? 'context-health-grid'}
         columnDefs={columnDefs}
+        // Grid-contract migration (Codex 019e2f86 finding 5): the
+        // context-health `GridColumnDef` wire type carries a REQUIRED
+        // pixel `width` per column, so the backend deliberately sizes
+        // these debug grids. `GridShell`'s `DEFAULT_COL_DEF` sets
+        // `flex: 1`, and AG Grid lets `flex` win over `width` when a
+        // column inherits both — which would flex-distribute away the
+        // server-sent pixel widths. Clearing `flex` on the default
+        // colDef lets each column's explicit `width` win, restoring
+        // pre-migration column sizing.
+        defaultColDef={{ flex: undefined }}
         rowData={gridData}
         rowModelType="clientSide"
         // `gridOptions` is spread AFTER GridShell's explicit AgGridReact

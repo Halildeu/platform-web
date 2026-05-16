@@ -323,6 +323,13 @@ export const AuditEventFeed: React.FC = () => {
     }
     lastSearchRef.current = locationSearch;
     const deepLink = parseAuditFeedSearch(locationSearch);
+    // `refreshServerSide` triggers the SSRM datasource's `getRows`
+    // synchronously; `getRows` reads the active filter from
+    // `filtersRef.current`. The `filters` state setter only flushes
+    // the ref via a post-render effect, so the ref MUST be set to the
+    // next filters synchronously here — otherwise the deeplink refresh
+    // fetches with the stale (previous) filter set.
+    filtersRef.current = deepLink.filters;
     setFilters(deepLink.filters);
     setHighlightId(deepLink.auditId);
     initialAuditIdRef.current = deepLink.auditId;
@@ -368,12 +375,20 @@ export const AuditEventFeed: React.FC = () => {
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       const formData = new FormData(e.currentTarget);
-      setFilters({
+      const nextFilters = {
         userEmail: (formData.get('userEmail') as string) ?? '',
         service: (formData.get('service') as string) ?? '',
         level: (formData.get('level') as string) ?? '',
         action: (formData.get('action') as string) ?? '',
-      });
+      };
+      // `refreshData` → `refreshServerSide` runs the SSRM `getRows`
+      // synchronously, and `getRows` reads `filtersRef.current`. The
+      // `setFilters` state update only flushes the ref on the next
+      // render (post-render effect), so the ref MUST be assigned the
+      // next filters synchronously here — otherwise the refresh fetches
+      // the OLD filter set and the applied filter is silently dropped.
+      filtersRef.current = nextFilters;
+      setFilters(nextFilters);
       const api = gridApiRef.current;
       if (api && (api.getDisplayedRowCount?.() ?? 0) > 0) {
         api.ensureIndexVisible?.(0, 'top');

@@ -8,17 +8,17 @@
   box-shadow: var(--shadow-sm);
 }
 
-.ag-theme-quartz.audit-grid {
-  height: calc(100vh - 200px);
-  width: 100%;
-}
-
-.audit-pagination-shell {
-  border-top: 1px solid var(--border-subtle);
-  padding: 1rem;
-}
-
-.audit-grid .audit-row-highlight {
+/*
+ * Grid-contract migration (Codex 019e2f86 finding 4): the migrated
+ * grid no longer renders a `.audit-grid` element — `EntityGridTemplate`
+ * owns the grid container + height + pagination footer. The deeplink /
+ * live-stream row highlight is applied via the `audit-row-highlight`
+ * row class (see `rowClassRules` in AuditEventFeed.tsx); its CSS must
+ * descend from the surviving wrapper, `.audit-grid-shell`. The old
+ * `.ag-theme-quartz.audit-grid` height + `.audit-pagination-shell`
+ * rules were dropped — those classes are gone post-migration.
+ */
+.audit-grid-shell .audit-row-highlight {
   background-color: var(--state-warning-bg) !important;
 }
 
@@ -63,7 +63,9 @@
   padding: 0.75rem;
   border-radius: 6px;
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
   font-size: 0.85rem;
   line-height: 1.4;
   white-space: pre-wrap;
