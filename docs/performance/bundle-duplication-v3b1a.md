@@ -117,6 +117,10 @@ etmeyen MFE'ler bile tam ~9.2 MB chart kopyası taşıyor. Muhtemel mekanizma
 (dedup PR'ında doğrulanacak — şu an hipotez): `@mfe/design-system` →
 `@mfe/x-charts` barrel re-export zinciri tree-shaking'i kırıyor.
 
+> **§7.1 reconcile (2026-05-17)**: gerçek-tarayıcı ölçümü bu bulguyu
+> **DE-SCOPE** etti — chart stack lazy code-split; non-chart route heavy
+> chart chunk indirmiyor. Bkz. §7.1.
+
 ### 3.4 MF-shared paketler — build-time görünür, runtime dedupe
 
 `react`/`react-dom`/`react-router`/`@reduxjs/toolkit`/`ag-grid-*` 7 MFE
@@ -130,6 +134,11 @@ değil** — share-scope provider/fallback chunk'ıdır.
 `mf-shared-scope-audit.md`'deki **"remote-bundles-canonical"** sinyalidir
 (remote `singleton()` kullanıyor, `hostOnly()` değil → kendi kopyasını
 gönderiyor olabilir). Runtime chunk-graph confirmation gerekir.
+
+> **§7.2 reconcile (2026-05-17)**: browser ölçümü §3.4'ün "MF-shared →
+> runtime tek instance" iddiasının `@mfe/design-system` için **YANLIŞ**
+> olduğunu gösterdi — route başına **5× loadShare chunk** iniyordu. Bkz.
+> §7.2 + bu PR'ın `hostOnly` fix'i.
 
 ### 3.5 Diğer noktalar
 
@@ -192,3 +201,64 @@ tarayıcıdan doğrulama) zorunlu.
 - `scripts/ci/duplicate-package-detector.mjs` — detector (size fix bu PR'da)
 - `scripts/vite-plugins/bundle-visualizer.ts` — env-gated Vite plugin
 - `tests/perf/bundle-stats/duplicates.json` — ham detector çıktısı (regenere)
+
+---
+
+## 7. V3-B1a-dedup — Browser Reconcile (2026-05-17)
+
+§3.2-§3.5 figürleri **build-time** `stats.json` analiziydi (hipotez katmanlı).
+Gerçek-tarayıcı ölçümü — `testai.acik.com/access/roles` fresh reload (real
+shell, `mfe-access` = non-chart MFE route, `claude-in-chrome` MCP, temiz
+resource buffer) — iki katmanı **düzeltti**.
+
+### 7.1 Chart dedup → DE-SCOPED (chart stack zaten lazy)
+
+§3.3'ün "chart 7× duplike → ~55 MB savings" çıkarımı **user-facing
+initial-load problemi DEĞİL**. Non-chart route'ta chart filtresine tek
+eşleşen `echarts-imports` shim'i (**0 KB decoded**); `ag-charts`/`echarts`
+heavy chunk + `chunk-V72SK3YL` **inmedi**. Chart stack lazy code-split —
+chart render etmeyen route heavy chart kodunu indirmiyor.
+
+§3.3'teki ~64.6 MB **build artifact** gerçeği olarak kalır (her MFE dist'inde
+lazy chart chunk'ı durur) ama route transfer'ine yansımıyor.
+→ **De-scoped**: chart MF-share/lazy PR'ı yanlış öncelik; kalan = düşük
+öncelikli build/CDN hygiene (chart-route cold-cache follow-up). V3-B2 CLS
+de-scope ile aynı pattern (headline figür browser'da reprodüksiyon vermedi).
+
+### 7.2 GERÇEK bulgu — `@mfe/design-system` MF singleton dedupe ETMİYOR
+
+`/access/roles` fresh load, top JS chunk'lar (encoded=transfer / decoded):
+
+| chunk                                                        | transfer | decoded |
+| ------------------------------------------------------------ | -------: | ------: |
+| `__mfe_internal__mfe_shell__loadShare__…design_mf_2_system…` |  1851 KB | 6812 KB |
+| `…mfe_users…loadShare__…design_mf_2_system…`                 |  1746 KB | 6452 KB |
+| `…mfe_audit…loadShare__…design_mf_2_system…`                 |  1741 KB | 6448 KB |
+| `…mfe_reporting…loadShare__…design_mf_2_system…`             |  1746 KB | 6442 KB |
+| `…mfe_access…loadShare__…design_mf_2_system…`                |  1745 KB | 6442 KB |
+
+**5 ayrı `@mfe/design-system` loadShare chunk** tek route'ta iniyor (shell +
+4 admin remote — shell admin remote'ları atomic statik blok olarak wire
+ediyor). Toplam route JS: **9.7 MB transfer / 36.5 MB decoded** — bunun
+**~8.8 MB transfer'i (~%91)** design-system, 5× kopya. ~7 MB/route pure
+redundancy. §3.4'ün "MF-shared → runtime tek instance" iddiası
+`@mfe/design-system` için yanlış: 6 remote DS'i `singleton()` (not
+`hostOnly()`) deklare ediyordu → her remote kendi ~1.75 MB-transfer kopyasını
+ship ediyordu (`mf-shared-scope-audit.md` "remote-bundles-canonical" drift'i).
+
+### 7.3 Fix — `@mfe/design-system` shared-scope `hostOnly()` (bu PR)
+
+6 remote (`suggestions/ethic/access/audit/users/reporting`) vite config'inde
+`@mfe/design-system` → `hostOnly('@mfe/design-system')` (`import: false` —
+host share-scope'tan tüket, kendi kopyanı ship etme). Shell provider olarak
+değişmedi.
+
+Build kanıtı: 6/6 remote temiz build; `find` ile 6 remote dist'inin
+hiçbirinde `*design*system*` loadShare chunk YOK (önce ~6.4 MB decoded'dı) —
+örn. `mfe-suggestions` dist/assets 13 MB → 6.7 MB. Beklenen runtime: route
+başına 5 DS kopyası → 1 (host); ~7 MB transfer düşüş. Browser payload-diff
+doğrulaması post-deploy (testai).
+
+Codex `019e3333` AGREE (scope: DS-only canary; `@mfe/shared-http` /
+`@mfe/i18n-dicts` / `@mfe/auth` aynı drift için ayrı ölçüm — bu PR'a dahil
+değil; `@mfe/auth` özellikle ayrı, prior auth/impersonation kırılma yüzeyi).

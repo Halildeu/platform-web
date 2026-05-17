@@ -109,7 +109,9 @@ const sharedProdOnly = {
   'ag-grid-react': singleton('ag-grid-react'),
   'ag-grid-community': singleton('ag-grid-community'),
   'ag-grid-enterprise': singleton('ag-grid-enterprise'),
-  '@mfe/design-system': singleton('@mfe/design-system', '@mfe/design-system', false),
+  // PERF-INIT-V2.1 B1a: hostOnly — consume @mfe/design-system from the host
+  // share-scope; the prior singleton() shipped a ~1.7 MB-transfer copy per remote.
+  '@mfe/design-system': hostOnly('@mfe/design-system'),
   '@mfe/shared-http': singleton('@mfe/shared-http', '@mfe/shared-http', false),
   '@mfe/i18n-dicts': singleton('@mfe/i18n-dicts', '@mfe/i18n-dicts', false),
   // Codex 019e1bed AGREE: @mfe/auth MF singleton — mfe-users PR-C2 ImpersonateAction
