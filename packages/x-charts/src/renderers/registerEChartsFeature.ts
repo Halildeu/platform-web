@@ -1,3 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- ECharts direct lazy subpaths ship no declarations; this file owns their source-consumer ambient declarations.
+/// <reference path="./echarts-lazy-feature.d.ts" />
+
 /**
  * Lazy ECharts feature registration — PR-X16 ECharts Depth campaign.
  *
