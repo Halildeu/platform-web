@@ -18,7 +18,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend, buildResponsiveGrid, buildResponsiveAxisLabel } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -176,6 +176,14 @@ function computeOutliers(raw: number[], q1: number, q3: number): number[] {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Stable empty option dispatched while the lazy `boxplot` series module
+ * is still loading — a module constant (not an inline `{}`) so the
+ * renderer's option-update effect does not thrash before
+ * {@link useRequiredEChartsFeature} reports ready.
+ */
+const EMPTY_BOXPLOT_OPTION: EChartsOption = {};
+
 const BoxPlotChartInner = React.forwardRef<
   HTMLDivElement,
   Omit<BoxPlotChartProps, 'access' | 'accessReason'>
@@ -212,6 +220,12 @@ const BoxPlotChartInner = React.forwardRef<
   const isHorizontal = orientation === 'horizontal';
   const fmt = valueFormatter ?? formatCompact;
 
+  // PR-X16b-prep: `boxplot` is lazy-registered (bundle headroom), so
+  // hold the option back until ready and gate `echarts.init()` — ECharts
+  // snapshots layout/visual handlers at init time (Codex 019e337e).
+  const boxplotFeature = useRequiredEChartsFeature('boxplot', { enabled: !isEmpty });
+  const boxplotFeatureReady = boxplotFeature.status === 'ready';
+
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
   const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
@@ -237,7 +251,9 @@ const BoxPlotChartInner = React.forwardRef<
   });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Hold the option until BOTH data exists AND the lazy `boxplot`
+    // module has registered (see `boxplotFeature` above).
+    if (isEmpty || !boxplotFeatureReady) return null;
 
     const palette = effectivePalette ?? ['#3b82f6'];
     const boxColor = colors?.box ?? palette[0] ?? '#3b82f6';
@@ -397,6 +413,7 @@ const BoxPlotChartInner = React.forwardRef<
   }, [
     data,
     isEmpty,
+    boxplotFeatureReady,
     isHorizontal,
     showGrid,
     showLegend,
@@ -452,7 +469,10 @@ const BoxPlotChartInner = React.forwardRef<
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({
-    option: option ?? ({} as EChartsOption),
+    // Gate echarts.init() until the lazy `boxplot` module has
+    // registered — ECharts snapshots layout/visual handlers at init.
+    enabled: boxplotFeatureReady,
+    option: option ?? EMPTY_BOXPLOT_OPTION,
     respectReducedMotion: true,
     onClick: guardChartCallback(handleClick, true),
   });

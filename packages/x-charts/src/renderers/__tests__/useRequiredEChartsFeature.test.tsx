@@ -22,9 +22,10 @@ vi.mock('../registerEChartsFeature', () => ({
 }));
 
 import { useRequiredEChartsFeature } from '../useRequiredEChartsFeature';
+import type { EChartsFeature } from '../registerEChartsFeature';
 
-function Probe({ enabled }: { enabled?: boolean }) {
-  const { status, error } = useRequiredEChartsFeature('tree', { enabled });
+function Probe({ enabled, feature = 'tree' }: { enabled?: boolean; feature?: EChartsFeature }) {
+  const { status, error } = useRequiredEChartsFeature(feature, { enabled });
   return (
     <div data-testid="probe" data-status={status} data-error={error?.message ?? ''}>
       {status}
@@ -85,5 +86,15 @@ describe('useRequiredEChartsFeature', () => {
     mocks.ensure.mockReturnValue(new Promise<void>(() => {}));
     const { container } = render(<Probe />);
     expect(statusOf(container)).toBe('loading');
+  });
+
+  it('is feature-agnostic — passes a non-tree feature straight to the registry', () => {
+    // PR-X16b-prep: the hook must drive the lifecycle for ANY
+    // EChartsFeature, not just `tree`. Lock that the feature argument is
+    // forwarded verbatim to `ensureEChartsFeatureRegistered`.
+    mocks.ensure.mockReturnValue(new Promise<void>(() => {}));
+    const { container } = render(<Probe enabled feature="graph" />);
+    expect(statusOf(container)).toBe('loading');
+    expect(mocks.ensure).toHaveBeenCalledWith('graph');
   });
 });

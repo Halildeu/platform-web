@@ -18,7 +18,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import {
   buildResponsiveLegend,
@@ -129,6 +129,14 @@ const escapeHtml = (t: string): string =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Stable empty option dispatched while the lazy `candlestick` series
+ * module is still loading — a module constant (not an inline `{}`) so
+ * the renderer's option-update effect does not thrash before
+ * {@link useRequiredEChartsFeature} reports ready.
+ */
+const EMPTY_CANDLESTICK_OPTION: EChartsOption = {};
+
 const CandlestickChartInner = React.forwardRef<
   HTMLDivElement,
   Omit<CandlestickChartProps, 'access' | 'accessReason'>
@@ -162,6 +170,12 @@ const CandlestickChartInner = React.forwardRef<
   const isEmpty = !data || data.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
+  // PR-X16b-prep: `candlestick` is lazy-registered (bundle headroom), so
+  // hold the option back until ready and gate `echarts.init()` — ECharts
+  // snapshots layout/visual handlers at init time (Codex 019e337e).
+  const candlestickFeature = useRequiredEChartsFeature('candlestick', { enabled: !isEmpty });
+  const candlestickFeatureReady = candlestickFeature.status === 'ready';
+
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
   const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
@@ -187,7 +201,9 @@ const CandlestickChartInner = React.forwardRef<
   });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Hold the option until BOTH data exists AND the lazy `candlestick`
+    // module has registered (see `candlestickFeature` above).
+    if (isEmpty || !candlestickFeatureReady) return null;
 
     const palette = effectivePalette ?? ['#22c55e', '#ef4444'];
     const upColor = bullishColor ?? palette[0] ?? '#22c55e';
@@ -330,6 +346,7 @@ const CandlestickChartInner = React.forwardRef<
   }, [
     data,
     isEmpty,
+    candlestickFeatureReady,
     showGrid,
     showLegend,
     bullishColor,
@@ -380,7 +397,10 @@ const CandlestickChartInner = React.forwardRef<
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({
-    option: option ?? ({} as EChartsOption),
+    // Gate echarts.init() until the lazy `candlestick` module has
+    // registered — ECharts snapshots layout/visual handlers at init.
+    enabled: candlestickFeatureReady,
+    option: option ?? EMPTY_CANDLESTICK_OPTION,
     respectReducedMotion: true,
     onClick: guardChartCallback(handleClick, true),
   });
