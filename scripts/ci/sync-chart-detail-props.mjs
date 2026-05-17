@@ -65,6 +65,10 @@ const CHARTS = [
   // series on a lazy `singleAxis` time coordinate system. ECharts Depth
   // campaign fourth wrapper.
   ['theme-river-chart', 'ThemeRiverChart'],
+  // PR-X16e (Codex thread 019e365b AGREE): project-schedule timeline —
+  // a `custom` series painting task bars on a time x-axis / category
+  // lane y-axis. ECharts Depth campaign fifth wrapper.
+  ['gantt-chart', 'GanttChart'],
   ['heatmap-chart', 'HeatmapChart'],
   ['waterfall-chart', 'WaterfallChart'],
   ['funnel-chart', 'FunnelChart'],

@@ -32,6 +32,10 @@ import {
   // series on a lazy `singleAxis` time coordinate system — ECharts
   // Depth campaign fourth wrapper.
   ThemeRiverChart,
+  // PR-X16e (Codex thread 019e365b AGREE): project-schedule timeline —
+  // a `custom` series painting task bars on a time x-axis / category
+  // lane y-axis — ECharts Depth campaign fifth wrapper.
+  GanttChart,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -1072,6 +1076,83 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             description={getOptStr(toggles, 'description')}
             className={getOptStr(toggles, 'className')}
             showLabel={isOn(toggles, 'showLabel', true)}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // PR-X16e (Codex thread 019e365b AGREE): project-schedule timeline —
+    // a `custom` series painting task bars on a time x-axis / category
+    // lane y-axis — ECharts Depth campaign. Sample dataset: 6-task ×
+    // 3-lane (Planning / Development / Testing) project schedule.
+    case 'gantt-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <GanttChart
+            data={[
+              {
+                id: 't1',
+                name: 'Discovery',
+                category: 'Planning',
+                start: '2026-01-05',
+                end: '2026-01-19',
+              },
+              {
+                id: 't2',
+                name: 'Design',
+                category: 'Planning',
+                start: '2026-01-19',
+                end: '2026-02-09',
+              },
+              {
+                id: 't3',
+                name: 'Frontend',
+                category: 'Development',
+                start: '2026-02-09',
+                end: '2026-03-16',
+              },
+              {
+                id: 't4',
+                name: 'Backend',
+                category: 'Development',
+                start: '2026-02-16',
+                end: '2026-03-23',
+              },
+              {
+                id: 't5',
+                name: 'Integration Test',
+                category: 'Testing',
+                start: '2026-03-23',
+                end: '2026-04-06',
+              },
+              {
+                id: 't6',
+                name: 'Launch',
+                category: 'Testing',
+                start: '2026-04-06',
+                end: '2026-04-13',
+              },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}

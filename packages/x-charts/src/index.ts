@@ -87,6 +87,11 @@ export type { PolarChartProps, PolarChartDataPoint, PolarSeriesType } from './Po
 // ECharts Depth campaign (fourth of 5).
 export { ThemeRiverChart } from './ThemeRiverChart';
 export type { ThemeRiverChartProps, ThemeRiverDataPoint } from './ThemeRiverChart';
+// PR-X16e (Codex thread 019e365b AGREE): Gantt timeline — a `custom`
+// renderItem series on the eager cartesian grid (lazy-registered
+// `custom` series). ECharts Depth campaign (fifth and FINAL of 5).
+export { GanttChart } from './GanttChart';
+export type { GanttChartProps, GanttTask } from './GanttChart';
 export { GaugeChart } from './GaugeChart';
 export type { GaugeChartProps } from './GaugeChart';
 export { WaterfallChart } from './WaterfallChart';

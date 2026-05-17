@@ -47,6 +47,9 @@ vi.mock('echarts/lib/component/singleAxis', () => {
   singleAxisComponentLoaded();
   return {};
 });
+// PR-X16e — custom renderItem series (GanttChart). Single-module, like
+// `tree` / `polar` — a plain stub, no hoisted spy needed.
+vi.mock('echarts/lib/chart/custom', () => ({}));
 
 beforeEach(() => {
   resetEChartsFeatureRegistration();
@@ -119,6 +122,7 @@ const ALL_FEATURES: EChartsFeature[] = [
   'calendar',
   'polar',
   'themeRiver',
+  'custom',
 ];
 
 describe('every EChartsFeature loader resolves', () => {

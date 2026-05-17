@@ -228,6 +228,9 @@ const ECHARTS_LAZY_FEATURE_EXTERNAL = [
   "echarts/lib/chart/themeRiver/*",
   "echarts/lib/component/singleAxis",
   "echarts/lib/component/singleAxis/*",
+  // PR-X16e — custom renderItem series (GanttChart).
+  "echarts/lib/chart/custom",
+  "echarts/lib/chart/custom/*",
 ];
 
 const WRAPPER_ONLY_EXTERNAL = [
@@ -289,6 +292,8 @@ const PROBE_CHART_WHITELIST = new Set([
   "PolarChart",
   // PR-X16d — ThemeRiverChart depth chart (lazy `themeRiver` + `singleAxis`).
   "ThemeRiverChart",
+  // PR-X16e — GanttChart depth chart (lazy `custom` renderItem series).
+  "GanttChart",
 ]);
 
 /**
