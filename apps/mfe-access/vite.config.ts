@@ -69,7 +69,9 @@ const sharedProdOnly = {
   'ag-grid-react': singleton('ag-grid-react'),
   'ag-grid-community': singleton('ag-grid-community'),
   'ag-grid-enterprise': singleton('ag-grid-enterprise'),
-  '@mfe/design-system': { singleton: true, requiredVersion: false as const },
+  // PERF-INIT-V2.1 B1a: hostOnly — consume @mfe/design-system from the host
+  // share-scope; the prior singleton shipped a ~1.7 MB-transfer copy per remote.
+  '@mfe/design-system': hostOnly('@mfe/design-system'),
   '@mfe/shared-http': { singleton: true, requiredVersion: false as const },
   // PR E (Codex CNS thread 019d99ba Tur 11): `@mfe/auth` MF singleton.
   // hostOnly pattern kullanılmıyor çünkü mfe-access kendi auth bundle'ını da

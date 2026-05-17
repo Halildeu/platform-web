@@ -68,7 +68,9 @@ const sharedProdOnly = {
   'ag-grid-react': singleton('ag-grid-react'),
   'ag-grid-community': singleton('ag-grid-community'),
   'ag-grid-enterprise': singleton('ag-grid-enterprise'),
-  '@mfe/design-system': singleton('@mfe/design-system', false),
+  // PERF-INIT-V2.1 B1a: hostOnly — consume @mfe/design-system from the host
+  // share-scope; the prior singleton() shipped a ~1.7 MB-transfer copy per remote.
+  '@mfe/design-system': hostOnly('@mfe/design-system'),
   '@mfe/shared-http': singleton('@mfe/shared-http', false),
 };
 
