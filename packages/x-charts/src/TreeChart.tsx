@@ -455,6 +455,12 @@ const TreeChartInner = React.forwardRef<
   );
 
   const { containerRef, instance } = useEChartsRenderer({
+    // Gate echarts.init() until the lazy `tree` series module has
+    // registered. ECharts snapshots its layout/visual handler list at
+    // init time, so an instance created before `registerLayout(treeLayout)`
+    // runs renders the tree with no `layoutInfo` and crashes TreeView
+    // (Codex thread 019e337e).
+    enabled: treeFeatureReady,
     option: option ?? EMPTY_TREE_OPTION,
     theme: themeObject,
     respectReducedMotion: true,
