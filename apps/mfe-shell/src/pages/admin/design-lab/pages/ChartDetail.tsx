@@ -2192,6 +2192,7 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
       'contrast-gated-static',
       'bundle-gated',
       'tree-shake-gated',
+      'ssr-subpath',
     ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
