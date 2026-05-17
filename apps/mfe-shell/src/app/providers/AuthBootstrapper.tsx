@@ -115,6 +115,76 @@ export async function clearTokenCookie(): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Bootstrap outcome deferred — onAuthSuccess ↔ bootstrap() handshake  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * PR-2 (Codex AGREE thread `019e362e`): the explicit outcome that
+ * {@code bootstrap()} resolves once it finishes, so the
+ * {@code keycloak.onAuthSuccess} catch-up handler can decide whether it
+ * still has work to do — instead of unconditionally re-running the full
+ * cookie + authz + session sequence (the redundant double-bootstrap).
+ *
+ * <ul>
+ *   <li>{@code transportReady} — the bootstrap controller already wrote
+ *       the cookie + authz snapshot + session. onAuthSuccess is a NO-OP;
+ *       re-running would issue a 2nd {@code POST /api/auth/cookie}, a 2nd
+ *       {@code GET /v1/authz/me} and a 2nd {@code setKeycloakSession}
+ *       (which itself triggers a 2nd inbox refetch).</li>
+ *   <li>{@code unauthenticated} — keycloak.init() saw no token. This is
+ *       the genuine post-redirect race (PR #313): keycloak-js fired
+ *       onAuthSuccess later with a freshly-exchanged auth-code token, so
+ *       the catch-up closure DOES run and converts the FSM to
+ *       transportReady.</li>
+ *   <li>{@code failed} — bootstrap hit a hard error (cookie write reject
+ *       or a boundary throw). onAuthSuccess is a NO-OP — no hidden retry;
+ *       the {@code failed} FSM state is authoritative.</li>
+ *   <li>{@code hydrated} — an impersonation session was restored before
+ *       keycloak.init(); keycloak handlers are no-ops while impersonation
+ *       is active (iter-5 P1-3 invariant).</li>
+ * </ul>
+ */
+export type BootstrapOutcome =
+  | { kind: 'transportReady' }
+  | { kind: 'unauthenticated' }
+  | { kind: 'failed' }
+  | { kind: 'hydrated' };
+
+/** One-shot deferred bridging {@code bootstrap()} and {@code onAuthSuccess}. */
+export interface BootstrapOutcomeDeferred {
+  /** Resolves once — with the outcome {@code bootstrap()} declares. */
+  promise: Promise<BootstrapOutcome>;
+  /**
+   * {@code resolveBootstrapOutcomeOnce} semantics — only the FIRST call
+   * settles the promise; later calls are silently ignored.
+   * {@code bootstrap()} resolves from several code paths (impersonation
+   * hydrate early-return, controller result, error boundary, finally
+   * backstop) and only the first wins.
+   */
+  resolve: (outcome: BootstrapOutcome) => void;
+}
+
+/**
+ * Create the one-shot {@link BootstrapOutcomeDeferred}. Constructed
+ * BEFORE {@code keycloak.onAuthSuccess} is attached so the handler can
+ * {@code await} the outcome no matter how early keycloak-js fires the
+ * event during {@code keycloak.init()}.
+ */
+export function createBootstrapOutcomeDeferred(): BootstrapOutcomeDeferred {
+  let settle: (outcome: BootstrapOutcome) => void = () => undefined;
+  const promise = new Promise<BootstrapOutcome>((res) => {
+    settle = res;
+  });
+  let settled = false;
+  const resolve = (outcome: BootstrapOutcome): void => {
+    if (settled) return;
+    settled = true;
+    settle(outcome);
+  };
+  return { promise, resolve };
+}
+
+/* ------------------------------------------------------------------ */
 /*  onAuthSuccess catch-up handler factory                              */
 /* ------------------------------------------------------------------ */
 
@@ -127,6 +197,13 @@ export interface OnAuthSuccessHandlerDeps {
   fetchAppPermissions: (token: string) => Promise<AuthzMeResult>;
   mapProfile: typeof mapKeycloakProfile;
   dispatch: (action: AnyAction) => unknown;
+  /**
+   * PR-2: resolves with {@code bootstrap()}'s outcome. The handler
+   * awaits this BEFORE doing any work — the catch-up closure runs ONLY
+   * for {@code unauthenticated}; {@code transportReady} / {@code failed}
+   * / {@code hydrated} are all no-ops.
+   */
+  bootstrapOutcome: Promise<BootstrapOutcome>;
 }
 
 type AnyAction = { type: string; payload?: unknown };
@@ -135,16 +212,24 @@ type AnyAction = { type: string; payload?: unknown };
  * Iter-6 P1-3 absorb (Codex thread `019e109c`): factory wrapping the
  * post-{@code keycloak.init} catch-up closure. Extracted for unit
  * testing the impersonation guard and the dispatch sequence without
- * mounting the React component. The component still owns the
- * lifecycle decision (when to attach this to {@code keycloak.onAuthSuccess});
- * the factory owns the closure semantics.
+ * mounting the React component.
  *
- * Iter-5 P1-3 invariant preserved: when impersonation is active the
- * handler short-circuits before any {@code /auth/cookie} write —
- * otherwise Keycloak.js's silent SSO completion would clobber the
- * broker session with the admin token. Same rationale as
- * {@code keycloak.onTokenExpired}; both refresh surfaces are
- * impersonation-guarded.
+ * <p>PR-2 (Codex AGREE thread `019e362e`): the catch-up is now
+ * RESULT-GATED. The handler awaits {@code deps.bootstrapOutcome} and
+ * runs the cookie + authz + session closure ONLY when bootstrap declared
+ * {@code unauthenticated} (the genuine post-redirect auth-code race).
+ * On {@code transportReady} the bootstrap controller already did that
+ * work — re-running it was the redundant double-bootstrap (a 2nd
+ * {@code /api/auth/cookie}, {@code /v1/authz/me} and inbox refetch on
+ * every silent-SSO load). On {@code failed} there is no hidden retry;
+ * on {@code hydrated} impersonation owns the FSM.
+ *
+ * <p>Iter-5 P1-3 invariant preserved: when impersonation is active the
+ * handler short-circuits BEFORE awaiting the outcome and before any
+ * {@code /auth/cookie} write — otherwise Keycloak.js's silent SSO
+ * completion would clobber the broker session with the admin token.
+ * Same rationale as {@code keycloak.onTokenExpired}; both refresh
+ * surfaces are impersonation-guarded.
  */
 export function createOnAuthSuccessHandler(deps: OnAuthSuccessHandlerDeps): () => Promise<void> {
   return async () => {
@@ -161,10 +246,24 @@ export function createOnAuthSuccessHandler(deps: OnAuthSuccessHandlerDeps): () =
       }
       return;
     }
+    // PR-2 (Codex AGREE thread 019e362e): result-gated catch-up. Wait
+    // for bootstrap() to declare its outcome, then act ONLY on the
+    // genuine post-redirect race (`unauthenticated`). `transportReady`
+    // means the controller already ran cookie + authz + session — the
+    // closure here would just duplicate it. `failed` gets no hidden
+    // retry; `hydrated` means impersonation owns the FSM.
+    const outcome = await deps.bootstrapOutcome;
+    if (!deps.getMounted()) return;
+    if (outcome.kind !== 'unauthenticated') {
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug(`[AuthBootstrapper] onAuthSuccess no-op — bootstrap outcome=${outcome.kind}`);
+      }
+      return;
+    }
     const token = deps.getKeycloakToken();
     if (!token) return;
     if (process.env.NODE_ENV !== 'production') {
-      console.info('[AuthBootstrapper] onAuthSuccess catch-up closure');
+      console.info('[AuthBootstrapper] onAuthSuccess catch-up closure (post-redirect race)');
     }
     try {
       await deps.setTokenCookie(token);
@@ -321,6 +420,11 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
     let mounted = true;
+    // PR-2 (Codex AGREE thread 019e362e): one-shot deferred bridging
+    // bootstrap() and the keycloak.onAuthSuccess handler. Created here —
+    // before either handler is attached — so onAuthSuccess can await the
+    // bootstrap outcome no matter how early keycloak-js fires the event.
+    const bootstrapOutcomeDeferred = createBootstrapOutcomeDeferred();
 
     /**
      * Phase 2 PR-Auth-1 (Codex iter-22/23 §Auth-1 absorb, thread 019e0119):
@@ -404,6 +508,9 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
         // bootstrap returns early without touching keycloak.
         const hydrated = await hydrateImpersonationFromStorage();
         if (hydrated) {
+          // Impersonation session restored — keycloak handlers stay
+          // no-ops (iter-5 P1-3). Tell onAuthSuccess via the outcome.
+          bootstrapOutcomeDeferred.resolve({ kind: 'hydrated' });
           return;
         }
         const isLoginRoute =
@@ -609,6 +716,18 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           dispatch(setKeycloakSession({ token: null }));
         }
         console.info('[AuthBootstrapper] bootstrap completed', { phase: result.finalPhase });
+        // PR-2: hand the controller's terminal phase to the
+        // onAuthSuccess handler. transportReady / unauthenticated map
+        // 1:1; every other terminal phase (failed, or a defensive
+        // non-terminal leak) collapses to `failed`.
+        bootstrapOutcomeDeferred.resolve({
+          kind:
+            result.finalPhase === 'transportReady'
+              ? 'transportReady'
+              : result.finalPhase === 'unauthenticated'
+                ? 'unauthenticated'
+                : 'failed',
+        });
       } catch (err: unknown) {
         // Defensive — controller already handles its own errors via
         // dispatchFailed; this catch covers anything outside the
@@ -624,6 +743,11 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           );
         }
       } finally {
+        // PR-2 defensive backstop: guarantee the onAuthSuccess handler
+        // never hangs awaiting an outcome no code path resolved (e.g. an
+        // unexpected throw after the controller returned). resolve is
+        // idempotent — a no-op on every path that already settled.
+        bootstrapOutcomeDeferred.resolve({ kind: 'failed' });
         if (mounted) {
           // Backward-compat: legacy {@code initialized} boolean is now
           // derived from {@link AuthPhase}; calling setAuthInitialized
@@ -634,43 +758,28 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     };
 
-    bootstrap();
-
-    // 2026-05-08 third hotfix (PR #313): catch-up closure for the
-    // post-redirect auth code race.
+    // 2026-05-08 third hotfix (PR #313) — post-redirect auth-code race.
     //
     // Repro: user lands at /login, kc.init() returns with kc.token=null
-    // (no Keycloak session yet). bootstrap controller dispatches
+    // (no Keycloak session yet). The bootstrap controller declares
     // 'unauthenticated' and returns early — setTokenCookie / authz
-    // never run. Then user clicks "Güvenli Kurumsal Giriş" → Keycloak
-    // login → redirect back with auth code. The page reload re-mounts
-    // AuthBootstrapper, which calls kc.init() again. This time kc.init
-    // exchanges the auth code for a token, so kc.token IS set after
-    // init. But by the time bootstrap awaits init, AppRouter has
-    // already rendered with token=null in Redux (rendered before init
-    // resolved) and Navigated to /login, blanking the URL.
+    // never run. Then the user completes the Keycloak login and the
+    // page reloads with an auth code; kc.init() exchanges it and
+    // keycloak-js fires onAuthSuccess internally with the fresh token.
+    // The catch-up closure writes the cookie, fetches authz, dispatches
+    // the session and converts the FSM to transportReady.
     //
-    // Symptoms (browser smoke verified):
-    //   pathname=/login
-    //   window.__keycloak.authenticated=true
-    //   window.__keycloak.token=true
-    //   document.cookie="" (no erp_access_token cookie set)
-    //   network: no /api/auth/cookie POST, no /api/v1/authz/me GET
-    //
-    // Why kc.token gets set even when bootstrap declared
-    // 'unauthenticated': Keycloak.js fires onAuthSuccess internally
-    // after the auth code exchange completes, even if the bootstrap
-    // controller already returned. The bootstrap controller checked
-    // kc.token at one specific moment; onAuthSuccess fires later.
-    //
-    // Fix: hook onAuthSuccess to run the same closure as the
-    // bootstrap success path — write the cookie, fetch authz, dispatch
-    // session + transportReady phase. Idempotent because:
-    //   - if bootstrap already advanced to transportReady, this
-    //     re-runs the closure (cookie write is idempotent server-side,
-    //     authz fetch returns same snapshot, dispatch is set-not-merge)
-    //   - if bootstrap declared 'unauthenticated' early, this catches
-    //     up and converts the FSM to transportReady.
+    // PR-2 (Codex AGREE thread 019e362e) — two structural changes that
+    // kill the double-bootstrap (a duplicate /api/auth/cookie,
+    // /v1/authz/me and inbox/me on EVERY silent-SSO page load):
+    //   1. onAuthSuccess is attached BEFORE bootstrap() is invoked, so
+    //      it can never miss an onAuthSuccess that keycloak-js fires
+    //      synchronously deep inside keycloak.init().
+    //   2. The handler is result-gated (see createOnAuthSuccessHandler):
+    //      it awaits the bootstrap outcome and runs the catch-up closure
+    //      ONLY for `unauthenticated`. On the silent-SSO happy path
+    //      bootstrap reaches `transportReady` and the handler is a
+    //      no-op — the controller already did the cookie + authz work.
     keycloak.onAuthSuccess = createOnAuthSuccessHandler({
       getMounted: () => mounted,
       getIsImpersonating: () => isImpersonatingRef.current,
@@ -680,6 +789,7 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
       fetchAppPermissions,
       mapProfile: mapKeycloakProfile,
       dispatch,
+      bootstrapOutcome: bootstrapOutcomeDeferred.promise,
     });
 
     keycloak.onTokenExpired = async () => {
@@ -757,6 +867,12 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
         dispatch(setAuthPhase('authzReady'));
       }
     };
+
+    // PR-2: bootstrap() is invoked LAST — after both keycloak event
+    // handlers are attached — so onAuthSuccess (which keycloak-js can
+    // fire synchronously inside keycloak.init()) always finds its
+    // handler in place and a live bootstrapOutcome deferred to await.
+    bootstrap();
 
     return () => {
       mounted = false;
