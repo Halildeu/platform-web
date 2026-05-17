@@ -1,3 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- echarts-gl ships no declarations; this file owns its source-consumer ambient declaration.
+/// <reference path="./echarts-gl.d.ts" />
+
 /**
  * Lazy `echarts-gl` registration — Faz 21.11 PR-A1 (Big Data Renderer
  * Router, WebGL Million-Point Path).
