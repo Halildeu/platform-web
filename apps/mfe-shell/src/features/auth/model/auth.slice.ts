@@ -880,6 +880,10 @@ export const selectAuthError = (state: { auth: AuthState }): AuthError | null =>
   state.auth.authError;
 export const selectAuthEpoch = (state: { auth: AuthState }): number => state.auth.authEpoch;
 
+/** Bearer access token — for API clients that issue their own fetch (RTK Query notify clients) instead of the shared axios interceptor. */
+export const selectAuthToken = (state: { auth: AuthState }): string | null =>
+  state.auth.token ?? null;
+
 /**
  * User Impersonation v1 PR-C2 selectors (Codex AGREE thread `019e109c`
  * iter-4). {@link selectIsImpersonating} is the boolean gate consulted
