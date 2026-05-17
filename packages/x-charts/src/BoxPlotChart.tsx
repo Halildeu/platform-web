@@ -294,7 +294,6 @@ const BoxPlotChartInner = React.forwardRef<
     const responsiveAxisLabel = buildResponsiveAxisLabel({
       breakpoint,
       labelCount: categories.length,
-      isHorizontal,
       densityFontMultiplier,
     });
 
@@ -310,8 +309,6 @@ const BoxPlotChartInner = React.forwardRef<
 
     const responsiveGrid = buildResponsiveGrid({
       breakpoint,
-      showLegend: responsiveLegend.show,
-      legendOrient: responsiveLegend.orient,
       hasTitle: !!title,
       hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
       hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
@@ -444,12 +441,15 @@ const BoxPlotChartInner = React.forwardRef<
         (entry?.values ? computeQuartiles(entry.values)?.[2] : undefined) ??
         0;
       onDataPointClick({
-        seriesName: title ?? 'Distribution',
-        seriesIndex: 0,
-        dataIndex: idx,
+        datum: {
+          seriesName: title ?? 'Distribution',
+          seriesIndex: 0,
+          dataIndex: idx,
+          category: entry?.category,
+          median,
+        },
         label: entry?.category ?? p.name ?? '',
         value: median,
-        datum: { category: entry?.category, median },
       });
     },
     [data, onDataPointClick, title],
@@ -464,8 +464,6 @@ const BoxPlotChartInner = React.forwardRef<
       value: d.values ? (computeQuartiles(d.values)?.[2] ?? 0) : (d.quartiles?.[2] ?? 0),
     })),
     valueFormatter: fmt,
-    anomalySummary,
-    formatAnomalyAnnouncement,
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({

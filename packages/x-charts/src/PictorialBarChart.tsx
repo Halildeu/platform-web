@@ -228,7 +228,6 @@ const PictorialBarChartInner = React.forwardRef<
     const responsiveAxisLabel = buildResponsiveAxisLabel({
       breakpoint,
       labelCount: categories.length,
-      isHorizontal,
       densityFontMultiplier,
     });
 
@@ -244,8 +243,6 @@ const PictorialBarChartInner = React.forwardRef<
 
     const responsiveGrid = buildResponsiveGrid({
       breakpoint,
-      showLegend: responsiveLegend.show,
-      legendOrient: responsiveLegend.orient,
       hasTitle: !!title,
       hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
       hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
@@ -350,12 +347,14 @@ const PictorialBarChartInner = React.forwardRef<
       const idx = p.dataIndex ?? 0;
       const entry = data[idx];
       onDataPointClick({
-        seriesName: title ?? 'Pictogram',
-        seriesIndex: 0,
-        dataIndex: idx,
+        datum: {
+          seriesName: title ?? 'Pictogram',
+          seriesIndex: 0,
+          dataIndex: idx,
+          ...entry,
+        },
         label: entry?.label ?? p.name ?? '',
         value: entry?.value ?? p.data?.value ?? 0,
-        datum: entry ?? undefined,
       });
     },
     [data, onDataPointClick, title],
@@ -367,8 +366,6 @@ const PictorialBarChartInner = React.forwardRef<
     description,
     data: data.map((d) => ({ label: d.label, value: d.value })),
     valueFormatter: fmt,
-    anomalySummary,
-    formatAnomalyAnnouncement,
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({

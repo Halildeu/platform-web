@@ -71,6 +71,8 @@ export interface FunnelChartProps extends AccessControlledProps {
   size?: 'sm' | 'md' | 'lg';
   /** Chart title. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Sort order for funnel stages. @default "descending" */
   sort?: 'descending' | 'ascending' | 'none';
   /** Pixel gap between funnel stages. @default 2 */
@@ -206,6 +208,7 @@ const FunnelChartInner = React.forwardRef<
     data,
     size = 'md',
     title,
+    description,
     sort = 'descending',
     gap = 2,
     showLabels = true,
@@ -454,6 +457,7 @@ const FunnelChartInner = React.forwardRef<
     chartType: 'funnel',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });

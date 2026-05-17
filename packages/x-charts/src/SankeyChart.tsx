@@ -83,6 +83,8 @@ export interface SankeyChartProps extends AccessControlledProps {
   size?: 'sm' | 'md' | 'lg';
   /** Chart title. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Layout orientation. @default "horizontal" */
   orient?: 'horizontal' | 'vertical';
   /** Width of each node in pixels. @default 20 */
@@ -212,6 +214,7 @@ const SankeyChartInner = React.forwardRef<
     links,
     size = 'md',
     title,
+    description,
     orient = 'horizontal',
     nodeWidth = 20,
     nodeGap = 8,
@@ -507,6 +510,7 @@ const SankeyChartInner = React.forwardRef<
     chartType: 'sankey',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });

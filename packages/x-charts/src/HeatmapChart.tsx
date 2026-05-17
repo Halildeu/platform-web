@@ -72,6 +72,8 @@ export interface HeatmapChartProps extends AccessControlledProps {
   size?: ChartSize;
   /** Chart title. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Minimum data value for color scale. Auto-detected if not provided. */
   min?: number;
   /** Maximum data value for color scale. Auto-detected if not provided. */
@@ -264,6 +266,7 @@ const HeatmapChartInner = React.forwardRef<
     yLabels,
     size = 'md',
     title,
+    description,
     min: minProp,
     max: maxProp,
     colors = ['#f5f5f5', '#3b82f6'],
@@ -611,6 +614,7 @@ const HeatmapChartInner = React.forwardRef<
     chartType: 'heatmap',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });

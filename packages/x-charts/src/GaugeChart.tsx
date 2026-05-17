@@ -69,6 +69,8 @@ export interface GaugeChartProps extends AccessControlledProps {
   max?: number;
   /** Title displayed above the gauge. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Visual size variant. @default "md" */
   size?: ChartSize;
   /** Threshold zones for colored arc segments. */
@@ -189,6 +191,7 @@ const GaugeChartInner = React.forwardRef<
     min = 0,
     max = 100,
     title,
+    description,
     size = 'md',
     thresholds,
     startAngle = 225,
@@ -392,6 +395,7 @@ const GaugeChartInner = React.forwardRef<
     chartType: 'gauge',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });

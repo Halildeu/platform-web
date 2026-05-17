@@ -423,14 +423,17 @@ const ParallelCoordinatesChartInner = React.forwardRef<
         seriesName?: string;
       };
       onDataPointClick({
-        seriesName: p.seriesName ?? title ?? 'Distribution',
-        seriesIndex: 0,
-        dataIndex: p.dataIndex ?? 0,
+        datum: {
+          seriesName: p.seriesName ?? title ?? 'Distribution',
+          seriesIndex: 0,
+          dataIndex: p.dataIndex ?? 0,
+          row: data[p.dataIndex ?? 0],
+          axisValues: p.data,
+        },
         label: p.seriesName ?? '',
         // For parallel coordinates "value" is ambiguous (N dims); we use
         // the first numeric value as the headline measure.
         value: typeof p.data?.[0] === 'number' ? (p.data[0] as number) : 0,
-        datum: { row: data[p.dataIndex ?? 0], axisValues: p.data },
       });
     },
     [data, onDataPointClick, title],
@@ -455,8 +458,6 @@ const ParallelCoordinatesChartInner = React.forwardRef<
     description,
     data: a11yData,
     valueFormatter: fmt,
-    anomalySummary,
-    formatAnomalyAnnouncement,
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({
