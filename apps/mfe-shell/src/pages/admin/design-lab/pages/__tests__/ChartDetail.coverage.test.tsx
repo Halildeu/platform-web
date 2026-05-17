@@ -51,6 +51,7 @@ vi.mock('@mfe/x-charts', async () => {
     TreeChart: stubChart('TreeChart'),
     CalendarHeatmap: stubChart('CalendarHeatmap'),
     PolarChart: stubChart('PolarChart'),
+    ThemeRiverChart: stubChart('ThemeRiverChart'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -95,6 +96,9 @@ const CHART_IDS_WITH_PRESETS = [
   // PR-X16c — PolarChart depth chart. Same render-smoke guard for
   // catalog completeness (LIVE_PROP_SUPPORT + CHART_PRESETS + preview).
   'polar-chart',
+  // PR-X16d — ThemeRiverChart depth chart. Same render-smoke guard for
+  // catalog completeness (LIVE_PROP_SUPPORT + CHART_PRESETS + preview).
+  'theme-river-chart',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',

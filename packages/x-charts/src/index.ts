@@ -82,6 +82,11 @@ export type {
 // (third of 5: Tree → Calendar → Polar → ThemeRiver → Gantt).
 export { PolarChart } from './PolarChart';
 export type { PolarChartProps, PolarChartDataPoint, PolarSeriesType } from './PolarChart';
+// PR-X16d (Codex thread 019e3615 AGREE): theme-river / stream graph —
+// a `themeRiver` series on a lazy `singleAxis` coordinate system.
+// ECharts Depth campaign (fourth of 5).
+export { ThemeRiverChart } from './ThemeRiverChart';
+export type { ThemeRiverChartProps, ThemeRiverDataPoint } from './ThemeRiverChart';
 export { GaugeChart } from './GaugeChart';
 export type { GaugeChartProps } from './GaugeChart';
 export { WaterfallChart } from './WaterfallChart';

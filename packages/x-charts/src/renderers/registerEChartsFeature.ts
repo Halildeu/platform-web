@@ -52,6 +52,8 @@
  *   - `boxplot`      — statistical box-and-whisker series (PR-X16b-prep)
  *   - `calendar`     — calendar coordinate-system component (PR-X16b)
  *   - `polar`        — polar coordinate-system component (PR-X16c)
+ *   - `themeRiver`   — stream-graph series + `singleAxis` component
+ *                      (PR-X16d)
  *
  * The `graph`/`parallel`/`pictorialBar`/`candlestick`/`boxplot` charts
  * are design-lab-only niche wrappers converted from eager registration
@@ -66,7 +68,8 @@ export type EChartsFeature =
   | 'candlestick'
   | 'boxplot'
   | 'calendar'
-  | 'polar';
+  | 'polar'
+  | 'themeRiver';
 
 /**
  * Per-feature loaders. Each performs a side-effect dynamic import of the
@@ -100,6 +103,14 @@ const FEATURE_LOADERS: Record<EChartsFeature, () => Promise<unknown>> = {
   // `polar` is a coordinate-system component — the `bar` / `line` /
   // `scatter` series that render into it stay eager (PR-X16c PolarChart).
   polar: () => import('echarts/lib/component/polar'),
+  // `themeRiver` is a stream-graph series that renders into the
+  // `singleAxis` coordinate system; both modules must register, so the
+  // loader awaits a two-module `Promise.all` (the `parallel` pattern).
+  themeRiver: () =>
+    Promise.all([
+      import('echarts/lib/chart/themeRiver'),
+      import('echarts/lib/component/singleAxis'),
+    ]),
 };
 
 /** Features whose lazy module has finished registering. */

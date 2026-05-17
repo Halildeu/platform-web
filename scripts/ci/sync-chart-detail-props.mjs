@@ -61,6 +61,10 @@ const CHARTS = [
   // bar/line/scatter series on a polar coordinate system. ECharts
   // Depth campaign third wrapper.
   ['polar-chart', 'PolarChart'],
+  // PR-X16d (Codex thread 019e3615 AGREE): stream graph — a `themeRiver`
+  // series on a lazy `singleAxis` time coordinate system. ECharts Depth
+  // campaign fourth wrapper.
+  ['theme-river-chart', 'ThemeRiverChart'],
   ['heatmap-chart', 'HeatmapChart'],
   ['waterfall-chart', 'WaterfallChart'],
   ['funnel-chart', 'FunnelChart'],

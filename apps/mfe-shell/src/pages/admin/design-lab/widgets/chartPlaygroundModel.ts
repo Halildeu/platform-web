@@ -637,6 +637,27 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // PR-X16d (Codex 019e3615 AGREE): stream graph — a `themeRiver` series
+  // on a lazy `singleAxis` time coordinate system. `showLabel` toggles
+  // the category-name label on each flow band — the only chart-specific
+  // editable primitive (ThemeRiverChart has no enum / axis-label / scale
+  // props). `data` is a complex shape (code-only);
+  // `valueFormatter`/`onDataPointClick` are function props — preset-
+  // driven via COMPLEX_PROP_PRESETS, not primitives here.
+  'theme-river-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'showLabel',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1009,6 +1030,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'calendar-heatmap',
       // PR-X16c (Codex 019e35b3): PolarChart category-value formatting.
       'polar-chart',
+      // PR-X16d (Codex 019e3615): ThemeRiverChart band-value formatting.
+      'theme-river-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1043,6 +1066,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'calendar-heatmap',
       // PR-X16c (Codex 019e35b3): PolarChart category-click cross-filter.
       'polar-chart',
+      // PR-X16d (Codex 019e3615): ThemeRiverChart band-click cross-filter.
+      'theme-river-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1887,6 +1912,35 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // PR-X16d (Codex 019e3615): ThemeRiverChart per-(date, category)
+  // scaffold so the generated snippet compiles end-to-end
+  // (`const sampleData = [...]`). 5-month × 3-channel traffic series.
+  'theme-river-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'ThemeRiverChart observations ({ date, value, category })',
+        jsLiteral: `[
+  { date: '2026-01-01', category: 'Web', value: 120 },
+  { date: '2026-01-01', category: 'Mobile', value: 80 },
+  { date: '2026-01-01', category: 'API', value: 45 },
+  { date: '2026-02-01', category: 'Web', value: 132 },
+  { date: '2026-02-01', category: 'Mobile', value: 96 },
+  { date: '2026-02-01', category: 'API', value: 58 },
+  { date: '2026-03-01', category: 'Web', value: 118 },
+  { date: '2026-03-01', category: 'Mobile', value: 110 },
+  { date: '2026-03-01', category: 'API', value: 67 },
+  { date: '2026-04-01', category: 'Web', value: 145 },
+  { date: '2026-04-01', category: 'Mobile', value: 124 },
+  { date: '2026-04-01', category: 'API', value: 73 },
+  { date: '2026-05-01', category: 'Web', value: 138 },
+  { date: '2026-05-01', category: 'Mobile', value: 141 },
+  { date: '2026-05-01', category: 'API', value: 88 },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -2362,6 +2416,51 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'layout',
       description: 'Start the first category at 0° instead of the top.',
       statePatch: { startAngle: 0 },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // PR-X16d (Codex 019e3615): ThemeRiverChart preset gallery.
+  'theme-river-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Stream graph with the category label on each band.',
+      statePatch: {},
+    },
+    {
+      id: 'no-labels',
+      label: 'No Band Labels',
+      tag: 'layout',
+      description: 'Hide the category-name label on each flow band.',
+      statePatch: { showLabel: false },
+    },
+    {
+      id: 'compact',
+      label: 'Compact Size',
+      tag: 'layout',
+      description: 'Small size variant for dense dashboard cells.',
+      statePatch: { size: 'sm' },
+    },
+    {
+      id: 'static',
+      label: 'No Animation',
+      tag: 'motion',
+      description: 'Render statically — skip the mount animation.',
+      statePatch: { animate: false },
     },
     {
       id: 'dark',
