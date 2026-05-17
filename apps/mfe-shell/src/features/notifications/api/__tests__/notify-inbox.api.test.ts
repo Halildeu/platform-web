@@ -13,7 +13,7 @@ import type { InboxItemDto, InboxListResponseDto, UnreadCountDto } from '../noti
  * - markRead flips state + invalidates list/badge cache (re-fetch)
  * - archive removes the row from the active list
  * - X-Org-Id / X-Subscriber-Id headers flow through to fetch
- * - credentials: 'include' is set so the gateway httpOnly JWT cookie travels
+ * - Authorization: Bearer <auth.token> flows through to fetch
  *
  * Pattern: stub global {@code fetch} via {@code vi.fn()} — MSW isn't a
  * workspace devDep yet, and the tests don't need a full service worker
@@ -159,11 +159,11 @@ describe('notifyInboxApi.listInbox', () => {
     expect(result.data?.items[0].id).toBe(2);
     expect(result.data?.items[1].id).toBe(1);
 
-    // Identity headers + cookie credentials flow through.
+    // Identity + bearer auth headers flow through.
     const req = recorded[0];
     expect(req.headers['x-org-id']).toBe('default');
     expect(req.headers['x-subscriber-id']).toBe('sub-1');
-    expect(req.credentials).toBe('include');
+    expect(req.headers['authorization']).toBe('Bearer stub-token');
     expect(req.url).toContain('/api/v1/notify/inbox/me');
     expect(req.url).toContain('page=0');
     expect(req.url).toContain('size=20');
@@ -264,7 +264,7 @@ describe('notifyInboxApi prepareHeaders state-derived identity', () => {
     // whether the endpoint config wrote anything to the headers map.
     expect(req.headers['x-org-id']).toBe('state-org');
     expect(req.headers['x-subscriber-id']).toBe('state-sub');
-    expect(req.credentials).toBe('include');
+    expect(req.headers['authorization']).toBe('Bearer stub-token');
   });
 
   it('rescues a blank-arg call by sourcing identity from state (post-PR-316 wire-safety net)', async () => {
@@ -287,15 +287,16 @@ describe('notifyInboxApi prepareHeaders state-derived identity', () => {
   });
 
   it('leaves headers blank when the auth slice has no identity (fail-closed)', async () => {
-    // Genuinely unauthenticated → selectNotifyIdentity returns null →
-    // prepareHeaders no-op → orchestrator returns 400 in production.
-    // This is the correct safety boundary; we never invent identity.
+    // Genuinely unauthenticated → no token + null identity →
+    // prepareHeaders writes neither Authorization nor identity headers →
+    // gateway returns 401 in production. Correct fail-closed boundary.
     const store = buildStore({ unauthenticated: true });
     await store.dispatch(
       notifyInboxApi.endpoints.listInbox.initiate({ orgId: '', subscriberId: '' }),
     );
 
     const req = recorded[0];
+    expect(req.headers['authorization'] ?? '').toBe('');
     expect(req.headers['x-org-id'] ?? '').toBe('');
     expect(req.headers['x-subscriber-id'] ?? '').toBe('');
   });
@@ -371,10 +372,10 @@ describe('notifyInboxApi unwrapRequestFetchFn (Request→string workaround)', ()
     expect(calls[0].inputType).toBe('string');
     expect(calls[0].method).toBe('GET');
 
-    // Header + credential preservation through the unwrap.
+    // Header preservation through the unwrap.
     expect(calls[0].headers['x-org-id']).toBe('default');
     expect(calls[0].headers['x-subscriber-id']).toBe('sub-1');
-    expect(calls[0].credentials).toBe('include');
+    expect(calls[0].headers['authorization']).toBe('Bearer stub-token');
 
     // Abort/timeout signal must carry over so RTK Query cancellation
     // and any per-request timeout continue to fire.

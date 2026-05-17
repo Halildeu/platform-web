@@ -1,6 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { RootState } from '../../../app/store/store';
 import { selectNotifyIdentity } from '../model/identity.selectors';
+import { selectAuthToken } from '../../auth/model/auth.slice';
 import type {
   InboxItemActionArgs,
   InboxItemDto,
@@ -14,13 +15,15 @@ import type {
  * RTK Query client for the notification-orchestrator inbox REST API
  * (Faz 23.4 PR-E.5 — frontend identity bootstrap).
  *
- * Endpoints: gateway-fronted under {@code /api/v1/notify/inbox/...}. The
- * shell auth flow already pins the JWT into an httpOnly cookie via
- * {@code POST /auth/cookie}; here we set {@code credentials: 'include'}
- * so every request carries that cookie. The backend
- * {@code SubscriberIdentityGuard} validates the {@code X-Subscriber-Id}
- * header against trusted JWT claims (subscriberId | userId | sub) — see
- * platform-backend PR #94.
+ * Endpoints: gateway-fronted under {@code /api/v1/notify/inbox/...}.
+ * REST requests authenticate with an {@code Authorization: Bearer}
+ * header sourced from the Redux {@code auth} slice — the api-gateway
+ * {@code CookieAwareBearerTokenConverter} honours the
+ * {@code erp_access_token} cookie only for the SSE {@code /me/stream}
+ * path, so every REST inbox call carries the bearer token explicitly.
+ * The backend {@code SubscriberIdentityGuard} validates the
+ * {@code X-Subscriber-Id} header against trusted JWT claims
+ * (subscriberId | userId | sub) — see platform-backend PR #94.
  *
  * Why RTK Query (not a custom hook): cache, automatic invalidation
  * (mark-read / archive flip the list and badge), built-in loading / error
@@ -113,11 +116,6 @@ export const notifyInboxApi = createApi({
   reducerPath: 'notifyInboxApi',
   baseQuery: fetchBaseQuery({
     baseUrl: resolveInboxBaseUrl(),
-    // The gateway sets the auth cookie httpOnly + SameSite=Lax under the
-    // same origin; include it on every fetch so Spring Security sees the
-    // JWT. Without this, the request would be unauthenticated and rejected
-    // by the resource-server filter chain.
-    credentials: 'include',
     fetchFn: unwrapRequestFetchFn,
     /**
      * State-derived identity headers (PR-5.X-bis follow-up; Codex thread
@@ -159,7 +157,16 @@ export const notifyInboxApi = createApi({
      * is "wire safety".
      */
     prepareHeaders: (headers, { getState }) => {
-      const identity = selectNotifyIdentity(getState() as RootState);
+      const state = getState() as RootState;
+      // REST notify routes authenticate header-only at the gateway (the
+      // erp_access_token cookie is honoured only for the SSE /me/stream
+      // path). Absent token → no header → fail-closed 401, same boundary
+      // as the null-identity case below.
+      const token = selectAuthToken(state);
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      const identity = selectNotifyIdentity(state);
       if (!identity) {
         return headers;
       }

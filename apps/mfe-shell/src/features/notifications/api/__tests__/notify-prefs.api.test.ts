@@ -9,7 +9,7 @@ import type { PreferenceDto } from '../notify-prefs.types';
  *
  * Mirrors the inbox API test pattern: stub global fetch via
  * vi.stubGlobal so RTK Query's Request shape is honored. Tests cover
- * list/upsert/delete URL+method+headers+credentials, plus tag
+ * list/upsert/delete URL+method+headers+auth, plus tag
  * invalidation behavior (mutation triggers list refetch).
  */
 
@@ -36,11 +36,52 @@ const buildPref = (overrides: Partial<PreferenceDto> = {}): PreferenceDto => ({
   ...overrides,
 });
 
-const buildStore = () =>
-  configureStore({
-    reducer: { [notifyPrefsApi.reducerPath]: notifyPrefsApi.reducer },
+const AUTH_TOKEN = 'stub-token';
+
+type AuthOverrides = { unauthenticated?: boolean };
+
+/**
+ * Minimal auth slice fixture — prepareHeaders resolves the bearer token
+ * via selectAuthToken and the identity via selectNotifyIdentity, both
+ * off state.auth. orgId/subscriberId match IDENTITY so the wire headers
+ * line up with the endpoint args. Pass { unauthenticated: true } to
+ * exercise the fail-closed branch (no token, no identity).
+ */
+const buildAuthState = (overrides: AuthOverrides = {}) => ({
+  user: overrides.unauthenticated
+    ? null
+    : {
+        id: 'profile-1',
+        email: 'admin@example.com',
+        role: 'ADMIN' as const,
+        permissions: [] as string[],
+        orgId: 'default',
+        subscriberId: 'sub-1',
+      },
+  token: overrides.unauthenticated ? null : AUTH_TOKEN,
+  status: 'idle' as const,
+  error: null,
+  registrationStatus: 'idle' as const,
+  lastRegisteredEmail: null,
+  expiresAt: null,
+  initialized: true,
+  phase: overrides.unauthenticated ? ('unauthenticated' as const) : ('transportReady' as const),
+  authError: null,
+  authEpoch: 0,
+  transportReadyAt: overrides.unauthenticated ? null : Date.now(),
+  authzSnapshot: null,
+});
+
+const buildStore = (authOverrides: AuthOverrides = {}) => {
+  const auth = buildAuthState(authOverrides);
+  return configureStore({
+    reducer: {
+      auth: (state = auth) => state,
+      [notifyPrefsApi.reducerPath]: notifyPrefsApi.reducer,
+    },
     middleware: (gdm) => gdm().concat(notifyPrefsApi.middleware),
   });
+};
 
 let recorded: RequestRecord[] = [];
 let fetchHandler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -85,7 +126,7 @@ afterEach(() => {
 });
 
 describe('notifyPrefsApi.listPreferences', () => {
-  it('returns the seed list with identity headers + credentials include', async () => {
+  it('returns the seed list with identity + Authorization headers', async () => {
     const store = buildStore();
     const result = await store.dispatch(
       notifyPrefsApi.endpoints.listPreferences.initiate(IDENTITY),
@@ -95,8 +136,21 @@ describe('notifyPrefsApi.listPreferences', () => {
     const req = recorded[0];
     expect(req.headers['x-org-id']).toBe('default');
     expect(req.headers['x-subscriber-id']).toBe('sub-1');
-    expect(req.credentials).toBe('include');
+    expect(req.headers['authorization']).toBe('Bearer stub-token');
     expect(req.url).toContain('/api/v1/notify/preferences/me');
+  });
+});
+
+describe('notifyPrefsApi prepareHeaders fail-closed', () => {
+  it('writes no Authorization or identity headers when the auth slice is empty', async () => {
+    const store = buildStore({ unauthenticated: true });
+    await store.dispatch(
+      notifyPrefsApi.endpoints.listPreferences.initiate({ orgId: '', subscriberId: '' }),
+    );
+    const req = recorded[0];
+    expect(req.headers['authorization'] ?? '').toBe('');
+    expect(req.headers['x-org-id'] ?? '').toBe('');
+    expect(req.headers['x-subscriber-id'] ?? '').toBe('');
   });
 });
 
@@ -191,7 +245,7 @@ describe('notifyPrefsApi.restoreDefaults (Faz 23.6 PR-C1)', () => {
     expect(delReq?.url).not.toMatch(/\/me\/\d+$/);
     expect(delReq?.headers['x-org-id']).toBe('default');
     expect(delReq?.headers['x-subscriber-id']).toBe('sub-1');
-    expect(delReq?.credentials).toBe('include');
+    expect(delReq?.headers['authorization']).toBe('Bearer stub-token');
     expect(delReq?.body).toBeFalsy();
   });
 
@@ -252,7 +306,7 @@ describe('notifyPrefsApi.restoreDefaults (Faz 23.6 PR-C1)', () => {
 });
 
 describe('notifyPrefsApi.muteChannel (Faz 23.6 PR-C2)', () => {
-  it('POSTs /me/mute-channel with channel body, identity headers, and credentials include', async () => {
+  it('POSTs /me/mute-channel with channel body, identity + Authorization headers', async () => {
     fetchHandler = async () =>
       jsonResponse({ channel: 'email', muted: true, deletedOverrideCount: 3, shadowDenyCount: 2 });
     const store = buildStore();
@@ -269,7 +323,7 @@ describe('notifyPrefsApi.muteChannel (Faz 23.6 PR-C2)', () => {
     expect(postReq?.url).toMatch(/\/api\/v1\/notify\/preferences\/me\/mute-channel$/);
     expect(postReq?.headers['x-org-id']).toBe('default');
     expect(postReq?.headers['x-subscriber-id']).toBe('sub-1');
-    expect(postReq?.credentials).toBe('include');
+    expect(postReq?.headers['authorization']).toBe('Bearer stub-token');
     expect(postReq?.body).toBeTruthy();
     expect(JSON.parse(postReq?.body ?? '{}')).toEqual({ channel: 'email' });
   });

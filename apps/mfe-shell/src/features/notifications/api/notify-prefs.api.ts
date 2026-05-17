@@ -1,4 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { RootState } from '../../../app/store/store';
+import { selectNotifyIdentity } from '../model/identity.selectors';
+import { selectAuthToken } from '../../auth/model/auth.slice';
 import type {
   PreferenceDeleteArgs,
   PreferenceDto,
@@ -15,9 +18,10 @@ import type {
  * - {@code PUT /api/v1/notify/preferences/me} → upsert by composite key
  * - {@code DELETE /api/v1/notify/preferences/me/{id}} → remove one row
  *
- * Same identity contract as the inbox surface (Faz 23.4 PR-E.5):
- * {@code credentials: 'include'} pulls the gateway httpOnly JWT cookie;
- * X-Org-Id / X-Subscriber-Id headers identify the caller; backend
+ * Same auth contract as the inbox surface: an {@code Authorization:
+ * Bearer} header (sourced from the Redux {@code auth} slice) plus
+ * X-Org-Id / X-Subscriber-Id identity headers, both set in
+ * {@code prepareHeaders}. The backend
  * {@link com.serban.notify.api.SubscriberIdentityGuard} enforces the
  * trusted-claim-set match server-side.
  *
@@ -42,7 +46,23 @@ export const notifyPrefsApi = createApi({
   reducerPath: 'notifyPrefsApi',
   baseQuery: fetchBaseQuery({
     baseUrl: resolvePreferencesBaseUrl(),
-    credentials: 'include',
+    // Wire-level safety net — set bearer + identity headers for every
+    // request. Endpoint-level `headers: identityHeaders(arg)` stays for
+    // cache-key parity; prepareHeaders is the guaranteed wire write.
+    // Absent token → no header → fail-closed 401.
+    prepareHeaders: (headers, { getState }) => {
+      const state = getState() as RootState;
+      const token = selectAuthToken(state);
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      const identity = selectNotifyIdentity(state);
+      if (identity) {
+        headers.set('X-Org-Id', identity.orgId);
+        headers.set('X-Subscriber-Id', identity.subscriberId);
+      }
+      return headers;
+    },
   }),
   tagTypes: ['Preference'] as const,
   endpoints: (build) => ({
