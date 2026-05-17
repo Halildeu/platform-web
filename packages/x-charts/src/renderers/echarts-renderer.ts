@@ -105,6 +105,21 @@ export type EChartsRenderSettledEvent = {
 export interface EChartsRendererOptions {
   /** ECharts option object. */
   option: EChartsOption;
+  /**
+   * Gate the renderer lifecycle. Default `true`. When `false`, the hook
+   * does NOT call `echarts.init()` or `setOption()` — used by
+   * lazy-registered charts (e.g. TreeChart) that must defer instance
+   * creation until their ECharts feature module has registered.
+   *
+   * ECharts' Scheduler snapshots the registered layout/visual handler
+   * list at `echarts.init()` time. An instance created BEFORE a lazy
+   * `registerLayout` runs never sees that layout — the series renders
+   * with no `layoutInfo` and crashes its view (Codex thread 019e337e:
+   * `tree` series → `TreeView.render` → `Cannot read properties of
+   * undefined (reading 'x')`). Gating init on feature-readiness fixes
+   * that ordering.
+   */
+  enabled?: boolean;
   /** Renderer type. @default 'canvas' */
   renderer?: 'canvas' | 'svg';
   /** Theme name or object (from DesignLabEChartsTheme). */
@@ -209,6 +224,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
 
   const {
     option,
+    enabled = true,
     renderer = 'canvas',
     theme,
     notMerge = false,
@@ -265,6 +281,10 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
 
   // Init / Dispose
   useEffect(() => {
+    // Lazy-feature charts gate this until their ECharts module is
+    // registered — `echarts.init()` must run AFTER `registerLayout`
+    // (see `enabled` doc on EChartsRendererOptions).
+    if (!enabled) return;
     const container = containerRef.current;
     if (!container) return;
 
@@ -301,7 +321,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     // ECharts re-resolves toolbox/legend/dataZoom strings.
     // PR3b: respectReducedMotion is also a dep — the resize-animation
     // duration we close over above changes when the consumer toggles it.
-  }, [renderer, theme, echartsLocaleKey, respectReducedMotion]);
+  }, [enabled, renderer, theme, echartsLocaleKey, respectReducedMotion]);
 
   // Click handler lifecycle (Faz 21.4 PR-E2 must-fix #1, iter-2).
   //
@@ -354,6 +374,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
 
   // Option update
   useEffect(() => {
+    if (!enabled) return;
     const instance = instanceRef.current;
     if (!instance || !option) return;
 
@@ -443,7 +464,7 @@ export function useEChartsRenderer(options: EChartsRendererOptions): EChartsRend
     // `unstable_onRenderSettled` intentionally omitted: the callback
     // is captured via `onRenderSettledRef` so a changing identity
     // would otherwise re-run setOption and corrupt the measurement.
-  }, [option, notMerge, lazyUpdate, respectReducedMotion, echartsLocaleKey]);
+  }, [enabled, option, notMerge, lazyUpdate, respectReducedMotion, echartsLocaleKey]);
 
   const resize = useCallback(() => {
     instanceRef.current?.resize();
