@@ -919,30 +919,34 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // and honest (Codex thread 019e365b — C-prime verdict, which rejected
   // an earlier mixed-convention `367`):
   //
-  //  - `FULL_CATALOG_PROPS` is the historical raw convention — the sum
-  //    of ChartDetail `props.length` over the enrolled curated charts
-  //    (… TreeChart +24, CalendarHeatmap +25, PolarChart +22,
-  //    ThemeRiverChart +17, GanttChart +16) → 354 + 16 = 370.
+  //  - `FULL_CATALOG_PROPS` is the historical raw convention — a
+  //    manually-maintained accumulator (NOT auto-derived from
+  //    ChartDetail.tsx): each PR that changes catalog props on an
+  //    enrolled chart adds its delta here. Chart enrolments: TreeChart
+  //    +24, CalendarHeatmap +25, PolarChart +22, ThemeRiverChart +17,
+  //    GanttChart +16 → 354 + 16 = 370. PR-X16 P0-2 adds the universal
+  //    `description` prop to 8 already-enrolled charts (Gauge/Radar/
+  //    Treemap/Heatmap/Waterfall/Funnel/Sankey/Sunburst) → 370 + 8 = 378.
   //  - the THRESHOLD denominator excludes exactly ONE prop per enrolled
   //    chart — `data`. A dataset is represented by SAMPLE_DATA / code
   //    scaffolds, never by a LIVE_PROP_SUPPORT primitive or a
   //    COMPLEX_PROP_PRESETS entry, so it can never be in the numerator.
   //    The exclusion is SYMMETRIC across every enrolled chart, not a
   //    Gantt-only adjustment: 18 enrolled charts → 18 `data` props →
-  //    370 - 18 = 352.
+  //    378 - 18 = 360.
   //
   // `anomalySummary` / `formatAnomalyAnnouncement` deliberately STAY in
   // the denominator — that keeps the gate conservative while removing
   // only the dataset-shaped numerator/denominator mismatch.
   //
-  // Honest live-surface coverage: 332 / 352 ≈ %94.3. The raw full-
-  // catalog ratio 332 / 370 ≈ %89.7 is documented but is NOT the gate.
+  // Honest live-surface coverage: 332 / 360 ≈ %92.2. The raw full-
+  // catalog ratio 332 / 378 ≈ %87.8 is documented but is NOT the gate.
   //
   // NOTE: this lock is still a CURATED subset — the PR-X12+ campaign
   // charts (graph / geo-map / box-plot / candlestick / pictorial-bar /
   // parallel-coordinates) are intentionally NOT enrolled here. Enrolling
   // them is a separate coverage-lock follow-up.
-  const FULL_CATALOG_PROPS = 370;
+  const FULL_CATALOG_PROPS = 378;
   const DATASET_PROPS_EXCLUDED_FROM_LIVE_SURFACE = Object.keys(PRIMITIVE_LIVE_COUNTS).length;
   const LIVE_SURFACE_DENOMINATOR = FULL_CATALOG_PROPS - DATASET_PROPS_EXCLUDED_FROM_LIVE_SURFACE;
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
@@ -982,9 +986,9 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     // C-prime verdict) so a future chart-add cannot silently re-mix the
     // convention: DATASET_PROPS_EXCLUDED is derived from the enrolled
     // count, so forgetting to bump FULL_CATALOG_PROPS trips `toBe(18)`.
-    expect(FULL_CATALOG_PROPS).toBe(370);
+    expect(FULL_CATALOG_PROPS).toBe(378);
     expect(DATASET_PROPS_EXCLUDED_FROM_LIVE_SURFACE).toBe(18);
-    expect(LIVE_SURFACE_DENOMINATOR).toBe(352);
+    expect(LIVE_SURFACE_DENOMINATOR).toBe(360);
     // Coverage floor for PR-B: at least %90 of the live-editable surface.
     expect(total / LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(0.9);
   });
