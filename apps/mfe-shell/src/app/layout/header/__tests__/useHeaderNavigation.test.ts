@@ -1,0 +1,86 @@
+// @vitest-environment jsdom
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { useHeaderNavigation } from '../useHeaderNavigation';
+
+/* ---- mocks ---- */
+
+const permissionsMock = {
+  hasModule: vi.fn((_m: string) => false),
+  isSuperAdmin: vi.fn(() => false),
+};
+
+vi.mock('react-router-dom', () => ({
+  useLocation: () => ({ pathname: '/home' }),
+}));
+
+vi.mock('@mfe/auth', () => ({
+  usePermissions: () => permissionsMock,
+}));
+
+vi.mock('../../../store/store.hooks', () => ({
+  useAppSelector: (sel: (s: unknown) => unknown) => sel({ auth: { initialized: true } }),
+}));
+
+vi.mock('../../../i18n', () => ({
+  useShellCommonI18n: () => ({ t: (k: string) => k }),
+}));
+
+let suggestionsEnabled = true;
+let ethicEnabled = true;
+vi.mock('../../../shell-navigation', () => ({
+  isSuggestionsRemoteEnabled: () => suggestionsEnabled,
+  isEthicRemoteEnabled: () => ethicEnabled,
+}));
+
+const groupKeys = () =>
+  renderHook(() => useHeaderNavigation()).result.current.groups.map((g) => g.key);
+
+const hrItems = () => {
+  const hr = renderHook(() => useHeaderNavigation()).result.current.groups.find(
+    (g) => g.key === 'hr',
+  );
+  return (hr?.items ?? []).map((i) => i.key);
+};
+
+describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
+  beforeEach(() => {
+    suggestionsEnabled = true;
+    ethicEnabled = true;
+    permissionsMock.hasModule.mockImplementation(() => false);
+    permissionsMock.isSuperAdmin.mockImplementation(() => false);
+  });
+
+  it('hides the HR group entirely for a user with no modules', () => {
+    // Regression: Öneriler/Etik had no `module`, so the İK group showed
+    // (via `any-child`) to any authenticated user even with zero modules,
+    // and the items led to /unauthorized once route guards were added.
+    // suggestions→SUGGESTIONS, ethic→ETHIC, compensation/demographic→REPORT
+    // are all gated now → no visible child → İK group dropped.
+    expect(groupKeys()).not.toContain('hr');
+  });
+
+  it('shows the HR group with only Öneriler when SUGGESTIONS is granted', () => {
+    permissionsMock.hasModule.mockImplementation((m) => m === 'SUGGESTIONS');
+    expect(groupKeys()).toContain('hr');
+    expect(hrItems()).toEqual(['suggestions']);
+  });
+
+  it('shows the HR group with only Etik when ETHIC is granted', () => {
+    permissionsMock.hasModule.mockImplementation((m) => m === 'ETHIC');
+    expect(hrItems()).toEqual(['ethic']);
+  });
+
+  it('shows all HR items for a super admin', () => {
+    permissionsMock.isSuperAdmin.mockImplementation(() => true);
+    expect(hrItems()).toEqual(['suggestions', 'ethic', 'compensation', 'demographic']);
+  });
+
+  it('keeps the remote-flag gate independent of the module gate', () => {
+    // SUGGESTIONS granted but the suggestions remote is disabled → the
+    // item is still dropped; module access does not override deploy state.
+    permissionsMock.hasModule.mockImplementation((m) => m === 'SUGGESTIONS');
+    suggestionsEnabled = false;
+    expect(hrItems()).not.toContain('suggestions');
+  });
+});
