@@ -36,3 +36,5 @@ declare module 'echarts/lib/component/polar';
 // PR-X16d — themeRiver series + singleAxis component for ThemeRiverChart.
 declare module 'echarts/lib/chart/themeRiver';
 declare module 'echarts/lib/component/singleAxis';
+// PR-X16e — custom renderItem series for GanttChart.
+declare module 'echarts/lib/chart/custom';

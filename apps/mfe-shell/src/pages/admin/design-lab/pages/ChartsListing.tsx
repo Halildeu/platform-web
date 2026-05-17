@@ -287,6 +287,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'area',
   },
+  // PR-X16e (Codex thread 019e365b AGREE): ECharts Depth campaign —
+  // project-schedule timeline (custom series, task bars on a time axis).
+  {
+    id: 'gantt-chart',
+    name: 'GanttChart',
+    description: 'Proje zaman cizelgesi, zaman ekseninde gorev cubuklari.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
   // Interaction
   {
     id: 'chart-container',

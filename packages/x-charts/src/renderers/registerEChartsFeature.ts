@@ -54,6 +54,7 @@
  *   - `polar`        — polar coordinate-system component (PR-X16c)
  *   - `themeRiver`   — stream-graph series + `singleAxis` component
  *                      (PR-X16d)
+ *   - `custom`       — generic custom-render series (PR-X16e GanttChart)
  *
  * The `graph`/`parallel`/`pictorialBar`/`candlestick`/`boxplot` charts
  * are design-lab-only niche wrappers converted from eager registration
@@ -69,7 +70,8 @@ export type EChartsFeature =
   | 'boxplot'
   | 'calendar'
   | 'polar'
-  | 'themeRiver';
+  | 'themeRiver'
+  | 'custom';
 
 /**
  * Per-feature loaders. Each performs a side-effect dynamic import of the
@@ -111,6 +113,11 @@ const FEATURE_LOADERS: Record<EChartsFeature, () => Promise<unknown>> = {
       import('echarts/lib/chart/themeRiver'),
       import('echarts/lib/component/singleAxis'),
     ]),
+  // `custom` is a generic renderItem-driven series — GanttChart (PR-X16e)
+  // draws each task as a `renderItem` rect on the eager cartesian grid
+  // (time x-axis + category y-axis), so no extra component module is
+  // needed. Single-module loader, like `tree` / `calendar` / `polar`.
+  custom: () => import('echarts/lib/chart/custom'),
 };
 
 /** Features whose lazy module has finished registering. */

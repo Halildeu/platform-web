@@ -658,6 +658,26 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // PR-X16e (Codex 019e365b AGREE): project-schedule timeline — a
+  // `custom` series painting task bars on a time x-axis / category lane
+  // y-axis. GanttChart has NO chart-specific editable primitive (no
+  // enum / axis-label / scale / showLabel props) — only the 11-prop
+  // common axis. `data` is a complex shape (code-only);
+  // `valueFormatter`/`onDataPointClick` are function props — preset-
+  // driven via COMPLEX_PROP_PRESETS, not primitives here.
+  'gantt-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1032,6 +1052,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'polar-chart',
       // PR-X16d (Codex 019e3615): ThemeRiverChart band-value formatting.
       'theme-river-chart',
+      // PR-X16e (Codex 019e365b): GanttChart task-duration formatting.
+      'gantt-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1068,6 +1090,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'polar-chart',
       // PR-X16d (Codex 019e3615): ThemeRiverChart band-click cross-filter.
       'theme-river-chart',
+      // PR-X16e (Codex 019e365b): GanttChart task-bar-click cross-filter.
+      'gantt-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1941,6 +1965,26 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // PR-X16e (Codex 019e365b): GanttChart task scaffold so the generated
+  // snippet compiles end-to-end (`const sampleData = [...]`). 6-task ×
+  // 3-lane (Planning / Development / Testing) project schedule.
+  'gantt-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'GanttChart tasks ({ id, name, category, start, end })',
+        jsLiteral: `[
+  { id: 't1', name: 'Discovery', category: 'Planning', start: '2026-01-05', end: '2026-01-19' },
+  { id: 't2', name: 'Design', category: 'Planning', start: '2026-01-19', end: '2026-02-09' },
+  { id: 't3', name: 'Frontend', category: 'Development', start: '2026-02-09', end: '2026-03-16' },
+  { id: 't4', name: 'Backend', category: 'Development', start: '2026-02-16', end: '2026-03-23' },
+  { id: 't5', name: 'Integration Test', category: 'Testing', start: '2026-03-23', end: '2026-04-06' },
+  { id: 't6', name: 'Launch', category: 'Testing', start: '2026-04-06', end: '2026-04-13' },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -2447,6 +2491,44 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'layout',
       description: 'Hide the category-name label on each flow band.',
       statePatch: { showLabel: false },
+    },
+    {
+      id: 'compact',
+      label: 'Compact Size',
+      tag: 'layout',
+      description: 'Small size variant for dense dashboard cells.',
+      statePatch: { size: 'sm' },
+    },
+    {
+      id: 'static',
+      label: 'No Animation',
+      tag: 'motion',
+      description: 'Render statically — skip the mount animation.',
+      statePatch: { animate: false },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // PR-X16e (Codex 019e365b): GanttChart preset gallery.
+  'gantt-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Project-schedule timeline with one task bar per row.',
+      statePatch: {},
     },
     {
       id: 'compact',

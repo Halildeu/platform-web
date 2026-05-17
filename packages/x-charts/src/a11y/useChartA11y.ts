@@ -79,7 +79,10 @@ export type ChartA11yKind =
   | 'polar'
   // PR-X16d (Codex thread 019e3615 AGREE): themeRiver stream-graph on a
   // lazy `singleAxis` coordinate system.
-  | 'themeRiver';
+  | 'themeRiver'
+  // PR-X16e (Codex thread 019e365b AGREE): custom renderItem series —
+  // Gantt timeline / project-schedule chart.
+  | 'gantt';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -210,6 +213,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   polar: 'Polar chart',
   // PR-X16d (Codex thread 019e3615 AGREE): themeRiver stream graph.
   themeRiver: 'Stream graph',
+  // PR-X16e (Codex thread 019e365b AGREE): custom-render Gantt timeline.
+  gantt: 'Gantt chart',
 };
 
 const defaultFormatter = (v: number): string =>
