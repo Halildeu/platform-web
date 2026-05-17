@@ -402,7 +402,7 @@ const CandlestickChartInner = React.forwardRef<
     enabled: candlestickFeatureReady,
     option: option ?? EMPTY_CANDLESTICK_OPTION,
     respectReducedMotion: true,
-    onClick: guardChartCallback(handleClick, true),
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   const setRefs = useCallback(
@@ -436,11 +436,15 @@ CandlestickChartInner.displayName = 'CandlestickChartInner';
  * `accessReason` gate without touching hook order.
  */
 export const CandlestickChart = React.forwardRef<HTMLDivElement, CandlestickChartProps>(
-  function CandlestickChart({ access, accessReason, ...rest }, ref) {
-    const accessState = resolveAccessState(access);
+  function CandlestickChart({ access, accessReason, onDataPointClick, ...rest }, ref) {
+    const { state } = resolveAccessState(access);
     return (
-      <ChartAccessGate accessState={accessState} accessReason={accessReason}>
-        <CandlestickChartInner ref={ref} {...rest} />
+      <ChartAccessGate access={access} accessReason={accessReason}>
+        <CandlestickChartInner
+          ref={ref}
+          {...rest}
+          onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        />
       </ChartAccessGate>
     );
   },

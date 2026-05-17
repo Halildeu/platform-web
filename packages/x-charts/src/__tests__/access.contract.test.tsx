@@ -53,6 +53,10 @@ import { SankeyChart } from '../SankeyChart';
 import { SunburstChart } from '../SunburstChart';
 import { GraphChart } from '../GraphChart';
 import { GeoMap } from '../GeoMap';
+import { BoxPlotChart } from '../BoxPlotChart';
+import { CandlestickChart } from '../CandlestickChart';
+import { PictorialBarChart } from '../PictorialBarChart';
+import { ParallelCoordinatesChart } from '../ParallelCoordinatesChart';
 import {
   ensureGeoMapRegistered,
   __resetGeoMapRegistrationCacheForTests,
@@ -70,6 +74,14 @@ beforeEach(async () => {
   // `enabled` from first render and the access-matrix click-listener
   // assertions stay synchronous (echarts-mock stubs the renderer).
   markEChartsFeatureRegisteredForTest('graph');
+  // Campaign-end cleanup (Codex thread 019e36d9): BoxPlot / Candlestick /
+  // PictorialBar / Parallel are lazy too — pre-mark their features so the
+  // access-matrix click-listener assertions stay synchronous, same as
+  // `graph` above.
+  markEChartsFeatureRegisteredForTest('boxplot');
+  markEChartsFeatureRegisteredForTest('candlestick');
+  markEChartsFeatureRegisteredForTest('pictorialBar');
+  markEChartsFeatureRegisteredForTest('parallel');
   // PR-X12c (Codex 019e2254 PR-X12c iter-2 fix): pre-register a stub
   // map so `GeoMap` cases in the parametric matrix don't skip render
   // due to missing registration. `await` (not fire-and-forget) so the
@@ -312,6 +324,66 @@ const CASES: ChartCase[] = [
       <GeoMap
         mapName="TR_TEST"
         data={[{ name: 'A', value: 1 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+  // Campaign-end cleanup (Codex thread 019e36d9): the four PR-X16b-prep
+  // niche wrappers join the matrix. Pre-fix they passed `accessState` to
+  // ChartAccessGate (gate expects `access`) and called
+  // `guardChartCallback(handleClick, true)` with swapped argument order
+  // — so the guard returned `undefined` and the click listener was never
+  // installed, even under `access="full"`. The `full → >=1 listener`
+  // assertion below is the regression lock.
+  {
+    name: 'BoxPlotChart',
+    handlerBearing: true,
+    render: (o) => (
+      <BoxPlotChart
+        data={[{ category: 'A', values: [1, 2, 3, 4, 5] }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+  {
+    name: 'CandlestickChart',
+    handlerBearing: true,
+    render: (o) => (
+      <CandlestickChart
+        data={[{ label: 'D1', open: 100, close: 110, low: 95, high: 115 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+  {
+    name: 'PictorialBarChart',
+    handlerBearing: true,
+    render: (o) => (
+      <PictorialBarChart
+        data={[{ label: 'A', value: 5 }]}
+        access={o.access}
+        accessReason={o.accessReason}
+        onDataPointClick={o.onClick as never}
+      />
+    ),
+  },
+  {
+    name: 'ParallelCoordinatesChart',
+    handlerBearing: true,
+    render: (o) => (
+      <ParallelCoordinatesChart
+        data={[{ dept: 'Eng', salary: 80000, tenure: 5 }]}
+        axes={[
+          { field: 'dept', name: 'Department', type: 'category' },
+          { field: 'salary', name: 'Salary', type: 'value', min: 0, max: 100000 },
+          { field: 'tenure', name: 'Tenure', type: 'value', min: 0, max: 30 },
+        ]}
         access={o.access}
         accessReason={o.accessReason}
         onDataPointClick={o.onClick as never}
