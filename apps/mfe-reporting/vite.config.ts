@@ -73,9 +73,7 @@ const sharedProdOnly = {
   'ag-grid-enterprise': singleton('ag-grid-enterprise'),
   'ag-grid-react': singleton('ag-grid-react'),
   '@platform/capabilities': singleton('@platform/capabilities', false),
-  // PERF-INIT-V2.1 B1a: hostOnly — consume @mfe/design-system from the host
-  // share-scope; the prior singleton() shipped a ~1.7 MB-transfer copy per remote.
-  '@mfe/design-system': hostOnly('@mfe/design-system'),
+  '@mfe/design-system': singleton('@mfe/design-system', false),
   '@mfe/shared-http': singleton('@mfe/shared-http', false),
   '@mfe/i18n-dicts': singleton('@mfe/i18n-dicts', false),
   // R15 user-visible repair follow-up (Codex 019e2aef iter-3):

@@ -46,9 +46,7 @@ const sharedCore = {
   '@tanstack/react-query': hostOnly('@tanstack/react-query'),
 };
 const sharedProdOnly = {
-  // PERF-INIT-V2.1 B1a: hostOnly — consume @mfe/design-system from the host
-  // share-scope; the prior singleton() shipped a ~1.7 MB-transfer copy per remote.
-  '@mfe/design-system': hostOnly('@mfe/design-system'),
+  '@mfe/design-system': singleton('@mfe/design-system', false),
   clsx: singleton('clsx'),
   'tailwind-merge': singleton('tailwind-merge'),
 };
