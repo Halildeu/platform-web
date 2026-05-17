@@ -223,6 +223,11 @@ const ECHARTS_LAZY_FEATURE_EXTERNAL = [
   // PR-X16c — polar coordinate-system component (PolarChart).
   "echarts/lib/component/polar",
   "echarts/lib/component/polar/*",
+  // PR-X16d — themeRiver series + singleAxis component (ThemeRiverChart).
+  "echarts/lib/chart/themeRiver",
+  "echarts/lib/chart/themeRiver/*",
+  "echarts/lib/component/singleAxis",
+  "echarts/lib/component/singleAxis/*",
 ];
 
 const WRAPPER_ONLY_EXTERNAL = [
@@ -282,6 +287,8 @@ const PROBE_CHART_WHITELIST = new Set([
   "BoxPlotChart",
   // PR-X16c — PolarChart depth chart (lazy `polar` coordinate system).
   "PolarChart",
+  // PR-X16d — ThemeRiverChart depth chart (lazy `themeRiver` + `singleAxis`).
+  "ThemeRiverChart",
 ]);
 
 /**

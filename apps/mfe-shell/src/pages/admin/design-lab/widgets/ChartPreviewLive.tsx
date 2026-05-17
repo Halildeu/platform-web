@@ -28,6 +28,10 @@ import {
   // bar/line/scatter series on a polar coordinate system — ECharts
   // Depth campaign third wrapper.
   PolarChart,
+  // PR-X16d (Codex thread 019e3615 AGREE): stream graph — a `themeRiver`
+  // series on a lazy `singleAxis` time coordinate system — ECharts
+  // Depth campaign fourth wrapper.
+  ThemeRiverChart,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -1018,6 +1022,56 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             showRadiusAxisLabel={isOn(toggles, 'showRadiusAxisLabel', true)}
             min={getOptNum(toggles, 'min')}
             max={getOptNum(toggles, 'max')}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // PR-X16d (Codex thread 019e3615 AGREE): stream graph — a `themeRiver`
+    // series on a lazy `singleAxis` time coordinate system — ECharts
+    // Depth campaign. Sample dataset: 5-month × 3-channel traffic series.
+    case 'theme-river-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <ThemeRiverChart
+            data={[
+              { date: '2026-01-01', category: 'Web', value: 120 },
+              { date: '2026-01-01', category: 'Mobile', value: 80 },
+              { date: '2026-01-01', category: 'API', value: 45 },
+              { date: '2026-02-01', category: 'Web', value: 132 },
+              { date: '2026-02-01', category: 'Mobile', value: 96 },
+              { date: '2026-02-01', category: 'API', value: 58 },
+              { date: '2026-03-01', category: 'Web', value: 118 },
+              { date: '2026-03-01', category: 'Mobile', value: 110 },
+              { date: '2026-03-01', category: 'API', value: 67 },
+              { date: '2026-04-01', category: 'Web', value: 145 },
+              { date: '2026-04-01', category: 'Mobile', value: 124 },
+              { date: '2026-04-01', category: 'API', value: 73 },
+              { date: '2026-05-01', category: 'Web', value: 138 },
+              { date: '2026-05-01', category: 'Mobile', value: 141 },
+              { date: '2026-05-01', category: 'API', value: 88 },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            showLabel={isOn(toggles, 'showLabel', true)}
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}

@@ -30,6 +30,23 @@ vi.mock('echarts/lib/chart/boxplot', () => ({}));
 vi.mock('echarts/lib/component/calendar', () => ({}));
 // PR-X16c — stub the polar coordinate-system component module.
 vi.mock('echarts/lib/component/polar', () => ({}));
+// PR-X16d: themeRiver is a TWO-module feature: the `themeRiver` series
+// PLUS the `singleAxis` coordinate component. Each mock factory bumps a
+// hoisted spy so the dedicated test below can assert BOTH modules were
+// dynamic-imported; a plain `() => ({})` stub would let a loader that
+// silently dropped the second module still pass.
+const { themeRiverSeriesLoaded, singleAxisComponentLoaded } = vi.hoisted(() => ({
+  themeRiverSeriesLoaded: vi.fn(),
+  singleAxisComponentLoaded: vi.fn(),
+}));
+vi.mock('echarts/lib/chart/themeRiver', () => {
+  themeRiverSeriesLoaded();
+  return {};
+});
+vi.mock('echarts/lib/component/singleAxis', () => {
+  singleAxisComponentLoaded();
+  return {};
+});
 
 beforeEach(() => {
   resetEChartsFeatureRegistration();
@@ -101,6 +118,7 @@ const ALL_FEATURES: EChartsFeature[] = [
   'boxplot',
   'calendar',
   'polar',
+  'themeRiver',
 ];
 
 describe('every EChartsFeature loader resolves', () => {
@@ -128,5 +146,17 @@ describe('every EChartsFeature loader resolves', () => {
     // await would throw — a clean resolve proves both modules ran.
     await expect(ensureEChartsFeatureRegistered('parallel')).resolves.toBeUndefined();
     expect(isEChartsFeatureRegistered('parallel')).toBe(true);
+  });
+
+  it('`themeRiver` registers only after BOTH its series + singleAxis modules load', async () => {
+    // The `themeRiver` loader awaits a two-module Promise.all
+    // (echarts/lib/chart/themeRiver + echarts/lib/component/singleAxis).
+    // The mock factories bump hoisted spies, so asserting BOTH ran proves
+    // the loader did not silently drop the singleAxis module — which a
+    // clean resolve alone would NOT catch.
+    await expect(ensureEChartsFeatureRegistered('themeRiver')).resolves.toBeUndefined();
+    expect(isEChartsFeatureRegistered('themeRiver')).toBe(true);
+    expect(themeRiverSeriesLoaded).toHaveBeenCalled();
+    expect(singleAxisComponentLoaded).toHaveBeenCalled();
   });
 });

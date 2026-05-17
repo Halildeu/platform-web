@@ -277,6 +277,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'radar',
   },
+  // PR-X16d (Codex thread 019e3615 AGREE): ECharts Depth campaign —
+  // stream graph (themeRiver series on a singleAxis time grid).
+  {
+    id: 'theme-river-chart',
+    name: 'ThemeRiverChart',
+    description: 'Akarsu/stream grafik, zaman ekseninde kategori hacmi.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'area',
+  },
   // Interaction
   {
     id: 'chart-container',

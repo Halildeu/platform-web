@@ -33,3 +33,6 @@ declare module 'echarts/lib/chart/boxplot';
 declare module 'echarts/lib/component/calendar';
 // PR-X16c — polar coordinate-system component for PolarChart.
 declare module 'echarts/lib/component/polar';
+// PR-X16d — themeRiver series + singleAxis component for ThemeRiverChart.
+declare module 'echarts/lib/chart/themeRiver';
+declare module 'echarts/lib/component/singleAxis';
