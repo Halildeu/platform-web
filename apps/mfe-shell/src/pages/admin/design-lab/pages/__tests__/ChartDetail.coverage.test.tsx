@@ -3,13 +3,14 @@
  * ChartDetail — page render coverage smoke for chart wrappers with full
  * playground (LIVE_PROP_SUPPORT + CHART_PRESETS) support.
  *
- * NOTE: The library exports 23 wrappers as of PR-X12c, but only 17 have
- * the full live-playground wiring (LIVE_PROP_SUPPORT + CHART_PRESETS in
- * chartPlaygroundModel + ChartPreviewLive switch). The 6 new PR-X
- * campaign wrappers (BoxPlotChart, CandlestickChart, PictorialBarChart,
- * ParallelCoordinatesChart, GraphChart, GeoMap) have detail-page entries
- * (description + props + sampleCode + features) but no live playground —
- * follow-up PR will extend the playground coverage to 23.
+ * NOTE: This smoke renders the ChartDetail page for every wrapper with
+ * full live-playground wiring (LIVE_PROP_SUPPORT + CHART_PRESETS in
+ * chartPlaygroundModel + a ChartPreviewLive switch arm) — see
+ * `CHART_IDS_WITH_PRESETS`. Rendering the page exercises the full
+ * `ChartMeta` catalog entry, so a missing required field surfaces here
+ * instead of in cluster QA — e.g. the `features` omission in the
+ * `tree-chart` entry that crashed `/charts/tree-chart` live on testai
+ * (PR-X16a hotfix: tree-chart added to the list below as the guard).
  *
  * Faz 21.11 PR-Playground-Coverage follow-up: lock the contract that
  * `/admin/design-lab/charts/:chartId` mounts cleanly for every wrapper
@@ -47,6 +48,7 @@ vi.mock('@mfe/x-charts', async () => {
     GaugeChart: stubChart('GaugeChart'),
     RadarChart: stubChart('RadarChart'),
     TreemapChart: stubChart('TreemapChart'),
+    TreeChart: stubChart('TreeChart'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -81,6 +83,10 @@ const CHART_IDS_WITH_PRESETS = [
   'gauge-chart',
   'radar-chart',
   'treemap-chart',
+  // PR-X16a — TreeChart depth chart. Render-smoke regression guard for
+  // the `features` / `sampleCode` catalog completeness that the live
+  // testai crash exposed.
+  'tree-chart',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',
