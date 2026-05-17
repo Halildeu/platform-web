@@ -90,6 +90,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('useInboxUnreadSse', () => {
@@ -243,5 +244,92 @@ describe('useInboxUnreadSse', () => {
     });
     expect(stubInstances.length).toBe(sourcesBeforeTimer);
     expect(bobEs.closed).toBe(false);
+  });
+
+  /**
+   * Connect-time snapshot LIST-refetch fix. The orchestrator sends the
+   * current unread count as the FIRST SSE event on connect; invalidating
+   * Inbox/LIST then refetches a list just fetched on mount. The hook now
+   * skips that one invalidation when the snapshot count matches the
+   * cached list count — a drift, an absent cache, or any later event
+   * still invalidates.
+   */
+  describe('unread-count → Inbox/LIST invalidation', () => {
+    const identity = { orgId: 'default', subscriberId: 'sub-1' };
+    const seedList = (store: ReturnType<typeof buildWrapper>['store'], unreadCount: number) =>
+      store.dispatch(
+        notifyInboxApi.util.upsertQueryData('listInbox', identity, {
+          items: [],
+          totalElements: 0,
+          totalPages: 1,
+          page: 0,
+          size: 20,
+          unreadCount,
+        }),
+      );
+
+    it('skips LIST invalidation on the connect-time snapshot when the count is unchanged', async () => {
+      const { Wrapper, store } = buildWrapper();
+      await seedList(store, 4);
+      const invalidateSpy = vi.spyOn(notifyInboxApi.util, 'invalidateTags');
+      renderHook(() => useInboxUnreadSse(identity), { wrapper: Wrapper });
+      const es = stubInstances[0];
+
+      await act(async () => {
+        es.fire('open');
+        es.fire('unread-count', { unreadCount: 4 });
+        await Promise.resolve();
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalled();
+    });
+
+    it('invalidates LIST on the connect-time snapshot when the count drifted', async () => {
+      const { Wrapper, store } = buildWrapper();
+      await seedList(store, 4);
+      const invalidateSpy = vi.spyOn(notifyInboxApi.util, 'invalidateTags');
+      renderHook(() => useInboxUnreadSse(identity), { wrapper: Wrapper });
+      const es = stubInstances[0];
+
+      await act(async () => {
+        es.fire('open');
+        es.fire('unread-count', { unreadCount: 9 });
+        await Promise.resolve();
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalidates LIST on the first event when no list cache exists yet', async () => {
+      const { Wrapper } = buildWrapper();
+      const invalidateSpy = vi.spyOn(notifyInboxApi.util, 'invalidateTags');
+      renderHook(() => useInboxUnreadSse(identity), { wrapper: Wrapper });
+      const es = stubInstances[0];
+
+      await act(async () => {
+        es.fire('open');
+        es.fire('unread-count', { unreadCount: 4 });
+        await Promise.resolve();
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalidates LIST on every event after the first, even when the count is unchanged', async () => {
+      const { Wrapper, store } = buildWrapper();
+      await seedList(store, 4);
+      const invalidateSpy = vi.spyOn(notifyInboxApi.util, 'invalidateTags');
+      renderHook(() => useInboxUnreadSse(identity), { wrapper: Wrapper });
+      const es = stubInstances[0];
+
+      await act(async () => {
+        es.fire('open');
+        es.fire('unread-count', { unreadCount: 4 }); // connect snapshot — skipped
+        es.fire('unread-count', { unreadCount: 4 }); // real event — a row may have flipped READ→ARCHIVED
+        await Promise.resolve();
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });
