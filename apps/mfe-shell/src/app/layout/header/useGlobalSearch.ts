@@ -4,12 +4,14 @@ import type { CommandPaletteItem } from '@mfe/design-system';
 import { usePermissions } from '@mfe/auth';
 import { useAppSelector, useAppDispatch } from '../../store/store.hooks';
 import { toggleOpen } from '../../../features/notifications/model/notifications.slice';
-import {
-  isSuggestionsRemoteEnabled,
-  isEthicRemoteEnabled,
-} from '../../shell-navigation';
+import { isSuggestionsRemoteEnabled, isEthicRemoteEnabled } from '../../shell-navigation';
 import { useShellCommonI18n } from '../../i18n';
-import { SEARCHABLE_ITEMS, SEARCH_GROUP_LABELS, type SearchableItem } from './header-search.config';
+import {
+  SEARCHABLE_ITEMS,
+  SEARCH_GROUP_LABELS,
+  isSearchableItemVisible,
+  type SearchableItem,
+} from './header-search.config';
 import { useRecentPages } from './useRecentPages';
 import { nlSearch } from './nl-search-engine';
 
@@ -40,8 +42,14 @@ export function useGlobalSearch(): GlobalSearchState {
   const ethicEnabled = isEthicRemoteEnabled();
   const { recentPages } = useRecentPages();
 
-  const open = useCallback(() => { setIsOpen(true); setQuery(''); }, []);
-  const close = useCallback(() => { setIsOpen(false); setQuery(''); }, []);
+  const open = useCallback(() => {
+    setIsOpen(true);
+    setQuery('');
+  }, []);
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setQuery('');
+  }, []);
 
   // Ctrl+K / Cmd+K global shortcut
   useEffect(() => {
@@ -59,13 +67,16 @@ export function useGlobalSearch(): GlobalSearchState {
   // Filter searchable items by permission and remote flags
   const filteredItems = useMemo<SearchableItem[]>(() => {
     if (!initialized) return [];
-    return SEARCHABLE_ITEMS.filter((item) => {
-      if (item.remoteFlag === 'suggestions' && !suggestionsEnabled) return false;
-      if (item.remoteFlag === 'ethic' && !ethicEnabled) return false;
-      if (item.permission && !hasModule(item.permission)) return false;
-      return true;
-    });
-  }, [initialized, hasModule, suggestionsEnabled, ethicEnabled]);
+    const sa = isSuperAdmin();
+    return SEARCHABLE_ITEMS.filter((item) =>
+      isSearchableItemVisible(item, {
+        isSuperAdmin: sa,
+        hasModule,
+        suggestionsEnabled,
+        ethicEnabled,
+      }),
+    );
+  }, [initialized, hasModule, isSuperAdmin, suggestionsEnabled, ethicEnabled]);
 
   // Build CommandPalette items: recent + filtered
   const items = useMemo<CommandPaletteItem[]>(() => {
@@ -154,7 +165,9 @@ export function useGlobalSearch(): GlobalSearchState {
         try {
           window.localStorage.setItem('mfe.locale', locale);
           window.dispatchEvent(new CustomEvent('app:locale-change', { detail: { locale } }));
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         return;
       }
       if (id === 'cmd-notifications') {

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+import { Sidebar, buildSidebarNavItems } from './Sidebar';
 
 const dispatchMock = vi.fn();
 const pushNotificationMock = vi.fn((payload: Record<string, unknown>) => ({
@@ -118,5 +118,48 @@ describe('Sidebar', () => {
 
     fireEvent.click(screen.getByTestId('nav-folders'));
     expect(screen.getByTestId('nav-folders-all')).toBeInTheDocument();
+  });
+});
+
+describe('buildSidebarNavItems — module gating', () => {
+  const denyAll = () => false;
+  const allow = (granted: string) => (mod: string) => mod === granted;
+  const pick = (items: ReturnType<typeof buildSidebarNavItems>, key: string) =>
+    items.find((i) => i.key === key);
+
+  it('gates the schema-explorer item by the THEME module', () => {
+    // Regression: schema-explorer previously rendered with an
+    // unconditional href and no `disabled` flag, so unauthorized users
+    // saw it active and clicking landed on /unauthorized. It must be
+    // gated like every other privileged item, matching the
+    // /admin/schema-explorer route guard (AppRouter requiredModule="THEME").
+    const denied = pick(buildSidebarNavItems(false, denyAll), 'schema-explorer');
+    expect(denied?.disabled).toBe(true);
+    expect(denied?.href).toBeUndefined();
+
+    const granted = pick(buildSidebarNavItems(false, allow('THEME')), 'schema-explorer');
+    expect(granted?.disabled).toBe(false);
+    expect(granted?.href).toBe('/admin/schema-explorer');
+  });
+
+  it('opens the schema-explorer item for super admins regardless of modules', () => {
+    const item = pick(buildSidebarNavItems(true, denyAll), 'schema-explorer');
+    expect(item?.disabled).toBe(false);
+    expect(item?.href).toBe('/admin/schema-explorer');
+  });
+
+  it('keeps every privileged item gated (no ungated leak)', () => {
+    // With no modules and no super-admin, only Home stays enabled;
+    // every other item must be disabled with no href.
+    const items = buildSidebarNavItems(false, denyAll);
+    for (const item of items) {
+      if (item.key === 'home') {
+        expect(item.disabled).toBeFalsy();
+        expect(item.href).toBe('/home');
+      } else {
+        expect(item.disabled).toBe(true);
+        expect(item.href).toBeUndefined();
+      }
+    }
   });
 });
