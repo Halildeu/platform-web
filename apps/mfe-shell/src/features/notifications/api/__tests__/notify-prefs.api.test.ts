@@ -38,37 +38,42 @@ const buildPref = (overrides: Partial<PreferenceDto> = {}): PreferenceDto => ({
 
 const AUTH_TOKEN = 'stub-token';
 
+type AuthOverrides = { unauthenticated?: boolean };
+
 /**
  * Minimal auth slice fixture — prepareHeaders resolves the bearer token
  * via selectAuthToken and the identity via selectNotifyIdentity, both
  * off state.auth. orgId/subscriberId match IDENTITY so the wire headers
- * line up with the endpoint args.
+ * line up with the endpoint args. Pass { unauthenticated: true } to
+ * exercise the fail-closed branch (no token, no identity).
  */
-const buildAuthState = () => ({
-  user: {
-    id: 'profile-1',
-    email: 'admin@example.com',
-    role: 'ADMIN' as const,
-    permissions: [] as string[],
-    orgId: 'default',
-    subscriberId: 'sub-1',
-  },
-  token: AUTH_TOKEN,
+const buildAuthState = (overrides: AuthOverrides = {}) => ({
+  user: overrides.unauthenticated
+    ? null
+    : {
+        id: 'profile-1',
+        email: 'admin@example.com',
+        role: 'ADMIN' as const,
+        permissions: [] as string[],
+        orgId: 'default',
+        subscriberId: 'sub-1',
+      },
+  token: overrides.unauthenticated ? null : AUTH_TOKEN,
   status: 'idle' as const,
   error: null,
   registrationStatus: 'idle' as const,
   lastRegisteredEmail: null,
   expiresAt: null,
   initialized: true,
-  phase: 'transportReady' as const,
+  phase: overrides.unauthenticated ? ('unauthenticated' as const) : ('transportReady' as const),
   authError: null,
   authEpoch: 0,
-  transportReadyAt: Date.now(),
+  transportReadyAt: overrides.unauthenticated ? null : Date.now(),
   authzSnapshot: null,
 });
 
-const buildStore = () => {
-  const auth = buildAuthState();
+const buildStore = (authOverrides: AuthOverrides = {}) => {
+  const auth = buildAuthState(authOverrides);
   return configureStore({
     reducer: {
       auth: (state = auth) => state,
@@ -121,7 +126,7 @@ afterEach(() => {
 });
 
 describe('notifyPrefsApi.listPreferences', () => {
-  it('returns the seed list with identity headers + credentials include', async () => {
+  it('returns the seed list with identity + Authorization headers', async () => {
     const store = buildStore();
     const result = await store.dispatch(
       notifyPrefsApi.endpoints.listPreferences.initiate(IDENTITY),
@@ -133,6 +138,19 @@ describe('notifyPrefsApi.listPreferences', () => {
     expect(req.headers['x-subscriber-id']).toBe('sub-1');
     expect(req.headers['authorization']).toBe('Bearer stub-token');
     expect(req.url).toContain('/api/v1/notify/preferences/me');
+  });
+});
+
+describe('notifyPrefsApi prepareHeaders fail-closed', () => {
+  it('writes no Authorization or identity headers when the auth slice is empty', async () => {
+    const store = buildStore({ unauthenticated: true });
+    await store.dispatch(
+      notifyPrefsApi.endpoints.listPreferences.initiate({ orgId: '', subscriberId: '' }),
+    );
+    const req = recorded[0];
+    expect(req.headers['authorization'] ?? '').toBe('');
+    expect(req.headers['x-org-id'] ?? '').toBe('');
+    expect(req.headers['x-subscriber-id'] ?? '').toBe('');
   });
 });
 
@@ -288,7 +306,7 @@ describe('notifyPrefsApi.restoreDefaults (Faz 23.6 PR-C1)', () => {
 });
 
 describe('notifyPrefsApi.muteChannel (Faz 23.6 PR-C2)', () => {
-  it('POSTs /me/mute-channel with channel body, identity headers, and credentials include', async () => {
+  it('POSTs /me/mute-channel with channel body, identity + Authorization headers', async () => {
     fetchHandler = async () =>
       jsonResponse({ channel: 'email', muted: true, deletedOverrideCount: 3, shadowDenyCount: 2 });
     const store = buildStore();
