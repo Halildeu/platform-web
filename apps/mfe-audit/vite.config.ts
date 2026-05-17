@@ -68,7 +68,7 @@ const sharedProdOnly = {
   'ag-grid-react': singleton('ag-grid-react'),
   'ag-grid-community': singleton('ag-grid-community'),
   'ag-grid-enterprise': singleton('ag-grid-enterprise'),
-  '@mfe/design-system': singleton('@mfe/design-system', false),
+  '@mfe/design-system': hostOnly('@mfe/design-system'),
   '@mfe/shared-http': singleton('@mfe/shared-http', false),
 };
 

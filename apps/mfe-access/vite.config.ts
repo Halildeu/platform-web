@@ -69,7 +69,7 @@ const sharedProdOnly = {
   'ag-grid-react': singleton('ag-grid-react'),
   'ag-grid-community': singleton('ag-grid-community'),
   'ag-grid-enterprise': singleton('ag-grid-enterprise'),
-  '@mfe/design-system': { singleton: true, requiredVersion: false as const },
+  '@mfe/design-system': hostOnly('@mfe/design-system'),
   '@mfe/shared-http': { singleton: true, requiredVersion: false as const },
   // PR E (Codex CNS thread 019d99ba Tur 11): `@mfe/auth` MF singleton.
   // hostOnly pattern kullanılmıyor çünkü mfe-access kendi auth bundle'ını da

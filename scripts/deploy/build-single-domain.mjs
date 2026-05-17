@@ -70,6 +70,25 @@ function runBuild(app, env) {
   }
 }
 
+function buildDesignSystem() {
+  console.log('[ubuntu] prebuilding @mfe/design-system (dist) for hostOnly remotes...');
+  const result = spawnSync('npm', ['run', 'build:dist', '--prefix', 'packages/design-system'], {
+    cwd: webRoot,
+    env: { ...process.env },
+    stdio: 'inherit',
+  });
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+
+  const dsEntry = path.join(webRoot, 'packages/design-system/dist/esm/index.js');
+  if (!existsSync(dsEntry)) {
+    throw new Error(`design-system prebuild did not produce ${dsEntry}`);
+  }
+  console.log('[ubuntu] @mfe/design-system dist present (dist/esm/index.js)');
+}
+
 function ensureDir(target) {
   mkdirSync(target, { recursive: true });
 }
@@ -363,6 +382,11 @@ const reportingRemoteUrl = remoteEntryUrlFor('reporting');
 
 rmSync(outputDir, { recursive: true, force: true });
 ensureDir(outputDir);
+
+// Remotes declare @mfe/design-system as hostOnly (import:false) — the MF plugin
+// resolves it from node_modules/@mfe/design-system/dist, so the package must be
+// built before the MFE builds run.
+buildDesignSystem();
 
 for (const remote of coreRemotes) {
   const basePath = normalizePathPrefix(`/remotes/${remote.slug}/`);

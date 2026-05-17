@@ -142,6 +142,7 @@
     "start": "storybook dev -p 6006",
     "scaffold:component": "node scripts/scaffold-component.mjs",
     "build": "rm -rf dist && tsup && npx tsc --project tsconfig.build.json && node scripts/post-build-use-client.mjs",
+    "build:dist": "rm -rf dist && tsup",
     "lint": "../../node_modules/.bin/eslint --config eslint.config.mjs src",
     "test": "vitest run",
     "test:visual": "npx playwright test",

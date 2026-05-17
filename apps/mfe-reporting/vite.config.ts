@@ -73,7 +73,7 @@ const sharedProdOnly = {
   'ag-grid-enterprise': singleton('ag-grid-enterprise'),
   'ag-grid-react': singleton('ag-grid-react'),
   '@platform/capabilities': singleton('@platform/capabilities', false),
-  '@mfe/design-system': singleton('@mfe/design-system', false),
+  '@mfe/design-system': hostOnly('@mfe/design-system'),
   '@mfe/shared-http': singleton('@mfe/shared-http', false),
   '@mfe/i18n-dicts': singleton('@mfe/i18n-dicts', false),
   // R15 user-visible repair follow-up (Codex 019e2aef iter-3):

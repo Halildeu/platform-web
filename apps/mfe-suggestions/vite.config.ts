@@ -46,7 +46,7 @@ const sharedCore = {
   '@tanstack/react-query': hostOnly('@tanstack/react-query'),
 };
 const sharedProdOnly = {
-  '@mfe/design-system': singleton('@mfe/design-system', false),
+  '@mfe/design-system': hostOnly('@mfe/design-system'),
   clsx: singleton('clsx'),
   'tailwind-merge': singleton('tailwind-merge'),
 };
