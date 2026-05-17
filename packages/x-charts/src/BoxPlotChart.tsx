@@ -474,7 +474,7 @@ const BoxPlotChartInner = React.forwardRef<
     enabled: boxplotFeatureReady,
     option: option ?? EMPTY_BOXPLOT_OPTION,
     respectReducedMotion: true,
-    onClick: guardChartCallback(handleClick, true),
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   const setRefs = useCallback(
@@ -508,11 +508,15 @@ BoxPlotChartInner.displayName = 'BoxPlotChartInner';
  * `accessReason` gate without touching hook order.
  */
 export const BoxPlotChart = React.forwardRef<HTMLDivElement, BoxPlotChartProps>(
-  function BoxPlotChart({ access, accessReason, ...rest }, ref) {
-    const accessState = resolveAccessState(access);
+  function BoxPlotChart({ access, accessReason, onDataPointClick, ...rest }, ref) {
+    const { state } = resolveAccessState(access);
     return (
-      <ChartAccessGate accessState={accessState} accessReason={accessReason}>
-        <BoxPlotChartInner ref={ref} {...rest} />
+      <ChartAccessGate access={access} accessReason={accessReason}>
+        <BoxPlotChartInner
+          ref={ref}
+          {...rest}
+          onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        />
       </ChartAccessGate>
     );
   },

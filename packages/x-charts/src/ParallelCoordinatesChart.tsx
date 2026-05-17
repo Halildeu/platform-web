@@ -465,7 +465,7 @@ const ParallelCoordinatesChartInner = React.forwardRef<
     enabled: parallelFeatureReady,
     option: option ?? EMPTY_PARALLEL_OPTION,
     respectReducedMotion: true,
-    onClick: guardChartCallback(handleClick, true),
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   const setRefs = useCallback(
@@ -497,11 +497,15 @@ ParallelCoordinatesChartInner.displayName = 'ParallelCoordinatesChartInner';
 export const ParallelCoordinatesChart = React.forwardRef<
   HTMLDivElement,
   ParallelCoordinatesChartProps
->(function ParallelCoordinatesChart({ access, accessReason, ...rest }, ref) {
-  const accessState = resolveAccessState(access);
+>(function ParallelCoordinatesChart({ access, accessReason, onDataPointClick, ...rest }, ref) {
+  const { state } = resolveAccessState(access);
   return (
-    <ChartAccessGate accessState={accessState} accessReason={accessReason}>
-      <ParallelCoordinatesChartInner ref={ref} {...rest} />
+    <ChartAccessGate access={access} accessReason={accessReason}>
+      <ParallelCoordinatesChartInner
+        ref={ref}
+        {...rest}
+        onDataPointClick={guardChartCallback(state, onDataPointClick)}
+      />
     </ChartAccessGate>
   );
 });

@@ -377,7 +377,7 @@ const PictorialBarChartInner = React.forwardRef<
     enabled: pictorialFeatureReady,
     option: option ?? EMPTY_PICTORIAL_BAR_OPTION,
     respectReducedMotion: true,
-    onClick: guardChartCallback(handleClick, true),
+    onClick: onDataPointClick ? handleClick : undefined,
   });
 
   const setRefs = useCallback(
@@ -407,11 +407,15 @@ const PictorialBarChartInner = React.forwardRef<
 PictorialBarChartInner.displayName = 'PictorialBarChartInner';
 
 export const PictorialBarChart = React.forwardRef<HTMLDivElement, PictorialBarChartProps>(
-  function PictorialBarChart({ access, accessReason, ...rest }, ref) {
-    const accessState = resolveAccessState(access);
+  function PictorialBarChart({ access, accessReason, onDataPointClick, ...rest }, ref) {
+    const { state } = resolveAccessState(access);
     return (
-      <ChartAccessGate accessState={accessState} accessReason={accessReason}>
-        <PictorialBarChartInner ref={ref} {...rest} />
+      <ChartAccessGate access={access} accessReason={accessReason}>
+        <PictorialBarChartInner
+          ref={ref}
+          {...rest}
+          onDataPointClick={guardChartCallback(state, onDataPointClick)}
+        />
       </ChartAccessGate>
     );
   },
