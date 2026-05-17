@@ -31,9 +31,11 @@ import type { InboxRequestIdentity } from './notify-inbox.types';
  * {@code getUnreadCount} + {@code listInbox} count caches directly (no
  * refetch round trip) and invalidates the {@code Inbox / LIST} tag so
  * the drawer's list view re-fetches the rows. The one exception is the
- * connect-time snapshot event when its count matches the freshly-fetched
- * list cache — that invalidation would be a redundant refetch and is
- * skipped (see the {@code unread-count} handler). This keeps the
+ * connect-time snapshot event when it cannot indicate a stale row set —
+ * its count matches the freshly-fetched list cache, or that cache has
+ * not resolved yet (its in-flight mount fetch already delivers fresh
+ * rows) — that invalidation would be a redundant refetch and is skipped
+ * (see the {@code unread-count} handler). This keeps the
  * single-source-of-truth in the RTK Query store; consuming components
  * (NotificationBell, NotificationCenter) still read from the same hooks
  * they already used.
@@ -164,14 +166,25 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
             }
           }),
         );
-        // The connect-time snapshot event carries the count the inbox
-        // list was just fetched with; invalidating LIST then is a
-        // redundant refetch. Skip it ONLY when the snapshot count matches
-        // the cached list count — a drift (or an absent list cache) means
-        // the rows may be stale, so the refetch is warranted. Every later
-        // event is a real mutation signal and always invalidates.
+        // The connect-time snapshot (firstEvent) carries the current
+        // unread count, NOT a mutation signal — invalidating Inbox/LIST
+        // for it triggers a redundant listInbox refetch (the inbox/me ×2
+        // observed on every page load). Skip that invalidation when the
+        // snapshot cannot indicate a stale row set:
+        //   - previousUnreadCount === undefined → listInbox has not
+        //     resolved yet (still in-flight from the NotificationCenter
+        //     mount fetch, or no cache entry). That in-flight request
+        //     delivers fresh rows on its own; invalidating LIST would
+        //     just queue a 2nd identical fetch.
+        //   - previousUnreadCount === parsed → listInbox already
+        //     resolved and its count matches the snapshot — no drift.
+        // A genuine drift (previousUnreadCount defined AND != parsed)
+        // means the cached rows may be stale — e.g. a mutation during an
+        // SSE reconnect gap — so the refetch IS warranted. Every later
+        // (non-first) event is a real mutation signal and always
+        // invalidates.
         const isRedundantSnapshot =
-          firstEvent && previousUnreadCount !== undefined && previousUnreadCount === parsed;
+          firstEvent && (previousUnreadCount === undefined || previousUnreadCount === parsed);
         if (!isRedundantSnapshot) {
           dispatch(notifyInboxApi.util.invalidateTags([{ type: 'Inbox', id: 'LIST' }]));
         }
