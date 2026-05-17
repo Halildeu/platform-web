@@ -73,7 +73,10 @@ export type ChartA11yKind =
   | 'globe'
   // PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link
   // tree (ECharts `tree` series). Org-chart / hierarchy use-case.
-  | 'tree';
+  | 'tree'
+  // PR-X16c (Codex thread 019e35b3 AGREE): bar/line/scatter series on a
+  // lazy `polar` coordinate system. Categorical radial chart.
+  | 'polar';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -200,6 +203,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   globe: 'Globe chart',
   // PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link tree.
   tree: 'Tree chart',
+  // PR-X16c (Codex thread 019e35b3 AGREE): categorical polar / radial chart.
+  polar: 'Polar chart',
 };
 
 const defaultFormatter = (v: number): string =>

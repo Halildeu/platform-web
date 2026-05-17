@@ -41,6 +41,8 @@ const CHART_PLAYGROUND_ROUTES: Array<{ slug: string; previewTestId: string }> = 
   { slug: 'tree-chart', previewTestId: 'design-lab-chart-preview-tree-chart' },
   // PR-X16b (Codex thread 019e33a9) — ECharts Depth campaign calendar heatmap.
   { slug: 'calendar-heatmap', previewTestId: 'design-lab-chart-preview-calendar-heatmap' },
+  // PR-X16c (Codex thread 019e35b3) — ECharts Depth campaign polar chart.
+  { slug: 'polar-chart', previewTestId: 'design-lab-chart-preview-polar-chart' },
   // Composite widgets (PR-B series)
   { slug: 'kpi-card', previewTestId: 'design-lab-chart-preview-kpi-card' },
   { slug: 'sparkline-chart', previewTestId: 'design-lab-chart-preview-sparkline-chart' },

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-17T10:08:05.006Z",
+  "generatedAt": "2026-05-17T12:04:11.067Z",
   "totalConsumers": 43,
   "byBucket": {
     "production": 20,
@@ -363,6 +363,7 @@
         "ParallelCoordinatesChart",
         "PictorialBarChart",
         "PieChart",
+        "PolarChart",
         "RadarChart",
         "SHARED_CHART_CANVAS_HEIGHT",
         "SankeyChart",

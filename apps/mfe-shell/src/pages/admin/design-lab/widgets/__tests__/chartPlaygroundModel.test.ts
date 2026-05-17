@@ -787,6 +787,8 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
     'tree-chart',
     // PR-X16b — CalendarHeatmap (ECharts Depth campaign second wrapper).
     'calendar-heatmap',
+    // PR-X16c — PolarChart (ECharts Depth campaign third wrapper).
+    'polar-chart',
     'heatmap-chart',
     'waterfall-chart',
     'funnel-chart',
@@ -830,7 +832,7 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
       expect(count).toBe(COMMON_AXIS.length);
       total += count;
     }
-    // 15 charts × 11 common-axis props = 165 just from common axis.
+    // 16 charts × 11 common-axis props = 176 just from common axis.
     expect(total).toBe(ALL_CHART_IDS.length * COMMON_AXIS.length);
   });
 });
@@ -859,6 +861,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'treemap-chart': 15,
     'tree-chart': 19, // PR-X16a: 19 primitives (valueFormatter/onDataPointClick are preset-driven)
     'calendar-heatmap': 17, // PR-X16b: 11 common-axis + orient/startOfWeek/showValues/showVisualMap/min/max
+    'polar-chart': 17, // PR-X16c: 11 common-axis + seriesType/startAngle/showAngleAxisLabel/showRadiusAxisLabel/min/max
     'heatmap-chart': 15,
     'waterfall-chart': 15,
     'funnel-chart': 19,
@@ -878,6 +881,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'treemap-chart': 3, // + onNodeClick
     'tree-chart': 2, // PR-X16a: valueFormatter + onDataPointClick
     'calendar-heatmap': 3, // PR-X16b: valueFormatter + onDataPointClick + colors
+    'polar-chart': 2, // PR-X16c: valueFormatter + onDataPointClick (PolarChart has no colors prop)
     'heatmap-chart': 4, // + onCellClick + colors
     'waterfall-chart': 2,
     'funnel-chart': 2,
@@ -893,13 +897,16 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // PR-X16b enrols CalendarHeatmap: +17 primitives, +3 presets, +25
   // catalog props. Coverage: 247 (primitives) + 39 (presets) = 286 /
   // 315 ≈ %90.8.
+  // PR-X16c enrols PolarChart: +17 primitives, +2 presets, +22 catalog
+  // props. Coverage: 264 (primitives) + 41 (presets) = 305 / 337 ≈
+  // %90.5.
   //
   // NOTE: this lock is a CURATED subset — the PR-X12+ campaign charts
   // (graph / geo-map / box-plot / candlestick / pictorial-bar /
   // parallel-coordinates) are intentionally NOT enrolled here, so
   // `TOTAL_CATALOG_PROPS` is the subset catalog total, not the whole
   // catalog. Enrolling them is a separate coverage-lock follow-up.
-  const TOTAL_CATALOG_PROPS = 315;
+  const TOTAL_CATALOG_PROPS = 337;
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
   const PRESET_TOTAL = Object.values(PRESET_COUNTS).reduce((a, b) => a + b, 0);
   const EXPECTED_TOTAL = PRIMITIVE_TOTAL + PRESET_TOTAL;

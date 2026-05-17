@@ -185,6 +185,16 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'monday', label: 'monday (default)' },
     { value: 'sunday', label: 'sunday' },
   ],
+  // PR-X16c (Codex 019e35b3): PolarChart series render type.
+  // `PolarSeriesType` is an exported type alias in `packages/x-charts/
+  // src/PolarChart.tsx`; the prop catalog stores the alias name (not the
+  // resolved literal union), so it needs an explicit table here — same
+  // pattern as `TreeLayout` / `CalendarHeatmapOrient` above.
+  PolarSeriesType: [
+    { value: 'bar', label: 'bar (default — nightingale rose)' },
+    { value: 'line', label: 'line (open radial line)' },
+    { value: 'scatter', label: 'scatter (one point per category)' },
+  ],
 };
 
 const ACCESS_LEVEL_INLINE = '"full" | "readonly" | "disabled" | "hidden"';
@@ -600,6 +610,33 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // PR-X16c (Codex 019e35b3 AGREE): categorical radial chart —
+  // bar/line/scatter series on a polar coordinate system. `seriesType`
+  // picks the series render kind; `startAngle` rotates the first
+  // category; `showAngleAxisLabel`/`showRadiusAxisLabel` toggle the two
+  // axis label sets; `min`/`max` pin the radius scale. `data` is a
+  // complex shape (code-only); `valueFormatter`/`onDataPointClick` are
+  // function props — preset-driven via COMPLEX_PROP_PRESETS, not
+  // primitives here.
+  'polar-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'seriesType',
+    'startAngle',
+    'showAngleAxisLabel',
+    'showRadiusAxisLabel',
+    'min',
+    'max',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -970,6 +1007,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'tree-chart',
       // PR-X16b (Codex 019e33a9): CalendarHeatmap day-value formatting.
       'calendar-heatmap',
+      // PR-X16c (Codex 019e35b3): PolarChart category-value formatting.
+      'polar-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1002,6 +1041,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'tree-chart',
       // PR-X16b (Codex 019e33a9): CalendarHeatmap day-cell cross-filter.
       'calendar-heatmap',
+      // PR-X16c (Codex 019e35b3): PolarChart category-click cross-filter.
+      'polar-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1826,6 +1867,26 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // PR-X16c (Codex 019e35b3): PolarChart per-category scaffold so the
+  // generated snippet compiles end-to-end (`const sampleData = [...]`).
+  'polar-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'PolarChart per-category values ({ name, value })',
+        jsLiteral: `[
+  { name: 'Pzt', value: 42 },
+  { name: 'Sal', value: 38 },
+  { name: 'Çar', value: 55 },
+  { name: 'Per', value: 61 },
+  { name: 'Cum', value: 73 },
+  { name: 'Cmt', value: 48 },
+  { name: 'Paz', value: 30 },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -2256,6 +2317,51 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'layout',
       description: 'Begin each week on Sunday instead of Monday.',
       statePatch: { startOfWeek: 'sunday' },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // PR-X16c (Codex 019e35b3): PolarChart preset gallery.
+  'polar-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Polar-bar (nightingale rose) with both axis labels.',
+      statePatch: {},
+    },
+    {
+      id: 'line-series',
+      label: 'Line Series',
+      tag: 'series',
+      description: 'Render an open radial line instead of polar bars.',
+      statePatch: { seriesType: 'line' },
+    },
+    {
+      id: 'scatter-series',
+      label: 'Scatter Series',
+      tag: 'series',
+      description: 'One point per category on the polar grid.',
+      statePatch: { seriesType: 'scatter' },
+    },
+    {
+      id: 'rotated',
+      label: 'Rotated Start',
+      tag: 'layout',
+      description: 'Start the first category at 0° instead of the top.',
+      statePatch: { startAngle: 0 },
     },
     {
       id: 'dark',

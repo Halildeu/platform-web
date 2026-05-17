@@ -267,6 +267,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'heatmap',
   },
+  // PR-X16c (Codex thread 019e35b3 AGREE): ECharts Depth campaign —
+  // categorical radial chart (bar/line/scatter on a polar grid).
+  {
+    id: 'polar-chart',
+    name: 'PolarChart',
+    description: 'Kategorik radyal grafik, polar eksende bar/line/scatter.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'radar',
+  },
   // Interaction
   {
     id: 'chart-container',

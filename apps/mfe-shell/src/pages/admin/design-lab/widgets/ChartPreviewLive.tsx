@@ -24,6 +24,10 @@ import {
   // PR-X16b (Codex thread 019e33a9 AGREE): GitHub-contributions-style
   // daily calendar heatmap — ECharts Depth campaign second wrapper.
   CalendarHeatmap,
+  // PR-X16c (Codex thread 019e35b3 AGREE): categorical radial chart —
+  // bar/line/scatter series on a polar coordinate system — ECharts
+  // Depth campaign third wrapper.
+  PolarChart,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -967,6 +971,53 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             }
             showValues={isOn(toggles, 'showValues', false)}
             showVisualMap={isOn(toggles, 'showVisualMap', true)}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // PR-X16c (Codex thread 019e35b3 AGREE): categorical radial chart —
+    // bar/line/scatter series on a polar coordinate system — ECharts
+    // Depth campaign. Sample dataset: 7-point weekly activity series.
+    case 'polar-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <PolarChart
+            data={[
+              { name: 'Pzt', value: 42 },
+              { name: 'Sal', value: 38 },
+              { name: 'Çar', value: 55 },
+              { name: 'Per', value: 61 },
+              { name: 'Cum', value: 73 },
+              { name: 'Cmt', value: 48 },
+              { name: 'Paz', value: 30 },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            seriesType={getEnum(toggles, 'seriesType', 'bar')}
+            startAngle={getNum(toggles, 'startAngle', 90)}
+            showAngleAxisLabel={isOn(toggles, 'showAngleAxisLabel', true)}
+            showRadiusAxisLabel={isOn(toggles, 'showRadiusAxisLabel', true)}
+            min={getOptNum(toggles, 'min')}
+            max={getOptNum(toggles, 'max')}
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
