@@ -5,9 +5,15 @@ import { authenticateAndNavigate } from './utils/auth';
 
 const ensureUsersMfeReady = async (page: Page): Promise<boolean> => {
   try {
-    await page.waitForFunction(() => typeof window !== 'undefined' && typeof (window as any).mfe_users !== 'undefined', {
-      timeout: 30_000,
-    });
+    // waitForFunction(pageFunction, arg, options) — timeout MUST be the
+    // 3rd parameter; passed 2nd it becomes the (ignored) page-function arg
+    // and the wait falls back to the 15s config actionTimeout (same bug
+    // class as PR #558 / #566).
+    await page.waitForFunction(
+      () => typeof window !== 'undefined' && typeof (window as any).mfe_users !== 'undefined',
+      undefined,
+      { timeout: 30_000 },
+    );
     return true;
   } catch {
     // Users MFE not running — verify page loaded without crash instead of skipping

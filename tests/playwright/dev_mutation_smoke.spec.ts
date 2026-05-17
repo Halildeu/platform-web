@@ -97,14 +97,25 @@ async function login(page: import('@playwright/test').Page, root: string) {
         await page.locator('input[name="password"]').fill('admin1234');
         await page.locator('input[type="submit"], button[type="submit"]').click();
       }
-      await page.waitForURL((url) => url.toString().startsWith(root) && !url.toString().includes('/login'), {
-        timeout: 60_000,
-        waitUntil: 'domcontentloaded',
-      });
-      await page.waitForFunction(() => {
-        const state = (window as any).__shellStore?.getState?.()?.auth;
-        return Boolean(state?.initialized && state?.token);
-      }, { timeout: 30_000 });
+      await page.waitForURL(
+        (url) => url.toString().startsWith(root) && !url.toString().includes('/login'),
+        {
+          timeout: 60_000,
+          waitUntil: 'domcontentloaded',
+        },
+      );
+      // waitForFunction(pageFunction, arg, options) — timeout MUST be the
+      // 3rd parameter; passed 2nd it becomes the (ignored) page-function
+      // arg and the wait falls back to the 15s config actionTimeout
+      // (same bug class as PR #558 / #566).
+      await page.waitForFunction(
+        () => {
+          const state = (window as any).__shellStore?.getState?.()?.auth;
+          return Boolean(state?.initialized && state?.token);
+        },
+        undefined,
+        { timeout: 30_000 },
+      );
       return;
     } catch (error) {
       lastError = error;
@@ -170,12 +181,17 @@ async function fetchLatestAuditEvents(root: string, token: string) {
 }
 
 async function fetchAuditEventById(root: string, token: string, auditId: string) {
-  return api<{ events?: AuditEventWire[] }>(root, token, `/api/audit/events?id=${encodeURIComponent(auditId)}`);
+  return api<{ events?: AuditEventWire[] }>(
+    root,
+    token,
+    `/api/audit/events?id=${encodeURIComponent(auditId)}`,
+  );
 }
 
 test('real users/access mutation smoke with rollback', async ({ page, baseURL }) => {
-  const isPermitAll = (process.env.PW_FAKE_AUTH ?? '').trim() === '1'
-    || (process.env.AUTH_MODE ?? '').trim().toLowerCase() === 'permitall';
+  const isPermitAll =
+    (process.env.PW_FAKE_AUTH ?? '').trim() === '1' ||
+    (process.env.AUTH_MODE ?? '').trim().toLowerCase() === 'permitall';
 
   if (isPermitAll) {
     // In permitAll mode, navigate to page and verify it renders without crash
@@ -229,7 +245,9 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
     const token = await readToken(page);
 
     const users = await api<UsersListResponse>(root, token, '/api/v1/users?page=1&pageSize=20');
-    const targetUser = (users.items ?? []).find((item) => item.email && item.email !== 'admin@example.com');
+    const targetUser = (users.items ?? []).find(
+      (item) => item.email && item.email !== 'admin@example.com',
+    );
     if (!targetUser) {
       throw new Error('Mutasyon smoke için uygun kullanıcı bulunamadı.');
     }
@@ -244,21 +262,25 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
 
     await page.goto(`${root}/admin/users`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('users-grid-root')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(targetUserEmail, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(targetUserEmail, { exact: false }).first()).toBeVisible({
+      timeout: 30_000,
+    });
     await page.getByText(targetUserEmail, { exact: false }).first().dblclick();
 
     const statusSwitch = page.getByRole('switch').first();
     await expect(statusSwitch).toBeVisible({ timeout: 30_000 });
     const nextEnabled = !originalUserEnabled;
-    const toggleResponsePromise = page.waitForResponse((response) =>
-      response.url().includes(`/api/v1/users/${encodeURIComponent(targetUserId)}/activation`) && response.request().method() === 'PUT',
+    const toggleResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/v1/users/${encodeURIComponent(targetUserId)}/activation`) &&
+        response.request().method() === 'PUT',
     );
     await statusSwitch.click();
     const toggleResponse = await toggleResponsePromise;
     if (!toggleResponse.ok()) {
       throw new Error(`Users status toggle başarısız: ${toggleResponse.status()}`);
     }
-    const toggleResponseBody = await toggleResponse.json() as { auditId?: string };
+    const toggleResponseBody = (await toggleResponse.json()) as { auditId?: string };
     const usersToggleAuditId = String(toggleResponseBody?.auditId ?? '');
     if (!usersToggleAuditId) {
       throw new Error('Users status toggle için auditId bulunamadı.');
@@ -273,7 +295,8 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
 
     const sessionInput = page.locator('input[type="number"]').first();
     const sessionSaveButton = page.getByRole('button', { name: /kaydet|save/i }).first();
-    const updatedSessionTimeout = originalSessionTimeout >= 60 ? originalSessionTimeout - 1 : originalSessionTimeout + 1;
+    const updatedSessionTimeout =
+      originalSessionTimeout >= 60 ? originalSessionTimeout - 1 : originalSessionTimeout + 1;
     await sessionInput.fill(String(updatedSessionTimeout));
     await expect(sessionInput).toHaveValue(String(updatedSessionTimeout));
     await expect(sessionSaveButton).toBeEnabled();
@@ -286,15 +309,10 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
       (detail) => Number(detail.sessionTimeoutMinutes ?? 0) === updatedSessionTimeout,
     );
 
-    await api(
-      root,
-      token,
-      `/api/v1/users/${encodeURIComponent(targetUserId)}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ sessionTimeoutMinutes: originalSessionTimeout }),
-      },
-    );
+    await api(root, token, `/api/v1/users/${encodeURIComponent(targetUserId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ sessionTimeoutMinutes: originalSessionTimeout }),
+    });
     await waitForUserState(
       root,
       token,
@@ -302,15 +320,10 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
       (detail) => Number(detail.sessionTimeoutMinutes ?? 0) === originalSessionTimeout,
     );
 
-    await api(
-      root,
-      token,
-      `/api/v1/users/${encodeURIComponent(targetUserId)}/activation`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ active: originalUserEnabled }),
-      },
-    );
+    await api(root, token, `/api/v1/users/${encodeURIComponent(targetUserId)}/activation`, {
+      method: 'PUT',
+      body: JSON.stringify({ active: originalUserEnabled }),
+    });
     await waitForUserState(
       root,
       token,
@@ -343,17 +356,29 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
     if (!visibleRoleName) {
       throw new Error('Access grid üzerinde görünür rol adı okunamadı.');
     }
-    const targetRole = (roles.items ?? []).find((item) => item.id != null && String(item.name ?? '').trim() === visibleRoleName);
+    const targetRole = (roles.items ?? []).find(
+      (item) => item.id != null && String(item.name ?? '').trim() === visibleRoleName,
+    );
     if (!targetRole) {
       throw new Error(`Access grid rolü API listesiyle eşleşmedi: ${visibleRoleName}`);
     }
     const roleId = String(targetRole.id);
-    const roleDetail = await api<RoleDetailResponse>(root, token, `/api/v1/roles/${encodeURIComponent(roleId)}`);
-    const originalPermissionIds = Array.isArray(roleDetail.permissions) ? roleDetail.permissions.map(String) : [];
+    const roleDetail = await api<RoleDetailResponse>(
+      root,
+      token,
+      `/api/v1/roles/${encodeURIComponent(roleId)}`,
+    );
+    const originalPermissionIds = Array.isArray(roleDetail.permissions)
+      ? roleDetail.permissions.map(String)
+      : [];
     const permissions = await api<PermissionListResponse>(root, token, '/api/v1/permissions');
     const permissionItems = Array.isArray(permissions.items) ? permissions.items : [];
-    const permissionToAdd = permissionItems.find((perm) => perm.id != null && !originalPermissionIds.includes(String(perm.id)));
-    const permissionToRemove = permissionItems.find((perm) => perm.id != null && originalPermissionIds.includes(String(perm.id)));
+    const permissionToAdd = permissionItems.find(
+      (perm) => perm.id != null && !originalPermissionIds.includes(String(perm.id)),
+    );
+    const permissionToRemove = permissionItems.find(
+      (perm) => perm.id != null && originalPermissionIds.includes(String(perm.id)),
+    );
     const toggleTarget = permissionToAdd ?? permissionToRemove;
     if (!toggleTarget?.id) {
       throw new Error('Permission save smoke için uygun permission bulunamadı.');
@@ -362,7 +387,9 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
     const chosenPermissionCode = String(toggleTarget.code ?? toggleTarget.id);
 
     const accessDrawer = page.getByTestId('access-role-drawer-content');
-    const accessDrawerCloseButton = page.locator('.mfe-detail-drawer button[aria-label="Kapat"]').last();
+    const accessDrawerCloseButton = page
+      .locator('.mfe-detail-drawer button[aria-label="Kapat"]')
+      .last();
     if (await accessDrawer.isVisible().catch(() => false)) {
       await accessDrawerCloseButton.click();
       await expect(accessDrawer).toBeHidden({ timeout: 15_000 });
@@ -388,32 +415,46 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
     const permissionCheckbox = permissionLabel.locator('input[type="checkbox"]').first();
     await expect(permissionCheckbox).toBeVisible({ timeout: 30_000 });
 
-    const updateResponsePromise = page.waitForResponse((response) =>
-      response.url().includes(`/api/v1/roles/${encodeURIComponent(roleId)}/permissions`) && response.request().method() === 'PUT',
+    const updateResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/v1/roles/${encodeURIComponent(roleId)}/permissions`) &&
+        response.request().method() === 'PUT',
     );
     await permissionCheckbox.click();
-    await page.getByRole('button', { name: /kaydet|save/i }).last().click();
+    await page
+      .getByRole('button', { name: /kaydet|save/i })
+      .last()
+      .click();
     const updateResponse = await updateResponsePromise;
     if (!updateResponse.ok()) {
       throw new Error(`Role permission update başarısız: ${updateResponse.status()}`);
     }
-    const updateResponseBody = await updateResponse.json() as { auditId?: string };
+    const updateResponseBody = (await updateResponse.json()) as { auditId?: string };
     const roleAuditId = String(updateResponseBody?.auditId ?? '');
     if (!roleAuditId) {
       throw new Error('Role permission update için auditId dönmedi.');
     }
 
-    const roleAfterUpdate = await api<RoleDetailResponse>(root, token, `/api/v1/roles/${encodeURIComponent(roleId)}`);
-    const updatedPermissionIds = Array.isArray(roleAfterUpdate.permissions) ? roleAfterUpdate.permissions.map(String) : [];
+    const roleAfterUpdate = await api<RoleDetailResponse>(
+      root,
+      token,
+      `/api/v1/roles/${encodeURIComponent(roleId)}`,
+    );
+    const updatedPermissionIds = Array.isArray(roleAfterUpdate.permissions)
+      ? roleAfterUpdate.permissions.map(String)
+      : [];
     const expectedHasPermission = !originalPermissionIds.includes(chosenPermissionId);
     if (updatedPermissionIds.includes(chosenPermissionId) !== expectedHasPermission) {
       throw new Error('Role permission update backend durumuna yansımadı.');
     }
 
     const latestAuditEvents = await fetchLatestAuditEvents(root, token);
-    const auditVisibleInApi = Boolean((latestAuditEvents.events ?? []).find((event) =>
-      String(event.id) === roleAuditId || String(event.correlationId ?? '') === roleAuditId,
-    ));
+    const auditVisibleInApi = Boolean(
+      (latestAuditEvents.events ?? []).find(
+        (event) =>
+          String(event.id) === roleAuditId || String(event.correlationId ?? '') === roleAuditId,
+      ),
+    );
     const auditByIdResponse = await fetchAuditEventById(root, token, roleAuditId);
     const auditEvent = (auditByIdResponse.events ?? [])[0];
     if (!auditEvent) {
@@ -421,21 +462,24 @@ test('real users/access mutation smoke with rollback', async ({ page, baseURL })
     }
     const auditUiNeedle = String(auditEvent.correlationId ?? auditEvent.action ?? roleAuditId);
 
-    await page.goto(`${root}/audit/events?auditId=${encodeURIComponent(roleAuditId)}`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${root}/audit/events?auditId=${encodeURIComponent(roleAuditId)}`, {
+      waitUntil: 'domcontentloaded',
+    });
     await expect(page.locator('.ag-root').first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(auditUiNeedle, { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(auditUiNeedle, { exact: false }).first()).toBeVisible({
+      timeout: 30_000,
+    });
     const auditVisibleInUi = true;
 
-    await api(
+    await api(root, token, `/api/v1/roles/${encodeURIComponent(roleId)}/permissions`, {
+      method: 'PUT',
+      body: JSON.stringify({ permissionIds: originalPermissionIds }),
+    });
+    const roleAfterRollback = await api<RoleDetailResponse>(
       root,
       token,
-      `/api/v1/roles/${encodeURIComponent(roleId)}/permissions`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ permissionIds: originalPermissionIds }),
-      },
+      `/api/v1/roles/${encodeURIComponent(roleId)}`,
     );
-    const roleAfterRollback = await api<RoleDetailResponse>(root, token, `/api/v1/roles/${encodeURIComponent(roleId)}`);
     const rollbackPermissionIds = Array.isArray(roleAfterRollback.permissions)
       ? roleAfterRollback.permissions.map(String).sort()
       : [];
