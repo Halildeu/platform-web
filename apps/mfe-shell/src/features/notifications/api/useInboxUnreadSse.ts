@@ -28,9 +28,12 @@ import type { InboxRequestIdentity } from './notify-inbox.types';
  * <h3>Cache integration</h3>
  *
  * On every {@code unread-count} event the hook patches the
- * {@code getUnreadCount} RTK Query cache directly (no refetch round
- * trip) and invalidates the {@code Inbox / LIST} tag so the drawer's
- * list view re-fetches whenever it is mounted. This keeps the
+ * {@code getUnreadCount} + {@code listInbox} count caches directly (no
+ * refetch round trip) and invalidates the {@code Inbox / LIST} tag so
+ * the drawer's list view re-fetches the rows. The one exception is the
+ * connect-time snapshot event when its count matches the freshly-fetched
+ * list cache — that invalidation would be a redundant refetch and is
+ * skipped (see the {@code unread-count} handler). This keeps the
  * single-source-of-truth in the RTK Query store; consuming components
  * (NotificationBell, NotificationCenter) still read from the same hooks
  * they already used.
@@ -112,6 +115,11 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
     const connect = () => {
       if (cancelled) return;
 
+      // The orchestrator emits the current unread count as the FIRST SSE
+      // event on every (re)connect; later events are real inbox mutations.
+      // Per-connection so each reconnect re-evaluates its own snapshot.
+      let firstEvent = true;
+
       const url = buildStreamUrl(identity);
       let es: EventSource;
       try {
@@ -140,19 +148,34 @@ export function useInboxUnreadSse(identity: InboxRequestIdentity | null): InboxU
         //   1. getUnreadCount(identity) — direct match for callers using
         //      useGetUnreadCountQuery.
         //   2. listInbox(identity) — only the unreadCount field is
-        //      patched; items remain stale until the LIST tag refetch
-        //      below resolves with the post-mutation row set.
+        //      patched; the LIST tag refetch below (when fired) resolves
+        //      the post-mutation row set.
         dispatch(
           notifyInboxApi.util.upsertQueryData('getUnreadCount', identity, {
             unreadCount: parsed,
           }),
         );
+        let previousUnreadCount: number | undefined;
         dispatch(
           notifyInboxApi.util.updateQueryData('listInbox', identity, (draft) => {
-            if (draft) draft.unreadCount = parsed;
+            if (draft) {
+              previousUnreadCount = draft.unreadCount;
+              draft.unreadCount = parsed;
+            }
           }),
         );
-        dispatch(notifyInboxApi.util.invalidateTags([{ type: 'Inbox', id: 'LIST' }]));
+        // The connect-time snapshot event carries the count the inbox
+        // list was just fetched with; invalidating LIST then is a
+        // redundant refetch. Skip it ONLY when the snapshot count matches
+        // the cached list count — a drift (or an absent list cache) means
+        // the rows may be stale, so the refetch is warranted. Every later
+        // event is a real mutation signal and always invalidates.
+        const isRedundantSnapshot =
+          firstEvent && previousUnreadCount !== undefined && previousUnreadCount === parsed;
+        if (!isRedundantSnapshot) {
+          dispatch(notifyInboxApi.util.invalidateTags([{ type: 'Inbox', id: 'LIST' }]));
+        }
+        firstEvent = false;
         setStatus((prev) => ({ ...prev, lastUnreadCount: parsed }));
       });
 
