@@ -82,6 +82,8 @@ export interface WaterfallChartProps extends AccessControlledProps {
   size?: 'sm' | 'md' | 'lg';
   /** Chart title. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Colors per waterfall segment type. */
   colors?: {
     increase?: string;
@@ -210,6 +212,7 @@ const WaterfallChartInner = React.forwardRef<
     data,
     size = 'md',
     title,
+    description,
     colors: colorsProp,
     showConnector = true,
     showValues = true,
@@ -617,6 +620,7 @@ const WaterfallChartInner = React.forwardRef<
     chartType: 'waterfall',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });

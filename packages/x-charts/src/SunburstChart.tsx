@@ -85,6 +85,8 @@ export interface SunburstChartProps extends AccessControlledProps {
   size?: 'sm' | 'md' | 'lg';
   /** Chart title. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Per-level ring configuration. Auto-generated from data depth when omitted. */
   levels?: SunburstLevelConfig[];
   /** Sort order for sibling nodes. @default "desc" */
@@ -290,6 +292,7 @@ const SunburstChartInner = React.forwardRef<
     data,
     size = 'md',
     title,
+    description,
     levels: levelsProp,
     sort = 'desc',
     radius = ['0%', '90%'],
@@ -526,6 +529,7 @@ const SunburstChartInner = React.forwardRef<
     chartType: 'sunburst',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });

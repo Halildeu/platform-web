@@ -1395,6 +1395,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Title displayed above the gauge.',
       },
       {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
         name: 'size',
         type: 'ChartSize',
         required: false,
@@ -1634,6 +1641,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Chart title.',
       },
       {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
         name: 'animate',
         type: 'boolean',
         required: false,
@@ -1794,6 +1808,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'undefined',
         description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
       },
       {
         name: 'showLegend',
@@ -2978,6 +2999,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Chart title.',
       },
       {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
         name: 'min',
         type: 'number',
         required: false,
@@ -3188,6 +3216,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Chart title.',
       },
       {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
         name: 'colors',
         type: '{ increase?: string; decrease?: string; total?: string; }',
         required: false,
@@ -3384,6 +3419,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'undefined',
         description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
       },
       {
         name: 'sort',
@@ -3611,6 +3653,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         description: 'Chart title.',
       },
       {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
         name: 'orient',
         type: "'horizontal' | 'vertical'",
         required: false,
@@ -3832,6 +3881,13 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
         required: false,
         default: 'undefined',
         description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
       },
       {
         name: 'levels',

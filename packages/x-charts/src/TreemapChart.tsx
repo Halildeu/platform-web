@@ -70,6 +70,8 @@ export interface TreemapChartProps extends AccessControlledProps {
   size?: ChartSize;
   /** Chart title. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Show legend below the chart. @default false */
   showLegend?: boolean;
   /** Show breadcrumb navigation on drill-down. @default true */
@@ -235,6 +237,7 @@ const TreemapChartInner = React.forwardRef<
     data,
     size = 'md',
     title,
+    description,
     showLegend = false,
     showBreadcrumb = true,
     leafDepth = 1,
@@ -465,6 +468,7 @@ const TreemapChartInner = React.forwardRef<
     chartType: 'treemap',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });

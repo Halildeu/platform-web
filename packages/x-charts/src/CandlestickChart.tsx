@@ -216,7 +216,6 @@ const CandlestickChartInner = React.forwardRef<
     const responsiveAxisLabel = buildResponsiveAxisLabel({
       breakpoint,
       labelCount: categories.length,
-      isHorizontal: false,
       densityFontMultiplier,
     });
 
@@ -232,8 +231,6 @@ const CandlestickChartInner = React.forwardRef<
 
     const responsiveGrid = buildResponsiveGrid({
       breakpoint,
-      showLegend: responsiveLegend.show,
-      legendOrient: responsiveLegend.orient,
       hasTitle: !!title,
       hasBottomLegend: responsiveLegend.show && responsiveLegend.orient === 'horizontal',
       hasRightLegend: responsiveLegend.show && responsiveLegend.orient === 'vertical',
@@ -371,14 +368,16 @@ const CandlestickChartInner = React.forwardRef<
       const idx = p.dataIndex ?? 0;
       const entry = data[idx];
       onDataPointClick({
-        seriesName: title ?? 'OHLC',
-        seriesIndex: 0,
-        dataIndex: idx,
+        datum: {
+          seriesName: title ?? 'OHLC',
+          seriesIndex: 0,
+          dataIndex: idx,
+          ...entry,
+        },
         label: entry?.label ?? p.name ?? '',
         // Use `close` as the headline value — matches the convention used
         // by financial dashboards that need a single primary measure.
         value: entry?.close ?? 0,
-        datum: entry ?? undefined,
       });
     },
     [data, onDataPointClick, title],
@@ -392,8 +391,6 @@ const CandlestickChartInner = React.forwardRef<
     // This is the most common headline figure for OHLC bars.
     data: data.map((d) => ({ label: d.label, value: d.close })),
     valueFormatter: fmt,
-    anomalySummary,
-    formatAnomalyAnnouncement,
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({

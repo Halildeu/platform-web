@@ -103,6 +103,8 @@ export interface RadarChartProps extends AccessControlledProps {
   splitNumber?: number;
   /** Chart title. */
   title?: string;
+  /** Accessible description. */
+  description?: string;
   /** Animate on mount. @default true */
   animate?: boolean;
   /** Custom value formatter for tooltip. */
@@ -279,6 +281,7 @@ const RadarChartInner = React.forwardRef<
     showLegend = false,
     splitNumber = 5,
     title,
+    description,
     valueFormatter,
     animate = true,
     onDataPointClick,
@@ -561,6 +564,7 @@ const RadarChartInner = React.forwardRef<
     chartType: 'radar',
     data: a11yData,
     title,
+    description,
     valueFormatter: fmt,
     echartsInstance: instance,
   });
