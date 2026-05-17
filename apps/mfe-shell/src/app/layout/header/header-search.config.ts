@@ -32,6 +32,7 @@ export const SEARCHABLE_ITEMS: SearchableItem[] = [
     path: '/suggestions',
     keywords: ['suggestions', 'oneri', 'oneriler'],
     remoteFlag: 'suggestions',
+    permission: MODULE_KEYS.SUGGESTIONS,
   },
   {
     id: 'nav-ethic',
@@ -40,6 +41,7 @@ export const SEARCHABLE_ITEMS: SearchableItem[] = [
     path: '/ethic',
     keywords: ['ethic', 'etik'],
     remoteFlag: 'ethic',
+    permission: MODULE_KEYS.ETHIC,
   },
   {
     id: 'nav-users',

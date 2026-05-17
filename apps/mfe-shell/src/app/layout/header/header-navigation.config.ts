@@ -73,7 +73,10 @@ export const NAV_GROUPS: NavGroup[] = [
         descriptionKey: 'shell.mega.hr.suggestions.desc',
         path: '/suggestions',
         icon: Lightbulb,
+        // remoteFlag = deploy/capability gate; module = per-user auth gate.
+        // Both must pass for the item to show.
         remoteFlag: 'suggestions',
+        module: MODULE_KEYS.SUGGESTIONS,
       },
       {
         key: 'ethic',
@@ -81,6 +84,7 @@ export const NAV_GROUPS: NavGroup[] = [
         descriptionKey: 'shell.mega.hr.ethic.desc',
         path: '/ethic',
         icon: Scale,
+        module: MODULE_KEYS.ETHIC,
         remoteFlag: 'ethic',
       },
       {

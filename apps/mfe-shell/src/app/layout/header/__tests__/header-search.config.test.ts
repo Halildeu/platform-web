@@ -52,11 +52,34 @@ describe('isSearchableItemVisible — global search permission gate', () => {
   });
 
   it('still gates items behind remote feature flags', () => {
+    // nav-suggestions also carries permission: SUGGESTIONS, so grant the
+    // module here to isolate the remote-flag dimension.
+    const withModule = (over = {}) => ctx({ hasModule: (m) => m === 'SUGGESTIONS', ...over });
     expect(
-      isSearchableItemVisible(pick('nav-suggestions'), ctx({ suggestionsEnabled: false })),
+      isSearchableItemVisible(pick('nav-suggestions'), withModule({ suggestionsEnabled: false })),
     ).toBe(false);
     expect(
-      isSearchableItemVisible(pick('nav-suggestions'), ctx({ suggestionsEnabled: true })),
+      isSearchableItemVisible(pick('nav-suggestions'), withModule({ suggestionsEnabled: true })),
     ).toBe(true);
+  });
+
+  it('hides the Suggestions search item without the SUGGESTIONS module', () => {
+    // Regression: nav-suggestions had no `permission` — it leaked the
+    // Öneriler remote into Cmd/Ctrl+K for every authenticated user.
+    const navSuggestions = pick('nav-suggestions');
+    expect(navSuggestions.permission).toBe('SUGGESTIONS');
+    expect(isSearchableItemVisible(navSuggestions, ctx())).toBe(false);
+    expect(
+      isSearchableItemVisible(navSuggestions, ctx({ hasModule: (m) => m === 'SUGGESTIONS' })),
+    ).toBe(true);
+    expect(isSearchableItemVisible(navSuggestions, ctx({ isSuperAdmin: true }))).toBe(true);
+  });
+
+  it('hides the Ethic search item without the ETHIC module', () => {
+    const navEthic = pick('nav-ethic');
+    expect(navEthic.permission).toBe('ETHIC');
+    expect(isSearchableItemVisible(navEthic, ctx())).toBe(false);
+    expect(isSearchableItemVisible(navEthic, ctx({ hasModule: (m) => m === 'ETHIC' }))).toBe(true);
+    expect(isSearchableItemVisible(navEthic, ctx({ isSuperAdmin: true }))).toBe(true);
   });
 });

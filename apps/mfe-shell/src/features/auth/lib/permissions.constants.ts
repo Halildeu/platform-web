@@ -22,6 +22,15 @@ export const MODULE_KEYS = {
    * in sync per Faz 22.1.1b.
    */
   ENDPOINT_ADMIN: 'ENDPOINT_ADMIN',
+  /**
+   * SUGGESTIONS / ETHIC — the Öneriler and Etik remote MFEs are
+   * permission-gated features (backend PermissionCatalogService modules,
+   * ADMIN gets MANAGE by default). Gate the nav, search and route guards
+   * on these keys; without them the features leak to every authenticated
+   * user.
+   */
+  SUGGESTIONS: 'SUGGESTIONS',
+  ETHIC: 'ETHIC',
 } as const;
 
 export type ModuleKey = keyof typeof MODULE_KEYS;

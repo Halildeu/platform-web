@@ -114,7 +114,7 @@ export const AppRouter: React.FC = () => {
           path="/suggestions"
           element={
             suggestionsEnabled ? (
-              <ProtectedRoute>
+              <ProtectedRoute requiredModule="SUGGESTIONS">
                 <SuggestionsApp />
               </ProtectedRoute>
             ) : (
@@ -126,7 +126,7 @@ export const AppRouter: React.FC = () => {
           path="/ethic"
           element={
             ethicEnabled ? (
-              <ProtectedRoute>
+              <ProtectedRoute requiredModule="ETHIC">
                 <EthicApp />
               </ProtectedRoute>
             ) : (
