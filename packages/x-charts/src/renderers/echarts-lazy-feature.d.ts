@@ -31,3 +31,5 @@ declare module 'echarts/lib/chart/candlestick';
 declare module 'echarts/lib/chart/boxplot';
 // PR-X16b — calendar coordinate-system component for CalendarHeatmap.
 declare module 'echarts/lib/component/calendar';
+// PR-X16c — polar coordinate-system component for PolarChart.
+declare module 'echarts/lib/component/polar';

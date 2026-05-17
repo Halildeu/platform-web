@@ -57,6 +57,10 @@ const CHARTS = [
   // PR-X16b (Codex thread 019e33a9 AGREE): GitHub-contributions-style
   // daily calendar heatmap. ECharts Depth campaign second wrapper.
   ['calendar-heatmap', 'CalendarHeatmap'],
+  // PR-X16c (Codex thread 019e35b3 AGREE): categorical radial chart —
+  // bar/line/scatter series on a polar coordinate system. ECharts
+  // Depth campaign third wrapper.
+  ['polar-chart', 'PolarChart'],
   ['heatmap-chart', 'HeatmapChart'],
   ['waterfall-chart', 'WaterfallChart'],
   ['funnel-chart', 'FunnelChart'],

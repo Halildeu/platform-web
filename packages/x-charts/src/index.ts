@@ -77,6 +77,11 @@ export type {
   CalendarHeatmapCellSize,
   CalendarWeekStart,
 } from './CalendarHeatmap';
+// PR-X16c (Codex thread 019e35b3 AGREE): polar chart — bar/line/scatter
+// series on a lazy `polar` coordinate system. ECharts Depth campaign
+// (third of 5: Tree → Calendar → Polar → ThemeRiver → Gantt).
+export { PolarChart } from './PolarChart';
+export type { PolarChartProps, PolarChartDataPoint, PolarSeriesType } from './PolarChart';
 export { GaugeChart } from './GaugeChart';
 export type { GaugeChartProps } from './GaugeChart';
 export { WaterfallChart } from './WaterfallChart';

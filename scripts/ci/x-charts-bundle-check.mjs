@@ -220,6 +220,9 @@ const ECHARTS_LAZY_FEATURE_EXTERNAL = [
   // PR-X16b — calendar coordinate-system component (CalendarHeatmap).
   "echarts/lib/component/calendar",
   "echarts/lib/component/calendar/*",
+  // PR-X16c — polar coordinate-system component (PolarChart).
+  "echarts/lib/component/polar",
+  "echarts/lib/component/polar/*",
 ];
 
 const WRAPPER_ONLY_EXTERNAL = [
@@ -277,6 +280,8 @@ const PROBE_CHART_WHITELIST = new Set([
   "PictorialBarChart",
   "CandlestickChart",
   "BoxPlotChart",
+  // PR-X16c — PolarChart depth chart (lazy `polar` coordinate system).
+  "PolarChart",
 ]);
 
 /**

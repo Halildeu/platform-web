@@ -28,6 +28,8 @@ vi.mock('echarts/lib/chart/pictorialBar', () => ({}));
 vi.mock('echarts/lib/chart/candlestick', () => ({}));
 vi.mock('echarts/lib/chart/boxplot', () => ({}));
 vi.mock('echarts/lib/component/calendar', () => ({}));
+// PR-X16c — stub the polar coordinate-system component module.
+vi.mock('echarts/lib/component/polar', () => ({}));
 
 beforeEach(() => {
   resetEChartsFeatureRegistration();
@@ -98,6 +100,7 @@ const ALL_FEATURES: EChartsFeature[] = [
   'candlestick',
   'boxplot',
   'calendar',
+  'polar',
 ];
 
 describe('every EChartsFeature loader resolves', () => {
