@@ -54,6 +54,9 @@ const CHARTS = [
   // PR-X16a (Codex thread 019e32da AGREE): hierarchical node-link
   // tree (org-chart). ECharts Depth campaign first wrapper.
   ['tree-chart', 'TreeChart'],
+  // PR-X16b (Codex thread 019e33a9 AGREE): GitHub-contributions-style
+  // daily calendar heatmap. ECharts Depth campaign second wrapper.
+  ['calendar-heatmap', 'CalendarHeatmap'],
   ['heatmap-chart', 'HeatmapChart'],
   ['waterfall-chart', 'WaterfallChart'],
   ['funnel-chart', 'FunnelChart'],

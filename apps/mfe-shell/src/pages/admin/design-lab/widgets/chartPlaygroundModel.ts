@@ -171,6 +171,20 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'TB', label: 'TB (top → bottom)' },
     { value: 'BT', label: 'BT (bottom → top)' },
   ],
+  // PR-X16b (Codex 019e33a9): CalendarHeatmap layout aliases.
+  // `CalendarHeatmapOrient` / `CalendarWeekStart` are exported type
+  // aliases in `packages/x-charts/src/CalendarHeatmap.tsx`; the prop
+  // catalog stores the alias name (not the resolved literal union), so
+  // they need explicit tables here — same pattern as `TreeLayout` /
+  // `TreeOrient` above.
+  CalendarHeatmapOrient: [
+    { value: 'horizontal', label: 'horizontal (default)' },
+    { value: 'vertical', label: 'vertical' },
+  ],
+  CalendarWeekStart: [
+    { value: 'monday', label: 'monday (default)' },
+    { value: 'sunday', label: 'sunday' },
+  ],
 };
 
 const ACCESS_LEVEL_INLINE = '"full" | "readonly" | "disabled" | "hidden"';
@@ -561,6 +575,31 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // PR-X16b (Codex 019e33a9 AGREE): GitHub-contributions-style daily
+  // calendar heatmap. `orient`/`startOfWeek` drive the grid layout;
+  // `showValues`/`showVisualMap` toggle cell labels + legend; `min`/`max`
+  // pin the color scale. `range`/`cellSize`/`colors` are complex/union
+  // shapes (code-only); `valueFormatter`/`onDataPointClick` are function
+  // props — preset-driven via COMPLEX_PROP_PRESETS, not primitives here.
+  'calendar-heatmap': new Set([
+    'title',
+    'description',
+    'className',
+    'orient',
+    'startOfWeek',
+    'showValues',
+    'showVisualMap',
+    'min',
+    'max',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -929,6 +968,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'sunburst-chart',
       // PR-X16a (Codex 019e32da): TreeChart node value formatting.
       'tree-chart',
+      // PR-X16b (Codex 019e33a9): CalendarHeatmap day-value formatting.
+      'calendar-heatmap',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -959,6 +1000,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'sunburst-chart',
       // PR-X16a (Codex 019e32da): TreeChart node-click cross-filter.
       'tree-chart',
+      // PR-X16b (Codex 019e33a9): CalendarHeatmap day-cell cross-filter.
+      'calendar-heatmap',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1010,6 +1053,16 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   ],
   'heatmap-chart.colors': [
     { presetId: 'default', label: 'Wrapper default (auto)' },
+    { presetId: 'cool-warm', label: 'Cool→Warm' },
+    { presetId: 'green-red', label: 'Green→Red' },
+  ],
+  // PR-X16b (Codex 019e33a9): CalendarHeatmap low→high gradient. The
+  // `colors` prop is `[string, string]` — same shape as heatmap-chart, so
+  // the gradient presets mirror it. Routing it as a preset (not a
+  // LIVE_PROP_SUPPORT primitive) keeps the curated count-lock coverage
+  // above the %90 floor.
+  'calendar-heatmap.colors': [
+    { presetId: 'default', label: 'Wrapper default (GitHub blue)' },
     { presetId: 'cool-warm', label: 'Cool→Warm' },
     { presetId: 'green-red', label: 'Green→Red' },
   ],
@@ -1753,6 +1806,26 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // PR-X16b (Codex 019e33a9): CalendarHeatmap daily-value scaffold so the
+  // generated snippet compiles end-to-end (`const sampleData = [...]`).
+  'calendar-heatmap': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'CalendarHeatmap daily values (YYYY-MM-DD)',
+        jsLiteral: `[
+  { date: '2026-01-06', value: 5 },
+  { date: '2026-01-14', value: 12 },
+  { date: '2026-02-03', value: 8 },
+  { date: '2026-02-21', value: 17 },
+  { date: '2026-03-09', value: 3 },
+  { date: '2026-03-27', value: 20 },
+  { date: '2026-04-15', value: 11 },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -2138,6 +2211,51 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'interaction',
       description: 'Enable mouse pan + scroll-zoom on the canvas.',
       statePatch: { roam: true },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // PR-X16b (Codex 019e33a9): CalendarHeatmap preset gallery.
+  'calendar-heatmap': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Horizontal calendar grid with the visual-map legend.',
+      statePatch: {},
+    },
+    {
+      id: 'with-values',
+      label: 'With Values',
+      tag: 'labels',
+      description: 'Show the numeric value inside each day cell.',
+      statePatch: { showValues: true },
+    },
+    {
+      id: 'vertical',
+      label: 'Vertical Layout',
+      tag: 'orientation',
+      description: 'Stack the months vertically instead of left-to-right.',
+      statePatch: { orient: 'vertical' },
+    },
+    {
+      id: 'sunday-start',
+      label: 'Sunday Start',
+      tag: 'layout',
+      description: 'Begin each week on Sunday instead of Monday.',
+      statePatch: { startOfWeek: 'sunday' },
     },
     {
       id: 'dark',
