@@ -9,12 +9,11 @@ test.describe('Theme and dark mode (QLTY-THEME-DM-01)', () => {
     // Wait for theme system to initialize
     await page.waitForFunction(
       () => document.documentElement.hasAttribute('data-theme'),
+      undefined,
       { timeout: 10_000 },
     );
 
-    const theme = await page.evaluate(() =>
-      document.documentElement.getAttribute('data-theme'),
-    );
+    const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
     expect(theme).toBeTruthy();
   });
 
@@ -25,6 +24,7 @@ test.describe('Theme and dark mode (QLTY-THEME-DM-01)', () => {
     // Wait for theme to be initialized
     await page.waitForFunction(
       () => document.documentElement.hasAttribute('data-theme'),
+      undefined,
       { timeout: 10_000 },
     );
 
@@ -37,9 +37,7 @@ test.describe('Theme and dark mode (QLTY-THEME-DM-01)', () => {
 
       // Look for appearance/dark mode toggle
       const appearanceToggle = runtimePanel
-        .locator(
-          'button, [role="switch"], [role="radio"], input[type="checkbox"]',
-        )
+        .locator('button, [role="switch"], [role="radio"], input[type="checkbox"]')
         .filter({ hasText: /dark|karanlik|gece|appearance|gorunum/i })
         .first();
 
@@ -69,6 +67,7 @@ test.describe('Theme and dark mode (QLTY-THEME-DM-01)', () => {
 
     await page.waitForFunction(
       () => document.documentElement.hasAttribute('data-theme'),
+      undefined,
       { timeout: 10_000 },
     );
 
@@ -82,6 +81,7 @@ test.describe('Theme and dark mode (QLTY-THEME-DM-01)', () => {
 
     await page.waitForFunction(
       () => document.documentElement.hasAttribute('data-theme'),
+      undefined,
       { timeout: 10_000 },
     );
 
@@ -101,6 +101,7 @@ test.describe('Theme and dark mode (QLTY-THEME-DM-01)', () => {
       () =>
         document.documentElement.hasAttribute('data-theme') &&
         document.documentElement.hasAttribute('data-density'),
+      undefined,
       { timeout: 10_000 },
     );
 
