@@ -31,9 +31,11 @@ import type { InboxRequestIdentity } from './notify-inbox.types';
  * {@code getUnreadCount} + {@code listInbox} count caches directly (no
  * refetch round trip) and invalidates the {@code Inbox / LIST} tag so
  * the drawer's list view re-fetches the rows. The one exception is the
- * connect-time snapshot event when its count matches the freshly-fetched
- * list cache — that invalidation would be a redundant refetch and is
- * skipped (see the {@code unread-count} handler). This keeps the
+ * connect-time snapshot event when it cannot indicate a stale row set —
+ * its count matches the freshly-fetched list cache, or that cache has
+ * not resolved yet (its in-flight mount fetch already delivers fresh
+ * rows) — that invalidation would be a redundant refetch and is skipped
+ * (see the {@code unread-count} handler). This keeps the
  * single-source-of-truth in the RTK Query store; consuming components
  * (NotificationBell, NotificationCenter) still read from the same hooks
  * they already used.
