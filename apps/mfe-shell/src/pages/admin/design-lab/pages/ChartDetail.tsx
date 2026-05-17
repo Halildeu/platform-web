@@ -2162,6 +2162,37 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
           'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
       },
     ],
+    sampleCode: `<TreeChart
+  data={[
+    {
+      name: "CEO",
+      children: [
+        { name: "Engineering", children: [
+          { name: "Frontend", value: 20 },
+          { name: "Backend", value: 25 },
+        ] },
+        { name: "Design", value: 8 },
+      ],
+    },
+  ]}
+  layout="orthogonal"
+  title="Org Chart"
+/>`,
+    features: [
+      'cross-filter',
+      'expand-collapse',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+    ],
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
