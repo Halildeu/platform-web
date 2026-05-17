@@ -249,9 +249,11 @@ describe('useInboxUnreadSse', () => {
   /**
    * Connect-time snapshot LIST-refetch fix. The orchestrator sends the
    * current unread count as the FIRST SSE event on connect; invalidating
-   * Inbox/LIST then refetches a list just fetched on mount. The hook now
-   * skips that one invalidation when the snapshot count matches the
-   * cached list count — a drift, an absent cache, or any later event
+   * Inbox/LIST then refetches a list just fetched on mount. The hook
+   * skips that one invalidation whenever the snapshot cannot indicate a
+   * stale row set — the count matches the cached list, OR listInbox has
+   * not resolved yet (its in-flight mount fetch delivers fresh rows). A
+   * genuine count drift against a resolved cache, or any later event,
    * still invalidates.
    */
   describe('unread-count → Inbox/LIST invalidation', () => {
@@ -300,7 +302,12 @@ describe('useInboxUnreadSse', () => {
       expect(invalidateSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('invalidates LIST on the first event when no list cache exists yet', async () => {
+    it('skips LIST invalidation on the connect snapshot when listInbox has not resolved', async () => {
+      // No seedList — models the real page-load race: the SSE connects
+      // and emits its snapshot before the NotificationCenter mount fetch
+      // of listInbox has resolved. previousUnreadCount is undefined; the
+      // in-flight fetch delivers fresh rows on its own, so invalidating
+      // LIST would only queue a redundant 2nd inbox/me.
       const { Wrapper } = buildWrapper();
       const invalidateSpy = vi.spyOn(notifyInboxApi.util, 'invalidateTags');
       renderHook(() => useInboxUnreadSse(identity), { wrapper: Wrapper });
@@ -312,7 +319,7 @@ describe('useInboxUnreadSse', () => {
         await Promise.resolve();
       });
 
-      expect(invalidateSpy).toHaveBeenCalledTimes(1);
+      expect(invalidateSpy).not.toHaveBeenCalled();
     });
 
     it('invalidates LIST on every event after the first, even when the count is unchanged', async () => {
@@ -326,6 +333,25 @@ describe('useInboxUnreadSse', () => {
         es.fire('open');
         es.fire('unread-count', { unreadCount: 4 }); // connect snapshot — skipped
         es.fire('unread-count', { unreadCount: 4 }); // real event — a row may have flipped READ→ARCHIVED
+        await Promise.resolve();
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('still invalidates LIST on a later event after an unresolved-list snapshot was skipped', async () => {
+      // First event skipped via the previousUnreadCount===undefined
+      // branch (no list cache); firstEvent must still flip so the next
+      // event — a real mutation — invalidates.
+      const { Wrapper } = buildWrapper();
+      const invalidateSpy = vi.spyOn(notifyInboxApi.util, 'invalidateTags');
+      renderHook(() => useInboxUnreadSse(identity), { wrapper: Wrapper });
+      const es = stubInstances[0];
+
+      await act(async () => {
+        es.fire('open');
+        es.fire('unread-count', { unreadCount: 4 }); // connect snapshot, list unresolved — skipped
+        es.fire('unread-count', { unreadCount: 5 }); // real mutation — must invalidate
         await Promise.resolve();
       });
 
