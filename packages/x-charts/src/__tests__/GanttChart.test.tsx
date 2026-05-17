@@ -338,6 +338,47 @@ describe('GanttChart — option shape', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  tooltip formatter                                                  */
+/* ------------------------------------------------------------------ */
+
+describe('GanttChart — tooltip formatter', () => {
+  const tooltipFormatter = (): ((p: { dataIndex?: number }) => string) => {
+    const tooltip = lastDispatchedOption()?.tooltip as
+      | { formatter?: (p: { dataIndex?: number }) => string }
+      | undefined;
+    return tooltip?.formatter ?? (() => '');
+  };
+
+  it('resolves dataIndex to the task name, lane, date range and duration', () => {
+    render(<GanttChart data={ganttData()} animate={false} />);
+    const html = tooltipFormatter()({ dataIndex: 0 });
+    expect(html).toContain('<strong>Design</strong>');
+    expect(html).toContain('Phase 1');
+    expect(html).toContain('2026-01-05');
+    expect(html).toContain('2026-01-12');
+    expect(html).toContain('7'); // Design spans 7 days
+  });
+
+  it('omits the lane line when the lane equals the task name', () => {
+    render(
+      <GanttChart
+        data={[{ name: 'Solo', start: '2026-01-01', end: '2026-01-08' }]}
+        animate={false}
+      />,
+    );
+    const html = tooltipFormatter()({ dataIndex: 0 });
+    expect(html).toContain('<strong>Solo</strong>');
+    // `Solo` appears exactly once — no separate lane line.
+    expect(html.match(/Solo/g)).toHaveLength(1);
+  });
+
+  it('returns an empty string for an out-of-range dataIndex', () => {
+    render(<GanttChart data={ganttData()} animate={false} />);
+    expect(tooltipFormatter()({ dataIndex: 99 })).toBe('');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  onDataPointClick — point-level                                     */
 /* ------------------------------------------------------------------ */
 
