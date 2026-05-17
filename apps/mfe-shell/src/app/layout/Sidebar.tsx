@@ -22,12 +22,88 @@ import type {
   ShellSidebarFooterActionItem,
 } from '@mfe/design-system/patterns';
 import { useAppDispatch } from '../store/store.hooks';
-import { pushNotification, toggleOpen } from '../../features/notifications/model/notifications.slice';
+import {
+  pushNotification,
+  toggleOpen,
+} from '../../features/notifications/model/notifications.slice';
 import { usePermissions } from '@mfe/auth';
 import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
 
 const STORAGE_KEY = 'shell.sidebar.mode';
 const defaultReportingRoute = getSharedReport('users-overview').webRoute;
+
+/**
+ * Pure, testable builder for the sidebar navigation items.
+ *
+ * Every privileged item is gated by an OpenFGA module: when the gate is
+ * closed the item renders {@code disabled} with no {@code href}, so an
+ * unauthorized user cannot click through to a route guard rejection
+ * ({@code /unauthorized}). The {@code schema-explorer} item is gated by
+ * {@code THEME} to match the {@code /admin/schema-explorer} route guard
+ * (AppRouter {@code requiredModule="THEME"}). Keeping this a standalone
+ * function lets the gating contract be unit-tested without mounting the
+ * federated ShellSidebar (which needs JSDOM observer shims).
+ */
+export const buildSidebarNavItems = (
+  sa: boolean,
+  hasModule: (moduleKey: string) => boolean,
+): ShellSidebarNavItem[] => {
+  const canAccess = sa || hasModule(MODULE_KEYS.ACCESS);
+  const canAudit = sa || hasModule(MODULE_KEYS.AUDIT);
+  const canReport = sa || hasModule(MODULE_KEYS.REPORT);
+  const canThemeAdmin = sa || hasModule(MODULE_KEYS.THEME);
+  const homePath = '/home';
+
+  return [
+    {
+      key: 'home',
+      label: 'Home',
+      href: homePath,
+      icon: <Home aria-hidden />,
+      dataTestId: 'nav-home',
+    },
+    {
+      key: 'dashboard',
+      label: 'Dashboard',
+      href: canAudit ? '/audit/events' : undefined,
+      icon: <LayoutDashboard aria-hidden />,
+      dataTestId: 'nav-dashboard',
+      disabled: !canAudit,
+    },
+    {
+      key: 'projects',
+      label: 'Projects',
+      href: canAccess ? '/access/roles' : undefined,
+      icon: <Folder aria-hidden />,
+      dataTestId: 'nav-projects',
+      disabled: !canAccess,
+    },
+    {
+      key: 'reporting',
+      label: 'Reporting',
+      href: canReport ? defaultReportingRoute : undefined,
+      icon: <BarChart3 aria-hidden />,
+      dataTestId: 'nav-reporting',
+      disabled: !canReport,
+    },
+    {
+      key: 'services',
+      label: 'Services',
+      href: canThemeAdmin ? '/admin/services' : undefined,
+      icon: <Server aria-hidden />,
+      dataTestId: 'nav-services',
+      disabled: !canThemeAdmin,
+    },
+    {
+      key: 'schema-explorer',
+      label: 'Schema Explorer',
+      href: canThemeAdmin ? '/admin/schema-explorer' : undefined,
+      icon: <Database aria-hidden />,
+      dataTestId: 'nav-schema-explorer',
+      disabled: !canThemeAdmin,
+    },
+  ];
+};
 
 export const Sidebar: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -42,8 +118,7 @@ export const Sidebar: React.FC = () => {
   );
 
   useEffect(() => {
-    const update = () =>
-      setIsOnline(typeof navigator === 'undefined' ? true : navigator.onLine);
+    const update = () => setIsOnline(typeof navigator === 'undefined' ? true : navigator.onLine);
     window.addEventListener('online', update);
     window.addEventListener('offline', update);
     return () => {
@@ -53,22 +128,10 @@ export const Sidebar: React.FC = () => {
   }, []);
 
   /* ---- Navigation items ---- */
-  const navItems: ShellSidebarNavItem[] = useMemo(() => {
-    const canAccess = sa || hasModule(MODULE_KEYS.ACCESS);
-    const canAudit = sa || hasModule(MODULE_KEYS.AUDIT);
-    const canReport = sa || hasModule(MODULE_KEYS.REPORT);
-    const canThemeAdmin = sa || hasModule(MODULE_KEYS.THEME);
-    const homePath = '/home';
-
-    return [
-      { key: 'home', label: 'Home', href: homePath, icon: <Home aria-hidden />, dataTestId: 'nav-home' },
-      { key: 'dashboard', label: 'Dashboard', href: canAudit ? '/audit/events' : undefined, icon: <LayoutDashboard aria-hidden />, dataTestId: 'nav-dashboard', disabled: !canAudit },
-      { key: 'projects', label: 'Projects', href: canAccess ? '/access/roles' : undefined, icon: <Folder aria-hidden />, dataTestId: 'nav-projects', disabled: !canAccess },
-      { key: 'reporting', label: 'Reporting', href: canReport ? defaultReportingRoute : undefined, icon: <BarChart3 aria-hidden />, dataTestId: 'nav-reporting', disabled: !canReport },
-      { key: 'services', label: 'Services', href: canThemeAdmin ? '/admin/services' : undefined, icon: <Server aria-hidden />, dataTestId: 'nav-services', disabled: !canThemeAdmin },
-      { key: 'schema-explorer', label: 'Schema Explorer', href: '/admin/schema-explorer', icon: <Database aria-hidden />, dataTestId: 'nav-schema-explorer' },
-    ];
-  }, [hasModule, sa]);
+  const navItems: ShellSidebarNavItem[] = useMemo(
+    () => buildSidebarNavItems(sa, hasModule),
+    [hasModule, sa],
+  );
 
   /* ---- Active key resolution ---- */
   const homePath = navItems.find((item) => item.key === 'home')?.href;
@@ -91,7 +154,7 @@ export const Sidebar: React.FC = () => {
         key: 'settings',
         label: 'Settings',
         icon: <Settings aria-hidden />,
-        href: (sa || hasModule(MODULE_KEYS.THEME)) ? '/admin/themes' : undefined,
+        href: sa || hasModule(MODULE_KEYS.THEME) ? '/admin/themes' : undefined,
         disabled: !(sa || hasModule(MODULE_KEYS.THEME)),
         dataTestId: 'nav-settings',
       },
