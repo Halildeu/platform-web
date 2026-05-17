@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-16T22:29:26.667Z",
+  "generatedAt": "2026-05-17T10:08:05.006Z",
   "totalConsumers": 43,
   "byBucket": {
     "production": 20,
@@ -346,6 +346,7 @@
         "AreaChart",
         "BarChart",
         "BoxPlotChart",
+        "CalendarHeatmap",
         "CandlestickChart",
         "ChartContainer",
         "ChartDashboard",

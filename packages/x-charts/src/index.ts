@@ -66,6 +66,17 @@ export { TreeChart } from './TreeChart';
 export type { TreeChartProps, TreeNode, TreeLayout, TreeOrient } from './TreeChart';
 export { HeatmapChart } from './HeatmapChart';
 export type { HeatmapChartProps } from './HeatmapChart';
+// PR-X16b (Codex thread 019e33a9 AGREE): calendar heatmap — a `heatmap`
+// series on a lazy `calendar` coordinate system. ECharts Depth campaign
+// (second of 5: Tree → Calendar → Polar → ThemeRiver → Gantt).
+export { CalendarHeatmap } from './CalendarHeatmap';
+export type {
+  CalendarHeatmapProps,
+  CalendarHeatmapDataPoint,
+  CalendarHeatmapOrient,
+  CalendarHeatmapCellSize,
+  CalendarWeekStart,
+} from './CalendarHeatmap';
 export { GaugeChart } from './GaugeChart';
 export type { GaugeChartProps } from './GaugeChart';
 export { WaterfallChart } from './WaterfallChart';

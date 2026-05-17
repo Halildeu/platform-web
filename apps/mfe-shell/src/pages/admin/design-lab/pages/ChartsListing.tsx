@@ -257,6 +257,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'treemap',
   },
+  // PR-X16b (Codex thread 019e33a9 AGREE): ECharts Depth campaign —
+  // GitHub-contributions-style daily calendar heatmap.
+  {
+    id: 'calendar-heatmap',
+    name: 'CalendarHeatmap',
+    description: 'GitHub tarzi gunluk takvim heatmap, aktivite yogunlugu.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'heatmap',
+  },
   // Interaction
   {
     id: 'chart-container',

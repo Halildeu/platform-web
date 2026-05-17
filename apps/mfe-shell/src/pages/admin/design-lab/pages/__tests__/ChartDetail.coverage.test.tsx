@@ -49,6 +49,7 @@ vi.mock('@mfe/x-charts', async () => {
     RadarChart: stubChart('RadarChart'),
     TreemapChart: stubChart('TreemapChart'),
     TreeChart: stubChart('TreeChart'),
+    CalendarHeatmap: stubChart('CalendarHeatmap'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -87,6 +88,9 @@ const CHART_IDS_WITH_PRESETS = [
   // the `features` / `sampleCode` catalog completeness that the live
   // testai crash exposed.
   'tree-chart',
+  // PR-X16b — CalendarHeatmap depth chart. Same render-smoke guard for
+  // catalog completeness (LIVE_PROP_SUPPORT + CHART_PRESETS + preview).
+  'calendar-heatmap',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',

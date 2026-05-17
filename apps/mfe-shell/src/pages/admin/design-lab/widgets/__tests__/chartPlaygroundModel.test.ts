@@ -785,6 +785,8 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
     'radar-chart',
     'treemap-chart',
     'tree-chart',
+    // PR-X16b — CalendarHeatmap (ECharts Depth campaign second wrapper).
+    'calendar-heatmap',
     'heatmap-chart',
     'waterfall-chart',
     'funnel-chart',
@@ -828,7 +830,7 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
       expect(count).toBe(COMMON_AXIS.length);
       total += count;
     }
-    // 13 charts × 11 common-axis props = 143 just from common axis.
+    // 15 charts × 11 common-axis props = 165 just from common axis.
     expect(total).toBe(ALL_CHART_IDS.length * COMMON_AXIS.length);
   });
 });
@@ -856,6 +858,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'radar-chart': 16,
     'treemap-chart': 15,
     'tree-chart': 19, // PR-X16a: 19 primitives (valueFormatter/onDataPointClick are preset-driven)
+    'calendar-heatmap': 17, // PR-X16b: 11 common-axis + orient/startOfWeek/showValues/showVisualMap/min/max
     'heatmap-chart': 15,
     'waterfall-chart': 15,
     'funnel-chart': 19,
@@ -874,6 +877,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'radar-chart': 2,
     'treemap-chart': 3, // + onNodeClick
     'tree-chart': 2, // PR-X16a: valueFormatter + onDataPointClick
+    'calendar-heatmap': 3, // PR-X16b: valueFormatter + onDataPointClick + colors
     'heatmap-chart': 4, // + onCellClick + colors
     'waterfall-chart': 2,
     'funnel-chart': 2,
@@ -886,13 +890,16 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // PR-X16a enrols TreeChart in the curated lock: +19 primitives, +2
   // presets, +24 catalog props. Coverage: 230 (primitives) + 36
   // (presets) = 266 / 290 ≈ %91.7.
+  // PR-X16b enrols CalendarHeatmap: +17 primitives, +3 presets, +25
+  // catalog props. Coverage: 247 (primitives) + 39 (presets) = 286 /
+  // 315 ≈ %90.8.
   //
   // NOTE: this lock is a CURATED subset — the PR-X12+ campaign charts
   // (graph / geo-map / box-plot / candlestick / pictorial-bar /
   // parallel-coordinates) are intentionally NOT enrolled here, so
   // `TOTAL_CATALOG_PROPS` is the subset catalog total, not the whole
   // catalog. Enrolling them is a separate coverage-lock follow-up.
-  const TOTAL_CATALOG_PROPS = 290;
+  const TOTAL_CATALOG_PROPS = 315;
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
   const PRESET_TOTAL = Object.values(PRESET_COUNTS).reduce((a, b) => a + b, 0);
   const EXPECTED_TOTAL = PRIMITIVE_TOTAL + PRESET_TOTAL;

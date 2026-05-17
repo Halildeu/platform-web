@@ -21,6 +21,9 @@ import {
   RadarChart,
   TreemapChart,
   TreeChart,
+  // PR-X16b (Codex thread 019e33a9 AGREE): GitHub-contributions-style
+  // daily calendar heatmap — ECharts Depth campaign second wrapper.
+  CalendarHeatmap,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -875,6 +878,99 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             valueColumnHeader={getStr(toggles, 'valueColumnHeader', 'Personel')}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // PR-X16b (Codex thread 019e33a9 AGREE): GitHub-contributions-style
+    // daily calendar heatmap — ECharts Depth campaign. Sample dataset:
+    // ~50 daily activity points spanning Jan→Apr 2026.
+    case 'calendar-heatmap': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <CalendarHeatmap
+            data={[
+              { date: '2026-01-02', value: 4 },
+              { date: '2026-01-05', value: 9 },
+              { date: '2026-01-06', value: 12 },
+              { date: '2026-01-09', value: 3 },
+              { date: '2026-01-13', value: 7 },
+              { date: '2026-01-15', value: 15 },
+              { date: '2026-01-19', value: 6 },
+              { date: '2026-01-22', value: 11 },
+              { date: '2026-01-26', value: 2 },
+              { date: '2026-01-28', value: 8 },
+              { date: '2026-01-30', value: 14 },
+              { date: '2026-02-02', value: 5 },
+              { date: '2026-02-04', value: 18 },
+              { date: '2026-02-06', value: 10 },
+              { date: '2026-02-09', value: 7 },
+              { date: '2026-02-11', value: 13 },
+              { date: '2026-02-13', value: 1 },
+              { date: '2026-02-16', value: 9 },
+              { date: '2026-02-18', value: 16 },
+              { date: '2026-02-20', value: 4 },
+              { date: '2026-02-23', value: 12 },
+              { date: '2026-02-25', value: 6 },
+              { date: '2026-02-27', value: 19 },
+              { date: '2026-03-02', value: 8 },
+              { date: '2026-03-04', value: 3 },
+              { date: '2026-03-06', value: 11 },
+              { date: '2026-03-09', value: 14 },
+              { date: '2026-03-11', value: 5 },
+              { date: '2026-03-13', value: 17 },
+              { date: '2026-03-16', value: 7 },
+              { date: '2026-03-18', value: 10 },
+              { date: '2026-03-20', value: 2 },
+              { date: '2026-03-23', value: 13 },
+              { date: '2026-03-25', value: 9 },
+              { date: '2026-03-27', value: 20 },
+              { date: '2026-03-30', value: 6 },
+              { date: '2026-04-01', value: 11 },
+              { date: '2026-04-03', value: 4 },
+              { date: '2026-04-06', value: 15 },
+              { date: '2026-04-08', value: 8 },
+              { date: '2026-04-10', value: 12 },
+              { date: '2026-04-13', value: 3 },
+              { date: '2026-04-15', value: 16 },
+              { date: '2026-04-17', value: 7 },
+              { date: '2026-04-20', value: 10 },
+              { date: '2026-04-22', value: 5 },
+              { date: '2026-04-24', value: 18 },
+              { date: '2026-04-27', value: 9 },
+              { date: '2026-04-29', value: 13 },
+            ]}
+            range="2026"
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            orient={getEnum(toggles, 'orient', 'horizontal')}
+            startOfWeek={getEnum(toggles, 'startOfWeek', 'monday')}
+            min={getOptNum(toggles, 'min')}
+            max={getOptNum(toggles, 'max')}
+            colors={
+              getColorsPreset(getEnum(toggles, 'colors', 'default')) as [string, string] | undefined
+            }
+            showValues={isOn(toggles, 'showValues', false)}
+            showVisualMap={isOn(toggles, 'showVisualMap', true)}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
