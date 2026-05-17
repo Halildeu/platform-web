@@ -13,11 +13,21 @@ import {
   isEChartsFeatureRegistered,
   markEChartsFeatureRegisteredForTest,
   resetEChartsFeatureRegistration,
+  type EChartsFeature,
 } from '../registerEChartsFeature';
 
 // Stub the direct `echarts/lib/chart/tree` side-effect module so the
 // dynamic import resolves instantly without loading real ECharts.
 vi.mock('echarts/lib/chart/tree', () => ({}));
+// PR-X16b-prep — stub the niche-chart series + the parallel / calendar
+// coordinate-system component modules the same way.
+vi.mock('echarts/lib/chart/graph', () => ({}));
+vi.mock('echarts/lib/chart/parallel', () => ({}));
+vi.mock('echarts/lib/component/parallel', () => ({}));
+vi.mock('echarts/lib/chart/pictorialBar', () => ({}));
+vi.mock('echarts/lib/chart/candlestick', () => ({}));
+vi.mock('echarts/lib/chart/boxplot', () => ({}));
+vi.mock('echarts/lib/component/calendar', () => ({}));
 
 beforeEach(() => {
   resetEChartsFeatureRegistration();
@@ -73,5 +83,47 @@ describe('resetEChartsFeatureRegistration', () => {
     await ensureEChartsFeatureRegistered('tree');
     resetEChartsFeatureRegistration();
     expect(isEChartsFeatureRegistered('tree')).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  PR-X16b-prep — every lazy feature key has a working loader          */
+/* ------------------------------------------------------------------ */
+
+const ALL_FEATURES: EChartsFeature[] = [
+  'tree',
+  'graph',
+  'parallel',
+  'pictorialBar',
+  'candlestick',
+  'boxplot',
+  'calendar',
+];
+
+describe('every EChartsFeature loader resolves', () => {
+  it.each(ALL_FEATURES)('registers `%s` via its FEATURE_LOADERS entry', async (feature) => {
+    expect(isEChartsFeatureRegistered(feature)).toBe(false);
+    await ensureEChartsFeatureRegistered(feature);
+    expect(isEChartsFeatureRegistered(feature)).toBe(true);
+  });
+
+  it.each(ALL_FEATURES)('`%s` registration is idempotent + single-flight', async (feature) => {
+    const a = ensureEChartsFeatureRegistered(feature);
+    const b = ensureEChartsFeatureRegistered(feature);
+    // Overlapping callers share ONE in-flight import promise.
+    expect(a).toBe(b);
+    await Promise.all([a, b]);
+    // A post-registration call resolves immediately (no re-import).
+    await ensureEChartsFeatureRegistered(feature);
+    expect(isEChartsFeatureRegistered(feature)).toBe(true);
+  });
+
+  it('`parallel` registers only after BOTH its series + component modules load', async () => {
+    // The `parallel` loader awaits a two-module Promise.all
+    // (echarts/lib/chart/parallel + echarts/lib/component/parallel). If
+    // either stub were missing, the dynamic import would reject and this
+    // await would throw — a clean resolve proves both modules ran.
+    await expect(ensureEChartsFeatureRegistered('parallel')).resolves.toBeUndefined();
+    expect(isEChartsFeatureRegistered('parallel')).toBe(true);
   });
 });

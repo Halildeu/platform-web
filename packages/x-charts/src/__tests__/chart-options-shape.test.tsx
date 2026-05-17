@@ -68,6 +68,10 @@ import {
   ensureGeoMapRegistered,
   __resetGeoMapRegistrationCacheForTests,
 } from '../geo/registerGeoMap';
+import {
+  markEChartsFeatureRegisteredForTest,
+  resetEChartsFeatureRegistration,
+} from '../renderers/registerEChartsFeature';
 
 /* ------------------------------------------------------------------ */
 /*  Setup                                                              */
@@ -76,10 +80,22 @@ import {
 beforeEach(() => {
   resetEChartsMock();
   installJsdomPolyfills();
+  // PR-X16b-prep: the niche charts (Graph/Parallel/PictorialBar/
+  // Candlestick/BoxPlot) lazy-register their ECharts feature via
+  // useRequiredEChartsFeature. The echarts-mock fixture stubs the
+  // renderer, so pre-mark each feature registered — this keeps the hook
+  // synchronously `ready` and the option-shape assertions below
+  // synchronous (no real dynamic import in the jsdom runtime).
+  markEChartsFeatureRegisteredForTest('graph');
+  markEChartsFeatureRegisteredForTest('parallel');
+  markEChartsFeatureRegisteredForTest('pictorialBar');
+  markEChartsFeatureRegisteredForTest('candlestick');
+  markEChartsFeatureRegisteredForTest('boxplot');
 });
 
 afterEach(() => {
   restoreJsdomPolyfills();
+  resetEChartsFeatureRegistration();
 });
 
 /* ------------------------------------------------------------------ */

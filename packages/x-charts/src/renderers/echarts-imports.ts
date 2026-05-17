@@ -76,23 +76,13 @@ import { GaugeChart } from 'echarts/charts';
 import { FunnelChart } from 'echarts/charts';
 import { HeatmapChart } from 'echarts/charts';
 import { SunburstChart } from 'echarts/charts';
-// PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
-import { BoxplotChart } from 'echarts/charts';
-// PR-X7 (Codex thread 019e1e30 AGREE): financial OHLC chart for stock/
-// crypto price ranges with bullish/bearish color coding.
-import { CandlestickChart } from 'echarts/charts';
-// PR-X10 (Codex thread 019e1e30 AGREE): decorative bar chart that renders
-// each bar as a tiled symbol (icon). Useful for infographic dashboards.
-import { PictorialBarChart } from 'echarts/charts';
-// PR-X12a (Codex thread 019e2119 AGREE): parallel coordinates chart for
-// multi-dim data comparison (HR compensation eşitliği analizi). Reads N
-// dimensions per row, renders one polyline per row across N axes.
-import { ParallelChart } from 'echarts/charts';
-// PR-X12b (Codex thread 019e2119 AGREE): network/graph chart for entity-
-// edge relationship topology (Context Health DocGraph, dependency network,
-// permission cascade). Replaces "graph"-named bar charts that count nodes
-// but don't show their relationships.
-import { GraphChart } from 'echarts/charts';
+// PR-X16b-prep: BoxplotChart / CandlestickChart / PictorialBarChart /
+// ParallelChart (+ ParallelComponent) / GraphChart are intentionally NOT
+// eager-registered. These five niche, design-lab-only charts were lazy-
+// converted to free ~16-18 KB of CONTRACT §8 `contractTotal` headroom
+// for the rest of the PR-X16 depth campaign. Each wrapper lazy-registers
+// its feature on first non-empty mount via
+// `renderers/registerEChartsFeature.ts` (Codex thread 019e33a9 AGREE).
 // PR-X12c (Codex thread 019e2254 AGREE): geographic choropleth map for
 // regional distribution (HR location il bazlı yoğunluk). Map JSON
 // (TR provinces, world, etc.) is CONSUMER-supplied and registered via
@@ -137,10 +127,9 @@ import { MarkLineComponent } from 'echarts/components';
 import { MarkPointComponent } from 'echarts/components';
 import { MarkAreaComponent } from 'echarts/components';
 import { VisualMapComponent } from 'echarts/components';
-// PR-X12a: ParallelComponent is the coordinate system that the
-// `ParallelChart` series renders into (analogous to GridComponent for
-// cartesian charts). Must register both series + coordinate system.
-import { ParallelComponent } from 'echarts/components';
+// PR-X16b-prep: ParallelComponent (the `parallel` coordinate system) is
+// lazy-registered alongside the `parallel` series — see the chart
+// imports note above.
 // PR-X12c: GeoComponent is the coordinate system for `MapChart`
 // (choropleth) and any future scatter-overlay-on-map use case.
 // Required alongside `MapChart` for region styling, roam, visualMap
@@ -174,11 +163,9 @@ export function registerECharts(): void {
     FunnelChart,
     HeatmapChart,
     SunburstChart,
-    BoxplotChart, // PR-X6: statistical box-and-whisker chart
-    CandlestickChart, // PR-X7: financial OHLC chart
-    PictorialBarChart, // PR-X10: decorative pictogram bar chart
-    ParallelChart, // PR-X12a: parallel coordinates (multi-dim comparison)
-    GraphChart, // PR-X12b: network/graph relationship topology
+    // PR-X16b-prep: Boxplot/Candlestick/PictorialBar/Parallel/Graph
+    // charts are lazy-registered (registerEChartsFeature.ts) — see the
+    // import note above.
     MapChart, // PR-X12c: geographic choropleth map (regional distribution)
     // Components
     TitleComponent,
@@ -196,7 +183,7 @@ export function registerECharts(): void {
     MarkPointComponent,
     MarkAreaComponent,
     VisualMapComponent,
-    ParallelComponent, // PR-X12a: parallel-coordinate system (axes layout)
+    // PR-X16b-prep: ParallelComponent lazy-registered with the `parallel` series.
     GeoComponent, // PR-X12c: geo coordinate system (map series host)
   ]);
 

@@ -22,7 +22,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -166,6 +166,14 @@ const DEFAULT_PALETTE = [
 const escapeHtml = (t: string): string =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/**
+ * Stable empty option dispatched while the lazy `parallel` modules are
+ * still loading — a module constant (not an inline `{}`) so the
+ * renderer's option-update effect does not thrash before
+ * {@link useRequiredEChartsFeature} reports ready.
+ */
+const EMPTY_PARALLEL_OPTION: EChartsOption = {};
+
 const ParallelCoordinatesChartInner = React.forwardRef<
   HTMLDivElement,
   Omit<ParallelCoordinatesChartProps, 'access' | 'accessReason'>
@@ -201,6 +209,13 @@ const ParallelCoordinatesChartInner = React.forwardRef<
   const isEmpty = !data || data.length === 0 || axes.length < 2;
   const fmt = valueFormatter ?? formatCompact;
 
+  // PR-X16b-prep: the `parallel` series + coordinate-system component
+  // are lazy-registered (bundle headroom), so hold the option back until
+  // ready and gate `echarts.init()` — ECharts snapshots layout/visual
+  // handlers at init time (Codex 019e337e).
+  const parallelFeature = useRequiredEChartsFeature('parallel', { enabled: !isEmpty });
+  const parallelFeatureReady = parallelFeature.status === 'ready';
+
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
   const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
@@ -226,7 +241,9 @@ const ParallelCoordinatesChartInner = React.forwardRef<
   });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Hold the option until BOTH data exists AND the lazy `parallel`
+    // modules have registered (see `parallelFeature` above).
+    if (isEmpty || !parallelFeatureReady) return null;
 
     const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
 
@@ -381,6 +398,7 @@ const ParallelCoordinatesChartInner = React.forwardRef<
     lineOpacity,
     lineWidth,
     isEmpty,
+    parallelFeatureReady,
     showLegend,
     animate,
     colors,
@@ -442,7 +460,10 @@ const ParallelCoordinatesChartInner = React.forwardRef<
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({
-    option: option ?? ({} as EChartsOption),
+    // Gate echarts.init() until the lazy `parallel` modules have
+    // registered — ECharts snapshots its layout/visual handlers at init.
+    enabled: parallelFeatureReady,
+    option: option ?? EMPTY_PARALLEL_OPTION,
     respectReducedMotion: true,
     onClick: guardChartCallback(handleClick, true),
   });

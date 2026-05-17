@@ -16,7 +16,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend, buildResponsiveGrid, buildResponsiveAxisLabel } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -144,6 +144,14 @@ const DEFAULT_PALETTE = [
 const escapeHtml = (t: string): string =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/**
+ * Stable empty option dispatched while the lazy `pictorialBar` series
+ * module is still loading — a module constant (not an inline `{}`) so
+ * the renderer's option-update effect does not thrash before
+ * {@link useRequiredEChartsFeature} reports ready.
+ */
+const EMPTY_PICTORIAL_BAR_OPTION: EChartsOption = {};
+
 const PictorialBarChartInner = React.forwardRef<
   HTMLDivElement,
   Omit<PictorialBarChartProps, 'access' | 'accessReason'>
@@ -181,6 +189,12 @@ const PictorialBarChartInner = React.forwardRef<
   const isHorizontal = orientation === 'horizontal';
   const fmt = valueFormatter ?? formatCompact;
 
+  // PR-X16b-prep: `pictorialBar` is lazy-registered (bundle headroom),
+  // so hold the option back until ready and gate `echarts.init()` —
+  // ECharts snapshots layout/visual handlers at init time (Codex 019e337e).
+  const pictorialFeature = useRequiredEChartsFeature('pictorialBar', { enabled: !isEmpty });
+  const pictorialFeatureReady = pictorialFeature.status === 'ready';
+
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
   const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
@@ -204,7 +218,9 @@ const PictorialBarChartInner = React.forwardRef<
   });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Hold the option until BOTH data exists AND the lazy `pictorialBar`
+    // module has registered (see `pictorialFeature` above).
+    if (isEmpty || !pictorialFeatureReady) return null;
 
     const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
     const categories = data.map((d) => d.label);
@@ -306,6 +322,7 @@ const PictorialBarChartInner = React.forwardRef<
   }, [
     data,
     isEmpty,
+    pictorialFeatureReady,
     isHorizontal,
     showGrid,
     showLegend,
@@ -355,7 +372,10 @@ const PictorialBarChartInner = React.forwardRef<
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({
-    option: option ?? ({} as EChartsOption),
+    // Gate echarts.init() until the lazy `pictorialBar` module has
+    // registered — ECharts snapshots layout/visual handlers at init.
+    enabled: pictorialFeatureReady,
+    option: option ?? EMPTY_PICTORIAL_BAR_OPTION,
     respectReducedMotion: true,
     onClick: guardChartCallback(handleClick, true),
   });

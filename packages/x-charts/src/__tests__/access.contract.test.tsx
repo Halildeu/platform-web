@@ -57,10 +57,19 @@ import {
   ensureGeoMapRegistered,
   __resetGeoMapRegistrationCacheForTests,
 } from '../geo/registerGeoMap';
+import {
+  markEChartsFeatureRegisteredForTest,
+  resetEChartsFeatureRegistration,
+} from '../renderers/registerEChartsFeature';
 
 beforeEach(async () => {
   resetEChartsMock();
   installJsdomPolyfills();
+  // PR-X16b-prep: GraphChart lazy-registers the `graph` series via
+  // useRequiredEChartsFeature. Pre-mark it so the renderer is gated
+  // `enabled` from first render and the access-matrix click-listener
+  // assertions stay synchronous (echarts-mock stubs the renderer).
+  markEChartsFeatureRegisteredForTest('graph');
   // PR-X12c (Codex 019e2254 PR-X12c iter-2 fix): pre-register a stub
   // map so `GeoMap` cases in the parametric matrix don't skip render
   // due to missing registration. `await` (not fire-and-forget) so the
@@ -81,6 +90,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   restoreJsdomPolyfills();
+  resetEChartsFeatureRegistration();
 });
 
 /* ------------------------------------------------------------------ */

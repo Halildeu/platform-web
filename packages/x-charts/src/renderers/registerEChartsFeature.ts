@@ -12,10 +12,12 @@
  *
  * This module is the 2-D analogue of `renderers/gl/registerEChartsGL.ts`:
  * each feature has a loader that dynamic-imports ONLY that feature's
- * ECharts module via the direct `echarts/lib/chart/<name>` side-effect
- * path — NEVER the `echarts/charts` barrel. The barrel re-exports every
- * chart install fn, so a dynamic import of it risks code-splitting the
- * WHOLE chart set into the lazy chunk (Codex iter-2 must-fix). The
+ * ECharts module via the direct `echarts/lib/chart/<name>` series path
+ * (or `echarts/lib/component/<name>` for a coordinate-system component)
+ * — NEVER the `echarts/charts` / `echarts/components` barrels. A barrel
+ * re-exports every install fn, so a dynamic import of it risks
+ * code-splitting the WHOLE chart set into the lazy chunk (Codex iter-2
+ * must-fix). The
  * direct `echarts/lib/chart/tree.js` module ends with `use(install)`,
  * so importing it self-registers the series type on the shared
  * `echarts/core` namespace (the same singleton `registerECharts()`
@@ -25,7 +27,7 @@
  * triggered `ensureEChartsFeatureRegistered('tree')`, every later
  * TreeChart sees `tree` already registered.
  *
- * The dynamic `import('echarts/lib/chart/*')` calls are LOCKED to this
+ * The dynamic `import('echarts/lib/*')` calls are LOCKED to this
  * file by `__tests__/bundle-guard.test.ts` — that leakage guard is what
  * lets the bundle-size CI gate externalise the lazy paths without the
  * external mark masking an accidental static-import regression.
@@ -36,22 +38,63 @@
  */
 
 /**
- * Lazy-registrable ECharts features. One entry is added per PR-X16
- * campaign chart (X16a `tree` → X16b calendar → X16c polar → ...).
+ * Lazy-registrable ECharts features. Each key maps to a chart series OR
+ * a coordinate-system component module kept OUT of the eager
+ * `registerECharts()` list so the CONTRACT §8 `contractTotal` bundle
+ * stays under the 350 KB gzip cap:
+ *
+ *   - `tree`         — hierarchical node-link series (PR-X16a)
+ *   - `graph`        — network / entity-edge series (PR-X16b-prep)
+ *   - `parallel`     — parallel-coordinates series + coordinate system
+ *                      (PR-X16b-prep)
+ *   - `pictorialBar` — pictogram bar series (PR-X16b-prep)
+ *   - `candlestick`  — financial OHLC series (PR-X16b-prep)
+ *   - `boxplot`      — statistical box-and-whisker series (PR-X16b-prep)
+ *   - `calendar`     — calendar coordinate-system component (PR-X16b)
+ *
+ * The `graph`/`parallel`/`pictorialBar`/`candlestick`/`boxplot` charts
+ * are design-lab-only niche wrappers converted from eager registration
+ * to lazy by PR-X16b-prep — freeing the bundle headroom the rest of the
+ * PR-X16 depth campaign needs.
  */
-export type EChartsFeature = 'tree';
+export type EChartsFeature =
+  | 'tree'
+  | 'graph'
+  | 'parallel'
+  | 'pictorialBar'
+  | 'candlestick'
+  | 'boxplot'
+  | 'calendar';
 
 /**
  * Per-feature loaders. Each performs a side-effect dynamic import of the
- * direct `echarts/lib/chart/<name>` module — that file ends with
- * `use(install)`, so the series type self-registers on the shared
- * `echarts/core` namespace. The resolved module value is intentionally
- * ignored; the import is purely for its registration side effect.
+ * direct `echarts/lib/chart/<name>` series module (or
+ * `echarts/lib/component/<name>` for a coordinate-system component) —
+ * that file ends with `use(install)`, so the feature self-registers on
+ * the shared `echarts/core` namespace. The resolved module value is
+ * intentionally ignored; the import is purely for its registration side
+ * effect.
  *
- * Direct path, NOT `echarts/charts`: see the file header.
+ * `parallel` needs BOTH its series and the `parallel` coordinate-system
+ * component, so its loader awaits a two-module `Promise.all` — the
+ * feature flips to `registered` only once both side-effect imports run.
+ *
+ * Direct path, NOT the `echarts/charts` / `echarts/components` barrels:
+ * see the file header.
  */
 const FEATURE_LOADERS: Record<EChartsFeature, () => Promise<unknown>> = {
   tree: () => import('echarts/lib/chart/tree'),
+  graph: () => import('echarts/lib/chart/graph'),
+  // The `parallel` series renders into the `parallel` coordinate system;
+  // both the chart series and its component module must register.
+  parallel: () =>
+    Promise.all([import('echarts/lib/chart/parallel'), import('echarts/lib/component/parallel')]),
+  pictorialBar: () => import('echarts/lib/chart/pictorialBar'),
+  candlestick: () => import('echarts/lib/chart/candlestick'),
+  boxplot: () => import('echarts/lib/chart/boxplot'),
+  // `calendar` is a coordinate-system component — the `heatmap` series
+  // that renders into it stays eager (PR-X16b CalendarHeatmap).
+  calendar: () => import('echarts/lib/component/calendar'),
 };
 
 /** Features whose lazy module has finished registering. */

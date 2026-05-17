@@ -183,24 +183,43 @@ const ECHARTS_GL_EXTERNAL = [
 ];
 
 // PR-X16 ECharts Depth campaign — the depth charts (Tree, and later
-// Calendar/Polar/ThemeRiver/Gantt) are lazy-registered via
-// `renderers/registerEChartsFeature.ts`, which dynamic-imports the
-// direct `echarts/lib/chart/<name>` side-effect module. Like the
-// echarts-gl chunk, that lazy module is loaded ONLY on first mount of
-// the corresponding wrapper and is NOT part of the CONTRACT §7/§8
-// initial chart artifact a consumer ships up-front — so it stays
-// external in `contractTotal` (it is already external in
-// `wrapperOnly` via the blanket `echarts/*`).
+// Polar/ThemeRiver/Gantt) AND the PR-X16b-prep niche charts
+// (graph/parallel/pictorialBar/candlestick/boxplot) are lazy-registered
+// via `renderers/registerEChartsFeature.ts`, which dynamic-imports the
+// direct `echarts/lib/chart/<name>` series module (or
+// `echarts/lib/component/<name>` for a coordinate-system component).
+// Like the echarts-gl chunk, each lazy module is loaded ONLY on first
+// mount of the corresponding wrapper and is NOT part of the CONTRACT
+// §7/§8 initial chart artifact a consumer ships up-front — so it stays
+// external in `contractTotal` (it is already external in `wrapperOnly`
+// via the blanket `echarts/*`).
 //
 // HONESTY GUARD: `src/__tests__/bundle-guard.test.ts` locks every
-// dynamic `import('echarts/lib/chart/*')` to `registerEChartsFeature.ts`
-// and forbids any static import of those deep paths. Without that guard
+// dynamic `import('echarts/lib/*')` to `registerEChartsFeature.ts` and
+// forbids any static import of those deep paths. Without that guard
 // this external mark could silently mask a regression that pulls a
-// depth chart back into the eager graph; with it, such a regression
+// lazy chart back into the eager graph; with it, such a regression
 // fails the bundle-guard test instead.
 const ECHARTS_LAZY_FEATURE_EXTERNAL = [
+  // PR-X16a — TreeChart depth chart.
   "echarts/lib/chart/tree",
   "echarts/lib/chart/tree/*",
+  // PR-X16b-prep — niche charts converted from eager to lazy register.
+  "echarts/lib/chart/graph",
+  "echarts/lib/chart/graph/*",
+  "echarts/lib/chart/parallel",
+  "echarts/lib/chart/parallel/*",
+  "echarts/lib/component/parallel",
+  "echarts/lib/component/parallel/*",
+  "echarts/lib/chart/pictorialBar",
+  "echarts/lib/chart/pictorialBar/*",
+  "echarts/lib/chart/candlestick",
+  "echarts/lib/chart/candlestick/*",
+  "echarts/lib/chart/boxplot",
+  "echarts/lib/chart/boxplot/*",
+  // PR-X16b — calendar coordinate-system component (CalendarHeatmap).
+  "echarts/lib/component/calendar",
+  "echarts/lib/component/calendar/*",
 ];
 
 const WRAPPER_ONLY_EXTERNAL = [
@@ -251,6 +270,13 @@ const PROBE_CHART_WHITELIST = new Set([
   "Lines3D",
   // Faz 21.11 P1c — Globe wrapper. Codex thread `019e10f8` iter-1.
   "Globe",
+  // PR-X16b-prep — niche charts lazy-converted to free bundle headroom.
+  // The probe verifies each stays out of the eager `contractTotal` graph.
+  "GraphChart",
+  "ParallelCoordinatesChart",
+  "PictorialBarChart",
+  "CandlestickChart",
+  "BoxPlotChart",
 ]);
 
 /**

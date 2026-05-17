@@ -24,7 +24,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
-import { useEChartsRenderer } from './renderers';
+import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -194,6 +194,14 @@ const DEFAULT_PALETTE = [
 const escapeHtml = (t: string): string =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/**
+ * Stable empty option dispatched while the lazy `graph` series module
+ * is still loading — a module constant (not an inline `{}`) so the
+ * renderer's option-update effect does not thrash before
+ * {@link useRequiredEChartsFeature} reports ready.
+ */
+const EMPTY_GRAPH_OPTION: EChartsOption = {};
+
 const GraphChartInner = React.forwardRef<
   HTMLDivElement,
   Omit<GraphChartProps, 'access' | 'accessReason'>
@@ -235,6 +243,12 @@ const GraphChartInner = React.forwardRef<
   const isEmpty = !nodes || nodes.length === 0;
   const fmt = valueFormatter ?? formatCompact;
 
+  // PR-X16b-prep: `graph` is lazy-registered (bundle headroom), so hold
+  // the option back until ready and gate `echarts.init()` — ECharts
+  // snapshots layout/visual handlers at init time (Codex 019e337e).
+  const graphFeature = useRequiredEChartsFeature('graph', { enabled: !isEmpty });
+  const graphFeatureReady = graphFeature.status === 'ready';
+
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
   const breakpoint = useResponsiveBreakpoint(ownContainerRef);
 
@@ -259,7 +273,9 @@ const GraphChartInner = React.forwardRef<
   });
 
   const option = useMemo((): EChartsOption | null => {
-    if (isEmpty) return null;
+    // Hold the option until BOTH data exists AND the lazy `graph`
+    // module has registered (see `graphFeature` above).
+    if (isEmpty || !graphFeatureReady) return null;
 
     const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
 
@@ -419,6 +435,7 @@ const GraphChartInner = React.forwardRef<
     symbol,
     defaultSymbolSize,
     isEmpty,
+    graphFeatureReady,
     showLegend,
     animate,
     colors,
@@ -502,7 +519,10 @@ const GraphChartInner = React.forwardRef<
   });
 
   const { containerRef, instance: _instance } = useEChartsRenderer({
-    option: option ?? ({} as EChartsOption),
+    // Gate echarts.init() until the lazy `graph` module has registered —
+    // ECharts snapshots its layout/visual handler list at init time.
+    enabled: graphFeatureReady,
+    option: option ?? EMPTY_GRAPH_OPTION,
     respectReducedMotion: true,
     // Outer wrapper already passed a guarded `onDataPointClick`
     // (BarChart pattern). Install ECharts click listener only when the
