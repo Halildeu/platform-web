@@ -141,11 +141,20 @@ const INLINE_HELPER = [
 const AUTH_LOADSHARE_TOKEN = '__loadShare___mf_0_mfe_mf_1_auth__loadShare__';
 
 // Matches `import { r } from "...auth_loadShare..."` and the alias variant
-// `import { r as alias } from "...auth_loadShare..."`. The fail-closed audit
+// `import { r as alias } from "...auth_loadShare..."`. The modulepreload
+// helper export emitted by Vite/Rolldown is named `r` or `_` depending on
+// the chunk-graph shape, so both names are matched. The fail-closed audit
 // below catches any other shape (multi-specifier, namespace, re-export, etc.)
 // rather than silently leaving them in place.
 const AUTH_HELPER_IMPORT_RE =
-  /import\s*\{\s*r(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*\}\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+  /import\s*\{\s*(r|_)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*\}\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+
+// Diagnostic only: matches ANY import/export statement that references the
+// auth loadShare chunk. Used by the fail-closed audit to surface the exact
+// offending import shape in the error message, so an unhandled shape is
+// immediately actionable instead of needing a separate failOnLeak:false run.
+const ANY_AUTH_REF_RE =
+  /(?:\bimport\b|\bexport\b)[^;]*?["'][^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'][^;]*;?/g;
 
 export interface MfPreloadHelperIsolationOptions {
   /** Verbose logging of every rewrite. Defaults to false. */
@@ -179,8 +188,8 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
         AUTH_HELPER_IMPORT_RE.lastIndex = 0;
 
         let chunkRewrites = 0;
-        const rewritten = code.replace(AUTH_HELPER_IMPORT_RE, (_match, alias) => {
-          const localName = (alias as string | undefined) ?? 'r';
+        const rewritten = code.replace(AUTH_HELPER_IMPORT_RE, (_match, helperName, alias) => {
+          const localName = (alias as string | undefined) ?? (helperName as string);
           chunkRewrites += 1;
           return `const ${localName} = ${INLINE_HELPER};`;
         });
@@ -190,7 +199,6 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
           totalRewrites += chunkRewrites;
           rewrittenChunks.push(fileName);
           if (debug) {
-             
             console.log(
               `[mf-preload-helper-isolation] ${fileName}: inlined ${chunkRewrites} helper import(s)`,
             );
@@ -199,7 +207,6 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
       }
 
       if (debug) {
-         
         console.log(
           `[mf-preload-helper-isolation] total rewrites: ${totalRewrites} across ${rewrittenChunks.length} chunk(s)`,
         );
@@ -214,22 +221,34 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
       // legitimately dynamic-import auth_loadShare to materialise the share;
       // those calls are async and do not close the TLA runtime cycle.
       if (failOnLeak) {
-        const leaks: string[] = [];
+        const leaks: { fileName: string; refs: string[] }[] = [];
         for (const [fileName, chunk] of Object.entries(bundle)) {
           if (chunk.type !== 'chunk') continue;
           if (fileName.includes(AUTH_LOADSHARE_TOKEN)) continue;
           if (!fileName.includes('__loadShare__')) continue;
           if (chunk.code.includes(AUTH_LOADSHARE_TOKEN)) {
-            leaks.push(fileName);
+            ANY_AUTH_REF_RE.lastIndex = 0;
+            const refs = (chunk.code.match(ANY_AUTH_REF_RE) ?? []).map((s) =>
+              s.trim().slice(0, 300),
+            );
+            leaks.push({ fileName, refs });
           }
         }
         if (leaks.length > 0) {
-          const list = leaks.map((f) => `  - ${f}`).join('\n');
+          const list = leaks
+            .map(({ fileName, refs }) => {
+              const shown =
+                refs.length > 0
+                  ? refs.map((r) => `      ${r}`).join('\n')
+                  : '      (token present but no import/export statement matched — inspect the chunk)';
+              return `  - ${fileName}\n${shown}`;
+            })
+            .join('\n');
           throw new Error(
             `[mf-preload-helper-isolation] FAIL: ${leaks.length} loadShare chunk(s) still reference the auth loadShare token after rewrite:\n${list}\n` +
               `This is the back-edge that closes the auth ↔ design-system runtime cycle. ` +
               `The rewrite regex AUTH_HELPER_IMPORT_RE in scripts/vite-plugins/mf-preload-helper-isolation.ts ` +
-              `did not match the new import shape — extend it to cover the offending chunks above.`,
+              `did not match the offending import shape(s) shown above — extend it to cover them.`,
           );
         }
       }

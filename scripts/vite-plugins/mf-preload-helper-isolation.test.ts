@@ -86,6 +86,42 @@ describe('mfPreloadHelperIsolation — rewrite contract', () => {
     expect(code).toContain(`a(()=>import('./x.js'),[]);`);
   });
 
+  it('rewrites the `_`-named helper variant `import { _ as alias }`', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const routerName = `__mfe_internal__mfe_shell__loadShare__react_mf_2_router__loadShare__.mjs-RTR.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-GGG.js`;
+    const bundle = {
+      [authName]: makeChunk(authName, `export var _ = function(){};`),
+      [routerName]: makeChunk(
+        routerName,
+        `import{_ as a}from"./${authName}";\nexport var y=a(()=>import('./x.js'),[]);`,
+      ),
+    };
+
+    callGenerateBundle(plugin, bundle);
+
+    const code = (bundle[routerName] as { code: string }).code;
+    expect(code).not.toContain(AUTH_TOKEN);
+    expect(code).toMatch(/const a =\s*\(\(\)=>\{/);
+    expect(code).toContain(`a(()=>import('./x.js'),[]);`);
+  });
+
+  it('rewrites the no-alias `_`-named helper variant `import { _ }`', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const chunkName = `__mfe_internal__mfe_shell__loadShare__react_mf_2_router__loadShare__.mjs-HHH.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-III.js`;
+    const bundle = {
+      [authName]: makeChunk(authName, `export var _ = function(){};`),
+      [chunkName]: makeChunk(chunkName, `import { _ } from "./${authName}";\nexport var z = 1;`),
+    };
+
+    callGenerateBundle(plugin, bundle);
+
+    const code = (bundle[chunkName] as { code: string }).code;
+    expect(code).not.toContain(AUTH_TOKEN);
+    expect(code).toMatch(/const _ =\s*\(\(\)=>\{/);
+  });
+
   it('does not modify the auth loadShare chunk itself', () => {
     const plugin = mfPreloadHelperIsolation();
     const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-AUTH.js`;
