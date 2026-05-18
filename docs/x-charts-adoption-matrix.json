@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-05-17T15:13:39.218Z",
-  "totalConsumers": 43,
+  "generatedAt": "2026-05-18T19:03:17.771Z",
+  "totalConsumers": 44,
   "byBucket": {
     "production": 20,
     "test": 3,
-    "demo": 11,
+    "demo": 12,
     "package": 9
   },
   "entries": [
@@ -330,6 +330,20 @@
         "identifyTrends",
         "nlToChartSpec",
         "suggestChartType"
+      ],
+      "kinds": [
+        "ImportDeclaration"
+      ]
+    },
+    {
+      "file": "apps/mfe-shell/src/pages/admin/design-lab/widgets/chartPlaygroundModel.ts",
+      "app": "mfe-shell",
+      "bucket": "demo",
+      "subpaths": [
+        "@mfe/x-charts"
+      ],
+      "symbols": [
+        "ChartMarkup"
       ],
       "kinds": [
         "ImportDeclaration"

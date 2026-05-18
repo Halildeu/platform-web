@@ -87,6 +87,7 @@ import {
   getColorsPreset,
   getDecal,
   getEnum,
+  getMarkupsPreset,
   getNum,
   getOptNum,
   getOptStr,
@@ -532,6 +533,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'bar-chart')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -573,6 +576,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'line-chart')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -615,6 +620,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'area-chart')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
             density={getEnum(toggles, 'density', 'auto')}
@@ -705,6 +712,9 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             large={isOn(toggles, 'large', false)}
             largeThreshold={getOptNum(toggles, 'largeThreshold')}
             crossFilterRequired={isOn(toggles, 'crossFilterRequired', false)}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'scatter-chart')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
+            onBrushSelection={getCallbackPreset(getEnum(toggles, 'onBrushSelection', 'noop'))}
           />
         </PreviewBox>
       );
@@ -1226,6 +1236,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             onCellClick={getCallbackPreset(getEnum(toggles, 'onCellClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'heatmap-chart')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
@@ -1267,6 +1279,8 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'waterfall-chart')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}
@@ -2352,6 +2366,7 @@ const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
   data,
   valueFormatter,
   onBrushSelection,
+  markups: presetMarkups,
   ...rest
 }) => {
   // When the demo toggle is on we extend the dataset with a guaranteed
@@ -2375,6 +2390,17 @@ const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
     idPrefix: 'scatter-demo-anomaly',
     valueFormatter,
   });
+
+  // PR-X16 §4f.2: the anomaly overlay and the playground `markups`
+  // preset both feed the same `markups` prop — merge them so selecting
+  // a markup preset never silently drops the anomaly pills (and vice
+  // versa). Anomaly markups render first (lower in the overlay stack).
+  const mergedMarkups = React.useMemo(() => {
+    const base = showAnomalyPills ? anomalyMarkups : [];
+    const extra = presetMarkups ?? [];
+    const all = [...base, ...extra];
+    return all.length > 0 ? all : undefined;
+  }, [showAnomalyPills, anomalyMarkups, presetMarkups]);
 
   // PR-A2c-wire demo: status pill that reflects the most recent brush
   // selection. Lets the design-lab tester SEE that the brush wiring
@@ -2414,7 +2440,7 @@ const ScatterAnomalyDemoChart: React.FC<ScatterAnomalyDemoChartProps> = ({
         {...rest}
         data={augmentedData}
         valueFormatter={valueFormatter}
-        markups={showAnomalyPills ? anomalyMarkups : undefined}
+        markups={mergedMarkups}
         enableBrush={enableBrush}
         onBrushSelection={enableBrush ? handleBrushSelection : undefined}
       />
