@@ -23,7 +23,7 @@ import { requestsGrouping } from '../../../grid';
  * so the factories can reference them without hitting Temporal Dead
  * Zone when vitest hoists vi.mock() to the top of the file.
  */
-const { mockGet, mockPost, stubClient, authEpochHolder } = vi.hoisted(() => {
+const { mockGet, mockPost, stubClient, authEpochHolder, authReadyHolder } = vi.hoisted(() => {
   const mockGet = vi.fn();
   const mockPost = vi.fn();
   return {
@@ -33,6 +33,9 @@ const { mockGet, mockPost, stubClient, authEpochHolder } = vi.hoisted(() => {
     // PR-0.5c: mutable auth epoch so a test can bump it between two
     // fetchFilterValues() calls and assert the cache invalidates.
     authEpochHolder: { value: 1 },
+    // Codex 019e3ab8: mutable auth.ready() resolver so a test can make
+    // the gate pending or resolve {ok:false} between calls.
+    authReadyHolder: { ready: () => Promise.resolve({ ok: true }) },
   };
 });
 
@@ -42,6 +45,8 @@ vi.mock('../../../app/services/shell-services', () => ({
     auth: {
       getUser: () => ({ permissions: [] }),
       getEpoch: () => authEpochHolder.value,
+      // Codex 019e3ab8: protected reporting endpoints gate on auth.ready().
+      ready: () => authReadyHolder.ready(),
     },
   }),
 }));
@@ -67,6 +72,14 @@ import {
   fetchReportData,
   ReportQueryError,
 } from '../api';
+
+// Codex 019e3ab8: every test starts with a ready auth FSM so the new
+// auth-ready gate is transparent to the pre-existing suites; the gate
+// describe at the end of the file overrides authReadyHolder.ready
+// per test and this reset keeps the override from leaking.
+beforeEach(() => {
+  authReadyHolder.ready = () => Promise.resolve({ ok: true });
+});
 
 describe('requestsGrouping', () => {
   it('returns false on a flat request', () => {
@@ -821,5 +834,96 @@ describe('fetchFilterValues (PR-0.5c set filter values)', () => {
     expect(afterEpochBump.values).toEqual(['principal-2']);
     // restore for any later test
     authEpochHolder.value = 1;
+  });
+});
+
+/*
+ * Codex thread 019e3ab8 — auth-ready gate. The dynamic-report protected
+ * endpoints (fetchReportData flat + grouped, exportReportData,
+ * fetchFilterValues) await getShellServices().auth.ready() before
+ * issuing the HTTP request, so a request cannot leave before the shell
+ * auth FSM reaches transportReady and 401 ("JWT token zorunludur") —
+ * the live capability-remount race that left dynamic grids stuck on the
+ * loading overlay.
+ */
+describe('auth-ready gate (Codex 019e3ab8)', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    mockPost.mockReset();
+    clearFilterValuesCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fetchReportData (flat) skips the HTTP request and returns an empty page when auth is not ready', async () => {
+    authReadyHolder.ready = () => Promise.resolve({ ok: false, reason: 'unauthenticated' });
+    const req: GridRequest = { page: 1, pageSize: 50 };
+    const res = await fetchReportData('any', { search: '' }, req);
+    expect(res).toEqual({ rows: [], total: 0 });
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('fetchReportData (grouped) skips POST /query when auth is not ready', async () => {
+    authReadyHolder.ready = () => Promise.resolve({ ok: false, reason: 'failed' });
+    const req: GridRequest = {
+      page: 1,
+      pageSize: 50,
+      rowGroupCols: [{ id: 'category', field: 'category', displayName: 'Category' } as any],
+    };
+    const res = await fetchReportData('any', { search: '' }, req);
+    expect(res).toEqual({ rows: [], total: 0 });
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('fetchReportData awaits auth.ready() before issuing the HTTP request', async () => {
+    let releaseGate: (value: { ok: boolean }) => void = () => undefined;
+    authReadyHolder.ready = () =>
+      new Promise<{ ok: boolean }>((resolve) => {
+        releaseGate = resolve;
+      });
+    mockGet.mockResolvedValueOnce({
+      data: { items: [{ id: 1 }], total: 1, page: 1, pageSize: 50 },
+    });
+
+    const pending = fetchReportData('any', { search: '' }, { page: 1, pageSize: 50 });
+    // gate still pending → no HTTP request yet
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockGet).not.toHaveBeenCalled();
+
+    // gate resolves ok → the request proceeds
+    releaseGate({ ok: true });
+    const res = await pending;
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(res.rows).toHaveLength(1);
+  });
+
+  it('fetchFilterValues returns an empty, uncached result when auth is not ready', async () => {
+    authReadyHolder.ready = () => Promise.resolve({ ok: false, reason: 'unauthenticated' });
+    const res = await fetchFilterValues('any', 'city');
+    expect(res).toEqual({ values: [], limit: 0, truncated: false });
+    expect(mockGet).not.toHaveBeenCalled();
+
+    // the empty result is NOT cached: once auth is ready the next call
+    // hits the network.
+    authReadyHolder.ready = () => Promise.resolve({ ok: true });
+    mockGet.mockResolvedValueOnce({
+      data: { values: ['Ankara'], limit: 1000, truncated: false },
+    });
+    const second = await fetchFilterValues('any', 'city');
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(second.values).toEqual(['Ankara']);
+  });
+
+  it('exportReportData rejects with a user-facing error when auth is not ready', async () => {
+    authReadyHolder.ready = () => Promise.resolve({ ok: false, reason: 'unauthenticated' });
+    await expect(exportReportData('any', { search: '' }, 'csv')).rejects.toThrow(
+      /Oturum henüz hazır değil/,
+    );
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });

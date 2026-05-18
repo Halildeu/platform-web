@@ -132,6 +132,29 @@ const resolveHttpClient = (): ApiInstance => {
 };
 
 /**
+ * Auth-ready gate for protected reporting endpoints (Codex thread
+ * 019e3ab8). The AG Grid SSRM datasource fires {@link fetchReportData}
+ * on grid mount AND again on the capability-driven remount
+ * (ReportPage's grid `key` carries `capabilityKey`, which changes when
+ * `ensureColumnMeta` resolves). A request that leaves before the shell
+ * auth FSM reaches `transportReady` races the token and 401s
+ * ("JWT token zorunludur") — the grid then sticks on the loading
+ * overlay. This mirrors the `metadata-cache` auth.ready() gate so the
+ * `/data`, `/query`, `/export` and `/filter-values` calls wait out the
+ * auth FSM (including a transient `refreshing` phase) before issuing a
+ * protected request. Returns `false` fail-closed when shell-services
+ * is unwired or `auth.ready()` rejects.
+ */
+const isReportAuthReady = async (): Promise<boolean> => {
+  try {
+    const result = await getShellServices().auth.ready();
+    return result.ok === true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Resolves the active company id for report API calls.
  *
  * Source priority:
@@ -464,6 +487,20 @@ export const fetchReportData = async (
   defaultSort?: string,
   defaultDirection?: string,
 ): Promise<GridResponse<DynamicReportRow>> => {
+  /*
+   * Auth-ready gate (Codex thread 019e3ab8) — covers BOTH the flat
+   * `/data` path and the grouped `/query` path, since fetchReportDataGrouped
+   * is only reached from here. On a not-ready auth FSM, return an empty
+   * page instead of issuing a 401-bound request: ReportPage's SSRM
+   * datasource resolves params.success({ rowData: [], rowCount: 0 }) and
+   * the grid shows a clean empty state rather than a stuck loading
+   * overlay. `auth.ready()` waits out a transient `refreshing` phase, so
+   * the normal case proceeds with a valid token.
+   */
+  if (!(await isReportAuthReady())) {
+    return { rows: [], total: 0 };
+  }
+
   // PR-0.2 hardening: when the request expresses any grouping intent,
   // forward it via POST /query so the backend's grouped path handles
   // GROUP BY / aggregations / ancestor expansion. Flat requests stay on
@@ -564,6 +601,15 @@ export const exportReportData = async (
    */
   mode?: 'raw' | 'view',
 ): Promise<{ blob: Blob; filename: string }> => {
+  /*
+   * Auth-ready gate (Codex thread 019e3ab8). Export is a user action;
+   * a token-less request would 401 and produce a misleading empty
+   * file, so on a not-ready auth FSM throw a user-facing error — the
+   * ReportPage handleServerExport catch surfaces it as a toast.
+   */
+  if (!(await isReportAuthReady())) {
+    throw new Error('Oturum henüz hazır değil; export başlatılamadı. Lütfen tekrar deneyin.');
+  }
   const client = resolveHttpClient();
   const wireFormat = format === 'csv' ? 'csv' : 'xlsx';
   const extension = format === 'csv' ? 'csv' : 'xlsx';
@@ -803,6 +849,17 @@ export const fetchFilterValues = async (
   const cached = filterValuesCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.result;
+  }
+
+  /*
+   * Auth-ready gate (Codex thread 019e3ab8). A hot cache hit above is
+   * fine to serve (already-fetched, principal-scoped data); only the
+   * network path is gated. On a not-ready auth FSM return an empty
+   * result WITHOUT caching it, so the next dropdown open re-fetches
+   * once the auth FSM advances.
+   */
+  if (!(await isReportAuthReady())) {
+    return { values: [], limit: 0, truncated: false };
   }
 
   const client = resolveHttpClient();
