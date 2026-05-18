@@ -13,9 +13,27 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 vi.mock('@mfe/x-charts', () => {
+  // §4f.2: the sentinel also surfaces the `markups` / `onMarkupClick`
+  // props as data-attributes so the markup-preset forwarding tests can
+  // assert which overlay reached the underlying chart. Routing tests are
+  // unaffected — they only read `data-testid` + the title text node.
   const sentinel = (kind: string) => {
-    const Component: React.FC<{ title?: string }> = ({ title }) =>
-      React.createElement('div', { 'data-testid': `mock-${kind}` }, title);
+    const Component: React.FC<{
+      title?: string;
+      markups?: ReadonlyArray<{ type?: string }>;
+      onMarkupClick?: unknown;
+    }> = ({ title, markups, onMarkupClick }) =>
+      React.createElement(
+        'div',
+        {
+          'data-testid': `mock-${kind}`,
+          'data-markup-types': Array.isArray(markups)
+            ? markups.map((m) => m.type ?? '').join(',')
+            : '',
+          'data-has-markup-click': onMarkupClick ? '1' : '0',
+        },
+        title,
+      );
     Component.displayName = `Mock${kind}`;
     return Component;
   };
@@ -343,5 +361,78 @@ describe('ChartPreviewLive — switch routing per chart-id', () => {
     expect(screen.getByText(/Future chart: live preview yakında/)).toBeInTheDocument();
     // No mock component should have rendered.
     expect(screen.queryByTestId(/^mock-/)).toBeNull();
+  });
+});
+
+/* PR-X16 §4f.2 — markup overlay preset forwarding */
+
+describe('ChartPreviewLive — §4f.2 markup preset forwarding', () => {
+  const MARKUP_CHART_KINDS: Array<{ chartId: string; kind: string }> = [
+    { chartId: 'bar-chart', kind: 'bar' },
+    { chartId: 'line-chart', kind: 'line' },
+    { chartId: 'area-chart', kind: 'area' },
+    { chartId: 'heatmap-chart', kind: 'heatmap' },
+    { chartId: 'waterfall-chart', kind: 'waterfall' },
+  ];
+
+  it.each(MARKUP_CHART_KINDS)(
+    'chart "$chartId" forwards a threshold-line markup preset to the chart',
+    ({ chartId, kind }) => {
+      render(
+        <ChartPreviewLive
+          chartId={chartId}
+          chartName={`${chartId} preview`}
+          toggles={{ markups: 'threshold-line' }}
+        />,
+      );
+      expect(screen.getByTestId(`mock-${kind}`).getAttribute('data-markup-types')).toBe('line');
+    },
+  );
+
+  it('markups "none" (default) forwards no markup overlay', () => {
+    render(<ChartPreviewLive chartId="bar-chart" chartName="bar preview" />);
+    expect(screen.getByTestId('mock-bar').getAttribute('data-markup-types')).toBe('');
+  });
+
+  it('a highlight-band preset forwards an area markup', () => {
+    render(
+      <ChartPreviewLive
+        chartId="area-chart"
+        chartName="area preview"
+        toggles={{ markups: 'highlight-band' }}
+      />,
+    );
+    expect(screen.getByTestId('mock-area').getAttribute('data-markup-types')).toBe('area');
+  });
+
+  it('onMarkupClick preset forwards a click handler to the chart', () => {
+    render(
+      <ChartPreviewLive
+        chartId="bar-chart"
+        chartName="bar preview"
+        toggles={{ onMarkupClick: 'console-log' }}
+      />,
+    );
+    expect(screen.getByTestId('mock-bar').getAttribute('data-has-markup-click')).toBe('1');
+  });
+
+  it('onMarkupClick "noop" (default) forwards no handler', () => {
+    render(<ChartPreviewLive chartId="bar-chart" chartName="bar preview" />);
+    expect(screen.getByTestId('mock-bar').getAttribute('data-has-markup-click')).toBe('0');
+  });
+
+  it('scatter-chart merges the markup preset alongside the anomaly overlay path', () => {
+    // `useAnomalyOverlay` is mocked to return [] (real overlay shape is
+    // covered in x-charts' own tests) — so this asserts the preset markup
+    // is NOT swallowed by the anomaly `markups=` path: the pre-§4f.2
+    // `markups={anomalyMarkups}` wiring would have dropped it.
+    render(
+      <ChartPreviewLive
+        chartId="scatter-chart"
+        chartName="scatter preview"
+        toggles={{ markups: 'highlight-band' }}
+      />,
+    );
+    expect(screen.getByTestId('mock-scatter').getAttribute('data-markup-types')).toBe('area');
   });
 });

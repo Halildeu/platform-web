@@ -25,6 +25,7 @@
  *     turns animation off, the code becomes `animate={false}`).
  */
 import type { CSSProperties } from 'react';
+import type { ChartMarkup } from '@mfe/x-charts';
 
 /* ================================================================== */
 /*  Types                                                              */
@@ -1025,6 +1026,25 @@ export interface ComplexPreset {
 }
 
 /**
+ * PR-X16 §4f.2 (Codex thread `019e3af0` AGREE) — shared preset option
+ * lists for the markup-overlay wave. `markups` exposes a curated set of
+ * demo overlays; `onMarkupClick` / `onBrushSelection` reuse the standard
+ * side-effect callback presets (same shape as `onDataPointClick`).
+ */
+const MARKUP_PRESET_OPTIONS: ComplexPreset[] = [
+  { presetId: 'none', label: 'Yok (varsayılan)' },
+  { presetId: 'threshold-line', label: 'Eşik çizgisi' },
+  { presetId: 'highlight-band', label: 'Vurgu bandı' },
+  { presetId: 'kpi-label', label: 'KPI etiketi' },
+];
+
+const CALLBACK_PRESET_OPTIONS: ComplexPreset[] = [
+  { presetId: 'noop', label: 'no-op (default)' },
+  { presetId: 'console-log', label: 'console.log' },
+  { presetId: 'alert', label: 'browser alert' },
+];
+
+/**
  * Per `chartId.propName` preset metadata. When a complex prop has an entry
  * here, `buildDescriptor` upgrades its kind from `complex` (read-only) to
  * `preset` (live editable). Keep in sync with the resolver helpers + with
@@ -1172,6 +1192,41 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   ],
   // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
   // requires its own object resolver, deferred to PR-FE-Playground-4.
+
+  // ---- PR-X16 §4f.2 — markup overlay preset wave -------------------
+  // `markups` + `onMarkupClick` for the six genuine-markup charts:
+  // bar / line / area / scatter / heatmap / waterfall. These are every
+  // chart whose wrapper calls `useMarkupAdapter` AND fires `onMarkupClick`
+  // (verified in x-charts source — Codex thread `019e3af0`). The NO-OP
+  // markup charts — pie, gauge, radar, treemap, funnel, sankey, sunburst
+  // — are deliberately NOT enrolled: their wrappers accept `markups` for
+  // API consistency but render nothing, so a playground control there
+  // would be a dead no-op (would inflate the numerator dishonestly).
+  ...Object.fromEntries(
+    [
+      'bar-chart',
+      'line-chart',
+      'area-chart',
+      'scatter-chart',
+      'heatmap-chart',
+      'waterfall-chart',
+    ].map((cid) => [`${cid}.markups`, MARKUP_PRESET_OPTIONS] as [string, ComplexPreset[]]),
+  ),
+  ...Object.fromEntries(
+    [
+      'bar-chart',
+      'line-chart',
+      'area-chart',
+      'scatter-chart',
+      'heatmap-chart',
+      'waterfall-chart',
+    ].map((cid) => [`${cid}.onMarkupClick`, CALLBACK_PRESET_OPTIONS] as [string, ComplexPreset[]]),
+  ),
+  // Scatter brush selection — the catalog `onBrushSelection` callback.
+  // ChartPreviewLive already renders the brush UI via the `enableBrush`
+  // primitive; this preset makes the callback itself live-selectable so
+  // the playground tester can see console-log / alert side effects fire.
+  'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 };
 
 /**
@@ -1282,6 +1337,235 @@ export function getThresholdsPreset(
         { value: 70, color: '#f59e0b' },
         { value: 100, color: '#22c55e' },
       ];
+  }
+}
+
+/* ================================================================== */
+/*  PR-X16 §4f.2: markup overlay preset resolver                       */
+/* ================================================================== */
+
+/**
+ * Chart-aware markup anchor table. Each genuine-markup chart maps the
+ * three `markups` preset ids to one concrete `ChartMarkup` whose anchor
+ * lands inside that chart's `ChartPreviewLive` sample-data range:
+ *
+ *   - bar / line / area / waterfall — numeric value (y) axis, category x
+ *   - scatter — numeric x / y
+ *   - heatmap — categorical x / y; `LineMarkup.value` + `AreaMarkup.from`
+ *     / `to` take category strings (the `number | string` contract), and
+ *     `kpi-label` uses the heatmap-friendly `{ xLabel, yLabel }` anchor.
+ *
+ * Verified NO-OP-free against `adaptToEcharts` `DEFAULT_SUPPORT_MATRIX`
+ * (line / area / label full for all six) — Codex thread `019e3af0`.
+ */
+const MARKUP_PRESET_ANCHORS: Record<
+  string,
+  Record<'threshold-line' | 'highlight-band' | 'kpi-label', ChartMarkup>
+> = {
+  'bar-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'y',
+      value: 350,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Hedef 350', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'y',
+      from: 340,
+      to: 380,
+      opacity: 0.18,
+      label: { text: 'Üst bant' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Zirve',
+      anchor: { x: 'Mayıs', y: 390 },
+      background: '#0ea5e9',
+    },
+  },
+  'line-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'y',
+      value: 300,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Eşik 300', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'y',
+      from: 250,
+      to: 320,
+      opacity: 0.18,
+      label: { text: 'Bant' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Zirve',
+      anchor: { x: 'Mayıs', y: 390 },
+      background: '#0ea5e9',
+    },
+  },
+  'area-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'y',
+      value: 300,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Eşik 300', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'y',
+      from: 250,
+      to: 320,
+      opacity: 0.18,
+      label: { text: 'Bant' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Zirve',
+      anchor: { x: 'Mayıs', y: 390 },
+      background: '#0ea5e9',
+    },
+  },
+  'scatter-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'y',
+      value: 280,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Eşik 280', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'y',
+      from: 220,
+      to: 300,
+      opacity: 0.18,
+      label: { text: 'Bant' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'İlgi alanı',
+      anchor: { x: 355, y: 255 },
+      background: '#0ea5e9',
+    },
+  },
+  'heatmap-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'x',
+      value: 'Çar',
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Çarşamba' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'x',
+      from: 'Sal',
+      to: 'Per',
+      opacity: 0.18,
+      label: { text: 'Hafta ortası' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Yoğun',
+      anchor: { xLabel: 'Per', yLabel: 'Sabah' },
+      background: '#0ea5e9',
+    },
+  },
+  'waterfall-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'y',
+      value: 1250,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Hedef 1250', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'y',
+      from: 1200,
+      to: 1400,
+      opacity: 0.18,
+      label: { text: 'Bant' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Zirve',
+      anchor: { x: 'Hizmet', y: 1500 },
+      background: '#0ea5e9',
+    },
+  },
+};
+
+/**
+ * Resolve a `markups` preset id into a one-element `ChartMarkup[]` demo
+ * overlay for the given chart. Returns `undefined` for `none` / unknown
+ * chart / unknown preset id so the wrapper renders no overlay (the
+ * playground default is `none`).
+ */
+export function getMarkupsPreset(
+  presetId: string | undefined,
+  chartId: string,
+): ChartMarkup[] | undefined {
+  if (!presetId || presetId === 'none') return undefined;
+  const anchors = MARKUP_PRESET_ANCHORS[chartId];
+  if (!anchors) return undefined;
+  switch (presetId) {
+    case 'threshold-line':
+      return [anchors['threshold-line']];
+    case 'highlight-band':
+      return [anchors['highlight-band']];
+    case 'kpi-label':
+      return [anchors['kpi-label']];
+    default:
+      return undefined;
   }
 }
 

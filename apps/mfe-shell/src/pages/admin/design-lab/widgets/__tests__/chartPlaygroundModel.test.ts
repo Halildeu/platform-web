@@ -28,6 +28,7 @@ import {
   getEnumOptions,
   getFaq,
   getFeatureBadge,
+  getMarkupsPreset,
   getNum,
   getOptStr,
   getPerformanceGuidance,
@@ -956,11 +957,11 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
 
   // Per-chart preset-enabled complex prop count from COMPLEX_PROP_PRESETS.
   const PRESET_COUNTS: Record<string, number> = {
-    'bar-chart': 3, // valueFormatter, onDataPointClick, colors
-    'line-chart': 2, // valueFormatter, onDataPointClick
-    'area-chart': 2,
+    'bar-chart': 5, // valueFormatter, onDataPointClick, colors; §4f.2: + markups + onMarkupClick
+    'line-chart': 4, // valueFormatter, onDataPointClick; §4f.2: + markups + onMarkupClick
+    'area-chart': 4, // §4f.2: + markups + onMarkupClick
     'pie-chart': 2,
-    'scatter-chart': 3, // + colors
+    'scatter-chart': 6, // + colors; §4f.2: + markups + onMarkupClick + onBrushSelection
     'gauge-chart': 3, // + thresholds
     'radar-chart': 2,
     'treemap-chart': 3, // + onNodeClick
@@ -969,8 +970,8 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'polar-chart': 2, // PR-X16c: valueFormatter + onDataPointClick (PolarChart has no colors prop)
     'theme-river-chart': 2, // PR-X16d: valueFormatter + onDataPointClick (ThemeRiverChart has no colors prop)
     'gantt-chart': 2, // PR-X16e: valueFormatter + onDataPointClick (GanttChart has no colors prop)
-    'heatmap-chart': 4, // + onCellClick + colors
-    'waterfall-chart': 2,
+    'heatmap-chart': 6, // + onCellClick + colors; §4f.2: + markups + onMarkupClick
+    'waterfall-chart': 4, // §4f.2: + markups + onMarkupClick
     'funnel-chart': 2,
     'sankey-chart': 3, // + onNodeClick
     'sunburst-chart': 3, // + onNodeClick
@@ -1004,13 +1005,14 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // input props stay in the denominator, only making the gate more
   // conservative.
   //
-  // TRANSITIONAL GATE (PR-X16 §4f). Honest coverage today is 346 / 432
-  // ≈ 80.1%, below the 0.9 target. So the build stays green while the §4f
+  // TRANSITIONAL GATE (PR-X16 §4f). Honest coverage today is 359 / 432
+  // ≈ 83.1%, below the 0.9 target. So the build stays green while the §4f
   // coverage sprint runs, the legacy CI-continuity denominator (360) keeps
   // its own 0.9 gate; the honest 432 denominator is asserted next to it as
-  // a tracked, non-regressing truth. §4f.1 added +14 primitives; §4f.2–§4f.3
-  // raise the numerator further (346 → ≥389); §4f.4 removes the legacy gate
-  // and flips the hard 0.9 gate onto the honest denominator.
+  // a tracked, non-regressing truth. §4f.1 added +14 primitives, §4f.2 added
+  // +13 markup/brush presets; §4f.3 raises the numerator further
+  // (359 → ≥389); §4f.4 removes the legacy gate and flips the hard 0.9 gate
+  // onto the honest denominator.
   const ENROLLED_CHART_IDS = Object.keys(PRIMITIVE_LIVE_COUNTS);
   const CATALOG_PROP_COUNTS = countChartCatalogProps();
   const DERIVED_CATALOG_PROPS = ENROLLED_CHART_IDS.reduce(
@@ -1074,11 +1076,11 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     expect(DERIVED_CATALOG_PROPS).toBe(450);
     expect(EXCLUDED_SAMPLE_INPUTS).toBe(18);
     expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(432);
-    // Honest coverage today: 346 / 432 ≈ 80.1% — below the 0.9 target.
+    // Honest coverage today: 359 / 432 ≈ 83.1% — below the 0.9 target.
     // Anti-regression ratchet: coverage must not drop below the current
-    // measured level. §4f.2–§4f.3 raise both `EXPECTED_TOTAL` and this
-    // floor; §4f.4 turns this into the hard 0.9 gate.
-    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(346 / 432);
+    // measured level. §4f.3 raises both `EXPECTED_TOTAL` and this floor;
+    // §4f.4 turns this into the hard 0.9 gate.
+    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(359 / 432);
   });
 });
 
@@ -1182,5 +1184,103 @@ describe('chartPlaygroundModel — preset infrastructure (PR-B)', () => {
     };
     const d = buildDescriptor('bar-chart', formatterProp);
     expect(serialisePropToCode(d, 'currency-tl')).toBeNull();
+  });
+});
+
+/* ================================================================== */
+/*  PR-X16 §4f.2: markup overlay preset resolver                       */
+/* ================================================================== */
+
+describe('chartPlaygroundModel — markup preset resolver (§4f.2)', () => {
+  const GENUINE_MARKUP_CHARTS = [
+    'bar-chart',
+    'line-chart',
+    'area-chart',
+    'scatter-chart',
+    'heatmap-chart',
+    'waterfall-chart',
+  ];
+  const MARKUP_VARIANTS = ['threshold-line', 'highlight-band', 'kpi-label'];
+
+  it('getMarkupsPreset returns undefined for none / undefined / unenrolled chart / unknown id', () => {
+    expect(getMarkupsPreset('none', 'bar-chart')).toBeUndefined();
+    expect(getMarkupsPreset(undefined, 'bar-chart')).toBeUndefined();
+    // pie / gauge / radar / treemap / funnel / sankey / sunburst markups
+    // are a documented NO-OP — those charts are deliberately not enrolled.
+    expect(getMarkupsPreset('threshold-line', 'pie-chart')).toBeUndefined();
+    expect(getMarkupsPreset('threshold-line', 'gauge-chart')).toBeUndefined();
+    expect(getMarkupsPreset('does-not-exist', 'bar-chart')).toBeUndefined();
+  });
+
+  it('getMarkupsPreset resolves every variant for all six genuine-markup charts', () => {
+    for (const chartId of GENUINE_MARKUP_CHARTS) {
+      for (const preset of MARKUP_VARIANTS) {
+        const result = getMarkupsPreset(preset, chartId);
+        expect(result, `${chartId}.${preset}`).toHaveLength(1);
+        // Every markup carries a stable id (ECharts click-lookup key).
+        expect(result?.[0].id, `${chartId}.${preset} id`).toBeTruthy();
+      }
+    }
+  });
+
+  it('getMarkupsPreset threshold-line is a numeric y-axis LineMarkup for cartesian charts', () => {
+    for (const chartId of [
+      'bar-chart',
+      'line-chart',
+      'area-chart',
+      'scatter-chart',
+      'waterfall-chart',
+    ]) {
+      const m = getMarkupsPreset('threshold-line', chartId)?.[0];
+      expect(m?.type, chartId).toBe('line');
+      if (m?.type === 'line') {
+        expect(m.axis, chartId).toBe('y');
+        expect(typeof m.value, chartId).toBe('number');
+      }
+    }
+  });
+
+  it('getMarkupsPreset uses categorical-string anchors for the heatmap (no numeric axis)', () => {
+    const threshold = getMarkupsPreset('threshold-line', 'heatmap-chart')?.[0];
+    expect(threshold?.type).toBe('line');
+    if (threshold?.type === 'line') expect(typeof threshold.value).toBe('string');
+
+    const band = getMarkupsPreset('highlight-band', 'heatmap-chart')?.[0];
+    expect(band?.type).toBe('area');
+    if (band?.type === 'area') {
+      expect(typeof band.from).toBe('string');
+      expect(typeof band.to).toBe('string');
+    }
+
+    const label = getMarkupsPreset('kpi-label', 'heatmap-chart')?.[0];
+    expect(label?.type).toBe('label');
+    if (label?.type === 'label') {
+      expect(label.anchor).toHaveProperty('xLabel');
+      expect(label.anchor).toHaveProperty('yLabel');
+    }
+  });
+
+  it('buildDescriptor upgrades the markups complex prop to a preset control', () => {
+    const markupsProp: ChartProp = {
+      name: 'markups',
+      type: 'ChartMarkup[]',
+      required: false,
+      default: 'undefined',
+      description: '',
+    };
+    const d = buildDescriptor('bar-chart', markupsProp);
+    expect(d.kind).toBe('preset');
+    expect(d.liveEditable).toBe(true);
+    expect(d.defaultValue).toBe('none'); // first preset id
+    expect(d.options.map((o) => o.value)).toContain('threshold-line');
+  });
+
+  it('isLiveEditable is true for markup props on enrolled charts, false on NO-OP charts', () => {
+    expect(isLiveEditable('bar-chart', 'markups')).toBe(true);
+    expect(isLiveEditable('waterfall-chart', 'onMarkupClick')).toBe(true);
+    expect(isLiveEditable('scatter-chart', 'onBrushSelection')).toBe(true);
+    // pie / gauge markups are a NO-OP — not enrolled, so not live.
+    expect(isLiveEditable('pie-chart', 'markups')).toBe(false);
+    expect(isLiveEditable('gauge-chart', 'onMarkupClick')).toBe(false);
   });
 });
