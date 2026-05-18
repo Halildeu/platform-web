@@ -57,6 +57,49 @@ export type { SunburstChartProps } from '../SunburstChart';
 export type { TreemapChartProps } from '../TreemapChart';
 export type { WaterfallChartProps } from '../WaterfallChart';
 
+// PR-X6 / X7 / X10 / X12 / X16 campaign wrapper prop types (type-only).
+export type { TreeChartProps, TreeNode, TreeLayout, TreeOrient } from '../TreeChart';
+export type {
+  CalendarHeatmapProps,
+  CalendarHeatmapDataPoint,
+  CalendarHeatmapOrient,
+  CalendarHeatmapCellSize,
+  CalendarWeekStart,
+} from '../CalendarHeatmap';
+export type { PolarChartProps, PolarChartDataPoint, PolarSeriesType } from '../PolarChart';
+export type { ThemeRiverChartProps, ThemeRiverDataPoint } from '../ThemeRiverChart';
+export type { GanttChartProps, GanttTask } from '../GanttChart';
+export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
+export type { CandlestickChartProps, CandlestickDataPoint } from '../CandlestickChart';
+export type { PictorialBarChartProps, PictorialBarDataPoint } from '../PictorialBarChart';
+export type { ParallelCoordinatesChartProps, ParallelAxisDef } from '../ParallelCoordinatesChart';
+export type {
+  GraphChartProps,
+  GraphNode,
+  GraphEdge,
+  GraphCategory,
+  GraphLayoutMode,
+} from '../GraphChart';
+export type { GeoMapProps, GeoMapDatum, GeoMapVisualMap } from '../GeoMap';
+// GeoMap loader + overlay prop type surface (type-only — `export type`
+// erases the import, so the ECharts-runtime `registerGeoMap` module is
+// never pulled into this server-safe barrel).
+export type { GeoJsonFeatureCollection, GeoMapLoader } from '../geo/registerGeoMap';
+export type {
+  GeoOverlay,
+  GeoBubbleLayer,
+  GeoEffectScatterLayer,
+  GeoFlowLayer,
+  GeoFlowDatum,
+  GeoHeatmapLayer,
+  GeoHeatmapDatum,
+  GeoMarkerLayer,
+  GeoMarkerDatum,
+  GeoMarkerSymbol,
+  GeoMarkerPresetSymbol,
+  GeoPointDatum,
+} from '../geo/geoOverlayTypes';
+
 // Composite types
 export type { ChartContainerProps } from '../ChartContainer';
 export type { ChartDashboardProps } from '../ChartDashboard';
