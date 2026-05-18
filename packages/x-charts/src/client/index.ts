@@ -17,7 +17,7 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  17 chart wrappers (13 2D echarts-backed + 4 3D echarts-gl-backed) */
+/*  28 chart wrappers (24 2D echarts-backed + 4 3D echarts-gl-backed) */
 /* ------------------------------------------------------------------ */
 
 export { AreaChart } from '../AreaChart';
@@ -67,6 +67,61 @@ export { TreemapChart } from '../TreemapChart';
 export type { TreemapChartProps } from '../TreemapChart';
 export { WaterfallChart } from '../WaterfallChart';
 export type { WaterfallChartProps } from '../WaterfallChart';
+
+/* ------------------------------------------------------------------ */
+/*  PR-X6 / X7 / X10 / X12 / X16 campaign wrappers                     */
+/* ------------------------------------------------------------------ */
+
+export { TreeChart } from '../TreeChart';
+export type { TreeChartProps, TreeNode, TreeLayout, TreeOrient } from '../TreeChart';
+export { CalendarHeatmap } from '../CalendarHeatmap';
+export type {
+  CalendarHeatmapProps,
+  CalendarHeatmapDataPoint,
+  CalendarHeatmapOrient,
+  CalendarHeatmapCellSize,
+  CalendarWeekStart,
+} from '../CalendarHeatmap';
+export { PolarChart } from '../PolarChart';
+export type { PolarChartProps, PolarChartDataPoint, PolarSeriesType } from '../PolarChart';
+export { ThemeRiverChart } from '../ThemeRiverChart';
+export type { ThemeRiverChartProps, ThemeRiverDataPoint } from '../ThemeRiverChart';
+export { GanttChart } from '../GanttChart';
+export type { GanttChartProps, GanttTask } from '../GanttChart';
+export { BoxPlotChart } from '../BoxPlotChart';
+export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
+export { CandlestickChart } from '../CandlestickChart';
+export type { CandlestickChartProps, CandlestickDataPoint } from '../CandlestickChart';
+export { PictorialBarChart } from '../PictorialBarChart';
+export type { PictorialBarChartProps, PictorialBarDataPoint } from '../PictorialBarChart';
+export { ParallelCoordinatesChart } from '../ParallelCoordinatesChart';
+export type { ParallelCoordinatesChartProps, ParallelAxisDef } from '../ParallelCoordinatesChart';
+export { GraphChart } from '../GraphChart';
+export type {
+  GraphChartProps,
+  GraphNode,
+  GraphEdge,
+  GraphCategory,
+  GraphLayoutMode,
+} from '../GraphChart';
+export { GeoMap } from '../GeoMap';
+export type { GeoMapProps, GeoMapDatum, GeoMapVisualMap } from '../GeoMap';
+// GeoMap `overlays` prop type surface (type-only). Runtime registration
+// helpers `ensureGeoMapRegistered` / `isGeoMapRegistered` stay root-only.
+export type {
+  GeoOverlay,
+  GeoBubbleLayer,
+  GeoEffectScatterLayer,
+  GeoFlowLayer,
+  GeoFlowDatum,
+  GeoHeatmapLayer,
+  GeoHeatmapDatum,
+  GeoMarkerLayer,
+  GeoMarkerDatum,
+  GeoMarkerSymbol,
+  GeoMarkerPresetSymbol,
+  GeoPointDatum,
+} from '../geo/geoOverlayTypes';
 
 /* ------------------------------------------------------------------ */
 /*  Composite / dashboard surfaces (also client-only)                  */

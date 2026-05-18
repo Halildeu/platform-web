@@ -477,11 +477,11 @@ prop surface.
 
 Three package entry points:
 
-| Subpath                | Purpose                                                                                                                                                                                                                                         | RSC-safe?                                                 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `@mfe/x-charts`        | Default barrel — back-compat for current Vite consumers, re-exports everything from the workspace root                                                                                                                                          | No (mixed)                                                |
-| `@mfe/x-charts/client` | All 13 chart wrappers + composites (`ChartContainer`, `ChartDashboard`, `KPICard`, `StatWidget`, `ChartLegend`, `ChartToolbar`, `MiniChart`, `SparklineChart`). Every leaf carries `'use client'` at the top of the file plus the barrel itself | **No** — must be imported from a client component         |
-| `@mfe/x-charts/ssr`    | Public types (chart props, cross-filter / drill-down types, AccessControlledProps) + theme tokens. **No runtime React components.**                                                                                                             | **Yes** — safe to import from any RSC / Node-only context |
+| Subpath                | Purpose                                                                                                                                                                                                                                      | RSC-safe?                                                 |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `@mfe/x-charts`        | Default barrel — back-compat for current Vite consumers, re-exports everything from the workspace root                                                                                                                                       | No (mixed)                                                |
+| `@mfe/x-charts/client` | All chart wrappers + composites (`ChartContainer`, `ChartDashboard`, `KPICard`, `StatWidget`, `ChartLegend`, `ChartToolbar`, `MiniChart`, `SparklineChart`). Every leaf carries `'use client'` at the top of the file plus the barrel itself | **No** — must be imported from a client component         |
+| `@mfe/x-charts/ssr`    | Public types (chart props, cross-filter / drill-down types, AccessControlledProps) + theme tokens. **No runtime React components.**                                                                                                          | **Yes** — safe to import from any RSC / Node-only context |
 
 ### Client-Only (`'use client'`)
 
