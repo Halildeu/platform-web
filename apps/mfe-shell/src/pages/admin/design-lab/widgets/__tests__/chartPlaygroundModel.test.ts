@@ -1010,13 +1010,12 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // input props stay in the denominator, only making the gate more
   // conservative.
   //
-  // TRANSITIONAL GATE (PR-X16 §4f). Honest coverage today is 393 / 432
-  // ≈ 91.0% — clears the 0.9 target after §4f.3. The legacy CI-continuity
-  // denominator (360) keeps its own 0.9 gate until §4f.4; the honest 432
-  // denominator is asserted next to it as a tracked, non-regressing truth.
-  // §4f.1 added +14 primitives, §4f.2 +13 markup/brush presets, §4f.3 +34
-  // anomaly a11y presets (359 → 393); §4f.4 removes the legacy gate and
-  // flips the hard 0.9 gate onto the honest denominator.
+  // HARD GATE (PR-X16 §4f.4 — sprint close). The §4f coverage sprint
+  // landed: §4f.1 +14 primitives, §4f.2 +13 markup/brush presets, §4f.3
+  // +34 anomaly a11y presets. Honest live-surface coverage is now
+  // 393 / 432 ≈ 91.0%, clearing the 0.9 target — so the transitional
+  // legacy CI-continuity denominator (360) is removed and the gate runs
+  // directly on the honest AST-derived 432 denominator below.
   const ENROLLED_CHART_IDS = Object.keys(PRIMITIVE_LIVE_COUNTS);
   const CATALOG_PROP_COUNTS = countChartCatalogProps();
   const DERIVED_CATALOG_PROPS = ENROLLED_CHART_IDS.reduce(
@@ -1025,10 +1024,9 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   );
   const EXCLUDED_SAMPLE_INPUTS = ENROLLED_CHART_IDS.length;
   const HONEST_LIVE_SURFACE_DENOMINATOR = DERIVED_CATALOG_PROPS - EXCLUDED_SAMPLE_INPUTS;
-  // Legacy CI-continuity denominator (pre-§4f hand-maintained 378 − 18).
-  // Kept ONLY so this truth-scaffold PR does not break CI — removed in
-  // PR-X16 §4f.4.
-  const LEGACY_CI_CONTINUITY_DENOMINATOR = 360;
+  // Hard 0.9 coverage floor — ceil(0.9 × 432) = 389. EXPECTED_TOTAL must
+  // stay at or above this; the per-chart counts above are exact-locked.
+  const HARD_COVERAGE_FLOOR = Math.ceil(0.9 * HONEST_LIVE_SURFACE_DENOMINATOR);
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
   const PRESET_TOTAL = Object.values(PRESET_COUNTS).reduce((a, b) => a + b, 0);
   const EXPECTED_TOTAL = PRIMITIVE_TOTAL + PRESET_TOTAL;
@@ -1050,7 +1048,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     },
   );
 
-  it('system-wide live count — legacy CI-continuity gate (PR-X16 §4f.0)', () => {
+  it('system-wide live count — primitive + preset totals match the lock', () => {
     let primitives = 0;
     for (const chartId of Object.keys(PRIMITIVE_LIVE_COUNTS)) {
       primitives += LIVE_PROP_SUPPORT[chartId]?.size ?? 0;
@@ -1062,13 +1060,9 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
 
     const total = primitives + presets;
     expect(total).toBe(EXPECTED_TOTAL);
-    // Transitional gate — keeps CI green during the §4f coverage sprint;
-    // replaced by the honest gate (below) in PR-X16 §4f.4.
-    expect(LEGACY_CI_CONTINUITY_DENOMINATOR).toBe(360);
-    expect(total / LEGACY_CI_CONTINUITY_DENOMINATOR).toBeGreaterThanOrEqual(0.9);
   });
 
-  it('honest catalog-derived live-surface coverage (PR-X16 §4f truth scaffold)', () => {
+  it('honest catalog-derived live-surface coverage — hard 0.9 gate (PR-X16 §4f.4)', () => {
     // Every enrolled chart must resolve to a CHART_CATALOG entry — a
     // missing id would silently under-count the honest denominator.
     for (const id of ENROLLED_CHART_IDS) {
@@ -1080,10 +1074,13 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     expect(DERIVED_CATALOG_PROPS).toBe(450);
     expect(EXCLUDED_SAMPLE_INPUTS).toBe(18);
     expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(432);
-    // Honest coverage today: 393 / 432 ≈ 91.0% — clears the 0.9 target.
-    // Anti-regression ratchet: coverage must not drop below the current
-    // measured level. §4f.4 turns this into the hard 0.9 gate.
-    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(393 / 432);
+    // HARD GATE (PR-X16 §4f.4). Honest coverage is 393 / 432 ≈ 91.0%.
+    // EXPECTED_TOTAL must stay at/above the 0.9 floor (389 = ceil(0.9 ×
+    // 432)) and the ratio must clear 0.9 — a real coverage regression
+    // (removing a preset or primitive) now fails CI.
+    expect(HARD_COVERAGE_FLOOR).toBe(389);
+    expect(EXPECTED_TOTAL).toBeGreaterThanOrEqual(HARD_COVERAGE_FLOOR);
+    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(0.9);
   });
 });
 
