@@ -58,17 +58,6 @@ const mkProp = (over: Partial<ChartProp> = {}): ChartProp => ({
 /* ================================================================== */
 
 /**
- * AST-count the `props[]` array length for every chart in ChartDetail.tsx's
- * `CHART_CATALOG`. `CHART_CATALOG` is the single source of truth the Design
- * Lab API tab + playground descriptors render from, but it is a `const`
- * (not exported), so the count-lock reads it via the TypeScript AST.
- *
- * Exists because the old hand-maintained `FULL_CATALOG_PROPS` accumulator
- * silently drifted (378) below the real enrolled-chart catalog (450) — see
- * PR-X16 §4f. Deriving from the AST means the denominator can never drift
- * from `CHART_CATALOG` again.
- */
-/**
  * Resolve ChartDetail.tsx from disk. vitest's `import.meta.url` is not a
  * usable `file:` URL under the jsdom pool, so the file is located relative
  * to `process.cwd()` — the mfe-shell package dir when vitest runs there
@@ -84,6 +73,17 @@ function resolveChartDetailPath(): string {
   return found;
 }
 
+/**
+ * AST-count the `props[]` array length for every chart in ChartDetail.tsx's
+ * `CHART_CATALOG`. `CHART_CATALOG` is the single source of truth the Design
+ * Lab API tab + playground descriptors render from, but it is a `const`
+ * (not exported), so the count-lock reads it via the TypeScript AST.
+ *
+ * Exists because the old hand-maintained `FULL_CATALOG_PROPS` accumulator
+ * silently drifted (378) below the real enrolled-chart catalog (450) — see
+ * PR-X16 §4f. Deriving from the AST means the denominator can never drift
+ * from `CHART_CATALOG` again.
+ */
 function countChartCatalogProps(): Record<string, number> {
   const source = readFileSync(resolveChartDetailPath(), 'utf8');
   const sourceFile = ts.createSourceFile(
