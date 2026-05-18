@@ -317,3 +317,14 @@ export const normalizeServerSideRequest = (request: GridRequest): GridRequest =>
     groupKeys: [],
   };
 };
+
+// SSRM response contract normalizer (Codex thread 019e3a61). Shared
+// boundary that re-derives an AG Grid SSRM-correct { rowData, rowCount }
+// from the request window so divergent module total semantics cannot
+// strand rows. See ./ssrm-response.ts for the rationale.
+export {
+  normalizeSsrmSuccessPayload,
+  type NormalizeSsrmSuccessInput,
+  type SsrmResponseLike,
+  type SsrmSuccessPayload,
+} from './ssrm-response';
