@@ -4,15 +4,10 @@ import type { GridRequest, GridResponse } from '../../grid';
 // eslint-disable-next-line no-restricted-imports -- defensive fallback when getShellServices() unavailable (resolveHttp helper below)
 import { api } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
-// PR-X14 (Codex 019e26a9 post-impl high #2 + iter-2 must-fix): row
-// filtering must use the same alias normalization the map adapter does
-// — otherwise `location=İstanbul` filter drops the same İSTANBUL(Avrupa)
-// / İSTANBUL(Anadolu) rows the map correctly aggregates to TR-34. The
-// "Belirtilmemiş" filter must use the shared `isUnspecifiedLocationLabel`
-// helper so unmatched labels DON'T fall into the unspecified bucket
-// (Codex iter-2 absorb).
-import { findProvinceCodeByLabel } from './geo/tr-provinces';
-import { isUnspecifiedLocationLabel } from './utils/location-to-geomap';
+// Codex 019e3b64: the grid now reads the live backend dynamic report
+// `hr-demografik-yapi` through the shared dynamic-report helper, inheriting
+// its auth.ready() gate + 401/400 handling (PR #590).
+import { fetchReportData } from '../dynamic-report/api';
 
 // ---------------------------------------------------------------------------
 // Backend Dashboard API — canlı Workcube verisi
@@ -110,71 +105,155 @@ export const refreshLiveData = (): void => {
   _liveFetchPromise = null;
 };
 
+// ---------------------------------------------------------------------------
+// Grid rows — canlı Workcube verisi (backend dynamic report)
+// ---------------------------------------------------------------------------
+// Codex thread 019e3b64: the grid was mock-only (suppressed empty on prod).
+// It now reads `report-service` report `hr-demografik-yapi`. The backend
+// emits UPPER_SNAKE columns; this module maps each row onto the typed
+// camelCase HrDemographicRow.
+
+/**
+ * Backend report key. Intentionally equal to the hand-written module's
+ * route segment (`getSharedReport('hr-demografik-yapi').webRouteSegment`)
+ * so ReportingApp's `dynamicReports.filter(r => !allRoutes.has(r.key))`
+ * dedup suppresses the would-be duplicate dynamic route. The route-coupling
+ * test in `__tests__/api-filter.test.ts` locks this invariant.
+ */
+export const REPORT_KEY = 'hr-demografik-yapi';
+
+/**
+ * Grid colId (camelCase, from getColumnMeta) → backend report column
+ * (UPPER_SNAKE, from reports/hr-demografik-yapi.json). Drives sort-colId
+ * translation + column-level filter translation.
+ */
+const FIELD_TO_BACKEND: Record<string, string> = {
+  fullName: 'FULL_NAME',
+  department: 'DEPARTMENT_NAME',
+  position: 'POSITION_NAME',
+  gender: 'GENDER',
+  age: 'AGE',
+  education: 'EDUCATION',
+  employmentType: 'EMPLOYMENT_TYPE',
+  location: 'LOCATION',
+  tenureYears: 'TENURE_YEARS',
+  hireDate: 'HIRE_DATE',
+  generation: 'GENERATION',
+};
+
+const asText = (value: unknown): string => (value == null ? '' : String(value));
+const asNumber = (value: unknown): number => {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const GENDER_LABELS: ReadonlySet<string> = new Set(['Erkek', 'Kadın', 'Diğer']);
+const toGender = (value: unknown): HrDemographicRow['gender'] => {
+  const label = asText(value);
+  return (GENDER_LABELS.has(label) ? label : 'Diğer') as HrDemographicRow['gender'];
+};
+
+/** Map one backend (UPPER_SNAKE) row onto the typed HrDemographicRow. */
+const mapBackendRow = (row: Record<string, unknown>): HrDemographicRow => ({
+  id: asText(row.EMPLOYEE_ID),
+  fullName: asText(row.FULL_NAME),
+  department: asText(row.DEPARTMENT_NAME),
+  position: asText(row.POSITION_NAME),
+  gender: toGender(row.GENDER),
+  birthDate: '',
+  age: asNumber(row.AGE),
+  education: asText(row.EDUCATION),
+  maritalStatus: '',
+  employmentType: asText(row.EMPLOYMENT_TYPE),
+  hireDate: asText(row.HIRE_DATE),
+  tenureYears: asNumber(row.TENURE_YEARS),
+  location: asText(row.LOCATION),
+  isManager: false,
+  hasDisability: false,
+  militaryStatus: '',
+  generation: asText(row.GENERATION),
+  ethicsTrainingComplete: false,
+  positionLevel: '',
+});
+
+/**
+ * Build the AG Grid advancedFilter payload from the sidebar filters + any
+ * column-level filterModel, translating camelCase grid fields to the
+ * backend's UPPER_SNAKE columns. The backend `/data` endpoint has no
+ * `search` param, so `search` is folded in as `FULL_NAME contains`
+ * (v1 = name-only). department/location use `contains` (real Workcube
+ * values differ from the legacy mock dropdown); gender/employmentType
+ * use `equals` (the report's SQL emits those exact labels).
+ */
+const buildDemographicFilter = (
+  filters: HrDemographicFilters,
+  gridFilterModel?: Record<string, unknown> | null,
+): Record<string, unknown> => {
+  const model: Record<string, unknown> = {};
+
+  // Column-level AG Grid filters first (camelCase colId → backend column).
+  for (const [colId, spec] of Object.entries(gridFilterModel ?? {})) {
+    const backend = FIELD_TO_BACKEND[colId];
+    if (backend) model[backend] = spec;
+  }
+
+  const textFilter = (type: 'contains' | 'equals', filter: string) => ({
+    filterType: 'text',
+    type,
+    filter,
+  });
+  const sidebarValue = (raw: unknown): string => {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    return value && value !== 'all' ? value : '';
+  };
+
+  const search = sidebarValue(filters.search);
+  if (search) model.FULL_NAME = textFilter('contains', search);
+
+  const department = sidebarValue(filters.department);
+  if (department) model.DEPARTMENT_NAME = textFilter('contains', department);
+
+  const location = sidebarValue(filters.location);
+  if (location) model.LOCATION = textFilter('contains', location);
+
+  const gender = sidebarValue(filters.gender);
+  if (gender) model.GENDER = textFilter('equals', gender);
+
+  const employmentType = sidebarValue(filters.employmentType);
+  if (employmentType) model.EMPLOYMENT_TYPE = textFilter('equals', employmentType);
+
+  return model;
+};
+
 export const fetchHrDemographicRows = async (
   filters: HrDemographicFilters,
   request: GridRequest,
 ): Promise<GridResponse<HrDemographicRow>> => {
-  // Grid still uses mock data (individual row data not available from dashboard API)
-  let filtered = [...mockRows];
+  // Translate the grid's camelCase sort colId(s) to the backend columns.
+  const sortModel = (request.sortModel ?? [])
+    .map((entry) => {
+      const colId = FIELD_TO_BACKEND[entry.colId];
+      return colId ? { colId, sort: entry.sort } : null;
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    filtered = filtered.filter(
-      (r) =>
-        r.fullName.toLowerCase().includes(q) ||
-        r.department.toLowerCase().includes(q) ||
-        r.position.toLowerCase().includes(q),
-    );
-  }
-  if (filters.department && filters.department !== 'all') {
-    filtered = filtered.filter((r) => r.department === filters.department);
-  }
-  if (filters.gender && filters.gender !== 'all') {
-    filtered = filtered.filter((r) => r.gender === filters.gender);
-  }
-  if (filters.location && filters.location !== 'all') {
-    // Codex 019e26a9 post-impl high #2: code-based comparison so the
-    // İstanbul filter accepts every row whose label aliases to TR-34
-    // (canonical "İstanbul", "İSTANBUL(Avrupa)", "İSTANBUL(Anadolu)",
-    // ASCII-folded variants). "Belirtilmemiş" stays a separate bucket
-    // that does NOT match any province filter.
-    const filterCode = findProvinceCodeByLabel(filters.location);
-    if (filterCode) {
-      filtered = filtered.filter((r) => findProvinceCodeByLabel(r.location) === filterCode);
-    } else if (isUnspecifiedLocationLabel(filters.location)) {
-      // Codex 019e26a9 post-impl iter-2 must-fix: "Belirtilmemiş"
-      // bucket must use the SAME semantic as the adapter so unmatched
-      // labels (e.g. "Atlantis", typos) do NOT also fall here. They
-      // surface separately via `unmatchedLabels` in the map adapter.
-      filtered = filtered.filter((r) => isUnspecifiedLocationLabel(r.location));
-    } else {
-      // Unknown filter value — fall back to legacy exact equality so
-      // pre-existing callers don't silently drop to "no results".
-      filtered = filtered.filter((r) => r.location === filters.location);
-    }
-  }
-  if (filters.employmentType && filters.employmentType !== 'all') {
-    filtered = filtered.filter((r) => r.employmentType === filters.employmentType);
-  }
+  const advancedFilter = buildDemographicFilter(filters, request.filterModel);
 
-  if (request.sortModel && request.sortModel.length > 0) {
-    const { colId, sort } = request.sortModel[0];
-    const dir = sort === 'desc' ? -1 : 1;
-    filtered.sort((a, b) => {
-      const aVal = (a as unknown as Record<string, unknown>)[colId];
-      const bVal = (b as unknown as Record<string, unknown>)[colId];
-      if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * dir;
-      return String(aVal ?? '').localeCompare(String(bVal ?? ''), 'tr') * dir;
-    });
-  }
+  // A fresh GridRequest — never mutate the caller's request (Codex 019e3b64).
+  const backendRequest: GridRequest = {
+    page: request.page,
+    pageSize: request.pageSize,
+    startRow: request.startRow,
+    endRow: request.endRow,
+    sortModel,
+    advancedFilter: JSON.stringify(advancedFilter),
+  };
 
-  const pageSize = request.pageSize ?? 50;
-  const page = request.page ?? 1;
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize;
+  // `fetchReportData` carries the auth.ready() gate + 401/400 handling.
+  const res = await fetchReportData(REPORT_KEY, { search: '' }, backendRequest, 'FULL_NAME', 'asc');
 
   return {
-    rows: filtered.slice(start, end),
-    total: filtered.length,
+    rows: res.rows.map((row) => mapBackendRow(row as Record<string, unknown>)),
+    total: res.total,
   };
 };

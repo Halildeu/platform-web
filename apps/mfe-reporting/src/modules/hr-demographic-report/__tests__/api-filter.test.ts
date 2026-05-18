@@ -1,28 +1,37 @@
 /**
- * fetchHrDemographicRows — location-filter regression tests.
- *
- * Codex 019e26a9 post-impl iter-2 must-fix: filter behaviour must
- * agree with the map adapter:
- *   1. Canonical "İstanbul" filter MUST include İSTANBUL(Avrupa) and
- *      İSTANBUL(Anadolu) split rows (which the map adapter aggregates
- *      to TR-34). Earlier `r.location === filters.location` exact
- *      equality dropped these silently.
- *   2. "Belirtilmemiş" filter MUST only catch rows that the adapter
- *      treats as unspecified — NOT every row that fails the alias
- *      lookup. Unmatched labels (typos, new provinces, etc.) surface
- *      via the chart adapter's `unmatchedLabels`, not the grid's
- *      Belirtilmemiş bucket.
+ * fetchHrDemographicRows — live backend wiring tests (Codex thread
+ * 019e3b64). The İK demografik grid was mock-only and rendered empty on
+ * prod/testai; it now reads the `report-service` dynamic report
+ * `hr-demografik-yapi` through the shared dynamic-report `fetchReportData`
+ * helper. These tests pin:
+ *   1. the request goes to GET /v1/reports/hr-demografik-yapi/data;
+ *   2. UPPER_SNAKE backend columns map onto the typed HrDemographicRow;
+ *   3. sidebar filters translate into a backend-column advancedFilter;
+ *   4. the grid's camelCase sort colId translates to the backend column;
+ *   5. the auth.ready() gate (inherited from fetchReportData / PR #590)
+ *      short-circuits to an empty page;
+ *   6. the backend report key === the capability route segment, so
+ *      ReportingApp's dynamic-report dedup suppresses the duplicate.
  */
-import { describe, it, expect } from 'vitest';
-import { fetchHrDemographicRows } from '../api';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+const { mockGet, authReady } = vi.hoisted(() => ({
+  mockGet: vi.fn(),
+  authReady: { ok: true },
+}));
+
+vi.mock('../../../app/services/shell-services', () => ({
+  getShellServices: () => ({
+    http: { get: mockGet, post: vi.fn() },
+    // fetchReportData gates on auth.ready().ok (Codex 019e3ab8 / PR #590).
+    auth: { ready: () => Promise.resolve({ ok: authReady.ok }) },
+  }),
+}));
+
+import { fetchHrDemographicRows, REPORT_KEY } from '../api';
+import { getSharedReport } from '@platform/capabilities';
 import type { HrDemographicFilters } from '../types';
 import type { GridRequest } from '../../../grid';
-
-const baseRequest: GridRequest = {
-  page: 1,
-  pageSize: 1000,
-  sortModel: [],
-};
 
 const emptyFilters: HrDemographicFilters = {
   search: '',
@@ -31,79 +40,118 @@ const emptyFilters: HrDemographicFilters = {
   employmentType: 'all',
   gender: 'all',
   ageGroup: 'all',
+  dateRange: null,
 };
 
-describe('fetchHrDemographicRows — location filter (PR-X14 regression)', () => {
-  it('İstanbul filter includes İSTANBUL(Avrupa) + İSTANBUL(Anadolu) split labels', async () => {
-    const response = await fetchHrDemographicRows(
-      { ...emptyFilters, location: 'İstanbul' },
-      baseRequest,
-    );
+const baseRequest: GridRequest = { page: 1, pageSize: 50 };
 
-    // Mock data Phase 1 seeds each label at least once, so split rows
-    // exist; Phase 2 adds weighted-random fill. The filter must surface
-    // every row whose `findProvinceCodeByLabel` resolves to TR-34.
-    const labels = response.rows.map((r) => r.location);
-    expect(labels).toContain('İstanbul');
-    expect(labels).toContain('İSTANBUL(Avrupa)');
-    expect(labels).toContain('İSTANBUL(Anadolu)');
+const backendRow = (id: number): Record<string, unknown> => ({
+  EMPLOYEE_ID: id,
+  FULL_NAME: `Çalışan ${id}`,
+  DEPARTMENT_NAME: 'Finans',
+  POSITION_NAME: 'Uzman',
+  GENDER: 'Kadın',
+  AGE: 30 + id,
+  EDUCATION: 'Lisans',
+  EMPLOYMENT_TYPE: 'Tam Zamanlı',
+  LOCATION: 'İstanbul',
+  HIRE_DATE: '2020-01-15',
+  TENURE_YEARS: 5.2,
+  GENERATION: 'Y Kuşağı',
+});
+
+/** Parse the query string of the (single) recorded GET call. */
+const lastQuery = (): URLSearchParams => {
+  const url = String(mockGet.mock.calls[0][0]);
+  return new URLSearchParams(url.slice(url.indexOf('?') + 1));
+};
+
+describe('fetchHrDemographicRows — live backend wiring (Codex 019e3b64)', () => {
+  beforeEach(() => {
+    mockGet.mockReset();
+    authReady.ok = true;
   });
 
-  it('Belirtilmemiş filter returns ONLY unspecified rows', async () => {
-    const response = await fetchHrDemographicRows(
-      { ...emptyFilters, location: 'Belirtilmemiş' },
-      baseRequest,
-    );
+  it('calls GET /v1/reports/hr-demografik-yapi/data and maps UPPER_SNAKE → HrDemographicRow', async () => {
+    mockGet.mockResolvedValueOnce({ data: { items: [backendRow(1), backendRow(2)], total: 2 } });
 
-    // Every returned row must look unspecified — no canonical TR
-    // provinces, no "İstanbul" split labels.
-    const uniqueLabels = new Set(response.rows.map((r) => r.location));
-    // Common Belirtilmemiş forms: 'Belirtilmemiş', '' (empty), etc.
-    // Real rows in the mock seed set use 'Belirtilmemiş' (Phase 1).
-    expect(uniqueLabels.has('Belirtilmemiş')).toBe(true);
-    expect(uniqueLabels.has('İstanbul')).toBe(false);
-    expect(uniqueLabels.has('Ankara')).toBe(false);
-    expect(uniqueLabels.has('İSTANBUL(Avrupa)')).toBe(false);
+    const res = await fetchHrDemographicRows(emptyFilters, baseRequest);
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(String(mockGet.mock.calls[0][0])).toContain('/v1/reports/hr-demografik-yapi/data');
+    const query = lastQuery();
+    expect(query.get('page')).toBe('1');
+    expect(query.get('pageSize')).toBe('50');
+
+    expect(res.total).toBe(2);
+    expect(res.rows).toHaveLength(2);
+    expect(res.rows[0]).toMatchObject({
+      id: '1',
+      fullName: 'Çalışan 1',
+      department: 'Finans',
+      position: 'Uzman',
+      gender: 'Kadın',
+      age: 31,
+      education: 'Lisans',
+      employmentType: 'Tam Zamanlı',
+      location: 'İstanbul',
+      tenureYears: 5.2,
+      generation: 'Y Kuşağı',
+    });
   });
 
-  it('canonical Ankara filter excludes İstanbul + İzmir rows', async () => {
-    const response = await fetchHrDemographicRows(
-      { ...emptyFilters, location: 'Ankara' },
+  it('folds sidebar filters into the advancedFilter with backend column names', async () => {
+    mockGet.mockResolvedValueOnce({ data: { items: [], total: 0 } });
+
+    await fetchHrDemographicRows(
+      { ...emptyFilters, search: 'ali', department: 'Finans', gender: 'Erkek' },
       baseRequest,
     );
 
-    const labels = response.rows.map((r) => r.location);
-    expect(labels.length).toBeGreaterThan(0);
-    expect(labels.every((l) => l === 'Ankara' || l.toUpperCase().startsWith('ANKARA'))).toBe(true);
+    const advancedFilter = lastQuery().get('advancedFilter');
+    expect(advancedFilter).not.toBeNull();
+    const model = JSON.parse(advancedFilter as string);
+    expect(model.FULL_NAME).toEqual({ filterType: 'text', type: 'contains', filter: 'ali' });
+    expect(model.DEPARTMENT_NAME).toEqual({
+      filterType: 'text',
+      type: 'contains',
+      filter: 'Finans',
+    });
+    expect(model.GENDER).toEqual({ filterType: 'text', type: 'equals', filter: 'Erkek' });
+    // `all` / untouched sidebar fields produce no filter entry.
+    expect(model.LOCATION).toBeUndefined();
+    expect(model.EMPLOYMENT_TYPE).toBeUndefined();
   });
 
-  it('all filter returns every row regardless of label', async () => {
-    const response = await fetchHrDemographicRows(
-      { ...emptyFilters, location: 'all' },
-      baseRequest,
-    );
+  it('translates the grid camelCase sort colId to the backend column', async () => {
+    mockGet.mockResolvedValueOnce({ data: { items: [], total: 0 } });
 
-    const labels = new Set(response.rows.map((r) => r.location));
-    expect(labels.has('İstanbul')).toBe(true);
-    expect(labels.has('Ankara')).toBe(true);
-    expect(labels.has('Belirtilmemiş')).toBe(true);
-    expect(labels.has('İSTANBUL(Avrupa)')).toBe(true);
+    await fetchHrDemographicRows(emptyFilters, {
+      ...baseRequest,
+      sortModel: [{ colId: 'tenureYears', sort: 'desc' }],
+    });
+
+    expect(JSON.parse(lastQuery().get('sort') as string)).toEqual([
+      { colId: 'TENURE_YEARS', sort: 'desc' },
+    ]);
   });
 
-  it('İzmir filter (ASCII-folded variant) accepts IZMIR canonicalised rows', async () => {
-    const response = await fetchHrDemographicRows(
-      { ...emptyFilters, location: 'IZMIR' },
-      baseRequest,
-    );
+  it('short-circuits to an empty page without a request when auth is not ready', async () => {
+    authReady.ok = false;
 
-    // Filter alias normalises IZMIR → TR-35 → matches all İzmir rows.
-    const labels = response.rows.map((r) => r.location);
-    expect(labels.length).toBeGreaterThan(0);
-    for (const label of labels) {
-      // Each surviving row's label, when aliased, must equal TR-35
-      // — but the simple expectation is: contains İzmir or IZMIR or
-      // some normalized form thereof.
-      expect(label.toUpperCase().replace(/İ/g, 'I')).toContain('IZMIR');
-    }
+    const res = await fetchHrDemographicRows(emptyFilters, baseRequest);
+
+    expect(res).toEqual({ rows: [], total: 0 });
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+});
+
+describe('hr-demografik-yapi route ↔ backend key coupling (dedup guard, Codex 019e3b64)', () => {
+  it('backend report key equals the capability route segment so ReportingApp suppresses the dynamic duplicate', () => {
+    // ReportingApp dedup: dynamicReports.filter(r => !allRoutes.has(r.key)).
+    // allRoutes carries the hand-written module route (= webRouteSegment).
+    // If these drift apart a duplicate /admin/reports menu entry appears.
+    expect(REPORT_KEY).toBe('hr-demografik-yapi');
+    expect(getSharedReport('hr-demografik-yapi').webRouteSegment).toBe(REPORT_KEY);
   });
 });

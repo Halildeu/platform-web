@@ -5,14 +5,6 @@ import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
 import type { HrDemographicFilters, HrDemographicRow } from './types';
 import { fetchHrDemographicRows } from './api';
 import DemographicDashboard from './DemographicDashboard';
-// PR-X14 (Codex 019e26a9 iter-2 must-fix #4): filter dropdown parity
-// with the expanded mock + alias coverage. 81 canonical TR il
-// + Belirtilmemiş bucket. İstanbul Avrupa/Anadolu split labels are
-// preserved in the drawer breakdown (provinceDetails.sourceLabels);
-// the filter UI exposes the canonical "İstanbul" entry only —
-// `fetchHrDemographicRows` server-side equality compares the
-// normalised province name, not the split sub-region.
-import { TR_PROVINCES } from './geo/tr-provinces';
 
 const sharedReport = getSharedReport('hr-demografik-yapi');
 
@@ -55,45 +47,29 @@ export const hrDemographicReportModule: ReportModule<HrDemographicFilters, HrDem
             onChange={(e) => setFieldValue('search', e.target.value)}
           />
         </label>
+        {/* Codex 019e3b64: department + location are free-text "contains"
+            filters now that the grid reads live Workcube data — the legacy
+            hardcoded dropdowns were seeded for the mock dataset and would
+            never match real Workcube department/city values. */}
         <label className={labelClass}>
           <span>{t('reports.hrDemographic.filters.department')}</span>
-          <select
+          <input
             data-testid="report-filter-department"
             className={inputClass}
-            value={values.department ?? 'all'}
+            value={values.department && values.department !== 'all' ? values.department : ''}
+            placeholder={t('reports.hrDemographic.filters.department')}
             onChange={(e) => setFieldValue('department', e.target.value)}
-          >
-            <option value="all">{t('reports.filters.all')}</option>
-            <option value="Finans">Finans</option>
-            <option value="İnsan Kaynakları">İnsan Kaynakları</option>
-            <option value="Bilgi Teknolojileri">Bilgi Teknolojileri</option>
-            <option value="Satış">Satış</option>
-            <option value="Pazarlama">Pazarlama</option>
-            <option value="Üretim">Üretim</option>
-            <option value="Hukuk">Hukuk</option>
-            <option value="Lojistik">Lojistik</option>
-          </select>
+          />
         </label>
         <label className={labelClass}>
           <span>{t('reports.hrDemographic.filters.location')}</span>
-          <select
+          <input
             data-testid="report-filter-location"
             className={inputClass}
-            value={values.location ?? 'all'}
+            value={values.location && values.location !== 'all' ? values.location : ''}
+            placeholder={t('reports.hrDemographic.filters.location')}
             onChange={(e) => setFieldValue('location', e.target.value)}
-          >
-            <option value="all">{t('reports.filters.all')}</option>
-            {/* PR-X14: 81 TR provinces (sorted by plate code) +
-                Belirtilmemiş bucket. Sourced from canonical
-                TR_PROVINCES dataset so adapter + filter share one
-                source of truth. */}
-            <option value="Belirtilmemiş">Belirtilmemiş</option>
-            {TR_PROVINCES.map((p) => (
-              <option key={p.code} value={p.name}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          />
         </label>
         <label className={labelClass}>
           <span>{t('reports.hrDemographic.filters.gender')}</span>
