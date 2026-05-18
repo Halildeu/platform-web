@@ -848,53 +848,31 @@ function BulletChart({
 }
 
 // ---------------------------------------------------------------------------
-// Progress Bar — PR-X11 migration.
-// Header HTML stays for label/value composition; the bar body now uses
-// XBarChart with `showBackground` (track) so the widget participates in
-// theme/decal/a11y plumbing instead of an animated raw <div>.
+// ChartEmpty — honest "no data" placeholder for a live-wired chart whose
+// backend query returned zero rows (Codex 019e3c78: empty live data must
+// read as "Veri yok", not a [MOCK] label and not a fabricated number).
 // ---------------------------------------------------------------------------
-function ProgressBar({
-  label,
-  value,
-  target,
-  unit = '%',
-}: {
-  label: string;
-  value: number;
-  target: number;
-  unit?: string;
-}) {
-  const color =
-    value >= target
-      ? 'var(--state-success-text)'
-      : value >= target * 0.8
-        ? 'var(--state-warning-text)'
-        : 'var(--state-error-text)';
-
+function ChartEmpty({ variant = 'empty' }: { variant?: 'empty' | 'loading' | 'missing' }) {
+  // Codex 019e3c78: "id /charts response'unda yok" (config/deploy drift) ≠
+  // "id var, 0 satır" (gerçek veri yok) ≠ henüz yükleniyor.
+  const text =
+    variant === 'loading'
+      ? 'Yükleniyor…'
+      : variant === 'missing'
+        ? 'Grafik bu sürümde mevcut değil'
+        : 'Veri yok';
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: 4,
-        }}
-      >
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-          {value}
-          {unit}
-        </span>
-      </div>
-      <XBarChart
-        data={[{ label: '', value, color }]}
-        orientation="horizontal"
-        showBackground
-        size="sm"
-        valueAxisMax={target}
-        valueFormatter={(v) => `${v}${unit}`}
-      />
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 120,
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+      }}
+    >
+      {text}
     </div>
   );
 }
@@ -1024,11 +1002,10 @@ function SalaryTrendChart({
         }
       }
     }
-    const useMock = trendPoints.length === 0;
-    const points = useMock ? [8.2, 7.5, 7.1, 6.8, 6.3, 5.9] : trendPoints.map((p) => p.gap);
-    const lbls = useMock
-      ? ['Q1-25', 'Q2-25', 'Q3-25', 'Q4-25', 'Q1-26', 'Q2-26']
-      : trendPoints.map((p) => p.label);
+    // Codex 019e3c78: no hardcoded mock series — empty trendData renders an
+    // empty trend (honest "no data") rather than a fabricated gap curve.
+    const points = trendPoints.map((p) => p.gap);
+    const lbls = trendPoints.map((p) => p.label);
     return {
       series: [
         {
@@ -1061,7 +1038,7 @@ function SalaryTrendChart({
 // ---------------------------------------------------------------------------
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ gridColumn: 'span 3', marginTop: 24, marginBottom: 8 }}>
+    <div style={{ gridColumn: '1 / -1', marginTop: 24, marginBottom: 8 }}>
       <h2
         style={{
           fontSize: 16,
@@ -1132,6 +1109,25 @@ const DemographicDashboard: React.FC = () => {
       if (chart && chart.data && chart.data.length > 0) return chart.data;
     }
     return null;
+  };
+
+  // Helper: chart id canlı /charts response'unda VAR mı (rows boş olsa da).
+  // Codex 019e3c78: "id response'ta yok" (config/deploy drift) ile "id var
+  // ama 0 satır" (gerçek 'Veri yok') durumlarını ayırmak için.
+  const hasLiveChart = (chartId: string): boolean =>
+    !!liveCharts && liveCharts.some((c) => c.id === chartId);
+
+  // Helper: canlıya bağlı bir chart kartının gövdesini render eder — veri
+  // varsa chart, yoksa loading / config-drift / "Veri yok" empty-state.
+  const renderLiveChart = (
+    chartId: string,
+    render: (data: Array<{ label: string; value: number }>) => React.ReactNode,
+  ): React.ReactNode => {
+    const data = getChartData(chartId);
+    if (data) return render(data);
+    if (dataSource === 'loading') return <ChartEmpty variant="loading" />;
+    if (!hasLiveChart(chartId)) return <ChartEmpty variant="missing" />;
+    return <ChartEmpty variant="empty" />;
   };
 
   // Helper: chart başlığına [MOCK] etiketi ekle — canlı veri yoksa
@@ -1360,11 +1356,11 @@ const DemographicDashboard: React.FC = () => {
               canonical İkamet Şehri lives in the HC-2 row below. */}
         </div>
 
-        {/* ── ROW 4: Bullet Charts + Etik Uyum ────────────────── */}
+        {/* ── ROW 4: Yönetici / Çalışan Oranları ──────────────── */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: '1fr',
             gap: 16,
             marginBottom: 16,
           }}
@@ -1412,12 +1408,6 @@ const DemographicDashboard: React.FC = () => {
               target={15}
               max={30}
             />
-          </ChartCard>
-          <ChartCard title={chartTitle('Etik ve Uyum')}>
-            <ProgressBar label="Etik Egitim Tamamlama" value={88} target={95} />
-            <ProgressBar label="Veri Gizliligi Uyumu" value={92} target={100} />
-            <ProgressBar label="Davranis Kurallari Onayi" value={96} target={100} />
-            <ProgressBar label="Anti-Yolsuzluk Belgesi" value={78} target={90} />
           </ChartCard>
         </div>
 
@@ -1602,50 +1592,29 @@ const DemographicDashboard: React.FC = () => {
           </ChartCard>
         </div>
 
-        {/* ── ROW 8: Etik & Uyum (detayli) ─────────────────────── */}
+        {/* ── ROW 8: Etik & Uyum ──────────────────────────────── */}
+        {/* Codex 019e3b64/019e3c78: wired to live Workcube dashboard charts.
+            The Veri Gizliliği Uyumu / İhbar Hattı Başvuru / Davranış Kuralları
+            Onayı / Anti-Yolsuzluk Belgesi metrics were removed — no Workcube
+            source. Empty live data renders an explicit "Veri yok" state. */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gap: 16,
             marginBottom: 16,
           }}
         >
           <SectionHeader>Etik & Uyum</SectionHeader>
-          <ChartCard title={chartTitle('Etik Metrikler')}>
-            <ProgressBar
-              label="Etik Egitim Tamamlama"
-              value={summary.ethicsTrainingRate}
-              target={95}
-            />
-            <ProgressBar
-              label="Veri Gizliligi Uyumu"
-              value={summary.dataPrivacyComplianceRate}
-              target={100}
-            />
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-              Ihbar Hatti Basvuru (12 ay):{' '}
-              <strong style={{ color: 'var(--text-primary)', fontSize: 18 }}>
-                {summary.whistleblowerCases}
-              </strong>
-            </div>
+          <ChartCard title="Etik Egitim Katilimi">
+            {renderLiveChart('ethics-training-attendance', (d) => (
+              <VerticalBarChart data={d} />
+            ))}
           </ChartCard>
-          <ChartCard title={chartTitle('Disiplin Islemleri')}>
-            <VerticalBarChart data={summary.disciplinaryActions} />
-          </ChartCard>
-          <ChartCard title={chartTitle('Uyum Ozeti')}>
-            <BulletChart
-              label="Etik Egitim"
-              actual={summary.ethicsTrainingRate}
-              target={95}
-              max={100}
-            />
-            <BulletChart
-              label="Veri Gizliligi"
-              actual={summary.dataPrivacyComplianceRate}
-              target={100}
-              max={100}
-            />
+          <ChartCard title="Disiplin Islemleri">
+            {renderLiveChart('disciplinary-actions', (d) => (
+              <VerticalBarChart data={d} />
+            ))}
           </ChartCard>
         </div>
 
@@ -1659,26 +1628,17 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <SectionHeader>Maas & Esitlik</SectionHeader>
-          <ChartCard title={chartTitle('Cinsiyet Maas Karsilastirma', 'salary-by-gender')}>
-            <HorizontalBarChart
-              data={getChartData('salary-by-gender') ?? summary.avgSalaryByGender}
-            />
+          <ChartCard title="Cinsiyet Maas Karsilastirma">
+            {renderLiveChart('salary-by-gender', (d) => (
+              <HorizontalBarChart data={d} />
+            ))}
           </ChartCard>
-          <ChartCard title={chartTitle('Maas Farki', 'salary-by-gender')}>
-            {(() => {
-              const salData = getChartData('salary-by-gender');
-              const male =
-                salData?.find((d) => d.label === 'Erkek')?.value ??
-                summary.avgSalaryByGender.find((d) => d.label === 'Erkek')?.value ??
-                0;
+          <ChartCard title="Maas Farki">
+            {renderLiveChart('salary-by-gender', (salData) => {
+              const male = salData.find((d) => d.label === 'Erkek')?.value ?? 0;
               const female =
-                salData?.find((d) => d.label === 'Kadın' || d.label === 'Kadin')?.value ??
-                summary.avgSalaryByGender.find((d) => d.label === 'Kadın')?.value ??
-                0;
-              const gap =
-                male > 0
-                  ? Math.round(((male - female) / male) * 1000) / 10
-                  : summary.genderPayGapPercent;
+                salData.find((d) => d.label === 'Kadın' || d.label === 'Kadin')?.value ?? 0;
+              const gap = male > 0 ? Math.round(((male - female) / male) * 1000) / 10 : 0;
               return (
                 <>
                   <BulletChart
@@ -1694,10 +1654,12 @@ const DemographicDashboard: React.FC = () => {
                   </div>
                 </>
               );
-            })()}
+            })}
           </ChartCard>
-          <ChartCard title={chartTitle('Maas Farki Trendi', 'salary-gender-trend')}>
-            <SalaryTrendChart trendData={getChartData('salary-gender-trend')} />
+          <ChartCard title="Maas Farki Trendi">
+            {renderLiveChart('salary-gender-trend', (d) => (
+              <SalaryTrendChart trendData={d} />
+            ))}
           </ChartCard>
         </div>
       </DashboardSection>

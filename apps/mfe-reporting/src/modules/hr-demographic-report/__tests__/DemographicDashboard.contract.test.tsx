@@ -29,7 +29,7 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 import { FIXTURE_ROWS, FIXTURE_SUMMARY } from '../__fixtures__/demographic.fixture';
 
@@ -111,11 +111,23 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     );
   };
 
+  // GaugeChart + LineChart stubbed too — the real ECharts widgets crash
+  // under jsdom on the live re-render path (no canvas layout). The
+  // contract assertions only inspect Pie/Bar/Treemap/KPI capture.
+  const GaugeChart = (props: { title?: string }) => (
+    <div data-testid="x-gauge" data-title={props.title ?? ''} />
+  );
+  const LineChart = (props: { title?: string }) => (
+    <div data-testid="x-line" data-title={props.title ?? ''} />
+  );
+
   return {
     ...actual,
     PieChart,
     BarChart,
     TreemapChart,
+    GaugeChart,
+    LineChart,
     ChartContainer,
     KPICard,
   };
@@ -126,7 +138,7 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
 /* ---------------------------------------------------------------- */
 
 import DemographicDashboard from '../DemographicDashboard';
-import { getSummary } from '../api';
+import { getSummary, getLiveKPIs, getLiveCharts } from '../api';
 
 describe('DemographicDashboard — contract test against fixture summary', () => {
   beforeEach(() => {
@@ -319,5 +331,56 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     // Sum of male+female across buckets must equal headcount.
     const total = FIXTURE_SUMMARY.agePyramid.reduce((s, p) => s + p.male + p.female, 0);
     expect(total).toBe(FIXTURE_ROWS.length);
+  });
+
+  it('liveChartsWireToDashboard: ethics/salary cards render live backend data, not mock', async () => {
+    // Codex 019e3c78: prove the 5 live-wired charts (disciplinary-actions,
+    // ethics-training-attendance, salary-by-gender, salary-gender-trend)
+    // actually flow backend /charts data into the chart components — the
+    // dashboard useEffect resolves getLiveKPIs + getLiveCharts then
+    // re-renders with dataSource='live'.
+    vi.mocked(getLiveKPIs).mockResolvedValueOnce([
+      { id: 'headcount', title: 'Toplam Personel', value: 100, formattedValue: '100', trend: null },
+    ] as never);
+    vi.mocked(getLiveCharts).mockResolvedValueOnce([
+      {
+        id: 'disciplinary-actions',
+        title: 'Disiplin',
+        chartType: 'bar',
+        data: [{ label: 'Uyari', value: 7 }],
+      },
+      {
+        id: 'ethics-training-attendance',
+        title: 'Etik',
+        chartType: 'bar',
+        data: [{ label: 'Etik 101', value: 12 }],
+      },
+      {
+        id: 'salary-by-gender',
+        title: 'Maas',
+        chartType: 'bar',
+        data: [
+          { label: 'Erkek', value: 50000 },
+          { label: 'Kadın', value: 48000 },
+        ],
+      },
+    ] as never);
+
+    render(<DemographicDashboard />);
+
+    await waitFor(() => {
+      expect(
+        chartRegistry.some(
+          (c) => Array.isArray(c.data) && JSON.stringify(c.data).includes('Uyari'),
+        ),
+      ).toBe(true);
+    });
+
+    const findByData = (needle: string) =>
+      chartRegistry.find((c) => Array.isArray(c.data) && JSON.stringify(c.data).includes(needle));
+    // Each live chart's backend rows reached the chart component verbatim.
+    expect(findByData('Uyari')?.data).toEqual([{ label: 'Uyari', value: 7 }]);
+    expect(findByData('Etik 101')?.data).toEqual([{ label: 'Etik 101', value: 12 }]);
+    expect(findByData('50000')?.data).toContainEqual({ label: 'Erkek', value: 50000 });
   });
 });
