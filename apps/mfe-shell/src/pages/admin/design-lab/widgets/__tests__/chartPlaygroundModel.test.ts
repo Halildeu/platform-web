@@ -934,11 +934,11 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // counts (a) the LIVE_PROP_SUPPORT primitive set + (b) preset-mapped
   // complex props for that chartId.
   const PRIMITIVE_LIVE_COUNTS: Record<string, number> = {
-    'bar-chart': 15,
-    'line-chart': 16,
-    'area-chart': 17,
-    'pie-chart': 15,
-    'scatter-chart': 18, // PR-A2c-wire: + enableBrush
+    'bar-chart': 21, // PR-X16 §4f.1: + stacked/showBackground/barGap/barCategoryGap/valueAxisMin/valueAxisMax
+    'line-chart': 18, // PR-X16 §4f.1: + step/connectNulls
+    'area-chart': 19, // PR-X16 §4f.1: + step/connectNulls
+    'pie-chart': 16, // PR-X16 §4f.1: + roseType
+    'scatter-chart': 21, // PR-A2c-wire: + enableBrush; §4f.1: + large/largeThreshold/crossFilterRequired
     'gauge-chart': 19,
     'radar-chart': 16,
     'treemap-chart': 15,
@@ -1004,13 +1004,13 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // input props stay in the denominator, only making the gate more
   // conservative.
   //
-  // TRANSITIONAL GATE (PR-X16 §4f.0). Honest coverage today is 332 / 432
-  // ≈ 76.9%, below the 0.9 target. So the build stays green while the §4f
+  // TRANSITIONAL GATE (PR-X16 §4f). Honest coverage today is 346 / 432
+  // ≈ 80.1%, below the 0.9 target. So the build stays green while the §4f
   // coverage sprint runs, the legacy CI-continuity denominator (360) keeps
   // its own 0.9 gate; the honest 432 denominator is asserted next to it as
-  // a tracked, non-regressing truth. §4f.1–§4f.3 raise the numerator
-  // (332 → ≥389); §4f.4 removes the legacy gate and flips the hard 0.9
-  // gate onto the honest denominator.
+  // a tracked, non-regressing truth. §4f.1 added +14 primitives; §4f.2–§4f.3
+  // raise the numerator further (346 → ≥389); §4f.4 removes the legacy gate
+  // and flips the hard 0.9 gate onto the honest denominator.
   const ENROLLED_CHART_IDS = Object.keys(PRIMITIVE_LIVE_COUNTS);
   const CATALOG_PROP_COUNTS = countChartCatalogProps();
   const DERIVED_CATALOG_PROPS = ENROLLED_CHART_IDS.reduce(
@@ -1074,11 +1074,11 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     expect(DERIVED_CATALOG_PROPS).toBe(450);
     expect(EXCLUDED_SAMPLE_INPUTS).toBe(18);
     expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(432);
-    // Honest coverage today: 332 / 432 ≈ 76.9% — below the 0.9 target.
+    // Honest coverage today: 346 / 432 ≈ 80.1% — below the 0.9 target.
     // Anti-regression ratchet: coverage must not drop below the current
-    // measured level. §4f.1–§4f.3 raise both `EXPECTED_TOTAL` and this
+    // measured level. §4f.2–§4f.3 raise both `EXPECTED_TOTAL` and this
     // floor; §4f.4 turns this into the hard 0.9 gate.
-    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(332 / 432);
+    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(346 / 432);
   });
 });
 
