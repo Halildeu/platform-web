@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-18T19:03:17.771Z",
+  "generatedAt": "2026-05-18T19:49:25.608Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -343,6 +343,8 @@
         "@mfe/x-charts"
       ],
       "symbols": [
+        "AnomalyAnnouncementFormatter",
+        "AnomalySummary",
         "ChartMarkup"
       ],
       "kinds": [
