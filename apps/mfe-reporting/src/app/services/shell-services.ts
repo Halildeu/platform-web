@@ -112,11 +112,25 @@ let currentServices: RemoteShellServices | null = null;
 const fallbackServices = createNoopServices();
 
 export const configureShellServices = (services: Partial<RemoteShellServices>): void => {
+  /*
+   * Partial merge (Codex thread 019e3ab8). configureShellServices is
+   * called more than once: the shell wires the full set at route load
+   * ({ http: shellClient, auth, ... }), then ReportingProviders
+   * re-configures with the canonical `mfe_shell/services` object —
+   * which carries NO `http`. A plain overwrite would resolve the
+   * absent `http` to `fallbackServices.http` (the remote's own axios
+   * copy with only a synchronous window.__keycloak interceptor),
+   * silently downgrading an already-wired shell client. That was the
+   * root cause of the dynamic-report `/data` 401 auth-race. Each
+   * absent field now falls back to the CURRENT value first, then the
+   * fallback — so a later incomplete configure cannot regress a field.
+   */
+  const previous = currentServices ?? fallbackServices;
   currentServices = {
-    notify: services.notify ?? fallbackServices.notify,
-    telemetry: services.telemetry ?? fallbackServices.telemetry,
-    http: services.http ?? fallbackServices.http,
-    auth: services.auth ?? fallbackServices.auth,
+    notify: services.notify ?? previous.notify,
+    telemetry: services.telemetry ?? previous.telemetry,
+    http: services.http ?? previous.http,
+    auth: services.auth ?? previous.auth,
   };
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[mfe-reporting] shell services configured');

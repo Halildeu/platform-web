@@ -98,7 +98,7 @@ jobs:
         # cross-group module contract test (src/modules/__tests__) are
         # included here so the "satır yok" whack-a-mole regression guard
         # actually runs in the required gate, not just locally.
-        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts
+        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts src/app/services/__tests__/shell-services.test.ts
 
   token-drift-required:
     name: Token Drift (build --check)

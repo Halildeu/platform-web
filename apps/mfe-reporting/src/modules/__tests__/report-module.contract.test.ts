@@ -38,7 +38,8 @@ vi.mock('../../app/services/shell-services', () => ({
     auth: {
       getUser: () => ({ permissions: [] }),
       getEpoch: () => 1,
-      ready: () => Promise.resolve(),
+      // Codex 019e3ab8: dynamic-report fetchRows gates on auth.ready().ok.
+      ready: () => Promise.resolve({ ok: true }),
     },
   }),
 }));

@@ -20,6 +20,10 @@ vi.mock('../../../app/services/shell-services', () => ({
       get: mockGet,
       post: mockPost,
     },
+    // Codex 019e3ab8: fetchReportData now gates on auth.ready(); the
+    // tenant-gate tests need a ready auth FSM so the request reaches
+    // the backend and the 400 tenant_selection_required surfaces.
+    auth: { ready: () => Promise.resolve({ ok: true }) },
   }),
 }));
 
