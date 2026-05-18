@@ -1,5 +1,6 @@
 import type { HrCompensationFilters, HrCompensationRow } from './types';
 import type { GridRequest, GridResponse } from '../../grid';
+// eslint-disable-next-line no-restricted-imports -- `api` is the resolveHttp() fallback when getShellServices() is unavailable (e.g. unit tests)
 import { api, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
 
@@ -47,7 +48,9 @@ export interface DashboardChart {
   chartConfig?: Record<string, unknown>;
 }
 
-export type DashboardFilters = Partial<Pick<HrCompensationFilters, 'department' | 'gender' | 'collarType' | 'education'>>;
+export type DashboardFilters = Partial<
+  Pick<HrCompensationFilters, 'department' | 'gender' | 'collarType' | 'education'>
+>;
 
 const _cache = new Map<string, { kpis: DashboardKPI[] | null; charts: DashboardChart[] | null }>();
 const _pending = new Map<string, Promise<void>>();
@@ -65,9 +68,11 @@ function filterCacheKey(filters?: DashboardFilters): string {
 function buildDashboardFilterParams(filters?: DashboardFilters): string {
   if (!filters) return '';
   const params = new URLSearchParams();
-  if (filters.department && filters.department !== 'all') params.set('department', filters.department);
+  if (filters.department && filters.department !== 'all')
+    params.set('department', filters.department);
   if (filters.gender && filters.gender !== 'all') params.set('gender', filters.gender);
-  if (filters.collarType && filters.collarType !== 'all') params.set('collarType', filters.collarType);
+  if (filters.collarType && filters.collarType !== 'all')
+    params.set('collarType', filters.collarType);
   if (filters.education && filters.education !== 'all') params.set('education', filters.education);
   const str = params.toString();
   return str ? `&${str}` : '';
@@ -83,8 +88,12 @@ async function fetchDashboardData(timeRange = 'ytd', filters?: DashboardFilters)
       const client = resolveHttp();
       const filterQs = buildDashboardFilterParams(filters);
       const [kpiRes, chartRes] = await Promise.all([
-        client.get<DashboardKPI[]>(`/v1/dashboards/${DASHBOARD_KEY}/kpis?timeRange=${timeRange}${filterQs}`),
-        client.get<DashboardChart[]>(`/v1/dashboards/${DASHBOARD_KEY}/charts?timeRange=${timeRange}${filterQs}`),
+        client.get<DashboardKPI[]>(
+          `/v1/dashboards/${DASHBOARD_KEY}/kpis?timeRange=${timeRange}${filterQs}`,
+        ),
+        client.get<DashboardChart[]>(
+          `/v1/dashboards/${DASHBOARD_KEY}/charts?timeRange=${timeRange}${filterQs}`,
+        ),
       ]);
       const kpis = kpiRes.data && Array.isArray(kpiRes.data) ? kpiRes.data : null;
       const charts = chartRes.data && Array.isArray(chartRes.data) ? chartRes.data : null;
@@ -106,7 +115,9 @@ export const getLiveKPIs = async (filters?: DashboardFilters): Promise<Dashboard
   return _cache.get(filterCacheKey(filters))?.kpis ?? null;
 };
 
-export const getLiveCharts = async (filters?: DashboardFilters): Promise<DashboardChart[] | null> => {
+export const getLiveCharts = async (
+  filters?: DashboardFilters,
+): Promise<DashboardChart[] | null> => {
   await fetchDashboardData('ytd', filters);
   return _cache.get(filterCacheKey(filters))?.charts ?? null;
 };
@@ -126,7 +137,9 @@ export const getFilterOptions = async (filterKey: string): Promise<string[]> => 
   if (_filterOptionsCache.has(filterKey)) return _filterOptionsCache.get(filterKey)!;
   try {
     const client = resolveHttp();
-    const res = await client.get<string[]>(`/v1/dashboards/${DASHBOARD_KEY}/filter-options/${filterKey}`);
+    const res = await client.get<string[]>(
+      `/v1/dashboards/${DASHBOARD_KEY}/filter-options/${filterKey}`,
+    );
     const options = Array.isArray(res.data) ? res.data : [];
     _filterOptionsCache.set(filterKey, options);
     return options;
@@ -166,7 +179,11 @@ const buildAdvancedFilter = (
     merged.DEPARTMENT_NAME = { filterType: 'text', type: 'contains', filter: filters.department };
   }
   if (filters.collarType && filters.collarType !== 'all') {
-    merged.COLLAR_TYPE = { filterType: 'number', type: 'equals', filter: Number(filters.collarType) };
+    merged.COLLAR_TYPE = {
+      filterType: 'number',
+      type: 'equals',
+      filter: Number(filters.collarType),
+    };
   }
   if (filters.gender && filters.gender !== 'all') {
     merged.GENDER = { filterType: 'number', type: 'equals', filter: Number(filters.gender) };
@@ -211,21 +228,35 @@ export const fetchCompensationRows = async (
 ): Promise<GridResponse<HrCompensationRow>> => {
   try {
     const client = resolveHttp();
-    const response = await client.get<{ items?: HrCompensationRow[]; data?: HrCompensationRow[]; rows?: HrCompensationRow[]; total: number }>(
-      `/v1/reports/${REPORT_KEY}/data?${buildQueryString(filters, request)}`,
-    );
+    const response = await client.get<{
+      items?: HrCompensationRow[];
+      data?: HrCompensationRow[];
+      rows?: HrCompensationRow[];
+      total: number;
+    }>(`/v1/reports/${REPORT_KEY}/data?${buildQueryString(filters, request)}`);
     const rawData = response.data;
-    const rows = Array.isArray(rawData?.items) ? rawData.items
-      : Array.isArray(rawData?.data) ? rawData.data
-      : Array.isArray(rawData?.rows) ? rawData.rows
-      : [];
+    const rows = Array.isArray(rawData?.items)
+      ? rawData.items
+      : Array.isArray(rawData?.data)
+        ? rawData.data
+        : Array.isArray(rawData?.rows)
+          ? rawData.rows
+          : [];
     const apiTotal = typeof rawData?.total === 'number' ? rawData.total : rows.length;
     const pageSize = request.pageSize ?? 50;
-    const total = rows.length < pageSize ? rows.length : apiTotal;
+    const startRow = Math.max(0, ((request.page ?? 1) - 1) * pageSize);
+    /*
+     * SSRM contract (Codex thread 019e3a61): a short (non-full) block
+     * is the LAST block ⇒ exact total is `startRow + rows.length`. The
+     * previous code used a page-LOCAL count here, collapsing the
+     * rowCount on every non-first partial block. A full block keeps the
+     * backend total.
+     */
+    const total = rows.length < pageSize ? startRow + rows.length : apiTotal;
 
     return { rows, total };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Ücret verileri alınamadı';
-    throw new Error(msg);
+    throw new Error(msg, { cause: error });
   }
 };

@@ -10,6 +10,7 @@ import {
   EntityGridTemplate,
   buildEntityGridQueryParams,
   normalizeServerSideRequest,
+  normalizeSsrmSuccessPayload,
 } from '../../grid';
 import type { GridRequest, GridResponse, ColumnDef } from '../../grid';
 import type {
@@ -920,17 +921,27 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
             res.pivotResultColumns,
             lastPivotSignatureRef,
           );
-          if (pivotApplied.mode === 'explicit') {
-            params.success({ rowData: res.rows, rowCount: res.total });
-          } else if (pivotApplied.mode === 'fallback') {
-            params.success({
-              rowData: res.rows,
-              rowCount: res.total,
-              pivotResultFields: res.pivotResultFields,
-            });
-          } else {
-            params.success({ rowData: res.rows, rowCount: res.total });
-          }
+          /*
+           * SSRM response contract (Codex thread 019e3a61): re-derive an
+           * AG Grid-correct { rowData, rowCount } from the request
+           * window. The report modules carry divergent total semantics
+           * (page-local caps, whole-list returns) — forwarding the raw
+           * res.total stranded rows ("Sütunlar var, satır yok"). The
+           * normalizer is the single shared boundary; the module
+           * adapters are also fixed at source. pivotResultFields is
+           * re-attached only on the fallback registration path.
+           */
+          const successPayload = normalizeSsrmSuccessPayload({
+            startRow: ssrmRequest.startRow,
+            endRow: ssrmRequest.endRow,
+            res,
+          });
+          params.success({
+            ...successPayload,
+            ...(pivotApplied.mode === 'fallback'
+              ? { pivotResultFields: res.pivotResultFields }
+              : {}),
+          });
 
           /*
            * PR-0.5a (Codex threads 019e2c61 plan-time, 019e2ca8

@@ -76,7 +76,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Vitest workspace (jsdom)
         run: pnpm run test:workspace
-      - name: Vitest mfe-reporting dynamic-report (PR-0.2 reporting hardening)
+      - name: Vitest mfe-reporting SSRM response contract + dynamic-report
         # Root vitest.config.ts intentionally excludes apps/mfe-reporting
         # from the workspace project list (chart fixture isolation), so
         # tests added under that package wouldn't otherwise run in the
@@ -92,7 +92,13 @@ jobs:
         # to vitest is a separate cleanup PR; for now we keep this CI
         # step narrowly scoped so the PR-0.2 contract stays locked
         # without dragging unrelated tech debt into this gate.
-        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report
+        #
+        # SSRM response contract (Codex thread 019e3a61): the
+        # normalizeSsrmSuccessPayload helper unit test (src/grid) and the
+        # cross-group module contract test (src/modules/__tests__) are
+        # included here so the "satır yok" whack-a-mole regression guard
+        # actually runs in the required gate, not just locally.
+        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts
 
   token-drift-required:
     name: Token Drift (build --check)

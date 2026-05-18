@@ -1,4 +1,6 @@
+// eslint-disable-next-line no-restricted-imports -- axios is imported only for the isAxiosError type-guard; HTTP calls go through getShellServices().http
 import axios, { type AxiosError } from 'axios';
+// eslint-disable-next-line no-restricted-imports -- `api` is the resolveHttpClient() fallback when getShellServices() is unavailable (e.g. unit tests)
 import { api, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
 import type { GridRequest, GridResponse } from '../../grid';
@@ -99,9 +101,17 @@ export const fetchWeeklyAuditReport = async (
     );
     const events = Array.isArray(response.data?.events) ? response.data.events : [];
     const pageSize = request.pageSize ?? 50;
+    const startRow = Math.max(0, ((request.page ?? 1) - 1) * pageSize);
     const apiTotal = typeof response.data?.total === 'number' ? response.data.total : events.length;
-    /* Backend may report inflated total — cap to actual rows when page is not full */
-    const total = events.length < pageSize ? events.length : apiTotal;
+    /*
+     * SSRM contract (Codex thread 019e3a61): a short (non-full) block
+     * is the LAST block, so the exact global total is
+     * `startRow + rows.length`. The previous code dropped to a
+     * page-LOCAL count (`events.length`) here — on every non-first
+     * partial block that told AG Grid the dataset was tiny and hid the
+     * already-loaded rows. A full block keeps the backend total.
+     */
+    const total = events.length < pageSize ? startRow + events.length : apiTotal;
 
     return {
       rows: normalizeRows(events),
@@ -116,10 +126,12 @@ export const fetchWeeklyAuditReport = async (
         console.warn('[mfe-reporting/weekly-audit] traceId', traceId);
       }
       if (status === 401 || status === 403) {
-        throw new Error('Haftalık denetim özeti için yetki bulunmuyor');
+        throw new Error('Haftalık denetim özeti için yetki bulunmuyor', { cause: error });
       }
-      throw new Error(`Haftalık denetim verileri alınamadı (HTTP ${status ?? '??'})`);
+      throw new Error(`Haftalık denetim verileri alınamadı (HTTP ${status ?? '??'})`, {
+        cause: error,
+      });
     }
-    throw new Error('Haftalık denetim verileri alınamadı');
+    throw new Error('Haftalık denetim verileri alınamadı', { cause: error });
   }
 };

@@ -1,4 +1,6 @@
+// eslint-disable-next-line no-restricted-imports -- axios is imported only for the isAxiosError type-guard; HTTP calls go through getShellServices().http
 import axios, { AxiosError } from 'axios';
+// eslint-disable-next-line no-restricted-imports -- `api` is the resolveHttpClient() fallback when getShellServices() is unavailable (e.g. unit tests)
 import { api, type ApiInstance } from '@mfe/shared-http';
 import { getShellServices } from '../../app/services/shell-services';
 import type { GridRequest, GridResponse } from '../../grid';
@@ -67,7 +69,11 @@ const normalizeRows = (items: RoleDto[]): AccessRow[] =>
     updatedAt: item.lastModifiedAt ?? '',
   }));
 
-const compareValues = (left: string | number, right: string | number, direction: 'asc' | 'desc') => {
+const compareValues = (
+  left: string | number,
+  right: string | number,
+  direction: 'asc' | 'desc',
+) => {
   const result =
     typeof left === 'number' && typeof right === 'number'
       ? left - right
@@ -119,8 +125,20 @@ export const fetchAccessReport = async (
     const filteredRows = filterRows(normalizedRows, filters, request);
     const sortedRows = sortRows(filteredRows, request);
 
+    /*
+     * SSRM block window (Codex thread 019e3a61): /v1/roles has no
+     * backend pagination, so slice the sorted client-side list to the
+     * page AG Grid asked for. Without this every SSRM block received
+     * the entire list — block N duplicated block 0 and AG Grid's cache
+     * window accounting broke. `total` stays the full filtered count
+     * (the honest global total).
+     */
+    const pageSize = request.pageSize ?? 50;
+    const page = request.page ?? 1;
+    const startRow = Math.max(0, (page - 1) * pageSize);
+
     return {
-      rows: sortedRows,
+      rows: sortedRows.slice(startRow, startRow + pageSize),
       total: filteredRows.length,
     };
   } catch (error: unknown) {
@@ -132,10 +150,10 @@ export const fetchAccessReport = async (
         console.warn('[mfe-reporting/access] traceId', traceId);
       }
       if (status === 401 || status === 403) {
-        throw new Error('Erişim rolleri raporu için yetki bulunmuyor');
+        throw new Error('Erişim rolleri raporu için yetki bulunmuyor', { cause: error });
       }
-      throw new Error(`Erişim rolleri alınamadı (HTTP ${status ?? '??'})`);
+      throw new Error(`Erişim rolleri alınamadı (HTTP ${status ?? '??'})`, { cause: error });
     }
-    throw new Error('Erişim rolleri alınamadı');
+    throw new Error('Erişim rolleri alınamadı', { cause: error });
   }
 };
