@@ -120,7 +120,7 @@ are accent-IMMUNE:
 - `WaterfallChart` `increase` (success) and `decrease` (danger) — only
   the `total` color binds to accent primary
 
-The other chart wrappers use `effectivePalette` (from the resolved
+The other 10 chart wrappers use `effectivePalette` (from the resolved
 accent or the HC/Print theme builder) as the series color fallback.
 
 **Default-on a11y (Faz 21.5-B1/B2):** All chart wrappers compose with
