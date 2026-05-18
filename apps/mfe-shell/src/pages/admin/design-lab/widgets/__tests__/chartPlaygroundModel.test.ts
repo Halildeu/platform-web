@@ -17,6 +17,8 @@ import {
   encodeBase64Utf8,
   encodePlaygroundState,
   generatePlaygroundCode,
+  getAnomalyAnnouncementPreset,
+  getAnomalySummaryPreset,
   getBool,
   getCallbackPreset,
   getCategory,
@@ -956,25 +958,28 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   };
 
   // Per-chart preset-enabled complex prop count from COMPLEX_PROP_PRESETS.
+  // §4f.3 (+34): every enrolled chart except Gauge gains the anomaly a11y
+  // pair (anomalySummary + formatAnomalyAnnouncement) = +2 each across 17
+  // charts. Gauge has no anomaly catalog pair → unchanged.
   const PRESET_COUNTS: Record<string, number> = {
-    'bar-chart': 5, // valueFormatter, onDataPointClick, colors; §4f.2: + markups + onMarkupClick
-    'line-chart': 4, // valueFormatter, onDataPointClick; §4f.2: + markups + onMarkupClick
-    'area-chart': 4, // §4f.2: + markups + onMarkupClick
-    'pie-chart': 2,
-    'scatter-chart': 6, // + colors; §4f.2: + markups + onMarkupClick + onBrushSelection
-    'gauge-chart': 3, // + thresholds
-    'radar-chart': 2,
-    'treemap-chart': 3, // + onNodeClick
-    'tree-chart': 2, // PR-X16a: valueFormatter + onDataPointClick
-    'calendar-heatmap': 3, // PR-X16b: valueFormatter + onDataPointClick + colors
-    'polar-chart': 2, // PR-X16c: valueFormatter + onDataPointClick (PolarChart has no colors prop)
-    'theme-river-chart': 2, // PR-X16d: valueFormatter + onDataPointClick (ThemeRiverChart has no colors prop)
-    'gantt-chart': 2, // PR-X16e: valueFormatter + onDataPointClick (GanttChart has no colors prop)
-    'heatmap-chart': 6, // + onCellClick + colors; §4f.2: + markups + onMarkupClick
-    'waterfall-chart': 4, // §4f.2: + markups + onMarkupClick
-    'funnel-chart': 2,
-    'sankey-chart': 3, // + onNodeClick
-    'sunburst-chart': 3, // + onNodeClick
+    'bar-chart': 7, // vF, onDPC, colors; §4f.2: + markups/onMarkupClick; §4f.3: + anomaly pair
+    'line-chart': 6, // vF, onDPC; §4f.2: + markups/onMarkupClick; §4f.3: + anomaly pair
+    'area-chart': 6, // §4f.2: + markups/onMarkupClick; §4f.3: + anomaly pair
+    'pie-chart': 4, // vF, onDPC; §4f.3: + anomaly pair
+    'scatter-chart': 8, // + colors; §4f.2: + markups/onMarkupClick/onBrushSelection; §4f.3: + anomaly pair
+    'gauge-chart': 3, // + thresholds — no anomaly catalog pair, §4f.3 skips Gauge
+    'radar-chart': 4, // vF, onDPC; §4f.3: + anomaly pair
+    'treemap-chart': 5, // + onNodeClick; §4f.3: + anomaly pair
+    'tree-chart': 4, // PR-X16a: vF + onDPC; §4f.3: + anomaly pair
+    'calendar-heatmap': 5, // PR-X16b: vF + onDPC + colors; §4f.3: + anomaly pair
+    'polar-chart': 4, // PR-X16c: vF + onDPC; §4f.3: + anomaly pair
+    'theme-river-chart': 4, // PR-X16d: vF + onDPC; §4f.3: + anomaly pair
+    'gantt-chart': 4, // PR-X16e: vF + onDPC; §4f.3: + anomaly pair
+    'heatmap-chart': 8, // + onCellClick + colors; §4f.2: + markups/onMarkupClick; §4f.3: + anomaly pair
+    'waterfall-chart': 6, // §4f.2: + markups/onMarkupClick; §4f.3: + anomaly pair
+    'funnel-chart': 4, // vF, onDPC; §4f.3: + anomaly pair
+    'sankey-chart': 5, // + onNodeClick; §4f.3: + anomaly pair
+    'sunburst-chart': 5, // + onNodeClick; §4f.3: + anomaly pair
   };
 
   // ---- §4f live-surface coverage lock --------------------------------
@@ -1005,14 +1010,13 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // input props stay in the denominator, only making the gate more
   // conservative.
   //
-  // TRANSITIONAL GATE (PR-X16 §4f). Honest coverage today is 359 / 432
-  // ≈ 83.1%, below the 0.9 target. So the build stays green while the §4f
-  // coverage sprint runs, the legacy CI-continuity denominator (360) keeps
-  // its own 0.9 gate; the honest 432 denominator is asserted next to it as
-  // a tracked, non-regressing truth. §4f.1 added +14 primitives, §4f.2 added
-  // +13 markup/brush presets; §4f.3 raises the numerator further
-  // (359 → ≥389); §4f.4 removes the legacy gate and flips the hard 0.9 gate
-  // onto the honest denominator.
+  // TRANSITIONAL GATE (PR-X16 §4f). Honest coverage today is 393 / 432
+  // ≈ 91.0% — clears the 0.9 target after §4f.3. The legacy CI-continuity
+  // denominator (360) keeps its own 0.9 gate until §4f.4; the honest 432
+  // denominator is asserted next to it as a tracked, non-regressing truth.
+  // §4f.1 added +14 primitives, §4f.2 +13 markup/brush presets, §4f.3 +34
+  // anomaly a11y presets (359 → 393); §4f.4 removes the legacy gate and
+  // flips the hard 0.9 gate onto the honest denominator.
   const ENROLLED_CHART_IDS = Object.keys(PRIMITIVE_LIVE_COUNTS);
   const CATALOG_PROP_COUNTS = countChartCatalogProps();
   const DERIVED_CATALOG_PROPS = ENROLLED_CHART_IDS.reduce(
@@ -1076,11 +1080,10 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     expect(DERIVED_CATALOG_PROPS).toBe(450);
     expect(EXCLUDED_SAMPLE_INPUTS).toBe(18);
     expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(432);
-    // Honest coverage today: 359 / 432 ≈ 83.1% — below the 0.9 target.
+    // Honest coverage today: 393 / 432 ≈ 91.0% — clears the 0.9 target.
     // Anti-regression ratchet: coverage must not drop below the current
-    // measured level. §4f.3 raises both `EXPECTED_TOTAL` and this floor;
-    // §4f.4 turns this into the hard 0.9 gate.
-    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(359 / 432);
+    // measured level. §4f.4 turns this into the hard 0.9 gate.
+    expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(393 / 432);
   });
 });
 
@@ -1282,5 +1285,129 @@ describe('chartPlaygroundModel — markup preset resolver (§4f.2)', () => {
     // pie / gauge markups are a NO-OP — not enrolled, so not live.
     expect(isLiveEditable('pie-chart', 'markups')).toBe(false);
     expect(isLiveEditable('gauge-chart', 'onMarkupClick')).toBe(false);
+  });
+});
+
+/* ================================================================== */
+/*  PR-X16 §4f.3: anomaly a11y preset resolvers                        */
+/* ================================================================== */
+
+describe('chartPlaygroundModel — anomaly a11y preset resolvers (§4f.3)', () => {
+  const ANOMALY_CHARTS = [
+    'bar-chart',
+    'line-chart',
+    'area-chart',
+    'pie-chart',
+    'scatter-chart',
+    'radar-chart',
+    'treemap-chart',
+    'tree-chart',
+    'calendar-heatmap',
+    'polar-chart',
+    'theme-river-chart',
+    'gantt-chart',
+    'heatmap-chart',
+    'waterfall-chart',
+    'funnel-chart',
+    'sankey-chart',
+    'sunburst-chart',
+  ];
+
+  it('getAnomalySummaryPreset returns undefined for none / undefined / Gauge / unknown id', () => {
+    expect(getAnomalySummaryPreset('none', 'bar-chart')).toBeUndefined();
+    expect(getAnomalySummaryPreset(undefined, 'bar-chart')).toBeUndefined();
+    // Gauge has no anomaly catalog pair — deliberately not enrolled in §4f.3.
+    expect(getAnomalySummaryPreset('one-outlier', 'gauge-chart')).toBeUndefined();
+    expect(getAnomalySummaryPreset('does-not-exist', 'bar-chart')).toBeUndefined();
+  });
+
+  it('getAnomalySummaryPreset returns 1 summary for one-outlier, 3 for multi-outlier', () => {
+    expect(getAnomalySummaryPreset('one-outlier', 'bar-chart')).toHaveLength(1);
+    expect(getAnomalySummaryPreset('multi-outlier', 'bar-chart')).toHaveLength(3);
+  });
+
+  it('getAnomalySummaryPreset resolves valid AnomalySummary[] for all 17 enrolled charts', () => {
+    for (const chartId of ANOMALY_CHARTS) {
+      const summaries = getAnomalySummaryPreset('multi-outlier', chartId);
+      expect(summaries, chartId).toHaveLength(3);
+      for (const s of summaries ?? []) {
+        // Every required AnomalySummary field must be populated.
+        expect(s.id, `${chartId} id`).toBeTruthy();
+        expect(typeof s.formattedY, `${chartId} formattedY`).toBe('string');
+        expect(['above', 'below']).toContain(s.direction);
+        expect(['high', 'medium']).toContain(s.severityBucket);
+        expect(s.ariaLabel, `${chartId} ariaLabel`).toBeTruthy();
+      }
+    }
+  });
+
+  it('getAnomalySummaryPreset emits kind-aware summaries for radar / hierarchical / sankey', () => {
+    const radar = getAnomalySummaryPreset('one-outlier', 'radar-chart')?.[0];
+    expect(radar?.kind).toBe('radar');
+    expect(radar?.indicatorName).toBeTruthy();
+
+    const tree = getAnomalySummaryPreset('one-outlier', 'tree-chart')?.[0];
+    expect(tree?.kind).toBe('hierarchical');
+    expect(Array.isArray(tree?.path)).toBe(true);
+
+    const sankey = getAnomalySummaryPreset('one-outlier', 'sankey-chart')?.[0];
+    expect(sankey?.kind).toBe('sankey-edge');
+    expect(sankey?.source).toBeTruthy();
+    expect(sankey?.target).toBeTruthy();
+
+    // Flat charts carry no kind discriminator (legacy flat template).
+    expect(getAnomalySummaryPreset('one-outlier', 'bar-chart')?.[0].kind).toBeUndefined();
+  });
+
+  it('getAnomalyAnnouncementPreset returns undefined for default / undefined / unknown', () => {
+    expect(getAnomalyAnnouncementPreset('default')).toBeUndefined();
+    expect(getAnomalyAnnouncementPreset(undefined)).toBeUndefined();
+    expect(getAnomalyAnnouncementPreset('does-not-exist')).toBeUndefined();
+  });
+
+  it('getAnomalyAnnouncementPreset terse / verbose return working formatters', () => {
+    const summaries = getAnomalySummaryPreset('multi-outlier', 'bar-chart')!;
+    const terse = getAnomalyAnnouncementPreset('terse');
+    expect(typeof terse).toBe('function');
+    expect(terse!(summaries, 'tr')).toBe('3 anomali');
+    expect(terse!([], 'tr')).toBe('');
+
+    const verbose = getAnomalyAnnouncementPreset('verbose');
+    expect(typeof verbose).toBe('function');
+    expect(verbose!(summaries, 'tr-TR')).toContain('3 anomali');
+    expect(verbose!(summaries, 'en-US')).toContain('3 anomalies');
+    expect(verbose!([], 'en')).toBe('');
+  });
+
+  it('buildDescriptor upgrades the anomaly pair to preset controls', () => {
+    const summaryProp: ChartProp = {
+      name: 'anomalySummary',
+      type: 'AnomalySummary[]',
+      required: false,
+      default: 'undefined',
+      description: '',
+    };
+    const fmtProp: ChartProp = {
+      name: 'formatAnomalyAnnouncement',
+      type: 'AnomalyAnnouncementFormatter',
+      required: false,
+      default: 'undefined',
+      description: '',
+    };
+    const dS = buildDescriptor('bar-chart', summaryProp);
+    expect(dS.kind).toBe('preset');
+    expect(dS.liveEditable).toBe(true);
+    expect(dS.defaultValue).toBe('none');
+    const dF = buildDescriptor('bar-chart', fmtProp);
+    expect(dF.kind).toBe('preset');
+    expect(dF.liveEditable).toBe(true);
+    expect(dF.defaultValue).toBe('default');
+  });
+
+  it('isLiveEditable is true for the anomaly pair on enrolled charts, false on Gauge', () => {
+    expect(isLiveEditable('bar-chart', 'anomalySummary')).toBe(true);
+    expect(isLiveEditable('sankey-chart', 'formatAnomalyAnnouncement')).toBe(true);
+    expect(isLiveEditable('gauge-chart', 'anomalySummary')).toBe(false);
+    expect(isLiveEditable('gauge-chart', 'formatAnomalyAnnouncement')).toBe(false);
   });
 });

@@ -13,16 +13,19 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 vi.mock('@mfe/x-charts', () => {
-  // §4f.2: the sentinel also surfaces the `markups` / `onMarkupClick`
-  // props as data-attributes so the markup-preset forwarding tests can
-  // assert which overlay reached the underlying chart. Routing tests are
-  // unaffected — they only read `data-testid` + the title text node.
+  // §4f.2 / §4f.3: the sentinel surfaces the `markups` / `onMarkupClick`
+  // and `anomalySummary` / `formatAnomalyAnnouncement` props as
+  // data-attributes so the preset-forwarding tests can assert which
+  // overlay / a11y summary reached the underlying chart. Routing tests
+  // are unaffected — they only read `data-testid` + the title text node.
   const sentinel = (kind: string) => {
     const Component: React.FC<{
       title?: string;
       markups?: ReadonlyArray<{ type?: string }>;
       onMarkupClick?: unknown;
-    }> = ({ title, markups, onMarkupClick }) =>
+      anomalySummary?: ReadonlyArray<unknown>;
+      formatAnomalyAnnouncement?: unknown;
+    }> = ({ title, markups, onMarkupClick, anomalySummary, formatAnomalyAnnouncement }) =>
       React.createElement(
         'div',
         {
@@ -31,6 +34,8 @@ vi.mock('@mfe/x-charts', () => {
             ? markups.map((m) => m.type ?? '').join(',')
             : '',
           'data-has-markup-click': onMarkupClick ? '1' : '0',
+          'data-anomaly-count': Array.isArray(anomalySummary) ? String(anomalySummary.length) : '0',
+          'data-has-anomaly-fmt': formatAnomalyAnnouncement ? '1' : '0',
         },
         title,
       );
@@ -434,5 +439,77 @@ describe('ChartPreviewLive — §4f.2 markup preset forwarding', () => {
       />,
     );
     expect(screen.getByTestId('mock-scatter').getAttribute('data-markup-types')).toBe('area');
+  });
+});
+
+/* PR-X16 §4f.3 — anomaly a11y preset forwarding */
+
+describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
+  // The 13 enrolled anomaly charts that have an x-charts mock sentinel
+  // here. calendar-heatmap / polar / theme-river / gantt are enrolled
+  // too but have no sentinel in this routing mock — their forwarding is
+  // covered by the resolver unit tests in chartPlaygroundModel.test.ts.
+  const ANOMALY_CHART_KINDS: Array<{ chartId: string; kind: string }> = [
+    { chartId: 'bar-chart', kind: 'bar' },
+    { chartId: 'line-chart', kind: 'line' },
+    { chartId: 'area-chart', kind: 'area' },
+    { chartId: 'pie-chart', kind: 'pie' },
+    { chartId: 'scatter-chart', kind: 'scatter' },
+    { chartId: 'radar-chart', kind: 'radar' },
+    { chartId: 'treemap-chart', kind: 'treemap' },
+    { chartId: 'tree-chart', kind: 'tree' },
+    { chartId: 'heatmap-chart', kind: 'heatmap' },
+    { chartId: 'waterfall-chart', kind: 'waterfall' },
+    { chartId: 'funnel-chart', kind: 'funnel' },
+    { chartId: 'sankey-chart', kind: 'sankey' },
+    { chartId: 'sunburst-chart', kind: 'sunburst' },
+  ];
+
+  it.each(ANOMALY_CHART_KINDS)(
+    'chart "$chartId" forwards a multi-outlier anomalySummary preset (3 entries)',
+    ({ chartId, kind }) => {
+      render(
+        <ChartPreviewLive
+          chartId={chartId}
+          chartName={`${chartId} preview`}
+          toggles={{ anomalySummary: 'multi-outlier' }}
+        />,
+      );
+      expect(screen.getByTestId(`mock-${kind}`).getAttribute('data-anomaly-count')).toBe('3');
+    },
+  );
+
+  it('anomalySummary "none" (default) forwards no summary', () => {
+    render(<ChartPreviewLive chartId="bar-chart" chartName="bar preview" />);
+    expect(screen.getByTestId('mock-bar').getAttribute('data-anomaly-count')).toBe('0');
+  });
+
+  it('one-outlier preset forwards exactly one summary', () => {
+    render(
+      <ChartPreviewLive
+        chartId="line-chart"
+        chartName="line preview"
+        toggles={{ anomalySummary: 'one-outlier' }}
+      />,
+    );
+    expect(screen.getByTestId('mock-line').getAttribute('data-anomaly-count')).toBe('1');
+  });
+
+  it('formatAnomalyAnnouncement preset forwards a formatter alongside a summary', () => {
+    render(
+      <ChartPreviewLive
+        chartId="bar-chart"
+        chartName="bar preview"
+        toggles={{ anomalySummary: 'multi-outlier', formatAnomalyAnnouncement: 'verbose' }}
+      />,
+    );
+    const sentinel = screen.getByTestId('mock-bar');
+    expect(sentinel.getAttribute('data-anomaly-count')).toBe('3');
+    expect(sentinel.getAttribute('data-has-anomaly-fmt')).toBe('1');
+  });
+
+  it('formatAnomalyAnnouncement "default" forwards no formatter override', () => {
+    render(<ChartPreviewLive chartId="bar-chart" chartName="bar preview" />);
+    expect(screen.getByTestId('mock-bar').getAttribute('data-has-anomaly-fmt')).toBe('0');
   });
 });
