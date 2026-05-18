@@ -104,7 +104,12 @@ jobs:
         # mapping + row mapping + auth gate + the route↔backend-key dedup
         # invariant — runs in the gate so a regression to the empty grid
         # or a duplicate dynamic-report route fails CI.
-        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts src/app/services/__tests__/shell-services.test.ts src/modules/hr-demographic-report/__tests__/api-filter.test.ts
+        #
+        # DemographicDashboard.contract.test.tsx (Codex thread 019e3c78):
+        # the İK demografik dashboard — KPI strip + chart-card contract —
+        # runs in the gate so the ethics/pay-equity live-chart wiring +
+        # mock-metric removal stay regression-guarded.
+        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts src/app/services/__tests__/shell-services.test.ts src/modules/hr-demographic-report/__tests__/api-filter.test.ts src/modules/hr-demographic-report/__tests__/DemographicDashboard.contract.test.tsx
 
   token-drift-required:
     name: Token Drift (build --check)
