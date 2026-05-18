@@ -25,7 +25,7 @@
  *     turns animation off, the code becomes `animate={false}`).
  */
 import type { CSSProperties } from 'react';
-import type { ChartMarkup } from '@mfe/x-charts';
+import type { ChartMarkup, AnomalySummary, AnomalyAnnouncementFormatter } from '@mfe/x-charts';
 
 /* ================================================================== */
 /*  Types                                                              */
@@ -1043,6 +1043,51 @@ const CALLBACK_PRESET_OPTIONS: ComplexPreset[] = [
 ];
 
 /**
+ * PR-X16 §4f.3 (Codex thread `019e3af0` AGREE) — anomaly a11y preset
+ * option lists. `anomalySummary` exposes demo `AnomalySummary[]` data
+ * (none / one / multi outlier); `formatAnomalyAnnouncement` exposes
+ * announcement-formatter presets (default = wrapper's built-in EN/TR
+ * formatter, plus a terse + a verbose override).
+ */
+const ANOMALY_SUMMARY_PRESET_OPTIONS: ComplexPreset[] = [
+  { presetId: 'none', label: 'Yok (varsayılan)' },
+  { presetId: 'one-outlier', label: 'Tek aykırı değer' },
+  { presetId: 'multi-outlier', label: 'Çoklu aykırı değer' },
+];
+
+const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
+  { presetId: 'default', label: 'Varsayılan (EN/TR)' },
+  { presetId: 'terse', label: 'Kısa' },
+  { presetId: 'verbose', label: 'Ayrıntılı' },
+];
+
+/**
+ * The 17 enrolled charts that carry the `anomalySummary` +
+ * `formatAnomalyAnnouncement` a11y pair in CHART_CATALOG — every
+ * count-lock-enrolled chart except Gauge (whose catalog entry has no
+ * anomaly pair). Verified against the AST by Codex thread `019e3af0`.
+ */
+const ANOMALY_PRESET_CHART_IDS = [
+  'bar-chart',
+  'line-chart',
+  'area-chart',
+  'pie-chart',
+  'scatter-chart',
+  'radar-chart',
+  'treemap-chart',
+  'tree-chart',
+  'calendar-heatmap',
+  'polar-chart',
+  'theme-river-chart',
+  'gantt-chart',
+  'heatmap-chart',
+  'waterfall-chart',
+  'funnel-chart',
+  'sankey-chart',
+  'sunburst-chart',
+] as const;
+
+/**
  * Per `chartId.propName` preset metadata. When a complex prop has an entry
  * here, `buildDescriptor` upgrades its kind from `complex` (read-only) to
  * `preset` (live editable). Keep in sync with the resolver helpers + with
@@ -1225,6 +1270,22 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   // primitive; this preset makes the callback itself live-selectable so
   // the playground tester can see console-log / alert side effects fire.
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
+
+  // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 17 enrolled
+  // charts that carry the anomaly a11y pair in CHART_CATALOG (every
+  // enrolled chart except Gauge — verified via AST, Codex 019e3af0).
+  // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
+  // `formatAnomalyAnnouncement` overrides the announcement template.
+  ...Object.fromEntries(
+    ANOMALY_PRESET_CHART_IDS.flatMap((cid) => [
+      [`${cid}.anomalySummary`, ANOMALY_SUMMARY_PRESET_OPTIONS] as [string, ComplexPreset[]],
+      [`${cid}.formatAnomalyAnnouncement`, ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS] as [
+        string,
+        ComplexPreset[],
+      ],
+    ]),
+  ),
 };
 
 /**
@@ -1562,6 +1623,153 @@ export function getMarkupsPreset(
       return [anchors['highlight-band']];
     case 'kpi-label':
       return [anchors['kpi-label']];
+    default:
+      return undefined;
+  }
+}
+
+/* ================================================================== */
+/*  PR-X16 §4f.3: anomaly a11y preset resolvers                        */
+/* ================================================================== */
+
+/**
+ * Domain bucket for a chart's demo `AnomalySummary`. The default
+ * `formatAnomalyAnnouncement` (`ChartAriaLive`) branches on the
+ * `AnomalySummary.kind` discriminator, so the demo summary must carry
+ * the right kind + metadata for the SR announcement to read correctly:
+ *   - `flat`         — cartesian / categorical (12 charts)
+ *   - `radar`        — radar-chart (series + indicator metadata)
+ *   - `hierarchical` — tree / treemap / sunburst (ancestor path)
+ *   - `sankey`       — sankey-chart (edge source/target/flow)
+ */
+type AnomalyChartKind = 'flat' | 'radar' | 'hierarchical' | 'sankey';
+
+const ANOMALY_PRESET_CHART_ID_SET: ReadonlySet<string> = new Set(ANOMALY_PRESET_CHART_IDS);
+
+const CHART_ANOMALY_KIND: Record<string, AnomalyChartKind> = {
+  'radar-chart': 'radar',
+  'tree-chart': 'hierarchical',
+  'treemap-chart': 'hierarchical',
+  'sunburst-chart': 'hierarchical',
+  'sankey-chart': 'sankey',
+};
+
+interface DemoOutlier {
+  x: number | string;
+  y: number;
+  direction: 'above' | 'below';
+  severity: number;
+  severityBucket: 'high' | 'medium';
+}
+
+/** Three demo outliers — `one-outlier` uses the first, `multi-outlier` all. */
+const DEMO_OUTLIERS: readonly DemoOutlier[] = [
+  { x: 'Mayıs', y: 390, direction: 'above', severity: 140, severityBucket: 'high' },
+  { x: 'Şubat', y: 110, direction: 'below', severity: 92, severityBucket: 'medium' },
+  { x: 'Kasım', y: 421, direction: 'above', severity: 77, severityBucket: 'medium' },
+];
+
+/** Build one kind-aware demo `AnomalySummary` from a base outlier. */
+function buildAnomalySummary(
+  base: DemoOutlier,
+  index: number,
+  kind: AnomalyChartKind,
+): AnomalySummary {
+  const formattedY = base.y.toFixed(2);
+  const common = {
+    id: `preset-anomaly-${index}`,
+    x: base.x,
+    y: base.y,
+    formattedY,
+    direction: base.direction,
+    severity: base.severity,
+    severityBucket: base.severityBucket,
+  };
+  if (kind === 'radar') {
+    return {
+      ...common,
+      kind: 'radar',
+      seriesName: 'Seri A',
+      indicatorIndex: index,
+      indicatorName: ['Gecikme', 'Hata oranı', 'Kapsama'][index] ?? 'Gösterge',
+      axisUnit: 'ms',
+      ariaLabel: `Radar göstergesi anomalisi: ${base.x}`,
+    };
+  }
+  if (kind === 'hierarchical') {
+    return {
+      ...common,
+      kind: 'hierarchical',
+      path: ['Bölge', 'Ekip', String(base.x)],
+      depth: 2,
+      ariaLabel: `Hiyerarşi anomalisi: ${base.x}`,
+    };
+  }
+  if (kind === 'sankey') {
+    return {
+      ...common,
+      kind: 'sankey-edge',
+      edgeId: `e-${index}`,
+      source: 'Kaynak',
+      target: String(base.x),
+      flowValue: base.y,
+      ariaLabel: `Akış anomalisi: ${base.x}`,
+    };
+  }
+  return {
+    ...common,
+    ariaLabel: `${base.direction === 'above' ? 'Beklenenin üzerinde' : 'Beklenenin altında'} aykırı değer: x=${base.x}, y=${formattedY}`,
+  };
+}
+
+/**
+ * Resolve an `anomalySummary` preset id into a demo `AnomalySummary[]`
+ * for the given chart, or `undefined` for `none` / unknown preset /
+ * non-enrolled chart (Gauge has no anomaly catalog pair).
+ */
+export function getAnomalySummaryPreset(
+  presetId: string | undefined,
+  chartId: string,
+): AnomalySummary[] | undefined {
+  if (!presetId || presetId === 'none') return undefined;
+  if (!ANOMALY_PRESET_CHART_ID_SET.has(chartId)) return undefined;
+  let count: number;
+  if (presetId === 'one-outlier') count = 1;
+  else if (presetId === 'multi-outlier') count = 3;
+  else return undefined;
+  const kind = CHART_ANOMALY_KIND[chartId] ?? 'flat';
+  return DEMO_OUTLIERS.slice(0, count).map((o, i) => buildAnomalySummary(o, i, kind));
+}
+
+/**
+ * Resolve a `formatAnomalyAnnouncement` preset id into a custom
+ * `AnomalyAnnouncementFormatter`. `default` (and unknown) returns
+ * `undefined` so the wrapper keeps its built-in EN/TR formatter.
+ */
+export function getAnomalyAnnouncementPreset(
+  presetId: string | undefined,
+): AnomalyAnnouncementFormatter | undefined {
+  switch (presetId) {
+    case 'terse':
+      return (anomalies) => {
+        if (!Array.isArray(anomalies) || anomalies.length === 0) return '';
+        return anomalies.length === 1 ? '1 anomali' : `${anomalies.length} anomali`;
+      };
+    case 'verbose':
+      return (anomalies, locale) => {
+        if (!Array.isArray(anomalies) || anomalies.length === 0) return '';
+        const isTr = typeof locale === 'string' && locale.toLowerCase().startsWith('tr');
+        const total = anomalies.length;
+        const above = anomalies.filter((a) => a.direction === 'above').length;
+        const below = total - above;
+        const top = [...anomalies].sort((a, b) => b.severity - a.severity)[0];
+        if (isTr) {
+          return `${total} anomali tespit edildi — ${above} üstte, ${below} altta. En yüksek önem: x=${top.x}, y=${top.formattedY} (${top.severityBucket}).`;
+        }
+        return `${total} anomalies detected — ${above} above, ${below} below. Highest severity: x=${top.x}, y=${top.formattedY} (${top.severityBucket}).`;
+      };
+    case 'default':
+    case undefined:
     default:
       return undefined;
   }

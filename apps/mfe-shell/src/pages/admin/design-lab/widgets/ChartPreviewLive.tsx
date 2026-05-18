@@ -82,6 +82,8 @@ import FeatureDemoLive, { type FeatureId } from './FeatureDemoLive';
 import AiHookDemoLive, { type AiHookId } from './AiHookDemoLive';
 import PerfUtilityDemoLive, { type PerfUtilityId } from './PerfUtilityDemoLive';
 import {
+  getAnomalyAnnouncementPreset,
+  getAnomalySummaryPreset,
   getBool,
   getCallbackPreset,
   getColorsPreset,
@@ -541,6 +543,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -584,6 +593,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -628,6 +644,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -663,6 +686,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -715,6 +745,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'scatter-chart')}
             onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             onBrushSelection={getCallbackPreset(getEnum(toggles, 'onBrushSelection', 'noop'))}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -798,6 +835,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -850,6 +894,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -920,6 +971,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1013,6 +1071,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1060,6 +1125,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1110,6 +1182,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1187,6 +1266,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1245,6 +1331,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1288,6 +1381,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1331,6 +1431,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1379,6 +1486,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
@@ -1433,6 +1547,13 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );
