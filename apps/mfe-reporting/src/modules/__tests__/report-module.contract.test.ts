@@ -82,13 +82,18 @@ const pageOf = (url: string): { page: number; pageSize: number } => {
   };
 };
 
-/** A paged window of the 120-row fixture (backend-paginated endpoints). */
+/**
+ * A paged window of the 120-row fixture (backend-paginated endpoints).
+ * `EMPLOYEE_ID` carries a window-unique value so modules that key their
+ * row id off a backend UPPER_SNAKE column (hr-demographic-report maps
+ * `EMPLOYEE_ID` → row id) still produce block-0 ≠ block-1 distinct rows.
+ */
 const pagedItems = (prefix: string, page: number, pageSize: number) => {
   const start = (page - 1) * pageSize;
   const end = Math.min(start + pageSize, TOTAL_FIXTURE);
   const items: Array<Record<string, unknown>> = [];
   for (let i = start; i < end; i += 1) {
-    items.push({ id: `${prefix}-${i}` });
+    items.push({ id: `${prefix}-${i}`, EMPLOYEE_ID: i });
   }
   return items;
 };

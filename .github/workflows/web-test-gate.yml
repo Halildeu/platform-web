@@ -98,7 +98,13 @@ jobs:
         # cross-group module contract test (src/modules/__tests__) are
         # included here so the "satır yok" whack-a-mole regression guard
         # actually runs in the required gate, not just locally.
-        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts src/app/services/__tests__/shell-services.test.ts
+        #
+        # hr-demographic-report/__tests__/api-filter.test.ts (Codex thread
+        # 019e3b64): the İK demografik grid live-Workcube wiring — request
+        # mapping + row mapping + auth gate + the route↔backend-key dedup
+        # invariant — runs in the gate so a regression to the empty grid
+        # or a duplicate dynamic-report route fails CI.
+        run: pnpm --filter mfe-reporting exec vitest run src/modules/dynamic-report src/grid/ssrm-response.test.ts src/modules/__tests__/report-module.contract.test.ts src/app/services/__tests__/shell-services.test.ts src/modules/hr-demographic-report/__tests__/api-filter.test.ts
 
   token-drift-required:
     name: Token Drift (build --check)
