@@ -76,8 +76,8 @@ Tracker entry: `docs/x-charts-ui-ux-tracker.md` (Faz 21.4 cycle).
 
 ### 1.1 Common chart wrapper props (v2.2, Faz 21.5 + 21.6 cycle)
 
-All 13 canonical chart wrappers in `@mfe/x-charts` share four opt-in
-theme/visual props (default `'auto'`):
+All chart wrappers in `@mfe/x-charts` share four opt-in theme/visual
+props (default `'auto'`):
 
 | Prop      | Values                                                                                      | Default  |
 | --------- | ------------------------------------------------------------------------------------------- | -------- |
@@ -442,8 +442,8 @@ prop surface.
 
 ## 3. Access Control — ACTIVE (v2.3, Faz 21.4 PR-E2)
 
-> **Status (v2.3, 2026-05-03):** ACTIVE. All 13 chart wrappers now
-> extend `AccessControlledProps` and accept `access` / `accessReason`
+> **Status (v2.3, 2026-05-03):** ACTIVE. All chart wrappers now extend
+> `AccessControlledProps` and accept `access` / `accessReason`
 > props at runtime via `<ChartAccessGate>` (PR-E2 #166). The shape
 > below is the canonical surface; default `access === undefined`
 > follows the identity-transform path (zero DOM wrapper). For
