@@ -1319,9 +1319,10 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 
   // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
-  // `anomalySummary` + `formatAnomalyAnnouncement` for the 17 enrolled
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 18 enrolled
   // charts that carry the anomaly a11y pair in CHART_CATALOG (every
-  // enrolled chart except Gauge — verified via AST, Codex 019e3af0).
+  // enrolled chart except Gauge — verified via AST, Codex 019e3af0;
+  // population-pyramid added by Codex thread 019e3f75).
   // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
   // `formatAnomalyAnnouncement` overrides the announcement template.
   ...Object.fromEntries(

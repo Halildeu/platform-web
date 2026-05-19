@@ -961,9 +961,9 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   };
 
   // Per-chart preset-enabled complex prop count from COMPLEX_PROP_PRESETS.
-  // §4f.3 (+34): every enrolled chart except Gauge gains the anomaly a11y
-  // pair (anomalySummary + formatAnomalyAnnouncement) = +2 each across 17
-  // charts. Gauge has no anomaly catalog pair → unchanged.
+  // Every enrolled chart except Gauge carries the anomaly a11y pair
+  // (anomalySummary + formatAnomalyAnnouncement) = +2 each — 18 of the 19
+  // enrolled charts. Gauge has no anomaly catalog pair → unchanged.
   const PRESET_COUNTS: Record<string, number> = {
     'bar-chart': 7, // vF, onDPC, colors; §4f.2: + markups/onMarkupClick; §4f.3: + anomaly pair
     'line-chart': 6, // vF, onDPC; §4f.2: + markups/onMarkupClick; §4f.3: + anomaly pair
