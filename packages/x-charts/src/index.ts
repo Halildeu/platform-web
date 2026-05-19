@@ -105,6 +105,9 @@ export type { SunburstChartProps } from './SunburstChart';
 // Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid.
 export { PopulationPyramid } from './PopulationPyramid';
 export type { PopulationPyramidProps, PopulationPyramidDatum } from './PopulationPyramid';
+// Codex thread 019e41cd AGREE: dual-axis composite (bar + line) chart.
+export { ComboChart } from './ComboChart';
+export type { ComboChartProps, ComboChartSeries, ComboSeriesType, ComboAxisId } from './ComboChart';
 // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 export { BoxPlotChart } from './BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';
