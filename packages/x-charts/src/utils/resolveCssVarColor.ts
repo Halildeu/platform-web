@@ -148,8 +148,10 @@ export function resolveCssVarColors(colors: string[] | undefined): string[] | un
  * `useChartAnnotations` markPoint / markLine fragments. Those style
  * objects are typed loosely (`Record<string, unknown>` or a
  * `{ color?: string; [key: string]: unknown }` index signature) so a
- * consumer can pass `borderColor` / `shadowColor` etc. that the narrow
- * {@link resolveTreeNodeColors} contract does not cover.
+ * consumer can pass `borderColor` / `shadowColor` etc. on any of them.
+ * {@link resolveTreeNodeColors} also delegates each tree node's
+ * `itemStyle` here, so a hierarchical data node resolves the same four
+ * fields.
  *
  * Non-mutating: a new object is always returned (the input style object
  * is never touched). `undefined` input passes through as `undefined` so
@@ -182,40 +184,44 @@ export function resolveStyleColorFields<T extends Record<string, unknown> | unde
 }
 
 /**
- * Minimal shape of a hierarchical chart node carrying optional per-node
- * `itemStyle.color` / `itemStyle.borderColor`. Tree / Treemap / Sunburst
- * wrappers share this contract. The constraint is intentionally narrow — only
- * the fields the resolver reads — and carries NO index signature, so a
- * concrete node type (e.g. `SunburstNode`, whose own `itemStyle` DOES have an
- * index signature) still satisfies `T extends TreeColorNode`.
+ * Minimal shape of a hierarchical chart node carrying an optional per-node
+ * `itemStyle`. Tree / Treemap / Sunburst wrappers share this contract.
  *
- * `borderColor` is included because `SunburstNode.itemStyle` is typed
- * `{ color?: string; [key: string]: unknown }` — its index signature lets a
- * consumer pass `itemStyle: { borderColor: 'var(--token)' }`, which would
- * otherwise reach the canvas un-normalized. `TreeNode` / `TreemapNode` only
- * expose `color`, so for those node types resolving `borderColor` is simply a
- * no-op (the `typeof === 'string'` guard skips an absent field).
+ * `itemStyle` is typed `Record<string, unknown>` — broad enough that
+ * {@link resolveTreeNodeColors} can hand each node's `itemStyle` straight to
+ * {@link resolveStyleColorFields} (whose parameter is
+ * `Record<string, unknown> | undefined`), so a tree node resolves the SAME
+ * four style color fields — `color` / `borderColor` / `backgroundColor` /
+ * `shadowColor` — as every other public color surface. The concrete node
+ * types still satisfy `T extends TreeColorNode`: `TreeNode` / `TreemapNode`
+ * expose `itemStyle?: { color?: string }` and `SunburstNode` exposes
+ * `itemStyle?: { color?: string; [key: string]: unknown }` — an all-optional
+ * object type is assignable to `Record<string, unknown>`, so no concrete node
+ * type is excluded.
  */
 export interface TreeColorNode {
-  itemStyle?: { color?: string; borderColor?: string };
+  itemStyle?: Record<string, unknown>;
   children?: readonly TreeColorNode[];
 }
 
 /**
  * Recursively resolve consumer-supplied `var(--token)` colors in a tree of
- * chart nodes. Each node's `itemStyle.color` and `itemStyle.borderColor` is
- * passed through {@link resolveCssVarColor}; children are walked depth-first.
- * Nodes that carry no resolvable color field are returned structurally
- * unchanged (a new object is still produced so the input tree is never
- * mutated).
+ * chart nodes. Each node's `itemStyle` is delegated to
+ * {@link resolveStyleColorFields}, so all four style color fields —
+ * `color` / `borderColor` / `backgroundColor` / `shadowColor` — are
+ * normalized; children are walked depth-first. Nodes that carry no
+ * `itemStyle` are returned structurally unchanged (a new object is still
+ * produced so the input tree is never mutated).
  *
  * Used by tree-shaped wrappers (Tree / Treemap / Sunburst) where the consumer
  * color lives in nested `itemStyle` rather than a flat `colors` prop — the
  * canvas renderer cannot read CSS custom properties at any depth. `TreeNode` /
  * `TreemapNode` only expose `itemStyle.color`; `SunburstNode.itemStyle` has an
- * index signature so a consumer can also pass `borderColor` — both are
- * normalized here, and the `borderColor` branch is a harmless no-op for the
- * node types that never set it.
+ * index signature so a consumer can also pass `borderColor` /
+ * `backgroundColor` / `shadowColor` on a data node — all four are normalized
+ * here (the unset fields are harmless no-ops for the node types that never
+ * set them, because {@link resolveStyleColorFields} skips an absent or
+ * non-string field).
  *
  * The return type is the input node type `T`, so the resolved tree drops
  * straight back into an ECharts `series.data` slot without a cast.
@@ -232,14 +238,11 @@ export function resolveTreeNodeColors<T extends TreeColorNode>(
   if (nodes === undefined) return undefined;
   return nodes.map((node) => {
     const next: T = { ...node };
-    const hasColor = node.itemStyle && typeof node.itemStyle.color === 'string';
-    const hasBorderColor = node.itemStyle && typeof node.itemStyle.borderColor === 'string';
-    if (hasColor || hasBorderColor) {
-      next.itemStyle = {
-        ...node.itemStyle,
-        ...(hasColor ? { color: resolveCssVarColor(node.itemStyle!.color) } : {}),
-        ...(hasBorderColor ? { borderColor: resolveCssVarColor(node.itemStyle!.borderColor) } : {}),
-      };
+    if (node.itemStyle) {
+      // Delegate the per-node itemStyle to the shared resolver so a tree
+      // node covers the same four color fields as every other public
+      // color surface (color / borderColor / backgroundColor / shadowColor).
+      next.itemStyle = resolveStyleColorFields(node.itemStyle);
     }
     if (Array.isArray(node.children)) {
       // The recursion preserves the concrete child node type via `T`'s

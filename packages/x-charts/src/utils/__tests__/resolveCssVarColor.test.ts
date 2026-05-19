@@ -262,7 +262,13 @@ describe('resolveCssVarColor — SSR (no DOM)', () => {
 
 describe('resolveTreeNodeColors', () => {
   afterEach(() => {
-    clearRootVars('--xc-test-primary', '--xc-test-accent', '--xc-test-border');
+    clearRootVars(
+      '--xc-test-primary',
+      '--xc-test-accent',
+      '--xc-test-border',
+      '--xc-test-shadow',
+      '--xc-test-bg',
+    );
   });
 
   it('resolves itemStyle.color in a flat node list', () => {
@@ -306,6 +312,28 @@ describe('resolveTreeNodeColors', () => {
       children?: Array<{ name: string; itemStyle?: { color?: string; borderColor?: string } }>;
     }>);
     expect(out?.[0].children?.[0].itemStyle?.color).toBe('#ec4899');
+  });
+
+  it('resolves shadowColor / backgroundColor on a node and its child (all four fields)', () => {
+    // SunburstNode.itemStyle has an open index signature, so a consumer can
+    // pass shadowColor / backgroundColor on a data node — resolveTreeNodeColors
+    // delegates each node's itemStyle to resolveStyleColorFields, which covers
+    // all four color fields, not just color + borderColor.
+    document.documentElement.style.setProperty('--xc-test-shadow', 'rgba(0,0,0,0.4)');
+    document.documentElement.style.setProperty('--xc-test-bg', '#fffbeb');
+    const out = resolveTreeNodeColors([
+      {
+        name: 'root',
+        itemStyle: { shadowColor: 'var(--xc-test-shadow)' },
+        children: [{ name: 'child', itemStyle: { backgroundColor: 'var(--xc-test-bg)' } }],
+      },
+    ] as Array<{
+      name: string;
+      itemStyle?: { color?: string; [key: string]: unknown };
+      children?: Array<{ name: string; itemStyle?: { color?: string; [key: string]: unknown } }>;
+    }>);
+    expect(out?.[0].itemStyle?.shadowColor).toBe('rgba(0,0,0,0.4)');
+    expect(out?.[0].children?.[0].itemStyle?.backgroundColor).toBe('#fffbeb');
   });
 
   it('leaves nodes without an itemStyle structurally intact (non-mutating clone)', () => {
