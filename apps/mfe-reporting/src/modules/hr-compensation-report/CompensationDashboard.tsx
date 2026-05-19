@@ -163,8 +163,16 @@ const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: bool
                   ? kpi.trend.direction
                   : 'flat',
               value: trendValue,
+              // Mirror the toneAccent vocabulary so the trend arrow color
+              // tracks backend toneRules (success/danger drive arrow color,
+              // warning/info stay neutral) instead of only the legacy
+              // positive/negative aliases.
               positive:
-                kpi.tone === 'positive' ? true : kpi.tone === 'negative' ? false : undefined,
+                kpi.tone === 'success' || kpi.tone === 'positive'
+                  ? true
+                  : kpi.tone === 'danger' || kpi.tone === 'negative'
+                    ? false
+                    : undefined,
             }
           : undefined
       }
