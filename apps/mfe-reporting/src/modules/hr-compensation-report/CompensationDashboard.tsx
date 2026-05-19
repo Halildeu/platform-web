@@ -58,6 +58,23 @@ const formatValue = (v: number | null, format?: string): string => {
   return formatNumber(v);
 };
 
+/**
+ * KPI value formatter — compacts large currency magnitudes (>= 1M) to a
+ * short notation (e.g. ₺207,7 Mn) so a 9-digit figure cannot overflow its
+ * card. Non-currency / sub-million values fall through to `formatValue`.
+ */
+const formatKpiValue = (v: number | null, format?: string): string => {
+  if (format === 'currency' && v != null && Math.abs(v) >= 1_000_000) {
+    return new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(v);
+  }
+  return formatValue(v, format);
+};
+
 const chartCurrencyFormatter = (value: number): string => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
@@ -72,7 +89,7 @@ const sectionClass = 'mb-6';
 const chartRowClass = 'grid grid-cols-1 md:grid-cols-2 gap-4 mb-6';
 const chartFullClass = 'grid grid-cols-1 gap-4 mb-6';
 const cardClass = 'rounded-lg border border-border-subtle bg-surface-default p-4';
-const kpiStripClass = 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6';
+const kpiStripClass = 'grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6';
 
 /* ------------------------------------------------------------------ */
 /*  KPI Card \u2014 thin shim around `@mfe/x-charts/KPICard`                */
@@ -113,10 +130,26 @@ const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: bool
         ? `${kpi.benchmark.label}: N/A`
         : undefined;
 
+  /*
+   * Tone-derived top accent — gives each card a colour-coded edge so the
+   * metric's intent reads at a glance and the strip no longer looks like
+   * a row of flat, undifferentiated white boxes. The backend KPI
+   * `toneRules` emit `success` / `warning` / `danger` / `info`, so all
+   * four are mapped here; `positive` / `negative` are accepted as aliases.
+   */
+  const toneAccent =
+    kpi.tone === 'success' || kpi.tone === 'positive'
+      ? 'border-t-4 border-t-state-success-text'
+      : kpi.tone === 'danger' || kpi.tone === 'negative'
+        ? 'border-t-4 border-t-state-error-text'
+        : kpi.tone === 'warning'
+          ? 'border-t-4 border-t-state-warning-text'
+          : 'border-t-4 border-t-action-primary';
+
   return (
     <XKPICard
       title={kpi.title}
-      value={formatValue(kpi.value, kpi.format)}
+      value={formatKpiValue(kpi.value, kpi.format)}
       subtitle={subtitle}
       trend={
         kpi.trend && trendValue
@@ -135,7 +168,7 @@ const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: bool
           : undefined
       }
       onClick={onClick}
-      className={active ? 'ring-2 ring-action-primary' : undefined}
+      className={[toneAccent, active && 'ring-2 ring-action-primary'].filter(Boolean).join(' ')}
     />
   );
 };
@@ -209,13 +242,33 @@ const ChartBlock: React.FC<{
 }> = ({ chart, title, height, children, gridColumns }) => {
   const chartTitle = chart?.title ?? title ?? '';
   const data = chart?.data ?? [];
+  /*
+   * The chart is the primary view; the per-chart summary grid duplicates
+   * it 1:1. It sits behind a collapsed-by-default disclosure so every card
+   * isn't trailed by a redundant always-on AG Grid.
+   */
+  const [tableOpen, setTableOpen] = React.useState(false);
+  const hasTable = Boolean(gridColumns) && data.length > 0;
   return (
     <div className={cardClass}>
       <h3 className="text-sm font-medium text-text-primary mb-3">{chartTitle}</h3>
       <div className={`${height ?? 'h-72'} overflow-hidden`}>
         {chart && data.length > 0 ? children : <EmptyState />}
       </div>
-      {gridColumns && data.length > 0 && <ChartDataGrid data={data} columns={gridColumns} />}
+      {hasTable && (
+        <>
+          <button
+            type="button"
+            onClick={() => setTableOpen((open) => !open)}
+            aria-expanded={tableOpen}
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-text-secondary transition hover:text-text-primary"
+          >
+            <span aria-hidden="true">{tableOpen ? '▾' : '▸'}</span>
+            {tableOpen ? 'Tabloyu gizle' : 'Tabloyu göster'}
+          </button>
+          {tableOpen && gridColumns && <ChartDataGrid data={data} columns={gridColumns} />}
+        </>
+      )}
     </div>
   );
 };
