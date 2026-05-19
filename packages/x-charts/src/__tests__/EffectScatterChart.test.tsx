@@ -399,6 +399,43 @@ describe('EffectScatterChart — onDataPointClick', () => {
     handlers[handlers.length - 1]({ componentType: 'markLine', name: 'mk-1' });
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it('onMarkupClick payload chartType is "effectScatter" (wrapper identity, not adapter mode)', () => {
+    const onMarkup = vi.fn();
+    // Provide a real markup so the wrapper's markupLookup resolves the
+    // ECharts click event back to the markup payload. Without this the
+    // early-return branch hits the `if (markup)` guard and skips the
+    // callback — exactly what the previous test exercises.
+    render(
+      <EffectScatterChart
+        data={defaultData()}
+        markups={[
+          {
+            id: 'eff-mk-1',
+            type: 'line',
+            axis: 'x',
+            value: 25,
+          },
+        ]}
+        onMarkupClick={onMarkup}
+        animate={false}
+      />,
+    );
+    const handlers = clickListenerRegistrations();
+    handlers[handlers.length - 1]({
+      componentType: 'markLine',
+      name: 'eff-mk-1',
+      seriesIndex: 0,
+      dataIndex: undefined,
+    });
+    expect(onMarkup).toHaveBeenCalledTimes(1);
+    // Codex iter-2 fix: payload `chartType` carries the wrapper identity
+    // (EffectScatter), not the adapter support-matrix mode ('scatter').
+    expect(onMarkup.mock.calls[0][0]).toMatchObject({
+      chartType: 'effectScatter',
+      markup: expect.objectContaining({ id: 'eff-mk-1' }),
+    });
+  });
 });
 
 /* ------------------------------------------------------------------ */

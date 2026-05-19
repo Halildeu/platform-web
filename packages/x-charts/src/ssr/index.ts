@@ -39,6 +39,13 @@ export type { PieChartProps } from '../PieChart';
 export type { RadarChartProps } from '../RadarChart';
 export type { SankeyChartProps } from '../SankeyChart';
 export type { ScatterChartProps } from '../ScatterChart';
+// Codex thread 019e425b AGREE: standalone effectScatter wrapper public
+// type surface (RSC consumers declare props without pulling ECharts).
+export type {
+  EffectScatterChartProps,
+  EffectScatterDataPoint,
+  EffectScatterRippleEffect,
+} from '../EffectScatterChart';
 // Faz 21.11 P1a — 3D Extension Pack public type surface (no runtime).
 // P1c adds GlobeProps.
 export type { Scatter3DProps, Scatter3DDataPoint } from '../Scatter3D';

@@ -538,9 +538,14 @@ const EffectScatterChartInner = React.forwardRef<
         const lookupName = typeof p.name === 'string' ? p.name : undefined;
         const markup = lookupName ? markupResult.markupLookup.get(lookupName) : undefined;
         if (markup) {
+          // Codex iter-2 fix: wrapper kimliğini doğru raporla. Adapter
+          // support matrix `chartType: 'scatter'` modunda kalıyor (yukarı
+          // useMarkupAdapter çağrısı) çünkü matrix `effectScatter`'ı
+          // ayrıca tanımıyor; ama event payload tüketicisine wrapper'ın
+          // EffectScatter olduğunu söylemesi gerek.
           onMarkupClick({
             markup,
-            chartType: 'scatter',
+            chartType: 'effectScatter',
             seriesIndex: p.seriesIndex,
             dataIndex: p.dataIndex,
             nativeParams: params,
