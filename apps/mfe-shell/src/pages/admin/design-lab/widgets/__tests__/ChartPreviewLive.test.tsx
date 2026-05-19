@@ -84,6 +84,8 @@ vi.mock('@mfe/x-charts', () => {
     PolarChart: sentinel('polar'),
     ThemeRiverChart: sentinel('theme-river'),
     GanttChart: sentinel('gantt'),
+    // PR#2 (Codex 019e3f75): PopulationPyramid HR demographic pyramid.
+    PopulationPyramid: sentinel('population-pyramid'),
     HeatmapChart: sentinel('heatmap'),
     WaterfallChart: sentinel('waterfall'),
     FunnelChart: sentinel('funnel'),
@@ -227,6 +229,7 @@ const CASES: Array<{ chartId: string; expectedTestId: string }> = [
   { chartId: 'polar-chart', expectedTestId: 'mock-polar' },
   { chartId: 'theme-river-chart', expectedTestId: 'mock-theme-river' },
   { chartId: 'gantt-chart', expectedTestId: 'mock-gantt' },
+  { chartId: 'population-pyramid', expectedTestId: 'mock-population-pyramid' },
   { chartId: 'heatmap-chart', expectedTestId: 'mock-heatmap' },
   { chartId: 'waterfall-chart', expectedTestId: 'mock-waterfall' },
   { chartId: 'funnel-chart', expectedTestId: 'mock-funnel' },
@@ -388,6 +391,7 @@ describe('ChartPreviewLive — §4f.2 markup preset forwarding', () => {
     { chartId: 'area-chart', kind: 'area' },
     { chartId: 'heatmap-chart', kind: 'heatmap' },
     { chartId: 'waterfall-chart', kind: 'waterfall' },
+    { chartId: 'population-pyramid', kind: 'population-pyramid' },
   ];
 
   it.each(MARKUP_CHART_KINDS)(
@@ -455,7 +459,7 @@ describe('ChartPreviewLive — §4f.2 markup preset forwarding', () => {
 /* PR-X16 §4f.3 — anomaly a11y preset forwarding */
 
 describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
-  // All 17 enrolled anomaly charts (every count-lock-enrolled chart
+  // All 18 enrolled anomaly charts (every count-lock-enrolled chart
   // except Gauge) — each now has an x-charts mock sentinel below, so
   // §4f.3 anomaly-preset forwarding is harness-covered for the full set.
   const ANOMALY_CHART_KINDS: Array<{ chartId: string; kind: string }> = [
@@ -471,6 +475,7 @@ describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
     { chartId: 'polar-chart', kind: 'polar' },
     { chartId: 'theme-river-chart', kind: 'theme-river' },
     { chartId: 'gantt-chart', kind: 'gantt' },
+    { chartId: 'population-pyramid', kind: 'population-pyramid' },
     { chartId: 'heatmap-chart', kind: 'heatmap' },
     { chartId: 'waterfall-chart', kind: 'waterfall' },
     { chartId: 'funnel-chart', kind: 'funnel' },
