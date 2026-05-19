@@ -58,6 +58,23 @@ const formatValue = (v: number | null, format?: string): string => {
   return formatNumber(v);
 };
 
+/**
+ * KPI value formatter — compacts large currency magnitudes (>= 1M) to a
+ * short notation (e.g. ₺207,7 Mn) so a 9-digit figure cannot overflow its
+ * card. Non-currency / sub-million values fall through to `formatValue`.
+ */
+const formatKpiValue = (v: number | null, format?: string): string => {
+  if (format === 'currency' && v != null && Math.abs(v) >= 1_000_000) {
+    return new Intl.NumberFormat('tr-TR', {
+      style: 'currency',
+      currency: 'TRY',
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(v);
+  }
+  return formatValue(v, format);
+};
+
 const chartCurrencyFormatter = (value: number): string => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
@@ -72,7 +89,7 @@ const sectionClass = 'mb-6';
 const chartRowClass = 'grid grid-cols-1 md:grid-cols-2 gap-4 mb-6';
 const chartFullClass = 'grid grid-cols-1 gap-4 mb-6';
 const cardClass = 'rounded-lg border border-border-subtle bg-surface-default p-4';
-const kpiStripClass = 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 mb-6';
+const kpiStripClass = 'grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6';
 
 /* ------------------------------------------------------------------ */
 /*  KPI Card \u2014 thin shim around `@mfe/x-charts/KPICard`                */
@@ -116,7 +133,7 @@ const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: bool
   return (
     <XKPICard
       title={kpi.title}
-      value={formatValue(kpi.value, kpi.format)}
+      value={formatKpiValue(kpi.value, kpi.format)}
       subtitle={subtitle}
       trend={
         kpi.trend && trendValue
