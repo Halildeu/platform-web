@@ -47,6 +47,9 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     PieChart: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="mock-pie">{children}</div>
     ),
+    WaterfallChart: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="mock-waterfall">{children}</div>
+    ),
   };
 });
 

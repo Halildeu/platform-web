@@ -1,7 +1,14 @@
 import React from 'react';
 import { getLiveKPIs, getLiveCharts, refreshDashboardData } from './api';
 import type { DashboardKPI, DashboardChart, DashboardChartItem, DashboardFilters } from './api';
-import { BarChart, LineChart, PieChart, CrossFilterProvider, useCrossFilter } from '@mfe/x-charts';
+import {
+  BarChart,
+  LineChart,
+  PieChart,
+  WaterfallChart,
+  CrossFilterProvider,
+  useCrossFilter,
+} from '@mfe/x-charts';
 import type { ChartClickEvent, CrossFilterEntry } from '@mfe/x-charts';
 import { KPICard as XKPICard } from '@mfe/x-charts';
 // ESLint exception: lightweight read-only chart-summary grid, no toolbar/variant needed — see CONTRIBUTING grid-contract section.
@@ -323,26 +330,47 @@ const renderSalaryLine = (data: DashboardChartItem[]) => (
   />
 );
 
+/** Narrow a backend-supplied `type` field to the WaterfallChart union. */
+const asWaterfallType = (v: unknown): 'increase' | 'decrease' | 'total' | undefined =>
+  v === 'increase' || v === 'decrease' || v === 'total' ? v : undefined;
+
 /**
- * cost-waterfall — explicit single-series bar (current backend shape).
+ * cost-waterfall — adaptive renderer (employer cost-structure waterfall).
  *
- * TODO(platform-backend PR): the report-service
- * `dashboards/hr-compensation.json` `cost-waterfall` query emits absolute,
- * all-positive line items — not the signed cumulative deltas + total row
- * that `WaterfallChart` (@mfe/x-charts) needs. Feeding absolute values to
- * `WaterfallChart` would inflate the running total and conflate
- * net / tax / employer-cost semantics. Once the backend query emits
- * waterfall-shaped data, swap this renderer to `<WaterfallChart>`.
+ * The report-service `dashboards/hr-compensation.json` `cost-waterfall`
+ * query currently emits absolute, all-positive bar items
+ * (`chartType: "bar"`) → the BarChart fallback below renders, visually
+ * unchanged. The platform-backend follow-up rewrites that query to emit
+ * signed waterfall deltas + a real total row (`chartType: "waterfall"`,
+ * per-item `type`); once it deploys this switches to the canonical
+ * `WaterfallChart` with no further frontend change. The switch is keyed
+ * on `chartType` because `WaterfallChart` needs the signed/total shape —
+ * feeding it the absolute bar payload would inflate the running total.
  */
-const renderCostStructure = (data: DashboardChartItem[]) => (
-  <BarChart
-    data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
-    orientation="horizontal"
-    showValues
-    showGrid
-    valueFormatter={chartCurrencyFormatter}
-  />
-);
+const renderCostStructure = (chart: DashboardChart, data: DashboardChartItem[]) => {
+  if (chart.chartType === 'waterfall') {
+    return (
+      <WaterfallChart
+        data={data.map((d) => ({
+          label: d.label,
+          value: num(d.value),
+          type: asWaterfallType(d.type),
+        }))}
+        showValues
+        valueFormatter={chartCurrencyFormatter}
+      />
+    );
+  }
+  return (
+    <BarChart
+      data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
+      orientation="horizontal"
+      showValues
+      showGrid
+      valueFormatter={chartCurrencyFormatter}
+    />
+  );
+};
 
 /** company-payroll-pie — share of total payroll. */
 const renderPie = (
@@ -386,7 +414,7 @@ const renderChartContent = (
     case 'tenure-salary-relation':
       return renderSalaryLine(data);
     case 'cost-waterfall':
-      return renderCostStructure(data);
+      return renderCostStructure(chart, data);
     case 'company-payroll-pie':
       return renderPie(data, onDataPointClick);
     case 'dept-percentile-radar':
