@@ -235,7 +235,11 @@ const EmptyState = () => (
  */
 const num = (v: number | null | undefined): number => v ?? 0;
 
-/** salary-histogram — pre-binned salary buckets → single-series vertical bars. */
+/**
+ * salary-histogram — pre-binned salary buckets → single-color vertical bars.
+ * A histogram is one distribution, so a one-entry `colors` palette keeps
+ * every bin the same hue (BarChart cycles the supplied palette).
+ */
 const renderHistogram = (
   data: DashboardChartItem[],
   onDataPointClick?: (event: ChartClickEvent) => void,
@@ -243,6 +247,7 @@ const renderHistogram = (
   <BarChart
     data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
     orientation="vertical"
+    colors={['#3b82f6']}
     showValues
     onDataPointClick={onDataPointClick}
   />
@@ -355,8 +360,9 @@ const renderPie = (
 /**
  * Explicit chart-id → wrapper dispatcher. Every `case` is a deliberate
  * contract decision — there is no catch-all that the known charts route
- * through. An unrecognised id (e.g. a newly backend-added chart) falls
- * back to a plain vertical bar so its data still surfaces.
+ * through. An unrecognised id (backend ↔ frontend chart-id drift) renders
+ * the empty state, so the gap is visible rather than silently absorbed
+ * into a generic bar.
  */
 const renderChartContent = (
   chart: DashboardChart | undefined,
@@ -386,7 +392,7 @@ const renderChartContent = (
     case 'dept-percentile-radar':
       return renderPercentileBars(data, onDataPointClick);
     default:
-      return renderRankingBar(data, 'vertical', onDataPointClick);
+      return <EmptyState />;
   }
 };
 
