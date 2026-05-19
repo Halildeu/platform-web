@@ -108,6 +108,9 @@ const CHARTS = [
   // demographic pyramid — diverging horizontal bar on a shared symmetric
   // value axis. Design Lab enrollment PR#2 (the 29th x-charts wrapper).
   ['population-pyramid', 'PopulationPyramid'],
+  // ComboChart (Codex thread 019e41cd AGREE): dual-axis composite bar+line
+  // chart on a shared category x-axis (the 30th x-charts wrapper).
+  ['combo-chart', 'ComboChart'],
 ];
 
 /* ------------------------------------------------------------------ */

@@ -54,6 +54,7 @@ vi.mock('@mfe/x-charts', async () => {
     ThemeRiverChart: stubChart('ThemeRiverChart'),
     GanttChart: stubChart('GanttChart'),
     PopulationPyramid: stubChart('PopulationPyramid'),
+    ComboChart: stubChart('ComboChart'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -108,6 +109,9 @@ const CHART_IDS_WITH_PRESETS = [
   // guard for catalog completeness (LIVE_PROP_SUPPORT + CHART_PRESETS +
   // ChartPreviewLive switch arm).
   'population-pyramid',
+  // ComboChart — dual-axis composite bar+line (Codex 019e41cd). Same
+  // render-smoke guard for catalog completeness.
+  'combo-chart',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',
