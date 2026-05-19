@@ -234,7 +234,15 @@ describe('PopulationPyramid — onDataPointClick', () => {
     const event = onClick.mock.calls[0][0];
     expect(event.value).toBe(200); // POSITIVE — never the negated coord
     expect(event.label).toBe('25-34');
-    expect(event.datum).toMatchObject({ side: 'left', ageBand: '25-34', seriesName: 'Erkek' });
+    // Canonical `label` / `value` must also live INSIDE `datum` (the
+    // cross-filter bus forwards only `event.datum`).
+    expect(event.datum).toMatchObject({
+      side: 'left',
+      ageBand: '25-34',
+      seriesName: 'Erkek',
+      label: '25-34',
+      value: 200,
+    });
   });
 
   it('a markup-overlay click does NOT fire onDataPointClick', () => {

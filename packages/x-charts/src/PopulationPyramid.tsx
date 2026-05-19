@@ -40,6 +40,10 @@ import { ChartA11yShell, useChartA11y } from './a11y';
 import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
 import type { AnomalySummary } from './annotations/computeAnomalyOverlay';
 import type { EChartsOption } from './renderers/echarts-imports';
+// Re-exported so consumers can import these from the wrapper or the
+// `@mfe/x-charts` root — mirrors the per-wrapper convention (BarChart,
+// the PR-X16 depth wrappers).
+export type { ChartClickEvent, ChartMarkup, ChartMarkupClickEvent } from './types';
 import type { ChartClickEvent, ChartMarkup, ChartMarkupClickEvent } from './types';
 import { useMarkupAdapter } from './annotations/useMarkupAdapter';
 import { mergeMarkupPatches } from './annotations/mergeMarkupPatches';
@@ -100,7 +104,11 @@ export interface PopulationPyramidProps extends AccessControlledProps {
   /**
    * Visual overlay markups — threshold lines, highlight bands, KPI
    * labels. NB: markup `x` values are in the signed render domain — a
-   * left-side threshold uses a negative `x`.
+   * left-side threshold uses a negative `x`. Use explicit-coordinate
+   * anchors (`LineMarkup` / `AreaMarkup` `axis` + `value`, `LabelMarkup`
+   * `{ x, y }`); the `LabelMarkup` `{ dataIndex }` anchor is NOT reliable
+   * on this chart (v1 limitation — the generic cartesian resolver assumes
+   * a category-x / value-y layout, the opposite of a pyramid).
    */
   markups?: ChartMarkup[];
   /** Callback fired when a markup overlay is clicked. */
@@ -257,8 +265,8 @@ const PopulationPyramidInner = React.forwardRef<
     // Symmetric value domain — both sides must share `[-max, max]` so the
     // two halves are visually comparable (Codex pitfall C).
     const maxAbs =
-      maxValue !== undefined && maxValue > 0
-        ? maxValue
+      Number.isFinite(maxValue) && (maxValue as number) > 0
+        ? (maxValue as number)
         : Math.max(...safeRows.flatMap((d) => [d.left, d.right]), 1);
 
     const labelFontSize = scaleFontSize(11, densityFontMultiplier);
@@ -463,7 +471,10 @@ const PopulationPyramidInner = React.forwardRef<
           : Math.abs(typeof p.value === 'number' ? p.value : 0);
       const ageBand = typeof raw.ageBand === 'string' ? raw.ageBand : (p.name ?? '');
       onDataPointClick({
-        datum: { ...raw, seriesName: p.seriesName },
+        // Canonical payload — `label` + `value` live INSIDE `datum` too
+        // so `CrossFilterChart` (which forwards only `event.datum`) can
+        // resolve `emitFields: ['label']` / `['value']`. Mirrors BarChart.
+        datum: { ...raw, label: ageBand, value: rawValue, seriesName: p.seriesName },
         value: rawValue,
         label: ageBand,
       });
