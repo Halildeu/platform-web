@@ -1,14 +1,7 @@
 import React from 'react';
 import { getLiveKPIs, getLiveCharts, refreshDashboardData } from './api';
 import type { DashboardKPI, DashboardChart, DashboardChartItem, DashboardFilters } from './api';
-import {
-  BarChart,
-  PieChart,
-  useEChartsRenderer,
-  buildDesignLabEChartsTheme,
-  CrossFilterProvider,
-  useCrossFilter,
-} from '@mfe/x-charts';
+import { BarChart, LineChart, PieChart, CrossFilterProvider, useCrossFilter } from '@mfe/x-charts';
 import type { ChartClickEvent, CrossFilterEntry } from '@mfe/x-charts';
 import { KPICard as XKPICard } from '@mfe/x-charts';
 // ESLint exception: lightweight read-only chart-summary grid, no toolbar/variant needed — see CONTRIBUTING grid-contract section.
@@ -221,116 +214,181 @@ const ChartBlock: React.FC<{
 };
 
 /* ------------------------------------------------------------------ */
-/*  Chart Renderers                                                    */
+/*  Chart Renderers — explicit per-chart-id wrapper selection          */
+/*                                                                     */
+/*  No generic bar catch-all: every chart id deliberately picks its     */
+/*  @mfe/x-charts contract wrapper. `renderChartContent` (switch on     */
+/*  chart.id) at the end of this block is the single dispatch point.    */
 /* ------------------------------------------------------------------ */
-
-const renderBarChart = (
-  data: DashboardChartItem[],
-  config?: Record<string, unknown>,
-  valueFormatter?: (value: number) => string,
-  onDataPointClick?: (event: ChartClickEvent) => void,
-) => {
-  if (!data.length) return <EmptyState />;
-  const orientation =
-    config?.orientation === 'horizontal' ? ('horizontal' as const) : ('vertical' as const);
-  return (
-    <BarChart
-      data={data}
-      orientation={orientation}
-      showValues={Boolean(config?.showValues)}
-      valueFormatter={valueFormatter}
-      onDataPointClick={onDataPointClick}
-    />
-  );
-};
-
-/** Dual-axis line chart — left axis: currency (Ort. Maaş), right axis: count (Çalışan) */
-const DualAxisLineChart: React.FC<{ data: DashboardChartItem[] }> = ({ data }) => {
-  const hasDualSeries = data.some((d) => d.value2 != null);
-  const theme = React.useMemo(() => buildDesignLabEChartsTheme(), []);
-
-  const option = React.useMemo(() => {
-    const categories = data.map((d) => d.label);
-    const salaryData = data.map((d) => d.value);
-    const countData = data.map((d) => (d.value2 as number) ?? 0);
-
-    const series: Record<string, unknown>[] = [
-      {
-        type: 'line',
-        name: 'Ort. Maaş',
-        data: salaryData,
-        yAxisIndex: 0,
-        lineStyle: { color: '#3b82f6', width: 2 },
-        itemStyle: { color: '#3b82f6' },
-        symbolSize: 6,
-      },
-    ];
-
-    if (hasDualSeries) {
-      series.push({
-        type: 'bar',
-        name: 'Çalışan Sayısı',
-        data: countData,
-        yAxisIndex: 1,
-        itemStyle: { color: '#f59e0b', opacity: 0.6 },
-        barMaxWidth: 30,
-      });
-    }
-
-    return {
-      tooltip: { trigger: 'axis' as const },
-      legend: { show: true },
-      xAxis: { type: 'category' as const, data: categories },
-      yAxis: [
-        {
-          type: 'value' as const,
-          name: 'Ort. Maaş (₺)',
-          axisLabel: { formatter: (v: number) => chartCurrencyFormatter(v) },
-          splitLine: { show: true },
-        },
-        ...(hasDualSeries
-          ? [
-              {
-                type: 'value' as const,
-                name: 'Çalışan Sayısı',
-                axisLabel: { formatter: (v: number) => formatNumber(v) },
-                splitLine: { show: false },
-              },
-            ]
-          : []),
-      ],
-      series,
-    };
-  }, [data, hasDualSeries]);
-
-  const { containerRef } = useEChartsRenderer({ option, theme });
-
-  return (
-    <div ref={containerRef as React.Ref<HTMLDivElement>} style={{ height: 320, width: '100%' }} />
-  );
-};
-
-const renderPieChart = (
-  data: DashboardChartItem[],
-  valueFormatter?: (value: number) => string,
-  onDataPointClick?: (event: ChartClickEvent) => void,
-) => {
-  if (!data.length) return <EmptyState />;
-  return (
-    <PieChart
-      data={data}
-      showLegend
-      valueFormatter={valueFormatter}
-      onDataPointClick={onDataPointClick}
-    />
-  );
-};
 
 const EmptyState = () => (
   <div className="flex items-center justify-center h-full text-sm text-text-subtle">
     Veri bulunamadı
   </div>
 );
+
+/**
+ * `api.ts` types dashboard aggregates as `number | null` — backend
+ * `AVG` / `MIN` / `MAX` (incl. `AVG(CASE WHEN gender = ...)`) can resolve
+ * to SQL NULL. The x-charts wrapper contracts require `number`, so every
+ * adapter normalizes through `num()` before passing chart props.
+ */
+const num = (v: number | null | undefined): number => v ?? 0;
+
+/** salary-histogram — pre-binned salary buckets → single-series vertical bars. */
+const renderHistogram = (
+  data: DashboardChartItem[],
+  onDataPointClick?: (event: ChartClickEvent) => void,
+) => (
+  <BarChart
+    data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
+    orientation="vertical"
+    showValues
+    onDataPointClick={onDataPointClick}
+  />
+);
+
+/** Single-series ranking bar — dept-salary / education-premium / collar-type. */
+const renderRankingBar = (
+  data: DashboardChartItem[],
+  orientation: 'vertical' | 'horizontal',
+  onDataPointClick?: (event: ChartClickEvent) => void,
+) => (
+  <BarChart
+    data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
+    orientation={orientation}
+    showValues
+    valueFormatter={chartCurrencyFormatter}
+    onDataPointClick={onDataPointClick}
+  />
+);
+
+/** gender-salary-comparison — grouped bars: Erkek (`value`) + Kadın (`value2`). */
+const renderGenderBars = (
+  data: DashboardChartItem[],
+  onDataPointClick?: (event: ChartClickEvent) => void,
+) => (
+  <BarChart
+    data={data.map((d) => ({
+      label: d.label,
+      value: num(d.value),
+      value2: num(d.value2),
+    }))}
+    orientation="horizontal"
+    series={[
+      { field: 'value', name: 'Erkek' },
+      { field: 'value2', name: 'Kadın' },
+    ]}
+    showLegend
+    valueFormatter={chartCurrencyFormatter}
+    onDataPointClick={onDataPointClick}
+  />
+);
+
+/** dept-percentile-radar — grouped bars: Min / Ort. / Maks per department. */
+const renderPercentileBars = (
+  data: DashboardChartItem[],
+  onDataPointClick?: (event: ChartClickEvent) => void,
+) => (
+  <BarChart
+    data={data.map((d) => ({
+      label: d.label,
+      value: num(d.value),
+      min_val: num(d.min_val),
+      max_val: num(d.max_val),
+    }))}
+    orientation="horizontal"
+    series={[
+      { field: 'min_val', name: 'Min' },
+      { field: 'value', name: 'Ort.' },
+      { field: 'max_val', name: 'Maks' },
+    ]}
+    showLegend
+    valueFormatter={chartCurrencyFormatter}
+    onDataPointClick={onDataPointClick}
+  />
+);
+
+/** salary-trend-12m / tenure-salary-relation — single-series line over an ordered axis. */
+const renderSalaryLine = (data: DashboardChartItem[]) => (
+  <LineChart
+    series={[{ name: 'Ort. Maaş', data: data.map((d) => num(d.value)) }]}
+    labels={data.map((d) => d.label)}
+    valueFormatter={chartCurrencyFormatter}
+  />
+);
+
+/**
+ * cost-waterfall — explicit single-series bar (current backend shape).
+ *
+ * TODO(platform-backend PR): the report-service
+ * `dashboards/hr-compensation.json` `cost-waterfall` query emits absolute,
+ * all-positive line items — not the signed cumulative deltas + total row
+ * that `WaterfallChart` (@mfe/x-charts) needs. Feeding absolute values to
+ * `WaterfallChart` would inflate the running total and conflate
+ * net / tax / employer-cost semantics. Once the backend query emits
+ * waterfall-shaped data, swap this renderer to `<WaterfallChart>`.
+ */
+const renderCostStructure = (data: DashboardChartItem[]) => (
+  <BarChart
+    data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
+    orientation="horizontal"
+    showValues
+    showGrid
+    valueFormatter={chartCurrencyFormatter}
+  />
+);
+
+/** company-payroll-pie — share of total payroll. */
+const renderPie = (
+  data: DashboardChartItem[],
+  onDataPointClick?: (event: ChartClickEvent) => void,
+) => (
+  <PieChart
+    data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
+    showLegend
+    valueFormatter={chartCurrencyFormatter}
+    onDataPointClick={onDataPointClick}
+  />
+);
+
+/**
+ * Explicit chart-id → wrapper dispatcher. Every `case` is a deliberate
+ * contract decision — there is no catch-all that the known charts route
+ * through. An unrecognised id (e.g. a newly backend-added chart) falls
+ * back to a plain vertical bar so its data still surfaces.
+ */
+const renderChartContent = (
+  chart: DashboardChart | undefined,
+  onDataPointClick?: (event: ChartClickEvent) => void,
+): React.ReactNode => {
+  const data = chart?.data ?? [];
+  if (!chart || data.length === 0) return <EmptyState />;
+  switch (chart.id) {
+    case 'salary-histogram':
+      return renderHistogram(data, onDataPointClick);
+    case 'dept-salary-comparison':
+      return renderRankingBar(data, 'horizontal', onDataPointClick);
+    case 'gender-salary-comparison':
+      return renderGenderBars(data, onDataPointClick);
+    case 'education-salary-premium':
+      return renderRankingBar(data, 'horizontal', onDataPointClick);
+    case 'salary-trend-12m':
+      return renderSalaryLine(data);
+    case 'collar-type-salary':
+      return renderRankingBar(data, 'vertical', onDataPointClick);
+    case 'tenure-salary-relation':
+      return renderSalaryLine(data);
+    case 'cost-waterfall':
+      return renderCostStructure(data);
+    case 'company-payroll-pie':
+      return renderPie(data, onDataPointClick);
+    case 'dept-percentile-radar':
+      return renderPercentileBars(data, onDataPointClick);
+    default:
+      return renderRankingBar(data, 'vertical', onDataPointClick);
+  }
+};
 
 /* ------------------------------------------------------------------ */
 /*  Main Dashboard Component                                           */
@@ -595,10 +653,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value', label: 'Kişi Sayısı', format: 'number' },
           ]}
         >
-          {renderBarChart(
-            findChart('salary-histogram')?.data ?? [],
-            findChart('salary-histogram')?.chartConfig,
-            undefined,
+          {renderChartContent(
+            findChart('salary-histogram'),
             makeChartClickHandler('salary-histogram'),
           )}
         </ChartBlock>
@@ -615,10 +671,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
           ]}
         >
-          {renderBarChart(
-            findChart('dept-salary-comparison')?.data ?? [],
-            { ...findChart('dept-salary-comparison')?.chartConfig, orientation: 'horizontal' },
-            chartCurrencyFormatter,
+          {renderChartContent(
+            findChart('dept-salary-comparison'),
             makeChartClickHandler('dept-salary-comparison'),
           )}
         </ChartBlock>
@@ -635,10 +689,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value2', label: 'Kadın Ort.', format: 'currency' },
           ]}
         >
-          {renderBarChart(
-            findChart('gender-salary-comparison')?.data ?? [],
-            { ...findChart('gender-salary-comparison')?.chartConfig, orientation: 'horizontal' },
-            chartCurrencyFormatter,
+          {renderChartContent(
+            findChart('gender-salary-comparison'),
             makeChartClickHandler('gender-salary-comparison'),
           )}
         </ChartBlock>
@@ -651,10 +703,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
           ]}
         >
-          {renderBarChart(
-            findChart('education-salary-premium')?.data ?? [],
-            { ...findChart('education-salary-premium')?.chartConfig, orientation: 'horizontal' },
-            chartCurrencyFormatter,
+          {renderChartContent(
+            findChart('education-salary-premium'),
             makeChartClickHandler('education-salary-premium'),
           )}
         </ChartBlock>
@@ -672,7 +722,10 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value2', label: 'Çalışan Sayısı', format: 'number' },
           ]}
         >
-          <DualAxisLineChart data={findChart('salary-trend-12m')?.data ?? []} />
+          {renderChartContent(
+            findChart('salary-trend-12m'),
+            makeChartClickHandler('salary-trend-12m'),
+          )}
         </ChartBlock>
       </div>
 
@@ -687,10 +740,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value2', label: 'Kişi Sayısı', format: 'number' },
           ]}
         >
-          {renderBarChart(
-            findChart('collar-type-salary')?.data ?? [],
-            findChart('collar-type-salary')?.chartConfig,
-            chartCurrencyFormatter,
+          {renderChartContent(
+            findChart('collar-type-salary'),
             makeChartClickHandler('collar-type-salary'),
           )}
         </ChartBlock>
@@ -703,10 +754,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
           ]}
         >
-          {renderBarChart(
-            findChart('tenure-salary-relation')?.data ?? [],
-            findChart('tenure-salary-relation')?.chartConfig,
-            chartCurrencyFormatter,
+          {renderChartContent(
+            findChart('tenure-salary-relation'),
             makeChartClickHandler('tenure-salary-relation'),
           )}
         </ChartBlock>
@@ -723,11 +772,7 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value', label: 'Tutar', format: 'currency' },
           ]}
         >
-          {renderBarChart(
-            findChart('cost-waterfall')?.data ?? [],
-            { orientation: 'horizontal', showValues: true, showGrid: true },
-            chartCurrencyFormatter,
-          )}
+          {renderChartContent(findChart('cost-waterfall'), makeChartClickHandler('cost-waterfall'))}
         </ChartBlock>
       </div>
 
@@ -742,9 +787,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'value', label: 'Toplam Bordro', format: 'currency' },
           ]}
         >
-          {renderPieChart(
-            findChart('company-payroll-pie')?.data ?? [],
-            chartCurrencyFormatter,
+          {renderChartContent(
+            findChart('company-payroll-pie'),
             makeChartClickHandler('company-payroll-pie'),
           )}
         </ChartBlock>
@@ -759,10 +803,8 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
             { key: 'max_val', label: 'Max', format: 'currency' },
           ]}
         >
-          {renderBarChart(
-            findChart('dept-percentile-radar')?.data ?? [],
-            { ...findChart('dept-percentile-radar')?.chartConfig, orientation: 'horizontal' },
-            chartCurrencyFormatter,
+          {renderChartContent(
+            findChart('dept-percentile-radar'),
             makeChartClickHandler('dept-percentile-radar'),
           )}
         </ChartBlock>
