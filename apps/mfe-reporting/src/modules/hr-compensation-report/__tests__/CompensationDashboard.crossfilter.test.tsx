@@ -47,6 +47,9 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     ComboChart: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="mock-combo">{children}</div>
     ),
+    EffectScatterChart: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="mock-effect-scatter">{children}</div>
+    ),
     PieChart: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="mock-pie">{children}</div>
     ),

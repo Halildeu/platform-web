@@ -4,6 +4,7 @@ import type { DashboardKPI, DashboardChart, DashboardChartItem, DashboardFilters
 import {
   BarChart,
   ComboChart,
+  EffectScatterChart,
   LineChart,
   PieChart,
   WaterfallChart,
@@ -368,26 +369,52 @@ const renderGenderBars = (
   />
 );
 
-/** dept-percentile-radar — grouped bars: Min / Ort. / Maks per department. */
-const renderPercentileBars = (
+/**
+ * dept-percentile-radar — Departman Maaş Yayılımı: EffectScatter
+ * outlier emphasis. Each department renders as a single rippled point
+ * at `(ortalama maaş, maaş aralığı)`; ripple emphasises the departman
+ * outliers without the grouped-bar visual debt the previous
+ * BarChart-orientation 'horizontal' rendering carried (Codex thread
+ * 019e4292 PR#3 AGREE).
+ *
+ * Mapping (Codex iter-1 spec):
+ *   x = num(d.value)            // departman ortalama maaş
+ *   y = Math.max(0, max - min)  // maaş aralığı (clamped non-negative)
+ *   name = d.label              // departman adı — REQUIRED for cross-filter
+ *
+ * `size` is omitted deliberately: the wrapper's `point.size` would
+ * become the pixel radius, and a raw 10K-50K maaş aralığı would
+ * explode the marker. A constant `symbolSize=18` keeps every point
+ * legible regardless of dataset scale. `anomalySummary` is also
+ * deliberately not wired here: the dashboard has no real outlier
+ * detector for this chart, and a "widest range = outlier" mock would
+ * mislabel via the a11y live region (Codex iter-1 REVISE).
+ *
+ * The chart id stays `dept-percentile-radar` so the cross-filter map
+ * (`CHART_FILTER_MAP['dept-percentile-radar'].valueField === 'label'`)
+ * keeps routing the click event's department label to the active
+ * filter. The Min / Ort. / Max grid table directly below the chart
+ * preserves the precise numeric breakdown the old grouped bar showed.
+ */
+const renderDepartmentSalarySpreadEffectScatter = (
   data: DashboardChartItem[],
   onDataPointClick?: (event: ChartClickEvent) => void,
 ) => (
-  <BarChart
-    data={data.map((d) => ({
-      label: d.label,
-      value: num(d.value),
-      min_val: num(d.min_val),
-      max_val: num(d.max_val),
-    }))}
-    orientation="horizontal"
+  <EffectScatterChart
+    data={data.map((d) => {
+      const min = num(d.min_val);
+      const max = num(d.max_val);
+      return {
+        x: num(d.value),
+        y: Math.max(0, max - min),
+        name: d.label,
+      };
+    })}
     size="lg"
-    series={[
-      { field: 'min_val', name: 'Min' },
-      { field: 'value', name: 'Ort.' },
-      { field: 'max_val', name: 'Maks' },
-    ]}
-    showLegend
+    showGrid
+    xLabel="Ortalama maaş"
+    yLabel="Maaş aralığı"
+    symbolSize={18}
     valueFormatter={chartCurrencyFormatter}
     onDataPointClick={onDataPointClick}
   />
@@ -527,7 +554,7 @@ const renderChartContent = (
     case 'company-payroll-pie':
       return renderPie(data, onDataPointClick);
     case 'dept-percentile-radar':
-      return renderPercentileBars(data, onDataPointClick);
+      return renderDepartmentSalarySpreadEffectScatter(data, onDataPointClick);
     default:
       return <EmptyState />;
   }
