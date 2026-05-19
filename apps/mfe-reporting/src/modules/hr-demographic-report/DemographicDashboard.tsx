@@ -939,6 +939,14 @@ const DashboardSection: React.FC<{
 // table internally. The symmetric `[-max, +max]` value domain is also
 // wrapper-owned, so the manual `maxVal` / `valueAxisMin` / `valueAxisMax`
 // wiring is dropped.
+//
+// PR#4: no explicit `colors` prop. The wrapper is accent-driven and
+// resolves its `effectivePalette` to real hex internally. A `colors`
+// prop of raw `var(--…)` strings does NOT resolve on the ECharts canvas
+// renderer — canvas `fillStyle` ignores CSS custom properties, so both
+// series collapse to one undifferentiated dark fallback (the shim hit
+// the same constraint). Letting the wrapper own the palette keeps the
+// two genders visually distinct + theme-aware.
 // ---------------------------------------------------------------------------
 function AgePyramidChart({
   data,
@@ -958,7 +966,6 @@ function AgePyramidChart({
       data={pyramidData}
       leftLabel="Erkek"
       rightLabel="Kadin"
-      colors={['var(--action-primary)', 'var(--accent-soft)']}
       size="md"
       showLegend
     />

@@ -80,6 +80,7 @@ interface CapturedPyramid {
   leftLabel?: string;
   rightLabel?: string;
   data?: unknown;
+  colors?: unknown;
 }
 const pyramidRegistry: CapturedPyramid[] = [];
 
@@ -138,11 +139,13 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     leftLabel?: string;
     rightLabel?: string;
     data?: unknown;
+    colors?: unknown;
   }) => {
     pyramidRegistry.push({
       leftLabel: props.leftLabel,
       rightLabel: props.rightLabel,
       data: props.data,
+      colors: props.colors,
     });
     return <div data-testid="x-population-pyramid" />;
   };
@@ -371,6 +374,10 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     const pyramid = pyramidRegistry[0];
     expect(pyramid.leftLabel).toBe('Erkek');
     expect(pyramid.rightLabel).toBe('Kadin');
+    // PR#4: no `colors` prop — raw `var(--…)` strings don't resolve on the
+    // ECharts canvas; the wrapper's accent-driven effectivePalette owns the
+    // two-gender coloring. Locks against a CSS-var color regression.
+    expect(pyramid.colors).toBeUndefined();
     // Exact field-mapping lock: ageGroup → ageBand, male → left, female →
     // right, all UNSIGNED. Exact equality (vs a loose `left >= 0`) also
     // catches a male↔female swap or a re-introduced `-d.male` negation —
