@@ -108,6 +108,15 @@ export type { PopulationPyramidProps, PopulationPyramidDatum } from './Populatio
 // Codex thread 019e41cd AGREE: dual-axis composite (bar + line) chart.
 export { ComboChart } from './ComboChart';
 export type { ComboChartProps, ComboChartSeries, ComboSeriesType, ComboAxisId } from './ComboChart';
+// Codex thread 019e425b AGREE: standalone effectScatter wrapper — scatter
+// + ripple animation. Distinct from ScatterChart (no big-data/brush API);
+// use case is low-/mid-cardinality emphasis points (outliers, live metrics).
+export { EffectScatterChart } from './EffectScatterChart';
+export type {
+  EffectScatterChartProps,
+  EffectScatterDataPoint,
+  EffectScatterRippleEffect,
+} from './EffectScatterChart';
 // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 export { BoxPlotChart } from './BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';
