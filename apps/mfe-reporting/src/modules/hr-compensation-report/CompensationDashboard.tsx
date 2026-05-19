@@ -133,15 +133,18 @@ const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: bool
   /*
    * Tone-derived top accent — gives each card a colour-coded edge so the
    * metric's intent reads at a glance and the strip no longer looks like
-   * a row of flat, undifferentiated white boxes. `tone` comes from the
-   * backend KPI payload (`positive` / `negative` / `info`).
+   * a row of flat, undifferentiated white boxes. The backend KPI
+   * `toneRules` emit `success` / `warning` / `danger` / `info`, so all
+   * four are mapped here; `positive` / `negative` are accepted as aliases.
    */
   const toneAccent =
-    kpi.tone === 'positive'
+    kpi.tone === 'success' || kpi.tone === 'positive'
       ? 'border-t-4 border-t-state-success-text'
-      : kpi.tone === 'negative'
+      : kpi.tone === 'danger' || kpi.tone === 'negative'
         ? 'border-t-4 border-t-state-error-text'
-        : 'border-t-4 border-t-action-primary';
+        : kpi.tone === 'warning'
+          ? 'border-t-4 border-t-state-warning-text'
+          : 'border-t-4 border-t-action-primary';
 
   return (
     <XKPICard
