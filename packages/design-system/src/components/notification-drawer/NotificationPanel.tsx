@@ -63,6 +63,15 @@ export interface NotificationPanelProps extends AccessControlledProps {
   /** Custom element rendered in the header actions area. */
   headerAccessory?: React.ReactNode;
   /**
+   * Custom element rendered as its own row directly below the header
+   * (e.g. a tab switcher / segmented control). Distinct from
+   * {@code headerAccessory} so the tab strip never has to share the
+   * single header row with action buttons + close affordance —
+   * preventing horizontal overflow on narrow drawer widths where the
+   * combined content otherwise pushes the tab strip off-screen.
+   */
+  tabBar?: React.ReactNode;
+  /**
    * Custom element rendered below the notification list, inside the
    * scroll container (e.g. a "load more" button for paginated
    * surfaces). Only shown when {@code items.length > 0}.
@@ -308,6 +317,7 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
       clearLabel = 'Temizle',
       removeLabel = 'Bildirimi kapat',
       headerAccessory,
+      tabBar,
       listFooter,
       getPrimaryActionLabel,
       onPrimaryAction,
@@ -535,6 +545,15 @@ export const NotificationPanel = React.forwardRef<HTMLDivElement, NotificationPa
             </div>
           ) : null}
         </header>
+
+        {tabBar ? (
+          <div
+            data-component="notification-panel-tabbar"
+            className="flex flex-wrap items-center gap-2 border-b border-border-subtle/75 bg-[var(--surface-card)] px-6 py-2 backdrop-blur-xs"
+          >
+            {tabBar}
+          </div>
+        ) : null}
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {showFilters && visibleFilters.length > 0 && items.length > 0 ? (

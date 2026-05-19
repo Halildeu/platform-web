@@ -455,7 +455,7 @@ const NotificationCenter: React.FC = () => {
         onRemoveSelected={isHistory ? undefined : handleRemoveSelected}
         getPrimaryActionLabel={isHistory ? undefined : getPrimaryActionLabel}
         onPrimaryAction={isHistory ? undefined : handlePrimaryAction}
-        headerAccessory={tabSwitcher}
+        tabBar={tabSwitcher}
         listFooter={historyFooter}
         showFilters
         selectable={!isHistory}
