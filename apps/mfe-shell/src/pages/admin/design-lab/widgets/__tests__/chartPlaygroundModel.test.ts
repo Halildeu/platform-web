@@ -600,7 +600,7 @@ describe('chartPlaygroundModel — preset gallery', () => {
   });
 
   it('applyPreset shallow-merges patch over defaults', () => {
-    const defaults: Record<string, unknown> = {
+    const defaults: PlaygroundState = {
       showGrid: true,
       animate: true,
       orientation: 'vertical',
