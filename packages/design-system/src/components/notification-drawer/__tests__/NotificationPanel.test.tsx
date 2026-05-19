@@ -183,6 +183,29 @@ describe('NotificationPanel — aksiyonlar', () => {
     const { container } = render(<NotificationPanel items={sampleItems} />);
     expect(container.querySelector('[data-component="notification-panel-tabbar"]')).toBeNull();
   });
+
+  it('tabBar header descendant DEGIL (overflow kontrat invariant)', () => {
+    // Codex iter-1 P4: data-component selector header icine yanlislikla
+    // tasinsa bile gecebilir. Bu test gercek tab semantics ile header
+    // descendant olmama invariant'ini DOM hiyerarsisi uzerinden pinler.
+    const { container } = render(
+      <NotificationPanel
+        items={sampleItems}
+        tabBar={
+          <div role="tablist" aria-label="Test tabs">
+            <button type="button" role="tab">
+              Gecmis
+            </button>
+          </div>
+        }
+      />,
+    );
+    const header = container.querySelector('header');
+    const tablist = screen.getByRole('tablist', { name: /test tabs/i });
+    expect(header).not.toBeNull();
+    expect(header).not.toContainElement(tablist);
+    expect(screen.getByRole('tab', { name: /gecmis/i })).toBeInTheDocument();
+  });
 });
 
 /* ------------------------------------------------------------------ */

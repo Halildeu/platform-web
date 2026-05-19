@@ -365,7 +365,11 @@ const NotificationCenter: React.FC = () => {
   );
 
   const tabSwitcher = (
-    <div role="tablist" aria-label="Bildirim sekmeleri" className="flex gap-1 text-xs">
+    <div
+      role="tablist"
+      aria-label="Bildirim sekmeleri"
+      className="flex min-w-0 max-w-full flex-wrap gap-1 text-xs"
+    >
       <button
         type="button"
         role="tab"
