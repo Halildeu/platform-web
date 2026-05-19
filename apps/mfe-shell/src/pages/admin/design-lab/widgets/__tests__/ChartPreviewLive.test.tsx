@@ -78,6 +78,12 @@ vi.mock('@mfe/x-charts', () => {
     RadarChart: sentinel('radar'),
     TreemapChart: sentinel('treemap'),
     TreeChart: sentinel('tree'),
+    // PR-X16 ECharts-Depth wrappers — sentinels so routing + §4f.3
+    // anomaly-forwarding coverage spans all 17 enrolled anomaly charts.
+    CalendarHeatmap: sentinel('calendar-heatmap'),
+    PolarChart: sentinel('polar'),
+    ThemeRiverChart: sentinel('theme-river'),
+    GanttChart: sentinel('gantt'),
     HeatmapChart: sentinel('heatmap'),
     WaterfallChart: sentinel('waterfall'),
     FunnelChart: sentinel('funnel'),
@@ -217,6 +223,10 @@ const CASES: Array<{ chartId: string; expectedTestId: string }> = [
   { chartId: 'radar-chart', expectedTestId: 'mock-radar' },
   { chartId: 'treemap-chart', expectedTestId: 'mock-treemap' },
   { chartId: 'tree-chart', expectedTestId: 'mock-tree' },
+  { chartId: 'calendar-heatmap', expectedTestId: 'mock-calendar-heatmap' },
+  { chartId: 'polar-chart', expectedTestId: 'mock-polar' },
+  { chartId: 'theme-river-chart', expectedTestId: 'mock-theme-river' },
+  { chartId: 'gantt-chart', expectedTestId: 'mock-gantt' },
   { chartId: 'heatmap-chart', expectedTestId: 'mock-heatmap' },
   { chartId: 'waterfall-chart', expectedTestId: 'mock-waterfall' },
   { chartId: 'funnel-chart', expectedTestId: 'mock-funnel' },
@@ -445,10 +455,9 @@ describe('ChartPreviewLive — §4f.2 markup preset forwarding', () => {
 /* PR-X16 §4f.3 — anomaly a11y preset forwarding */
 
 describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
-  // The 13 enrolled anomaly charts that have an x-charts mock sentinel
-  // here. calendar-heatmap / polar / theme-river / gantt are enrolled
-  // too but have no sentinel in this routing mock — their forwarding is
-  // covered by the resolver unit tests in chartPlaygroundModel.test.ts.
+  // All 17 enrolled anomaly charts (every count-lock-enrolled chart
+  // except Gauge) — each now has an x-charts mock sentinel below, so
+  // §4f.3 anomaly-preset forwarding is harness-covered for the full set.
   const ANOMALY_CHART_KINDS: Array<{ chartId: string; kind: string }> = [
     { chartId: 'bar-chart', kind: 'bar' },
     { chartId: 'line-chart', kind: 'line' },
@@ -458,6 +467,10 @@ describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
     { chartId: 'radar-chart', kind: 'radar' },
     { chartId: 'treemap-chart', kind: 'treemap' },
     { chartId: 'tree-chart', kind: 'tree' },
+    { chartId: 'calendar-heatmap', kind: 'calendar-heatmap' },
+    { chartId: 'polar-chart', kind: 'polar' },
+    { chartId: 'theme-river-chart', kind: 'theme-river' },
+    { chartId: 'gantt-chart', kind: 'gantt' },
     { chartId: 'heatmap-chart', kind: 'heatmap' },
     { chartId: 'waterfall-chart', kind: 'waterfall' },
     { chartId: 'funnel-chart', kind: 'funnel' },
