@@ -6,9 +6,13 @@
  * `var(--…)` colors must be resolved to a concrete value before they reach
  * an ECharts color field. These tests pin every branch of that resolution.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 
-import { resolveCssVarColor, resolveCssVarColors } from '../resolveCssVarColor';
+import {
+  resolveCssVarColor,
+  resolveCssVarColors,
+  resolveTreeNodeColors,
+} from '../resolveCssVarColor';
 
 /** Remove any inline custom properties set on <html> during a test. */
 function clearRootVars(...tokens: string[]): void {
@@ -126,5 +130,96 @@ describe('resolveCssVarColors', () => {
 
   it('applies the fallback branch per entry', () => {
     expect(resolveCssVarColors(['var(--xc-undefined-tok, #abcdef)'])).toEqual(['#abcdef']);
+  });
+});
+
+describe('resolveCssVarColor — SSR (no DOM)', () => {
+  // The resolver's documented contract is "no DOM → input returned
+  // unchanged". `vi.stubGlobal('document', undefined)` makes
+  // `typeof document === 'undefined'` true, simulating a server render.
+  // The explicit guard at the TOP of resolveCssVarColor must bail out
+  // BEFORE the regex parse — otherwise a `var(--x, fallback)` input
+  // would resolve to its fallback (readCssVar returns '' with no DOM),
+  // which is NOT a passthrough. The client re-resolves on hydration.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns a var(--token, #fallback) input UNCHANGED with no DOM', () => {
+    vi.stubGlobal('document', undefined);
+    // With a DOM this would resolve to '#ffffff' (the fallback). The
+    // SSR guard makes it a true passthrough instead.
+    expect(resolveCssVarColor('var(--brand, #ffffff)')).toBe('var(--brand, #ffffff)');
+  });
+
+  it('returns a plain var(--token) input UNCHANGED with no DOM', () => {
+    vi.stubGlobal('document', undefined);
+    expect(resolveCssVarColor('var(--xc-test-primary)')).toBe('var(--xc-test-primary)');
+  });
+
+  it('still passes hex / undefined through unchanged with no DOM', () => {
+    vi.stubGlobal('document', undefined);
+    expect(resolveCssVarColor('#3b82f6')).toBe('#3b82f6');
+    expect(resolveCssVarColor(undefined)).toBeUndefined();
+  });
+});
+
+describe('resolveTreeNodeColors', () => {
+  afterEach(() => {
+    clearRootVars('--xc-test-primary', '--xc-test-accent', '--xc-test-border');
+  });
+
+  it('resolves itemStyle.color in a flat node list', () => {
+    document.documentElement.style.setProperty('--xc-test-primary', '#1d4ed8');
+    const out = resolveTreeNodeColors([
+      { name: 'a', itemStyle: { color: 'var(--xc-test-primary)' } },
+    ] as Array<{ name: string; itemStyle?: { color?: string; borderColor?: string } }>);
+    expect(out?.[0].itemStyle?.color).toBe('#1d4ed8');
+  });
+
+  it('resolves itemStyle.borderColor (Sunburst index-signature path)', () => {
+    document.documentElement.style.setProperty('--xc-test-border', '#22c55e');
+    const out = resolveTreeNodeColors([
+      { name: 'a', itemStyle: { borderColor: 'var(--xc-test-border)' } },
+    ] as Array<{ name: string; itemStyle?: { color?: string; borderColor?: string } }>);
+    expect(out?.[0].itemStyle?.borderColor).toBe('#22c55e');
+  });
+
+  it('resolves both color and borderColor on the same node', () => {
+    document.documentElement.style.setProperty('--xc-test-primary', '#1d4ed8');
+    document.documentElement.style.setProperty('--xc-test-border', '#22c55e');
+    const out = resolveTreeNodeColors([
+      {
+        name: 'a',
+        itemStyle: { color: 'var(--xc-test-primary)', borderColor: 'var(--xc-test-border)' },
+      },
+    ] as Array<{ name: string; itemStyle?: { color?: string; borderColor?: string } }>);
+    expect(out?.[0].itemStyle).toEqual({ color: '#1d4ed8', borderColor: '#22c55e' });
+  });
+
+  it('recurses into children, resolving nested itemStyle colors', () => {
+    document.documentElement.style.setProperty('--xc-test-accent', '#ec4899');
+    const out = resolveTreeNodeColors([
+      {
+        name: 'root',
+        children: [{ name: 'child', itemStyle: { color: 'var(--xc-test-accent)' } }],
+      },
+    ] as Array<{
+      name: string;
+      itemStyle?: { color?: string; borderColor?: string };
+      children?: Array<{ name: string; itemStyle?: { color?: string; borderColor?: string } }>;
+    }>);
+    expect(out?.[0].children?.[0].itemStyle?.color).toBe('#ec4899');
+  });
+
+  it('leaves nodes without an itemStyle structurally intact (non-mutating clone)', () => {
+    const input = [{ name: 'plain' }];
+    const out = resolveTreeNodeColors(input);
+    expect(out?.[0]).toEqual({ name: 'plain' });
+    expect(out?.[0]).not.toBe(input[0]);
+  });
+
+  it('returns undefined when the input is undefined', () => {
+    expect(resolveTreeNodeColors(undefined)).toBeUndefined();
   });
 });

@@ -436,9 +436,14 @@ const BarChartInner = React.forwardRef<
       ? {
           showBackground: true,
           backgroundStyle: {
-            color: backgroundStyle?.color ?? 'rgba(180, 180, 180, 0.12)',
+            // `backgroundStyle` is a public prop — its `color` / `borderColor`
+            // are consumer-supplied and may be `var(--token)` strings the
+            // canvas renderer cannot read. Resolve both before they reach
+            // ECharts; the translucent default fill stays intact when the
+            // consumer omits `color`.
+            color: resolveCssVarColor(backgroundStyle?.color) ?? 'rgba(180, 180, 180, 0.12)',
             borderRadius: backgroundStyle?.borderRadius ?? 4,
-            borderColor: backgroundStyle?.borderColor,
+            borderColor: resolveCssVarColor(backgroundStyle?.borderColor),
             borderWidth: backgroundStyle?.borderWidth,
             opacity: backgroundStyle?.opacity,
           },

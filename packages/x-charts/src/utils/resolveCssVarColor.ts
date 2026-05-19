@@ -34,9 +34,10 @@
 
 /**
  * Matches a single CSS `var()` expression, capturing the token name and an
- * optional fallback. The fallback capture is greedy so a nested `var()` in
- * the fallback position is captured whole — e.g. for
- * `var(--a, var(--b, #fff))` group 2 is `var(--b, #fff)`.
+ * optional fallback. The fallback capture (`[\s\S]+?`) is *lazy*, but the
+ * anchored final `\)$` still forces it to consume the entire fallback
+ * expression — including a nested `var()` / `rgba()`. So for
+ * `var(--a, var(--b, #fff))` group 2 is the whole `var(--b, #fff)`.
  */
 const VAR_EXPRESSION = /^var\(\s*(--[^,)]+?)\s*(?:,\s*([\s\S]+?)\s*)?\)$/;
 
@@ -79,6 +80,16 @@ export function resolveCssVarColor(color: string | undefined): string | undefine
     return color;
   }
 
+  // SSR true-passthrough guard. Without a DOM, `readCssVar` can only ever
+  // return `''`, so a `var(--token, fallback)` input would otherwise resolve
+  // to its (recursively-resolved) fallback — NOT a passthrough, contradicting
+  // the documented "no DOM → input returned unchanged" contract. Bailing out
+  // *before* the regex parse keeps SSR a genuine no-op; the client re-runs
+  // the resolver against a live DOM on hydration.
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') {
+    return color;
+  }
+
   const trimmed = color.trim();
   const match = VAR_EXPRESSION.exec(trimmed);
   if (!match) {
@@ -118,28 +129,40 @@ export function resolveCssVarColors(colors: string[] | undefined): string[] | un
 }
 
 /**
- * Minimal shape of a hierarchical chart node carrying an optional per-node
- * `itemStyle.color`. Tree / Treemap / Sunburst wrappers share this contract
- * (`{ name, value?, children?, itemStyle?: { color? } }`). The constraint is
- * intentionally narrow — only the two fields the resolver reads — and carries
- * NO index signature, so a concrete node type (e.g. `SunburstNode`) does not
- * need one to satisfy `T extends TreeColorNode`.
+ * Minimal shape of a hierarchical chart node carrying optional per-node
+ * `itemStyle.color` / `itemStyle.borderColor`. Tree / Treemap / Sunburst
+ * wrappers share this contract. The constraint is intentionally narrow — only
+ * the fields the resolver reads — and carries NO index signature, so a
+ * concrete node type (e.g. `SunburstNode`, whose own `itemStyle` DOES have an
+ * index signature) still satisfies `T extends TreeColorNode`.
+ *
+ * `borderColor` is included because `SunburstNode.itemStyle` is typed
+ * `{ color?: string; [key: string]: unknown }` — its index signature lets a
+ * consumer pass `itemStyle: { borderColor: 'var(--token)' }`, which would
+ * otherwise reach the canvas un-normalized. `TreeNode` / `TreemapNode` only
+ * expose `color`, so for those node types resolving `borderColor` is simply a
+ * no-op (the `typeof === 'string'` guard skips an absent field).
  */
 export interface TreeColorNode {
-  itemStyle?: { color?: string };
+  itemStyle?: { color?: string; borderColor?: string };
   children?: readonly TreeColorNode[];
 }
 
 /**
  * Recursively resolve consumer-supplied `var(--token)` colors in a tree of
- * chart nodes. Each node's `itemStyle.color` is passed through
- * {@link resolveCssVarColor}; children are walked depth-first. Nodes that
- * carry no `itemStyle.color` are returned structurally unchanged (a new
- * object is still produced so the input tree is never mutated).
+ * chart nodes. Each node's `itemStyle.color` and `itemStyle.borderColor` is
+ * passed through {@link resolveCssVarColor}; children are walked depth-first.
+ * Nodes that carry no resolvable color field are returned structurally
+ * unchanged (a new object is still produced so the input tree is never
+ * mutated).
  *
  * Used by tree-shaped wrappers (Tree / Treemap / Sunburst) where the consumer
- * color lives in nested `itemStyle.color` rather than a flat `colors` prop —
- * the canvas renderer cannot read CSS custom properties at any depth.
+ * color lives in nested `itemStyle` rather than a flat `colors` prop — the
+ * canvas renderer cannot read CSS custom properties at any depth. `TreeNode` /
+ * `TreemapNode` only expose `itemStyle.color`; `SunburstNode.itemStyle` has an
+ * index signature so a consumer can also pass `borderColor` — both are
+ * normalized here, and the `borderColor` branch is a harmless no-op for the
+ * node types that never set it.
  *
  * The return type is the input node type `T`, so the resolved tree drops
  * straight back into an ECharts `series.data` slot without a cast.
@@ -156,10 +179,13 @@ export function resolveTreeNodeColors<T extends TreeColorNode>(
   if (nodes === undefined) return undefined;
   return nodes.map((node) => {
     const next: T = { ...node };
-    if (node.itemStyle && typeof node.itemStyle.color === 'string') {
+    const hasColor = node.itemStyle && typeof node.itemStyle.color === 'string';
+    const hasBorderColor = node.itemStyle && typeof node.itemStyle.borderColor === 'string';
+    if (hasColor || hasBorderColor) {
       next.itemStyle = {
         ...node.itemStyle,
-        color: resolveCssVarColor(node.itemStyle.color),
+        ...(hasColor ? { color: resolveCssVarColor(node.itemStyle!.color) } : {}),
+        ...(hasBorderColor ? { borderColor: resolveCssVarColor(node.itemStyle!.borderColor) } : {}),
       };
     }
     if (Array.isArray(node.children)) {
