@@ -106,6 +106,23 @@ describe('resolveCssVarColor', () => {
       'linear-gradient(var(--x), #fff)',
     );
   });
+
+  it('is ReDoS-safe on a pathological var()-prefixed input (CodeQL js/polynomial-redos)', () => {
+    // The VAR_EXPRESSION regex is linear by construction — adjacent
+    // quantifiers range over disjoint character classes. A `var(--(` prefix
+    // followed by 100k tabs (the exact shape CodeQL's polynomial-redos query
+    // flagged) must resolve effectively instantly; a backtracking regex
+    // would hang for many seconds.
+    const pathological = `var(--(${'\t'.repeat(100_000)}`;
+    const start = performance.now();
+    const result = resolveCssVarColor(pathological);
+    const elapsed = performance.now() - start;
+    // Linear-time: sub-millisecond in practice — 100ms leaves a 100x+
+    // margin while staying far below any polynomial-backtracking runtime.
+    expect(elapsed).toBeLessThan(100);
+    // Not a complete var() expression (no closing paren) → passthrough.
+    expect(result).toBe(pathological);
+  });
 });
 
 describe('resolveCssVarColors', () => {

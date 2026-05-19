@@ -34,12 +34,20 @@
 
 /**
  * Matches a single CSS `var()` expression, capturing the token name and an
- * optional fallback. The fallback capture (`[\s\S]+?`) is *lazy*, but the
- * anchored final `\)$` still forces it to consume the entire fallback
- * expression — including a nested `var()` / `rgba()`. So for
- * `var(--a, var(--b, #fff))` group 2 is the whole `var(--b, #fff)`.
+ * optional fallback.
+ *
+ * ReDoS-safe by construction (CodeQL `js/polynomial-redos`): every pair of
+ * adjacent quantifiers ranges over DISJOINT character classes, so the engine
+ * has no ambiguous partition to backtrack over —
+ *   - the token class `[^\s,)]` excludes whitespace, so the surrounding
+ *     `\s*` can never also match a token character;
+ *   - the fallback is captured greedily as `[\s\S]*` with NO trailing `\s*`
+ *     (it is `.trim()`-ed in code instead) — a greedy `[\s\S]*` followed by
+ *     the literal `\)$` backtracks at most once.
+ * The greedy fallback still consumes a whole nested `var()` / `rgba()`; for
+ * `var(--a, var(--b, #fff))` group 2 is the entire `var(--b, #fff)`.
  */
-const VAR_EXPRESSION = /^var\(\s*(--[^,)]+?)\s*(?:,\s*([\s\S]+?)\s*)?\)$/;
+const VAR_EXPRESSION = /^var\(\s*(--[^\s,)]+)\s*(?:,([\s\S]*))?\)$/;
 
 /**
  * Resolve a single CSS custom property by token name (e.g. `--action-primary`).
@@ -104,13 +112,18 @@ export function resolveCssVarColor(color: string | undefined): string | undefine
     return resolveCssVarColor(resolved);
   }
 
-  if (fallback !== undefined) {
+  // The fallback group is captured raw — the regex does NO in-pattern
+  // `\s*` trimming around it (that would re-introduce the ambiguous
+  // adjacent-quantifier ReDoS). Trim here instead; an empty / whitespace-
+  // only fallback (`var(--x,)` / `var(--x, )`) counts as "no fallback".
+  const fallbackColor = fallback?.trim();
+  if (fallbackColor) {
     // Recursively resolve the fallback — it can be a nested var() or literal.
-    return resolveCssVarColor(fallback);
+    return resolveCssVarColor(fallbackColor);
   }
 
-  // Bare `var(--token)` with an undefined token and no fallback: nothing
-  // useful to resolve to — return the original input unchanged.
+  // Bare `var(--token)` with an undefined token and no usable fallback:
+  // nothing to resolve to — return the original input unchanged.
   return color;
 }
 
