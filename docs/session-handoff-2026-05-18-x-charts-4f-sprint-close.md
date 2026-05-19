@@ -65,36 +65,32 @@ temiz, tsc 0-yeni hata (git-stash baseline 521=521 her PR'da), CI tam
 yeşil (admin'siz squash merge), `ai-post-merge-cleanup.sh` forensic
 archive tag, cross-AI Codex review (thread `019e3af0`).
 
-## 4. İspatlamaz / Bekleyen
+## 4. İspatlamaz / Bekleyen — HEPSİ KAPANDI (post-handoff)
 
-- **(a) ChartPreviewLive test-harness completeness** — `spawn_task` chip
-  açık. `ChartPreviewLive.test.tsx` `vi.mock('@mfe/x-charts')` factory'sinde
-  `CalendarHeatmap` / `PolarChart` / `ThemeRiverChart` / `GanttChart`
-  sentinel'ları eksik → bu 4 chart'ın §4f.3 forwarding'i sadece resolver
-  unit testiyle kapsanıyor (routing/forwarding harness'ı değil). Codex
-  (`019e3af0`) "merge blocker değil, test-harness completeness" dedi.
-- **(b) CONTRACT.md §1.1 semantic-preservation audit** — önceki
-  handoff'tan taşınan açık iş; `packages/x-charts/CONTRACT.md` §1.1
-  accent-immune listesi 28-wrapper döneminde stale. Ayrı `spawn_task`
-  chip'i; §4f sprint'inden bağımsız.
-- **(c) pre-existing TS2345** — `chartPlaygroundModel.test.ts`
-  `applyPreset(defaults: Record<string, unknown>)` — §4f.0'dan beri bilinen
-  pre-existing tip hatası. §4f sprint'i boyunca baseline'da (521) sabit
-  tutuldu, hiçbir §4f PR'ı yeni hata eklemedi. Küçük ayrı temizlik PR'ı.
+Bu handoff yazıldığında 3 loose-end açıktı; üçü de post-handoff
+PR'larıyla kapatıldı:
+
+- **(a) ChartPreviewLive test-harness completeness** — ✅ **PR #603**
+  (`d49ce5ba`). `ChartPreviewLive.test.tsx` mock'una `CalendarHeatmap` /
+  `PolarChart` / `ThemeRiverChart` / `GanttChart` sentinel'ları + routing
+  CASES + `ANOMALY_CHART_KINDS` girişleri eklendi → routing + §4f.3
+  forwarding artık 17/17 anomaly chart'ı kapsıyor. vitest 76/76, Codex
+  AGREE.
+- **(b) CONTRACT.md §1.1 accent-immune semantic audit** — ✅ **bu PR**.
+  28-wrapper audit: `CalendarHeatmap` accent-immune listesine eklendi
+  (kaynak L256 self-declare), stale "other 10" sayımı drift-proof ifadeye
+  çevrildi, `GeoMap` controlled soft-exception (choropleth visualMap
+  gradient) olarak not edildi. Codex AGREE.
+- **(c) pre-existing TS2345** — ✅ **PR #604** (`bc026744`).
+  `chartPlaygroundModel.test.ts` `applyPreset` fixture'ı
+  `Record<string, unknown>` → `PlaygroundState` düzeltildi; mfe-shell
+  tsc baseline 521 → 520. Codex AGREE.
 
 ## 5. Aksiyon Listesi — sıradaki session
 
-§4f count-lock coverage sprint **kapandı (5/5)**. Sıradaki session'ın §4f
-işi yok. Açık loose-end'ler düşük öncelikli ve ayrı:
-
-### P2 — test-harness + audit (her ikisi `spawn_task` chip olarak açık)
-
-- `ChartPreviewLive.test.tsx` 4-sentinel ekleme — madde 4(a)
-- `CONTRACT.md` §1.1 accent-immune semantic audit — madde 4(b)
-
-### P3 — opsiyonel temizlik
-
-- `chartPlaygroundModel.test.ts` pre-existing `TS2345` fix — madde 4(c)
+§4f count-lock coverage sprint **kapandı (5/5)** ve §4'teki üç loose-end
+de post-handoff PR'larıyla (#603, #604 + bu PR) **kapatıldı**. Sıradaki
+session için §4f / loose-end işi **kalmadı**.
 
 PR-X16 ECharts-Depth campaign + §4f count-lock sprint tümüyle kapandı.
 Design Lab playground honest live-surface coverage %76.8 → %91.0; hard
