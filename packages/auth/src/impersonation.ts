@@ -238,10 +238,20 @@ export function decodeJwtPayload(
     const globalScope = (typeof window !== 'undefined' ? window : (globalThis as unknown)) as {
       atob?: (s: string) => string;
       Buffer?: { from: (s: string, e: string) => { toString: (e: string) => string } };
+      TextDecoder?: new (label?: string) => { decode: (input: Uint8Array) => string };
     };
     let decoded: string | null = null;
     if (globalScope?.atob) {
-      decoded = globalScope.atob(padded);
+      // atob() yields a binary (Latin-1) string; JWT payloads are UTF-8,
+      // so decode the raw bytes as UTF-8 — otherwise non-ASCII claims
+      // (e.g. Turkish ç/ğ/ş) are mangled into mojibake.
+      const binary = globalScope.atob(padded);
+      decoded =
+        typeof globalScope.TextDecoder === 'function'
+          ? new globalScope.TextDecoder('utf-8').decode(
+              Uint8Array.from(binary, (ch) => ch.charCodeAt(0)),
+            )
+          : binary;
     } else if (globalScope?.Buffer) {
       decoded = globalScope.Buffer.from(padded, 'base64').toString('utf-8');
     }
