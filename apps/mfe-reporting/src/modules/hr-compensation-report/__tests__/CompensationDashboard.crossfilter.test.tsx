@@ -41,15 +41,12 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     BarChart: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="mock-bar">{children}</div>
     ),
+    LineChart: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="mock-line">{children}</div>
+    ),
     PieChart: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="mock-pie">{children}</div>
     ),
-    useEChartsRenderer: () => ({
-      containerRef: { current: null },
-      instance: null,
-      hasRendered: false,
-    }),
-    buildDesignLabEChartsTheme: () => ({}),
   };
 });
 

@@ -32,10 +32,16 @@ export interface DashboardKPI {
 
 export interface DashboardChartItem {
   label: string;
-  value: number;
-  value2?: number;
-  min_val?: number;
-  max_val?: number;
+  /**
+   * Dashboard aggregates (`COUNT` / `AVG` / `MIN` / `MAX`, including
+   * `AVG(CASE WHEN gender = ...)`) can resolve to SQL NULL — e.g. a
+   * gender-split average for a department with no employees of that
+   * gender. Chart adapters normalize null → 0 before passing chart props.
+   */
+  value: number | null;
+  value2?: number | null;
+  min_val?: number | null;
+  max_val?: number | null;
   [key: string]: unknown;
 }
 
