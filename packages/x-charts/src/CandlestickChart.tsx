@@ -18,6 +18,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import {
@@ -205,9 +206,12 @@ const CandlestickChartInner = React.forwardRef<
     // module has registered (see `candlestickFeature` above).
     if (isEmpty || !candlestickFeatureReady) return null;
 
+    // Consumer `bullishColor` / `bearishColor` are run through the CSS-var
+    // resolver so `var(--token)` values become concrete — the canvas renderer
+    // cannot read CSS custom properties. effectivePalette is already hex.
     const palette = effectivePalette ?? ['#22c55e', '#ef4444'];
-    const upColor = bullishColor ?? palette[0] ?? '#22c55e';
-    const downColor = bearishColor ?? palette[1] ?? '#ef4444';
+    const upColor = resolveCssVarColor(bullishColor) ?? palette[0] ?? '#22c55e';
+    const downColor = resolveCssVarColor(bearishColor) ?? palette[1] ?? '#ef4444';
 
     // ECharts candlestick wire format: [open, close, low, high].
     const candlestickData: number[][] = data.map((d) => [d.open, d.close, d.low, d.high]);

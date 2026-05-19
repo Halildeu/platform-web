@@ -12,6 +12,7 @@ import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { resolveCssVarColor, resolveCssVarColors } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -339,7 +340,11 @@ const BarChartInner = React.forwardRef<
 
     // Codex iter-13 fallback chain: explicit `colors` prop > effectivePalette
     // (accent or HC/Print theme builder) > inline DEFAULT_PALETTE.
-    const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
+    // Consumer-supplied `colors` are resolved through resolveCssVarColors so
+    // `var(--token)` strings become concrete values — the canvas renderer
+    // cannot read CSS custom properties. effectivePalette / DEFAULT_PALETTE
+    // are already resolved hex, so the resolver is a no-op for them.
+    const palette = resolveCssVarColors(colors) ?? effectivePalette ?? DEFAULT_PALETTE;
 
     const labelFontSize = scaleFontSize(11, densityFontMultiplier);
 
@@ -453,7 +458,7 @@ const BarChartInner = React.forwardRef<
           ...backgroundOptions,
           ...barSizeOptions,
           data: safeData.map((d) => ((d as Record<string, unknown>)[s.field] as number) ?? 0),
-          itemStyle: { color: s.color ?? palette[i % palette.length] },
+          itemStyle: { color: resolveCssVarColor(s.color) ?? palette[i % palette.length] },
           label: showValues
             ? {
                 show: true,
@@ -472,7 +477,7 @@ const BarChartInner = React.forwardRef<
             ...barSizeOptions,
             data: safeData.map((d, i) => ({
               value: d.value,
-              itemStyle: { color: d.color ?? palette[i % palette.length] },
+              itemStyle: { color: resolveCssVarColor(d.color) ?? palette[i % palette.length] },
             })),
             label: showValues
               ? {

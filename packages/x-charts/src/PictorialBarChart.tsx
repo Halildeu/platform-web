@@ -16,6 +16,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor, resolveCssVarColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend, buildResponsiveGrid, buildResponsiveAxisLabel } from './responsive';
@@ -222,7 +223,11 @@ const PictorialBarChartInner = React.forwardRef<
     // module has registered (see `pictorialFeature` above).
     if (isEmpty || !pictorialFeatureReady) return null;
 
-    const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
+    // Consumer `colors` / per-datum `d.color` are run through the CSS-var
+    // resolver so `var(--token)` strings become concrete values — the canvas
+    // renderer cannot read CSS custom properties. effectivePalette /
+    // DEFAULT_PALETTE are already resolved hex.
+    const palette = resolveCssVarColors(colors) ?? effectivePalette ?? DEFAULT_PALETTE;
     const categories = data.map((d) => d.label);
 
     const responsiveAxisLabel = buildResponsiveAxisLabel({
@@ -299,7 +304,7 @@ const PictorialBarChartInner = React.forwardRef<
           data: data.map((d, i) => ({
             value: d.value,
             symbol: d.symbol ?? symbol,
-            itemStyle: { color: d.color ?? palette[i % palette.length] },
+            itemStyle: { color: resolveCssVarColor(d.color) ?? palette[i % palette.length] },
           })),
           cursor: onDataPointClick ? 'pointer' : 'default',
         },

@@ -22,6 +22,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -275,6 +276,14 @@ const CalendarHeatmapInner = React.forwardRef<
     const dataMin = minProp ?? Math.min(...values);
     const dataMax = maxProp ?? Math.max(...values);
 
+    // Resolve a consumer `var(--token)` gradient color to a concrete value —
+    // the canvas renderer cannot read CSS custom properties. DEFAULT_COLORS
+    // is already hex, so this is a no-op for the default.
+    const gradientColors: [string, string] = [
+      resolveCssVarColor(colors[0]),
+      resolveCssVarColor(colors[1]),
+    ];
+
     // `range` is optional — derive a safe [start, end] from the data
     // span when the consumer omits it (Codex 019e33a9 must-have).
     const effectiveRange: string | [string, string] = range ?? [
@@ -351,7 +360,7 @@ const CalendarHeatmapInner = React.forwardRef<
         orient: 'horizontal' as const,
         left: 'center',
         bottom: 12,
-        inRange: { color: colors },
+        inRange: { color: gradientColors },
         textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
       },
       series: [

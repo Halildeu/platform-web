@@ -17,6 +17,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveTreeNodeColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -344,7 +345,10 @@ const SunburstChartInner = React.forwardRef<
     if (isEmpty) return null;
 
     const palette = effectivePalette ?? DEFAULT_PALETTE;
-    const coloredData = colorizeTopLevel(data, palette);
+    // Resolve any consumer `var(--token)` colors in the (possibly nested)
+    // node tree before assigning palette defaults — the canvas renderer
+    // cannot read CSS custom properties at any depth.
+    const coloredData = colorizeTopLevel(resolveTreeNodeColors(data), palette);
     const maxDepth = computeMaxDepth(coloredData);
     const levels = levelsProp ?? autoLevels(maxDepth, radius, densityFontMultiplier);
     const focusValue = resolveHighlightFocus(highlightPolicy);

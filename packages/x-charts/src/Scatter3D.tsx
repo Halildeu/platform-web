@@ -44,6 +44,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -221,7 +222,9 @@ export function buildScatter3DOption(input: BuildScatter3DOptionInput): EChartsO
       value: [p.x, p.y, p.z, v],
     };
     if (p.label !== undefined) item.name = p.label;
-    if (p.color !== undefined) item.itemStyle = { color: p.color };
+    // Resolve a consumer `var(--token)` color — the canvas/WebGL renderer
+    // cannot read CSS custom properties.
+    if (p.color !== undefined) item.itemStyle = { color: resolveCssVarColor(p.color) };
     if (p.size !== undefined) item.symbolSize = p.size;
     return item;
   });

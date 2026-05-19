@@ -17,6 +17,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -273,7 +274,9 @@ const FunnelChartInner = React.forwardRef<
       name: d.name,
       value: d.value,
       itemStyle: {
-        color: d.color ?? palette[i % palette.length],
+        // Consumer `d.color` is resolved so a `var(--token)` becomes
+        // concrete — the canvas renderer cannot read CSS custom properties.
+        color: resolveCssVarColor(d.color) ?? palette[i % palette.length],
       },
     }));
 

@@ -18,6 +18,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend, buildResponsiveGrid, buildResponsiveAxisLabel } from './responsive';
@@ -255,9 +256,15 @@ const BoxPlotChartInner = React.forwardRef<
     // module has registered (see `boxplotFeature` above).
     if (isEmpty || !boxplotFeatureReady) return null;
 
+    // Consumer `colors.box` / `colors.outlier` are run through the CSS-var
+    // resolver so `var(--token)` values become concrete — the canvas renderer
+    // cannot read CSS custom properties. The outlier default is itself a
+    // `var()` literal, so the whole expression is resolved.
     const palette = effectivePalette ?? ['#3b82f6'];
-    const boxColor = colors?.box ?? palette[0] ?? '#3b82f6';
-    const outlierColor = colors?.outlier ?? 'var(--state-warning-text, #f59e0b)';
+    const boxColor = resolveCssVarColor(colors?.box) ?? palette[0] ?? '#3b82f6';
+    const outlierColor = resolveCssVarColor(
+      colors?.outlier ?? 'var(--state-warning-text, #f59e0b)',
+    );
 
     // Two paths: raw values → compute quartiles ourselves; quartiles
     // already supplied → pass through. Selected per-entry; mixing modes

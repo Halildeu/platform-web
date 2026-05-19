@@ -35,6 +35,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -285,7 +286,7 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         }
         const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
         if (d.label !== undefined) item.name = d.label;
-        if (d.color !== undefined) item.itemStyle = { color: d.color };
+        if (d.color !== undefined) item.itemStyle = { color: resolveCssVarColor(d.color) };
         if (d.size !== undefined) item.symbolSize = d.size;
         return item;
       });
@@ -310,7 +311,7 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         }
         const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
         if (d.label !== undefined) item.name = d.label;
-        if (d.color !== undefined) item.itemStyle = { color: d.color };
+        if (d.color !== undefined) item.itemStyle = { color: resolveCssVarColor(d.color) };
         return item;
       });
       if (layerHasValue) numericSeriesIndexes.push(i);
@@ -335,7 +336,7 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
           [d.to[0], d.to[1]],
         ],
       };
-      if (d.color !== undefined) item.lineStyle = { color: d.color };
+      if (d.color !== undefined) item.lineStyle = { color: resolveCssVarColor(d.color) };
       if (d.label !== undefined) item.name = d.label;
       return item;
     });

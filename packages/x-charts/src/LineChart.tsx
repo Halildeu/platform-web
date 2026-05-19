@@ -12,6 +12,7 @@ import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -293,30 +294,33 @@ const LineChartInner = React.forwardRef<
       icon: 'roundRect',
     });
 
-    const echartsSeriesList = safeSeries.map((s, i) => ({
-      type: 'line' as const,
-      name: s.name,
-      data: s.data,
-      // ECharts ignores `smooth` when `step` is set, but we still pass
-      // `false` explicitly for clarity. `step` takes precedence so a
-      // caller that sets both gets step lines (matches the documented
-      // mutual-exclusivity).
-      smooth: step ? false : curved,
-      step: step ?? false,
-      connectNulls,
-      symbol: showDots ? 'circle' : 'none',
-      symbolSize: showDots ? 6 : 0,
-      lineStyle: { color: s.color ?? palette[i % palette.length], width: 2 },
-      itemStyle: { color: s.color ?? palette[i % palette.length] },
-      areaStyle: showArea
-        ? { color: s.color ?? palette[i % palette.length], opacity: 0.18 }
-        : undefined,
-      emphasis: {
-        focus: 'series' as const,
-        itemStyle: { borderWidth: 2 },
-      },
-      cursor: onDataPointClick ? 'pointer' : 'default',
-    }));
+    const echartsSeriesList = safeSeries.map((s, i) => {
+      // Resolve a consumer `var(--token)` color once — the canvas renderer
+      // cannot read CSS custom properties. `palette` is already resolved.
+      const seriesColor = resolveCssVarColor(s.color) ?? palette[i % palette.length];
+      return {
+        type: 'line' as const,
+        name: s.name,
+        data: s.data,
+        // ECharts ignores `smooth` when `step` is set, but we still pass
+        // `false` explicitly for clarity. `step` takes precedence so a
+        // caller that sets both gets step lines (matches the documented
+        // mutual-exclusivity).
+        smooth: step ? false : curved,
+        step: step ?? false,
+        connectNulls,
+        symbol: showDots ? 'circle' : 'none',
+        symbolSize: showDots ? 6 : 0,
+        lineStyle: { color: seriesColor, width: 2 },
+        itemStyle: { color: seriesColor },
+        areaStyle: showArea ? { color: seriesColor, opacity: 0.18 } : undefined,
+        emphasis: {
+          focus: 'series' as const,
+          itemStyle: { borderWidth: 2 },
+        },
+        cursor: onDataPointClick ? 'pointer' : 'default',
+      };
+    });
 
     return {
       animation: animate,

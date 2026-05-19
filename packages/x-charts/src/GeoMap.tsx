@@ -32,6 +32,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -326,7 +327,10 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       const values = echartsData.map((d) => d.value).filter((v) => Number.isFinite(v));
       const min = visualMap?.min ?? (values.length > 0 ? Math.min(...values) : 0);
       const max = visualMap?.max ?? (values.length > 0 ? Math.max(...values) : 1);
-      const colors = visualMap?.colors ?? DEFAULT_VISUALMAP_COLORS;
+      // Consumer `visualMap.colors` are run through the CSS-var resolver so
+      // `var(--token)` strings become concrete values — the canvas renderer
+      // cannot read CSS custom properties. DEFAULT_VISUALMAP_COLORS is hex.
+      const colors = resolveCssVarColors(visualMap?.colors) ?? DEFAULT_VISUALMAP_COLORS;
       const showVisualMap = visualMap?.show ?? true;
 
       const position = visualMap?.position ?? 'bottom';

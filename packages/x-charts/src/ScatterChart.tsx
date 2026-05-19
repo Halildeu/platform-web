@@ -14,6 +14,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { guardChartCallback } from './access/guardChartCallback';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
+import { resolveCssVarColor, resolveCssVarColors } from './utils/resolveCssVarColor';
 import {
   chooseRenderer,
   detectWebGLCapability,
@@ -491,7 +492,11 @@ const ScatterChartInner = React.forwardRef<
     // ceiling claim).
     if (isEmpty || webGLPending) return null;
 
-    const palette = colors ?? effectivePalette ?? getDefaultPalette();
+    // Consumer `colors` / per-point `d.color` are run through the CSS-var
+    // resolver so `var(--token)` strings become concrete values — the canvas
+    // renderer cannot read CSS custom properties. effectivePalette /
+    // getDefaultPalette() are already resolved hex.
+    const palette = resolveCssVarColors(colors) ?? effectivePalette ?? getDefaultPalette();
     const fontFamily = getCSSVar('--font-family-sans', 'Inter, system-ui, sans-serif');
     const textPrimary = getCSSVar('--text-primary', '#1a1a2e');
     const textSecondary = getCSSVar('--text-secondary', '#6b7280');
@@ -502,7 +507,7 @@ const ScatterChartInner = React.forwardRef<
     const scatterData = safeData.map((d, i) => ({
       value: bubble && d.size != null ? [d.x, d.y, d.size] : [d.x, d.y],
       name: d.label ?? `Point ${i + 1}`,
-      itemStyle: d.color ? { color: d.color } : undefined,
+      itemStyle: d.color ? { color: resolveCssVarColor(d.color) } : undefined,
     }));
 
     // Bubble: symbolSize maps size field to visual radius.

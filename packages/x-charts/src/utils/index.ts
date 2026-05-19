@@ -30,3 +30,10 @@ export {
   useChartLocale,
 } from './locale';
 export type { ChartLocaleConfig } from './locale';
+
+export {
+  resolveCssVarColor,
+  resolveCssVarColors,
+  resolveTreeNodeColors,
+} from './resolveCssVarColor';
+export type { TreeColorNode } from './resolveCssVarColor';

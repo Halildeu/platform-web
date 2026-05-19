@@ -17,6 +17,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -268,12 +269,15 @@ const SankeyChartInner = React.forwardRef<
     if (isEmpty) return null;
 
     /* -- Assign default colors to nodes without explicit color -- */
+    // A consumer `n.itemStyle.color` is run through the CSS-var resolver so a
+    // `var(--token)` value becomes concrete — the canvas renderer cannot read
+    // CSS custom properties. effectivePalette / DEFAULT_PALETTE are already hex.
     const palette = effectivePalette ?? DEFAULT_PALETTE;
     const coloredNodes = nodes.map((n, i) => ({
       ...n,
       itemStyle: {
-        color: n.itemStyle?.color ?? palette[i % palette.length],
         ...n.itemStyle,
+        color: resolveCssVarColor(n.itemStyle?.color) ?? palette[i % palette.length],
       },
     }));
 
