@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T18:58:42.873Z",
+  "generatedAt": "2026-05-19T21:24:09.032Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -147,7 +147,9 @@
       ],
       "symbols": [
         "BarChart",
+        "CHART_CANVAS_HEIGHT",
         "ChartClickEvent",
+        "ChartSize",
         "CrossFilterEntry",
         "CrossFilterProvider",
         "LineChart",

@@ -8,8 +8,9 @@ import {
   WaterfallChart,
   CrossFilterProvider,
   useCrossFilter,
+  CHART_CANVAS_HEIGHT,
 } from '@mfe/x-charts';
-import type { ChartClickEvent, CrossFilterEntry } from '@mfe/x-charts';
+import type { ChartClickEvent, ChartSize, CrossFilterEntry } from '@mfe/x-charts';
 import { KPICard as XKPICard } from '@mfe/x-charts';
 // ESLint exception: lightweight read-only chart-summary grid, no toolbar/variant needed — see CONTRIBUTING grid-contract section.
 import { AgGridReact } from 'ag-grid-react';
@@ -86,7 +87,7 @@ const chartCurrencyFormatter = (value: number): string => {
 /* ------------------------------------------------------------------ */
 
 const sectionClass = 'mb-6';
-const chartRowClass = 'grid grid-cols-1 md:grid-cols-2 gap-4 mb-6';
+const chartRowClass = 'grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 items-start';
 const chartFullClass = 'grid grid-cols-1 gap-4 mb-6';
 const cardClass = 'rounded-lg border border-border-subtle bg-surface-default p-4';
 const kpiStripClass = 'grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6';
@@ -236,25 +237,28 @@ const ChartDataGrid: React.FC<{
 const ChartBlock: React.FC<{
   chart: DashboardChart | undefined;
   title?: string;
-  height?: string;
   children?: React.ReactNode;
   gridColumns?: ChartGridColumn[];
-}> = ({ chart, title, height, children, gridColumns }) => {
+}> = ({ chart, title, children, gridColumns }) => {
   const chartTitle = chart?.title ?? title ?? '';
   const data = chart?.data ?? [];
   /*
    * The chart is the primary view; the per-chart summary grid duplicates
    * it 1:1. It sits behind a collapsed-by-default disclosure so every card
    * isn't trailed by a redundant always-on AG Grid.
+   *
+   * No fixed Tailwind height + `overflow-hidden` wrapper around the chart:
+   * the x-charts wrappers already set their canvas height via
+   * `CHART_CANVAS_HEIGHT[size]` (300px md / 400px lg). A shorter outer
+   * height clipped the bottom-anchored ECharts legend and tooltip overlays.
+   * The card now flexes to the chart's natural canvas height.
    */
   const [tableOpen, setTableOpen] = React.useState(false);
   const hasTable = Boolean(gridColumns) && data.length > 0;
   return (
     <div className={cardClass}>
       <h3 className="text-sm font-medium text-text-primary mb-3">{chartTitle}</h3>
-      <div className={`${height ?? 'h-72'} overflow-hidden`}>
-        {chart && data.length > 0 ? children : <EmptyState />}
-      </div>
+      <div className="relative">{chart && data.length > 0 ? children : <EmptyState />}</div>
       {hasTable && (
         <>
           <button
@@ -282,7 +286,10 @@ const ChartBlock: React.FC<{
 /* ------------------------------------------------------------------ */
 
 const EmptyState = () => (
-  <div className="flex items-center justify-center h-full text-sm text-text-subtle">
+  <div
+    className="flex items-center justify-center text-sm text-text-subtle"
+    style={{ minHeight: CHART_CANVAS_HEIGHT.md }}
+  >
     Veri bulunamadı
   </div>
 );
@@ -318,10 +325,12 @@ const renderRankingBar = (
   data: DashboardChartItem[],
   orientation: 'vertical' | 'horizontal',
   onDataPointClick?: (event: ChartClickEvent) => void,
+  size: ChartSize = 'md',
 ) => (
   <BarChart
     data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
     orientation={orientation}
+    size={size}
     showValues
     valueFormatter={chartCurrencyFormatter}
     onDataPointClick={onDataPointClick}
@@ -363,6 +372,7 @@ const renderPercentileBars = (
       max_val: num(d.max_val),
     }))}
     orientation="horizontal"
+    size="lg"
     series={[
       { field: 'min_val', name: 'Min' },
       { field: 'value', name: 'Ort.' },
@@ -375,10 +385,11 @@ const renderPercentileBars = (
 );
 
 /** salary-trend-12m / tenure-salary-relation — single-series line over an ordered axis. */
-const renderSalaryLine = (data: DashboardChartItem[]) => (
+const renderSalaryLine = (data: DashboardChartItem[], size: ChartSize = 'md') => (
   <LineChart
     series={[{ name: 'Ort. Maaş', data: data.map((d) => num(d.value)) }]}
     labels={data.map((d) => d.label)}
+    size={size}
     valueFormatter={chartCurrencyFormatter}
   />
 );
@@ -409,6 +420,7 @@ const renderCostStructure = (chart: DashboardChart, data: DashboardChartItem[]) 
           value: num(d.value),
           type: asWaterfallType(d.type),
         }))}
+        size="lg"
         showValues
         valueFormatter={chartCurrencyFormatter}
       />
@@ -418,6 +430,7 @@ const renderCostStructure = (chart: DashboardChart, data: DashboardChartItem[]) 
     <BarChart
       data={data.map((d) => ({ label: d.label, value: num(d.value) }))}
       orientation="horizontal"
+      size="lg"
       showValues
       showGrid
       valueFormatter={chartCurrencyFormatter}
@@ -455,13 +468,13 @@ const renderChartContent = (
     case 'salary-histogram':
       return renderHistogram(data, onDataPointClick);
     case 'dept-salary-comparison':
-      return renderRankingBar(data, 'horizontal', onDataPointClick);
+      return renderRankingBar(data, 'horizontal', onDataPointClick, 'lg');
     case 'gender-salary-comparison':
       return renderGenderBars(data, onDataPointClick);
     case 'education-salary-premium':
       return renderRankingBar(data, 'horizontal', onDataPointClick);
     case 'salary-trend-12m':
-      return renderSalaryLine(data);
+      return renderSalaryLine(data, 'lg');
     case 'collar-type-salary':
       return renderRankingBar(data, 'vertical', onDataPointClick);
     case 'tenure-salary-relation':
@@ -734,7 +747,6 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
         <ChartBlock
           chart={findChart('salary-histogram')}
           title="Maaş Dağılımı Histogramı"
-          height="h-80"
           gridColumns={[
             { key: 'label', label: 'Bant' },
             { key: 'value', label: 'Kişi Sayısı', format: 'number' },
@@ -752,7 +764,6 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
         <ChartBlock
           chart={findChart('dept-salary-comparison')}
           title="Departman Bazlı Maaş Karşılaştırma"
-          height="h-96"
           gridColumns={[
             { key: 'label', label: 'Departman' },
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
@@ -802,7 +813,6 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
         <ChartBlock
           chart={findChart('salary-trend-12m')}
           title="12 Aylık Maaş Trendi"
-          height="h-80"
           gridColumns={[
             { key: 'label', label: 'Ay' },
             { key: 'value', label: 'Ort. Maaş', format: 'currency' },
@@ -853,7 +863,6 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
         <ChartBlock
           chart={findChart('cost-waterfall')}
           title="Maliyet Yapısı Şelale"
-          height="h-96"
           gridColumns={[
             { key: 'label', label: 'Maliyet Kalemi' },
             { key: 'value', label: 'Tutar', format: 'currency' },
@@ -868,7 +877,6 @@ const CompensationDashboardInner: React.FC<CompensationDashboardProps> = ({
         <ChartBlock
           chart={findChart('company-payroll-pie')}
           title="Şirket Bordro Dağılımı"
-          height="h-72"
           gridColumns={[
             { key: 'label', label: 'Şirket' },
             { key: 'value', label: 'Toplam Bordro', format: 'currency' },
