@@ -43,7 +43,8 @@
  *     `\s*` can never also match a token character;
  *   - the fallback is captured greedily as `[\s\S]*` with NO trailing `\s*`
  *     (it is `.trim()`-ed in code instead) — a greedy `[\s\S]*` followed by
- *     the literal `\)$` backtracks at most once.
+ *     the literal `\)$` backtracks only linearly, never the polynomial
+ *     blow-up two overlapping quantifiers would produce.
  * The greedy fallback still consumes a whole nested `var()` / `rgba()`; for
  * `var(--a, var(--b, #fff))` group 2 is the entire `var(--b, #fff)`.
  */
