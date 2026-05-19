@@ -86,6 +86,31 @@ export interface InboxListResponseDto {
   unreadCount: number;
 }
 
+/**
+ * GET /api/v1/notify/inbox/me/history response shape (Faz 23.4 M6a).
+ *
+ * Mirrors the backend {@code InboxHistoryListResponse} record. Distinct
+ * from {@link InboxListResponseDto}: the history surface lists rows in
+ * EVERY state (UNREAD + READ + ARCHIVED) within a rolling window, so it
+ * deliberately carries no {@code unreadCount} badge field — that belongs
+ * to the active inbox. Instead it echoes the window the server applied
+ * so the UI can label the view without re-deriving the boundary.
+ */
+export interface InboxHistoryListResponseDto {
+  items: InboxItemDto[];
+  /** Zero-based page index. */
+  page: number;
+  /** Page size requested. */
+  size: number;
+  /** Total rows in the window (all states). */
+  totalElements: number;
+  totalPages: number;
+  /** ISO-8601 lower bound of the rolling window (DB-clock floor). */
+  windowStart: string;
+  /** Window length in days (server policy; default 30). */
+  windowDays: number;
+}
+
 /** GET /api/v1/notify/inbox/me/unread-count response. */
 export interface UnreadCountDto {
   unreadCount: number;

@@ -408,6 +408,56 @@ describe('notifyInboxApi.archive', () => {
   });
 });
 
+/**
+ * Faz 23.4 M6a — GET /me/history. The history surface lists rows in
+ * EVERY state (UNREAD + READ + ARCHIVED) within a server-enforced
+ * rolling window and carries window metadata instead of an unreadCount
+ * badge. Pages are requested individually so the "Geçmiş" tab can
+ * accumulate them client-side.
+ */
+describe('notifyInboxApi.listHistory', () => {
+  it('GETs /me/history with paging params + identity headers and returns window metadata', async () => {
+    fetchHandler = makeHistoryHandler({
+      pages: [
+        [
+          buildRow({ id: 1, state: 'UNREAD' }),
+          buildRow({ id: 2, state: 'ARCHIVED', archivedAt: '2026-05-10T08:00:00Z' }),
+        ],
+      ],
+    });
+    const store = buildStore();
+    const result = await store.dispatch(notifyInboxApi.endpoints.listHistory.initiate(IDENTITY));
+    expect(result.status).toBe('fulfilled');
+    expect(result.data?.items).toHaveLength(2);
+    // History is NOT state-filtered — an ARCHIVED row is present.
+    expect(result.data?.items.map((i) => i.state)).toContain('ARCHIVED');
+    expect(result.data?.windowDays).toBe(30);
+    expect(result.data?.windowStart).toBeTruthy();
+
+    const req = recorded[0];
+    expect(req.url).toContain('/api/v1/notify/inbox/me/history');
+    expect(req.url).toContain('page=0');
+    expect(req.url).toContain('size=50');
+    expect(req.headers['x-org-id']).toBe('default');
+    expect(req.headers['x-subscriber-id']).toBe('sub-1');
+  });
+
+  it('fetches the requested page for client-side accumulation', async () => {
+    fetchHandler = makeHistoryHandler({
+      pages: [[buildRow({ id: 1 })], [buildRow({ id: 2 })]],
+    });
+    const store = buildStore();
+    const result = await store.dispatch(
+      notifyInboxApi.endpoints.listHistory.initiate({ ...IDENTITY, page: 1, size: 50 }),
+    );
+    expect(result.status).toBe('fulfilled');
+    expect(result.data?.page).toBe(1);
+    expect(result.data?.totalPages).toBe(2);
+    expect(result.data?.items[0].id).toBe(2);
+    expect(recorded[0].url).toContain('page=1');
+  });
+});
+
 // ─── Test helpers ────────────────────────────────────────────────────────
 
 function headersToRecord(input: HeadersInit | undefined): Record<string, string> {
@@ -508,6 +558,35 @@ function makeArchiveHandler(opts: { archiveId: number }) {
     const { url, method } = extractCall(input, init);
     if (method === 'POST' && url.endsWith(`/${opts.archiveId}/archive`)) {
       return jsonResponse(buildRow({ id: opts.archiveId, state: 'ARCHIVED' }));
+    }
+    return jsonResponse({ error: 'unhandled', url, method }, 500);
+  };
+}
+
+/**
+ * Faz 23.4 M6a — GET /me/history handler. Returns one page at a time
+ * from the supplied page fixtures so accumulation can be exercised. The
+ * `/me/history` check runs before the generic `/me` branch so it is not
+ * shadowed (the substring `/me` also matches `/me/history`).
+ */
+function makeHistoryHandler(opts: { pages: InboxItemDto[][]; windowDays?: number }) {
+  const windowDays = opts.windowDays ?? 30;
+  const totalElements = opts.pages.reduce((n, p) => n + p.length, 0);
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const { url, method } = extractCall(input, init);
+    if (method === 'GET' && url.includes('/me/history')) {
+      const parsed = new URL(url);
+      const page = Number(parsed.searchParams.get('page') ?? '0');
+      const size = Number(parsed.searchParams.get('size') ?? '50');
+      return jsonResponse({
+        items: opts.pages[page] ?? [],
+        page,
+        size,
+        totalElements,
+        totalPages: opts.pages.length,
+        windowStart: '2026-04-19T00:00:00Z',
+        windowDays,
+      });
     }
     return jsonResponse({ error: 'unhandled', url, method }, 500);
   };

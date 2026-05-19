@@ -3,6 +3,7 @@ import type { RootState } from '../../../app/store/store';
 import { selectNotifyIdentity } from '../model/identity.selectors';
 import { selectAuthToken } from '../../auth/model/auth.slice';
 import type {
+  InboxHistoryListResponseDto,
   InboxItemActionArgs,
   InboxItemDto,
   InboxListArgs,
@@ -207,6 +208,37 @@ export const notifyInboxApi = createApi({
     }),
 
     /**
+     * GET /api/v1/notify/inbox/me/history — paged 30-day notification
+     * history (Faz 23.4 M6a — Codex thread {@code 019e40ec} AGREE
+     * iter-2).
+     *
+     * <p>Unlike {@link listInbox} (active surface — UNREAD + READ only),
+     * the history response returns rows in EVERY state (UNREAD + READ +
+     * ARCHIVED) created within the server-enforced rolling window. It is
+     * a read-only review surface; the "Geçmiş" tab accumulates pages
+     * client-side by incrementing the {@code page} arg.
+     *
+     * <p>Cache tag {@code Inbox/HISTORY-LIST} is separate from the
+     * active {@code Inbox/LIST}: archive / mark-read / mark-all-read
+     * mutations invalidate both so a state change is reflected the next
+     * time the history tab is opened.
+     */
+    listHistory: build.query<InboxHistoryListResponseDto, InboxListArgs>({
+      query: ({ orgId, subscriberId, page = 0, size = 50 }) => ({
+        url: '/me/history',
+        params: { page, size },
+        headers: identityHeaders({ orgId, subscriberId }),
+      }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.items.map(({ id }) => ({ type: 'Inbox' as const, id })),
+              { type: 'Inbox' as const, id: 'HISTORY-LIST' },
+            ]
+          : [{ type: 'Inbox' as const, id: 'HISTORY-LIST' }],
+    }),
+
+    /**
      * GET /api/v1/notify/inbox/me/unread-count — lightweight badge
      * endpoint. Use this when the SSE stream is unavailable or for the
      * initial render before the SSE connection completes.
@@ -233,6 +265,7 @@ export const notifyInboxApi = createApi({
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Inbox' as const, id },
         { type: 'Inbox' as const, id: 'LIST' },
+        { type: 'Inbox' as const, id: 'HISTORY-LIST' },
         { type: 'UnreadCount' as const, id: 'BADGE' },
       ],
     }),
@@ -250,6 +283,7 @@ export const notifyInboxApi = createApi({
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Inbox' as const, id },
         { type: 'Inbox' as const, id: 'LIST' },
+        { type: 'Inbox' as const, id: 'HISTORY-LIST' },
         { type: 'UnreadCount' as const, id: 'BADGE' },
       ],
     }),
@@ -277,6 +311,7 @@ export const notifyInboxApi = createApi({
       }),
       invalidatesTags: () => [
         { type: 'Inbox' as const, id: 'LIST' },
+        { type: 'Inbox' as const, id: 'HISTORY-LIST' },
         { type: 'UnreadCount' as const, id: 'BADGE' },
       ],
     }),
@@ -298,6 +333,7 @@ function identityHeaders({ orgId, subscriberId }: InboxRequestIdentity): Record<
 
 export const {
   useListInboxQuery,
+  useListHistoryQuery,
   useGetUnreadCountQuery,
   useMarkReadMutation,
   useArchiveMutation,
