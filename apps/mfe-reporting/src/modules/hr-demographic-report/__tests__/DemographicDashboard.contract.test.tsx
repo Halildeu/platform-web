@@ -73,6 +73,16 @@ interface CapturedKpi {
 }
 const kpiRegistry: CapturedKpi[] = [];
 
+// PR#3: AgePyramidChart now renders the real PopulationPyramid wrapper —
+// captured here (like Bar / Pie / Treemap) so the shim-swap mapping is
+// asserted (ageGroup → ageBand, unsigned male / female → left / right).
+interface CapturedPyramid {
+  leftLabel?: string;
+  rightLabel?: string;
+  data?: unknown;
+}
+const pyramidRegistry: CapturedPyramid[] = [];
+
 vi.mock('@mfe/x-charts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@mfe/x-charts')>();
 
@@ -121,6 +131,22 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     <div data-testid="x-line" data-title={props.title ?? ''} />
   );
 
+  // PR#3: PopulationPyramid is a real ECharts widget — stub it (like
+  // Gauge / Line) so the contract suite never invokes ECharts under
+  // jsdom, and capture the mapped { ageBand, left, right } rows.
+  const PopulationPyramid = (props: {
+    leftLabel?: string;
+    rightLabel?: string;
+    data?: unknown;
+  }) => {
+    pyramidRegistry.push({
+      leftLabel: props.leftLabel,
+      rightLabel: props.rightLabel,
+      data: props.data,
+    });
+    return <div data-testid="x-population-pyramid" />;
+  };
+
   return {
     ...actual,
     PieChart,
@@ -128,6 +154,7 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     TreemapChart,
     GaugeChart,
     LineChart,
+    PopulationPyramid,
     ChartContainer,
     KPICard,
   };
@@ -144,6 +171,7 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
   beforeEach(() => {
     chartRegistry.length = 0;
     kpiRegistry.length = 0;
+    pyramidRegistry.length = 0;
     vi.clearAllMocks();
     (getSummary as unknown as ReturnType<typeof vi.fn>).mockReturnValue(FIXTURE_SUMMARY);
   });
@@ -331,6 +359,29 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     // Sum of male+female across buckets must equal headcount.
     const total = FIXTURE_SUMMARY.agePyramid.reduce((s, p) => s + p.male + p.female, 0);
     expect(total).toBe(FIXTURE_ROWS.length);
+  });
+
+  it('agePyramidWiresToPopulationPyramid: unsigned male/female map onto left/right (PR#3 shim swap)', () => {
+    // PR#3 replaced the hand-rolled negate-one-series BarChart shim with
+    // the canonical PopulationPyramid wrapper. The wrapper negates the
+    // left series internally, so the dashboard must pass UNSIGNED counts:
+    // ageGroup → ageBand, male → left, female → right (no `-d.male`).
+    render(<DemographicDashboard />);
+    expect(pyramidRegistry.length).toBeGreaterThanOrEqual(1);
+    const pyramid = pyramidRegistry[0];
+    expect(pyramid.leftLabel).toBe('Erkek');
+    expect(pyramid.rightLabel).toBe('Kadin');
+    // Exact field-mapping lock: ageGroup → ageBand, male → left, female →
+    // right, all UNSIGNED. Exact equality (vs a loose `left >= 0`) also
+    // catches a male↔female swap or a re-introduced `-d.male` negation —
+    // Codex 019e3fef review.
+    expect(pyramid.data).toEqual(
+      FIXTURE_SUMMARY.agePyramid.map((d) => ({
+        ageBand: d.ageGroup,
+        left: d.male,
+        right: d.female,
+      })),
+    );
   });
 
   it('liveChartsWireToDashboard: ethics/salary cards render live backend data, not mock', async () => {
