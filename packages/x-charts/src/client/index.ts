@@ -17,7 +17,7 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  30 chart wrappers (26 2D echarts-backed + 4 3D echarts-gl-backed) */
+/*  31 chart wrappers (27 2D echarts-backed + 4 3D echarts-gl-backed) */
 /* ------------------------------------------------------------------ */
 
 export { AreaChart } from '../AreaChart';
@@ -99,6 +99,13 @@ export type {
   ComboSeriesType,
   ComboAxisId,
 } from '../ComboChart';
+// Codex thread 019e425b AGREE: standalone effectScatter wrapper.
+export { EffectScatterChart } from '../EffectScatterChart';
+export type {
+  EffectScatterChartProps,
+  EffectScatterDataPoint,
+  EffectScatterRippleEffect,
+} from '../EffectScatterChart';
 export { BoxPlotChart } from '../BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
 export { CandlestickChart } from '../CandlestickChart';

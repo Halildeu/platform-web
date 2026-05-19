@@ -87,7 +87,10 @@ export type ChartA11yKind =
   // diverging horizontal bar on a symmetric value axis.
   | 'populationPyramid'
   // Codex thread 019e41cd AGREE: dual-axis composite bar + line chart.
-  | 'combo';
+  | 'combo'
+  // Codex thread 019e425b AGREE: standalone effectScatter wrapper with
+  // ripple animation — distinct from `scatter` (no big-data/brush API).
+  | 'effectScatter';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -224,6 +227,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   populationPyramid: 'Population pyramid chart',
   // Codex thread 019e41cd AGREE: dual-axis composite bar + line chart.
   combo: 'Combination chart',
+  // Codex thread 019e425b AGREE: standalone effectScatter wrapper.
+  effectScatter: 'Effect scatter chart',
 };
 
 const defaultFormatter = (v: number): string =>
