@@ -49,20 +49,30 @@ forensic `ai-post-merge-cleanup.sh` (archive tag + audit log).
   temiz · tsc 0-yeni · `sync-chart-detail-props` + `x-charts-adoption-scan`
   `--check` senkron.
 
-## 4. İspatlamaz / açık follow-up
+## 4. Follow-up — KAPATILDI (PR #615)
 
 - **x-charts `colors` prop CSS-var çözümlemesi** — chart wrapper'ları
-  (`BarChart`, `PopulationPyramid`, …) `colors` / series `color`
-  string'lerini doğrudan ECharts `itemStyle.color`'a veriyor; canvas
-  renderer `var(--…)` CSS custom-property'lerini çözmüyor → CSS-var
-  input sessizce koyu fallback'e düşüyor (console hatası yok). PR#4 HR
-  dashboard'da `colors` prop'unu kaldırarak workaround yaptı; **kök fix
-  = `packages/x-charts` içinde paylaşılan CSS-var→hex normalizasyon
-  utility** (Codex `019e3fef` ayrı-PR önerisi). `spawn_task` chip'i
-  oluşturuldu — ayrı worktree'de başlatılabilir.
+  `colors` / series `color` / `itemStyle` string'lerini doğrudan ECharts
+  color field'larına veriyordu; canvas renderer `var(--…)` CSS custom-
+  property'lerini çözmüyor → CSS-var input sessizce koyu fallback'e
+  düşüyordu (console hatası yok). PR#4 HR dashboard'da `colors` prop'unu
+  kaldırarak workaround yapmıştı; **PR #615 kök fix'i shipledi**.
+- **PR #615** (`fix/x-charts-resolve-css-var-colors`, merge `0a05bd35`):
+  `packages/x-charts/src/utils/resolveCssVarColor.ts` paylaşılan utility
+  (`resolveCssVarColor` / `resolveCssVarColors` / `resolveStyleColorFields`
+  / `resolveTreeNodeColors` — SSR-safe, ReDoS-safe lineer regex) tüm
+  tüketici-renk yüzeylerine uygulandı: 25+ wrapper per-series/datum renk
+  - palet, markup adapter (`adaptToEcharts` + `DEFAULT_*` token'ları),
+    GeoMap choropleth + 5 overlay layer, Sankey/Sunburst/Globe style
+    objeleri, `useChartAnnotations`.
+- Cross-AI: Codex thread `019e40de`+`019e4149` → **AGREE** (4 REVISE
+  turu + CodeQL `js/polynomial-redos` HIGH fix, hepsi absorbe).
+- CI 32 pass / 0 fail · testai browser-verify ✓ (HR dashboard tüm chart
+  tipleri — Bar/Pie/Gauge/GeoMap/PopulationPyramid — doğru renkli,
+  görsel regresyon yok, x-charts console hatası yok).
 
 ## 5. Sıradaki
 
-PopulationPyramid kampanyası **kapandı** — bekleyen PR yok. Sıradaki
-oturum yeni bir kampanya seçebilir; tek açık iş yukarıdaki x-charts
-CSS-var color-normalization follow-up'ı (`spawn_task` chip'inden).
+PopulationPyramid kampanyası **+ x-charts CSS-var follow-up'ı tamamen
+kapandı** — bekleyen PR / açık follow-up yok. Sıradaki oturum yeni bir
+kampanya seçebilir.
