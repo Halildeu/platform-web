@@ -307,6 +307,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'bar',
   },
+  // ComboChart (Codex thread 019e41cd AGREE): dual-axis composite —
+  // bar + line series on two independent y-axes.
+  {
+    id: 'combo-chart',
+    name: 'ComboChart',
+    description: 'Dual-axis kompozit grafik, bar + line iki ayri y-ekseninde.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
   // Interaction
   {
     id: 'chart-container',

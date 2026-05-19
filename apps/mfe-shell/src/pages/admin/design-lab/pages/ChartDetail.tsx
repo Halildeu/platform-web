@@ -3179,6 +3179,242 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
+  // ComboChart (Codex thread 019e41cd AGREE): dual-axis composite chart —
+  // bar + line series on a shared category x-axis with two independent
+  // y-axes (primary left / secondary right). The 30th x-charts wrapper.
+  // `props` is sync-generated from the wrapper interface by
+  // `scripts/ci/sync-chart-detail-props.mjs`.
+  'combo-chart': {
+    id: 'combo-chart',
+    name: 'ComboChart',
+    description:
+      'Dual-axis composite chart — bar and line series on a shared category x-axis with two independent y-axes (primary left / secondary right). Each series declares its own type and axis; the secondary axis renders only when a series targets it.',
+    importPath: "import { ComboChart } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'labels',
+        type: 'string[]',
+        required: true,
+        default: '—',
+        description: 'X-axis category labels.',
+      },
+      {
+        name: 'series',
+        type: 'ComboChartSeries[]',
+        required: true,
+        default: '—',
+        description: 'Mixed bar / line series.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'showValues',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show value labels on bars / line points.',
+      },
+      {
+        name: 'showGrid',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show value-axis grid lines.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show the series legend.',
+      },
+      {
+        name: 'showDots',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show dot markers on line series.',
+      },
+      {
+        name: 'primaryAxisLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Primary (left) y-axis name.',
+      },
+      {
+        name: 'secondaryAxisLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Secondary (right) y-axis name.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Value formatter for the primary y-axis and its series.',
+      },
+      {
+        name: 'secondaryValueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Value formatter for the secondary y-axis and its series.',
+      },
+      {
+        name: 'colors',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description: 'Override the default color palette.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a bar / line point is clicked.',
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description:
+          "Visual overlay markups — threshold lines, highlight bands, KPI\nlabels. A y-axis `LineMarkup` anchors to the PRIMARY y-axis by\ndefault; an explicit markup `target` routing it to a secondary\nseries makes ECharts use that series' axis.",
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals (data-appearance / data-theme / media)',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override (visual differentiation beyond color).',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto" — follows documentElement `data-density`',
+        description: 'Density override (compact vs comfortable).',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto" — follows documentElement `data-accent`',
+        description: 'Accent palette override (light/emerald/ocean/violet/sunset/graphite/dark).',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Anomaly summary list — when supplied, `ChartA11yShell` fires a\npolite, debounced screen-reader announcement summarising outliers.\nDefault `undefined` = no anomaly announcement (backwards compat).',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description: 'Optional override of the anomaly announcement template.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<ComboChart
+  labels={['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz']}
+  series={[
+    { name: 'Gelir', type: 'bar', axis: 'primary', data: [120, 132, 101, 134, 90, 160] },
+    { name: 'Çalışan', type: 'bar', axis: 'secondary', data: [80, 85, 78, 92, 75, 98] },
+    { name: 'Hedef', type: 'line', axis: 'primary', data: [110, 125, 100, 130, 95, 150] },
+  ]}
+  primaryAxisLabel="Gelir"
+  secondaryAxisLabel="Çalışan"
+  title="Aylık Gelir / Çalışan / Hedef"
+/>`,
+    features: [
+      'cross-filter',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
   'heatmap-chart': {
     id: 'heatmap-chart',
     name: 'HeatmapChart',

@@ -718,6 +718,31 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // ComboChart (Codex 019e41cd AGREE): dual-axis composite bar+line.
+  // 11 common-axis + showValues/showGrid/showLegend/showDots +
+  // primaryAxisLabel/secondaryAxisLabel. `labels`/`series` are complex
+  // shapes (code-only); valueFormatter / secondaryValueFormatter /
+  // colors / onDataPointClick / markups / onMarkupClick + the anomaly
+  // pair are function/array props — preset-driven or code-only, not here.
+  'combo-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'primaryAxisLabel',
+    'secondaryAxisLabel',
+    'showValues',
+    'showGrid',
+    'showLegend',
+    'showDots',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1089,11 +1114,12 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
 ];
 
 /**
- * The 18 enrolled charts that carry the `anomalySummary` +
+ * The 19 enrolled charts that carry the `anomalySummary` +
  * `formatAnomalyAnnouncement` a11y pair in CHART_CATALOG — every
  * count-lock-enrolled chart except Gauge (whose catalog entry has no
  * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
- * `population-pyramid` added by Codex thread `019e3f75`.
+ * `population-pyramid` added by Codex thread `019e3f75`; `combo-chart`
+ * added by Codex thread `019e41cd`.
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
@@ -1115,6 +1141,8 @@ const ANOMALY_PRESET_CHART_IDS = [
   'sunburst-chart',
   // PR#2 (Codex 019e3f75): PopulationPyramid HR demographic pyramid.
   'population-pyramid',
+  // ComboChart (Codex 019e41cd AGREE): dual-axis composite bar+line.
+  'combo-chart',
 ] as const;
 
 /**
@@ -1163,6 +1191,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'gantt-chart',
       // PR#2 (Codex 019e3f75): PopulationPyramid age-band measure formatting.
       'population-pyramid',
+      // ComboChart (Codex 019e41cd): dual-axis primary-series value formatting.
+      'combo-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1203,6 +1233,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'gantt-chart',
       // PR#2 (Codex 019e3f75): PopulationPyramid age-band-click cross-filter.
       'population-pyramid',
+      // ComboChart (Codex 019e41cd): bar/line point-click cross-filter.
+      'combo-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1275,13 +1307,22 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
     { presetId: 'rainbow', label: 'Rainbow' },
     { presetId: 'monochrome', label: 'Monochrome slate' },
   ],
+  // ComboChart (Codex 019e41cd AGREE): `colors` is a `string[]` series
+  // palette — per-series bar/line color. The resolver is chart-agnostic;
+  // the wrapper cycles palette[i % len] across the series.
+  'combo-chart.colors': [
+    { presetId: 'default', label: 'Auto palette (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+    { presetId: 'monochrome', label: 'Monochrome slate' },
+  ],
   // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
   // requires its own object resolver, deferred to PR-FE-Playground-4.
 
   // ---- PR-X16 §4f.2 — markup overlay preset wave -------------------
-  // `markups` + `onMarkupClick` for the six genuine-markup charts:
-  // bar / line / area / scatter / heatmap / waterfall. These are every
-  // chart whose wrapper calls `useMarkupAdapter` AND fires `onMarkupClick`
+  // `markups` + `onMarkupClick` for the eight genuine-markup charts:
+  // bar / line / area / scatter / heatmap / waterfall / population-pyramid
+  // / combo-chart. These are every chart whose wrapper calls
+  // `useMarkupAdapter` AND fires `onMarkupClick`
   // (verified in x-charts source — Codex thread `019e3af0`). The NO-OP
   // markup charts — pie, gauge, radar, treemap, funnel, sankey, sunburst
   // — are deliberately NOT enrolled: their wrappers accept `markups` for
@@ -1298,6 +1339,9 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       // PR#2 (Codex 019e3f75): PopulationPyramid is a genuine-markup
       // chart — its wrapper calls `useMarkupAdapter` + fires `onMarkupClick`.
       'population-pyramid',
+      // ComboChart (Codex 019e41cd AGREE): genuine-markup chart — its
+      // wrapper calls `useMarkupAdapter` + fires `onMarkupClick`.
+      'combo-chart',
     ].map((cid) => [`${cid}.markups`, MARKUP_PRESET_OPTIONS] as [string, ComplexPreset[]]),
   ),
   ...Object.fromEntries(
@@ -1310,6 +1354,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'waterfall-chart',
       // PR#2 (Codex 019e3f75): PopulationPyramid markup-overlay click.
       'population-pyramid',
+      // ComboChart (Codex 019e41cd AGREE): markup-overlay click.
+      'combo-chart',
     ].map((cid) => [`${cid}.onMarkupClick`, CALLBACK_PRESET_OPTIONS] as [string, ComplexPreset[]]),
   ),
   // Scatter brush selection — the catalog `onBrushSelection` callback.
@@ -1319,10 +1365,11 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 
   // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
-  // `anomalySummary` + `formatAnomalyAnnouncement` for the 18 enrolled
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 19 enrolled
   // charts that carry the anomaly a11y pair in CHART_CATALOG (every
   // enrolled chart except Gauge — verified via AST, Codex 019e3af0;
-  // population-pyramid added by Codex thread 019e3f75).
+  // population-pyramid added by Codex thread 019e3f75; combo-chart added
+  // by Codex thread 019e41cd).
   // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
   // `formatAnomalyAnnouncement` overrides the announcement template.
   ...Object.fromEntries(
@@ -1685,6 +1732,40 @@ const MARKUP_PRESET_ANCHORS: Record<
       source: 'manual',
       text: 'Zirve kohort',
       anchor: { x: 480, y: '25-34' },
+      background: '#0ea5e9',
+    },
+  },
+  // ComboChart (Codex 019e41cd AGREE): dual-axis composite — standard
+  // cartesian category-x / value-y layout. A y-axis markup anchors to
+  // the PRIMARY y-axis (the bar series range, ~90-160 in the sample
+  // data); the category axis is `x` (months).
+  'combo-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'y',
+      value: 130,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Hedef 130', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'y',
+      from: 120,
+      to: 145,
+      opacity: 0.18,
+      label: { text: 'Hedef bant' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Zirve ay',
+      anchor: { x: 'Haz', y: 160 },
       background: '#0ea5e9',
     },
   },
@@ -2596,6 +2677,31 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // ComboChart (Codex 019e41cd AGREE): dual-axis composite — `labels`
+  // (category x-axis) + `series` (mixed bar/line) scaffolds so the
+  // generated snippet compiles end-to-end.
+  'combo-chart': {
+    scaffold: [
+      {
+        propName: 'labels',
+        varName: 'sampleLabels',
+        caption: 'ComboChart x-axis category labels (string[])',
+        jsLiteral: `['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz']`,
+      },
+      {
+        propName: 'series',
+        varName: 'sampleSeries',
+        caption: 'ComboChart mixed bar/line series ({ name, type, axis, data })',
+        jsLiteral: `[
+  // iter-2 §10: primary-bar + secondary-bar + primary-line — closes
+  // the "bars-on-two-axes overlap" risk via the Design Lab preview.
+  { name: 'Gelir', type: 'bar', axis: 'primary', data: [120, 132, 101, 134, 90, 160] },
+  { name: 'Çalışan', type: 'bar', axis: 'secondary', data: [80, 85, 78, 92, 75, 98] },
+  { name: 'Hedef', type: 'line', axis: 'primary', data: [110, 125, 100, 130, 95, 150] },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -3427,6 +3533,51 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       label: 'Read-only Access',
       tag: 'access',
       description: 'Visible but non-interactive — orbit + click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // ComboChart (Codex 019e41cd AGREE): dual-axis composite preset gallery.
+  'combo-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Bar + line on dual axes — legend, grid, line dots.',
+      statePatch: {},
+    },
+    {
+      id: 'with-values',
+      label: 'Bar/Point Values',
+      tag: 'display',
+      description: 'Show the raw value label on every bar and line point.',
+      statePatch: { showValues: true },
+    },
+    {
+      id: 'no-legend',
+      label: 'No Legend',
+      tag: 'layout',
+      description: 'Hide the series legend for a denser dashboard cell.',
+      statePatch: { showLegend: false },
+    },
+    {
+      id: 'no-dots',
+      label: 'No Line Dots',
+      tag: 'display',
+      description: 'Hide the line-series point markers — cleaner trend line.',
+      statePatch: { showDots: false },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
       statePatch: { access: 'readonly' },
     },
   ],

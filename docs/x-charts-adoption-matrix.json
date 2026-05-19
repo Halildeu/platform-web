@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T21:24:09.032Z",
+  "generatedAt": "2026-05-19T21:43:01.612Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -370,6 +370,7 @@
         "ChartContainer",
         "ChartDashboard",
         "ChartToolbar",
+        "ComboChart",
         "FunnelChart",
         "GanttChart",
         "GaugeChart",

@@ -40,6 +40,9 @@ import {
   // demographic pyramid — diverging horizontal bar on a shared symmetric
   // value axis. The 29th x-charts wrapper.
   PopulationPyramid,
+  // ComboChart (Codex thread 019e41cd AGREE): dual-axis composite —
+  // bar + line series on two independent y-axes. The 30th x-charts wrapper.
+  ComboChart,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -1322,6 +1325,64 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             }
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'population-pyramid')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // ComboChart (Codex thread 019e41cd AGREE): dual-axis composite —
+    // bar + line series on a shared category x-axis with two independent
+    // y-axes (primary left / secondary right). Sample dataset: 6 months,
+    // a revenue bar (primary) + a growth-% line (secondary).
+    case 'combo-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <ComboChart
+            labels={['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz']}
+            series={[
+              // iter-2 §10 (Codex 019e41cd): primary-bar + secondary-bar
+              // + primary-line exercises both axis groupings — closes the
+              // "bars-on-two-axes overlap" risk that the plan flagged.
+              { name: 'Gelir', type: 'bar', axis: 'primary', data: [120, 132, 101, 134, 90, 160] },
+              { name: 'Çalışan', type: 'bar', axis: 'secondary', data: [80, 85, 78, 92, 75, 98] },
+              { name: 'Hedef', type: 'line', axis: 'primary', data: [110, 125, 100, 130, 95, 150] },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            primaryAxisLabel={getStr(toggles, 'primaryAxisLabel', 'Gelir')}
+            secondaryAxisLabel={getStr(toggles, 'secondaryAxisLabel', 'Çalışan')}
+            showValues={isOn(toggles, 'showValues', false)}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            showDots={isOn(toggles, 'showDots', true)}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'combo-chart')}
             onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
