@@ -36,7 +36,17 @@ export const decodeJwtPayload = (token: string): Record<string, unknown> | null 
     let decoded: string | null = null;
     const globalScope = getUniversalGlobal();
     if (globalScope && typeof globalScope.atob === 'function') {
-      decoded = globalScope.atob(padded);
+      // atob() yields a binary (Latin-1) string; JWT payloads are UTF-8.
+      // Decoding the raw bytes as UTF-8 keeps non-ASCII claims intact —
+      // without this a `name` claim such as "Koçoğlu" surfaces as
+      // mojibake ("KoÃ§oÄlu") in the header and user grids.
+      const binary = globalScope.atob(padded);
+      decoded =
+        typeof globalScope.TextDecoder === 'function'
+          ? new globalScope.TextDecoder('utf-8').decode(
+              Uint8Array.from(binary, (ch) => ch.charCodeAt(0)),
+            )
+          : binary;
     } else if (globalScope?.Buffer) {
       decoded = globalScope.Buffer.from(padded, 'base64').toString('utf-8');
     }

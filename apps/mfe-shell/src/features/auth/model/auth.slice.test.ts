@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import reducer, { setKeycloakSession } from './auth.slice';
+import reducer, { setKeycloakSession, decodeJwtPayload } from './auth.slice';
 
 const originalWindow = globalThis.window;
 const originalLocalStorage = globalThis.localStorage;
@@ -174,5 +174,35 @@ describe('auth.slice setKeycloakSession — canonical subscriberId (Faz 23.5)', 
       }),
     );
     expect(next.user?.subscriberId).toBeUndefined();
+  });
+});
+
+describe('decodeJwtPayload — UTF-8 claim decoding', () => {
+  // Build a JWT whose payload is a UTF-8 → base64url segment, exactly as a
+  // real broker-issued token would be.
+  const toJwt = (payload: Record<string, unknown>): string => {
+    const body = Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url');
+    return `eyJhbGciOiJSUzI1NiJ9.${body}.sig`;
+  };
+
+  it('decodes non-ASCII (Turkish) name claims without mojibake', () => {
+    // Regression: atob() alone yields a Latin-1 string, so "Koçoğlu"
+    // surfaced as "KoÃ§oÄlu" in the header and user grids.
+    const decoded = decodeJwtPayload(
+      toJwt({ name: 'Halil Koçoğlu', given_name: 'Halil', family_name: 'Koçoğlu' }),
+    );
+    expect(decoded?.name).toBe('Halil Koçoğlu');
+    expect(decoded?.given_name).toBe('Halil');
+    expect(decoded?.family_name).toBe('Koçoğlu');
+  });
+
+  it('still decodes plain ASCII payloads', () => {
+    const decoded = decodeJwtPayload(toJwt({ sub: 'abc-123', email: 'user@example.com' }));
+    expect(decoded?.sub).toBe('abc-123');
+    expect(decoded?.email).toBe('user@example.com');
+  });
+
+  it('returns null for a malformed token', () => {
+    expect(decodeJwtPayload('not-a-jwt')).toBeNull();
   });
 });
