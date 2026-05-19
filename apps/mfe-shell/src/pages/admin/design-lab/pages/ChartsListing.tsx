@@ -317,6 +317,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'bar',
   },
+  // EffectScatterChart (Codex thread 019e425b AGREE): standalone
+  // effectScatter wrapper — scatter + ripple for outlier emphasis.
+  {
+    id: 'effect-scatter-chart',
+    name: 'EffectScatterChart',
+    description: 'Vurgu noktalari, scatter + dalgalanma animasyonu ile outlier isaretleme.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
   // Interaction
   {
     id: 'chart-container',

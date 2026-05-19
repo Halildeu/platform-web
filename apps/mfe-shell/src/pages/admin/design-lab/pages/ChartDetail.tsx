@@ -3415,6 +3415,232 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
+  // EffectScatterChart (Codex thread 019e425b AGREE): standalone
+  // effectScatter wrapper — scatter + ripple animation for low/mid
+  // cardinality emphasis points (outliers, live metrics, KPI markers).
+  // The 31st x-charts wrapper. `props` is sync-generated from the
+  // wrapper interface by `scripts/ci/sync-chart-detail-props.mjs`.
+  'effect-scatter-chart': {
+    id: 'effect-scatter-chart',
+    name: 'EffectScatterChart',
+    description:
+      'Standalone effectScatter wrapper — scatter + ripple animation for outlier emphasis. Distinct from ScatterChart (no big-data/brush API); use case is low- / mid-cardinality emphasis points where the ripple is the differentiator.',
+    importPath: "import { EffectScatterChart } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'data',
+        type: 'EffectScatterDataPoint[]',
+        required: true,
+        default: '—',
+        description: 'Data points to render.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'showGrid',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show grid lines on both axes.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: "Accessible description (also feeds the chart's ARIA description).",
+      },
+      {
+        name: 'colors',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description: 'Override default palette. Accepts CSS `var(--token)` strings.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter for axes + tooltip.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name on the chart root container.',
+      },
+      {
+        name: 'xLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'X-axis label.',
+      },
+      {
+        name: 'yLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Y-axis label.',
+      },
+      {
+        name: 'symbolSize',
+        type: 'number | ((point: EffectScatterDataPoint) => number)',
+        required: false,
+        default: 'undefined',
+        description:
+          'Pixel radius for each point. Function form receives the original\n   for per-point sizing. When omitted\nthe wrapper falls back to `point.size ?? 12`.',
+      },
+      {
+        name: 'effect',
+        type: 'EffectScatterRippleEffect',
+        required: false,
+        default: 'undefined',
+        description:
+          "Override the ripple animation parameters. Merged onto sensible\ndefaults (`scale=2.5`, `period=4`, `brushType='stroke'`); only the\nfields you supply are overridden.",
+      },
+      {
+        name: 'showEffectOn',
+        type: "'render' | 'emphasis'",
+        required: false,
+        default: '"render"',
+        description:
+          "When the ripple animation runs. `'render'` (default) loops the\nripple from mount; `'emphasis'` only ripples while the point is\nhovered / focused — useful for a \"tap to reveal\" interaction.",
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a data point is clicked.',
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description: 'Visual overlay markups — threshold lines / KPI bands.',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals.',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for HC / print.',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Anomaly summary list — when supplied, `ChartA11yShell` fires a\npolite, debounced screen-reader announcement summarising outliers.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description: 'Optional override of the anomaly announcement template.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<EffectScatterChart
+  data={[
+    { x: 42000, y: 18000, size: 28, name: 'Mühendislik' },
+    { x: 38000, y: 9000, size: 18, name: 'Pazarlama' },
+    { x: 45000, y: 22000, size: 32, name: 'Finans' },
+    { x: 34000, y: 7000, size: 15, name: 'İK' },
+    { x: 39000, y: 12000, size: 22, name: 'Operasyon' },
+    { x: 47000, y: 25000, size: 36, name: 'Satış' },
+  ]}
+  xLabel="Ortalama maaş"
+  yLabel="Maaş aralığı"
+  title="Departman maaş outlier'ları"
+/>`,
+    features: [
+      'cross-filter',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
   'heatmap-chart': {
     id: 'heatmap-chart',
     name: 'HeatmapChart',

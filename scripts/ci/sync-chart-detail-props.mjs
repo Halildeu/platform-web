@@ -111,6 +111,10 @@ const CHARTS = [
   // ComboChart (Codex thread 019e41cd AGREE): dual-axis composite bar+line
   // chart on a shared category x-axis (the 30th x-charts wrapper).
   ['combo-chart', 'ComboChart'],
+  // EffectScatterChart (Codex thread 019e425b AGREE): standalone
+  // effectScatter wrapper — scatter + ripple animation for outlier
+  // emphasis (the 31st x-charts wrapper).
+  ['effect-scatter-chart', 'EffectScatterChart'],
 ];
 
 /* ------------------------------------------------------------------ */

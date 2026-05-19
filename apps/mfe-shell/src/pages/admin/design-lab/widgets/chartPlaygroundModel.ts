@@ -743,6 +743,29 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // EffectScatterChart (Codex 019e425b AGREE): standalone effectScatter +
+  // ripple. 11 common-axis + showGrid/xLabel/yLabel/showEffectOn = 15
+  // primitives. `data` complex shape (code-only); `effect`/`symbolSize`
+  // nested/function — catalog only, not live; `valueFormatter`/`colors`/
+  // `onDataPointClick`/`markups`/`onMarkupClick` + anomaly pair are
+  // preset-driven via COMPLEX_PROP_PRESETS, not primitives here.
+  'effect-scatter-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'xLabel',
+    'yLabel',
+    'showGrid',
+    'showEffectOn',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1119,7 +1142,8 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
  * count-lock-enrolled chart except Gauge (whose catalog entry has no
  * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
  * `population-pyramid` added by Codex thread `019e3f75`; `combo-chart`
- * added by Codex thread `019e41cd`.
+ * added by Codex thread `019e41cd`; `effect-scatter-chart` added by Codex
+ * thread `019e425b`.
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
@@ -1143,6 +1167,8 @@ const ANOMALY_PRESET_CHART_IDS = [
   'population-pyramid',
   // ComboChart (Codex 019e41cd AGREE): dual-axis composite bar+line.
   'combo-chart',
+  // EffectScatterChart (Codex 019e425b AGREE): standalone effectScatter.
+  'effect-scatter-chart',
 ] as const;
 
 /**
@@ -1193,6 +1219,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'population-pyramid',
       // ComboChart (Codex 019e41cd): dual-axis primary-series value formatting.
       'combo-chart',
+      // EffectScatterChart (Codex 019e425b): outlier value formatting.
+      'effect-scatter-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1235,6 +1263,9 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'population-pyramid',
       // ComboChart (Codex 019e41cd): bar/line point-click cross-filter.
       'combo-chart',
+      // EffectScatterChart (Codex 019e425b): point-click cross-filter
+      // (departman outlier markers).
+      'effect-scatter-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1315,19 +1346,29 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
     { presetId: 'rainbow', label: 'Rainbow' },
     { presetId: 'monochrome', label: 'Monochrome slate' },
   ],
+  // EffectScatterChart (Codex 019e425b AGREE): `colors` is a `string[]`
+  // palette — first entry drives the series itemStyle (single-series).
+  // Same chart-agnostic resolver as scatter / combo.
+  'effect-scatter-chart.colors': [
+    { presetId: 'default', label: 'Auto palette (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+    { presetId: 'monochrome', label: 'Monochrome slate' },
+  ],
   // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
   // requires its own object resolver, deferred to PR-FE-Playground-4.
 
   // ---- PR-X16 §4f.2 — markup overlay preset wave -------------------
-  // `markups` + `onMarkupClick` for the eight genuine-markup charts:
+  // `markups` + `onMarkupClick` for the nine genuine-markup charts:
   // bar / line / area / scatter / heatmap / waterfall / population-pyramid
-  // / combo-chart. These are every chart whose wrapper calls
-  // `useMarkupAdapter` AND fires `onMarkupClick`
-  // (verified in x-charts source — Codex thread `019e3af0`). The NO-OP
-  // markup charts — pie, gauge, radar, treemap, funnel, sankey, sunburst
-  // — are deliberately NOT enrolled: their wrappers accept `markups` for
-  // API consistency but render nothing, so a playground control there
-  // would be a dead no-op (would inflate the numerator dishonestly).
+  // / combo-chart / effect-scatter-chart. These are every chart whose
+  // wrapper calls `useMarkupAdapter` AND fires `onMarkupClick`
+  // (verified in x-charts source — Codex thread `019e3af0`; PopulationPyramid
+  // via `019e3f75`; ComboChart via `019e41cd`; EffectScatterChart via
+  // `019e425b`). The NO-OP markup charts — pie, gauge, radar, treemap,
+  // funnel, sankey, sunburst — are deliberately NOT enrolled: their
+  // wrappers accept `markups` for API consistency but render nothing,
+  // so a playground control there would be a dead no-op (would inflate
+  // the numerator dishonestly).
   ...Object.fromEntries(
     [
       'bar-chart',
@@ -1342,6 +1383,10 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       // ComboChart (Codex 019e41cd AGREE): genuine-markup chart — its
       // wrapper calls `useMarkupAdapter` + fires `onMarkupClick`.
       'combo-chart',
+      // EffectScatterChart (Codex 019e425b AGREE): genuine-markup chart —
+      // its wrapper calls `useMarkupAdapter` (scatter mode) + fires
+      // `onMarkupClick` with wrapper-identity chartType 'effectScatter'.
+      'effect-scatter-chart',
     ].map((cid) => [`${cid}.markups`, MARKUP_PRESET_OPTIONS] as [string, ComplexPreset[]]),
   ),
   ...Object.fromEntries(
@@ -1356,6 +1401,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'population-pyramid',
       // ComboChart (Codex 019e41cd AGREE): markup-overlay click.
       'combo-chart',
+      // EffectScatterChart (Codex 019e425b AGREE): markup-overlay click.
+      'effect-scatter-chart',
     ].map((cid) => [`${cid}.onMarkupClick`, CALLBACK_PRESET_OPTIONS] as [string, ComplexPreset[]]),
   ),
   // Scatter brush selection — the catalog `onBrushSelection` callback.
@@ -1365,11 +1412,12 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 
   // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
-  // `anomalySummary` + `formatAnomalyAnnouncement` for the 19 enrolled
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 20 enrolled
   // charts that carry the anomaly a11y pair in CHART_CATALOG (every
   // enrolled chart except Gauge — verified via AST, Codex 019e3af0;
   // population-pyramid added by Codex thread 019e3f75; combo-chart added
-  // by Codex thread 019e41cd).
+  // by Codex thread 019e41cd; effect-scatter-chart added by Codex thread
+  // 019e425b).
   // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
   // `formatAnomalyAnnouncement` overrides the announcement template.
   ...Object.fromEntries(
@@ -1766,6 +1814,41 @@ const MARKUP_PRESET_ANCHORS: Record<
       source: 'manual',
       text: 'Zirve ay',
       anchor: { x: 'Haz', y: 160 },
+      background: '#0ea5e9',
+    },
+  },
+  // EffectScatterChart (Codex 019e425b AGREE): standalone effectScatter
+  // on cartesian2d. Both x and y are VALUE axes — sample dataset is
+  // departman ortalama maaş (x ~ 34000-47000) vs maaş aralığı (y ~
+  // 7000-25000). y-axis threshold anchors to the maaş aralığı dimension
+  // (20000 = high-spread alert); kpi label points at the Satış outlier.
+  'effect-scatter-chart': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'y',
+      value: 20000,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Yüksek aralık ≥20K', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'y',
+      from: 18000,
+      to: 25000,
+      opacity: 0.18,
+      label: { text: 'Outlier bandı' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Satış outlier',
+      anchor: { x: 47000, y: 25000 },
       background: '#0ea5e9',
     },
   },
@@ -2702,6 +2785,27 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // EffectScatterChart (Codex 019e425b AGREE): standalone effectScatter —
+  // `data` scaffold (departman maaş outlier'ları) for the generated
+  // snippet. Mirrors the Design Lab preview sample so the playground +
+  // generated code stay 1:1.
+  'effect-scatter-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'EffectScatterChart departman maaş outlier points (EffectScatterDataPoint[])',
+        jsLiteral: `[
+  { x: 42000, y: 18000, size: 28, name: 'Mühendislik' },
+  { x: 38000, y: 9000, size: 18, name: 'Pazarlama' },
+  { x: 45000, y: 22000, size: 32, name: 'Finans' },
+  { x: 34000, y: 7000, size: 15, name: 'İK' },
+  { x: 39000, y: 12000, size: 22, name: 'Operasyon' },
+  { x: 47000, y: 25000, size: 36, name: 'Satış' },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -3572,6 +3676,54 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'theme',
       description: 'Explicit dark theme override.',
       statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // EffectScatterChart (Codex 019e425b AGREE): standalone effectScatter
+  // preset gallery. 6 entries covering the main playground axes:
+  // starter, no-grid layout, emphasis-mode interactivity, dark theme,
+  // animation off (also zeroes the ripple — vestibular-safe), readonly.
+  'effect-scatter-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Default ripple animation — render-mode loop, grid on.',
+      statePatch: {},
+    },
+    {
+      id: 'no-grid',
+      label: 'No Grid',
+      tag: 'layout',
+      description: 'Cleaner canvas — no axis grid lines.',
+      statePatch: { showGrid: false },
+    },
+    {
+      id: 'emphasis',
+      label: 'Emphasis Only',
+      tag: 'interaction',
+      description: 'Ripple fires only on hover / focus — quiet default state.',
+      statePatch: { showEffectOn: 'emphasis' },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'no-animation',
+      label: 'No Animation',
+      tag: 'motion',
+      description: 'Static render — also zeroes the ripple (vestibular-safe).',
+      statePatch: { animate: false },
     },
     {
       id: 'readonly',
