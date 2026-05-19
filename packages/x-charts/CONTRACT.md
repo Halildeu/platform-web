@@ -112,16 +112,33 @@ identity transforms when no DOM signals are set → existing consumers see
 - Density multipliers in `theme/density-helpers.ts` with **a11y clamp at 10px**
   (`scaleFontSize(base, mul) = Math.max(10, Math.round(base*mul))`).
 
-**Semantic preservation (Codex iter-13):** Chart-level semantic colors
-are accent-IMMUNE:
+**Semantic preservation (Codex iter-13; 28-wrapper audit 2026-05-18):**
+Some chart wrappers color data by _semantic_ meaning (thresholds,
+low/high gradients, increase/decrease) rather than by the resolved
+`accent` palette. Those color channels are accent-IMMUNE:
 
-- `GaugeChart` thresholds (success/warning/danger)
-- `HeatmapChart` gradient colors (low/high)
-- `WaterfallChart` `increase` (success) and `decrease` (danger) — only
-  the `total` color binds to accent primary
+- `GaugeChart` — threshold colors (success/warning/danger)
+- `HeatmapChart` — `colors` low/high gradient
+- `CalendarHeatmap` — `colors` low/high gradient (GitHub-contributions
+  style; same gradient contract as `HeatmapChart`)
+- `WaterfallChart` — `increase` (success) / `decrease` (danger) colors;
+  only `total` binds to accent primary when `colors.total` is not
+  supplied (partial)
 
-The other 10 chart wrappers use `effectivePalette` (from the resolved
-accent or the HC/Print theme builder) as the series color fallback.
+`GaugeChart`, `HeatmapChart`, and `CalendarHeatmap` self-declare this
+in source ("accent-IMMUNE … effectivePalette ignored"). `WaterfallChart`
+documents `increase` / `decrease` as semantic and wires only `total`
+through `effectivePalette[0]`.
+
+`GeoMap` is a related current-behavior exception: its base choropleth
+region fill is driven by `visualMap.colors` or `DEFAULT_VISUALMAP_COLORS`,
+not by `effectivePalette`. Treat that base region fill as accent-immune,
+but keep it separate from the self-declared set until the wrapper carries
+the same explicit contract.
+
+All remaining exported chart wrappers use `effectivePalette` (from the
+resolved accent, or the HC/Print theme builder) as their series-color or
+value-gradient fallback.
 
 **Default-on a11y (Faz 21.5-B1/B2):** All chart wrappers compose with
 `useChartA11y` + `<ChartA11yShell>` providing:
