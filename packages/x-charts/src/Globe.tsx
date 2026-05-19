@@ -35,7 +35,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
-import { resolveCssVarColor } from './utils/resolveCssVarColor';
+import { resolveCssVarColor, resolveStyleColorFields } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -252,7 +252,17 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
     if (displacementScale !== undefined) globeOption.displacementScale = displacementScale;
   }
   if (environment !== undefined) globeOption.environment = environment;
-  if (regions !== undefined) globeOption.regions = regions;
+  if (regions !== undefined) {
+    // `GlobeRegion.itemStyle.color` is public API — a consumer can pass
+    // a `var(--token)` string. The echarts-GL renderer reads colours on
+    // the GPU and cannot resolve CSS custom properties any more than the
+    // 2D canvas can, so each region's `itemStyle` is run through
+    // `resolveStyleColorFields` (non-mutating) before it reaches the
+    // `globe.regions` option.
+    globeOption.regions = regions.map((r) =>
+      r.itemStyle ? { ...r, itemStyle: resolveStyleColorFields(r.itemStyle) } : r,
+    );
+  }
 
   // Per-layer series. `coordinateSystem: 'globe'` is enforced by the
   // wrapper — consumer cannot override it (would break the geo

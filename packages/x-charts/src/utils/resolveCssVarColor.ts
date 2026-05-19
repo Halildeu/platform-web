@@ -129,6 +129,59 @@ export function resolveCssVarColors(colors: string[] | undefined): string[] | un
 }
 
 /**
+ * Resolve every CSS-var color field on a single ECharts style object
+ * (`itemStyle` / `lineStyle` / `areaStyle` / `label` / `backgroundStyle`).
+ *
+ * ECharts style objects expose several named color fields — `color`,
+ * `borderColor`, `backgroundColor`, `shadowColor` — any of which a
+ * consumer can set to a `var(--token)` string the canvas renderer
+ * silently ignores (drawing a dark fallback with no console error).
+ * This helper passes each of those four fields through
+ * {@link resolveCssVarColor} when it is present and string-typed; every
+ * other field (numbers, nested objects, absent keys) is copied
+ * verbatim.
+ *
+ * Used for the public color surfaces where the style object reaches an
+ * ECharts color field with NO intermediate normalization — Sankey
+ * `SankeyNode.itemStyle`, Sunburst `levels[].itemStyle` /
+ * `levels[].label`, Globe `regions[].itemStyle`, and the
+ * `useChartAnnotations` markPoint / markLine fragments. Those style
+ * objects are typed loosely (`Record<string, unknown>` or a
+ * `{ color?: string; [key: string]: unknown }` index signature) so a
+ * consumer can pass `borderColor` / `shadowColor` etc. that the narrow
+ * {@link resolveTreeNodeColors} contract does not cover.
+ *
+ * Non-mutating: a new object is always returned (the input style object
+ * is never touched). `undefined` input passes through as `undefined` so
+ * an optional `itemStyle?` field can be normalized in a single call.
+ *
+ * The return type is the input type `T`, so the resolved style object
+ * drops straight back into its ECharts option slot without a cast.
+ *
+ * @param style a consumer-supplied ECharts style object, or `undefined`.
+ */
+export function resolveStyleColorFields<T extends Record<string, unknown>>(style: T): T;
+export function resolveStyleColorFields<T extends Record<string, unknown> | undefined>(style: T): T;
+export function resolveStyleColorFields<T extends Record<string, unknown> | undefined>(
+  style: T,
+): T {
+  if (!style) return style;
+  return {
+    ...style,
+    ...(typeof style.color === 'string' ? { color: resolveCssVarColor(style.color) } : {}),
+    ...(typeof style.borderColor === 'string'
+      ? { borderColor: resolveCssVarColor(style.borderColor) }
+      : {}),
+    ...(typeof style.backgroundColor === 'string'
+      ? { backgroundColor: resolveCssVarColor(style.backgroundColor) }
+      : {}),
+    ...(typeof style.shadowColor === 'string'
+      ? { shadowColor: resolveCssVarColor(style.shadowColor) }
+      : {}),
+  } as T;
+}
+
+/**
  * Minimal shape of a hierarchical chart node carrying optional per-node
  * `itemStyle.color` / `itemStyle.borderColor`. Tree / Treemap / Sunburst
  * wrappers share this contract. The constraint is intentionally narrow — only

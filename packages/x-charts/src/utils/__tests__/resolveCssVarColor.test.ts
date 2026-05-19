@@ -11,6 +11,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   resolveCssVarColor,
   resolveCssVarColors,
+  resolveStyleColorFields,
   resolveTreeNodeColors,
 } from '../resolveCssVarColor';
 
@@ -130,6 +131,101 @@ describe('resolveCssVarColors', () => {
 
   it('applies the fallback branch per entry', () => {
     expect(resolveCssVarColors(['var(--xc-undefined-tok, #abcdef)'])).toEqual(['#abcdef']);
+  });
+});
+
+describe('resolveStyleColorFields', () => {
+  afterEach(() => {
+    clearRootVars('--xc-test-fill', '--xc-test-border', '--xc-test-bg', '--xc-test-shadow');
+  });
+
+  it('resolves the color field', () => {
+    document.documentElement.style.setProperty('--xc-test-fill', '#1d4ed8');
+    expect(resolveStyleColorFields({ color: 'var(--xc-test-fill)' })).toEqual({ color: '#1d4ed8' });
+  });
+
+  it('resolves the borderColor field', () => {
+    document.documentElement.style.setProperty('--xc-test-border', '#22c55e');
+    expect(resolveStyleColorFields({ borderColor: 'var(--xc-test-border)' })).toEqual({
+      borderColor: '#22c55e',
+    });
+  });
+
+  it('resolves the backgroundColor field', () => {
+    document.documentElement.style.setProperty('--xc-test-bg', '#fffbeb');
+    expect(resolveStyleColorFields({ backgroundColor: 'var(--xc-test-bg)' })).toEqual({
+      backgroundColor: '#fffbeb',
+    });
+  });
+
+  it('resolves the shadowColor field', () => {
+    document.documentElement.style.setProperty('--xc-test-shadow', 'rgba(0,0,0,0.2)');
+    expect(resolveStyleColorFields({ shadowColor: 'var(--xc-test-shadow)' })).toEqual({
+      shadowColor: 'rgba(0,0,0,0.2)',
+    });
+  });
+
+  it('resolves all four color fields on the same style object', () => {
+    document.documentElement.style.setProperty('--xc-test-fill', '#1d4ed8');
+    document.documentElement.style.setProperty('--xc-test-border', '#22c55e');
+    document.documentElement.style.setProperty('--xc-test-bg', '#fffbeb');
+    document.documentElement.style.setProperty('--xc-test-shadow', 'rgba(0,0,0,0.3)');
+    expect(
+      resolveStyleColorFields({
+        color: 'var(--xc-test-fill)',
+        borderColor: 'var(--xc-test-border)',
+        backgroundColor: 'var(--xc-test-bg)',
+        shadowColor: 'var(--xc-test-shadow)',
+      }),
+    ).toEqual({
+      color: '#1d4ed8',
+      borderColor: '#22c55e',
+      backgroundColor: '#fffbeb',
+      shadowColor: 'rgba(0,0,0,0.3)',
+    });
+  });
+
+  it('falls back to the literal when a token is undefined', () => {
+    // --xc-test-fill intentionally never set.
+    expect(resolveStyleColorFields({ color: 'var(--xc-test-fill, #ec4899)' })).toEqual({
+      color: '#ec4899',
+    });
+  });
+
+  it('copies non-color fields verbatim and leaves hex colors untouched', () => {
+    expect(
+      resolveStyleColorFields({
+        color: '#3b82f6',
+        borderWidth: 2,
+        opacity: 0.6,
+        show: true,
+      }),
+    ).toEqual({ color: '#3b82f6', borderWidth: 2, opacity: 0.6, show: true });
+  });
+
+  it('leaves a style object with no color fields structurally equal', () => {
+    expect(resolveStyleColorFields({ borderWidth: 1, fontSize: 11 })).toEqual({
+      borderWidth: 1,
+      fontSize: 11,
+    });
+  });
+
+  it('ignores non-string color fields (defensive)', () => {
+    // A consumer could hand off a loosely-typed numeric/null color.
+    const input = { color: 42 as unknown as string, borderColor: null as unknown as string };
+    expect(resolveStyleColorFields(input)).toEqual({ color: 42, borderColor: null });
+  });
+
+  it('passes undefined through unchanged', () => {
+    expect(resolveStyleColorFields(undefined)).toBeUndefined();
+  });
+
+  it('does not mutate the input style object (non-mutating clone)', () => {
+    document.documentElement.style.setProperty('--xc-test-fill', '#1d4ed8');
+    const input = { color: 'var(--xc-test-fill)', borderWidth: 2 };
+    const out = resolveStyleColorFields(input);
+    expect(input.color).toBe('var(--xc-test-fill)');
+    expect(out).not.toBe(input);
   });
 });
 

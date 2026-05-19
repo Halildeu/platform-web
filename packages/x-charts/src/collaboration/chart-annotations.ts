@@ -6,6 +6,8 @@
 
 import { useState, useCallback } from 'react';
 
+import { resolveCssVarColor } from '../utils/resolveCssVarColor';
+
 export type AnnotationType = 'comment' | 'marker' | 'highlight' | 'threshold';
 
 export interface Annotation {
@@ -48,11 +50,12 @@ export function useChartAnnotations(initialAnnotations?: Annotation[]) {
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  const updateAnnotation = useCallback((id: string, updates: Partial<Omit<Annotation, 'id' | 'createdAt'>>) => {
-    setAnnotations((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, ...updates } : a)),
-    );
-  }, []);
+  const updateAnnotation = useCallback(
+    (id: string, updates: Partial<Omit<Annotation, 'id' | 'createdAt'>>) => {
+      setAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
+    },
+    [],
+  );
 
   const getAnnotationsForPoint = useCallback(
     (dataRef: string | number, seriesName?: string) => {
@@ -63,6 +66,13 @@ export function useChartAnnotations(initialAnnotations?: Annotation[]) {
     [annotations],
   );
 
+  // The consumer-supplied `Annotation.color` flows straight into an
+  // ECharts `itemStyle.color` / `lineStyle.color` field below. The
+  // canvas renderer silently ignores a `var(--token)` string (drawing a
+  // dark fallback with no console error), so each color is run through
+  // `resolveCssVarColor` first — keeping `useChartAnnotations` aligned
+  // with the x-charts standard that no public API emits a raw `var()`
+  // to an ECharts color field.
   const toEChartsMarkPoints = useCallback(() => {
     return annotations
       .filter((a) => a.type === 'marker' || a.type === 'comment')
@@ -70,7 +80,7 @@ export function useChartAnnotations(initialAnnotations?: Annotation[]) {
         name: a.text,
         xAxis: a.dataRef,
         yAxis: a.thresholdValue,
-        itemStyle: a.color ? { color: a.color } : undefined,
+        itemStyle: a.color ? { color: resolveCssVarColor(a.color) } : undefined,
       }));
   }, [annotations]);
 
@@ -80,7 +90,7 @@ export function useChartAnnotations(initialAnnotations?: Annotation[]) {
       .map((a) => ({
         name: a.text,
         yAxis: a.thresholdValue,
-        lineStyle: { color: a.color ?? '#ef4444', type: 'dashed' as const },
+        lineStyle: { color: resolveCssVarColor(a.color ?? '#ef4444'), type: 'dashed' as const },
         label: { formatter: a.text },
       }));
   }, [annotations]);
