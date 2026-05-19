@@ -96,7 +96,10 @@ export const inboxItemToSurfaceItem = (row: InboxItemDto): NotificationSurfaceIt
       intentId: row.intentId ?? undefined,
       topicKey: row.topicKey,
       severity,
-      // Raw state — lets the history tab surface an archived indicator.
+      // Raw inbox state — metadata for a future "Arşivlendi" indicator on
+      // history rows. NotificationItemCard does not render meta.state yet;
+      // the visible archived badge is a tracked follow-up, out of M6a
+      // scope (Codex thread `019e40ec` post-impl P2).
       state: row.state,
       locale: row.locale ?? undefined,
       readAt: row.readAt ?? undefined,

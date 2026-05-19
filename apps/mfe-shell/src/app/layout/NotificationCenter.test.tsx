@@ -93,13 +93,14 @@ const archiveMutationMock = vi.fn();
 
 vi.mock('../store/store.hooks', () => ({
   useAppSelector: (selector: unknown) => {
-    // Most callers pass selectNotifyIdentity; we treat any selector arg
-    // as a no-op and just return the current identity fixture so the
-    // component sees the same value its selector mock would produce.
-    if (typeof selector === 'function') {
-      return identityMock;
-    }
-    return identityMock;
+    // Faz 23.4 M6a (P1 regression guard — Codex thread `019e40ec`):
+    // selectNotifyIdentity rebuilds the identity object on every
+    // invocation in production, so the mock returns a FRESH
+    // {orgId,subscriberId} object each call. The history reset effect
+    // must therefore key on identity VALUES, not the object reference —
+    // a ref-keyed effect would wipe the accumulation on every render.
+    void selector;
+    return identityMock ? { ...identityMock } : null;
   },
 }));
 
@@ -621,6 +622,35 @@ describe('NotificationCenter', () => {
         .filter((arg): arg is { page: number } => !!arg && typeof arg === 'object' && 'page' in arg)
         .map((arg) => arg.page);
       expect(pageArgs).toContain(1);
+    });
+
+    it('keeps accumulated history across a re-render when identity values are unchanged (P1)', () => {
+      // useAppSelector yields a fresh {orgId,subscriberId} object on every
+      // render (production behaviour). The reset effect keys on identity
+      // VALUES (identityKey), not the object ref — so a re-render with the
+      // same identity values must NOT wipe the accumulated history.
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      historyQueryByPage = {
+        0: historyResult([historyRow({ id: 70, subject: 'Kalıcı bildirim' })], 0, 1, 1),
+      };
+      stateMock.isOpen = true;
+
+      const { rerender } = render(<NotificationCenter />);
+      fireEvent.click(screen.getByRole('tab', { name: /Geçmiş/ }));
+      expect(
+        within(screen.getByRole('dialog', { name: 'Bildirim merkezi' })).getByText(
+          'Kalıcı bildirim',
+        ),
+      ).toBeInTheDocument();
+
+      // Re-render — useAppSelector returns a new identity object (same
+      // values). A ref-keyed reset effect would blank the list here.
+      rerender(<NotificationCenter />);
+      expect(
+        within(screen.getByRole('dialog', { name: 'Bildirim merkezi' })).getByText(
+          'Kalıcı bildirim',
+        ),
+      ).toBeInTheDocument();
     });
   });
 });
