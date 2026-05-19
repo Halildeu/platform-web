@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T21:43:01.612Z",
+  "generatedAt": "2026-05-19T21:59:29.890Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -150,6 +150,7 @@
         "CHART_CANVAS_HEIGHT",
         "ChartClickEvent",
         "ChartSize",
+        "ComboChart",
         "CrossFilterEntry",
         "CrossFilterProvider",
         "LineChart",
