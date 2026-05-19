@@ -82,24 +82,27 @@ export function normalizeGeoOverlayColors(
   if (!overlays || overlays.length === 0) return overlays;
   return overlays.map((layer): GeoOverlay => {
     switch (layer.type) {
+      // `layer.data ?? []` for defensive parity with the
+      // `buildGeoOverlaySeries` builders below — `GeoOverlay.data`
+      // is typed required, so this guard is belt-and-suspenders.
       case 'bubble':
       case 'effectScatter':
         return {
           ...layer,
           color: resolveCssVarColor(layer.color),
-          data: layer.data.map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
+          data: (layer.data ?? []).map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
         };
       case 'flow':
         return {
           ...layer,
           color: resolveCssVarColor(layer.color),
-          data: layer.data.map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
+          data: (layer.data ?? []).map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
         };
       case 'marker':
         return {
           ...layer,
           color: resolveCssVarColor(layer.color),
-          data: layer.data.map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
+          data: (layer.data ?? []).map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
         };
       case 'heatmap':
         // Heatmap datums carry no per-point `color`; only the layer-level

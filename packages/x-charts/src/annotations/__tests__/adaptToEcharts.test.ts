@@ -12,7 +12,7 @@
  *   - Public name collision regression (ChartMarkup ≠ ChartAnnotation
  *     ≠ collaboration Annotation)
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { adaptToEcharts, DEFAULT_SUPPORT_MATRIX, type AdaptOptions } from '../adaptToEcharts';
 import type {
   ChartMarkup,
@@ -55,12 +55,17 @@ describe('adaptToEcharts — line markup', () => {
     expect(data[0]).toMatchObject({ name: 'q3-marker', xAxis: 'Q3' });
   });
 
-  it('uses default semantic color when omitted', () => {
+  it('uses default semantic color when omitted (resolved off the var() token)', () => {
+    // The DEFAULT_LINE_COLOR token (`var(--action-primary, #3b82f6)`)
+    // is run through resolveCssVarColor before it reaches the ECharts
+    // color field. With no `--action-primary` set on <html> the
+    // resolver falls back to the literal, so the canvas never sees a
+    // `var(...)` string.
     const r = adaptToEcharts([{ id: 'l', type: 'line', axis: 'y', value: 50 }], baseOpts);
     const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
-    expect((data[0] as { lineStyle: { color: string } }).lineStyle.color).toContain(
-      '--action-primary',
-    );
+    const color = (data[0] as { lineStyle: { color: string } }).lineStyle.color;
+    expect(color).not.toContain('var(');
+    expect(color).toBe('#3b82f6');
   });
 });
 
@@ -111,11 +116,15 @@ describe('adaptToEcharts — area markup', () => {
     expect(area[1]).toMatchObject({ xAxis: 'Q3' });
   });
 
-  it('uses default warning-bg + 0.15 opacity when omitted', () => {
+  it('uses default warning-bg + 0.15 opacity when omitted (color resolved off the var() token)', () => {
+    // DEFAULT_AREA_COLOR (`var(--state-warning-bg, #fef3c7)`) resolves
+    // to its literal fallback when the token is unset — the canvas
+    // never receives a raw `var(...)` string.
     const r = adaptToEcharts([{ id: 'a', type: 'area', axis: 'y', from: 0, to: 10 }], baseOpts);
     const data = (r.seriesPatches[0].markArea as { data: unknown[] }).data;
     const area = data[0] as Array<{ itemStyle: { color: string; opacity: number } }>;
-    expect(area[0].itemStyle.color).toContain('--state-warning-bg');
+    expect(area[0].itemStyle.color).not.toContain('var(');
+    expect(area[0].itemStyle.color).toBe('#fef3c7');
     expect(area[0].itemStyle.opacity).toBe(0.15);
   });
 });
@@ -522,6 +531,140 @@ describe('adaptToEcharts — XSS sanitization', () => {
     const formatter = (data[0] as { label: { formatter: string } }).label.formatter;
     expect(formatter).not.toContain('<a>');
     expect(formatter).toContain('&lt;');
+  });
+});
+
+describe('adaptToEcharts — CSS custom-property color resolution', () => {
+  // The ECharts canvas renderer silently ignores `var(--…)` color
+  // strings. Every markup color surface — consumer-supplied AND the
+  // DEFAULT_* token fallbacks — must be resolved by the adapter before
+  // it reaches an ECharts color field. These tests set a real custom
+  // property on <html> (jsdom env from vitest.config) so the resolver
+  // returns the concrete computed value rather than the var() literal.
+  afterEach(() => {
+    for (const t of [
+      '--xc-mk-line',
+      '--xc-mk-segment',
+      '--xc-mk-area',
+      '--xc-mk-point',
+      '--xc-mk-label',
+      '--xc-mk-label-bg',
+    ]) {
+      document.documentElement.style.removeProperty(t);
+    }
+  });
+
+  it('resolves a var(--token) consumer color on a line markup', () => {
+    document.documentElement.style.setProperty('--xc-mk-line', '#1d4ed8');
+    const r = adaptToEcharts(
+      [{ id: 'l', type: 'line', axis: 'y', value: 10, color: 'var(--xc-mk-line)' }],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    expect((data[0] as { lineStyle: { color: string } }).lineStyle.color).toBe('#1d4ed8');
+  });
+
+  it('resolves a var(--token) consumer color on a segment markup', () => {
+    document.documentElement.style.setProperty('--xc-mk-segment', '#22c55e');
+    const r = adaptToEcharts(
+      [
+        {
+          id: 's',
+          type: 'segment',
+          from: { x: 0, y: 0 },
+          to: { x: 1, y: 1 },
+          color: 'var(--xc-mk-segment)',
+        },
+      ],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    const segment = data[0] as Array<{ lineStyle?: { color: string } }>;
+    expect(segment[0].lineStyle?.color).toBe('#22c55e');
+  });
+
+  it('resolves a var(--token) consumer color on an area markup', () => {
+    document.documentElement.style.setProperty('--xc-mk-area', '#fef3c7');
+    const r = adaptToEcharts(
+      [{ id: 'a', type: 'area', axis: 'x', from: 'Q1', to: 'Q2', color: 'var(--xc-mk-area)' }],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markArea as { data: unknown[] }).data;
+    const area = data[0] as Array<{ itemStyle?: { color: string } }>;
+    expect(area[0].itemStyle?.color).toBe('#fef3c7');
+  });
+
+  it('resolves a var(--token) consumer color on a point markup', () => {
+    document.documentElement.style.setProperty('--xc-mk-point', '#8b5cf6');
+    const r = adaptToEcharts(
+      [{ id: 'p', type: 'point', x: 'Mar', y: 5, color: 'var(--xc-mk-point)' }],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { itemStyle: { color: string } }).itemStyle.color).toBe('#8b5cf6');
+  });
+
+  it('resolves var(--token) color AND background on a label markup', () => {
+    document.documentElement.style.setProperty('--xc-mk-label', '#6b7280');
+    document.documentElement.style.setProperty('--xc-mk-label-bg', '#f3f4f6');
+    const r = adaptToEcharts(
+      [
+        {
+          id: 'lbl',
+          type: 'label',
+          text: 'Note',
+          anchor: { x: 'Apr', y: 100 },
+          color: 'var(--xc-mk-label)',
+          background: 'var(--xc-mk-label-bg)',
+        },
+      ],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    const label = (data[0] as { label: { color: string; backgroundColor?: string } }).label;
+    expect(label.color).toBe('#6b7280');
+    expect(label.backgroundColor).toBe('#f3f4f6');
+  });
+
+  it('falls back to a var() literal fallback when the token is undefined', () => {
+    // --xc-mk-line intentionally never set: the resolver yields the
+    // literal fallback, so the canvas never sees `var(...)`.
+    const r = adaptToEcharts(
+      [
+        {
+          id: 'l',
+          type: 'line',
+          axis: 'y',
+          value: 10,
+          color: 'var(--xc-mk-line, #abcdef)',
+        },
+      ],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    expect((data[0] as { lineStyle: { color: string } }).lineStyle.color).toBe('#abcdef');
+  });
+
+  it('passes a plain hex consumer color through untouched', () => {
+    const r = adaptToEcharts(
+      [{ id: 'l', type: 'line', axis: 'y', value: 10, color: '#ff0000' }],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markLine as { data: unknown[] }).data;
+    expect((data[0] as { lineStyle: { color: string } }).lineStyle.color).toBe('#ff0000');
+  });
+
+  it('leaves label backgroundColor undefined when no background is supplied', () => {
+    // resolveCssVarColor(undefined) === undefined — the optional
+    // surface must not be coerced into a string.
+    const r = adaptToEcharts(
+      [{ id: 'lbl', type: 'label', text: 'X', anchor: { x: 0, y: 0 } }],
+      baseOpts,
+    );
+    const data = (r.seriesPatches[0].markPoint as { data: unknown[] }).data;
+    expect((data[0] as { label: { backgroundColor?: string } }).label.backgroundColor).toBe(
+      undefined,
+    );
   });
 });
 
