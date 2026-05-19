@@ -13,6 +13,7 @@
  * `docs/cross-filter.md` for related runtime overlay decisions.
  */
 import { sanitizeChartText } from '../security/sanitizeChartText';
+import { resolveCssVarColor } from '../utils/resolveCssVarColor';
 import type {
   ChartMarkup,
   LineMarkup,
@@ -171,6 +172,14 @@ export interface AdaptResult {
 /*  Default semantic colors (DS theme tokens)                         */
 /* ------------------------------------------------------------------ */
 
+// These defaults are CSS-var token strings. They — and any
+// consumer-supplied markup color — MUST be run through
+// `resolveCssVarColor` before they reach an ECharts color field:
+// the canvas renderer silently ignores `var(--…)` and would draw a
+// dark fallback with no console error. The `mapXToEcharts` helpers
+// below resolve `m.color ?? DEFAULT_X_COLOR` in a single call so
+// both surfaces are covered centrally — no per-wrapper normalization
+// of `markups` is needed.
 const DEFAULT_LINE_COLOR = 'var(--action-primary, #3b82f6)';
 const DEFAULT_AREA_COLOR = 'var(--state-warning-bg, #fef3c7)';
 const DEFAULT_POINT_COLOR = 'var(--accent-primary, #8b5cf6)';
@@ -195,7 +204,7 @@ function mapLineToEcharts(m: LineMarkup): unknown {
       position: m.label?.position ?? 'end',
     },
     lineStyle: {
-      color: m.color ?? DEFAULT_LINE_COLOR,
+      color: resolveCssVarColor(m.color ?? DEFAULT_LINE_COLOR),
       type: m.style ?? 'solid',
       width: m.width ?? 1,
     },
@@ -211,7 +220,7 @@ function mapSegmentToEcharts(m: SegmentMarkup): unknown {
       name: m.id,
       coord: fromCoord,
       lineStyle: {
-        color: m.color ?? DEFAULT_LINE_COLOR,
+        color: resolveCssVarColor(m.color ?? DEFAULT_LINE_COLOR),
         type: m.style ?? 'solid',
         width: m.width ?? 1,
       },
@@ -233,7 +242,7 @@ function mapAreaToEcharts(m: AreaMarkup): [unknown, unknown] {
       name: m.id,
       [axisKey]: m.from,
       itemStyle: {
-        color: m.color ?? DEFAULT_AREA_COLOR,
+        color: resolveCssVarColor(m.color ?? DEFAULT_AREA_COLOR),
         opacity: m.opacity ?? DEFAULT_AREA_OPACITY,
       },
       label: {
@@ -251,7 +260,7 @@ function mapPointToEcharts(m: PointMarkup): unknown {
     coord: [m.x, m.y],
     symbol: m.symbol ?? 'circle',
     symbolSize: m.size ?? 8,
-    itemStyle: { color: m.color ?? DEFAULT_POINT_COLOR },
+    itemStyle: { color: resolveCssVarColor(m.color ?? DEFAULT_POINT_COLOR) },
     label: {
       show: !!m.label,
       formatter: m.label?.text ? sanitizeChartText(m.label.text) : undefined,
@@ -330,8 +339,11 @@ function mapLabelToEcharts(m: LabelMarkup, ctx: MarkupDataContext | undefined): 
     label: {
       show: true,
       formatter: sanitizeChartText(m.text) ?? '',
-      color: m.color ?? DEFAULT_LABEL_COLOR,
-      backgroundColor: m.background,
+      color: resolveCssVarColor(m.color ?? DEFAULT_LABEL_COLOR),
+      // `background` is a public color surface too — resolve it
+      // before it becomes the canvas `backgroundColor` field.
+      // `undefined` passes through untouched (resolver overload).
+      backgroundColor: resolveCssVarColor(m.background),
       padding: [2, 4],
     },
   };

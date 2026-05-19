@@ -35,6 +35,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { resolveCssVarColor, resolveStyleColorFields } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -251,7 +252,17 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
     if (displacementScale !== undefined) globeOption.displacementScale = displacementScale;
   }
   if (environment !== undefined) globeOption.environment = environment;
-  if (regions !== undefined) globeOption.regions = regions;
+  if (regions !== undefined) {
+    // `GlobeRegion.itemStyle.color` is public API — a consumer can pass
+    // a `var(--token)` string. The echarts-GL renderer reads colours on
+    // the GPU and cannot resolve CSS custom properties any more than the
+    // 2D canvas can, so each region's `itemStyle` is run through
+    // `resolveStyleColorFields` (non-mutating) before it reaches the
+    // `globe.regions` option.
+    globeOption.regions = regions.map((r) =>
+      r.itemStyle ? { ...r, itemStyle: resolveStyleColorFields(r.itemStyle) } : r,
+    );
+  }
 
   // Per-layer series. `coordinateSystem: 'globe'` is enforced by the
   // wrapper — consumer cannot override it (would break the geo
@@ -285,7 +296,7 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         }
         const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
         if (d.label !== undefined) item.name = d.label;
-        if (d.color !== undefined) item.itemStyle = { color: d.color };
+        if (d.color !== undefined) item.itemStyle = { color: resolveCssVarColor(d.color) };
         if (d.size !== undefined) item.symbolSize = d.size;
         return item;
       });
@@ -310,7 +321,7 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
         }
         const item: Record<string, unknown> = { value: [d.lon, d.lat, v] };
         if (d.label !== undefined) item.name = d.label;
-        if (d.color !== undefined) item.itemStyle = { color: d.color };
+        if (d.color !== undefined) item.itemStyle = { color: resolveCssVarColor(d.color) };
         return item;
       });
       if (layerHasValue) numericSeriesIndexes.push(i);
@@ -335,7 +346,7 @@ export function buildGlobeOption(input: BuildGlobeOptionInput): EChartsOption {
           [d.to[0], d.to[1]],
         ],
       };
-      if (d.color !== undefined) item.lineStyle = { color: d.color };
+      if (d.color !== undefined) item.lineStyle = { color: resolveCssVarColor(d.color) };
       if (d.label !== undefined) item.name = d.label;
       return item;
     });

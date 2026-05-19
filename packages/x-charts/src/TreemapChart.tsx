@@ -15,6 +15,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveTreeNodeColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -292,6 +293,10 @@ const TreemapChartInner = React.forwardRef<
     const maxDepth = getMaxDepth(data);
     const levels = buildLevels(maxDepth, colorSaturation);
 
+    // Resolve any consumer `var(--token)` colors in the (possibly nested)
+    // node tree — the canvas renderer cannot read CSS custom properties.
+    const resolvedData = resolveTreeNodeColors(data);
+
     const labelFormatter = (params: { name: string; value: number }) => {
       const formatted = fmt(params.value);
       return `${escapeHtml(params.name)}\n${escapeHtml(formatted)}`;
@@ -332,7 +337,7 @@ const TreemapChartInner = React.forwardRef<
       series: [
         {
           type: 'treemap' as const,
-          data,
+          data: resolvedData,
           leafDepth,
           roam,
           visibleMin,

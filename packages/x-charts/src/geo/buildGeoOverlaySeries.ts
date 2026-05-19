@@ -38,6 +38,7 @@ import type {
   GeoMarkerSymbol,
   GeoPointDatum,
 } from './geoOverlayTypes';
+import { resolveCssVarColor, resolveCssVarColors } from '../utils/resolveCssVarColor';
 
 /* ------------------------------------------------------------------ */
 /*  Output type                                                        */
@@ -52,6 +53,68 @@ import type {
  * pin in a strict TS type without sacrificing maintenance overhead.
  */
 export type GeoOverlaySeriesSpec = Record<string, unknown>;
+
+/* ------------------------------------------------------------------ */
+/*  CSS-var color normalization (single entry point)                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Resolve every consumer-supplied `var(--token)` color in an overlay tree
+ * BEFORE the colors reach an ECharts color field. The geo canvas renderer
+ * cannot read CSS custom properties — an un-normalized `var(--…)` would
+ * render as an undifferentiated dark fallback with no console error.
+ *
+ * Covers every consumer color surface across all five overlay layer types:
+ *   - `layer.color` (bubble / effectScatter / flow / marker per-layer override)
+ *   - `layer.colors` (heatmap density ramp — array)
+ *   - per-datum `.color` (`GeoPointDatum`, `GeoFlowDatum`, `GeoMarkerDatum`)
+ *
+ * Non-mutating: every layer and datum is shallow-cloned, so the consumer's
+ * input array is never touched. Called once at the GeoMap entry and the
+ * result is fed to BOTH `buildGeoOverlaySeries` and
+ * `buildGeoOverlayVisualMaps`, so neither helper has to re-normalize.
+ *
+ * @param overlays Overlay array (may be undefined/empty → returned as-is).
+ */
+export function normalizeGeoOverlayColors(
+  overlays: GeoOverlay[] | undefined,
+): GeoOverlay[] | undefined {
+  if (!overlays || overlays.length === 0) return overlays;
+  return overlays.map((layer): GeoOverlay => {
+    switch (layer.type) {
+      // `layer.data ?? []` for defensive parity with the
+      // `buildGeoOverlaySeries` builders below — `GeoOverlay.data`
+      // is typed required, so this guard is belt-and-suspenders.
+      case 'bubble':
+      case 'effectScatter':
+        return {
+          ...layer,
+          color: resolveCssVarColor(layer.color),
+          data: (layer.data ?? []).map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
+        };
+      case 'flow':
+        return {
+          ...layer,
+          color: resolveCssVarColor(layer.color),
+          data: (layer.data ?? []).map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
+        };
+      case 'marker':
+        return {
+          ...layer,
+          color: resolveCssVarColor(layer.color),
+          data: (layer.data ?? []).map((d) => ({ ...d, color: resolveCssVarColor(d.color) })),
+        };
+      case 'heatmap':
+        // Heatmap datums carry no per-point `color`; only the layer-level
+        // `colors` density ramp is consumer-supplied.
+        return { ...layer, colors: resolveCssVarColors(layer.colors) };
+      default: {
+        const _exhaustive: never = layer;
+        return _exhaustive;
+      }
+    }
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /*  Bubble (scatter on geo) — value → symbolSize scale                */

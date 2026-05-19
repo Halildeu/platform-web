@@ -29,6 +29,7 @@ import React, { useCallback, useMemo, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -168,7 +169,9 @@ export function buildLines3DOption(input: BuildLines3DOptionInput): EChartsOptio
   // raw consumer label as `name` so the tooltip formatter can read
   // it back via the resolved path index.
   const series = paths.map((path, i) => {
-    const seriesColor = path.color ?? palette[i % Math.max(1, palette.length)];
+    // Resolve a consumer `var(--token)` color — the canvas/WebGL renderer
+    // cannot read CSS custom properties. `palette` is already resolved.
+    const seriesColor = resolveCssVarColor(path.color) ?? palette[i % Math.max(1, palette.length)];
     return {
       type: 'line3D' as const,
       name: path.label ?? `Path ${i + 1}`,

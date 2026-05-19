@@ -17,6 +17,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveStyleColorFields, resolveTreeNodeColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -344,7 +345,10 @@ const SunburstChartInner = React.forwardRef<
     if (isEmpty) return null;
 
     const palette = effectivePalette ?? DEFAULT_PALETTE;
-    const coloredData = colorizeTopLevel(data, palette);
+    // Resolve any consumer `var(--token)` colors in the (possibly nested)
+    // node tree before assigning palette defaults — the canvas renderer
+    // cannot read CSS custom properties at any depth.
+    const coloredData = colorizeTopLevel(resolveTreeNodeColors(data), palette);
     const maxDepth = computeMaxDepth(coloredData);
     const levels = levelsProp ?? autoLevels(maxDepth, radius, densityFontMultiplier);
     const focusValue = resolveHighlightFocus(highlightPolicy);
@@ -402,14 +406,24 @@ const SunburstChartInner = React.forwardRef<
           data: coloredData,
           radius,
           sort: sort === null ? undefined : sort,
+          // `SunburstLevelConfig.itemStyle` / `label` are public
+          // `Record<string, unknown>` props — a consumer can pass
+          // `itemStyle: { color: 'var(--x)', borderColor: 'var(--y)' }`
+          // or `label: { color: 'var(--text-secondary)' }`. The autoLevels
+          // default `itemStyle.borderColor` is itself a `var(--token)`
+          // string. `resolveStyleColorFields` resolves every CSS-var color
+          // field on both objects so none reaches the canvas renderer
+          // un-normalized (it cannot read CSS custom properties).
           levels: levels.map((lvl) => ({
             r0: lvl.r0,
             r1: lvl.r1,
-            itemStyle: lvl.itemStyle ?? {
-              borderWidth: 2,
-              borderColor: 'var(--bg-surface, #ffffff)',
-            },
-            label: lvl.label ?? { show: true, fontSize: 11 },
+            itemStyle: resolveStyleColorFields(
+              lvl.itemStyle ?? {
+                borderWidth: 2,
+                borderColor: 'var(--bg-surface, #ffffff)',
+              },
+            ),
+            label: resolveStyleColorFields(lvl.label ?? { show: true, fontSize: 11 }),
           })),
           label: {
             show: true,
@@ -426,10 +440,14 @@ const SunburstChartInner = React.forwardRef<
               shadowColor: 'rgba(0, 0, 0, 0.2)',
             },
           },
-          itemStyle: {
+          // Series-level border default is a `var(--token)` string —
+          // resolved so the canvas renderer draws the real surface
+          // colour instead of a dark fallback (same class as the
+          // per-level `itemStyle` resolution above).
+          itemStyle: resolveStyleColorFields({
             borderWidth: 2,
             borderColor: 'var(--bg-surface, #ffffff)',
-          },
+          }),
           // Cursor reflects clickability through EITHER callback so that
           // consumers wrapping the chart in `CrossFilterChart` (which
           // injects only `onDataPointClick`) still see a pointer

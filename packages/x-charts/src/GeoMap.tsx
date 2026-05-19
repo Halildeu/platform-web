@@ -32,6 +32,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor, resolveCssVarColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -52,6 +53,7 @@ import type { GeoOverlay, GeoOverlayMeta } from './geo/geoOverlayTypes';
 import {
   buildGeoOverlaySeries,
   buildGeoOverlayVisualMaps,
+  normalizeGeoOverlayColors,
   safeHeatmapIntensity,
 } from './geo/buildGeoOverlaySeries';
 import type { EChartsOption } from './renderers/echarts-imports';
@@ -315,7 +317,17 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
       const echartsData = data.map((d) => ({
         name: nameMap?.[d.name] ?? d.name,
         value: d.value,
-        itemStyle: d.itemStyle,
+        // `GeoMapDatum.itemStyle` is a public field carrying consumer
+        // `color` / `borderColor` that may be `var(--token)` strings. The
+        // canvas renderer cannot read CSS custom properties — resolve both
+        // via a non-mutating clone before the datum reaches ECharts.
+        itemStyle: d.itemStyle
+          ? {
+              ...d.itemStyle,
+              color: resolveCssVarColor(d.itemStyle.color),
+              borderColor: resolveCssVarColor(d.itemStyle.borderColor),
+            }
+          : undefined,
         // Keep the original name + code on the datum for a11y/click
         // payload — consumer code may want to round-trip back to
         // their canonical identifier.
@@ -323,10 +335,19 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
         _code: d.code,
       }));
 
+      // Normalize every consumer `var(--token)` color across the overlay
+      // tree ONCE (per-layer + per-datum + heatmap ramp). The resolved tree
+      // feeds both `buildGeoOverlayVisualMaps` and `buildGeoOverlaySeries`
+      // below so neither helper has to re-resolve. Non-mutating.
+      const normalizedOverlays = normalizeGeoOverlayColors(overlays);
+
       const values = echartsData.map((d) => d.value).filter((v) => Number.isFinite(v));
       const min = visualMap?.min ?? (values.length > 0 ? Math.min(...values) : 0);
       const max = visualMap?.max ?? (values.length > 0 ? Math.max(...values) : 1);
-      const colors = visualMap?.colors ?? DEFAULT_VISUALMAP_COLORS;
+      // Consumer `visualMap.colors` are run through the CSS-var resolver so
+      // `var(--token)` strings become concrete values — the canvas renderer
+      // cannot read CSS custom properties. DEFAULT_VISUALMAP_COLORS is hex.
+      const colors = resolveCssVarColors(visualMap?.colors) ?? DEFAULT_VISUALMAP_COLORS;
       const showVisualMap = visualMap?.show ?? true;
 
       const position = visualMap?.position ?? 'bottom';
@@ -467,7 +488,7 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
         // to an array shape only when needed, so existing consumers
         // without heatmap overlays see byte-identical option shape.
         visualMap: (() => {
-          const heatmapVisualMaps = buildGeoOverlayVisualMaps(overlays, 1);
+          const heatmapVisualMaps = buildGeoOverlayVisualMaps(normalizedOverlays, 1);
           if (heatmapVisualMaps.length === 0) {
             return visualMapLayout; // backward-compat single-object
           }
@@ -516,8 +537,9 @@ const GeoMapInner = React.forwardRef<HTMLDivElement, Omit<GeoMapProps, 'access' 
           // of the choropleth base. The pure builder dispatches on
           // `layer.type` and emits one ECharts series per overlay.
           // Empty overlays array → spread is a no-op; back-compat
-          // for existing consumers preserved.
-          ...buildGeoOverlaySeries(overlays, 0),
+          // for existing consumers preserved. `normalizedOverlays` has
+          // already had its consumer `var(--token)` colors resolved.
+          ...buildGeoOverlaySeries(normalizedOverlays, 0),
         ],
         // PR-X13a (Codex 019e25a2 iter-2 absorb): explicit `geo`
         // coordinate system. When base `map` series binds via

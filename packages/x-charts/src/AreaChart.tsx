@@ -14,6 +14,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { ChartA11yShell, useChartA11y } from './a11y';
 import type { AnomalyAnnouncementFormatter } from './a11y/ChartAriaLive';
@@ -312,7 +313,10 @@ const AreaChartInner = React.forwardRef<
     });
 
     const echartsSeriesList = safeSeries.map((s, i) => {
-      const color = s.color ?? palette[i % palette.length];
+      // Resolve a consumer `var(--token)` color to a concrete value — the
+      // canvas renderer cannot read CSS custom properties, and `makeGradient`
+      // below appends a hex alpha suffix that requires a real hex string.
+      const color = resolveCssVarColor(s.color) ?? palette[i % palette.length];
       return {
         type: 'line' as const,
         name: s.name,

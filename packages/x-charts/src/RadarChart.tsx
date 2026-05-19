@@ -15,6 +15,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -330,7 +331,9 @@ const RadarChartInner = React.forwardRef<
 
     const palette = effectivePalette ?? DEFAULT_PALETTE;
     const radarData = series.map((s, idx) => {
-      const seriesColor = s.color ?? palette[idx % palette.length];
+      // Resolve a consumer `var(--token)` color — the canvas renderer cannot
+      // read CSS custom properties. `palette` is already resolved.
+      const seriesColor = resolveCssVarColor(s.color) ?? palette[idx % palette.length];
 
       // Determine area style: per-series override > global showArea > none
       let areaConfig: { color: string; opacity: number } | undefined;

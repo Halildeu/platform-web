@@ -21,6 +21,7 @@ import React, { useMemo, useCallback, useRef } from 'react';
 import type { AccessControlledProps } from '@mfe/shared-types';
 import { resolveAccessState } from '@mfe/shared-types';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { useEChartsRenderer } from './renderers';
@@ -258,10 +259,15 @@ const PopulationPyramidInner = React.forwardRef<
     // Codex iter-13 fallback chain: explicit `colors` prop >
     // effectivePalette (accent / HC-Print theme builder) > inline default.
     // PopulationPyramid is accent-driven — no accent-immune carve-out.
-    const palette: [string, string] = colors ?? [
-      effectivePalette?.[0] ?? DEFAULT_PYRAMID_COLORS[0],
-      effectivePalette?.[1] ?? DEFAULT_PYRAMID_COLORS[1],
-    ];
+    // A consumer `colors` tuple is run through resolveCssVarColor so a
+    // `var(--token)` value becomes concrete — the canvas renderer cannot
+    // read CSS custom properties. effectivePalette / DEFAULT are already hex.
+    const palette: [string, string] = colors
+      ? [resolveCssVarColor(colors[0]), resolveCssVarColor(colors[1])]
+      : [
+          effectivePalette?.[0] ?? DEFAULT_PYRAMID_COLORS[0],
+          effectivePalette?.[1] ?? DEFAULT_PYRAMID_COLORS[1],
+        ];
 
     // Symmetric value domain — both sides must share `[-max, max]` so the
     // two halves are visually comparable (Codex pitfall C).

@@ -17,6 +17,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveStyleColorFields } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -268,14 +269,24 @@ const SankeyChartInner = React.forwardRef<
     if (isEmpty) return null;
 
     /* -- Assign default colors to nodes without explicit color -- */
+    // `SankeyNode.itemStyle` is `{ color?: string; [key: string]: unknown }`
+    // — its index signature lets a consumer pass `borderColor` /
+    // `shadowColor` etc. alongside `color`. `resolveStyleColorFields`
+    // resolves EVERY `var(--token)` color field (not just `color`) so none
+    // reaches the canvas renderer un-normalized. The palette default still
+    // fills in when the consumer omits `color`. effectivePalette /
+    // DEFAULT_PALETTE are already hex.
     const palette = effectivePalette ?? DEFAULT_PALETTE;
-    const coloredNodes = nodes.map((n, i) => ({
-      ...n,
-      itemStyle: {
-        color: n.itemStyle?.color ?? palette[i % palette.length],
-        ...n.itemStyle,
-      },
-    }));
+    const coloredNodes = nodes.map((n, i) => {
+      const resolvedStyle = resolveStyleColorFields(n.itemStyle);
+      return {
+        ...n,
+        itemStyle: {
+          ...resolvedStyle,
+          color: resolvedStyle?.color ?? palette[i % palette.length],
+        },
+      };
+    });
 
     /* -- Resolve link line color strategy -- */
     let linkLineColor: string;

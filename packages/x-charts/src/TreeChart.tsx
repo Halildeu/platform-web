@@ -24,6 +24,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveTreeNodeColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -319,6 +320,10 @@ const TreeChartInner = React.forwardRef<
     // the option for radial avoids a misleading no-op in DevTools.
     const isRadial = layout === 'radial';
 
+    // Resolve any consumer `var(--token)` colors in the (possibly nested)
+    // node tree — the canvas renderer cannot read CSS custom properties.
+    const resolvedData = resolveTreeNodeColors(data);
+
     return {
       animation: animate,
       animationDuration: animate ? 500 : 0,
@@ -350,7 +355,7 @@ const TreeChartInner = React.forwardRef<
       series: [
         {
           type: 'tree' as const,
-          data,
+          data: resolvedData,
           // `layout` drives orthogonal vs radial; `orient` only
           // meaningful for orthogonal (Codex iter-1 must-fix #2).
           layout,

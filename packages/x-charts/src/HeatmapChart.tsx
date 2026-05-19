@@ -15,6 +15,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveAxisLabel, buildResponsiveGrid } from './responsive';
@@ -386,6 +387,14 @@ const HeatmapChartInner = React.forwardRef<
     const effectiveMin = minProp ?? dataMin;
     const effectiveMax = maxProp ?? dataMax;
 
+    // Resolve a consumer `var(--token)` gradient color to a concrete value —
+    // the canvas renderer cannot read CSS custom properties. The default
+    // gradient is already hex, so this is a no-op for the default.
+    const gradientColors: [string, string] = [
+      resolveCssVarColor(colors[0]),
+      resolveCssVarColor(colors[1]),
+    ];
+
     return {
       animation: animate,
       animationDuration: animate ? 500 : 0,
@@ -467,7 +476,7 @@ const HeatmapChartInner = React.forwardRef<
         right: 0,
         top: 'center',
         inRange: {
-          color: colors,
+          color: gradientColors,
         },
         textStyle: { fontSize: scaleFontSize(11, densityFontMultiplier) },
       },

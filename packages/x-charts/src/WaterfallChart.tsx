@@ -17,6 +17,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import {
@@ -277,11 +278,15 @@ const WaterfallChartInner = React.forwardRef<
   // (success/danger) — never replaced by accent. Only `total` binds to
   // accent primary (effectivePalette[0]) when no explicit override.
   const accentPrimary = effectivePalette?.[0] ?? DEFAULT_COLORS.total;
+  // Consumer `colors.{increase,decrease,total}` are run through the CSS-var
+  // resolver so `var(--token)` values become concrete — the canvas renderer
+  // cannot read CSS custom properties. DEFAULT_COLORS / accentPrimary are
+  // already resolved hex.
   const palette = useMemo(
     () => ({
-      increase: colorsProp?.increase ?? DEFAULT_COLORS.increase,
-      decrease: colorsProp?.decrease ?? DEFAULT_COLORS.decrease,
-      total: colorsProp?.total ?? accentPrimary,
+      increase: resolveCssVarColor(colorsProp?.increase) ?? DEFAULT_COLORS.increase,
+      decrease: resolveCssVarColor(colorsProp?.decrease) ?? DEFAULT_COLORS.decrease,
+      total: resolveCssVarColor(colorsProp?.total) ?? accentPrimary,
     }),
     [colorsProp, accentPrimary],
   );

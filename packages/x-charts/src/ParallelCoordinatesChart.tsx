@@ -22,6 +22,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -245,7 +246,10 @@ const ParallelCoordinatesChartInner = React.forwardRef<
     // modules have registered (see `parallelFeature` above).
     if (isEmpty || !parallelFeatureReady) return null;
 
-    const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
+    // Consumer `colors` are run through the CSS-var resolver so `var(--token)`
+    // strings become concrete values — the canvas renderer cannot read CSS
+    // custom properties. effectivePalette / DEFAULT_PALETTE are already hex.
+    const palette = resolveCssVarColors(colors) ?? effectivePalette ?? DEFAULT_PALETTE;
 
     // Build the parallel axis defs in visual order. Each gets an `dim`
     // index matching the order in the `axes` prop.

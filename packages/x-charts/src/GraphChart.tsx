@@ -24,6 +24,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { guardChartCallback } from './access/guardChartCallback';
 import { cn } from './utils/cn';
+import { resolveCssVarColor, resolveCssVarColors } from './utils/resolveCssVarColor';
 import { useEChartsRenderer, useRequiredEChartsFeature } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { buildResponsiveLegend } from './responsive';
@@ -277,7 +278,11 @@ const GraphChartInner = React.forwardRef<
     // module has registered (see `graphFeature` above).
     if (isEmpty || !graphFeatureReady) return null;
 
-    const palette = colors ?? effectivePalette ?? DEFAULT_PALETTE;
+    // Consumer `colors` / per-node / per-edge / per-category colors are run
+    // through the CSS-var resolver so `var(--token)` strings become concrete
+    // values — the canvas renderer cannot read CSS custom properties.
+    // effectivePalette / DEFAULT_PALETTE are already resolved hex.
+    const palette = resolveCssVarColors(colors) ?? effectivePalette ?? DEFAULT_PALETTE;
 
     // Transform nodes + edges into ECharts wire format.
     const echartsNodes = nodes.map((n) => ({
@@ -293,7 +298,7 @@ const GraphChartInner = React.forwardRef<
         (typeof n.value === 'number'
           ? Math.max(10, Math.min(80, Math.sqrt(n.value) * 6))
           : defaultSymbolSize),
-      itemStyle: n.color ? { color: n.color } : undefined,
+      itemStyle: n.color ? { color: resolveCssVarColor(n.color) } : undefined,
       label: {
         show: true,
         fontSize: scaleFontSize(11, densityFontMultiplier),
@@ -305,7 +310,7 @@ const GraphChartInner = React.forwardRef<
       target: e.target,
       value: e.value,
       lineStyle: {
-        color: e.color,
+        color: resolveCssVarColor(e.color),
         width: typeof e.value === 'number' ? Math.max(1, Math.min(8, Math.sqrt(e.value) / 2)) : 1.5,
         curveness: 0,
       },
@@ -320,7 +325,7 @@ const GraphChartInner = React.forwardRef<
 
     const echartsCategories = categories?.map((c, i) => ({
       name: c.name,
-      itemStyle: { color: c.color ?? palette[i % palette.length] },
+      itemStyle: { color: resolveCssVarColor(c.color) ?? palette[i % palette.length] },
     }));
 
     const legendShow = showLegend ?? !!categories;

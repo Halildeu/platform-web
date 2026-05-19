@@ -15,6 +15,7 @@ import { resolveAccessState } from '@mfe/shared-types';
 import { guardChartCallback } from './access/guardChartCallback';
 import { ChartAccessGate } from './access/ChartAccessGate';
 import { cn } from './utils/cn';
+import { resolveCssVarColor } from './utils/resolveCssVarColor';
 import { useEChartsRenderer } from './renderers';
 import { useResponsiveBreakpoint } from './useResponsiveChart';
 import { ChartA11yShell, useChartA11y } from './a11y';
@@ -168,7 +169,12 @@ function buildAxisLineColors(
   if (range <= 0) return [[1, DEFAULT_PALETTE[0]]];
 
   const sorted = [...thresholds].sort((a, b) => a.value - b.value);
-  return sorted.map((t) => [Math.min(Math.max((t.value - min) / range, 0), 1), t.color]);
+  // Resolve a consumer `var(--token)` threshold color to a concrete value —
+  // the canvas renderer cannot read CSS custom properties.
+  return sorted.map((t) => [
+    Math.min(Math.max((t.value - min) / range, 0), 1),
+    resolveCssVarColor(t.color),
+  ]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -276,7 +282,7 @@ const GaugeChartInner = React.forwardRef<
           pointer: {
             length: pointer?.length ?? '60%',
             width: pointer?.width ?? 5,
-            itemStyle: pointer?.color ? { color: pointer.color } : undefined,
+            itemStyle: pointer?.color ? { color: resolveCssVarColor(pointer.color) } : undefined,
           },
           axisTick: {
             show: true,
