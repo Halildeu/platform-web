@@ -209,13 +209,33 @@ const ChartBlock: React.FC<{
 }> = ({ chart, title, height, children, gridColumns }) => {
   const chartTitle = chart?.title ?? title ?? '';
   const data = chart?.data ?? [];
+  /*
+   * The chart is the primary view; the per-chart summary grid duplicates
+   * it 1:1. It sits behind a collapsed-by-default disclosure so every card
+   * isn't trailed by a redundant always-on AG Grid.
+   */
+  const [tableOpen, setTableOpen] = React.useState(false);
+  const hasTable = Boolean(gridColumns) && data.length > 0;
   return (
     <div className={cardClass}>
       <h3 className="text-sm font-medium text-text-primary mb-3">{chartTitle}</h3>
       <div className={`${height ?? 'h-72'} overflow-hidden`}>
         {chart && data.length > 0 ? children : <EmptyState />}
       </div>
-      {gridColumns && data.length > 0 && <ChartDataGrid data={data} columns={gridColumns} />}
+      {hasTable && (
+        <>
+          <button
+            type="button"
+            onClick={() => setTableOpen((open) => !open)}
+            aria-expanded={tableOpen}
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-text-secondary transition hover:text-text-primary"
+          >
+            <span aria-hidden="true">{tableOpen ? '▾' : '▸'}</span>
+            {tableOpen ? 'Tabloyu gizle' : 'Tabloyu göster'}
+          </button>
+          {tableOpen && gridColumns && <ChartDataGrid data={data} columns={gridColumns} />}
+        </>
+      )}
     </div>
   );
 };
