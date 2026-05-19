@@ -3,6 +3,7 @@ import { getLiveKPIs, getLiveCharts, refreshDashboardData } from './api';
 import type { DashboardKPI, DashboardChart, DashboardChartItem, DashboardFilters } from './api';
 import {
   BarChart,
+  ComboChart,
   LineChart,
   PieChart,
   WaterfallChart,
@@ -402,6 +403,40 @@ const renderSalaryLine = (data: DashboardChartItem[], size: ChartSize = 'md') =>
   />
 );
 
+/**
+ * salary-trend-12m — dual-axis combo: avg-salary line (primary, currency)
+ * + monthly headcount bars (secondary, count). The backend
+ * `salary-trend-12m` query already emits `value` (avg salary) AND `value2`
+ * (`COUNT(EMPLOYEE_ID)`) per month; pre-ComboChart only `value` was
+ * visualised (the line) and `value2` lived in the AG Grid below.
+ * Routing through `ComboChart` lifts headcount to dashboard-primary
+ * status without a backend change (Codex thread 019e41cd PR#3 plan).
+ */
+const renderSalaryTrendCombo = (data: DashboardChartItem[], size: ChartSize = 'md') => (
+  <ComboChart
+    labels={data.map((d) => d.label)}
+    series={[
+      {
+        name: 'Ort. Maaş',
+        type: 'line',
+        axis: 'primary',
+        data: data.map((d) => num(d.value)),
+      },
+      {
+        name: 'Çalışan',
+        type: 'bar',
+        axis: 'secondary',
+        data: data.map((d) => num(d.value2)),
+      },
+    ]}
+    primaryAxisLabel="Ort. Maaş"
+    secondaryAxisLabel="Çalışan"
+    size={size}
+    valueFormatter={chartCurrencyFormatter}
+    secondaryValueFormatter={formatNumber}
+  />
+);
+
 /** Narrow a backend-supplied `type` field to the WaterfallChart union. */
 const asWaterfallType = (v: unknown): 'increase' | 'decrease' | 'total' | undefined =>
   v === 'increase' || v === 'decrease' || v === 'total' ? v : undefined;
@@ -482,7 +517,7 @@ const renderChartContent = (
     case 'education-salary-premium':
       return renderRankingBar(data, 'horizontal', onDataPointClick);
     case 'salary-trend-12m':
-      return renderSalaryLine(data, 'lg');
+      return renderSalaryTrendCombo(data, 'lg');
     case 'collar-type-salary':
       return renderRankingBar(data, 'vertical', onDataPointClick);
     case 'tenure-salary-relation':
