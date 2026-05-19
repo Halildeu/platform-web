@@ -21,28 +21,20 @@ oturuyor.
 
 ## 2. Codex AGREE'li 3-PR plan
 
-### PR #1 — wrapper-only (`@mfe/x-charts`)
+### PR #1 — wrapper-only — ✅ DONE (PR #607, merge `d9e8b580`)
 
-1. `packages/x-charts/src/PopulationPyramid.tsx` — normalize helper +
-   option builder + `useChartTheme` + `useMarkupAdapter` +
-   `mergeMarkupPatches` (bar-compat) + `useChartA11y` + `<ChartA11yShell>`
-   - `ChartAccessGate` + guarded callbacks.
-2. `src/index.ts` + `src/client/index.ts` export.
-3. `useChartA11y.ts` — `populationPyramid` kind + aria noun ekle.
-4. Testler — `PopulationPyramid.test.tsx`: normalization, internal
-   negation, symmetric axis, shared stack, tooltip/label abs, click side
-   payload, empty state, a11y no-negative table; accent testi
-   (`accent="emerald"` iki series rengini değiştirir); markup adapter
-   merge testi; access/anomaly smoke.
-5. Storybook — `PopulationPyramid.stories.tsx` (veya AllChartTypes).
-   Visual-invariant gate'in yeni wrapper'ı GERÇEKTEN ölçmesi isteniyorsa
-   `packages/design-system/src/__visual__/x-charts.visual.ts`'e story
-   ekle + baseline'ı bilinçli güncelle.
-6. CONTRACT — §1 prop bloğu, §1.1 "PopulationPyramid accent-driven" notu,
-   §9 catalogue 29-wrapper güncellemesi.
-7. CONTRACT §8 — 8 hard gate (bundle-size, a11y-axe, contrast,
-   chart-spec, xss, memory, tree-shake, visual). `x-charts-bundle-check`
-   - `verify-tree-shaking` lokal koş.
+`PopulationPyramid.tsx` wrapper + `index.ts` / `client/index.ts` export +
+`useChartA11y.ts` `populationPyramid` kind/noun + `PopulationPyramid.test.tsx`
+(19 test). Codex thread `019e3f75` AGREE — 1 REVISE absorbe edildi (click
+`datum.label/value`, `ChartClickEvent` re-export, `maxValue` finite guard,
+markup `{dataIndex}`-anchor v1-limit doc). vitest 19/19, eslint temiz,
+tsc x-charts baseline 43=43 (0-yeni), CI 32/32 yeşil.
+
+Storybook + CONTRACT §1/§9 PR#1'de bilinçli atlandı: PR-X16 depth
+wrapper'ları da per-chart story eklemedi (precedent); §1.1 (#605 audit)
+PopulationPyramid'i "all remaining exported chart wrappers use
+effectivePalette" altında zaten generic kapsıyor (accent-driven, carve-out
+yok); §9 catalogue pre-existing-stale ("13 wrappers"), ayrı audit işi.
 
 ### PR #2 — Design Lab enrollment
 
@@ -56,11 +48,25 @@ oturuyor.
   preset'leri) · `chartPlaygroundModel.test.ts` count-lock sabitleri ·
   `ChartPreviewLive.test.tsx` + `ChartDetail.coverage.test.tsx`.
 
-> **DİKKAT — §4f count-lock**: count-lock hard 0.9 gate (393/432). Yeni
-> chart catalog'a girince denominator ~+24 artar (chart'ın katalog prop
-> sayısı ~25). Marj yetmeyebilir → PR #2'de **catalog ile birlikte
-> yeterli live primitive + preset numerator AYNI ANDA** eklenmeli, yoksa
-> coverage 0.9 altına düşer ve gate kırmızı olur. Codex'in açık uyarısı.
+> **DİKKAT — §4f count-lock (hesaplanmış plan)**: hard 0.9 gate, şu an
+> **393/432 ≈ %91.0**. PopulationPyramid catalog'a girince:
+> `DERIVED_CATALOG_PROPS` ~+25 (PopulationPyramidProps ≈ 25 katalog
+> prop), `EXCLUDED_SAMPLE_INPUTS` +1 → `HONEST_LIVE_SURFACE_DENOMINATOR`
+> 432 → **~456**. Coverage ≥ 0.9 için numerator ≥ ceil(0.9×456) = **~411**
+> olmalı (şu an 393 → en az **+18**).
+>
+> Plan — PopulationPyramid'e **~17 live primitive** (11 common-axis +
+> `showValues`/`showGrid`/`showLegend`/`leftLabel`/`rightLabel`/`maxValue`)
+>
+> - **7 preset** (`valueFormatter`/`onDataPointClick`/`colors`/`markups`/
+>   `onMarkupClick`/`anomalySummary`/`formatAnomalyAnnouncement`) = **+24
+>   numerator** → `EXPECTED_TOTAL` 393 → **~417**, **~417/456 ≈ %91.5** ✓.
+>
+> KESİN sayılar AST'den gelir — count-lock testi self-verifying
+> (`it.each(PRIMITIVE_LIVE_COUNTS/PRESET_COUNTS)` + `DERIVED_CATALOG_PROPS`
+> / `HONEST_LIVE_SURFACE_DENOMINATOR` `.toBe(...)`). vitest lokal koşulup
+> exact değerler kilitlenir. **catalog + numerator AYNI PR'da** — yoksa
+> §4f.4 hard gate kırmızı (Codex'in açık uyarısı).
 
 ### PR #3 — ürün adoption (ayrı, opsiyonel)
 
@@ -111,8 +117,24 @@ git fetch origin && git checkout origin/main
 cat docs/session-handoff-2026-05-19-population-pyramid-plan.md
 ```
 
-PR #1 (wrapper-only) ile başla. Codex plan thread `019e3f75` — devamı
-`codex-reply` ile (thread expire olursa yeni thread + bu doc'u context
-olarak ver). Her PR: cross-AI Codex review · CI tam-yeşil admin'siz
-merge · `ai-post-merge-cleanup.sh` · PR #1/#2 UI etkisi → testai
-browser-verify (HARD RULE).
+**PR #1 ✅ DONE (#607 `d9e8b580`) — PopulationPyramid wrapper canlı.**
+Sıradaki: **PR #2 — Design Lab enrollment** (§2 PR #2 + yukarıdaki
+hesaplanmış count-lock planı). Enrollment mekanikleri:
+`scripts/ci/sync-chart-detail-props.mjs` `CHARTS` listesine (L45)
+`['population-pyramid', 'PopulationPyramid']` ekle → `ChartDetail.tsx`'e
+skeleton `CHART_CATALOG['population-pyramid']` entry aç (`polar-chart`
+L2440-2640 pattern'ini klonla: `id`/`name`/`description`/`importPath`/
+`tier`/`props:[]`/`themes`/`features`) → `node scripts/ci/sync-chart-detail-props.mjs`
+çalıştır, `props` bloğunu wrapper interface'inden doldurur →
+`ChartsListing.tsx` card → `ChartPreviewLive.tsx` import + `case
+'population-pyramid'` + İK örnek veri → `chartPlaygroundModel.ts`
+`LIVE_PROP_SUPPORT` + `COMPLEX_PROP_PRESETS` → `chartPlaygroundModel.test.ts`
+count-lock (`PRIMITIVE_LIVE_COUNTS`/`PRESET_COUNTS` + `DERIVED_CATALOG_PROPS`
+/`HONEST_LIVE_SURFACE_DENOMINATOR` `.toBe` sabitleri) → `ChartPreviewLive.test.tsx`
+routing CASE + sentinel. Sonra **PR #3** — `DemographicDashboard.tsx`
+`AgePyramidChart` shim swap + HR route browser-verify.
+
+Codex plan thread `019e3f75` — devamı `codex-reply` ile (thread expire
+olursa yeni thread + bu doc'u context ver). Her PR: cross-AI Codex
+review · CI tam-yeşil admin'siz merge · `ai-post-merge-cleanup.sh` ·
+PR #2 UI etkisi → testai browser-verify (HARD RULE).
