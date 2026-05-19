@@ -82,7 +82,10 @@ export type ChartA11yKind =
   | 'themeRiver'
   // PR-X16e (Codex thread 019e365b AGREE): custom renderItem series —
   // Gantt timeline / project-schedule chart.
-  | 'gantt';
+  | 'gantt'
+  // Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid —
+  // diverging horizontal bar on a symmetric value axis.
+  | 'populationPyramid';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -215,6 +218,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   themeRiver: 'Stream graph',
   // PR-X16e (Codex thread 019e365b AGREE): custom-render Gantt timeline.
   gantt: 'Gantt chart',
+  // Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid.
+  populationPyramid: 'Population pyramid chart',
 };
 
 const defaultFormatter = (v: number): string =>

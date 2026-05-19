@@ -102,6 +102,9 @@ export { SankeyChart } from './SankeyChart';
 export type { SankeyChartProps } from './SankeyChart';
 export { SunburstChart } from './SunburstChart';
 export type { SunburstChartProps } from './SunburstChart';
+// Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid.
+export { PopulationPyramid } from './PopulationPyramid';
+export type { PopulationPyramidProps, PopulationPyramidDatum } from './PopulationPyramid';
 // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 export { BoxPlotChart } from './BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';
