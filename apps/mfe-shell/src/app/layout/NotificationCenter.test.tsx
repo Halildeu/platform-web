@@ -113,8 +113,45 @@ const markAllAsReadMutationMock = vi.fn();
 // inspect what the hook was called with via `.mock.calls`.
 const useListInboxQueryMock = vi.fn((_arg: unknown, _opts?: unknown) => inboxQueryMock);
 
+// Faz 23.4 M6a: useListHistoryQuery mock. The component passes skipToken
+// (a non-object) until the history tab is active, then an object with a
+// `page` field. The mock honours that contract — it yields no data for
+// skipToken and a per-page fixture otherwise, so the page-accumulation
+// effect can be exercised deterministically.
+type HistoryQueryResult = {
+  data:
+    | {
+        items: InboxRowFixture[];
+        page: number;
+        size: number;
+        totalElements: number;
+        totalPages: number;
+        windowStart: string;
+        windowDays: number;
+      }
+    | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  isFetching: boolean;
+};
+const EMPTY_HISTORY_RESULT: HistoryQueryResult = {
+  data: undefined,
+  isLoading: false,
+  isError: false,
+  isFetching: false,
+};
+let historyQueryByPage: Record<number, HistoryQueryResult> = {};
+const useListHistoryQueryMock = vi.fn((arg: unknown, _opts?: unknown) => {
+  if (arg && typeof arg === 'object' && 'page' in arg) {
+    const page = (arg as { page: number }).page;
+    return historyQueryByPage[page] ?? EMPTY_HISTORY_RESULT;
+  }
+  return EMPTY_HISTORY_RESULT;
+});
+
 vi.mock('../../features/notifications/api/notify-inbox.api', () => ({
   useListInboxQuery: (arg: unknown, opts?: unknown) => useListInboxQueryMock(arg, opts),
+  useListHistoryQuery: (arg: unknown, opts?: unknown) => useListHistoryQueryMock(arg, opts),
   useMarkReadMutation: () => [markReadMutationMock, { isLoading: false }],
   useArchiveMutation: () => [archiveMutationMock, { isLoading: false }],
   useMarkAllAsReadMutation: () => [markAllAsReadMutationMock, { isLoading: false }],
@@ -157,10 +194,12 @@ describe('NotificationCenter', () => {
     // Faz 23.4 PR-E.5: reset inbox-tab fixtures.
     identityMock = null;
     inboxQueryMock = { data: undefined, isLoading: false, isError: false };
+    historyQueryByPage = {};
     markReadMutationMock.mockReset();
     archiveMutationMock.mockReset();
     markAllAsReadMutationMock.mockReset();
     useListInboxQueryMock.mockClear();
+    useListHistoryQueryMock.mockClear();
   });
 
   it('okunmamis sayiyi bell butonunda gosterir', () => {
@@ -471,6 +510,117 @@ describe('NotificationCenter', () => {
         subscriberId: '1204',
       });
       expect(markReadMutationMock).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * Faz 23.4 M6a — 30-day notification history tab.
+   *
+   * The Geçmiş tab is a read-only review surface: it lists rows in every
+   * state (UNREAD + READ + ARCHIVED) and exposes no mutation actions.
+   * Pages are accumulated client-side via "Daha fazla göster".
+   */
+  describe('history tab (Geçmiş)', () => {
+    const historyRow = (overrides: Partial<InboxRowFixture> = {}): InboxRowFixture => ({
+      id: 70,
+      intentId: null,
+      subject: 'Geçmiş bildirimi',
+      bodyText: null,
+      bodyHtml: null,
+      locale: null,
+      topicKey: 'history.test',
+      severity: 'info',
+      state: 'ARCHIVED',
+      readAt: null,
+      archivedAt: '2026-05-10T08:00:00Z',
+      createdAt: '2026-05-10T08:00:00Z',
+      expiresAt: null,
+      ...overrides,
+    });
+
+    const historyResult = (
+      items: InboxRowFixture[],
+      page: number,
+      totalElements: number,
+      totalPages: number,
+    ): HistoryQueryResult => ({
+      data: {
+        items,
+        page,
+        size: 50,
+        totalElements,
+        totalPages,
+        windowStart: '2026-04-19T00:00:00Z',
+        windowDays: 30,
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+    });
+
+    it('renders history rows (including archived) when the Geçmiş tab is selected', () => {
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      historyQueryByPage = {
+        0: historyResult([historyRow({ id: 70, subject: 'Arşivlenmiş bildirim' })], 0, 1, 1),
+      };
+      stateMock.isOpen = true;
+
+      render(<NotificationCenter />);
+      const historyTab = screen.getByRole('tab', { name: /Geçmiş/ });
+      expect(historyTab).toBeInTheDocument();
+      fireEvent.click(historyTab);
+
+      const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
+      expect(within(dialog).getByText('Arşivlenmiş bildirim')).toBeInTheDocument();
+    });
+
+    it('is read-only — no archive / mark-all-read actions on the history tab', () => {
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      historyQueryByPage = { 0: historyResult([historyRow()], 0, 1, 1) };
+      stateMock.isOpen = true;
+
+      render(<NotificationCenter />);
+      fireEvent.click(screen.getByRole('tab', { name: /Geçmiş/ }));
+      const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
+
+      // Mutation affordances are absent on the read-only history surface.
+      expect(within(dialog).queryByRole('button', { name: 'Tümünü okundu say' })).toBeNull();
+      expect(within(dialog).queryByRole('button', { name: 'Arşivle' })).toBeNull();
+      expect(within(dialog).queryByRole('button', { name: 'Tümünü arşivle' })).toBeNull();
+    });
+
+    it('disables the Geçmiş tab while identity is unresolved', () => {
+      stateMock.isOpen = true;
+      render(<NotificationCenter />);
+      expect(screen.getByRole('tab', { name: /Geçmiş/ })).toBeDisabled();
+    });
+
+    it('accumulates the next page when "Daha fazla göster" is clicked', () => {
+      identityMock = { orgId: 'default', subscriberId: '1204' };
+      historyQueryByPage = {
+        0: historyResult([historyRow({ id: 70, subject: 'Sayfa 1 bildirimi' })], 0, 2, 2),
+        1: historyResult([historyRow({ id: 71, subject: 'Sayfa 2 bildirimi' })], 1, 2, 2),
+      };
+      stateMock.isOpen = true;
+
+      render(<NotificationCenter />);
+      fireEvent.click(screen.getByRole('tab', { name: /Geçmiş/ }));
+      const dialog = screen.getByRole('dialog', { name: 'Bildirim merkezi' });
+      // Page 0 row visible; page 2 row not yet fetched.
+      expect(within(dialog).getByText('Sayfa 1 bildirimi')).toBeInTheDocument();
+      expect(within(dialog).queryByText('Sayfa 2 bildirimi')).toBeNull();
+
+      // Load more → page 1 fetched + appended (page 0 row stays present).
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Daha fazla göster' }));
+
+      expect(within(dialog).getByText('Sayfa 1 bildirimi')).toBeInTheDocument();
+      expect(within(dialog).getByText('Sayfa 2 bildirimi')).toBeInTheDocument();
+      // The hook was invoked with page:1 for the second fetch.
+      const pageArgs = useListHistoryQueryMock.mock.calls
+        .map(([arg]) => arg)
+        .filter((arg): arg is { page: number } => !!arg && typeof arg === 'object' && 'page' in arg)
+        .map((arg) => arg.page);
+      expect(pageArgs).toContain(1);
     });
   });
 });

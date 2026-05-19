@@ -84,13 +84,20 @@ export const inboxItemToSurfaceItem = (row: InboxItemDto): NotificationSurfaceIt
     priority: PRIORITY_BY_SEVERITY[severity] ?? 'normal',
     pinned: severity === 'critical',
     createdAt: parseTimestamp(row.createdAt),
-    read: row.state === 'READ',
+    // Faz 23.4 M6a: an ARCHIVED row counts as "read" for display — it has
+    // definitionally been dealt with, so the 30-day history surface must
+    // not render it bold/unread. ARCHIVED never reaches the active inbox
+    // tab (backend filters it out of GET /inbox/me), so this is a no-op
+    // for the active surface and only affects the history tab.
+    read: row.state === 'READ' || row.state === 'ARCHIVED',
     meta: {
       source: 'inbox',
       backendId: row.id,
       intentId: row.intentId ?? undefined,
       topicKey: row.topicKey,
       severity,
+      // Raw state — lets the history tab surface an archived indicator.
+      state: row.state,
       locale: row.locale ?? undefined,
       readAt: row.readAt ?? undefined,
       archivedAt: row.archivedAt ?? undefined,

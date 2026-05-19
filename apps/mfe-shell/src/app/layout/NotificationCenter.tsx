@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { NotificationDrawer, type NotificationSurfaceItem } from '@mfe/design-system';
@@ -10,6 +10,7 @@ import {
 } from '../../features/notifications/model/use-notification-center.model';
 import {
   useArchiveMutation,
+  useListHistoryQuery,
   useListInboxQuery,
   useMarkAllAsReadMutation,
   useMarkReadMutation,
@@ -29,18 +30,29 @@ type NotificationPrimaryNavigation = {
 };
 
 /**
- * Two tabs surfaced in the drawer header (Faz 23.4 PR-E.5 v1 UI):
+ * Three tabs surfaced in the drawer header:
  * - {@code system}: legacy local-first surface (toasts, audit pings).
- * - {@code inbox}: server-side notification-orchestrator inbox via
- *   RTK Query.
+ * - {@code inbox}: server-side notification-orchestrator active inbox
+ *   (UNREAD + READ) via RTK Query.
+ * - {@code history}: Faz 23.4 M6a — read-only 30-day notification
+ *   history (UNREAD + READ + ARCHIVED) with client-side page
+ *   accumulation.
  *
  * Default tab is {@code system} so existing behavior is preserved for
  * users who haven't yet been migrated to the new backend surface.
- * The badge sums both sources so users see one total unread count.
+ * The badge sums system + inbox unread counts (the history tab is a
+ * read-only review surface and contributes no badge count).
  */
-type ActiveTab = 'system' | 'inbox';
+type ActiveTab = 'system' | 'inbox' | 'history';
 
 const DEFAULT_TAB: ActiveTab = 'system';
+
+/**
+ * Page size for the history tab's client-side accumulation. Each
+ * "Daha fazla göster" click fetches the next page and appends it; the
+ * backend clamps page size at 100.
+ */
+const HISTORY_PAGE_SIZE = 50;
 
 const normalizeSearch = (search: string): string => search.replace(/^\?+/, '');
 
@@ -123,6 +135,54 @@ const NotificationCenter: React.FC = () => {
     return inboxQuery.data.items.map(inboxItemToSurfaceItem);
   }, [inboxQuery.data]);
 
+  // Faz 23.4 M6a — 30-day history tab. The query is gated on the tab
+  // being active (skipToken otherwise) so opening the drawer on the
+  // system/inbox tab never fetches history. Pages are accumulated
+  // client-side: "Daha fazla göster" increments `historyPage` and the
+  // effect below appends each resolved page (dedup by id — offset
+  // pagination has no snapshot isolation, so a row arriving between
+  // page fetches could otherwise duplicate).
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyItems, setHistoryItems] = useState<NotificationSurfaceItem[]>([]);
+  const historyQuery = useListHistoryQuery(
+    activeTab === 'history' && identity
+      ? { ...identity, page: historyPage, size: HISTORY_PAGE_SIZE }
+      : skipToken,
+    { refetchOnMountOrArgChange: true },
+  );
+
+  // Accumulate resolved history pages. Keyed on the response only — the
+  // server-echoed `page` field decides replace (page 0) vs append
+  // (page > 0), so a `historyPage` state change alone never re-runs
+  // this effect and never double-appends a still-loading page.
+  useEffect(() => {
+    const data = historyQuery.data;
+    if (!data) return;
+    const mapped = data.items.map(inboxItemToSurfaceItem);
+    setHistoryItems((prev) => {
+      if (data.page === 0) return mapped;
+      const seen = new Set(prev.map((it) => it.id));
+      return [...prev, ...mapped.filter((it) => !seen.has(it.id))];
+    });
+  }, [historyQuery.data]);
+
+  // Reset the accumulation when the user leaves the history tab, and
+  // (separately) whenever the identity changes — a fresh visit always
+  // re-fetches page 0.
+  useEffect(() => {
+    if (activeTab !== 'history') {
+      setHistoryPage(0);
+      setHistoryItems([]);
+    }
+  }, [activeTab]);
+  useEffect(() => {
+    setHistoryPage(0);
+    setHistoryItems([]);
+  }, [identity]);
+
+  const historyHasMore =
+    historyQuery.data != null && historyPage + 1 < historyQuery.data.totalPages;
+
   // Prefer the live SSE-pushed count when available; fall back to the
   // listInbox cache. The cache is also patched by the SSE hook, but the
   // SSE-pushed value is the authoritative immediate-render source — the
@@ -138,7 +198,9 @@ const NotificationCenter: React.FC = () => {
     return `Bildirimler (${totalUnreadCount} okunmamış)`;
   }, [totalUnreadCount]);
 
-  const activeItems = activeTab === 'inbox' ? inboxItems : localState.items;
+  const isHistory = activeTab === 'history';
+  const activeItems =
+    activeTab === 'inbox' ? inboxItems : isHistory ? historyItems : localState.items;
 
   const summaryLabel = useMemo(() => {
     if (activeTab === 'inbox') {
@@ -146,6 +208,14 @@ const NotificationCenter: React.FC = () => {
       if (inboxQuery.isError) return 'Bildirimler şu anda yüklenemiyor.';
       if (inboxItems.length === 0) return 'Yeni bildirim yok.';
       return `${inboxItems.length} bildirim · ${inboxUnreadCount} okunmamış`;
+    }
+    if (activeTab === 'history') {
+      if (historyQuery.isLoading) return 'Geçmiş yükleniyor…';
+      if (historyQuery.isError) return 'Geçmiş şu anda yüklenemiyor.';
+      if (historyItems.length === 0) return 'Son 30 günde bildirim yok.';
+      const total = historyQuery.data?.totalElements ?? historyItems.length;
+      const windowDays = historyQuery.data?.windowDays ?? 30;
+      return `${historyItems.length} / ${total} bildirim · son ${windowDays} gün`;
     }
     if (localState.items.length === 0) {
       return 'Yeni olaylar geldiğinde burada görünecek.';
@@ -157,6 +227,10 @@ const NotificationCenter: React.FC = () => {
     inboxQuery.isError,
     inboxQuery.isLoading,
     inboxUnreadCount,
+    historyItems.length,
+    historyQuery.data,
+    historyQuery.isError,
+    historyQuery.isLoading,
     localState.items.length,
   ]);
 
@@ -310,8 +384,38 @@ const NotificationCenter: React.FC = () => {
       >
         Bildirimlerim ({inboxUnreadCount})
       </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab === 'history'}
+        onClick={() => setActiveTab('history')}
+        className={`px-2 py-1 rounded ${
+          activeTab === 'history' ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-500'
+        }`}
+        disabled={identity === null}
+      >
+        Geçmiş (30 gün)
+      </button>
     </div>
   );
+
+  // Faz 23.4 M6a — "load more" footer for the history tab. Real page
+  // accumulation (Codex thread `019e40ec` iter-2): each click fetches
+  // the next page and the effect above appends it. Disabled while a
+  // fetch is in flight so a fast double-click cannot skip a page.
+  const historyFooter =
+    isHistory && historyHasMore ? (
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={() => setHistoryPage((p) => p + 1)}
+          disabled={historyQuery.isFetching}
+          className="rounded-full border border-zinc-300 px-4 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {historyQuery.isFetching ? 'Yükleniyor…' : 'Daha fazla göster'}
+        </button>
+      </div>
+    ) : null;
 
   return (
     <>
@@ -328,23 +432,28 @@ const NotificationCenter: React.FC = () => {
         items={activeItems}
         summaryLabel={summaryLabel}
         emptyTitle={
-          activeTab === 'inbox' && identity === null ? 'Önce oturum açın' : 'Şu anda bildirim yok'
+          (activeTab === 'inbox' || isHistory) && identity === null
+            ? 'Önce oturum açın'
+            : isHistory
+              ? 'Son 30 günde bildirim yok'
+              : 'Şu anda bildirim yok'
         }
         emptyDescription="Yeni olaylar geldiğinde burada görünecek."
         filteredEmptyTitle="Bu filtre için bildirim yok"
         markAllReadLabel="Tümünü okundu say"
         clearLabel={activeTab === 'inbox' ? 'Tümünü arşivle' : 'Temizle'}
         removeLabel={activeTab === 'inbox' ? 'Arşivle' : 'Bildirimi kapat'}
-        onMarkAllRead={handleMarkAllRead}
-        onMarkSelectedRead={handleMarkSelectedRead}
-        onClear={handleClear}
-        onRemoveItem={handleRemoveItem}
-        onRemoveSelected={handleRemoveSelected}
-        getPrimaryActionLabel={getPrimaryActionLabel}
-        onPrimaryAction={handlePrimaryAction}
+        onMarkAllRead={isHistory ? undefined : handleMarkAllRead}
+        onMarkSelectedRead={isHistory ? undefined : handleMarkSelectedRead}
+        onClear={isHistory ? undefined : handleClear}
+        onRemoveItem={isHistory ? undefined : handleRemoveItem}
+        onRemoveSelected={isHistory ? undefined : handleRemoveSelected}
+        getPrimaryActionLabel={isHistory ? undefined : getPrimaryActionLabel}
+        onPrimaryAction={isHistory ? undefined : handlePrimaryAction}
         headerAccessory={tabSwitcher}
+        listFooter={historyFooter}
         showFilters
-        selectable
+        selectable={!isHistory}
         grouping="priority"
         dateGrouping="relative-day"
         closeOnOverlayClick
