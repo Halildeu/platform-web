@@ -15,13 +15,16 @@ import {
   // 2026-05-13 — PR-X11 completes the bespoke-SVG → x-charts migration.
   // GaugeChart replaces big-number divs; LineChart replaces the Maas
   // Farki Trendi polyline; BarChart now backs BulletChart (showBackground +
-  // LineMarkup), ProgressBar (showBackground), StackedBar (stacked
-  // multi-series), and AgePyramidChart (2-series + negative values +
-  // valueFormatter absolute). PR-X1 + PR-X11 wrapper extensions
-  // (stacked/showBackground/valueAxisMin/valueAxisMax) made the final
-  // 4 internal swaps possible without changing call-site APIs.
+  // LineMarkup), ProgressBar (showBackground) and StackedBar (stacked
+  // multi-series). PR-X1 + PR-X11 wrapper extensions
+  // (stacked/showBackground/valueAxisMin/valueAxisMax) made the internal
+  // swaps possible without changing call-site APIs.
   GaugeChart as XGaugeChart,
   LineChart as XLineChart,
+  // PR#3 (Codex thread 019e3f75): AgePyramidChart drops its hand-rolled
+  // negate-one-series BarChart shim for the canonical PopulationPyramid
+  // wrapper — the 29th @mfe/x-charts wrapper (diverging horizontal bar).
+  PopulationPyramid as XPopulationPyramid,
 } from '@mfe/x-charts';
 
 // ---------------------------------------------------------------------------
@@ -926,42 +929,38 @@ const DashboardSection: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Age Pyramid Chart — PR-X11 migration.
-// Canonical ECharts population-pyramid pattern: 2 horizontal series, one
-// with NEGATIVE values (renders left of origin) + valueFormatter that
-// shows absolute values on the axis. Symmetric domain `[-max, +max]`
-// keeps the visual centred so left/right are comparable.
+// Age Pyramid Chart — PR#3 (Codex thread 019e3f75).
+// Renders the canonical `PopulationPyramid` wrapper (the 29th @mfe/x-charts
+// wrapper). The previous PR-X11 shim hand-built a pyramid on `BarChart` by
+// negating one series (`male: -d.male`) + a `Math.abs` axis formatter;
+// `PopulationPyramid` owns that render contract end-to-end — `left` /
+// `right` are passed UNSIGNED and the wrapper negates the left series for
+// rendering while un-negating tooltip / axis labels / bar labels / a11y
+// table internally. The symmetric `[-max, +max]` value domain is also
+// wrapper-owned, so the manual `maxVal` / `valueAxisMin` / `valueAxisMax`
+// wiring is dropped.
 // ---------------------------------------------------------------------------
 function AgePyramidChart({
   data,
 }: {
   data: Array<{ ageGroup: string; male: number; female: number }>;
 }) {
-  const maxVal = Math.max(...data.flatMap((d) => [d.male, d.female]), 1);
-
-  // ECharts pyramid wire format: { label: ageGroup, male: NEGATIVE, female: positive }.
-  // The wrapper passes these through unmodified (PR-X1 verified negative-
-  // value passthrough). `series` is multi-field; valueFormatter strips
-  // the sign so axis labels read 240 instead of -240.
+  // `ageGroup` → category row; `male` / `female` → UNSIGNED left / right
+  // measures (the wrapper negates the left series internally).
   const pyramidData = data.map((d) => ({
-    label: d.ageGroup,
-    male: -d.male,
-    female: d.female,
+    ageBand: d.ageGroup,
+    left: d.male,
+    right: d.female,
   }));
 
   return (
-    <XBarChart
-      data={pyramidData as unknown as Array<{ label: string; value: number }>}
-      series={[
-        { field: 'male', name: 'Erkek', color: 'var(--action-primary)' },
-        { field: 'female', name: 'Kadin', color: 'var(--accent-soft)' },
-      ]}
-      orientation="horizontal"
+    <XPopulationPyramid
+      data={pyramidData}
+      leftLabel="Erkek"
+      rightLabel="Kadin"
+      colors={['var(--action-primary)', 'var(--accent-soft)']}
       size="md"
       showLegend
-      valueAxisMin={-maxVal}
-      valueAxisMax={maxVal}
-      valueFormatter={(v) => Math.abs(v).toString()}
     />
   );
 }
