@@ -88,6 +88,9 @@ export { ThemeRiverChart } from '../ThemeRiverChart';
 export type { ThemeRiverChartProps, ThemeRiverDataPoint } from '../ThemeRiverChart';
 export { GanttChart } from '../GanttChart';
 export type { GanttChartProps, GanttTask } from '../GanttChart';
+// Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid.
+export { PopulationPyramid } from '../PopulationPyramid';
+export type { PopulationPyramidProps, PopulationPyramidDatum } from '../PopulationPyramid';
 export { BoxPlotChart } from '../BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
 export { CandlestickChart } from '../CandlestickChart';
