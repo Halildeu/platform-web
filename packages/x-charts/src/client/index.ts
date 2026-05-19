@@ -17,7 +17,7 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  28 chart wrappers (24 2D echarts-backed + 4 3D echarts-gl-backed) */
+/*  30 chart wrappers (26 2D echarts-backed + 4 3D echarts-gl-backed) */
 /* ------------------------------------------------------------------ */
 
 export { AreaChart } from '../AreaChart';
@@ -91,6 +91,14 @@ export type { GanttChartProps, GanttTask } from '../GanttChart';
 // Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid.
 export { PopulationPyramid } from '../PopulationPyramid';
 export type { PopulationPyramidProps, PopulationPyramidDatum } from '../PopulationPyramid';
+// Codex thread 019e41cd AGREE: dual-axis composite (bar + line) chart.
+export { ComboChart } from '../ComboChart';
+export type {
+  ComboChartProps,
+  ComboChartSeries,
+  ComboSeriesType,
+  ComboAxisId,
+} from '../ComboChart';
 export { BoxPlotChart } from '../BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
 export { CandlestickChart } from '../CandlestickChart';

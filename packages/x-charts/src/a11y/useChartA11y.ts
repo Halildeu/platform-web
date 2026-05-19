@@ -85,7 +85,9 @@ export type ChartA11yKind =
   | 'gantt'
   // Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid —
   // diverging horizontal bar on a symmetric value axis.
-  | 'populationPyramid';
+  | 'populationPyramid'
+  // Codex thread 019e41cd AGREE: dual-axis composite bar + line chart.
+  | 'combo';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -220,6 +222,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   gantt: 'Gantt chart',
   // Codex thread 019e3f75 AGREE: HR age × gender demographic pyramid.
   populationPyramid: 'Population pyramid chart',
+  // Codex thread 019e41cd AGREE: dual-axis composite bar + line chart.
+  combo: 'Combination chart',
 };
 
 const defaultFormatter = (v: number): string =>
