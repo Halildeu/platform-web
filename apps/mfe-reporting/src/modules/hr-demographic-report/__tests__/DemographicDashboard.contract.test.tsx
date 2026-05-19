@@ -371,15 +371,17 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     const pyramid = pyramidRegistry[0];
     expect(pyramid.leftLabel).toBe('Erkek');
     expect(pyramid.rightLabel).toBe('Kadin');
-    const rows = pyramid.data as Array<{ ageBand: string; left: number; right: number }>;
-    expect(rows.length).toBeGreaterThan(0);
-    for (const r of rows) {
-      expect(typeof r.ageBand).toBe('string');
-      // UNSIGNED — a regression that re-introduced `male: -d.male` would
-      // surface a negative `left` here.
-      expect(r.left).toBeGreaterThanOrEqual(0);
-      expect(r.right).toBeGreaterThanOrEqual(0);
-    }
+    // Exact field-mapping lock: ageGroup → ageBand, male → left, female →
+    // right, all UNSIGNED. Exact equality (vs a loose `left >= 0`) also
+    // catches a male↔female swap or a re-introduced `-d.male` negation —
+    // Codex 019e3fef review.
+    expect(pyramid.data).toEqual(
+      FIXTURE_SUMMARY.agePyramid.map((d) => ({
+        ageBand: d.ageGroup,
+        left: d.male,
+        right: d.female,
+      })),
+    );
   });
 
   it('liveChartsWireToDashboard: ethics/salary cards render live backend data, not mock', async () => {
