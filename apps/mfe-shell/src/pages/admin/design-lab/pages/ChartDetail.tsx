@@ -3390,11 +3390,12 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
   labels={['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz']}
   series={[
     { name: 'Gelir', type: 'bar', axis: 'primary', data: [120, 132, 101, 134, 90, 160] },
-    { name: 'Büyüme %', type: 'line', axis: 'secondary', data: [12, 14, 9, 18, 6, 21] },
+    { name: 'Çalışan', type: 'bar', axis: 'secondary', data: [80, 85, 78, 92, 75, 98] },
+    { name: 'Hedef', type: 'line', axis: 'primary', data: [110, 125, 100, 130, 95, 150] },
   ]}
   primaryAxisLabel="Gelir"
-  secondaryAxisLabel="Büyüme %"
-  title="Gelir + Büyüme Trendi"
+  secondaryAxisLabel="Çalışan"
+  title="Aylık Gelir / Çalışan / Hedef"
 />`,
     features: [
       'cross-filter',

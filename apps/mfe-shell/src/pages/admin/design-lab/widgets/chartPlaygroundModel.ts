@@ -1114,11 +1114,12 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
 ];
 
 /**
- * The 18 enrolled charts that carry the `anomalySummary` +
+ * The 19 enrolled charts that carry the `anomalySummary` +
  * `formatAnomalyAnnouncement` a11y pair in CHART_CATALOG — every
  * count-lock-enrolled chart except Gauge (whose catalog entry has no
  * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
- * `population-pyramid` added by Codex thread `019e3f75`.
+ * `population-pyramid` added by Codex thread `019e3f75`; `combo-chart`
+ * added by Codex thread `019e41cd`.
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
@@ -1318,9 +1319,10 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   // requires its own object resolver, deferred to PR-FE-Playground-4.
 
   // ---- PR-X16 §4f.2 — markup overlay preset wave -------------------
-  // `markups` + `onMarkupClick` for the six genuine-markup charts:
-  // bar / line / area / scatter / heatmap / waterfall. These are every
-  // chart whose wrapper calls `useMarkupAdapter` AND fires `onMarkupClick`
+  // `markups` + `onMarkupClick` for the eight genuine-markup charts:
+  // bar / line / area / scatter / heatmap / waterfall / population-pyramid
+  // / combo-chart. These are every chart whose wrapper calls
+  // `useMarkupAdapter` AND fires `onMarkupClick`
   // (verified in x-charts source — Codex thread `019e3af0`). The NO-OP
   // markup charts — pie, gauge, radar, treemap, funnel, sankey, sunburst
   // — are deliberately NOT enrolled: their wrappers accept `markups` for
@@ -1363,10 +1365,11 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 
   // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
-  // `anomalySummary` + `formatAnomalyAnnouncement` for the 18 enrolled
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 19 enrolled
   // charts that carry the anomaly a11y pair in CHART_CATALOG (every
   // enrolled chart except Gauge — verified via AST, Codex 019e3af0;
-  // population-pyramid added by Codex thread 019e3f75).
+  // population-pyramid added by Codex thread 019e3f75; combo-chart added
+  // by Codex thread 019e41cd).
   // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
   // `formatAnomalyAnnouncement` overrides the announcement template.
   ...Object.fromEntries(
@@ -2690,8 +2693,11 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
         varName: 'sampleSeries',
         caption: 'ComboChart mixed bar/line series ({ name, type, axis, data })',
         jsLiteral: `[
+  // iter-2 §10: primary-bar + secondary-bar + primary-line — closes
+  // the "bars-on-two-axes overlap" risk via the Design Lab preview.
   { name: 'Gelir', type: 'bar', axis: 'primary', data: [120, 132, 101, 134, 90, 160] },
-  { name: 'Büyüme %', type: 'line', axis: 'secondary', data: [12, 14, 9, 18, 6, 21] },
+  { name: 'Çalışan', type: 'bar', axis: 'secondary', data: [80, 85, 78, 92, 75, 98] },
+  { name: 'Hedef', type: 'line', axis: 'primary', data: [110, 125, 100, 130, 95, 150] },
 ]`,
       },
     ],
