@@ -21,8 +21,22 @@ const yesterday = now - 86_400_000;
 const olderDate = now - 86_400_000 * 5;
 
 const sampleItems: NotificationSurfaceItem[] = [
-  { id: 'n1', message: 'Build succeeded', type: 'success', read: false, priority: 'normal', createdAt: now },
-  { id: 'n2', message: 'Disk space low', type: 'warning', read: false, priority: 'high', createdAt: now },
+  {
+    id: 'n1',
+    message: 'Build succeeded',
+    type: 'success',
+    read: false,
+    priority: 'normal',
+    createdAt: now,
+  },
+  {
+    id: 'n2',
+    message: 'Disk space low',
+    type: 'warning',
+    read: false,
+    priority: 'high',
+    createdAt: now,
+  },
   { id: 'n3', message: 'User logged in', type: 'info', read: true, createdAt: yesterday },
   { id: 'n4', message: 'Old event', type: 'info', read: true, pinned: true, createdAt: olderDate },
 ];
@@ -72,15 +86,15 @@ describe('NotificationPanel — empty state', () => {
   });
 
   it('ozel emptyTitle ve emptyDescription gosterir', () => {
-    render(<NotificationPanel items={[]} emptyTitle="No alerts" emptyDescription="Everything is fine" />);
+    render(
+      <NotificationPanel items={[]} emptyTitle="No alerts" emptyDescription="Everything is fine" />,
+    );
     expect(screen.getByText('No alerts')).toBeInTheDocument();
     expect(screen.getByText('Everything is fine')).toBeInTheDocument();
   });
 
   it('filtreleme sonucu bos oldugunda filteredEmptyTitle gosterir', () => {
-    const items: NotificationSurfaceItem[] = [
-      { id: 'n1', message: 'Read item', read: true },
-    ];
+    const items: NotificationSurfaceItem[] = [{ id: 'n1', message: 'Read item', read: true }];
     render(<NotificationPanel items={items} showFilters activeFilter="unread" />);
     expect(screen.getByText('Bu filtre icin bildirim yok')).toBeInTheDocument();
   });
@@ -147,6 +161,51 @@ describe('NotificationPanel — aksiyonlar', () => {
     );
     expect(screen.getByTestId('custom-accessory')).toBeInTheDocument();
   });
+
+  it('tabBar ayri bir row olarak render eder (header overflow korumasi)', () => {
+    render(
+      <NotificationPanel
+        items={sampleItems}
+        tabBar={<div data-testid="custom-tabbar">Tabs</div>}
+      />,
+    );
+    const tabbar = screen.getByTestId('custom-tabbar');
+    expect(tabbar).toBeInTheDocument();
+    // Tab bar header icinde DEGIL, kendi row'unda olmali. Bu kontrolu
+    // gectigimizde header satirinin tab strip + action buttons + close
+    // yuku ile overflow etmedigi garantilenmis olur.
+    const tabBarRow = tabbar.closest('[data-component="notification-panel-tabbar"]');
+    expect(tabBarRow).not.toBeNull();
+    expect(tabBarRow?.tagName).toBe('DIV');
+  });
+
+  it('tabBar verilmedigi durumda tabbar row render edilmez', () => {
+    const { container } = render(<NotificationPanel items={sampleItems} />);
+    expect(container.querySelector('[data-component="notification-panel-tabbar"]')).toBeNull();
+  });
+
+  it('tabBar header descendant DEGIL (overflow kontrat invariant)', () => {
+    // Codex iter-1 P4: data-component selector header icine yanlislikla
+    // tasinsa bile gecebilir. Bu test gercek tab semantics ile header
+    // descendant olmama invariant'ini DOM hiyerarsisi uzerinden pinler.
+    const { container } = render(
+      <NotificationPanel
+        items={sampleItems}
+        tabBar={
+          <div role="tablist" aria-label="Test tabs">
+            <button type="button" role="tab">
+              Gecmis
+            </button>
+          </div>
+        }
+      />,
+    );
+    const header = container.querySelector('header');
+    const tablist = screen.getByRole('tablist', { name: /test tabs/i });
+    expect(header).not.toBeNull();
+    expect(header).not.toContainElement(tablist);
+    expect(screen.getByRole('tab', { name: /gecmis/i })).toBeInTheDocument();
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -184,9 +243,7 @@ describe('NotificationPanel — secim', () => {
 
   it('onSelectedIdsChange callback calisir', async () => {
     const handleChange = vi.fn();
-    render(
-      <NotificationPanel items={sampleItems} selectable onSelectedIdsChange={handleChange} />,
-    );
+    render(<NotificationPanel items={sampleItems} selectable onSelectedIdsChange={handleChange} />);
     const checkboxes = screen.getAllByRole('checkbox');
     await userEvent.click(checkboxes[0]);
     expect(handleChange).toHaveBeenCalled();
@@ -251,9 +308,7 @@ describe('NotificationPanel — accessibility', () => {
   });
 
   it('action buttons are accessible via role', () => {
-    render(
-      <NotificationPanel items={sampleItems} onMarkAllRead={() => {}} onClear={() => {}} />,
-    );
+    render(<NotificationPanel items={sampleItems} onMarkAllRead={() => {}} onClear={() => {}} />);
     expect(screen.getByRole('button', { name: /okundu/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /temizle/i })).toBeInTheDocument();
   });
@@ -277,7 +332,11 @@ describe('NotificationPanel — accessibility', () => {
 
 describe('NotificationPanel — quality signals', () => {
   it('handles keyboard and focus events via fireEvent', () => {
-    const { container } = render(<div role="textbox" tabIndex={0} data-testid="focusable">Content</div>);
+    const { container } = render(
+      <div role="textbox" tabIndex={0} data-testid="focusable">
+        Content
+      </div>,
+    );
     const el = container.querySelector('[data-testid="focusable"]')!;
     fireEvent.focus(el);
     fireEvent.keyDown(el, { key: 'Escape' });
@@ -287,7 +346,11 @@ describe('NotificationPanel — quality signals', () => {
   });
 
   it('handles error and invalid states', () => {
-    const { container } = render(<div role="alert" aria-invalid="true" data-testid="error-el">Error message</div>);
+    render(
+      <div role="alert" aria-invalid="true" data-testid="error-el">
+        Error message
+      </div>,
+    );
     const el = screen.getByTestId('error-el');
     expect(el).toBeInTheDocument();
     expect(el).toHaveAttribute('aria-invalid', 'true');
@@ -296,12 +359,20 @@ describe('NotificationPanel — quality signals', () => {
   });
 
   it('uses semantic roles for accessibility', () => {
-    const { container } = render(
+    render(
       <div>
-        <nav role="navigation" aria-label="test nav"><a href="#" role="link">Link</a></nav>
-        <main role="main"><section role="region" aria-label="content">Content</section></main>
+        <nav role="navigation" aria-label="test nav">
+          <a href="#" role="link">
+            Link
+          </a>
+        </nav>
+        <main role="main">
+          <section role="region" aria-label="content">
+            Content
+          </section>
+        </main>
         <footer role="contentinfo">Footer</footer>
-      </div>
+      </div>,
     );
     expect(screen.getByRole('navigation')).toBeInTheDocument();
     expect(screen.getByRole('link')).toBeInTheDocument();
@@ -311,7 +382,7 @@ describe('NotificationPanel — quality signals', () => {
   });
 
   it('supports async content via waitFor', async () => {
-    const { container, rerender } = render(<div data-testid="async-el">Loading</div>);
+    const { rerender } = render(<div data-testid="async-el">Loading</div>);
     rerender(<div data-testid="async-el">Loaded</div>);
     await waitFor(() => {
       expect(screen.getByTestId('async-el')).toHaveTextContent('Loaded');
