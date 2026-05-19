@@ -2955,6 +2955,230 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
+  // PopulationPyramid (Codex thread 019e3f75 AGREE): HR age × gender
+  // demographic pyramid — age-band rows with two diverging horizontal
+  // bars per row on a shared symmetric value axis. The 29th x-charts
+  // wrapper. `props` is sync-generated from the wrapper interface by
+  // `scripts/ci/sync-chart-detail-props.mjs`.
+  'population-pyramid': {
+    id: 'population-pyramid',
+    name: 'PopulationPyramid',
+    description:
+      'HR demographic pyramid — age-band rows with two diverging horizontal bars per row (e.g. male left, female right) on a shared symmetric value axis. left / right are unsigned; the wrapper negates the left series internally.',
+    importPath: "import { PopulationPyramid } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'data',
+        type: 'PopulationPyramidDatum[]',
+        required: true,
+        default: '—',
+        description: 'Age-band rows. `left` / `right` are unsigned; negation is internal.',
+      },
+      {
+        name: 'leftLabel',
+        type: 'string',
+        required: false,
+        default: '"Sol"',
+        description: 'Left-side series name (e.g. `"Erkek"`).',
+      },
+      {
+        name: 'rightLabel',
+        type: 'string',
+        required: false,
+        default: '"Sağ"',
+        description: 'Right-side series name (e.g. `"Kadın"`).',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'showValues',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show value labels on the bars (raw positive).',
+      },
+      {
+        name: 'showGrid',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show value-axis grid lines.',
+      },
+      {
+        name: 'showLegend',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show the left/right legend.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Custom value formatter (always receives the raw positive value).',
+      },
+      {
+        name: 'colors',
+        type: '[string, string]',
+        required: false,
+        default: 'undefined',
+        description: 'Explicit `[left, right]` series colors. Overrides the accent palette.',
+      },
+      {
+        name: 'maxValue',
+        type: 'number',
+        required: false,
+        default: 'undefined',
+        description:
+          'Explicit symmetric axis maximum. Without it the axis auto-scales to\nthe largest `left`/`right` across all rows. The value axis is always\nsymmetric (`[-max, max]`) so the two sides stay visually comparable.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate bars on mount.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a bar segment is clicked (raw positive value).',
+      },
+      {
+        name: 'markups',
+        type: 'ChartMarkup[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Visual overlay markups — threshold lines, highlight bands, KPI\nlabels. NB: markup `x` values are in the signed render domain — a\nleft-side threshold uses a negative `x`. Use explicit-coordinate\nanchors (`LineMarkup` `axis` + `value`, `AreaMarkup` `axis` +\n`from` / `to`, `LabelMarkup` `{ x, y }`); the `LabelMarkup`\n`{ dataIndex }` anchor is NOT reliable on this chart (v1 limitation\n— the generic cartesian resolver assumes a category-x / value-y\nlayout, the opposite of a pyramid).',
+      },
+      {
+        name: 'onMarkupClick',
+        type: '(event: ChartMarkupClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a markup overlay is clicked.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto" — follows documentElement signals (data-appearance / data-theme / media)',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto" — enabled for high-contrast and print themes',
+        description: 'Decal pattern override (visual differentiation beyond color).',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto" — follows documentElement `data-density`',
+        description: 'Density override (compact vs comfortable).',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto" — follows documentElement `data-accent`',
+        description: 'Accent palette override (light/emerald/ocean/violet/sunset/graphite/dark).',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Anomaly summary list — when supplied, `ChartA11yShell` fires a\npolite, debounced screen-reader announcement summarising outliers.\nDefault `undefined` = no anomaly announcement (backwards compat).',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description: 'Optional override of the anomaly announcement template.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<PopulationPyramid
+  data={[
+    { ageBand: '18-24', left: 240, right: 210 },
+    { ageBand: '25-34', left: 480, right: 520 },
+    { ageBand: '35-44', left: 390, right: 410 },
+    { ageBand: '45-54', left: 230, right: 250 },
+    { ageBand: '55-64', left: 120, right: 110 },
+  ]}
+  leftLabel="Erkek"
+  rightLabel="Kadın"
+  title="İK Yaş Piramidi"
+/>`,
+    features: [
+      'cross-filter',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
   'heatmap-chart': {
     id: 'heatmap-chart',
     name: 'HeatmapChart',

@@ -875,6 +875,8 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
     'theme-river-chart',
     // PR-X16e — GanttChart (ECharts Depth campaign fifth wrapper).
     'gantt-chart',
+    // PR#2 — PopulationPyramid (HR demographic pyramid, Codex 019e3f75).
+    'population-pyramid',
     'heatmap-chart',
     'waterfall-chart',
     'funnel-chart',
@@ -918,7 +920,7 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
       expect(count).toBe(COMMON_AXIS.length);
       total += count;
     }
-    // 17 charts × 11 common-axis props = 187 just from common axis.
+    // 19 charts × 11 common-axis props = 209 just from common axis.
     expect(total).toBe(ALL_CHART_IDS.length * COMMON_AXIS.length);
   });
 });
@@ -950,6 +952,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'polar-chart': 17, // PR-X16c: 11 common-axis + seriesType/startAngle/showAngleAxisLabel/showRadiusAxisLabel/min/max
     'theme-river-chart': 12, // PR-X16d: 11 common-axis + showLabel (ThemeRiverChart has no enum / axis-label / scale props)
     'gantt-chart': 11, // PR-X16e: 11 common-axis only (GanttChart has no enum / axis-label / scale / showLabel props)
+    'population-pyramid': 17, // PR#2: 11 common-axis + showValues/showGrid/showLegend/leftLabel/rightLabel/maxValue
     'heatmap-chart': 15,
     'waterfall-chart': 15,
     'funnel-chart': 19,
@@ -980,6 +983,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'funnel-chart': 4, // vF, onDPC; §4f.3: + anomaly pair
     'sankey-chart': 5, // + onNodeClick; §4f.3: + anomaly pair
     'sunburst-chart': 5, // + onNodeClick; §4f.3: + anomaly pair
+    'population-pyramid': 7, // PR#2: vF + onDPC + colors + markups + onMarkupClick + anomaly pair
   };
 
   // ---- §4f live-surface coverage lock --------------------------------
@@ -989,33 +993,33 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // the playground (a LIVE_PROP_SUPPORT primitive or a COMPLEX_PROP_PRESETS
   // entry).
   //
-  // Enrolled set — 18 charts: the 13 core wrappers + the 5 PR-X16 depth
-  // charts (tree / calendar-heatmap / polar / theme-river / gantt). The
-  // PR-X12+ campaign charts (graph / geo-map / box-plot / candlestick /
+  // Enrolled set — 19 charts: the 13 core wrappers + the 5 PR-X16 depth
+  // charts (tree / calendar-heatmap / polar / theme-river / gantt) + the
+  // PopulationPyramid wrapper (Codex thread `019e3f75`, PR#2). The PR-X12+
+  // campaign charts (graph / geo-map / box-plot / candlestick /
   // pictorial-bar / parallel-coordinates) are intentionally NOT enrolled.
   //
   // DENOMINATOR — honest, AST-derived (PR-X16 §4f.0). `DERIVED_CATALOG_PROPS`
   // sums `CHART_CATALOG[id].props.length` over the enrolled charts, counted
   // from ChartDetail.tsx via the TypeScript AST. The old hand-maintained
-  // `FULL_CATALOG_PROPS` accumulator had silently drifted to 378 while the
-  // real catalog is 450 — so the gate reported ~92% coverage when the
-  // honest figure is ~77%. AST-deriving means the denominator can never
-  // drift from `CHART_CATALOG` again.
+  // `FULL_CATALOG_PROPS` accumulator had silently drifted (378) below the
+  // real enrolled-chart catalog — AST-deriving means the denominator can
+  // never drift from `CHART_CATALOG` again.
   //
   // One sample-input surface per enrolled chart is excluded: a chart's
   // dataset is supplied by SAMPLE_DATA scaffolds, never by a live
   // primitive/preset, so it can never be in the numerator (one prop per
-  // chart, 18 total). A few charts express their sample input as more
+  // chart, 19 total). A few charts express their sample input as more
   // than one catalog prop (series+labels, nodes+links) — those extra
   // input props stay in the denominator, only making the gate more
   // conservative.
   //
   // HARD GATE (PR-X16 §4f.4 — sprint close). The §4f coverage sprint
   // landed: §4f.1 +14 primitives, §4f.2 +13 markup/brush presets, §4f.3
-  // +34 anomaly a11y presets. Honest live-surface coverage is now
-  // 393 / 432 ≈ 91.0%, clearing the 0.9 target — so the transitional
-  // legacy CI-continuity denominator (360) is removed and the gate runs
-  // directly on the honest AST-derived 432 denominator below.
+  // +34 anomaly a11y presets; PR#2 then enrolled PopulationPyramid (+17
+  // primitives, +7 presets, +25 catalog props). Honest live-surface
+  // coverage is now 417 / 456 ≈ 91.4%, clearing the 0.9 target — the gate
+  // runs directly on the honest AST-derived 456 denominator below.
   const ENROLLED_CHART_IDS = Object.keys(PRIMITIVE_LIVE_COUNTS);
   const CATALOG_PROP_COUNTS = countChartCatalogProps();
   const DERIVED_CATALOG_PROPS = ENROLLED_CHART_IDS.reduce(
@@ -1024,7 +1028,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   );
   const EXCLUDED_SAMPLE_INPUTS = ENROLLED_CHART_IDS.length;
   const HONEST_LIVE_SURFACE_DENOMINATOR = DERIVED_CATALOG_PROPS - EXCLUDED_SAMPLE_INPUTS;
-  // Hard 0.9 coverage floor — ceil(0.9 × 432) = 389. EXPECTED_TOTAL must
+  // Hard 0.9 coverage floor — ceil(0.9 × 456) = 411. EXPECTED_TOTAL must
   // stay at or above this; the per-chart counts above are exact-locked.
   const HARD_COVERAGE_FLOOR = Math.ceil(0.9 * HONEST_LIVE_SURFACE_DENOMINATOR);
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
@@ -1071,14 +1075,14 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     // Denominator AST-counted from ChartDetail.tsx CHART_CATALOG — drift
     // from the real catalog now fails CI instead of hiding behind a
     // hand-maintained accumulator.
-    expect(DERIVED_CATALOG_PROPS).toBe(450);
-    expect(EXCLUDED_SAMPLE_INPUTS).toBe(18);
-    expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(432);
-    // HARD GATE (PR-X16 §4f.4). Honest coverage is 393 / 432 ≈ 91.0%.
-    // EXPECTED_TOTAL must stay at/above the 0.9 floor (389 = ceil(0.9 ×
-    // 432)) and the ratio must clear 0.9 — a real coverage regression
-    // (removing a preset or primitive) now fails CI.
-    expect(HARD_COVERAGE_FLOOR).toBe(389);
+    expect(DERIVED_CATALOG_PROPS).toBe(475);
+    expect(EXCLUDED_SAMPLE_INPUTS).toBe(19);
+    expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(456);
+    // HARD GATE (PR-X16 §4f.4 + PR#2). Honest coverage is 417 / 456 ≈
+    // 91.4%. EXPECTED_TOTAL must stay at/above the 0.9 floor (411 =
+    // ceil(0.9 × 456)) and the ratio must clear 0.9 — a real coverage
+    // regression (removing a preset or primitive) now fails CI.
+    expect(HARD_COVERAGE_FLOOR).toBe(411);
     expect(EXPECTED_TOTAL).toBeGreaterThanOrEqual(HARD_COVERAGE_FLOOR);
     expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(0.9);
   });
@@ -1199,6 +1203,9 @@ describe('chartPlaygroundModel — markup preset resolver (§4f.2)', () => {
     'scatter-chart',
     'heatmap-chart',
     'waterfall-chart',
+    // PR#2 (Codex 019e3f75): PopulationPyramid — its wrapper calls
+    // useMarkupAdapter + fires onMarkupClick (genuine-markup chart).
+    'population-pyramid',
   ];
   const MARKUP_VARIANTS = ['threshold-line', 'highlight-band', 'kpi-label'];
 
@@ -1212,7 +1219,7 @@ describe('chartPlaygroundModel — markup preset resolver (§4f.2)', () => {
     expect(getMarkupsPreset('does-not-exist', 'bar-chart')).toBeUndefined();
   });
 
-  it('getMarkupsPreset resolves every variant for all six genuine-markup charts', () => {
+  it('getMarkupsPreset resolves every variant for all seven genuine-markup charts', () => {
     for (const chartId of GENUINE_MARKUP_CHARTS) {
       for (const preset of MARKUP_VARIANTS) {
         const result = getMarkupsPreset(preset, chartId);
@@ -1257,6 +1264,36 @@ describe('chartPlaygroundModel — markup preset resolver (§4f.2)', () => {
     if (label?.type === 'label') {
       expect(label.anchor).toHaveProperty('xLabel');
       expect(label.anchor).toHaveProperty('yLabel');
+    }
+  });
+
+  it('getMarkupsPreset uses numeric x-axis anchors for the population pyramid', () => {
+    // The pyramid is a horizontal diverging bar — the value axis is `x`
+    // (numeric, symmetric), the category axis is `y` (age bands). The
+    // axis-mirror of the bar / line / area `axis: 'y'` cartesian anchors.
+    const threshold = getMarkupsPreset('threshold-line', 'population-pyramid')?.[0];
+    expect(threshold?.type).toBe('line');
+    if (threshold?.type === 'line') {
+      expect(threshold.axis).toBe('x');
+      expect(typeof threshold.value).toBe('number');
+    }
+
+    const band = getMarkupsPreset('highlight-band', 'population-pyramid')?.[0];
+    expect(band?.type).toBe('area');
+    if (band?.type === 'area') {
+      expect(band.axis).toBe('x');
+      expect(typeof band.from).toBe('number');
+      expect(typeof band.to).toBe('number');
+    }
+
+    const label = getMarkupsPreset('kpi-label', 'population-pyramid')?.[0];
+    expect(label?.type).toBe('label');
+    if (label?.type === 'label') {
+      // Explicit-coordinate `{ x, y }` anchor — x is the numeric value
+      // axis, y is the age-band category (the `{ dataIndex }` anchor is a
+      // documented v1 NO-OP on this chart).
+      expect(label.anchor).toHaveProperty('x');
+      expect(label.anchor).toHaveProperty('y');
     }
   });
 
@@ -1308,6 +1345,8 @@ describe('chartPlaygroundModel — anomaly a11y preset resolvers (§4f.3)', () =
     'funnel-chart',
     'sankey-chart',
     'sunburst-chart',
+    // PR#2 (Codex 019e3f75): PopulationPyramid HR demographic pyramid.
+    'population-pyramid',
   ];
 
   it('getAnomalySummaryPreset returns undefined for none / undefined / Gauge / unknown id', () => {
@@ -1323,7 +1362,7 @@ describe('chartPlaygroundModel — anomaly a11y preset resolvers (§4f.3)', () =
     expect(getAnomalySummaryPreset('multi-outlier', 'bar-chart')).toHaveLength(3);
   });
 
-  it('getAnomalySummaryPreset resolves valid AnomalySummary[] for all 17 enrolled charts', () => {
+  it('getAnomalySummaryPreset resolves valid AnomalySummary[] for all 18 enrolled charts', () => {
     for (const chartId of ANOMALY_CHARTS) {
       const summaries = getAnomalySummaryPreset('multi-outlier', chartId);
       expect(summaries, chartId).toHaveLength(3);

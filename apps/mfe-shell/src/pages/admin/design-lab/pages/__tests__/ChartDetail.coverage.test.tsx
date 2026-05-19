@@ -53,6 +53,7 @@ vi.mock('@mfe/x-charts', async () => {
     PolarChart: stubChart('PolarChart'),
     ThemeRiverChart: stubChart('ThemeRiverChart'),
     GanttChart: stubChart('GanttChart'),
+    PopulationPyramid: stubChart('PopulationPyramid'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -103,6 +104,10 @@ const CHART_IDS_WITH_PRESETS = [
   // PR-X16e — GanttChart depth chart. Same render-smoke guard for
   // catalog completeness (LIVE_PROP_SUPPORT + CHART_PRESETS + preview).
   'gantt-chart',
+  // PR#2 — PopulationPyramid HR demographic pyramid. Same render-smoke
+  // guard for catalog completeness (LIVE_PROP_SUPPORT + CHART_PRESETS +
+  // ChartPreviewLive switch arm).
+  'population-pyramid',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',

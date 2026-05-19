@@ -104,6 +104,10 @@ const CHARTS = [
   // types scatter3D / lines3D / bar3D on coordinateSystem: 'globe'.
   // Codex thread `019e10f8` iter-1.
   ['globe-chart', 'Globe'],
+  // PopulationPyramid (Codex thread 019e3f75 AGREE): HR age × gender
+  // demographic pyramid — diverging horizontal bar on a shared symmetric
+  // value axis. Design Lab enrollment PR#2 (the 29th x-charts wrapper).
+  ['population-pyramid', 'PopulationPyramid'],
 ];
 
 /* ------------------------------------------------------------------ */

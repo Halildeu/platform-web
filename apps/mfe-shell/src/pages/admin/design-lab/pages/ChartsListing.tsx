@@ -297,6 +297,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'bar',
   },
+  // PopulationPyramid (Codex thread 019e3f75 AGREE): HR age × gender
+  // demographic pyramid — diverging horizontal bar.
+  {
+    id: 'population-pyramid',
+    name: 'PopulationPyramid',
+    description: 'IK nufus piramidi, yas bandi x cinsiyet diverging bar.',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
   // Interaction
   {
     id: 'chart-container',

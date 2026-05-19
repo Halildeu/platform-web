@@ -36,6 +36,10 @@ import {
   // a `custom` series painting task bars on a time x-axis / category
   // lane y-axis — ECharts Depth campaign fifth wrapper.
   GanttChart,
+  // PopulationPyramid (Codex thread 019e3f75 AGREE): HR age × gender
+  // demographic pyramid — diverging horizontal bar on a shared symmetric
+  // value axis. The 29th x-charts wrapper.
+  PopulationPyramid,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -1259,6 +1263,66 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // PopulationPyramid (Codex thread 019e3f75 AGREE): HR age × gender
+    // demographic pyramid — two diverging horizontal bars per age-band
+    // row on a shared symmetric value axis. `left` / `right` are
+    // unsigned; the wrapper negates the left series internally. Sample
+    // dataset: 6 age bands × 2 genders.
+    case 'population-pyramid': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <PopulationPyramid
+            data={[
+              { ageBand: '18-24', left: 240, right: 210 },
+              { ageBand: '25-34', left: 480, right: 520 },
+              { ageBand: '35-44', left: 390, right: 410 },
+              { ageBand: '45-54', left: 230, right: 250 },
+              { ageBand: '55-64', left: 120, right: 110 },
+              { ageBand: '65+', left: 60, right: 80 },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            leftLabel={getStr(toggles, 'leftLabel', 'Sol')}
+            rightLabel={getStr(toggles, 'rightLabel', 'Sağ')}
+            showValues={isOn(toggles, 'showValues', false)}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showLegend={isOn(toggles, 'showLegend', true)}
+            maxValue={getOptNum(toggles, 'maxValue')}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            colors={
+              getColorsPreset(getEnum(toggles, 'colors', 'default')) as [string, string] | undefined
+            }
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'population-pyramid')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
             decal={getDecal(toggles, 'decal', 'auto')}

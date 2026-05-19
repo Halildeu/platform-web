@@ -691,6 +691,33 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // PopulationPyramid (Codex 019e3f75 AGREE): HR age × gender demographic
+  // pyramid — diverging horizontal bar. `leftLabel`/`rightLabel` name the
+  // two series; `showValues`/`showGrid`/`showLegend` toggle the bar
+  // labels / value-axis grid / legend; `maxValue` pins the symmetric
+  // axis. `data` is a complex shape (code-only); `valueFormatter` /
+  // `onDataPointClick` / `colors` / `markups` / `onMarkupClick` + the
+  // anomaly pair are function/array props — preset-driven via
+  // COMPLEX_PROP_PRESETS, not primitives here.
+  'population-pyramid': new Set([
+    'title',
+    'description',
+    'className',
+    'leftLabel',
+    'rightLabel',
+    'showValues',
+    'showGrid',
+    'showLegend',
+    'maxValue',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1062,10 +1089,11 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
 ];
 
 /**
- * The 17 enrolled charts that carry the `anomalySummary` +
+ * The 18 enrolled charts that carry the `anomalySummary` +
  * `formatAnomalyAnnouncement` a11y pair in CHART_CATALOG — every
  * count-lock-enrolled chart except Gauge (whose catalog entry has no
- * anomaly pair). Verified against the AST by Codex thread `019e3af0`.
+ * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
+ * `population-pyramid` added by Codex thread `019e3f75`.
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
@@ -1085,6 +1113,8 @@ const ANOMALY_PRESET_CHART_IDS = [
   'funnel-chart',
   'sankey-chart',
   'sunburst-chart',
+  // PR#2 (Codex 019e3f75): PopulationPyramid HR demographic pyramid.
+  'population-pyramid',
 ] as const;
 
 /**
@@ -1131,6 +1161,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'theme-river-chart',
       // PR-X16e (Codex 019e365b): GanttChart task-duration formatting.
       'gantt-chart',
+      // PR#2 (Codex 019e3f75): PopulationPyramid age-band measure formatting.
+      'population-pyramid',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1169,6 +1201,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'theme-river-chart',
       // PR-X16e (Codex 019e365b): GanttChart task-bar-click cross-filter.
       'gantt-chart',
+      // PR#2 (Codex 019e3f75): PopulationPyramid age-band-click cross-filter.
+      'population-pyramid',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1233,6 +1267,14 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
     { presetId: 'cool-warm', label: 'Cool→Warm' },
     { presetId: 'green-red', label: 'Green→Red' },
   ],
+  // PR#2 (Codex 019e3f75): PopulationPyramid `colors` is `[leftColor,
+  // rightColor]` — same `[string, string]` shape as calendar-heatmap. The
+  // resolver is chart-agnostic; the wrapper reads palette[0] / palette[1].
+  'population-pyramid.colors': [
+    { presetId: 'default', label: 'Auto palette (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+    { presetId: 'monochrome', label: 'Monochrome slate' },
+  ],
   // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
   // requires its own object resolver, deferred to PR-FE-Playground-4.
 
@@ -1253,6 +1295,9 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'scatter-chart',
       'heatmap-chart',
       'waterfall-chart',
+      // PR#2 (Codex 019e3f75): PopulationPyramid is a genuine-markup
+      // chart — its wrapper calls `useMarkupAdapter` + fires `onMarkupClick`.
+      'population-pyramid',
     ].map((cid) => [`${cid}.markups`, MARKUP_PRESET_OPTIONS] as [string, ComplexPreset[]]),
   ),
   ...Object.fromEntries(
@@ -1263,6 +1308,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'scatter-chart',
       'heatmap-chart',
       'waterfall-chart',
+      // PR#2 (Codex 019e3f75): PopulationPyramid markup-overlay click.
+      'population-pyramid',
     ].map((cid) => [`${cid}.onMarkupClick`, CALLBACK_PRESET_OPTIONS] as [string, ComplexPreset[]]),
   ),
   // Scatter brush selection — the catalog `onBrushSelection` callback.
@@ -1413,9 +1460,14 @@ export function getThresholdsPreset(
  *   - heatmap — categorical x / y; `LineMarkup.value` + `AreaMarkup.from`
  *     / `to` take category strings (the `number | string` contract), and
  *     `kpi-label` uses the heatmap-friendly `{ xLabel, yLabel }` anchor.
+ *   - population-pyramid — numeric value (x) axis, category y; the
+ *     horizontal diverging bar is the axis-mirror of bar/line/area, so
+ *     threshold / band live on `axis: 'x'` and `kpi-label` anchors
+ *     `{ x: <number>, y: <ageBand> }` (Codex thread `019e3f75`).
  *
  * Verified NO-OP-free against `adaptToEcharts` `DEFAULT_SUPPORT_MATRIX`
- * (line / area / label full for all six) — Codex thread `019e3af0`.
+ * (line / area / label full for all seven) — Codex threads `019e3af0`
+ * + `019e3f75`.
  */
 const MARKUP_PRESET_ANCHORS: Record<
   string,
@@ -1598,6 +1650,40 @@ const MARKUP_PRESET_ANCHORS: Record<
       source: 'manual',
       text: 'Zirve',
       anchor: { x: 'Hizmet', y: 1500 },
+      background: '#0ea5e9',
+    },
+  },
+  // PR#2 (Codex 019e3f75): PopulationPyramid — horizontal diverging bar.
+  // The value axis is `x` (numeric, symmetric); the category axis is `y`
+  // (age bands). Anchors land inside the ChartPreviewLive sample-data
+  // range (left/right peak ≈ 480/520).
+  'population-pyramid': {
+    'threshold-line': {
+      id: 'preset-threshold',
+      type: 'line',
+      source: 'manual',
+      axis: 'x',
+      value: 400,
+      style: 'dashed',
+      color: '#ef4444',
+      label: { text: 'Eşik 400', position: 'end' },
+    },
+    'highlight-band': {
+      id: 'preset-band',
+      type: 'area',
+      source: 'manual',
+      axis: 'x',
+      from: 300,
+      to: 500,
+      opacity: 0.18,
+      label: { text: 'Yoğun kohort' },
+    },
+    'kpi-label': {
+      id: 'preset-label',
+      type: 'label',
+      source: 'manual',
+      text: 'Zirve kohort',
+      anchor: { x: 480, y: '25-34' },
       background: '#0ea5e9',
     },
   },
@@ -2489,6 +2575,26 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // PR#2 (Codex 019e3f75): PopulationPyramid age-band scaffold so the
+  // generated snippet compiles end-to-end (`const sampleData = [...]`).
+  // 6 age bands × 2 unsigned gendered measures.
+  'population-pyramid': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'PopulationPyramid age-band rows ({ ageBand, left, right })',
+        jsLiteral: `[
+  { ageBand: '18-24', left: 240, right: 210 },
+  { ageBand: '25-34', left: 480, right: 520 },
+  { ageBand: '35-44', left: 390, right: 410 },
+  { ageBand: '45-54', left: 230, right: 250 },
+  { ageBand: '55-64', left: 120, right: 110 },
+  { ageBand: '65+', left: 60, right: 80 },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -3320,6 +3426,51 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       label: 'Read-only Access',
       tag: 'access',
       description: 'Visible but non-interactive — orbit + click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // PR#2 (Codex 019e3f75): PopulationPyramid preset gallery.
+  'population-pyramid': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Diverging horizontal bar — left / right legend + grid.',
+      statePatch: {},
+    },
+    {
+      id: 'gendered',
+      label: 'Gendered Labels',
+      tag: 'labels',
+      description: 'HR age × gender use case — Erkek / Kadın series labels.',
+      statePatch: { leftLabel: 'Erkek', rightLabel: 'Kadın' },
+    },
+    {
+      id: 'with-values',
+      label: 'Bar Values',
+      tag: 'display',
+      description: 'Show the raw positive headcount label on each bar.',
+      statePatch: { showValues: true },
+    },
+    {
+      id: 'no-legend',
+      label: 'No Legend',
+      tag: 'layout',
+      description: 'Hide the left/right legend for a denser dashboard cell.',
+      statePatch: { showLegend: false },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
       statePatch: { access: 'readonly' },
     },
   ],
