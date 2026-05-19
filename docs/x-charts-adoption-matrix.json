@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T18:11:51.554Z",
+  "generatedAt": "2026-05-19T18:58:42.873Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -152,6 +152,7 @@
         "CrossFilterProvider",
         "LineChart",
         "PieChart",
+        "WaterfallChart",
         "XKPICard",
         "useCrossFilter"
       ],
