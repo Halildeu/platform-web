@@ -1143,7 +1143,7 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
  * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
  * `population-pyramid` added by Codex thread `019e3f75`; `combo-chart`
  * added by Codex thread `019e41cd`; `effect-scatter-chart` added by Codex
- * thread `019e425b`.
+ * thread `019e425b` (the 20th enrolled chart).
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
