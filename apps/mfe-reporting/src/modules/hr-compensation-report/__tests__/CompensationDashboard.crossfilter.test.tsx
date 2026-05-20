@@ -41,6 +41,9 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     BarChart: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="mock-bar">{children}</div>
     ),
+    Bar3DChart: ({ children }: { children?: React.ReactNode }) => (
+      <div data-testid="mock-bar3d">{children}</div>
+    ),
     LineChart: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="mock-line">{children}</div>
     ),
