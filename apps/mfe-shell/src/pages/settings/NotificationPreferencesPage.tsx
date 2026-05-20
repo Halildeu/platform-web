@@ -486,18 +486,22 @@ const PreferenceTable: React.FC<PreferenceTableProps> = ({
   );
 
   if (loading) {
-    return <p className="mt-6 text-sm text-zinc-500">Yükleniyor…</p>;
+    return (
+      <p className="mt-6 text-sm text-zinc-500" data-testid="notification-preferences-loading">
+        Yükleniyor…
+      </p>
+    );
   }
   if (sorted.length === 0) {
     return (
-      <p className="mt-6 text-sm text-zinc-600">
+      <p className="mt-6 text-sm text-zinc-600" data-testid="notification-preferences-empty">
         Henüz tanımlı bir kural yok. Yukarıdan ekleyebilirsiniz.
       </p>
     );
   }
 
   return (
-    <table className="mt-6 w-full text-sm">
+    <table className="mt-6 w-full text-sm" data-testid="notification-preferences-table">
       <thead>
         <tr className="text-left text-xs text-zinc-500 border-b">
           <th className="py-2">Konu</th>
