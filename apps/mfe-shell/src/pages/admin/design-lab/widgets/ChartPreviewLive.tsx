@@ -58,6 +58,10 @@ import {
   Surface3D,
   Lines3D,
   Globe,
+  // Bar3DChart (Codex thread 019e42c3 AGREE): standalone cartesian3D
+  // bar3D wrapper — category × category × value pivot 3D bars. The
+  // 32nd x-charts wrapper, 5th 3D after Scatter3D/Surface3D/Lines3D/Globe.
+  Bar3DChart,
   // PR-X campaign live playground (Codex 019e22b6 follow-up):
   // wire the 6 wrappers into ChartPreviewLive so design-lab Playground
   // tab renders real instances instead of the "yakında" fallback.
@@ -184,6 +188,26 @@ const GLOBE_FIXTURE_LAYERS = [
     data: GLOBE_FIXTURE_DATA,
   },
 ] as const;
+
+// Bar3DChart (Codex thread 019e42c3 AGREE): module-scope fixture so
+// reference identity stays stable across PlaygroundTab re-renders.
+// JSX-inline arrays would trigger the wrapper's option memo to recompute
+// every tick (live cluster smoke pattern repeated for every 3D wrapper).
+// Dataset: departman × kıdem × ortalama maaş (4 × 3 = 12 cells).
+const BAR_3D_FIXTURE: ReadonlyArray<{ x: string; y: string; z: number }> = [
+  { x: 'Mühendislik', y: 'Junior', z: 50000 },
+  { x: 'Mühendislik', y: 'Mid', z: 80000 },
+  { x: 'Mühendislik', y: 'Senior', z: 110000 },
+  { x: 'Satış', y: 'Junior', z: 45000 },
+  { x: 'Satış', y: 'Mid', z: 70000 },
+  { x: 'Satış', y: 'Senior', z: 95000 },
+  { x: 'Pazarlama', y: 'Junior', z: 48000 },
+  { x: 'Pazarlama', y: 'Mid', z: 75000 },
+  { x: 'Pazarlama', y: 'Senior', z: 100000 },
+  { x: 'İK', y: 'Junior', z: 42000 },
+  { x: 'İK', y: 'Mid', z: 68000 },
+  { x: 'İK', y: 'Senior', z: 90000 },
+];
 
 export interface ChartPreviewLiveProps {
   chartId: string;
@@ -1894,6 +1918,60 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // Bar3DChart (Codex thread 019e42c3 AGREE): standalone cartesian3D
+    // bar3D wrapper. Sample dataset: departman × kıdem × ortalama maaş
+    // (4 × 3 = 12 cells). markups/onMarkupClick deliberately NOT exposed
+    // per Codex iter-1 REVISE — the 2D markup adapter is cartesian-2d-only.
+    case 'bar-3d-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <Bar3DChart
+            data={
+              BAR_3D_FIXTURE as unknown as Array<{
+                x: string;
+                y: string;
+                z: number;
+              }>
+            }
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            xLabel={getStr(toggles, 'xLabel', 'Departman')}
+            yLabel={getStr(toggles, 'yLabel', 'Kıdem')}
+            zLabel={getStr(toggles, 'zLabel', 'Ortalama maaş')}
+            showValues={isOn(toggles, 'showValues', false)}
+            shading={getEnum(toggles, 'shading', 'lambert') as 'color' | 'lambert' | 'realistic'}
+            barSize={getNum(toggles, 'barSize', 0.8)}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );

@@ -766,6 +766,32 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // Bar3DChart (Codex 019e42c3 AGREE): standalone cartesian3D bar3D.
+  // 11 common-axis + xLabel/yLabel/zLabel/showValues/shading/barSize = 17
+  // primitives. `data` + `xCategories`/`yCategories` complex shapes
+  // (code-only); `viewControl`/`grid3D`/`light` object passthrough —
+  // catalog only, not live; `valueFormatter`/`colors`/`onDataPointClick`
+  // + anomaly pair preset-driven via COMPLEX_PROP_PRESETS. NO markups
+  // (Codex iter-1 REVISE — 2D markup adapter is cartesian-2d-only).
+  'bar-3d-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'xLabel',
+    'yLabel',
+    'zLabel',
+    'showValues',
+    'shading',
+    'barSize',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1137,13 +1163,14 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
 ];
 
 /**
- * The 19 enrolled charts that carry the `anomalySummary` +
+ * The 21 enrolled charts that carry the `anomalySummary` +
  * `formatAnomalyAnnouncement` a11y pair in CHART_CATALOG — every
  * count-lock-enrolled chart except Gauge (whose catalog entry has no
  * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
  * `population-pyramid` added by Codex thread `019e3f75`; `combo-chart`
  * added by Codex thread `019e41cd`; `effect-scatter-chart` added by Codex
- * thread `019e425b` (the 20th enrolled chart).
+ * thread `019e425b`; `bar-3d-chart` added by Codex thread `019e42c3` (the
+ * 21st enrolled chart).
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
@@ -1169,6 +1196,8 @@ const ANOMALY_PRESET_CHART_IDS = [
   'combo-chart',
   // EffectScatterChart (Codex 019e425b AGREE): standalone effectScatter.
   'effect-scatter-chart',
+  // Bar3DChart (Codex 019e42c3 AGREE): standalone cartesian3D bar3D.
+  'bar-3d-chart',
 ] as const;
 
 /**
@@ -1221,6 +1250,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'combo-chart',
       // EffectScatterChart (Codex 019e425b): outlier value formatting.
       'effect-scatter-chart',
+      // Bar3DChart (Codex 019e42c3): bar height (z) value formatting.
+      'bar-3d-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1266,6 +1297,9 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       // EffectScatterChart (Codex 019e425b): point-click cross-filter
       // (departman outlier markers).
       'effect-scatter-chart',
+      // Bar3DChart (Codex 019e42c3): 3D bar-click cross-filter
+      // (category × category pivot drill-down).
+      'bar-3d-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1354,6 +1388,14 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
     { presetId: 'rainbow', label: 'Rainbow' },
     { presetId: 'monochrome', label: 'Monochrome slate' },
   ],
+  // Bar3DChart (Codex 019e42c3 AGREE): `colors` is a `string[]` palette
+  // that drives the visualMap inRange.color stops (z-height gradient
+  // across 3D bars). Same chart-agnostic resolver as the other wrappers.
+  'bar-3d-chart.colors': [
+    { presetId: 'default', label: 'Auto palette (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+    { presetId: 'monochrome', label: 'Monochrome slate' },
+  ],
   // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
   // requires its own object resolver, deferred to PR-FE-Playground-4.
 
@@ -1412,12 +1454,12 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 
   // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
-  // `anomalySummary` + `formatAnomalyAnnouncement` for the 20 enrolled
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 21 enrolled
   // charts that carry the anomaly a11y pair in CHART_CATALOG (every
   // enrolled chart except Gauge — verified via AST, Codex 019e3af0;
   // population-pyramid added by Codex thread 019e3f75; combo-chart added
   // by Codex thread 019e41cd; effect-scatter-chart added by Codex thread
-  // 019e425b).
+  // 019e425b; bar-3d-chart added by Codex thread 019e42c3).
   // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
   // `formatAnomalyAnnouncement` overrides the announcement template.
   ...Object.fromEntries(
@@ -2806,6 +2848,33 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // Bar3DChart (Codex 019e42c3 AGREE): cartesian3D bar3D — `data`
+  // scaffold (departman × kıdem × ortalama maaş pivot) for the generated
+  // snippet. Mirrors BAR_3D_FIXTURE in ChartPreviewLive so playground +
+  // generated code stay 1:1.
+  'bar-3d-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'Bar3DChart departman × kıdem × ortalama maaş pivot (Bar3DDataPoint[])',
+        jsLiteral: `[
+  { x: 'Mühendislik', y: 'Junior', z: 50000 },
+  { x: 'Mühendislik', y: 'Mid', z: 80000 },
+  { x: 'Mühendislik', y: 'Senior', z: 110000 },
+  { x: 'Satış', y: 'Junior', z: 45000 },
+  { x: 'Satış', y: 'Mid', z: 70000 },
+  { x: 'Satış', y: 'Senior', z: 95000 },
+  { x: 'Pazarlama', y: 'Junior', z: 48000 },
+  { x: 'Pazarlama', y: 'Mid', z: 75000 },
+  { x: 'Pazarlama', y: 'Senior', z: 100000 },
+  { x: 'İK', y: 'Junior', z: 42000 },
+  { x: 'İK', y: 'Mid', z: 68000 },
+  { x: 'İK', y: 'Senior', z: 90000 },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -3723,6 +3792,53 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       label: 'No Animation',
       tag: 'motion',
       description: 'Static render — also zeroes the ripple (vestibular-safe).',
+      statePatch: { animate: false },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // Bar3DChart (Codex 019e42c3 AGREE): cartesian3D bar3D preset gallery.
+  // 6 entries covering the main playground axes: starter, with-values
+  // display, realistic shading, dark theme, no-animation, readonly.
+  'bar-3d-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Default lambert shading — 12-cell departman × kıdem pivot.',
+      statePatch: {},
+    },
+    {
+      id: 'with-values',
+      label: 'Bar Values',
+      tag: 'display',
+      description: 'Show the z-value (ortalama maaş) on top of every 3D bar.',
+      statePatch: { showValues: true },
+    },
+    {
+      id: 'realistic',
+      label: 'Realistic Shading',
+      tag: 'render',
+      description: 'PBR-style realistic shading — heavier GL load but glossier bars.',
+      statePatch: { shading: 'realistic' },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'no-animation',
+      label: 'No Animation',
+      tag: 'motion',
+      description: 'Static render — no entry tween.',
       statePatch: { animate: false },
     },
     {

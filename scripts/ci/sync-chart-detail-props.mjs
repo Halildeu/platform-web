@@ -115,6 +115,10 @@ const CHARTS = [
   // effectScatter wrapper — scatter + ripple animation for outlier
   // emphasis (the 31st x-charts wrapper).
   ['effect-scatter-chart', 'EffectScatterChart'],
+  // Bar3DChart (Codex thread 019e42c3 AGREE): standalone cartesian3D
+  // bar3D wrapper — category × category × value pivot 3D bars (the
+  // 32nd x-charts wrapper, 5th 3D after Scatter3D/Surface3D/Lines3D/Globe).
+  ['bar-3d-chart', 'Bar3DChart'],
 ];
 
 /* ------------------------------------------------------------------ */
