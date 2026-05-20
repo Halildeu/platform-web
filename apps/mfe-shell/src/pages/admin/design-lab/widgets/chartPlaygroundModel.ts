@@ -137,6 +137,20 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'pin', label: 'pin' },
     { value: 'arrow', label: 'arrow' },
   ],
+  // WordCloudShape — closed 7-shape enum from packages/x-charts/src/
+  // WordCloudChart.tsx (Codex thread 019e4351 iter-1). Pure string-
+  // literal union maps cleanly to a dropdown. Mirrors the LiquidFillShape
+  // pattern; without this entry the descriptor falls to `complex` and
+  // the playground hides the prop.
+  WordCloudShape: [
+    { value: 'circle', label: 'circle' },
+    { value: 'cardioid', label: 'cardioid' },
+    { value: 'diamond', label: 'diamond' },
+    { value: 'triangle-forward', label: 'triangle-forward' },
+    { value: 'triangle', label: 'triangle' },
+    { value: 'pentagon', label: 'pentagon' },
+    { value: 'star', label: 'star' },
+  ],
   ChartDensityPreference: [
     { value: 'auto', label: 'auto (shell density)' },
     { value: 'compact', label: 'compact' },
@@ -833,6 +847,34 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // WordCloudChart (Codex 019e4351 AGREE_WITH_REVISIONS): lazy-loaded
+  // text frequency cloud. 11 common-axis + shape/maxWords/rotationStep/
+  // gridSize/drawOutOfBound/shrinkToFit/fontFamily = 18 primitives.
+  // `data` + `sizeRange` + `rotationRange` complex tuples/arrays (code-
+  // only); `valueFormatter`/`colors`/`onDataPointClick` + anomaly pair
+  // preset-driven via COMPLEX_PROP_PRESETS. NO markups (Codex iter-1
+  // REVISE — no coordinate axis to anchor markups against; mirrors the
+  // LiquidFillChart preset surface).
+  'word-cloud-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'shape',
+    'maxWords',
+    'rotationStep',
+    'gridSize',
+    'drawOutOfBound',
+    'shrinkToFit',
+    'fontFamily',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1204,15 +1246,16 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
 ];
 
 /**
- * The 21 enrolled charts that carry the `anomalySummary` +
+ * The 23 enrolled charts that carry the `anomalySummary` +
  * `formatAnomalyAnnouncement` a11y pair in CHART_CATALOG — every
  * count-lock-enrolled chart except Gauge (whose catalog entry has no
  * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
  * `population-pyramid` added by Codex thread `019e3f75`; `combo-chart`
  * added by Codex thread `019e41cd`; `effect-scatter-chart` added by Codex
  * thread `019e425b`; `bar-3d-chart` added by Codex thread `019e42c3`;
- * `liquid-fill-chart` added by Codex thread `019e4301` (the 22nd
- * enrolled chart).
+ * `liquid-fill-chart` added by Codex thread `019e4301`; `word-cloud-chart`
+ * added by Codex thread `019e4351` (the 23rd enrolled chart, FINAL of
+ * the 5-missing-chart campaign).
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
@@ -1243,6 +1286,10 @@ const ANOMALY_PRESET_CHART_IDS = [
   // LiquidFillChart (Codex 019e4301 AGREE_WITH_REVISIONS): lazy-loaded
   // liquidFill KPI gauge.
   'liquid-fill-chart',
+  // WordCloudChart (Codex 019e4351 AGREE_WITH_REVISIONS): lazy-loaded
+  // text frequency cloud. 23rd enrolled chart — FINAL of the 5-missing-
+  // chart campaign.
+  'word-cloud-chart',
 ] as const;
 
 /**
@@ -1299,6 +1346,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'bar-3d-chart',
       // LiquidFillChart (Codex 019e4301): fill ratio percentage formatting.
       'liquid-fill-chart',
+      // WordCloudChart (Codex 019e4351): word frequency value formatting.
+      'word-cloud-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1349,6 +1398,9 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'bar-3d-chart',
       // LiquidFillChart (Codex 019e4301): single KPI gauge click.
       'liquid-fill-chart',
+      // WordCloudChart (Codex 019e4351): word-click cross-filter
+      // (term emphasis drill).
+      'word-cloud-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1453,6 +1505,15 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
     { presetId: 'rainbow', label: 'Rainbow' },
     { presetId: 'monochrome', label: 'Monochrome slate' },
   ],
+  // WordCloudChart (Codex 019e4351 AGREE_WITH_REVISIONS): `colors` is
+  // a `string[]` palette — the wrapper deterministically cycles
+  // `palette[dataIndex % palette.length]` (NO random picking — Codex
+  // iter-1). Same chart-agnostic resolver as the other wrappers.
+  'word-cloud-chart.colors': [
+    { presetId: 'default', label: 'Auto palette (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+    { presetId: 'monochrome', label: 'Monochrome slate' },
+  ],
   // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
   // requires its own object resolver, deferred to PR-FE-Playground-4.
 
@@ -1511,13 +1572,15 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 
   // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
-  // `anomalySummary` + `formatAnomalyAnnouncement` for the 22 enrolled
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 23 enrolled
   // charts that carry the anomaly a11y pair in CHART_CATALOG (every
   // enrolled chart except Gauge — verified via AST, Codex 019e3af0;
   // population-pyramid added by Codex thread 019e3f75; combo-chart added
   // by Codex thread 019e41cd; effect-scatter-chart added by Codex thread
   // 019e425b; bar-3d-chart added by Codex thread 019e42c3;
-  // liquid-fill-chart added by Codex thread 019e4301).
+  // liquid-fill-chart added by Codex thread 019e4301; word-cloud-chart
+  // added by Codex thread 019e4351 — 23rd enrolled, FINAL of the 5-
+  // missing-chart campaign).
   // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
   // `formatAnomalyAnnouncement` overrides the announcement template.
   ...Object.fromEntries(
@@ -2957,6 +3020,34 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
       },
     ],
   },
+  // WordCloudChart (Codex 019e4351 AGREE_WITH_REVISIONS): lazy-loaded
+  // text frequency cloud — `data` scaffold (top yetkinlik frekansları)
+  // for the generated snippet. Mirrors WORD_CLOUD_FIXTURE in
+  // ChartPreviewLive so playground + generated code stay 1:1. The
+  // scaffold is trimmed to 10 entries (out of 25 in the live fixture)
+  // to keep the generated snippet readable; the rendered preview cycles
+  // the full 25-word set deterministically via `palette[i % len]`.
+  'word-cloud-chart': {
+    scaffold: [
+      {
+        propName: 'data',
+        varName: 'sampleData',
+        caption: 'WordCloudChart yetkinlik frekansları (WordCloudDatum[])',
+        jsLiteral: `[
+  { name: 'React', value: 280 },
+  { name: 'TypeScript', value: 240 },
+  { name: 'ECharts', value: 180 },
+  { name: 'Java', value: 175 },
+  { name: 'Spring Boot', value: 160 },
+  { name: 'PostgreSQL', value: 150 },
+  { name: 'Kubernetes', value: 140 },
+  { name: 'Docker', value: 135 },
+  { name: 'Tailwind', value: 120 },
+  { name: 'Vite', value: 110 },
+]`,
+      },
+    ],
+  },
 };
 
 /**
@@ -3930,6 +4021,56 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'motion',
       description: 'Wave animation off — static fill (vestibular-safe).',
       statePatch: { waveAnimation: false },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // WordCloudChart (Codex 019e4351 AGREE_WITH_REVISIONS): lazy-loaded
+  // text frequency cloud preset gallery. 6 entries cover the main
+  // playground axes: starter, star-shape (silhouette swap), capped
+  // (maxWords clamp showcase), dark, no-animation, readonly. Every
+  // statePatch references a serialised primitive — the generated
+  // snippet stays 1:1 with the rendered preview.
+  'word-cloud-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Default circle shape, 25 yetkinlik, deterministic palette cycle.',
+      statePatch: {},
+    },
+    {
+      id: 'star-shape',
+      label: 'Star Shape',
+      tag: 'shape',
+      description: 'Star silhouette — same dataset packed into a five-pointed mask.',
+      statePatch: { shape: 'star' },
+    },
+    {
+      id: 'capped',
+      label: 'Top 10',
+      tag: 'capacity',
+      description: 'maxWords=10 — keeps only the largest 10 frequencies (desc-sort).',
+      statePatch: { maxWords: 10 },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'no-animation',
+      label: 'No Animation',
+      tag: 'motion',
+      description: 'Static render — no entry tween (vestibular-safe).',
+      statePatch: { animate: false },
     },
     {
       id: 'readonly',

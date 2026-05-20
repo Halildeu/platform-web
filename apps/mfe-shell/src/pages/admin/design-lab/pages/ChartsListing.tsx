@@ -347,6 +347,17 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'gauge',
   },
+  // WordCloudChart (Codex thread 019e4351 AGREE_WITH_REVISIONS):
+  // lazy-loaded text frequency word cloud — name/value pairs rendered
+  // as size-cycling rotated text inside a configurable silhouette.
+  {
+    id: 'word-cloud-chart',
+    name: 'WordCloudChart',
+    description: 'Metin frekans bulutu, name/value çiftleri + 7 silüet (lazy-loaded).',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'text',
+  },
   // Interaction
   {
     id: 'chart-container',

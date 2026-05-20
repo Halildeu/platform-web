@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T02:38:17.903Z",
+  "generatedAt": "2026-05-20T03:46:30.439Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -406,6 +406,7 @@
         "TreeChart",
         "TreemapChart",
         "WaterfallChart",
+        "WordCloudChart",
         "ensureGeoMapRegistered",
         "useAnomalyOverlay",
         "useChartInteractions",

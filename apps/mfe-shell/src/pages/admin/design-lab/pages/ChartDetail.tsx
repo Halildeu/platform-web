@@ -4110,6 +4110,236 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
+  // WordCloudChart (Codex thread 019e4351 AGREE_WITH_REVISIONS):
+  // lazy-loaded text frequency word cloud — `WordCloudDatum[]` rendered
+  // via `echarts-wordcloud` extension. The 34th x-charts wrapper
+  // (1st echarts-wordcloud), FINAL of the 5-missing-chart campaign.
+  // `props` sync-generated from the wrapper interface by
+  // scripts/ci/sync-chart-detail-props.mjs.
+  'word-cloud-chart': {
+    id: 'word-cloud-chart',
+    name: 'WordCloudChart',
+    description:
+      'Lazy-loaded text frequency word cloud — `WordCloudDatum[]` of `{ name, value }` pairs rendered as size-cycling rotated text inside a configurable silhouette (circle / cardioid / diamond / triangle-forward / triangle / pentagon / star). Codex iter-1 hardened: deterministic palette cycling (NO random picking), `maxWords` cap [1, 200] default 100, desc-sort by `value`, vestibular-safe (`prefers-reduced-motion: reduce` disables tween).',
+    importPath: "import { WordCloudChart } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'data',
+        type: 'WordCloudDatum[]',
+        required: true,
+        default: '—',
+        description: 'Word frequency pairs.',
+      },
+      {
+        name: 'shape',
+        type: 'WordCloudShape',
+        required: false,
+        default: '"circle"',
+        description: 'Cloud silhouette shape.',
+      },
+      {
+        name: 'maxWords',
+        type: 'number',
+        required: false,
+        default: '100',
+        description:
+          'Cap on the number of words rendered. Sorted desc by `value` then\nthe top N are kept. Clamped to `[1, 200]`.',
+      },
+      {
+        name: 'sizeRange',
+        type: '[number, number]',
+        required: false,
+        default: '[12, 60]',
+        description:
+          'Font size pixel range `[min, max]`. Smallest word renders at\n`min`, largest at `max`.',
+      },
+      {
+        name: 'rotationRange',
+        type: '[number, number]',
+        required: false,
+        default: '[-90, 90]',
+        description: 'Rotation degree range `[min, max]`.',
+      },
+      {
+        name: 'rotationStep',
+        type: 'number',
+        required: false,
+        default: '45',
+        description: 'Rotation step between placement attempts (degrees).',
+      },
+      {
+        name: 'gridSize',
+        type: 'number',
+        required: false,
+        default: '8',
+        description: 'Layout grid size (pixels). Smaller = denser layout.',
+      },
+      {
+        name: 'drawOutOfBound',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Allow words to render outside the canvas bounds.',
+      },
+      {
+        name: 'shrinkToFit',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Auto-shrink font sizes if the layout overflows.',
+      },
+      {
+        name: 'colors',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Deterministic color palette — words colour-cycle via\n`palette[dataIndex % palette.length]`. Accepts `var(--token)`\nstrings (resolved at runtime). Codex iter-1: NO random picking.',
+      },
+      {
+        name: 'fontFamily',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Font family applied to every word.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Tooltip / a11y value formatter.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto"',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Click callback — emits `{ word, value, label }`.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description: 'Anomaly summary list forwarded to ChartA11yShell SR announcer.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description: 'Optional override of the anomaly announcement template.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<WordCloudChart
+  data={[
+    { name: 'React', value: 280 },
+    { name: 'TypeScript', value: 240 },
+    { name: 'ECharts', value: 180 },
+  ]}
+  title="Sıkça geçen yetenekler"
+  shape="circle"
+  maxWords={50}
+/>`,
+    features: [
+      'cross-filter',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
   'heatmap-chart': {
     id: 'heatmap-chart',
     name: 'HeatmapChart',
