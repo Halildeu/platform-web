@@ -56,6 +56,10 @@ const buildDeps = (overrides: Partial<BootstrapDeps>): BootstrapDeps => ({
   dispatchPhase: vi.fn(),
   dispatchFailed: vi.fn(),
   dispatchSession: vi.fn(),
+  // 2026-05-20 hotfix: tests opt into a per-test mock via overrides when
+  // they care about the stale-token clear; default is a no-op so the
+  // happy-path tests keep working without restructuring.
+  dispatchSessionClear: vi.fn(),
   isMounted: () => true,
   ...overrides,
 });
@@ -144,6 +148,63 @@ describe('bootstrapAuthController — production controller import test', () => 
     expect(result.finalPhase).toBe('unauthenticated');
     expect(dispatchPhase.mock.calls.map((c) => c[0])).toEqual(['keycloakReady', 'unauthenticated']);
     expect(dispatchFailed).not.toHaveBeenCalled();
+  });
+
+  it('2026-05-20 stale-token recovery: kcToken yoksa dispatchSessionClear çağrılır (BEFORE phase=unauthenticated)', async () => {
+    // Regression guard for the testai stuck-UI bug: when silent-SSO
+    // returns no Keycloak session, the controller must clear any stale
+    // Redux token (rehydrated from localStorage at slice-init time)
+    // BEFORE dispatching phase=unauthenticated. Without this, the
+    // ProtectedRoute `(token && !authorizationReady)` branch returns
+    // null forever and the LoginPage `(initialized && token)` Navigate
+    // bounces the user back into a redirect loop. Bug repro pre-fix:
+    // testai admin pages rendered empty `main` for 4+ minutes; tab
+    // never reached the login form despite real auth being broken.
+    const dispatchSessionClear = vi.fn();
+    const result = await bootstrapAuthController(
+      buildDeps({
+        keycloak: {
+          authenticated: false,
+          getToken: () => null,
+          getTokenParsed: () => undefined,
+          init: vi.fn().mockResolvedValue(undefined),
+        },
+        dispatchPhase,
+        dispatchFailed,
+        dispatchSession,
+        dispatchSessionClear,
+      }),
+    );
+
+    expect(result.finalPhase).toBe('unauthenticated');
+    // dispatchSessionClear MUST fire exactly once (no double-clear) and
+    // MUST land before phase=unauthenticated so React subscribers see
+    // {token: null, phase: 'unauthenticated'} together — preventing
+    // the brief render where ProtectedRoute reads (truthy_token,
+    // unauthenticated_phase) and stays on the stuck loading path.
+    expect(dispatchSessionClear).toHaveBeenCalledTimes(1);
+    const phaseDispatchOrder = dispatchPhase.mock.invocationCallOrder[1];
+    const clearDispatchOrder = dispatchSessionClear.mock.invocationCallOrder[0];
+    expect(clearDispatchOrder).toBeLessThan(phaseDispatchOrder);
+  });
+
+  it('2026-05-20 stale-token recovery: kcToken VAR ise dispatchSessionClear çağrılmaz (happy-path no-regression)', async () => {
+    // Inverse guard: the stale-token clear must NOT fire on the
+    // successful auth path. dispatchSession (with the real token)
+    // remains the only state-write in the happy path.
+    const dispatchSessionClear = vi.fn();
+    const result = await bootstrapAuthController(
+      buildDeps({
+        dispatchPhase,
+        dispatchFailed,
+        dispatchSession,
+        dispatchSessionClear,
+      }),
+    );
+
+    expect(result.finalPhase).toBe('transportReady');
+    expect(dispatchSessionClear).not.toHaveBeenCalled();
+    expect(dispatchSession).toHaveBeenCalledTimes(1);
   });
 
   it('keycloak.init throw → failed phase + degraded UI (not login)', async () => {

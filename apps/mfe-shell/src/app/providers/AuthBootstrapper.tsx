@@ -681,6 +681,9 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           mapProfile: mapKeycloakProfile,
           dispatchPhase: (phase) => dispatch(setAuthPhase(phase)),
           dispatchFailed: (error) => dispatch(setAuthFailed(error)),
+          // 2026-05-20 hotfix — see BootstrapDeps.dispatchSessionClear
+          // JSDoc for the redirect-loop scenario this prevents.
+          dispatchSessionClear: () => dispatch(setKeycloakSession({ token: null })),
           dispatchSession: (session) => {
             // Re-merge mapKeycloakProfile output with authz permissions
             // (preserved from previous behaviour).
@@ -711,9 +714,29 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           isMounted: () => mounted,
         });
 
-        // Backward-compat: handle no-session case for tokenRef sync
-        if (result.finalPhase === 'unauthenticated' && !tokenRef.current) {
-          dispatch(setKeycloakSession({ token: null }));
+        // 2026-05-20 hotfix: when controller dispatched
+        // {@code unauthenticated} (silent-SSO returned no Keycloak
+        // session), drop the persisted localStorage keys so the next
+        // page load doesn't re-hydrate the dead token into
+        // {@code state.auth.token} before bootstrap re-runs. The Redux
+        // token itself is already cleared by the controller via
+        // {@code dispatchSessionClear} (the wrapper's responsibility is
+        // only the persistence-layer cleanup that the controller layer
+        // cannot see). Wrapped in try/catch because some browsers
+        // (privacy mode, embedded webviews) throw on localStorage access.
+        if (result.finalPhase === 'unauthenticated') {
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.removeItem('token');
+              window.localStorage.removeItem('tokenExpiresAt');
+              window.localStorage.removeItem('user');
+            }
+          } catch (storageErr) {
+            console.warn(
+              '[AuthBootstrapper] stale-token localStorage cleanup skipped:',
+              storageErr,
+            );
+          }
         }
         console.info('[AuthBootstrapper] bootstrap completed', { phase: result.finalPhase });
         // PR-2: hand the controller's terminal phase to the
