@@ -8,7 +8,6 @@ import { LocationGeoMap } from './LocationGeoMap';
 import {
   PieChart as XPieChart,
   BarChart as XBarChart,
-  TreemapChart as XTreemapChart,
   ChartContainer as XChartContainer,
   KPICard as XKPICard,
   type KPICardTrend,
@@ -33,6 +32,15 @@ import {
   // to the wrapper's 0-1 fillRatio contract (clampFillRatio guards
   // overflow). Backend schema unchanged.
   LiquidFillChart as XLiquidFillChart,
+  // Codex thread 019e4385 Campaign 5 PR#3 (AGREE): Departman Dağılımı
+  // headcount migrates from TreemapLocal to the canonical WordCloudChart
+  // wrapper — the 34th @mfe/x-charts wrapper (lazy-loaded
+  // echarts-wordcloud, deterministic palette cycle, vestibular-safe).
+  // Mapping: data.map(({ label, value }) => ({ name: label, value })) —
+  // backend payload contract unchanged ({ label, value } stays).
+  // Metaphor: each department renders as a word whose font size encodes
+  // headcount; deterministic colour cycle preserves WCAG contrast.
+  WordCloudChart as XWordCloudChart,
 } from '@mfe/x-charts';
 
 // ---------------------------------------------------------------------------
@@ -196,9 +204,27 @@ function HorizontalBarChartLocal({ data }: { data: Array<{ label: string; value:
   return <XBarChart data={data} orientation="horizontal" size="sm" />;
 }
 
-function TreemapLocal({ data }: { data: Array<{ label: string; value: number }> }) {
+// Codex thread 019e4385 Campaign 5 PR#3 (AGREE): TreemapLocal removed —
+// the canonical WordCloudChart now handles the `dept-headcount`
+// Departman Dağılımı section. `XTreemapChart` import dropped from
+// `@mfe/x-charts` to keep the bundle lean (no orphan symbols, no
+// `eslint no-unused-vars` warning). The shim definition is preserved
+// in git history (commit before this PR) for swap-back reference.
+
+// Codex thread 019e4385 Campaign 5 PR#3 (AGREE): Departman Dağılımı
+// shim — wraps the canonical XWordCloudChart with the existing
+// `{ label, value }[]` payload contract used by the Treemap/Pie/Bar
+// locals. Backend response stays `{ label, value }`; the shim maps to
+// the wrapper's WordCloudDatum `{ name, value }` shape and forwards
+// the `size="sm"` density used by every chart in the demographic
+// dashboard's chart strip. Empty/missing data → null (parity with
+// TreemapLocal / PieLocal — keeps the contract test's
+// `chartRegistryHasMultipleEntries` floor honest).
+function WordCloudLocal({ data }: { data: Array<{ label: string; value: number }> }) {
   if (!data.length) return null;
-  return <XTreemapChart data={data} size="sm" />;
+  return (
+    <XWordCloudChart data={data.map(({ label, value }) => ({ name: label, value }))} size="sm" />
+  );
 }
 
 // Gauge widget — Phase 1 migration to `@mfe/x-charts/GaugeChart`.
@@ -986,7 +1012,12 @@ function AgePyramidChart({
 const PieChart = PieChartLocal;
 const VerticalBarChart = VerticalBarChartLocal;
 const HorizontalBarChart = HorizontalBarChartLocal;
-const Treemap = TreemapLocal;
+// Codex thread 019e4385 Campaign 5 PR#3 (AGREE): WordCloud shim alias
+// — same indirection layer the other charts use so a future swap-back
+// (or alternative renderer) lives in one place. Replaces the previous
+// `const Treemap = TreemapLocal;` shim (now removed — Departman
+// Dağılımı uses WordCloud rendering).
+const WordCloud = WordCloudLocal;
 const Gauge = GaugeLocal;
 
 // ---------------------------------------------------------------------------
@@ -1282,7 +1313,12 @@ const DemographicDashboard: React.FC = () => {
           }}
         >
           <ChartCard title={chartTitle('Departman Dagilimi', 'dept-headcount')}>
-            <Treemap data={getChartData('dept-headcount') ?? summary.departments} />
+            {/* Codex thread 019e4385 Campaign 5 PR#3 (AGREE): swap from
+                TreemapLocal — the WordCloud metaphor renders each
+                department as a sized word (font size encodes headcount).
+                Payload contract unchanged; the shim maps
+                `{ label, value }` → `{ name: label, value }`. */}
+            <WordCloud data={getChartData('dept-headcount') ?? summary.departments} />
           </ChartCard>
           <ChartCard title={chartTitle('Kidem Dagilimi', 'tenure-distribution')}>
             <VerticalBarChart
