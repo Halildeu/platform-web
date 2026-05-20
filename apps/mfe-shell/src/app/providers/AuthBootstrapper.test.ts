@@ -6,6 +6,7 @@ import {
   type BootstrapDeps,
   type BootstrapInitOptions,
 } from './auth-bootstrap-controller';
+import { clearPersistedAuthKeys } from './AuthBootstrapper';
 
 /**
  * Phase 2 PR-Auth-1 (Codex iter-24/25 §Auth-1 absorb, thread 019e0119):
@@ -324,5 +325,75 @@ describe('bootstrapAuthController — production controller import test', () => 
 
     state = authReducer(state, setAuthPhase('refreshing'));
     expect(state.authError).toBeNull();
+  });
+});
+
+/* ================================================================== */
+/*  Codex thread 019e4443 REVISE absorb (2026-05-20):                  */
+/*  clearPersistedAuthKeys() unit tests — extracted helper             */
+/* ================================================================== */
+
+describe('clearPersistedAuthKeys — single source of truth for persisted-auth keyset', () => {
+  beforeEach(() => {
+    // Clean slate per test — jsdom's localStorage is shared across
+    // the suite by default.
+    window.localStorage.clear();
+  });
+
+  it('removes the 3 keys auth.slice.loadPersistedAuth() reads at slice-init', () => {
+    window.localStorage.setItem('token', 'stale-jwt');
+    window.localStorage.setItem('tokenExpiresAt', String(Date.now() + 60_000));
+    window.localStorage.setItem('user', JSON.stringify({ email: 'stale@example.com' }));
+
+    clearPersistedAuthKeys();
+
+    expect(window.localStorage.getItem('token')).toBeNull();
+    expect(window.localStorage.getItem('tokenExpiresAt')).toBeNull();
+    expect(window.localStorage.getItem('user')).toBeNull();
+  });
+
+  it('idempotent — running twice is a no-op (no throw on missing keys)', () => {
+    window.localStorage.setItem('token', 'first-jwt');
+    clearPersistedAuthKeys();
+    // Second call MUST NOT throw even though the keys are already gone.
+    expect(() => clearPersistedAuthKeys()).not.toThrow();
+    expect(window.localStorage.getItem('token')).toBeNull();
+  });
+
+  it('does NOT touch unrelated localStorage keys (impersonation, design-lab, theme)', () => {
+    // Regression guard: a future expansion of the keyset must not
+    // accidentally drop unrelated persisted state.
+    window.localStorage.setItem('token', 'stale-jwt');
+    window.localStorage.setItem('impersonation.brokerToken', 'broker-jwt');
+    window.localStorage.setItem('design-lab-recents', '["chart-a"]');
+    window.localStorage.setItem('themeAxes', '{"appearance":"dark"}');
+
+    clearPersistedAuthKeys();
+
+    expect(window.localStorage.getItem('token')).toBeNull();
+    expect(window.localStorage.getItem('impersonation.brokerToken')).toBe('broker-jwt');
+    expect(window.localStorage.getItem('design-lab-recents')).toBe('["chart-a"]');
+    expect(window.localStorage.getItem('themeAxes')).toBe('{"appearance":"dark"}');
+  });
+
+  it('gracefully handles localStorage throw (privacy mode / disabled storage)', () => {
+    // Simulate Safari privacy-mode quota-exceeded throw on removeItem.
+    // vi.spyOn returns a mock that proxies the call; direct assignment
+    // (e.g. window.localStorage.removeItem = ...) tripped on the jsdom
+    // Storage prototype's getter-only descriptor in earlier iter.
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new DOMException('QuotaExceededError');
+    });
+
+    expect(() => clearPersistedAuthKeys()).not.toThrow();
+    expect(removeItemSpy).toHaveBeenCalled(); // proves the throw path exercised
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      '[AuthBootstrapper] stale-token localStorage cleanup skipped:',
+      expect.any(DOMException),
+    );
+
+    removeItemSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 });

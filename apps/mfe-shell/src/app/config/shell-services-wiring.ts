@@ -386,6 +386,27 @@ registerRefreshHandler(async (): Promise<RefreshResult> => {
     if (process.env.NODE_ENV !== 'production') {
       console.warn('[shell] refresh closure failed during 401 retry:', err);
     }
+    // 2026-05-20 hotfix (Codex thread 019e4443 REVISE absorb): refresh
+    // closure failure on 401 retry is unrecoverable — the user's local
+    // token is already proven invalid by the 401 that triggered the
+    // refresh, AND the refresh attempt itself just failed. Leaving
+    // {@code state.auth.token} truthy in Redux replays the same stuck-
+    // UI class as the bootstrap-time silent-SSO bug (ProtectedRoute +
+    // LoginPage + PermissionProvider all mis-read the inconsistent
+    // {phase!=transportReady, token=truthy} pair). Clear Redux session
+    // + authzSnapshot + dispatch {@code unauthenticated} so the next
+    // protected mount routes to /login. Persistence cleanup is owned
+    // by the AuthBootstrapper wrapper's clearPersistedAuthKeys() —
+    // shell-services-wiring cannot import it cleanly without a cycle,
+    // and the slice's null-token branch already drops the same 3 keys.
+    try {
+      store.dispatch(setKeycloakSession({ token: null, authzSnapshot: null }));
+      store.dispatch(setAuthPhase('unauthenticated'));
+    } catch (dispatchErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[shell] stale-token clear dispatch failed:', dispatchErr);
+      }
+    }
     return { ok: false, reason: 'refresh-closure-failed' };
   }
 });
@@ -592,9 +613,11 @@ export const wireRemoteShellServices = () => {
     // sequence so comment-only drift can't silently re-order the
     // registration.  Sequence test in `__tests__/admin-remote-bootstrap.test.ts`
     // asserts the same order at module level.
-    const adminRemotes: Array<{ name: string; entry: string }> = ADMIN_REMOTE_BOOTSTRAP_SEQUENCE.map(
-      (key) => ({ name: `mfe_${key}`, entry: resolveAdminRemoteEntry(key) }),
-    );
+    const adminRemotes: Array<{ name: string; entry: string }> =
+      ADMIN_REMOTE_BOOTSTRAP_SEQUENCE.map((key) => ({
+        name: `mfe_${key}`,
+        entry: resolveAdminRemoteEntry(key),
+      }));
     adminRemotes.forEach(({ name, entry }) => {
       ensureRemoteShellServicesConfigured(name, entry, sharedServices).catch((error) => {
         if (process.env.NODE_ENV !== 'production') {
