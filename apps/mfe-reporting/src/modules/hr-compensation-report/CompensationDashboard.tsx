@@ -2,6 +2,7 @@ import React from 'react';
 import { getLiveKPIs, getLiveCharts, refreshDashboardData } from './api';
 import type { DashboardKPI, DashboardChart, DashboardChartItem, DashboardFilters } from './api';
 import {
+  Bar3DChart,
   BarChart,
   ComboChart,
   EffectScatterChart,
@@ -12,6 +13,7 @@ import {
   useCrossFilter,
   CHART_CANVAS_HEIGHT,
 } from '@mfe/x-charts';
+import type { Bar3DDataPoint } from '@mfe/x-charts';
 import type { ChartClickEvent, ChartSize, CrossFilterEntry } from '@mfe/x-charts';
 import { KPICard as XKPICard } from '@mfe/x-charts';
 // ESLint exception: lightweight read-only chart-summary grid, no toolbar/variant needed — see CONTRIBUTING grid-contract section.
@@ -347,27 +349,50 @@ const renderRankingBar = (
   />
 );
 
-/** gender-salary-comparison — grouped bars: Erkek (`value`) + Kadın (`value2`). */
-const renderGenderBars = (
+/**
+ * gender-salary-comparison — Departman × Cinsiyet × Ortalama Maaş 3D
+ * pivot via Bar3DChart. Each backend row (`{label, value, value2}`)
+ * fans out into two cartesian3D bar cells: one for `Erkek` (z=value)
+ * and one for `Kadın` (z=value2). The previous grouped horizontal
+ * BarChart compressed the gender axis into colour-coded bands; the
+ * Bar3D rendering surfaces it as a true second axis (Codex thread
+ * 019e42c3 PR#3 plan B AGREE).
+ *
+ * Mapping (Codex iter-4 spec)
+ *   x = d.label                     // departman adı
+ *   y = 'Erkek' | 'Kadın'           // sabit cinsiyet ekseni
+ *   z = num(d.value) | num(d.value2)// ortalama maaş
+ *   name = d.label                  // REQUIRED for cross-filter
+ *                                   // (CHART_FILTER_MAP valueField='label')
+ *
+ * Cross-filter parity preserved: chart id stays
+ * `gender-salary-comparison`, `name = d.label` ensures the wrapper's
+ * `event.label = name` payload routes the department through the
+ * existing `CHART_FILTER_MAP[...].valueField === 'label'` zincirini
+ * bozmadan. `yCategories={['Erkek','Kadın']}` locks the y-axis order
+ * so the legend reads gender consistently across renders.
+ */
+const renderGenderDepartmentBars3D = (
   data: DashboardChartItem[],
   onDataPointClick?: (event: ChartClickEvent) => void,
-) => (
-  <BarChart
-    data={data.map((d) => ({
-      label: d.label,
-      value: num(d.value),
-      value2: num(d.value2),
-    }))}
-    orientation="horizontal"
-    series={[
-      { field: 'value', name: 'Erkek' },
-      { field: 'value2', name: 'Kadın' },
-    ]}
-    showLegend
-    valueFormatter={chartCurrencyFormatter}
-    onDataPointClick={onDataPointClick}
-  />
-);
+) => {
+  const points: Bar3DDataPoint[] = data.flatMap((d) => [
+    { x: d.label, y: 'Erkek', z: num(d.value), name: d.label },
+    { x: d.label, y: 'Kadın', z: num(d.value2), name: d.label },
+  ]);
+  return (
+    <Bar3DChart
+      data={points}
+      yCategories={['Erkek', 'Kadın']}
+      size="lg"
+      xLabel="Departman"
+      yLabel="Cinsiyet"
+      zLabel="Ortalama maaş"
+      valueFormatter={chartCurrencyFormatter}
+      onDataPointClick={onDataPointClick}
+    />
+  );
+};
 
 /**
  * dept-percentile-radar — Departman Maaş Yayılımı: EffectScatter
@@ -540,7 +565,7 @@ const renderChartContent = (
     case 'dept-salary-comparison':
       return renderRankingBar(data, 'horizontal', onDataPointClick, 'lg');
     case 'gender-salary-comparison':
-      return renderGenderBars(data, onDataPointClick);
+      return renderGenderDepartmentBars3D(data, onDataPointClick);
     case 'education-salary-premium':
       return renderRankingBar(data, 'horizontal', onDataPointClick);
     case 'salary-trend-12m':

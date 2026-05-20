@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T00:51:19.172Z",
+  "generatedAt": "2026-05-20T01:14:36.631Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -146,6 +146,8 @@
         "@mfe/x-charts"
       ],
       "symbols": [
+        "Bar3DChart",
+        "Bar3DDataPoint",
         "BarChart",
         "CHART_CANVAS_HEIGHT",
         "ChartClickEvent",
