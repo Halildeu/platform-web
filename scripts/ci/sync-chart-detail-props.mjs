@@ -119,6 +119,10 @@ const CHARTS = [
   // bar3D wrapper — category × category × value pivot 3D bars (the
   // 32nd x-charts wrapper, 5th 3D after Scatter3D/Surface3D/Lines3D/Globe).
   ['bar-3d-chart', 'Bar3DChart'],
+  // LiquidFillChart (Codex thread 019e4301 AGREE_WITH_REVISIONS):
+  // lazy-loaded liquidFill KPI gauge — fillRatio 0-1 with wave
+  // animation. The 33rd x-charts wrapper (1st echarts-liquidfill).
+  ['liquid-fill-chart', 'LiquidFillChart'],
 ];
 
 /* ------------------------------------------------------------------ */

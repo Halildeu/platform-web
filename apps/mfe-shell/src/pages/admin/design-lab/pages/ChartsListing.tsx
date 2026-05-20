@@ -337,6 +337,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'bar',
   },
+  // LiquidFillChart (Codex thread 019e4301 AGREE_WITH_REVISIONS):
+  // lazy-loaded liquidFill KPI gauge — fillRatio 0-1 with wave animation.
+  {
+    id: 'liquid-fill-chart',
+    name: 'LiquidFillChart',
+    description: 'KPI sıvı doluluk göstergesi, 0-1 yüzde + dalga animasyonu (lazy-loaded).',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'gauge',
+  },
   // Interaction
   {
     id: 'chart-container',

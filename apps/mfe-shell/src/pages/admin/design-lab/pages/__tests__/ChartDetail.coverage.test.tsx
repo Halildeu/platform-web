@@ -57,6 +57,7 @@ vi.mock('@mfe/x-charts', async () => {
     ComboChart: stubChart('ComboChart'),
     EffectScatterChart: stubChart('EffectScatterChart'),
     Bar3DChart: stubChart('Bar3DChart'),
+    LiquidFillChart: stubChart('LiquidFillChart'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -120,6 +121,12 @@ const CHART_IDS_WITH_PRESETS = [
   // Bar3DChart — standalone cartesian3D bar3D pivot (Codex 019e42c3).
   // 32nd wrapper (5th 3D). Same render-smoke guard.
   'bar-3d-chart',
+  // LiquidFillChart — lazy-loaded liquidFill KPI gauge (Codex 019e4301).
+  // 33rd wrapper (1st echarts-liquidfill extension). Same render-smoke
+  // guard. The lazy gate is jsdom-mocked via stubChart so the page
+  // mount exercises the catalog/playground/preset plumbing without
+  // pulling the echarts-liquidfill chunk.
+  'liquid-fill-chart',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',
