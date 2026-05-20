@@ -58,8 +58,8 @@ importers:
         specifier: ^9.2.0
         version: 9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -278,8 +278,8 @@ importers:
         specifier: ~18.2.0
         version: 18.2.0(react@18.2.0)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -345,8 +345,8 @@ importers:
         specifier: ~18.2.0
         version: 18.2.0(react@18.2.0)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -409,8 +409,8 @@ importers:
         specifier: ^9.2.0
         version: 9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -476,8 +476,8 @@ importers:
         specifier: ^9.2.0
         version: 9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -558,8 +558,8 @@ importers:
         specifier: ~18.2.0
         version: 18.2.0(react@18.2.0)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -619,8 +619,8 @@ importers:
         specifier: ~18.2.0
         version: 18.2.0(react@18.2.0)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -722,8 +722,8 @@ importers:
         specifier: ^9.2.0
         version: 9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -783,8 +783,8 @@ importers:
         specifier: ^9.2.0
         version: 9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -853,8 +853,8 @@ importers:
         specifier: ^9.2.0
         version: 9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1)
       react-router:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: ^7.15.1
+        version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -4611,8 +4611,8 @@ packages:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
     engines: {node: '>=6.0'}
 
-  chromedriver@148.0.3:
-    resolution: {integrity: sha512-efk4NIkjjRr3Zy0C8Trj8jpMGgDY+ZA6kVpYFerH3M4tM4fguKCi81PguWwmHVx8FZdMmhFYczb1PaPvJqUkZQ==}
+  chromedriver@148.0.4:
+    resolution: {integrity: sha512-3UyptFDG4YF1Pyv3fzn95s1CN4K3zCpHSmE6g+6J4f2u9KxxOYzrwN2GApVyM2z02hlbSqzo9Ajn2hMi7LnvCw==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -7750,6 +7750,16 @@ packages:
       react-dom:
         optional: true
 
+  react-router@7.15.1:
+    resolution: {integrity: sha512-R8rl9HhgikFYoPJymnUtPXWbnDb3oget6lQnfIoupbt61aT9aOhRkDsY2XRhZRyX1Z/8a5sL74fXmFNm3NRK5A==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      react: '>=18'
+      react-dom: '>=18'
+    peerDependenciesMeta:
+      react-dom:
+        optional: true
+
   react@18.2.0:
     resolution: {integrity: sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==}
     engines: {node: '>=0.10.0'}
@@ -9682,7 +9692,7 @@ snapshots:
     dependencies:
       '@axe-core/webdriverjs': 4.11.3(selenium-webdriver@4.41.0)
       axe-core: 4.11.4
-      chromedriver: 148.0.3
+      chromedriver: 148.0.4
       colors: 1.4.0
       commander: 9.5.0
       dotenv: 17.4.2
@@ -13214,7 +13224,7 @@ snapshots:
 
   chrome-trace-event@1.0.4: {}
 
-  chromedriver@148.0.3:
+  chromedriver@148.0.4:
     dependencies:
       '@testim/chrome-version': 1.1.4
       adm-zip: 0.5.17
@@ -16964,6 +16974,14 @@ snapshots:
       react-router: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
 
   react-router@7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
+    dependencies:
+      cookie: 1.1.1
+      react: 18.2.0
+      set-cookie-parser: 2.7.2
+    optionalDependencies:
+      react-dom: 18.2.0(react@18.2.0)
+
+  react-router@7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
     dependencies:
       cookie: 1.1.1
       react: 18.2.0
