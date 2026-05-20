@@ -74,6 +74,9 @@ const ServiceControlPage = React.lazy(
 const NotificationPreferencesPage = React.lazy(
   () => import('../../pages/settings/NotificationPreferencesPage'),
 );
+const UnsubscribeLandingPage = React.lazy(
+  () => import('../../pages/notifications/unsubscribe/UnsubscribeLandingPage.ui'),
+);
 
 /* ------------------------------------------------------------------ */
 /*  AppRouter — All application routes                                 */
@@ -336,6 +339,12 @@ export const AppRouter: React.FC = () => {
             handled in-page via selectNotifyIdentity (returns null →
             "Önce oturum açın" message). */}
         <Route path="/settings/notifications" element={<NotificationPreferencesPage />} />
+        {/* Faz 23.5 M5 G3: public RFC 8058 one-click unsubscribe landing.
+            Reached from email footers; token-authenticated (HMAC) — NO
+            ProtectedRoute wrapper. Anonymous users who click a link in
+            an email read on a logged-out device must reach the success
+            state without a login prompt. */}
+        <Route path="/notifications/unsubscribe" element={<UnsubscribeLandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
