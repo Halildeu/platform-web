@@ -5,6 +5,7 @@ import productsReducer from '../../features/products/model/products.slice';
 import notificationsReducer from '../../features/notifications/model/notifications.slice';
 import { notifyInboxApi } from '../../features/notifications/api/notify-inbox.api';
 import { notifyPrefsApi } from '../../features/notifications/api/notify-prefs.api';
+import { notifyUnsubscribeApi } from '../../features/notifications/api/notify-unsubscribe.api';
 
 export const store = configureStore({
   reducer: {
@@ -17,9 +18,16 @@ export const store = configureStore({
     [notifyInboxApi.reducerPath]: notifyInboxApi.reducer,
     // Faz 23.5 PR3: notification-orchestrator preference REST cache.
     [notifyPrefsApi.reducerPath]: notifyPrefsApi.reducer,
+    // Faz 23.5 M5 G3: public unsubscribe landing — HMAC-token-based,
+    // no JWT/identity headers (decoupled from preference editor surface).
+    [notifyUnsubscribeApi.reducerPath]: notifyUnsubscribeApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat(notifyInboxApi.middleware, notifyPrefsApi.middleware),
+    getDefaultMiddleware().concat(
+      notifyInboxApi.middleware,
+      notifyPrefsApi.middleware,
+      notifyUnsubscribeApi.middleware,
+    ),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
