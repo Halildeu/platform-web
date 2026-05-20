@@ -117,6 +117,17 @@ export type {
   EffectScatterDataPoint,
   EffectScatterRippleEffect,
 } from './EffectScatterChart';
+// Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper —
+// category × category × value pivot 3D bars. Distinct from the bar3D
+// layer inside Globe (coordinateSystem: 'globe'); this is the standalone
+// cartesian3D foundation chart.
+export {
+  Bar3DChart,
+  normalizeBar3DData,
+  buildBar3DOption,
+  buildBar3DClickEvent,
+} from './Bar3DChart';
+export type { Bar3DChartProps, Bar3DDataPoint, Bar3DShading } from './Bar3DChart';
 // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 export { BoxPlotChart } from './BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';

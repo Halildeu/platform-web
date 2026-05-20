@@ -17,7 +17,7 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  31 chart wrappers (27 2D echarts-backed + 4 3D echarts-gl-backed) */
+/*  32 chart wrappers (27 2D echarts-backed + 5 3D echarts-gl-backed) */
 /* ------------------------------------------------------------------ */
 
 export { AreaChart } from '../AreaChart';
@@ -106,6 +106,9 @@ export type {
   EffectScatterDataPoint,
   EffectScatterRippleEffect,
 } from '../EffectScatterChart';
+// Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper.
+export { Bar3DChart } from '../Bar3DChart';
+export type { Bar3DChartProps, Bar3DDataPoint, Bar3DShading } from '../Bar3DChart';
 export { BoxPlotChart } from '../BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
 export { CandlestickChart } from '../CandlestickChart';
