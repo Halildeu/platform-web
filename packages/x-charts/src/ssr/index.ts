@@ -48,6 +48,8 @@ export type {
 } from '../EffectScatterChart';
 // Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper.
 export type { Bar3DChartProps, Bar3DDataPoint, Bar3DShading } from '../Bar3DChart';
+// Codex thread 019e4301 AGREE_WITH_REVISIONS: lazy-loaded liquidFill KPI gauge.
+export type { LiquidFillChartProps, LiquidFillShape } from '../LiquidFillChart';
 // Faz 21.11 P1a — 3D Extension Pack public type surface (no runtime).
 // P1c adds GlobeProps.
 export type { Scatter3DProps, Scatter3DDataPoint } from '../Scatter3D';

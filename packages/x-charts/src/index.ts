@@ -128,6 +128,20 @@ export {
   buildBar3DClickEvent,
 } from './Bar3DChart';
 export type { Bar3DChartProps, Bar3DDataPoint, Bar3DShading } from './Bar3DChart';
+// Codex thread 019e4301 AGREE_WITH_REVISIONS: lazy-loaded liquidFill
+// KPI gauge — fillRatio 0-1 with wave animation. Lazy chunk via
+// `echarts-liquidfill` npm dep + dedicated useRequiredEChartsLiquidFill
+// gate (mirrors useRequiredEChartsGL pattern but no WebGL probe).
+export { LiquidFillChart, clampFillRatio, buildLiquidFillData } from './LiquidFillChart';
+export type { LiquidFillChartProps, LiquidFillShape } from './LiquidFillChart';
+export {
+  useRequiredEChartsLiquidFill,
+  describeEChartsLiquidFillReason,
+  type EChartsLiquidFillStatus,
+  type EChartsLiquidFillUnsupportedReason,
+  type UseRequiredEChartsLiquidFillOptions,
+  type UseRequiredEChartsLiquidFillResult,
+} from './renderers/liquidfill';
 // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 export { BoxPlotChart } from './BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';

@@ -94,7 +94,11 @@ export type ChartA11yKind =
   // Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper —
   // category × category × value pivot 3D bars (distinct from Globe's
   // bar3D layer on coordinateSystem: 'globe').
-  | 'bar3d';
+  | 'bar3d'
+  // Codex thread 019e4301 AGREE_WITH_REVISIONS: lazy-loaded liquidFill
+  // KPI gauge — fillRatio 0-1 with wave animation (echarts-liquidfill
+  // npm dep).
+  | 'liquidFill';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -235,6 +239,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   effectScatter: 'Effect scatter chart',
   // Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper.
   bar3d: '3D bar chart',
+  // Codex thread 019e4301 AGREE_WITH_REVISIONS: liquidFill KPI gauge.
+  liquidFill: 'Liquid fill gauge',
 };
 
 const defaultFormatter = (v: number): string =>
