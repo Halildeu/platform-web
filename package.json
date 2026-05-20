@@ -388,7 +388,7 @@
     },
     {
       "name": "design-system advanced (AG Grid + ECharts; lazy-split target PR-B1a/b)",
-      "path": "apps/mfe-shell/dist/assets/__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_design_*.js",
+      "path": "apps/mfe-shell/dist/assets/*loadShare___mf_0_mfe_mf_1_design_*.js",
       "limit": "7 MB"
     }
   ],
