@@ -280,7 +280,7 @@ jobs:
 
       - name: Upload benchmark artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-1m-${{ github.run_id }}-${{ github.sha }}
           path: |
