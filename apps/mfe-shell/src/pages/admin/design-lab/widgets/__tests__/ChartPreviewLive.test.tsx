@@ -25,7 +25,23 @@ vi.mock('@mfe/x-charts', () => {
       onMarkupClick?: unknown;
       anomalySummary?: ReadonlyArray<unknown>;
       formatAnomalyAnnouncement?: unknown;
-    }> = ({ title, markups, onMarkupClick, anomalySummary, formatAnomalyAnnouncement }) =>
+      // Bar3DChart specific — Codex iter-4 P1 fix targeted regression:
+      // surface `barSize` / `shading` / `showValues` so the playground
+      // primitive-forwarding test can assert the live wiring lands on
+      // the wrapper instead of being silently dropped.
+      barSize?: number;
+      shading?: string;
+      showValues?: boolean;
+    }> = ({
+      title,
+      markups,
+      onMarkupClick,
+      anomalySummary,
+      formatAnomalyAnnouncement,
+      barSize,
+      shading,
+      showValues,
+    }) =>
       React.createElement(
         'div',
         {
@@ -36,6 +52,9 @@ vi.mock('@mfe/x-charts', () => {
           'data-has-markup-click': onMarkupClick ? '1' : '0',
           'data-anomaly-count': Array.isArray(anomalySummary) ? String(anomalySummary.length) : '0',
           'data-has-anomaly-fmt': formatAnomalyAnnouncement ? '1' : '0',
+          ...(barSize != null ? { 'data-bar-size': String(barSize) } : {}),
+          ...(shading != null ? { 'data-shading': shading } : {}),
+          ...(showValues != null ? { 'data-show-values': showValues ? '1' : '0' } : {}),
         },
         title,
       );
@@ -464,6 +483,24 @@ describe('ChartPreviewLive — §4f.2 markup preset forwarding', () => {
       />,
     );
     expect(screen.getByTestId('mock-scatter').getAttribute('data-markup-types')).toBe('area');
+  });
+
+  it('bar-3d-chart forwards barSize / shading / showValues primitives to the wrapper (Codex iter-4 P1 fix)', () => {
+    // Regression guard: barSize was previously listed in
+    // LIVE_PROP_SUPPORT['bar-3d-chart'] but not actually forwarded to
+    // the wrapper in ChartPreviewLive — Codex iter-4 P1 BLOCKER.
+    // This test asserts the live wiring lands on the mocked wrapper.
+    render(
+      <ChartPreviewLive
+        chartId="bar-3d-chart"
+        chartName="bar3d preview"
+        toggles={{ barSize: 0.4, shading: 'realistic', showValues: true }}
+      />,
+    );
+    const el = screen.getByTestId('mock-bar3d');
+    expect(el.getAttribute('data-bar-size')).toBe('0.4');
+    expect(el.getAttribute('data-shading')).toBe('realistic');
+    expect(el.getAttribute('data-show-values')).toBe('1');
   });
 });
 

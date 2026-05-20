@@ -1953,6 +1953,7 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             zLabel={getStr(toggles, 'zLabel', 'Ortalama maaş')}
             showValues={isOn(toggles, 'showValues', false)}
             shading={getEnum(toggles, 'shading', 'lambert') as 'color' | 'lambert' | 'realistic'}
+            barSize={getNum(toggles, 'barSize', 0.8)}
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
