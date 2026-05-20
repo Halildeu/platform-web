@@ -144,7 +144,7 @@ jobs:
 
       - name: Upload M2a1 measurement artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: m2a1-auth-route-budget-results
           path: |
