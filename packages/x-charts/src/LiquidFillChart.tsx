@@ -230,7 +230,13 @@ const LiquidFillChartInner = React.forwardRef<
 ) {
   const height = CHART_CANVAS_HEIGHT[size];
   const fmt = valueFormatter ?? ((v: number) => `%${Math.round(v * 100)}`);
-  const isEmpty = typeof value !== 'number' || !Number.isFinite(value);
+  // Codex iter-2 P2 fix: numeric `value` (even NaN/Infinity) is valid
+  // input — `clampFillRatio` collapses non-finite to 0. Empty state is
+  // reserved for genuinely missing input (consumer passed `undefined`
+  // typed as `number` via cast). Without this fix the wrapper would
+  // suppress the option for NaN inputs, contradicting the documented
+  // clampFillRatio contract.
+  const isEmpty = typeof value !== 'number';
 
   const ownContainerRef = useRef<HTMLDivElement | null>(null);
 

@@ -5,8 +5,10 @@
  *
  * Covers (Codex iter-1 spec):
  *
- *   1.  Empty value (NaN/Infinity/non-number) renders the
+ *   1.  Empty value (non-number; undefined cast) renders the
  *       `liquidfill-chart-empty` sentinel; no GL import, no option.
+ *       Codex iter-2 P2 fix: NaN/Infinity are numeric and clamp to 0
+ *       (separate regression test in §series + value clamp).
  *   2.  Lazy gate unsupported → `liquidfill-chart-unsupported` +
  *       `data-reason`.
  *   3.  Lazy gate loading → `liquidfill-chart-loading`; no option.
@@ -89,8 +91,12 @@ afterEach(() => {
 /* ------------------------------------------------------------------ */
 
 describe('LiquidFillChart — lazy gate lifecycle', () => {
-  it('empty value renders liquidfill-chart-empty and no option dispatch', () => {
-    const { getByTestId } = render(<LiquidFillChart value={Number.NaN} />);
+  it('empty value (non-number) renders liquidfill-chart-empty and no option dispatch', () => {
+    // Codex iter-2 P2 fix: empty branch reserved for genuinely
+    // missing input (consumer passed undefined typed via cast).
+    // Numeric inputs — even NaN/Infinity — clamp via clampFillRatio
+    // and dispatch a valid option (separate regression test below).
+    const { getByTestId } = render(<LiquidFillChart value={undefined as unknown as number} />);
     expect(getByTestId('liquidfill-chart-empty')).toBeTruthy();
     expect(lastDispatchedOption()).toBeNull();
   });
@@ -176,13 +182,15 @@ describe('LiquidFillChart — series + value clamp', () => {
     expect((series()[0].data as number[])[0]).toBe(1);
   });
 
-  it('non-finite value collapses to empty branch (NaN treated as empty)', () => {
-    const { getByTestId } = render(
-      <LiquidFillChart value={Number.POSITIVE_INFINITY} animate={false} />,
-    );
-    // Infinity is finite=false → wrapper treats as empty (Codex iter-1
-    // contract; clampFillRatio still works on direct numeric paths).
-    expect(getByTestId('liquidfill-chart-empty')).toBeTruthy();
+  it('non-finite value (NaN / Infinity) clamps to 0 and dispatches a valid option (Codex iter-2 P2)', () => {
+    // Codex iter-2 P2 fix regression guard. Previously the wrapper
+    // suppressed the option for NaN/Infinity inputs, contradicting the
+    // documented clampFillRatio(non-finite) === 0 contract.
+    const { rerender } = render(<LiquidFillChart value={Number.NaN} animate={false} />);
+    expect(lastDispatchedOption()).not.toBeNull();
+    expect((series()[0].data as number[])[0]).toBe(0);
+    rerender(<LiquidFillChart value={Number.POSITIVE_INFINITY} animate={false} />);
+    expect((series()[0].data as number[])[0]).toBe(0);
   });
 
   it('secondaryValues order — primary first, then clamped extras', () => {
