@@ -50,6 +50,9 @@ export type {
 export type { Bar3DChartProps, Bar3DDataPoint, Bar3DShading } from '../Bar3DChart';
 // Codex thread 019e4301 AGREE_WITH_REVISIONS: lazy-loaded liquidFill KPI gauge.
 export type { LiquidFillChartProps, LiquidFillShape } from '../LiquidFillChart';
+// Codex thread 019e4351 AGREE_WITH_REVISIONS: lazy-loaded wordCloud
+// text frequency wrapper. 34th wrapper; FINAL of the 5-missing-chart campaign.
+export type { WordCloudChartProps, WordCloudDatum, WordCloudShape } from '../WordCloudChart';
 // Faz 21.11 P1a — 3D Extension Pack public type surface (no runtime).
 // P1c adds GlobeProps.
 export type { Scatter3DProps, Scatter3DDataPoint } from '../Scatter3D';

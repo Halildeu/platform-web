@@ -142,6 +142,22 @@ export {
   type UseRequiredEChartsLiquidFillOptions,
   type UseRequiredEChartsLiquidFillResult,
 } from './renderers/liquidfill';
+// Codex thread 019e4351 AGREE_WITH_REVISIONS: lazy-loaded wordCloud
+// text frequency wrapper — word + value pairs visualised as font-size
+// scaled words on a circle/cardioid/etc shape. Lazy chunk via
+// `echarts-wordcloud` npm dep + dedicated useRequiredEChartsWordCloud
+// gate (mirrors useRequiredEChartsLiquidFill pattern). The 34th and
+// FINAL wrapper of the 5-missing-chart campaign.
+export { WordCloudChart, normalizeWordCloudData } from './WordCloudChart';
+export type { WordCloudChartProps, WordCloudDatum, WordCloudShape } from './WordCloudChart';
+export {
+  useRequiredEChartsWordCloud,
+  describeEChartsWordCloudReason,
+  type EChartsWordCloudStatus,
+  type EChartsWordCloudUnsupportedReason,
+  type UseRequiredEChartsWordCloudOptions,
+  type UseRequiredEChartsWordCloudResult,
+} from './renderers/wordcloud';
 // PR-X6 (Codex thread 019e1e30 AGREE): statistical box-and-whisker chart.
 export { BoxPlotChart } from './BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from './BoxPlotChart';

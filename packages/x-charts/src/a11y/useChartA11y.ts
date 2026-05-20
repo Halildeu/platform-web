@@ -98,7 +98,10 @@ export type ChartA11yKind =
   // Codex thread 019e4301 AGREE_WITH_REVISIONS: lazy-loaded liquidFill
   // KPI gauge — fillRatio 0-1 with wave animation (echarts-liquidfill
   // npm dep).
-  | 'liquidFill';
+  | 'liquidFill'
+  // Codex thread 019e4351 AGREE_WITH_REVISIONS: lazy-loaded wordCloud
+  // text frequency cloud (echarts-wordcloud npm dep).
+  | 'wordCloud';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -241,6 +244,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   bar3d: '3D bar chart',
   // Codex thread 019e4301 AGREE_WITH_REVISIONS: liquidFill KPI gauge.
   liquidFill: 'Liquid fill gauge',
+  // Codex thread 019e4351 AGREE_WITH_REVISIONS: wordCloud text frequency.
+  wordCloud: 'Word cloud chart',
 };
 
 const defaultFormatter = (v: number): string =>
