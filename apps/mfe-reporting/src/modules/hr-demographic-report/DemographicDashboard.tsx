@@ -1358,12 +1358,16 @@ const DemographicDashboard: React.FC = () => {
                   value={summary.deiScore / 100} normalises the 0-100
                   backend score to the wrapper's fillRatio 0-1 contract;
                   the title carries the label and the value formatter
-                  emits the legacy "/100" unit suffix for parity. */}
+                  emits the legacy "/100" unit suffix for parity.
+                  size="sm" matches the surrounding gauges' height
+                  contract (CHART_CANVAS_HEIGHT.sm=200) so the DEI
+                  Göstergeleri 2×2 grid keeps a uniform cell height
+                  (Codex iter-8 P2 layout-parity fix). */}
               <XLiquidFillChart
                 value={summary.deiScore / 100}
                 title="Genel DEI"
                 valueFormatter={(v) => `${Math.round(v * 100)}/100`}
-                size="md"
+                size="sm"
               />
             </div>
           </ChartCard>
