@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T04:19:37.566Z",
+  "generatedAt": "2026-05-20T04:24:02.757Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -183,7 +183,6 @@
         "XLiquidFillChart",
         "XPieChart",
         "XPopulationPyramid",
-        "XTreemapChart",
         "XWordCloudChart"
       ],
       "kinds": [
