@@ -312,10 +312,15 @@ const WordCloudChartInner = React.forwardRef<
           textStyle: {
             ...(fontFamily ? { fontFamily } : {}),
             // Codex iter-1: deterministic palette cycling (NOT random).
-            // ECharts wordCloud accepts a function on textStyle.color
-            // — params.dataIndex maps to a stable palette slot.
+            // ECharts wordCloud accepts a function on textStyle.color —
+            // params.dataIndex maps to a stable palette slot.
+            //
+            // Codex iter-2 P2 hardening: some `echarts-wordcloud` code
+            // paths invoke style callbacks with no argument; guard the
+            // params cast so `undefined.dataIndex` cannot throw.
             color: (params: unknown) => {
-              const p = params as { dataIndex?: number };
+              const p =
+                params && typeof params === 'object' ? (params as { dataIndex?: number }) : {};
               const i = typeof p.dataIndex === 'number' ? p.dataIndex : 0;
               return palette[i % palette.length] ?? palette[0];
             },

@@ -275,6 +275,17 @@ describe('WordCloudChart — deterministic color palette', () => {
     expect(ts.color({ dataIndex: 0 })).toBe('#abcdef');
     expect(ts.color({ dataIndex: 1 })).toBe('#222222');
   });
+
+  it('colors callback survives a no-arg / undefined invocation (Codex iter-2 P2)', () => {
+    // Codex iter-2 P2 hardening regression guard. Some echarts-wordcloud
+    // code paths invoke style callbacks with no argument; the callback
+    // must not crash and should fall back to palette[0].
+    render(<WordCloudChart data={turkishData()} colors={['#111111', '#222222']} animate={false} />);
+    const ts = series()[0].textStyle as { color: (p?: unknown) => string };
+    expect(ts.color(undefined)).toBe('#111111');
+    expect(ts.color(null)).toBe('#111111');
+    expect(ts.color('not-an-object')).toBe('#111111');
+  });
 });
 
 /* ------------------------------------------------------------------ */
