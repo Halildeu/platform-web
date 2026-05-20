@@ -428,23 +428,35 @@ export function buildBar3DClickEvent(
   params: unknown,
 ): ChartClickEvent | null {
   const p = params as { value?: unknown; name?: string; dataIndex?: number };
+  // Codex iter-2 P3 fix: require a valid dataIndex AND a valid value
+  // tuple before emitting the canonical payload. Without the dataIndex
+  // guard the helper silently emitted events for stale clicks (e.g.
+  // when ECharts replays a focus event after a dataset replace and
+  // dataIndex points past the new array). Source-of-truth z/label come
+  // from `normalized.items[dataIndex]` so the consumer can trust the
+  // payload to mirror the rendered cell.
   const valueArr = Array.isArray(p.value) ? (p.value as number[]) : null;
   if (!valueArr) return null;
-  const [xi, yi, z] = valueArr;
-  const xLabel = normalized.xCategories[xi];
-  const yLabel = normalized.yCategories[yi];
+  const dataIndex = typeof p.dataIndex === 'number' ? p.dataIndex : -1;
+  if (dataIndex < 0 || dataIndex >= normalized.items.length) return null;
+  const item = normalized.items[dataIndex];
+  const xLabel = normalized.xCategories[item.xIndex];
+  const yLabel = normalized.yCategories[item.yIndex];
   if (xLabel == null || yLabel == null) return null;
-  const item = normalized.items[p.dataIndex ?? -1];
-  const label = item?.name ?? `${String(xLabel)} × ${String(yLabel)}`;
+  // Prefer the source-of-truth z stored on the normalised item over the
+  // tuple's value[2] — they should match, but the item form is the
+  // contract surface the consumer is reading from.
+  const z = item.z;
+  const label = item.name ?? `${String(xLabel)} × ${String(yLabel)}`;
   return {
     datum: {
       x: xLabel,
       y: yLabel,
       z,
-      xIndex: xi,
-      yIndex: yi,
+      xIndex: item.xIndex,
+      yIndex: item.yIndex,
       label,
-      dataIndex: typeof p.dataIndex === 'number' ? p.dataIndex : undefined,
+      dataIndex,
     },
     value: z,
     label,
@@ -584,10 +596,18 @@ const Bar3DChartInner = React.forwardRef<
     [onDataPointClick, normalized],
   );
 
+  // Codex iter-2 P1 BLOCKER fix: gate the renderer hook on GL readiness.
+  // Without `enabled: gl.status === 'ready'`, the renderer init effect
+  // runs once on the first render (when the loading branch is showing
+  // and `containerRef.current === null`), bails, and never re-runs once
+  // GL flips to ready because none of its deps change. Tying `enabled`
+  // to GL status forces a clean re-init after the ChartA11yShell
+  // mounts and supplies the container ref.
   const { containerRef, instance } = useEChartsRenderer({
     option: option ?? ({} as EChartsOption),
     theme: themeObject,
     respectReducedMotion: true,
+    enabled: gl.status === 'ready',
     onClick: onDataPointClick ? handleClick : undefined,
   });
 
@@ -649,6 +669,11 @@ const Bar3DChartInner = React.forwardRef<
 
   /* ---- unsupported branch (WebGL missing or echarts-gl import failed) ---- */
   if (gl.status === 'unsupported') {
+    // Codex iter-2 P2 fix: aria-label parity with Scatter3D so screen
+    // readers hear the failure reason ("WebGL2 required") instead of
+    // only the generic chart name. `data-reason` falls back to
+    // `'webgl-unavailable'` when the helper didn't surface a reason.
+    const banner = describeEChartsGLReason(gl.reason);
     return (
       <div
         ref={forwardedRef}
@@ -658,18 +683,21 @@ const Bar3DChartInner = React.forwardRef<
         )}
         style={{ height }}
         role="img"
-        aria-label={a11y.ariaLabel}
+        aria-label={`${a11y.ariaLabel} — ${banner}`}
         data-testid="bar3d-chart-unsupported"
-        data-reason={gl.reason}
+        data-reason={gl.reason ?? 'webgl-unavailable'}
         {...rest}
       >
-        {describeEChartsGLReason(gl.reason)}
+        {banner}
       </div>
     );
   }
 
   /* ---- loading branch (GL chunk in flight) ---- */
   if (gl.status !== 'ready') {
+    // Codex iter-2 P2 fix: aria-label suffix mirrors the visible
+    // "loading" label so the SR announcement matches sighted UX.
+    const loadingMessage = '3D çiziciyi yükleniyor';
     return (
       <div
         ref={forwardedRef}
@@ -679,11 +707,11 @@ const Bar3DChartInner = React.forwardRef<
         )}
         style={{ height }}
         role="img"
-        aria-label={a11y.ariaLabel}
+        aria-label={`${a11y.ariaLabel} — ${loadingMessage}`}
         data-testid="bar3d-chart-loading"
         {...rest}
       >
-        3D çiziciyi yükleniyor…
+        {loadingMessage}…
       </div>
     );
   }

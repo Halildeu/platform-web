@@ -147,6 +147,54 @@ describe('Bar3DChart — GL gate lifecycle', () => {
     expect(getByTestId('bar3d-chart')).toBeTruthy();
     expect(lastDispatchedOption()).not.toBeNull();
   });
+
+  it('loading → ready rerender dispatches the bar3D series after the GL gate flips', () => {
+    // Codex iter-2 P1 BLOCKER fix regression guard. Without
+    // `enabled: gl.status === 'ready'` on useEChartsRenderer, the
+    // renderer init effect would bail on the first mount (loading
+    // branch, container null) and not re-run when GL flipped to ready.
+    (useRequiredEChartsGL as ReturnType<typeof vi.fn>).mockReturnValue({ status: 'loading' });
+    const { getByTestId, rerender } = render(<Bar3DChart data={defaultData()} animate={false} />);
+    expect(getByTestId('bar3d-chart-loading')).toBeTruthy();
+    expect(lastDispatchedOption()).toBeNull();
+
+    // GL flips to ready, the wrapper re-renders, ChartA11yShell mounts
+    // (renderer container is finally attached) and the option dispatches.
+    (useRequiredEChartsGL as ReturnType<typeof vi.fn>).mockReturnValue({ status: 'ready' });
+    rerender(<Bar3DChart data={defaultData()} animate={false} />);
+    expect(getByTestId('bar3d-chart')).toBeTruthy();
+    expect(lastDispatchedOption()).not.toBeNull();
+    expect(series()[0].type).toBe('bar3D');
+  });
+
+  it('unsupported branch aria-label suffixes the WebGL reason (Codex iter-2 P2)', () => {
+    (useRequiredEChartsGL as ReturnType<typeof vi.fn>).mockReturnValue({
+      status: 'unsupported',
+      reason: 'webgl2-required',
+    });
+    const { getByTestId } = render(<Bar3DChart data={defaultData()} title="Maaş Pivotu" />);
+    const el = getByTestId('bar3d-chart-unsupported');
+    const aria = el.getAttribute('aria-label') ?? '';
+    expect(aria).toContain('Maaş Pivotu'); // a11y.ariaLabel piece
+    expect(aria).toContain('WebGL2'); // banner piece
+    expect(el.getAttribute('data-reason')).toBe('webgl2-required');
+  });
+
+  it('unsupported branch data-reason falls back to "webgl-unavailable" when reason is missing', () => {
+    (useRequiredEChartsGL as ReturnType<typeof vi.fn>).mockReturnValue({ status: 'unsupported' });
+    const { getByTestId } = render(<Bar3DChart data={defaultData()} />);
+    expect(getByTestId('bar3d-chart-unsupported').getAttribute('data-reason')).toBe(
+      'webgl-unavailable',
+    );
+  });
+
+  it('loading branch aria-label suffixes the loading message (Codex iter-2 P2)', () => {
+    (useRequiredEChartsGL as ReturnType<typeof vi.fn>).mockReturnValue({ status: 'loading' });
+    const { getByTestId } = render(<Bar3DChart data={defaultData()} title="Maaş Pivotu" />);
+    const aria = getByTestId('bar3d-chart-loading').getAttribute('aria-label') ?? '';
+    expect(aria).toContain('Maaş Pivotu');
+    expect(aria).toContain('yükleniyor');
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -374,16 +422,41 @@ describe('Bar3DChart — onDataPointClick', () => {
     });
   });
 
-  it('buildBar3DClickEvent returns null for out-of-bounds value', () => {
+  it('buildBar3DClickEvent returns null when dataIndex is missing or negative', () => {
+    // Codex iter-2 P3 fix: dataIndex is the source-of-truth contract;
+    // a missing or negative dataIndex means ECharts replayed a stale
+    // event that no longer maps to a rendered cell.
     const normalized = normalizeBar3DData(defaultData());
-    const event = buildBar3DClickEvent(normalized, { value: [99, 99, 50000], dataIndex: 0 });
-    expect(event).toBeNull();
+    expect(buildBar3DClickEvent(normalized, { value: [0, 0, 50000] })).toBeNull();
+    expect(buildBar3DClickEvent(normalized, { value: [0, 0, 50000], dataIndex: -1 })).toBeNull();
+  });
+
+  it('buildBar3DClickEvent returns null when dataIndex is past the end of items', () => {
+    const normalized = normalizeBar3DData(defaultData());
+    expect(buildBar3DClickEvent(normalized, { value: [0, 0, 50000], dataIndex: 99 })).toBeNull();
   });
 
   it('buildBar3DClickEvent returns null when value is not an array', () => {
     const normalized = normalizeBar3DData(defaultData());
     const event = buildBar3DClickEvent(normalized, { value: 'nope', dataIndex: 0 });
     expect(event).toBeNull();
+  });
+
+  it('buildBar3DClickEvent z/label sourced from normalized.items[dataIndex] (not the tuple)', () => {
+    // Codex iter-2 P3 fix: source-of-truth z/label come from the
+    // normalised item, not the (potentially stale) value tuple. The
+    // tuple's [99, 99, 99999] would have been blindly trusted under
+    // the previous helper.
+    const normalized = normalizeBar3DData(defaultData());
+    const event = buildBar3DClickEvent(normalized, {
+      value: [99, 99, 99999],
+      dataIndex: 0,
+    });
+    expect(event).not.toBeNull();
+    expect(event!.value).toBe(50000); // items[0].z, NOT tuple[2]
+    expect(event!.label).toBe('Eng × Junior'); // items[0] derived
+    expect(event!.datum.xIndex).toBe(0); // items[0].xIndex, NOT tuple[0]
+    expect(event!.datum.yIndex).toBe(0);
   });
 });
 
