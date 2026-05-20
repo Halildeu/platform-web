@@ -25,6 +25,14 @@ import {
   // negate-one-series BarChart shim for the canonical PopulationPyramid
   // wrapper — the 29th @mfe/x-charts wrapper (diverging horizontal bar).
   PopulationPyramid as XPopulationPyramid,
+  // Codex thread 019e4301 Campaign 4 PR#3 (AGREE_WITH_REVISIONS):
+  // Genel DEI gauge migrates from the bespoke local <Gauge> to the
+  // canonical LiquidFillChart wrapper — the 33rd @mfe/x-charts wrapper
+  // (lazy-loaded echarts-liquidfill, fillRatio 0-1 with wave animation).
+  // Mapping: value={summary.deiScore / 100} — 0-100 score normalised
+  // to the wrapper's 0-1 fillRatio contract (clampFillRatio guards
+  // overflow). Backend schema unchanged.
+  LiquidFillChart as XLiquidFillChart,
 } from '@mfe/x-charts';
 
 // ---------------------------------------------------------------------------
@@ -1345,7 +1353,18 @@ const DemographicDashboard: React.FC = () => {
                 label="Nesil Cesitliligi"
                 unit="/100"
               />
-              <Gauge value={summary.deiScore} target={80} label="Genel DEI" unit="/100" />
+              {/* Codex thread 019e4301 Campaign 4 PR#3 AGREE: Genel DEI
+                  gauge migrates from local <Gauge> to LiquidFillChart.
+                  value={summary.deiScore / 100} normalises the 0-100
+                  backend score to the wrapper's fillRatio 0-1 contract;
+                  the title carries the label and the value formatter
+                  emits the legacy "/100" unit suffix for parity. */}
+              <XLiquidFillChart
+                value={summary.deiScore / 100}
+                title="Genel DEI"
+                valueFormatter={(v) => `${Math.round(v * 100)}/100`}
+                size="md"
+              />
             </div>
           </ChartCard>
           <ChartCard title={chartTitle('Nesil Dagilimi', 'generation-distribution')}>

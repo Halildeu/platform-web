@@ -150,6 +150,19 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     return <div data-testid="x-population-pyramid" />;
   };
 
+  // Codex thread 019e4301 Campaign 4 PR#3 (AGREE): LiquidFillChart
+  // replaces the local <Gauge> for `Genel DEI`. Lazy-loaded
+  // echarts-liquidfill chunk would never resolve under jsdom — stub
+  // it with the same shape as the other ECharts wrappers and capture
+  // the value/title for parity assertions.
+  const LiquidFillChart = (props: { title?: string; value?: number }) => (
+    <div
+      data-testid="x-liquidfill"
+      data-title={props.title ?? ''}
+      data-value={props.value != null ? String(props.value) : ''}
+    />
+  );
+
   return {
     ...actual,
     PieChart,
@@ -158,6 +171,7 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     GaugeChart,
     LineChart,
     PopulationPyramid,
+    LiquidFillChart,
     ChartContainer,
     KPICard,
   };

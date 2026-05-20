@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T02:11:35.896Z",
+  "generatedAt": "2026-05-20T02:38:17.903Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -180,6 +180,7 @@
         "XGaugeChart",
         "XKPICard",
         "XLineChart",
+        "XLiquidFillChart",
         "XPieChart",
         "XPopulationPyramid",
         "XTreemapChart"
