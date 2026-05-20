@@ -34,6 +34,17 @@ vi.mock('../../../features/notifications/model/identity.selectors', () => ({
   selectNotifyIdentity: () => identityMock,
 }));
 
+// Faz 23.5 M5 G3b: NotificationPreferenceForm (loaded transitively when
+// the drawer opens or page renders form) calls useListTopicCatalogQuery.
+// Without a Redux Provider wrapper the hook throws; mock it to a no-op
+// so page-level interaction tests do not depend on store wiring.
+// Existing page-level tests still exercise the Form's pref-form-topic
+// field (e.g. "opens the rich editor" test), so the Form component
+// itself stays real; only its catalog hook is mocked.
+vi.mock('../../../features/notifications/api/notify-topic-catalog.api', () => ({
+  useListTopicCatalogQuery: () => ({ data: undefined, isLoading: false, error: undefined }),
+}));
+
 vi.mock('../../../features/notifications/api/notify-prefs.api', () => ({
   useListPreferencesQuery: () => listQueryMock,
   useUpsertPreferenceMutation: () => [

@@ -4,6 +4,7 @@ import type {
   PreferenceDto,
   PreferenceUpsertBody,
 } from '../../features/notifications/api/notify-prefs.types';
+import { useListTopicCatalogQuery } from '../../features/notifications/api/notify-topic-catalog.api';
 import {
   defaultQuietHoursTimezone,
   parseQuietHours,
@@ -105,6 +106,18 @@ export const NotificationPreferenceForm: React.FC<NotificationPreferenceFormProp
   const [bypassCritical, setBypassCritical] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Faz 23.5 M5 G3b — topic catalog query. Skip when drawer is closed
+  // to avoid wasteful fetches on cold load. RTK Query default cache
+  // (60s keepUnusedDataFor) handles repeat opens cheaply. If the
+  // backend is missing this endpoint (empty items[]) we fall back to
+  // free-text entry — see `catalogEntries` below.
+  const { data: catalogData } = useListTopicCatalogQuery(undefined, { skip: !open });
+  const catalogEntries = catalogData?.items ?? [];
+  const catalogTopicMatch = useMemo(
+    () => catalogEntries.find((entry) => entry.topicKey === topicKey),
+    [catalogEntries, topicKey],
+  );
+
   // Reset form state whenever the drawer reopens or the editing target changes.
   useEffect(() => {
     if (!open) return;
@@ -205,6 +218,7 @@ export const NotificationPreferenceForm: React.FC<NotificationPreferenceFormProp
             onChange={(e) => setTopicKey(e.target.value)}
             placeholder="örn. report.export.ready"
             data-testid="pref-form-topic"
+            list={catalogEntries.length > 0 ? 'pref-form-topic-catalog' : undefined}
             // Codex thread `019e034e` post-impl P1 absorb: backend
             // PUT /me upserts by (topicKey, channel) composite key,
             // not by id. Letting the operator change the tuple in
@@ -214,6 +228,30 @@ export const NotificationPreferenceForm: React.FC<NotificationPreferenceFormProp
             disabled={mode === 'edit'}
             style={textInputStyle}
           />
+          {/* Faz 23.5 M5 G3b: backend-driven topic catalog autocomplete.
+              datalist is a native HTML5 element — no design-system
+              dependency, accessible by default, and degrades gracefully
+              (free-text entry still works if the catalog is empty or
+              the user types a value not in the list). */}
+          {catalogEntries.length > 0 && (
+            <datalist id="pref-form-topic-catalog" data-testid="pref-form-topic-catalog">
+              {catalogEntries.map((entry) => (
+                <option
+                  key={entry.topicKey}
+                  value={entry.topicKey}
+                  label={entry.label ?? entry.topicKey}
+                />
+              ))}
+            </datalist>
+          )}
+          {catalogTopicMatch?.description && (
+            <span
+              style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.25rem' }}
+              data-testid="pref-form-topic-description"
+            >
+              {catalogTopicMatch.description}
+            </span>
+          )}
         </label>
 
         <label style={fieldLabelStyle}>
@@ -224,11 +262,47 @@ export const NotificationPreferenceForm: React.FC<NotificationPreferenceFormProp
             onChange={(e) => setChannel(e.target.value)}
             placeholder="örn. email"
             data-testid="pref-form-channel"
+            list={
+              catalogTopicMatch && catalogTopicMatch.supportedChannels.length > 0
+                ? 'pref-form-channel-supported'
+                : undefined
+            }
             readOnly={mode === 'edit'}
             disabled={mode === 'edit'}
             style={textInputStyle}
           />
+          {catalogTopicMatch && catalogTopicMatch.supportedChannels.length > 0 && (
+            <datalist id="pref-form-channel-supported" data-testid="pref-form-channel-supported">
+              {catalogTopicMatch.supportedChannels.map((ch) => (
+                <option key={ch} value={ch.toLowerCase()} />
+              ))}
+            </datalist>
+          )}
+          {catalogTopicMatch && catalogTopicMatch.supportedChannels.length > 0 && (
+            <span
+              style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.25rem' }}
+              data-testid="pref-form-channel-hint"
+            >
+              Bu konu için desteklenen kanallar:{' '}
+              {catalogTopicMatch.supportedChannels.map((ch) => ch.toLowerCase()).join(', ')}
+            </span>
+          )}
         </label>
+        {catalogTopicMatch?.criticalEligible && (
+          <div
+            style={{
+              padding: '0.5rem 0.75rem',
+              backgroundColor: 'var(--surface-muted)',
+              borderRadius: '0.5rem',
+              fontSize: '0.75rem',
+              color: 'var(--text-secondary)',
+            }}
+            data-testid="pref-form-critical-badge"
+          >
+            <strong>Güvenlik kritik konu</strong> — devre dışı bırakılsa bile bypassForCritical
+            açıkken sistem bu mesajları (örn. OTP, güvenlik uyarısı) yine de iletir.
+          </div>
+        )}
         {mode === 'edit' && (
           <p
             style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '-0.5rem' }}
