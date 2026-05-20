@@ -123,6 +123,20 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'true', label: 'on' },
     { value: 'false', label: 'off' },
   ],
+  // LiquidFillShape — closed 7-shape enum from packages/x-charts/src/
+  // LiquidFillChart.tsx (Codex thread 019e4301 iter-1: path strings
+  // deliberately omitted for V1; pure string-literal union maps cleanly
+  // to a dropdown). Codex iter-5 P1 fix — without this entry the
+  // descriptor falls to `complex` and the playground hides the prop.
+  LiquidFillShape: [
+    { value: 'circle', label: 'circle' },
+    { value: 'rect', label: 'rect' },
+    { value: 'roundRect', label: 'roundRect' },
+    { value: 'triangle', label: 'triangle' },
+    { value: 'diamond', label: 'diamond' },
+    { value: 'pin', label: 'pin' },
+    { value: 'arrow', label: 'arrow' },
+  ],
   ChartDensityPreference: [
     { value: 'auto', label: 'auto (shell density)' },
     { value: 'compact', label: 'compact' },
@@ -792,6 +806,33 @@ export const LIVE_PROP_SUPPORT: Record<string, ReadonlySet<string>> = {
     'access',
     'accessReason',
   ]),
+  // LiquidFillChart (Codex 019e4301 AGREE_WITH_REVISIONS): lazy-loaded
+  // liquidFill KPI gauge. 11 common-axis + shape/radius/amplitude/
+  // waveLength/waveAnimation/showOutline/outlineColor = 18 primitives.
+  // `value` + `secondaryValues` complex shapes (code-only);
+  // `valueFormatter`/`colors`/`onDataPointClick` + anomaly pair
+  // preset-driven via COMPLEX_PROP_PRESETS. NO markups (Codex iter-1
+  // REVISE — no coordinate axis to anchor markups against).
+  'liquid-fill-chart': new Set([
+    'title',
+    'description',
+    'className',
+    'shape',
+    'radius',
+    'amplitude',
+    'waveLength',
+    'waveAnimation',
+    'showOutline',
+    'outlineColor',
+    'animate',
+    'size',
+    'theme',
+    'decal',
+    'density',
+    'accent',
+    'access',
+    'accessReason',
+  ]),
   'heatmap-chart': new Set([
     'title',
     'description',
@@ -1169,8 +1210,9 @@ const ANOMALY_ANNOUNCEMENT_PRESET_OPTIONS: ComplexPreset[] = [
  * anomaly pair). Verified against the AST by Codex thread `019e3af0`;
  * `population-pyramid` added by Codex thread `019e3f75`; `combo-chart`
  * added by Codex thread `019e41cd`; `effect-scatter-chart` added by Codex
- * thread `019e425b`; `bar-3d-chart` added by Codex thread `019e42c3` (the
- * 21st enrolled chart).
+ * thread `019e425b`; `bar-3d-chart` added by Codex thread `019e42c3`;
+ * `liquid-fill-chart` added by Codex thread `019e4301` (the 22nd
+ * enrolled chart).
  */
 const ANOMALY_PRESET_CHART_IDS = [
   'bar-chart',
@@ -1198,6 +1240,9 @@ const ANOMALY_PRESET_CHART_IDS = [
   'effect-scatter-chart',
   // Bar3DChart (Codex 019e42c3 AGREE): standalone cartesian3D bar3D.
   'bar-3d-chart',
+  // LiquidFillChart (Codex 019e4301 AGREE_WITH_REVISIONS): lazy-loaded
+  // liquidFill KPI gauge.
+  'liquid-fill-chart',
 ] as const;
 
 /**
@@ -1252,6 +1297,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       'effect-scatter-chart',
       // Bar3DChart (Codex 019e42c3): bar height (z) value formatting.
       'bar-3d-chart',
+      // LiquidFillChart (Codex 019e4301): fill ratio percentage formatting.
+      'liquid-fill-chart',
     ].map((cid) => [
       `${cid}.valueFormatter`,
       [
@@ -1300,6 +1347,8 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
       // Bar3DChart (Codex 019e42c3): 3D bar-click cross-filter
       // (category × category pivot drill-down).
       'bar-3d-chart',
+      // LiquidFillChart (Codex 019e4301): single KPI gauge click.
+      'liquid-fill-chart',
     ].map((cid) => [
       `${cid}.onDataPointClick`,
       [
@@ -1396,6 +1445,14 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
     { presetId: 'rainbow', label: 'Rainbow' },
     { presetId: 'monochrome', label: 'Monochrome slate' },
   ],
+  // LiquidFillChart (Codex 019e4301 AGREE_WITH_REVISIONS): `colors` is
+  // a `string[]` gradient (water/wave color stops). Same chart-agnostic
+  // resolver as the other wrappers.
+  'liquid-fill-chart.colors': [
+    { presetId: 'default', label: 'Auto palette (default)' },
+    { presetId: 'rainbow', label: 'Rainbow' },
+    { presetId: 'monochrome', label: 'Monochrome slate' },
+  ],
   // waterfall-chart.colors is `{ increase?, decrease?, total? }` object —
   // requires its own object resolver, deferred to PR-FE-Playground-4.
 
@@ -1454,12 +1511,13 @@ export const COMPLEX_PROP_PRESETS: Record<string, ComplexPreset[]> = {
   'scatter-chart.onBrushSelection': CALLBACK_PRESET_OPTIONS,
 
   // ---- PR-X16 §4f.3 — anomaly a11y preset wave --------------------
-  // `anomalySummary` + `formatAnomalyAnnouncement` for the 21 enrolled
+  // `anomalySummary` + `formatAnomalyAnnouncement` for the 22 enrolled
   // charts that carry the anomaly a11y pair in CHART_CATALOG (every
   // enrolled chart except Gauge — verified via AST, Codex 019e3af0;
   // population-pyramid added by Codex thread 019e3f75; combo-chart added
   // by Codex thread 019e41cd; effect-scatter-chart added by Codex thread
-  // 019e425b; bar-3d-chart added by Codex thread 019e42c3).
+  // 019e425b; bar-3d-chart added by Codex thread 019e42c3;
+  // liquid-fill-chart added by Codex thread 019e4301).
   // `anomalySummary` feeds `ChartA11yShell`'s polite SR announcement;
   // `formatAnomalyAnnouncement` overrides the announcement template.
   ...Object.fromEntries(
@@ -2103,6 +2161,17 @@ export const PLAYGROUND_DEFAULT_OVERRIDES: Record<string, PlaygroundValue> = {
  */
 export const PROP_EDITOR_KIND_OVERRIDES: Record<string, EditorKind> = {
   'tree-chart.roam': 'boolean',
+  // LiquidFillChart (Codex thread 019e4301 iter-5 P1 BLOCKER fix):
+  // `radius`, `amplitude`, `waveLength` are typed `string | number` in
+  // the wrapper interface so consumers can pass either `"50%"` or `120`
+  // / `"8%"` or `12`. The generic `getEditorKind` heuristic falls
+  // through to `complex` for union types; override to `'string'` so
+  // the playground exposes a text editor (the wrapper coerces either
+  // shape verbatim). Default values come from `parseDefault` which
+  // strips the surrounding quotes off the catalog's `"50%"` literal.
+  'liquid-fill-chart.radius': 'string',
+  'liquid-fill-chart.amplitude': 'string',
+  'liquid-fill-chart.waveLength': 'string',
 };
 
 /* ================================================================== */
@@ -2845,6 +2914,19 @@ const SAMPLE_DATA: Record<string, SampleDataDef> = {
   { x: 39000, y: 12000, size: 22, name: 'Operasyon' },
   { x: 47000, y: 25000, size: 36, name: 'Satış' },
 ]`,
+      },
+    ],
+  },
+  // LiquidFillChart (Codex 019e4301 AGREE_WITH_REVISIONS): lazy-loaded
+  // liquidFill KPI gauge — `value` (fillRatio 0-1) scaffold for the
+  // generated snippet. Single-value chart, no separate `data` array.
+  'liquid-fill-chart': {
+    scaffold: [
+      {
+        propName: 'value',
+        varName: 'sampleValue',
+        caption: 'LiquidFillChart fillRatio (0-1 clamp)',
+        jsLiteral: `0.72`,
       },
     ],
   },
@@ -3793,6 +3875,61 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       tag: 'motion',
       description: 'Static render — also zeroes the ripple (vestibular-safe).',
       statePatch: { animate: false },
+    },
+    {
+      id: 'readonly',
+      label: 'Read-only Access',
+      tag: 'access',
+      description: 'Visible but non-interactive — click no-op.',
+      statePatch: { access: 'readonly' },
+    },
+  ],
+  // LiquidFillChart (Codex 019e4301 AGREE_WITH_REVISIONS): lazy-loaded
+  // KPI gauge preset gallery. 6 entries: starter, pin-shape (Codex
+  // iter-5 P2 fix — replaces the previous "full container value=1"
+  // preset which drifted from the generated snippet's sample scaffold
+  // literal), rect-shape, dark, no-animation (waveAnimation off),
+  // readonly.
+  'liquid-fill-chart': [
+    {
+      id: 'basic',
+      label: 'Basic',
+      tag: 'starter',
+      description: 'Default circle shape, 72% fill, wave animation on.',
+      statePatch: {},
+    },
+    // Codex iter-5 P2 fix: avoid the "value=1" preview/code drift —
+    // generated snippet pulls the sample-data scaffold literal verbatim,
+    // so a state-only `value: 1` patch would render 100% in preview but
+    // emit `const sampleValue = 0.72` in the snippet. Replace with a
+    // primitive prop that the codegen actually serialises (`shape='pin'`).
+    {
+      id: 'pin-shape',
+      label: 'Pin Shape',
+      tag: 'shape',
+      description: 'Map-pin container — same fill, different metaphor.',
+      statePatch: { shape: 'pin' },
+    },
+    {
+      id: 'rect-shape',
+      label: 'Rect Shape',
+      tag: 'shape',
+      description: 'Rectangular container instead of circle.',
+      statePatch: { shape: 'rect' },
+    },
+    {
+      id: 'dark',
+      label: 'Dark Theme',
+      tag: 'theme',
+      description: 'Explicit dark theme override.',
+      statePatch: { theme: 'dark' },
+    },
+    {
+      id: 'no-animation',
+      label: 'No Animation',
+      tag: 'motion',
+      description: 'Wave animation off — static fill (vestibular-safe).',
+      statePatch: { waveAnimation: false },
     },
     {
       id: 'readonly',

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T01:14:36.631Z",
+  "generatedAt": "2026-05-20T02:11:35.896Z",
   "totalConsumers": 44,
   "byBucket": {
     "production": 20,
@@ -387,6 +387,7 @@
         "KPICard",
         "LineChart",
         "Lines3D",
+        "LiquidFillChart",
         "ParallelCoordinatesChart",
         "PictorialBarChart",
         "PieChart",

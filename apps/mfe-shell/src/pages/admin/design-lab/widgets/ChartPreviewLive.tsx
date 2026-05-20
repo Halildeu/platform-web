@@ -62,6 +62,10 @@ import {
   // bar3D wrapper — category × category × value pivot 3D bars. The
   // 32nd x-charts wrapper, 5th 3D after Scatter3D/Surface3D/Lines3D/Globe.
   Bar3DChart,
+  // LiquidFillChart (Codex thread 019e4301 AGREE_WITH_REVISIONS):
+  // lazy-loaded liquidFill KPI gauge wrapper. 33rd x-charts wrapper,
+  // 1st echarts-liquidfill extension.
+  LiquidFillChart,
   // PR-X campaign live playground (Codex 019e22b6 follow-up):
   // wire the 6 wrappers into ChartPreviewLive so design-lab Playground
   // tab renders real instances instead of the "yakında" fallback.
@@ -1918,6 +1922,64 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             accent={getEnum(toggles, 'accent', 'auto')}
             access={getEnum(toggles, 'access', 'full')}
             accessReason={getOptStr(toggles, 'accessReason')}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // LiquidFillChart (Codex thread 019e4301 AGREE_WITH_REVISIONS):
+    // lazy-loaded liquidFill KPI gauge. Sample value=0.72 (72% sprint
+    // completion). markups/onMarkupClick deliberately NOT exposed
+    // (no coordinate axis — Codex iter-1 REVISE).
+    case 'liquid-fill-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <LiquidFillChart
+            value={getNum(toggles, 'value', 0.72)}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            shape={
+              getEnum(toggles, 'shape', 'circle') as
+                | 'circle'
+                | 'rect'
+                | 'roundRect'
+                | 'triangle'
+                | 'diamond'
+                | 'pin'
+                | 'arrow'
+            }
+            radius={getStr(toggles, 'radius', '50%')}
+            amplitude={getStr(toggles, 'amplitude', '8%')}
+            waveLength={getStr(toggles, 'waveLength', '80%')}
+            waveAnimation={isOn(toggles, 'waveAnimation', true)}
+            showOutline={isOn(toggles, 'showOutline', true)}
+            outlineColor={getOptStr(toggles, 'outlineColor')}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
           />
         </PreviewBox>
       );

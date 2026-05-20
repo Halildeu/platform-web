@@ -3891,6 +3891,225 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
+  // LiquidFillChart (Codex thread 019e4301 AGREE_WITH_REVISIONS):
+  // lazy-loaded liquidFill KPI gauge — fillRatio 0-1 with wave
+  // animation. The 33rd x-charts wrapper (1st echarts-liquidfill).
+  // `props` sync-generated from the wrapper interface by
+  // scripts/ci/sync-chart-detail-props.mjs.
+  'liquid-fill-chart': {
+    id: 'liquid-fill-chart',
+    name: 'LiquidFillChart',
+    description:
+      'Lazy-loaded liquidFill KPI gauge wrapper — single fillRatio (0-1) visualised as a water-level container with optional multi-layer support waves and continuous wave animation. Distinct from GaugeChart (needle/arc with min/max scale); LiquidFillChart targets "completion %" / "satisfaction score" KPIs where the metaphor is "how full is the container".',
+    importPath: "import { LiquidFillChart } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'value',
+        type: 'number',
+        required: true,
+        default: '—',
+        description:
+          'Primary fill ratio — strictly 0-1 normalised. Non-finite / out-of-\nrange inputs clamp to `[0, 1]` (NaN/Infinity → 0).',
+      },
+      {
+        name: 'secondaryValues',
+        type: 'number[]',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional support wave overlays — each entry appended after the\nprimary value (multi-layer wave model). Clamped to `[0, 1]` per\nentry; non-array / undefined renders a single-layer chart.',
+      },
+      {
+        name: 'shape',
+        type: 'LiquidFillShape',
+        required: false,
+        default: '"circle"',
+        description: 'Container shape.',
+      },
+      {
+        name: 'radius',
+        type: 'string | number',
+        required: false,
+        default: '"50%"',
+        description: 'Container radius.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Label / tooltip value formatter.',
+      },
+      {
+        name: 'colors',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description: 'Override gradient palette. Accepts `var(--token)` strings.',
+      },
+      {
+        name: 'amplitude',
+        type: 'string | number',
+        required: false,
+        default: '"8%"',
+        description: 'Wave amplitude.',
+      },
+      {
+        name: 'waveLength',
+        type: 'string | number',
+        required: false,
+        default: '"80%"',
+        description: 'Wave length.',
+      },
+      {
+        name: 'waveAnimation',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description:
+          'Continuous wave loop. `prefers-reduced-motion: reduce` forces this\nto `false` at render time regardless of the prop value (vestibular\nsafety).',
+      },
+      {
+        name: 'showOutline',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Show outline ring around the container.',
+      },
+      {
+        name: 'outlineColor',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Outline color override. Accepts `var(--token)`.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Top-level mount animation.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto"',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Click callback (single-point KPI; payload carries the fillRatio).',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description: 'Anomaly summary list forwarded to ChartA11yShell SR announcer.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description: 'Optional override of the anomaly announcement template.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<LiquidFillChart
+  value={0.72}
+  title="Sprint Tamamlama"
+  shape="circle"
+  waveAnimation
+  showOutline
+/>`,
+    features: [
+      'cross-filter',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
   'heatmap-chart': {
     id: 'heatmap-chart',
     name: 'HeatmapChart',

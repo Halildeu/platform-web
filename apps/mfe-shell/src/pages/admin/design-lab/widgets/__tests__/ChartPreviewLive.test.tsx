@@ -111,6 +111,8 @@ vi.mock('@mfe/x-charts', () => {
     EffectScatterChart: sentinel('effect-scatter'),
     // Bar3DChart (Codex 019e42c3): standalone cartesian3D bar3D wrapper.
     Bar3DChart: sentinel('bar3d'),
+    // LiquidFillChart (Codex 019e4301): lazy-loaded liquidFill KPI gauge.
+    LiquidFillChart: sentinel('liquidfill'),
     HeatmapChart: sentinel('heatmap'),
     WaterfallChart: sentinel('waterfall'),
     FunnelChart: sentinel('funnel'),
@@ -258,6 +260,7 @@ const CASES: Array<{ chartId: string; expectedTestId: string }> = [
   { chartId: 'combo-chart', expectedTestId: 'mock-combo' },
   { chartId: 'effect-scatter-chart', expectedTestId: 'mock-effect-scatter' },
   { chartId: 'bar-3d-chart', expectedTestId: 'mock-bar3d' },
+  { chartId: 'liquid-fill-chart', expectedTestId: 'mock-liquidfill' },
   { chartId: 'heatmap-chart', expectedTestId: 'mock-heatmap' },
   { chartId: 'waterfall-chart', expectedTestId: 'mock-waterfall' },
   { chartId: 'funnel-chart', expectedTestId: 'mock-funnel' },
@@ -507,7 +510,7 @@ describe('ChartPreviewLive — §4f.2 markup preset forwarding', () => {
 /* PR-X16 §4f.3 — anomaly a11y preset forwarding */
 
 describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
-  // All 21 enrolled anomaly charts (every count-lock-enrolled chart
+  // All 22 enrolled anomaly charts (every count-lock-enrolled chart
   // except Gauge) — each now has an x-charts mock sentinel below, so
   // §4f.3 anomaly-preset forwarding is harness-covered for the full set.
   const ANOMALY_CHART_KINDS: Array<{ chartId: string; kind: string }> = [
@@ -527,6 +530,7 @@ describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
     { chartId: 'combo-chart', kind: 'combo' },
     { chartId: 'effect-scatter-chart', kind: 'effect-scatter' },
     { chartId: 'bar-3d-chart', kind: 'bar3d' },
+    { chartId: 'liquid-fill-chart', kind: 'liquidfill' },
     { chartId: 'heatmap-chart', kind: 'heatmap' },
     { chartId: 'waterfall-chart', kind: 'waterfall' },
     { chartId: 'funnel-chart', kind: 'funnel' },
