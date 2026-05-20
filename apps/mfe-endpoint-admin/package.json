@@ -29,11 +29,11 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^5.0.4",
-    "@module-federation/vite": "^1.15.2",
+    "@module-federation/vite": "^1.15.5",
     "eslint": "^9.13.0",
     "jsdom": "^29.1.1",
     "typescript": "^5.9.3",
-    "vite": "^8.0.11",
+    "vite": "^8.0.13",
     "vitest": "*"
   }
 }
