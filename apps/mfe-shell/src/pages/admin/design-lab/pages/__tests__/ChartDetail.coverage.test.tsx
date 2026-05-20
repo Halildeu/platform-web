@@ -55,6 +55,7 @@ vi.mock('@mfe/x-charts', async () => {
     GanttChart: stubChart('GanttChart'),
     PopulationPyramid: stubChart('PopulationPyramid'),
     ComboChart: stubChart('ComboChart'),
+    EffectScatterChart: stubChart('EffectScatterChart'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -112,6 +113,9 @@ const CHART_IDS_WITH_PRESETS = [
   // ComboChart — dual-axis composite bar+line (Codex 019e41cd). Same
   // render-smoke guard for catalog completeness.
   'combo-chart',
+  // EffectScatterChart — standalone effectScatter + ripple (Codex
+  // 019e425b). Same render-smoke guard for catalog completeness.
+  'effect-scatter-chart',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',

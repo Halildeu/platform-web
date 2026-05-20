@@ -43,6 +43,9 @@ import {
   // ComboChart (Codex thread 019e41cd AGREE): dual-axis composite —
   // bar + line series on two independent y-axes. The 30th x-charts wrapper.
   ComboChart,
+  // EffectScatterChart (Codex thread 019e425b AGREE): standalone
+  // effectScatter — scatter + ripple animation. The 31st x-charts wrapper.
+  EffectScatterChart,
   HeatmapChart,
   WaterfallChart,
   FunnelChart,
@@ -1383,6 +1386,62 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
             onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
             markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'combo-chart')}
+            onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // EffectScatterChart (Codex thread 019e425b AGREE): standalone
+    // effectScatter — scatter + ripple animation for outlier emphasis.
+    // Sample dataset: 6 departman maaş outlier'ları (x=ortalama maaş,
+    // y=maaş aralığı, name=departman) — gerçek HR-Compensation
+    // dept-percentile-radar swap'ının önizlemesi.
+    case 'effect-scatter-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <EffectScatterChart
+            data={[
+              { x: 42000, y: 18000, size: 28, name: 'Mühendislik' },
+              { x: 38000, y: 9000, size: 18, name: 'Pazarlama' },
+              { x: 45000, y: 22000, size: 32, name: 'Finans' },
+              { x: 34000, y: 7000, size: 15, name: 'İK' },
+              { x: 39000, y: 12000, size: 22, name: 'Operasyon' },
+              { x: 47000, y: 25000, size: 36, name: 'Satış' },
+            ]}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            xLabel={getStr(toggles, 'xLabel', 'Ortalama maaş')}
+            yLabel={getStr(toggles, 'yLabel', 'Maaş aralığı')}
+            showGrid={isOn(toggles, 'showGrid', true)}
+            showEffectOn={getEnum(toggles, 'showEffectOn', 'render') as 'render' | 'emphasis'}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            markups={getMarkupsPreset(getEnum(toggles, 'markups', 'none'), 'effect-scatter-chart')}
             onMarkupClick={getCallbackPreset(getEnum(toggles, 'onMarkupClick', 'noop'))}
             size={sizeFor('lg')}
             theme={themeOverride}
