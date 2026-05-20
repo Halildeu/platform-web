@@ -238,6 +238,37 @@ describe('chartPlaygroundModel — type detection', () => {
       expect(d.defaultValue).toBe(expectedDefault);
     },
   );
+
+  it('exposes WordCloudShape as exactly 7 shapes (Codex 019e4351 iter-1 regression guard)', () => {
+    // Without this enum entry the descriptor falls to `complex` and the
+    // playground hides the `shape` prop — defeating the count-lock N=18
+    // claim. Mirrors the LiquidFillShape regression-guard pattern.
+    const opts = getEnumOptions('WordCloudShape');
+    expect(opts).toBeDefined();
+    expect(opts?.map((o) => o.value)).toEqual([
+      'circle',
+      'cardioid',
+      'diamond',
+      'triangle-forward',
+      'triangle',
+      'pentagon',
+      'star',
+    ]);
+  });
+
+  it('buildDescriptor word-cloud-chart.shape is a live enum editor (Codex 019e4351 iter-1)', () => {
+    const d = buildDescriptor('word-cloud-chart', {
+      name: 'shape',
+      type: 'WordCloudShape',
+      required: false,
+      default: '"circle"',
+      description: '',
+    });
+    expect(d.kind).toBe('enum');
+    expect(d.liveEditable).toBe(true);
+    expect(d.options.map((o) => o.value)).toContain('star');
+    expect(d.defaultValue).toBe('circle');
+  });
 });
 
 describe('chartPlaygroundModel — default parsing', () => {
@@ -939,6 +970,9 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
     'bar-3d-chart',
     // LiquidFillChart — lazy-loaded liquidFill KPI gauge (Codex 019e4301).
     'liquid-fill-chart',
+    // WordCloudChart — lazy-loaded text frequency cloud (Codex 019e4351).
+    // 23rd enrolled chart — FINAL of the 5-missing-chart campaign.
+    'word-cloud-chart',
     'heatmap-chart',
     'waterfall-chart',
     'funnel-chart',
@@ -982,7 +1016,7 @@ describe('chartPlaygroundModel — LIVE_PROP_SUPPORT common-axis coverage', () =
       expect(count).toBe(COMMON_AXIS.length);
       total += count;
     }
-    // 23 charts × 11 common-axis props = 253 just from common axis.
+    // 24 charts × 11 common-axis props = 264 just from common axis.
     expect(total).toBe(ALL_CHART_IDS.length * COMMON_AXIS.length);
   });
 });
@@ -1019,6 +1053,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'effect-scatter-chart': 15, // EffectScatterChart: 11 common-axis + showGrid/xLabel/yLabel/showEffectOn
     'bar-3d-chart': 17, // Bar3DChart: 11 common-axis + xLabel/yLabel/zLabel/showValues/shading/barSize
     'liquid-fill-chart': 18, // LiquidFillChart: 11 common-axis + shape/radius/amplitude/waveLength/waveAnimation/showOutline/outlineColor
+    'word-cloud-chart': 18, // WordCloudChart: 11 common-axis + shape/maxWords/rotationStep/gridSize/drawOutOfBound/shrinkToFit/fontFamily
     'heatmap-chart': 15,
     'waterfall-chart': 15,
     'funnel-chart': 19,
@@ -1054,6 +1089,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     'effect-scatter-chart': 7, // EffectScatterChart: vF + onDPC + colors + markups + onMarkupClick + anomaly pair
     'bar-3d-chart': 5, // Bar3DChart: vF + onDPC + colors + anomaly pair (NO markups per Codex iter-1 — 2D adapter only)
     'liquid-fill-chart': 5, // LiquidFillChart: vF + onDPC + colors + anomaly pair (NO markups per Codex iter-1 — no coordinate axis)
+    'word-cloud-chart': 5, // WordCloudChart: vF + onDPC + colors + anomaly pair (NO markups per Codex iter-1 — no coordinate axis)
   };
 
   // ---- §4f live-surface coverage lock --------------------------------
@@ -1063,15 +1099,16 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // the playground (a LIVE_PROP_SUPPORT primitive or a COMPLEX_PROP_PRESETS
   // entry).
   //
-  // Enrolled set — 23 charts: the 13 core wrappers + the 5 PR-X16 depth
+  // Enrolled set — 24 charts: the 13 core wrappers + the 5 PR-X16 depth
   // charts (tree / calendar-heatmap / polar / theme-river / gantt) + the
   // PopulationPyramid wrapper (Codex thread `019e3f75`, PR#2) + the
   // ComboChart wrapper (Codex thread `019e41cd`) + the EffectScatterChart
   // wrapper (Codex thread `019e425b`) + the Bar3DChart wrapper (Codex
   // thread `019e42c3`) + the LiquidFillChart wrapper (Codex thread
-  // `019e4301`). The PR-X12+ campaign charts (graph / geo-map /
-  // box-plot / candlestick / pictorial-bar / parallel-coordinates) are
-  // intentionally NOT enrolled.
+  // `019e4301`) + the WordCloudChart wrapper (Codex thread `019e4351`,
+  // FINAL of the 5-missing-chart campaign). The PR-X12+ campaign charts
+  // (graph / geo-map / box-plot / candlestick / pictorial-bar /
+  // parallel-coordinates) are intentionally NOT enrolled.
   //
   // DENOMINATOR — honest, AST-derived (PR-X16 §4f.0). `DERIVED_CATALOG_PROPS`
   // sums `CHART_CATALOG[id].props.length` over the enrolled charts, counted
@@ -1096,9 +1133,11 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   // then enrolled (+15 primitives, +7 presets, +25 catalog props);
   // Bar3DChart then enrolled (+17 primitives, +5 presets, +28 catalog
   // props — no markups); LiquidFillChart then enrolled (+18 primitives,
-  // +5 presets, +25 catalog props — no markups). Honest live-surface
-  // coverage is now 508 / 557 ≈ 91.2%, clearing the 0.9 target — the
-  // gate runs directly on the honest AST-derived 557 denominator below.
+  // +5 presets, +25 catalog props — no markups); WordCloudChart then
+  // enrolled (+18 primitives, +5 presets, +26 catalog props — no
+  // markups; FINAL of the 5-missing-chart campaign). Honest live-surface
+  // coverage is now 531 / 582 ≈ 91.2%, clearing the 0.9 target — the
+  // gate runs directly on the honest AST-derived 582 denominator below.
   const ENROLLED_CHART_IDS = Object.keys(PRIMITIVE_LIVE_COUNTS);
   const CATALOG_PROP_COUNTS = countChartCatalogProps();
   const DERIVED_CATALOG_PROPS = ENROLLED_CHART_IDS.reduce(
@@ -1107,7 +1146,7 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
   );
   const EXCLUDED_SAMPLE_INPUTS = ENROLLED_CHART_IDS.length;
   const HONEST_LIVE_SURFACE_DENOMINATOR = DERIVED_CATALOG_PROPS - EXCLUDED_SAMPLE_INPUTS;
-  // Hard 0.9 coverage floor — ceil(0.9 × 557) = 502. EXPECTED_TOTAL must
+  // Hard 0.9 coverage floor — ceil(0.9 × 582) = 524. EXPECTED_TOTAL must
   // stay at or above this; the per-chart counts above are exact-locked.
   const HARD_COVERAGE_FLOOR = Math.ceil(0.9 * HONEST_LIVE_SURFACE_DENOMINATOR);
   const PRIMITIVE_TOTAL = Object.values(PRIMITIVE_LIVE_COUNTS).reduce((a, b) => a + b, 0);
@@ -1154,15 +1193,16 @@ describe('chartPlaygroundModel — exact per-chart live count (PR-B target lock)
     // Denominator AST-counted from ChartDetail.tsx CHART_CATALOG — drift
     // from the real catalog now fails CI instead of hiding behind a
     // hand-maintained accumulator.
-    expect(DERIVED_CATALOG_PROPS).toBe(580);
-    expect(EXCLUDED_SAMPLE_INPUTS).toBe(23);
-    expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(557);
+    expect(DERIVED_CATALOG_PROPS).toBe(606);
+    expect(EXCLUDED_SAMPLE_INPUTS).toBe(24);
+    expect(HONEST_LIVE_SURFACE_DENOMINATOR).toBe(582);
     // HARD GATE (PR-X16 §4f.4 + PR#2 + ComboChart + EffectScatterChart
-    // + Bar3DChart + LiquidFillChart). Honest coverage is 508 / 557 ≈
-    // 91.2%. EXPECTED_TOTAL must stay at/above the 0.9 floor (502 =
-    // ceil(0.9 × 557)) and the ratio must clear 0.9 — a real coverage
-    // regression (removing a preset or primitive) now fails CI.
-    expect(HARD_COVERAGE_FLOOR).toBe(502);
+    // + Bar3DChart + LiquidFillChart + WordCloudChart). Honest coverage
+    // is 531 / 582 ≈ 91.2%. EXPECTED_TOTAL must stay at/above the 0.9
+    // floor (524 = ceil(0.9 × 582)) and the ratio must clear 0.9 — a
+    // real coverage regression (removing a preset or primitive) now
+    // fails CI.
+    expect(HARD_COVERAGE_FLOOR).toBe(524);
     expect(EXPECTED_TOTAL).toBeGreaterThanOrEqual(HARD_COVERAGE_FLOOR);
     expect(EXPECTED_TOTAL / HONEST_LIVE_SURFACE_DENOMINATOR).toBeGreaterThanOrEqual(0.9);
   });
@@ -1444,6 +1484,9 @@ describe('chartPlaygroundModel — anomaly a11y preset resolvers (§4f.3)', () =
     'bar-3d-chart',
     // LiquidFillChart (Codex 019e4301): lazy-loaded liquidFill KPI gauge.
     'liquid-fill-chart',
+    // WordCloudChart (Codex 019e4351): lazy-loaded text frequency cloud.
+    // 23rd enrolled chart — FINAL of the 5-missing-chart campaign.
+    'word-cloud-chart',
     // ComboChart (Codex 019e41cd): dual-axis composite bar+line.
     'combo-chart',
   ];
@@ -1461,7 +1504,7 @@ describe('chartPlaygroundModel — anomaly a11y preset resolvers (§4f.3)', () =
     expect(getAnomalySummaryPreset('multi-outlier', 'bar-chart')).toHaveLength(3);
   });
 
-  it('getAnomalySummaryPreset resolves valid AnomalySummary[] for all 22 enrolled charts', () => {
+  it('getAnomalySummaryPreset resolves valid AnomalySummary[] for all 23 enrolled charts', () => {
     for (const chartId of ANOMALY_CHARTS) {
       const summaries = getAnomalySummaryPreset('multi-outlier', chartId);
       expect(summaries, chartId).toHaveLength(3);

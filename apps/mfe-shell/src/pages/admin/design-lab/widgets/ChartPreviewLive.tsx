@@ -66,6 +66,11 @@ import {
   // lazy-loaded liquidFill KPI gauge wrapper. 33rd x-charts wrapper,
   // 1st echarts-liquidfill extension.
   LiquidFillChart,
+  // WordCloudChart (Codex thread 019e4351 AGREE_WITH_REVISIONS):
+  // lazy-loaded text frequency word cloud wrapper. 34th x-charts
+  // wrapper (1st echarts-wordcloud), FINAL of the 5-missing-chart
+  // campaign.
+  WordCloudChart,
   // PR-X campaign live playground (Codex 019e22b6 follow-up):
   // wire the 6 wrappers into ChartPreviewLive so design-lab Playground
   // tab renders real instances instead of the "yakında" fallback.
@@ -211,6 +216,41 @@ const BAR_3D_FIXTURE: ReadonlyArray<{ x: string; y: string; z: number }> = [
   { x: 'İK', y: 'Junior', z: 42000 },
   { x: 'İK', y: 'Mid', z: 68000 },
   { x: 'İK', y: 'Senior', z: 90000 },
+];
+
+// WordCloudChart (Codex thread 019e4351 AGREE_WITH_REVISIONS):
+// module-scope fixture so reference identity stays stable across
+// PlaygroundTab re-renders. JSX-inline arrays would trigger the
+// wrapper's option memo to recompute every tick and force a full
+// echarts-wordcloud relayout — costly given the wrapper's layout
+// pass runs on the main thread.
+// Dataset: top-25 sıkça geçen yetkinlik (HR talent inventory metaphor).
+const WORD_CLOUD_FIXTURE: ReadonlyArray<{ name: string; value: number }> = [
+  { name: 'React', value: 280 },
+  { name: 'TypeScript', value: 240 },
+  { name: 'ECharts', value: 180 },
+  { name: 'Java', value: 175 },
+  { name: 'Spring Boot', value: 160 },
+  { name: 'PostgreSQL', value: 150 },
+  { name: 'Kubernetes', value: 140 },
+  { name: 'Docker', value: 135 },
+  { name: 'Tailwind', value: 120 },
+  { name: 'Vite', value: 110 },
+  { name: 'AG Grid', value: 105 },
+  { name: 'Keycloak', value: 95 },
+  { name: 'GitHub Actions', value: 90 },
+  { name: 'Vault', value: 85 },
+  { name: 'Redux', value: 80 },
+  { name: 'Storybook', value: 75 },
+  { name: 'Playwright', value: 70 },
+  { name: 'Vitest', value: 65 },
+  { name: 'Module Federation', value: 60 },
+  { name: 'Argo CD', value: 55 },
+  { name: 'OpenTelemetry', value: 50 },
+  { name: 'Grafana', value: 45 },
+  { name: 'Prometheus', value: 40 },
+  { name: 'Maven', value: 35 },
+  { name: 'Lucide', value: 30 },
 ];
 
 export interface ChartPreviewLiveProps {
@@ -1962,6 +2002,64 @@ const ChartPreviewLive: React.FC<ChartPreviewLiveProps> = ({
             waveAnimation={isOn(toggles, 'waveAnimation', true)}
             showOutline={isOn(toggles, 'showOutline', true)}
             outlineColor={getOptStr(toggles, 'outlineColor')}
+            animate={isOn(toggles, 'animate', true)}
+            valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
+            colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}
+            onDataPointClick={getCallbackPreset(getEnum(toggles, 'onDataPointClick', 'noop'))}
+            size={sizeFor('lg')}
+            theme={themeOverride}
+            decal={getDecal(toggles, 'decal', 'auto')}
+            density={getEnum(toggles, 'density', 'auto')}
+            accent={getEnum(toggles, 'accent', 'auto')}
+            access={getEnum(toggles, 'access', 'full')}
+            accessReason={getOptStr(toggles, 'accessReason')}
+            anomalySummary={getAnomalySummaryPreset(
+              getEnum(toggles, 'anomalySummary', 'none'),
+              chartId,
+            )}
+            formatAnomalyAnnouncement={getAnomalyAnnouncementPreset(
+              getEnum(toggles, 'formatAnomalyAnnouncement', 'default'),
+            )}
+          />
+        </PreviewBox>
+      );
+    }
+
+    // WordCloudChart (Codex thread 019e4351 AGREE_WITH_REVISIONS):
+    // lazy-loaded text frequency cloud. Sample dataset: 25 yetkinlik
+    // entries (HR talent inventory metaphor). markups/onMarkupClick
+    // deliberately NOT exposed (no coordinate axis — Codex iter-1).
+    case 'word-cloud-chart': {
+      const themeOverride = getEnum(toggles, 'theme', 'auto');
+      const surfaceStyle = getPreviewSurfaceStyle(themeOverride);
+      return (
+        <PreviewBox
+          ref={containerRef}
+          testId={testId}
+          height={finalHeight}
+          surfaceStyle={surfaceStyle}
+        >
+          <WordCloudChart
+            data={WORD_CLOUD_FIXTURE as Array<{ name: string; value: number }>}
+            title={getStr(toggles, 'title', chartName)}
+            description={getOptStr(toggles, 'description')}
+            className={getOptStr(toggles, 'className')}
+            shape={
+              getEnum(toggles, 'shape', 'circle') as
+                | 'circle'
+                | 'cardioid'
+                | 'diamond'
+                | 'triangle-forward'
+                | 'triangle'
+                | 'pentagon'
+                | 'star'
+            }
+            maxWords={getNum(toggles, 'maxWords', 100)}
+            rotationStep={getNum(toggles, 'rotationStep', 45)}
+            gridSize={getNum(toggles, 'gridSize', 8)}
+            drawOutOfBound={isOn(toggles, 'drawOutOfBound', false)}
+            shrinkToFit={isOn(toggles, 'shrinkToFit', true)}
+            fontFamily={getOptStr(toggles, 'fontFamily')}
             animate={isOn(toggles, 'animate', true)}
             valueFormatter={getValueFormatterPreset(getEnum(toggles, 'valueFormatter', 'raw'))}
             colors={getColorsPreset(getEnum(toggles, 'colors', 'default'))}

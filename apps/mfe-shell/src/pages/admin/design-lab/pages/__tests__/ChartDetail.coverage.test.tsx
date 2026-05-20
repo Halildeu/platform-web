@@ -58,6 +58,7 @@ vi.mock('@mfe/x-charts', async () => {
     EffectScatterChart: stubChart('EffectScatterChart'),
     Bar3DChart: stubChart('Bar3DChart'),
     LiquidFillChart: stubChart('LiquidFillChart'),
+    WordCloudChart: stubChart('WordCloudChart'),
     SankeyChart: stubChart('SankeyChart'),
     SunburstChart: stubChart('SunburstChart'),
     HeatmapChart: stubChart('HeatmapChart'),
@@ -127,6 +128,13 @@ const CHART_IDS_WITH_PRESETS = [
   // mount exercises the catalog/playground/preset plumbing without
   // pulling the echarts-liquidfill chunk.
   'liquid-fill-chart',
+  // WordCloudChart — lazy-loaded text frequency cloud (Codex 019e4351).
+  // 34th wrapper (1st echarts-wordcloud extension), FINAL of the
+  // 5-missing-chart campaign. Same render-smoke guard. The lazy gate
+  // is jsdom-mocked via stubChart so the page mount exercises the
+  // catalog/playground/preset plumbing without pulling the
+  // echarts-wordcloud chunk.
+  'word-cloud-chart',
   'sankey-chart',
   'sunburst-chart',
   'heatmap-chart',

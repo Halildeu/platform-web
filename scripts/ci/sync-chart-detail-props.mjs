@@ -123,6 +123,11 @@ const CHARTS = [
   // lazy-loaded liquidFill KPI gauge — fillRatio 0-1 with wave
   // animation. The 33rd x-charts wrapper (1st echarts-liquidfill).
   ['liquid-fill-chart', 'LiquidFillChart'],
+  // WordCloudChart (Codex thread 019e4351 AGREE_WITH_REVISIONS):
+  // lazy-loaded text frequency word cloud — name/value pairs rendered
+  // as size-cycling rotated text. The 34th x-charts wrapper (1st
+  // echarts-wordcloud), FINAL of the 5-missing-chart campaign.
+  ['word-cloud-chart', 'WordCloudChart'],
 ];
 
 /* ------------------------------------------------------------------ */

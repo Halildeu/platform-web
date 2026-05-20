@@ -113,6 +113,9 @@ vi.mock('@mfe/x-charts', () => {
     Bar3DChart: sentinel('bar3d'),
     // LiquidFillChart (Codex 019e4301): lazy-loaded liquidFill KPI gauge.
     LiquidFillChart: sentinel('liquidfill'),
+    // WordCloudChart (Codex 019e4351): lazy-loaded text frequency cloud.
+    // 23rd enrolled chart — FINAL of the 5-missing-chart campaign.
+    WordCloudChart: sentinel('wordcloud'),
     HeatmapChart: sentinel('heatmap'),
     WaterfallChart: sentinel('waterfall'),
     FunnelChart: sentinel('funnel'),
@@ -261,6 +264,7 @@ const CASES: Array<{ chartId: string; expectedTestId: string }> = [
   { chartId: 'effect-scatter-chart', expectedTestId: 'mock-effect-scatter' },
   { chartId: 'bar-3d-chart', expectedTestId: 'mock-bar3d' },
   { chartId: 'liquid-fill-chart', expectedTestId: 'mock-liquidfill' },
+  { chartId: 'word-cloud-chart', expectedTestId: 'mock-wordcloud' },
   { chartId: 'heatmap-chart', expectedTestId: 'mock-heatmap' },
   { chartId: 'waterfall-chart', expectedTestId: 'mock-waterfall' },
   { chartId: 'funnel-chart', expectedTestId: 'mock-funnel' },
@@ -531,6 +535,7 @@ describe('ChartPreviewLive — §4f.3 anomaly preset forwarding', () => {
     { chartId: 'effect-scatter-chart', kind: 'effect-scatter' },
     { chartId: 'bar-3d-chart', kind: 'bar3d' },
     { chartId: 'liquid-fill-chart', kind: 'liquidfill' },
+    { chartId: 'word-cloud-chart', kind: 'wordcloud' },
     { chartId: 'heatmap-chart', kind: 'heatmap' },
     { chartId: 'waterfall-chart', kind: 'waterfall' },
     { chartId: 'funnel-chart', kind: 'funnel' },
