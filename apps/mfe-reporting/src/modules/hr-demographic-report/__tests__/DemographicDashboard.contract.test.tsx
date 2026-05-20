@@ -150,6 +150,19 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     return <div data-testid="x-population-pyramid" />;
   };
 
+  // Codex thread 019e4301 Campaign 4 PR#3 (AGREE): LiquidFillChart
+  // replaces the local <Gauge> for `Genel DEI`. Lazy-loaded
+  // echarts-liquidfill chunk would never resolve under jsdom — stub
+  // it with the same shape as the other ECharts wrappers and capture
+  // the value/title for parity assertions.
+  const LiquidFillChart = (props: { title?: string; value?: number }) => (
+    <div
+      data-testid="x-liquidfill"
+      data-title={props.title ?? ''}
+      data-value={props.value != null ? String(props.value) : ''}
+    />
+  );
+
   return {
     ...actual,
     PieChart,
@@ -158,6 +171,7 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     GaugeChart,
     LineChart,
     PopulationPyramid,
+    LiquidFillChart,
     ChartContainer,
     KPICard,
   };
@@ -362,6 +376,26 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     // Sum of male+female across buckets must equal headcount.
     const total = FIXTURE_SUMMARY.agePyramid.reduce((s, p) => s + p.male + p.female, 0);
     expect(total).toBe(FIXTURE_ROWS.length);
+  });
+
+  it('generalDeiWiresToLiquidFill: deiScore 0-100 normalises to LiquidFillChart 0-1 fillRatio (Campaign 4 PR#3)', () => {
+    // Codex thread 019e4301 iter-8 P1 BLOCKER regression guard.
+    // Locks the actual mapping contract (not just the swap presence):
+    //   - LiquidFillChart receives value = summary.deiScore / 100
+    //   - title carries the "Genel DEI" label that used to live on
+    //     the local <Gauge>'s label prop
+    //   - the old local <Gauge> for Genel DEI is GONE (no x-gauge
+    //     stub with that title remains)
+    const { getByTestId, container } = render(<DemographicDashboard />);
+    const liquid = getByTestId('x-liquidfill');
+    expect(liquid.getAttribute('data-title')).toBe('Genel DEI');
+    expect(liquid.getAttribute('data-value')).toBe(String(FIXTURE_SUMMARY.deiScore / 100));
+    // Old gauge for Genel DEI must be gone — guards against a
+    // regression that re-introduces the local <Gauge> while keeping
+    // LiquidFillChart side-by-side.
+    const gauges = Array.from(container.querySelectorAll('[data-testid="x-gauge"]'));
+    const orphanGenelDeiGauge = gauges.find((el) => el.getAttribute('data-title') === 'Genel DEI');
+    expect(orphanGenelDeiGauge).toBeUndefined();
   });
 
   it('agePyramidWiresToPopulationPyramid: unsigned male/female map onto left/right (PR#3 shim swap)', () => {
