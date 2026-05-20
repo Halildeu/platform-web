@@ -23,7 +23,9 @@
  * regression):
  *   - "drop avg age KPI"           → kpiBlockReadsSummaryKeys
  *   - "rename `genderDistribution`" → pieReceivesGenderSlices
- *   - "drop department treemap"    → treemapReceivesDeptHierarchy
+ *   - "drop department word cloud" → wordCloudReceivesDeptHierarchy
+ *                                    (Codex 019e4385 Campaign 5 PR#3:
+ *                                     was treemapReceivesDeptHierarchy)
  *   - "skip getSummary call"        → mountReadsSummarySync
  *   - "drop age groups bar"         → barReceivesAgeGroups
  */
@@ -58,7 +60,11 @@ vi.mock('../api', () => ({
 /* ---------------------------------------------------------------- */
 
 interface CapturedChart {
-  type: 'pie' | 'bar' | 'treemap';
+  // Codex thread 019e4385 Campaign 5 PR#3 (AGREE): WordCloud added so
+  // the dept-headcount swap (Treemap → WordCloud) keeps the contract
+  // assertions tight — wordCloudReceivesDeptHierarchy below replaces
+  // the old treemapReceivesDeptHierarchy.
+  type: 'pie' | 'bar' | 'treemap' | 'wordcloud';
   title?: string;
   data?: unknown;
   series?: unknown;
@@ -163,6 +169,19 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     />
   );
 
+  // Codex thread 019e4385 Campaign 5 PR#3 (AGREE): WordCloudChart
+  // replaces TreemapLocal for `Departman Dağılımı` headcount. Lazy-
+  // loaded echarts-wordcloud chunk would never resolve under jsdom —
+  // stub it with the same shape as the other ECharts wrappers. The
+  // shim in DemographicDashboard.tsx already maps `{ label, value }` →
+  // `{ name, value }` (WordCloudDatum), so the captured `data` here
+  // arrives as `{ name, value }[]` — the contract assertion checks for
+  // the mapped `name` field matching FIXTURE_SUMMARY.departments[].label.
+  const WordCloudChart = (props: { data?: unknown; title?: string }) => {
+    chartRegistry.push({ type: 'wordcloud', title: props.title, data: props.data });
+    return <div data-testid="x-wordcloud" data-title={props.title ?? ''} />;
+  };
+
   return {
     ...actual,
     PieChart,
@@ -172,6 +191,7 @@ vi.mock('@mfe/x-charts', async (importOriginal) => {
     LineChart,
     PopulationPyramid,
     LiquidFillChart,
+    WordCloudChart,
     ChartContainer,
     KPICard,
   };
@@ -295,27 +315,32 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
     expect(totalAgeBarValue).toBe(FIXTURE_ROWS.length);
   });
 
-  it('treemapReceivesDeptHierarchy: a TreemapChart MUST be rendered for the department breakdown', () => {
+  it('wordCloudReceivesDeptHierarchy: a WordCloudChart MUST be rendered for the department breakdown', () => {
     render(<DemographicDashboard />);
 
-    // Codex iter-2: HARD requirement (was optional). The current
-    // dashboard renders one Treemap for `summary.departments`; if
-    // Wave 4 drops it, that's a Wave-4 scope reduction we want to
-    // surface, not silently swallow.
-    const treemap = chartRegistry.find((c) => c.type === 'treemap');
-    expect(treemap, 'TreemapChart for department breakdown was not rendered').toBeDefined();
+    // Codex thread 019e4385 Campaign 5 PR#3 (AGREE): swap from
+    // TreemapLocal — the WordCloud metaphor renders each department as
+    // a sized word (font size encodes headcount). Same HARD contract:
+    // every employee must be represented; dropping the chart would be
+    // a scope reduction we want to surface, not silently swallow.
+    //
+    // Payload mapping: the shim in DemographicDashboard maps backend
+    // `{ label, value }` → wrapper `{ name, value }`, so the captured
+    // `data` field on the chartRegistry entry carries the `name` shape.
+    const wordcloud = chartRegistry.find((c) => c.type === 'wordcloud');
+    expect(wordcloud, 'WordCloudChart for department breakdown was not rendered').toBeDefined();
 
-    const treemapData = treemap!.data as Array<{ label: string; value: number }>;
-    expect(Array.isArray(treemapData)).toBe(true);
+    const wordCloudData = wordcloud!.data as Array<{ name: string; value: number }>;
+    expect(Array.isArray(wordCloudData)).toBe(true);
 
-    const treemapLabels = treemapData.map((d) => d.label).sort();
+    const wordCloudLabels = wordCloudData.map((d) => d.name).sort();
     const fixtureDeptLabels = FIXTURE_SUMMARY.departments.map((d) => d.label).sort();
-    expect(treemapLabels).toEqual(fixtureDeptLabels);
+    expect(wordCloudLabels).toEqual(fixtureDeptLabels);
 
-    // Sum of treemap leaves must equal headcount (every employee
+    // Sum of word frequencies must equal headcount (every employee
     // belongs to exactly one department).
-    const totalTreemapValue = treemapData.reduce((s, d) => s + d.value, 0);
-    expect(totalTreemapValue).toBe(FIXTURE_ROWS.length);
+    const totalWordCloudValue = wordCloudData.reduce((s, d) => s + d.value, 0);
+    expect(totalWordCloudValue).toBe(FIXTURE_ROWS.length);
   });
 
   it('chartRegistryHasMultipleEntries: dashboard renders the full chart strip (>= 7 charts)', () => {
@@ -339,7 +364,7 @@ describe('DemographicDashboard — contract test against fixture summary', () =>
 
     const containers = container.querySelectorAll('[data-testid="x-chart-container"]');
     const chartElements = container.querySelectorAll(
-      '[data-testid="x-pie"], [data-testid="x-bar"], [data-testid="x-treemap"]',
+      '[data-testid="x-pie"], [data-testid="x-bar"], [data-testid="x-treemap"], [data-testid="x-wordcloud"]',
     );
     expect(containers.length).toBeGreaterThan(0);
     expect(chartElements.length).toBe(chartRegistry.length);
