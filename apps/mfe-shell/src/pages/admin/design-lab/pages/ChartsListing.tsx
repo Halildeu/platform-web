@@ -327,6 +327,16 @@ const CHART_ITEMS: ChartItem[] = [
     tier: 'enterprise',
     icon: 'bar',
   },
+  // Bar3DChart (Codex thread 019e42c3 AGREE): standalone cartesian3D
+  // bar3D wrapper — category × category × value pivot 3D bars.
+  {
+    id: 'bar-3d-chart',
+    name: 'Bar3DChart',
+    description: '3B bar grafigi, kategori x kategori x deger pivot (WebGL-required).',
+    group: 'charts_enterprise',
+    tier: 'enterprise',
+    icon: 'bar',
+  },
   // Interaction
   {
     id: 'chart-container',

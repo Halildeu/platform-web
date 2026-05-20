@@ -3641,6 +3641,256 @@ const CHART_CATALOG: Record<string, ChartMeta> = {
     a11y: ['keyboard-nav', 'data-table-fallback'],
     themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
   },
+  // Bar3DChart (Codex thread 019e42c3 AGREE): standalone cartesian3D
+  // bar3D wrapper — category × category × value pivot 3D bars (the
+  // 32nd x-charts wrapper, 5th 3D after Scatter3D/Surface3D/Lines3D/
+  // Globe). Distinct from the bar3D layer inside Globe; this is the
+  // standalone cartesian3D foundation chart. `props` sync-generated
+  // from the wrapper interface by sync-chart-detail-props.mjs.
+  'bar-3d-chart': {
+    id: 'bar-3d-chart',
+    name: 'Bar3DChart',
+    description:
+      'Standalone cartesian3D bar3D wrapper for category × category × value pivot 3D bars (e.g. departman × kıdem × ortalama maaş). WebGL-required; renders an unsupported banner on hosts without WebGL2.',
+    importPath: "import { Bar3DChart } from '@mfe/x-charts';",
+    tier: 'enterprise',
+    props: [
+      {
+        name: 'data',
+        type: 'Bar3DDataPoint[]',
+        required: true,
+        default: '—',
+        description: '3D bar cells. Each point is one bar at `(x, y)` with height `z`.',
+      },
+      {
+        name: 'xCategories',
+        type: 'Array<string | number>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Explicit x-axis category order. When omitted the wrapper derives\nthe order from the first occurrence of each `x` in `data`.',
+      },
+      {
+        name: 'yCategories',
+        type: 'Array<string | number>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Explicit y-axis category order. When omitted the wrapper derives\nthe order from the first occurrence of each `y` in `data`.',
+      },
+      {
+        name: 'size',
+        type: 'ChartSize',
+        required: false,
+        default: '"md"',
+        description: 'Visual size variant.',
+      },
+      {
+        name: 'title',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Chart title.',
+      },
+      {
+        name: 'description',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Accessible description.',
+      },
+      {
+        name: 'className',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Additional class name.',
+      },
+      {
+        name: 'xLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'X-axis label.',
+      },
+      {
+        name: 'yLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Y-axis label.',
+      },
+      {
+        name: 'zLabel',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description: 'Z-axis label.',
+      },
+      {
+        name: 'valueFormatter',
+        type: '(value: number) => string',
+        required: false,
+        default: 'undefined',
+        description: 'Value formatter for tooltip + value labels.',
+      },
+      {
+        name: 'colors',
+        type: 'string[]',
+        required: false,
+        default: 'undefined',
+        description: 'Override palette. Accepts `var(--token)` strings.',
+      },
+      {
+        name: 'animate',
+        type: 'boolean',
+        required: false,
+        default: 'true',
+        description: 'Animate on mount.',
+      },
+      {
+        name: 'showValues',
+        type: 'boolean',
+        required: false,
+        default: 'false',
+        description: 'Show value labels on top of each bar.',
+      },
+      {
+        name: 'shading',
+        type: 'Bar3DShading',
+        required: false,
+        default: '"lambert"',
+        description: 'Per-point shading mode.',
+      },
+      {
+        name: 'barSize',
+        type: 'number',
+        required: false,
+        default: '0.8',
+        description: 'Bar width in axis units.',
+      },
+      {
+        name: 'grid3D',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Native ECharts `grid3D` override (camera, axes, environment).\nWrapper merges over a sensible default.',
+      },
+      {
+        name: 'viewControl',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Native ECharts `viewControl` override (autoRotate, distance, etc.).\nWrapper passes through verbatim onto `grid3D.viewControl`.',
+      },
+      {
+        name: 'light',
+        type: 'Record<string, unknown>',
+        required: false,
+        default: 'undefined',
+        description:
+          'Native ECharts `light` override (main / ambient / direction).\nWrapper passes through verbatim onto `grid3D.light`.',
+      },
+      {
+        name: 'onDataPointClick',
+        type: '(event: ChartClickEvent) => void',
+        required: false,
+        default: 'undefined',
+        description: 'Callback fired when a 3D bar is clicked.',
+      },
+      {
+        name: 'theme',
+        type: 'ChartThemePreference',
+        required: false,
+        default: '"auto"',
+        description: 'Theme override.',
+      },
+      {
+        name: 'decal',
+        type: 'ChartDecalPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Decal pattern override.',
+      },
+      {
+        name: 'density',
+        type: 'ChartDensityPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Density override.',
+      },
+      {
+        name: 'accent',
+        type: 'ChartAccentPreference',
+        required: false,
+        default: '"auto"',
+        description: 'Accent palette override.',
+      },
+      {
+        name: 'anomalySummary',
+        type: 'AnomalySummary[]',
+        required: false,
+        default: 'undefined',
+        description: 'Anomaly summary list forwarded to ChartA11yShell SR announcer.',
+      },
+      {
+        name: 'formatAnomalyAnnouncement',
+        type: 'AnomalyAnnouncementFormatter',
+        required: false,
+        default: 'undefined',
+        description: 'Optional override of the anomaly announcement template.',
+      },
+      {
+        name: 'access',
+        type: '"full" | "readonly" | "disabled" | "hidden"',
+        required: false,
+        default: '"full"',
+        description:
+          'Access level controlling interactivity. "full" = interactive; "readonly" = blocks event callbacks; "disabled" = adds dim overlay + inert; "hidden" = renders nothing (Faz 21.4 PR-E2).',
+      },
+      {
+        name: 'accessReason',
+        type: 'string',
+        required: false,
+        default: 'undefined',
+        description:
+          'Optional human-readable reason explaining the access state. Surfaced in tooltips / aria-describedby for non-full states.',
+      },
+    ],
+    sampleCode: `<Bar3DChart
+  data={[
+    { x: 'Mühendislik', y: 'Junior', z: 50000 },
+    { x: 'Mühendislik', y: 'Mid', z: 80000 },
+    { x: 'Mühendislik', y: 'Senior', z: 110000 },
+    { x: 'Satış', y: 'Junior', z: 45000 },
+    { x: 'Satış', y: 'Mid', z: 70000 },
+    { x: 'Satış', y: 'Senior', z: 95000 },
+  ]}
+  xLabel="Departman"
+  yLabel="Kıdem"
+  zLabel="Ortalama maaş"
+  title="Departman × Kıdem Maaş Pivotu"
+/>`,
+    features: [
+      'cross-filter',
+      'tooltip',
+      'responsive',
+      'animation',
+      'access-control',
+      'decal',
+      'density-aware',
+      'accent-aware',
+      'axe-gated',
+      'contrast-gated-static',
+      'bundle-gated',
+      'tree-shake-gated',
+      'ssr-subpath',
+    ],
+    a11y: ['keyboard-nav', 'data-table-fallback'],
+    themes: ['auto', 'light', 'default', 'dark', 'high-contrast', 'print'],
+  },
   'heatmap-chart': {
     id: 'heatmap-chart',
     name: 'HeatmapChart',
