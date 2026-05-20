@@ -170,3 +170,68 @@ describe('bundle guard — lazy ECharts depth feature modules', () => {
     expect(LIB_DYNAMIC_IMPORT_RE.test(source)).toBe(true);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  Codex thread 019e4301 Campaign 4 — echarts-liquidfill shell impact */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `echarts-liquidfill` is an ECharts extension package (~50 KB gzip)
+ * that self-registers a `'liquidFill'` series type via side-effect
+ * import. Same posture as `echarts-gl`: static
+ *
+ *   import 'echarts-liquidfill';  // ← FORBIDDEN
+ *
+ * would bloat the initial shell bundle. The wrapper consumes it via
+ * dynamic `import('echarts-liquidfill')` inside the lazy registrar so
+ * Vite/Rollup code-splits it into its own chunk that only downloads
+ * when the first LiquidFillChart mounts.
+ *
+ * Allowed: dynamic `await import('echarts-liquidfill')` inside
+ * `renderers/liquidfill/registerEChartsLiquidFill.ts` ONLY.
+ */
+const ALLOWED_LIQUIDFILL_DYNAMIC_IMPORT_RE =
+  /await\s+import\s*\(\s*['"]echarts-liquidfill['"]\s*\)/;
+
+const FORBIDDEN_LIQUIDFILL_STATIC_RE =
+  /^[ \t]*(?:import[ \t]+(?:[^'"]*['"]echarts-liquidfill[^'"]*['"]|['"]echarts-liquidfill[^'"]*['"])|export[ \t]+[^;]*from[ \t]+['"]echarts-liquidfill[^'"]*['"])/m;
+
+const LIQUIDFILL_DYNAMIC_IMPORT_RE = /import\s*\(\s*['"]echarts-liquidfill['"]\s*\)/g;
+
+const ALLOWED_LIQUIDFILL_HOST = path.join(
+  'renderers',
+  'liquidfill',
+  'registerEChartsLiquidFill.ts',
+);
+
+describe('bundle guard — echarts-liquidfill shell impact', () => {
+  it('no source file ANYWHERE statically imports echarts-liquidfill', async () => {
+    const offenders: string[] = [];
+    for await (const file of walkTs(SRC_ROOT)) {
+      const rel = path.relative(SRC_ROOT, file);
+      const source = await readFile(file, 'utf-8');
+      if (FORBIDDEN_LIQUIDFILL_STATIC_RE.test(source)) {
+        offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('dynamic `import("echarts-liquidfill")` lives ONLY in renderers/liquidfill/registerEChartsLiquidFill.ts', async () => {
+    const offenders: string[] = [];
+    for await (const file of walkTs(SRC_ROOT)) {
+      const rel = path.relative(SRC_ROOT, file);
+      const source = await readFile(file, 'utf-8');
+      if (LIQUIDFILL_DYNAMIC_IMPORT_RE.test(source) && rel !== ALLOWED_LIQUIDFILL_HOST) {
+        offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the allowed host (registerEChartsLiquidFill.ts) DOES use the dynamic import', async () => {
+    const file = path.join(SRC_ROOT, ALLOWED_LIQUIDFILL_HOST);
+    const source = await readFile(file, 'utf-8');
+    expect(source).toMatch(ALLOWED_LIQUIDFILL_DYNAMIC_IMPORT_RE);
+  });
+});

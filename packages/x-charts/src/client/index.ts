@@ -17,7 +17,8 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  32 chart wrappers (27 2D echarts-backed + 5 3D echarts-gl-backed) */
+/*  33 chart wrappers (27 2D echarts-backed + 5 3D echarts-gl-backed  */
+/*  + 1 lazy-loaded echarts-liquidfill)                                */
 /* ------------------------------------------------------------------ */
 
 export { AreaChart } from '../AreaChart';
@@ -109,6 +110,9 @@ export type {
 // Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper.
 export { Bar3DChart } from '../Bar3DChart';
 export type { Bar3DChartProps, Bar3DDataPoint, Bar3DShading } from '../Bar3DChart';
+// Codex thread 019e4301 AGREE_WITH_REVISIONS: lazy-loaded liquidFill KPI gauge.
+export { LiquidFillChart } from '../LiquidFillChart';
+export type { LiquidFillChartProps, LiquidFillShape } from '../LiquidFillChart';
 export { BoxPlotChart } from '../BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
 export { CandlestickChart } from '../CandlestickChart';
