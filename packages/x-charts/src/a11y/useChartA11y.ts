@@ -90,7 +90,11 @@ export type ChartA11yKind =
   | 'combo'
   // Codex thread 019e425b AGREE: standalone effectScatter wrapper with
   // ripple animation — distinct from `scatter` (no big-data/brush API).
-  | 'effectScatter';
+  | 'effectScatter'
+  // Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper —
+  // category × category × value pivot 3D bars (distinct from Globe's
+  // bar3D layer on coordinateSystem: 'globe').
+  | 'bar3d';
 
 export interface ChartA11yDataPoint {
   /** Display label (axis category, slice name, etc.). */
@@ -229,6 +233,8 @@ const CHART_TYPE_ARIA_NOUN: Record<ChartA11yKind, string> = {
   combo: 'Combination chart',
   // Codex thread 019e425b AGREE: standalone effectScatter wrapper.
   effectScatter: 'Effect scatter chart',
+  // Codex thread 019e4277 AGREE: standalone cartesian3D bar3D wrapper.
+  bar3d: '3D bar chart',
 };
 
 const defaultFormatter = (v: number): string =>
