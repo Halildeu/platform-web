@@ -87,6 +87,18 @@ export interface BootstrapDeps {
   dispatchPhase: (phase: BootstrapPhase) => void;
   dispatchFailed: (error: { message: string; cause?: string }) => void;
   dispatchSession: (session: BootstrapSession) => void;
+  /**
+   * Stale-token recovery (2026-05-20 hotfix). Called when silent-SSO
+   * returns no Keycloak session — clears `state.auth.token` (which may
+   * have been rehydrated from a stale localStorage entry) so the
+   * ProtectedRoute + PermissionProvider + LoginPage gates see a
+   * consistent unauthenticated state. Without this, the localStorage
+   * token survives in Redux while `phase=unauthenticated`, producing a
+   * stuck UI: ProtectedRoute treats `(token && !authorizationReady)`
+   * as "still loading" and LoginPage's `(initialized && token)` guard
+   * Navigate()s back to the protected route → infinite loop.
+   */
+  dispatchSessionClear: () => void;
   /** Liveness check — bootstrap aborts if mounted becomes false. */
   isMounted: () => boolean;
 }
@@ -126,6 +138,16 @@ export async function bootstrapAuthController(deps: BootstrapDeps): Promise<Boot
     // the freshly-issued token entirely.
     const kcToken = deps.keycloak.getToken() ?? null;
     if (!kcToken) {
+      // 2026-05-20 hotfix: clear any stale Redux token BEFORE dispatching
+      // the unauthenticated phase. `state.auth.token` may have been
+      // rehydrated from localStorage at slice-init time; if we leave it
+      // truthy after declaring "no session", ProtectedRoute /
+      // PermissionProvider / LoginPage all read the inconsistent state
+      // and produce a redirect loop (see dispatchSessionClear JSDoc).
+      // Dispatch order matters: clear first, then phase — so React
+      // subscribers get the token=null + phase=unauthenticated state in
+      // the same render flush.
+      deps.dispatchSessionClear();
       deps.dispatchPhase('unauthenticated');
       return { finalPhase: 'unauthenticated', cookieAwaited };
     }

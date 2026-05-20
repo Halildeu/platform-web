@@ -312,6 +312,34 @@ export function createOnAuthSuccessHandler(deps: OnAuthSuccessHandlerDeps): () =
 }
 
 /* ------------------------------------------------------------------ */
+/*  Stale-token recovery helpers (2026-05-20 hotfix)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Drop the 3 localStorage keys that `auth.slice.loadPersistedAuth()`
+ * reads at slice-init time, so a future page reload does NOT
+ * re-hydrate a dead session into {@code state.auth.token} before
+ * bootstrap (or the refresh handlers) can re-run. Wrapped in try/catch
+ * because some browsers (privacy mode, embedded webviews) throw on
+ * localStorage access.
+ *
+ * Exported for unit tests — extracted from inline AuthBootstrapper
+ * helpers per Codex thread `019e4443` REVISE feedback so the keyset
+ * stays a single source of truth across bootstrap + refresh paths.
+ */
+export function clearPersistedAuthKeys(): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('token');
+      window.localStorage.removeItem('tokenExpiresAt');
+      window.localStorage.removeItem('user');
+    }
+  } catch (storageErr) {
+    console.warn('[AuthBootstrapper] stale-token localStorage cleanup skipped:', storageErr);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  AuthBootstrapper — Keycloak initialization & token management      */
 /* ------------------------------------------------------------------ */
 
@@ -681,6 +709,14 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           mapProfile: mapKeycloakProfile,
           dispatchPhase: (phase) => dispatch(setAuthPhase(phase)),
           dispatchFailed: (error) => dispatch(setAuthFailed(error)),
+          // 2026-05-20 hotfix — see BootstrapDeps.dispatchSessionClear
+          // JSDoc for the redirect-loop scenario this prevents.
+          // Codex thread 019e4443 REVISE absorb: also clear
+          // authzSnapshot so a stale superAdmin/permissions blob from
+          // the previous session can't leak through
+          // selectIsSuperAdmin / shell-services.isSuperAdmin gates.
+          dispatchSessionClear: () =>
+            dispatch(setKeycloakSession({ token: null, authzSnapshot: null })),
           dispatchSession: (session) => {
             // Re-merge mapKeycloakProfile output with authz permissions
             // (preserved from previous behaviour).
@@ -711,9 +747,17 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           isMounted: () => mounted,
         });
 
-        // Backward-compat: handle no-session case for tokenRef sync
-        if (result.finalPhase === 'unauthenticated' && !tokenRef.current) {
-          dispatch(setKeycloakSession({ token: null }));
+        // 2026-05-20 hotfix: when controller dispatched
+        // {@code unauthenticated} (silent-SSO returned no Keycloak
+        // session), drop the persisted localStorage keys so the next
+        // page load doesn't re-hydrate the dead token into
+        // {@code state.auth.token} before bootstrap re-runs. The Redux
+        // token itself is already cleared by the controller via
+        // {@code dispatchSessionClear} (the wrapper's responsibility is
+        // only the persistence-layer cleanup that the controller layer
+        // cannot see).
+        if (result.finalPhase === 'unauthenticated') {
+          clearPersistedAuthKeys();
         }
         console.info('[AuthBootstrapper] bootstrap completed', { phase: result.finalPhase });
         // PR-2: hand the controller's terminal phase to the
@@ -820,10 +864,20 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           } catch (refreshCookieErr) {
             console.warn('[AuthBootstrapper] refresh cookie write failed:', refreshCookieErr);
             void clearTokenCookie();
-            // Roll back to authzReady (still authenticated; protected
-            // transport may degrade for next request batch). PR-Refresh-4
-            // will add single-flight retry queue.
-            dispatch(setAuthPhase('authzReady'));
+            // 2026-05-20 hotfix (Codex thread 019e4443 REVISE absorb):
+            // Cookie write failure during refresh is a NON-RECOVERABLE
+            // session break — the new Keycloak token cannot be carried
+            // forward as an HttpOnly cookie, so every subsequent
+            // protected request will 401. Previous behaviour rolled
+            // back to {@code authzReady} which ProtectedRoute treats
+            // as bootstrapping → page stayed null forever (same stuck-
+            // UI class as the bootstrap-time bug). Treat as unauthenticated
+            // instead: clear Redux session + persisted localStorage so
+            // ProtectedRoute Navigate to /login can fire, and the user
+            // sees the login form instead of an indefinite blank page.
+            dispatch(setKeycloakSession({ token: null, authzSnapshot: null }));
+            clearPersistedAuthKeys();
+            dispatch(setAuthPhase('unauthenticated'));
             return;
           }
           const profile = mapKeycloakProfile(keycloak.token);
@@ -857,14 +911,22 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           dispatch(setAuthPhase('transportReady'));
         }
       } catch (refreshError) {
-        // Token refresh failed — log but don't logout.
-        // Keycloak SSO session may still be valid for re-auth.
+        // Token refresh failed — Keycloak refresh-token rejected or
+        // network unreachable. The current local token is by definition
+        // close to expiry (onTokenExpired fired ≤60s out), so leaving
+        // it in Redux strands the user on a doomed session.
         console.warn('[AuthBootstrapper] Token refresh failed:', refreshError);
         void clearTokenCookie();
-        // Roll back to authzReady (no transportReady) — caller may
-        // re-attempt or trigger logout based on their flow. PR-Refresh-4
-        // will replace this with proper single-flight retry queue.
-        dispatch(setAuthPhase('authzReady'));
+        // 2026-05-20 hotfix (Codex thread 019e4443 REVISE absorb):
+        // refresh failure = unauthenticated. Previously rolled back to
+        // {@code authzReady} which ProtectedRoute treats as bootstrapping
+        // → page stayed null forever (same stuck-UI class as the
+        // bootstrap-time bug). Clear Redux session + persisted
+        // localStorage + dispatch unauthenticated so the user reaches
+        // the login form instead of an indefinite blank page.
+        dispatch(setKeycloakSession({ token: null, authzSnapshot: null }));
+        clearPersistedAuthKeys();
+        dispatch(setAuthPhase('unauthenticated'));
       }
     };
 

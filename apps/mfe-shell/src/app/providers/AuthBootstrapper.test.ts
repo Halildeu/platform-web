@@ -6,6 +6,7 @@ import {
   type BootstrapDeps,
   type BootstrapInitOptions,
 } from './auth-bootstrap-controller';
+import { clearPersistedAuthKeys } from './AuthBootstrapper';
 
 /**
  * Phase 2 PR-Auth-1 (Codex iter-24/25 §Auth-1 absorb, thread 019e0119):
@@ -56,6 +57,10 @@ const buildDeps = (overrides: Partial<BootstrapDeps>): BootstrapDeps => ({
   dispatchPhase: vi.fn(),
   dispatchFailed: vi.fn(),
   dispatchSession: vi.fn(),
+  // 2026-05-20 hotfix: tests opt into a per-test mock via overrides when
+  // they care about the stale-token clear; default is a no-op so the
+  // happy-path tests keep working without restructuring.
+  dispatchSessionClear: vi.fn(),
   isMounted: () => true,
   ...overrides,
 });
@@ -144,6 +149,63 @@ describe('bootstrapAuthController — production controller import test', () => 
     expect(result.finalPhase).toBe('unauthenticated');
     expect(dispatchPhase.mock.calls.map((c) => c[0])).toEqual(['keycloakReady', 'unauthenticated']);
     expect(dispatchFailed).not.toHaveBeenCalled();
+  });
+
+  it('2026-05-20 stale-token recovery: kcToken yoksa dispatchSessionClear çağrılır (BEFORE phase=unauthenticated)', async () => {
+    // Regression guard for the testai stuck-UI bug: when silent-SSO
+    // returns no Keycloak session, the controller must clear any stale
+    // Redux token (rehydrated from localStorage at slice-init time)
+    // BEFORE dispatching phase=unauthenticated. Without this, the
+    // ProtectedRoute `(token && !authorizationReady)` branch returns
+    // null forever and the LoginPage `(initialized && token)` Navigate
+    // bounces the user back into a redirect loop. Bug repro pre-fix:
+    // testai admin pages rendered empty `main` for 4+ minutes; tab
+    // never reached the login form despite real auth being broken.
+    const dispatchSessionClear = vi.fn();
+    const result = await bootstrapAuthController(
+      buildDeps({
+        keycloak: {
+          authenticated: false,
+          getToken: () => null,
+          getTokenParsed: () => undefined,
+          init: vi.fn().mockResolvedValue(undefined),
+        },
+        dispatchPhase,
+        dispatchFailed,
+        dispatchSession,
+        dispatchSessionClear,
+      }),
+    );
+
+    expect(result.finalPhase).toBe('unauthenticated');
+    // dispatchSessionClear MUST fire exactly once (no double-clear) and
+    // MUST land before phase=unauthenticated so React subscribers see
+    // {token: null, phase: 'unauthenticated'} together — preventing
+    // the brief render where ProtectedRoute reads (truthy_token,
+    // unauthenticated_phase) and stays on the stuck loading path.
+    expect(dispatchSessionClear).toHaveBeenCalledTimes(1);
+    const phaseDispatchOrder = dispatchPhase.mock.invocationCallOrder[1];
+    const clearDispatchOrder = dispatchSessionClear.mock.invocationCallOrder[0];
+    expect(clearDispatchOrder).toBeLessThan(phaseDispatchOrder);
+  });
+
+  it('2026-05-20 stale-token recovery: kcToken VAR ise dispatchSessionClear çağrılmaz (happy-path no-regression)', async () => {
+    // Inverse guard: the stale-token clear must NOT fire on the
+    // successful auth path. dispatchSession (with the real token)
+    // remains the only state-write in the happy path.
+    const dispatchSessionClear = vi.fn();
+    const result = await bootstrapAuthController(
+      buildDeps({
+        dispatchPhase,
+        dispatchFailed,
+        dispatchSession,
+        dispatchSessionClear,
+      }),
+    );
+
+    expect(result.finalPhase).toBe('transportReady');
+    expect(dispatchSessionClear).not.toHaveBeenCalled();
+    expect(dispatchSession).toHaveBeenCalledTimes(1);
   });
 
   it('keycloak.init throw → failed phase + degraded UI (not login)', async () => {
@@ -263,5 +325,75 @@ describe('bootstrapAuthController — production controller import test', () => 
 
     state = authReducer(state, setAuthPhase('refreshing'));
     expect(state.authError).toBeNull();
+  });
+});
+
+/* ================================================================== */
+/*  Codex thread 019e4443 REVISE absorb (2026-05-20):                  */
+/*  clearPersistedAuthKeys() unit tests — extracted helper             */
+/* ================================================================== */
+
+describe('clearPersistedAuthKeys — single source of truth for persisted-auth keyset', () => {
+  beforeEach(() => {
+    // Clean slate per test — jsdom's localStorage is shared across
+    // the suite by default.
+    window.localStorage.clear();
+  });
+
+  it('removes the 3 keys auth.slice.loadPersistedAuth() reads at slice-init', () => {
+    window.localStorage.setItem('token', 'stale-jwt');
+    window.localStorage.setItem('tokenExpiresAt', String(Date.now() + 60_000));
+    window.localStorage.setItem('user', JSON.stringify({ email: 'stale@example.com' }));
+
+    clearPersistedAuthKeys();
+
+    expect(window.localStorage.getItem('token')).toBeNull();
+    expect(window.localStorage.getItem('tokenExpiresAt')).toBeNull();
+    expect(window.localStorage.getItem('user')).toBeNull();
+  });
+
+  it('idempotent — running twice is a no-op (no throw on missing keys)', () => {
+    window.localStorage.setItem('token', 'first-jwt');
+    clearPersistedAuthKeys();
+    // Second call MUST NOT throw even though the keys are already gone.
+    expect(() => clearPersistedAuthKeys()).not.toThrow();
+    expect(window.localStorage.getItem('token')).toBeNull();
+  });
+
+  it('does NOT touch unrelated localStorage keys (impersonation, design-lab, theme)', () => {
+    // Regression guard: a future expansion of the keyset must not
+    // accidentally drop unrelated persisted state.
+    window.localStorage.setItem('token', 'stale-jwt');
+    window.localStorage.setItem('impersonation.brokerToken', 'broker-jwt');
+    window.localStorage.setItem('design-lab-recents', '["chart-a"]');
+    window.localStorage.setItem('themeAxes', '{"appearance":"dark"}');
+
+    clearPersistedAuthKeys();
+
+    expect(window.localStorage.getItem('token')).toBeNull();
+    expect(window.localStorage.getItem('impersonation.brokerToken')).toBe('broker-jwt');
+    expect(window.localStorage.getItem('design-lab-recents')).toBe('["chart-a"]');
+    expect(window.localStorage.getItem('themeAxes')).toBe('{"appearance":"dark"}');
+  });
+
+  it('gracefully handles localStorage throw (privacy mode / disabled storage)', () => {
+    // Simulate Safari privacy-mode quota-exceeded throw on removeItem.
+    // vi.spyOn returns a mock that proxies the call; direct assignment
+    // (e.g. window.localStorage.removeItem = ...) tripped on the jsdom
+    // Storage prototype's getter-only descriptor in earlier iter.
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new DOMException('QuotaExceededError');
+    });
+
+    expect(() => clearPersistedAuthKeys()).not.toThrow();
+    expect(removeItemSpy).toHaveBeenCalled(); // proves the throw path exercised
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      '[AuthBootstrapper] stale-token localStorage cleanup skipped:',
+      expect.any(DOMException),
+    );
+
+    removeItemSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 });
