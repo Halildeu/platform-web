@@ -182,6 +182,20 @@ const ECHARTS_GL_EXTERNAL = [
   "zrender/*",
 ];
 
+// Codex thread 019e4301 Campaign 4 — `echarts-liquidfill` is a
+// side-effect-registered extension package (~50 KB gzip). The wrapper
+// loads it via dynamic `import('echarts-liquidfill')` inside
+// `renderers/liquidfill/registerEChartsLiquidFill.ts` (HONESTY GUARD:
+// `src/__tests__/bundle-guard.test.ts` enforces the single-host
+// invariant). The lazy chunk is NOT part of the CONTRACT §7/§8 initial
+// chart artifact a consumer ships up-front — it stays external in BOTH
+// `wrapperOnly` and `contractTotal` so the size measurement honestly
+// reflects the eager graph.
+const ECHARTS_LIQUIDFILL_EXTERNAL = [
+  "echarts-liquidfill",
+  "echarts-liquidfill/*",
+];
+
 // PR-X16 ECharts Depth campaign — the depth charts (Tree, and later
 // Polar/ThemeRiver/Gantt) AND the PR-X16b-prep niche charts
 // (graph/parallel/pictorialBar/candlestick/boxplot) are lazy-registered
@@ -236,6 +250,7 @@ const ECHARTS_LAZY_FEATURE_EXTERNAL = [
 const WRAPPER_ONLY_EXTERNAL = [
   ...ALWAYS_EXTERNAL,
   ...ECHARTS_GL_EXTERNAL,
+  ...ECHARTS_LIQUIDFILL_EXTERNAL,
   "echarts",
   "echarts/*",
   "echarts-extension-amap",
@@ -245,6 +260,7 @@ const CONTRACT_TOTAL_EXTERNAL = [
   ...ALWAYS_EXTERNAL,
   ...ECHARTS_GL_EXTERNAL,
   ...ECHARTS_LAZY_FEATURE_EXTERNAL,
+  ...ECHARTS_LIQUIDFILL_EXTERNAL,
 ];
 
 /* ------------------------------------------------------------------ */
@@ -281,6 +297,10 @@ const PROBE_CHART_WHITELIST = new Set([
   "Lines3D",
   // Faz 21.11 P1c — Globe wrapper. Codex thread `019e10f8` iter-1.
   "Globe",
+  // Codex thread 019e4301 Campaign 4 — LiquidFillChart lazy-loads
+  // `echarts-liquidfill` via the same external pattern as echarts-gl,
+  // so the probe verifies its eager footprint stays empty.
+  "LiquidFillChart",
   // PR-X16b-prep — niche charts lazy-converted to free bundle headroom.
   // The probe verifies each stays out of the eager `contractTotal` graph.
   "GraphChart",

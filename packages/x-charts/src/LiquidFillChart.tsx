@@ -274,8 +274,13 @@ const LiquidFillChartInner = React.forwardRef<
       animationDuration: animate ? 500 : 0,
       title: title
         ? {
-            text: escapeHtml(title),
-            subtext: description ? escapeHtml(description) : undefined,
+            // Codex iter-2 P3 fix: ECharts title.text / subtext render
+            // as plain text in the canvas/svg layer, NOT HTML. Escaping
+            // here would surface `R&amp;D &lt;Ops&gt;` to the user
+            // instead of `R&D <Ops>`. Tooltip formatter stays escaped
+            // because that branch returns an HTML string.
+            text: title,
+            subtext: description ?? undefined,
             left: 'center',
           }
         : undefined,
@@ -315,10 +320,13 @@ const LiquidFillChartInner = React.forwardRef<
       aria: {
         enabled: true,
         label: {
+          // Codex iter-2 P3 fix: `aria.label.description` is consumed
+          // by screen readers verbatim — HTML escaping would garble
+          // the spoken label.
           description: description
-            ? escapeHtml(description)
+            ? description
             : title
-              ? `Liquid fill gauge: ${escapeHtml(title)}`
+              ? `Liquid fill gauge: ${title}`
               : 'Liquid fill gauge',
         },
         ...(decalEnabled ? { decal: { show: true, decals: decalPatterns } } : {}),
