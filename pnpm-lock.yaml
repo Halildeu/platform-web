@@ -1094,6 +1094,9 @@ importers:
       echarts-liquidfill:
         specifier: ~3.1.0
         version: 3.1.0(echarts@5.6.0)
+      echarts-wordcloud:
+        specifier: ~2.1.0
+        version: 2.1.0(echarts@5.6.0)
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 18.2.0
@@ -5145,6 +5148,11 @@ packages:
 
   echarts-liquidfill@3.1.0:
     resolution: {integrity: sha512-5Dlqs/jTsdTUAsd+K5LPLLTgrbbNORUSBQyk8PSy1Mg2zgHDWm83FmvA4s0ooNepCJojFYRITTQ4GU1UUSKYLw==}
+    peerDependencies:
+      echarts: ^5.0.1
+
+  echarts-wordcloud@2.1.0:
+    resolution: {integrity: sha512-Kt1JmbcROgb+3IMI48KZECK2AP5lG6bSsOEs+AsuwaWJxQom31RTNd6NFYI01E/YaI1PFZeueaupjlmzSQasjQ==}
     peerDependencies:
       echarts: ^5.0.1
 
@@ -13584,6 +13592,10 @@ snapshots:
       zrender: 5.6.1
 
   echarts-liquidfill@3.1.0(echarts@5.6.0):
+    dependencies:
+      echarts: 5.6.0
+
+  echarts-wordcloud@2.1.0(echarts@5.6.0):
     dependencies:
       echarts: 5.6.0
 

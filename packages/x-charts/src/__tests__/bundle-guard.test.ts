@@ -235,3 +235,55 @@ describe('bundle guard — echarts-liquidfill shell impact', () => {
     expect(source).toMatch(ALLOWED_LIQUIDFILL_DYNAMIC_IMPORT_RE);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  Codex thread 019e4351 Campaign 5 — echarts-wordcloud shell impact  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `echarts-wordcloud@~2.1.0` self-registers a `'wordCloud'` series
+ * type via side-effect import (same posture as echarts-liquidfill).
+ * Static `import 'echarts-wordcloud'` would bloat the initial shell
+ * bundle. Dynamic `import('echarts-wordcloud')` lives ONLY in the
+ * lazy registrar.
+ */
+const ALLOWED_WORDCLOUD_DYNAMIC_IMPORT_RE = /await\s+import\s*\(\s*['"]echarts-wordcloud['"]\s*\)/;
+
+const FORBIDDEN_WORDCLOUD_STATIC_RE =
+  /^[ \t]*(?:import[ \t]+(?:[^'"]*['"]echarts-wordcloud[^'"]*['"]|['"]echarts-wordcloud[^'"]*['"])|export[ \t]+[^;]*from[ \t]+['"]echarts-wordcloud[^'"]*['"])/m;
+
+const WORDCLOUD_DYNAMIC_IMPORT_RE = /import\s*\(\s*['"]echarts-wordcloud['"]\s*\)/g;
+
+const ALLOWED_WORDCLOUD_HOST = path.join('renderers', 'wordcloud', 'registerEChartsWordCloud.ts');
+
+describe('bundle guard — echarts-wordcloud shell impact', () => {
+  it('no source file ANYWHERE statically imports echarts-wordcloud', async () => {
+    const offenders: string[] = [];
+    for await (const file of walkTs(SRC_ROOT)) {
+      const rel = path.relative(SRC_ROOT, file);
+      const source = await readFile(file, 'utf-8');
+      if (FORBIDDEN_WORDCLOUD_STATIC_RE.test(source)) {
+        offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('dynamic `import("echarts-wordcloud")` lives ONLY in renderers/wordcloud/registerEChartsWordCloud.ts', async () => {
+    const offenders: string[] = [];
+    for await (const file of walkTs(SRC_ROOT)) {
+      const rel = path.relative(SRC_ROOT, file);
+      const source = await readFile(file, 'utf-8');
+      if (WORDCLOUD_DYNAMIC_IMPORT_RE.test(source) && rel !== ALLOWED_WORDCLOUD_HOST) {
+        offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the allowed host (registerEChartsWordCloud.ts) DOES use the dynamic import', async () => {
+    const file = path.join(SRC_ROOT, ALLOWED_WORDCLOUD_HOST);
+    const source = await readFile(file, 'utf-8');
+    expect(source).toMatch(ALLOWED_WORDCLOUD_DYNAMIC_IMPORT_RE);
+  });
+});

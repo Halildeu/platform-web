@@ -17,8 +17,8 @@
  */
 
 /* ------------------------------------------------------------------ */
-/*  33 chart wrappers (27 2D echarts-backed + 5 3D echarts-gl-backed  */
-/*  + 1 lazy-loaded echarts-liquidfill)                                */
+/*  34 chart wrappers (27 2D echarts-backed + 5 3D echarts-gl-backed  */
+/*  + 1 lazy-loaded echarts-liquidfill + 1 lazy-loaded echarts-wordcloud) */
 /* ------------------------------------------------------------------ */
 
 export { AreaChart } from '../AreaChart';
@@ -113,6 +113,10 @@ export type { Bar3DChartProps, Bar3DDataPoint, Bar3DShading } from '../Bar3DChar
 // Codex thread 019e4301 AGREE_WITH_REVISIONS: lazy-loaded liquidFill KPI gauge.
 export { LiquidFillChart } from '../LiquidFillChart';
 export type { LiquidFillChartProps, LiquidFillShape } from '../LiquidFillChart';
+// Codex thread 019e4351 AGREE_WITH_REVISIONS: lazy-loaded wordCloud
+// text frequency wrapper. 34th wrapper; FINAL of the 5-missing-chart campaign.
+export { WordCloudChart } from '../WordCloudChart';
+export type { WordCloudChartProps, WordCloudDatum, WordCloudShape } from '../WordCloudChart';
 export { BoxPlotChart } from '../BoxPlotChart';
 export type { BoxPlotChartProps, BoxPlotDataPoint } from '../BoxPlotChart';
 export { CandlestickChart } from '../CandlestickChart';
