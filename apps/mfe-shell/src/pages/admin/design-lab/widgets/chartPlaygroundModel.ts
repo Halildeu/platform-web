@@ -123,6 +123,20 @@ const KNOWN_ENUM_OPTIONS: Record<string, EditorEnumOption[]> = {
     { value: 'true', label: 'on' },
     { value: 'false', label: 'off' },
   ],
+  // LiquidFillShape — closed 7-shape enum from packages/x-charts/src/
+  // LiquidFillChart.tsx (Codex thread 019e4301 iter-1: path strings
+  // deliberately omitted for V1; pure string-literal union maps cleanly
+  // to a dropdown). Codex iter-5 P1 fix — without this entry the
+  // descriptor falls to `complex` and the playground hides the prop.
+  LiquidFillShape: [
+    { value: 'circle', label: 'circle' },
+    { value: 'rect', label: 'rect' },
+    { value: 'roundRect', label: 'roundRect' },
+    { value: 'triangle', label: 'triangle' },
+    { value: 'diamond', label: 'diamond' },
+    { value: 'pin', label: 'pin' },
+    { value: 'arrow', label: 'arrow' },
+  ],
   ChartDensityPreference: [
     { value: 'auto', label: 'auto (shell density)' },
     { value: 'compact', label: 'compact' },
@@ -2147,6 +2161,17 @@ export const PLAYGROUND_DEFAULT_OVERRIDES: Record<string, PlaygroundValue> = {
  */
 export const PROP_EDITOR_KIND_OVERRIDES: Record<string, EditorKind> = {
   'tree-chart.roam': 'boolean',
+  // LiquidFillChart (Codex thread 019e4301 iter-5 P1 BLOCKER fix):
+  // `radius`, `amplitude`, `waveLength` are typed `string | number` in
+  // the wrapper interface so consumers can pass either `"50%"` or `120`
+  // / `"8%"` or `12`. The generic `getEditorKind` heuristic falls
+  // through to `complex` for union types; override to `'string'` so
+  // the playground exposes a text editor (the wrapper coerces either
+  // shape verbatim). Default values come from `parseDefault` which
+  // strips the surrounding quotes off the catalog's `"50%"` literal.
+  'liquid-fill-chart.radius': 'string',
+  'liquid-fill-chart.amplitude': 'string',
+  'liquid-fill-chart.waveLength': 'string',
 };
 
 /* ================================================================== */
@@ -3871,12 +3896,17 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
       description: 'Default circle shape, 72% fill, wave animation on.',
       statePatch: {},
     },
+    // Codex iter-5 P2 fix: avoid the "value=1" preview/code drift —
+    // generated snippet pulls the sample-data scaffold literal verbatim,
+    // so a state-only `value: 1` patch would render 100% in preview but
+    // emit `const sampleValue = 0.72` in the snippet. Replace with a
+    // primitive prop that the codegen actually serialises (`shape='pin'`).
     {
-      id: 'full',
-      label: 'Full Container',
-      tag: 'value',
-      description: '100% fill — saturated success state.',
-      statePatch: { value: 1 },
+      id: 'pin-shape',
+      label: 'Pin Shape',
+      tag: 'shape',
+      description: 'Map-pin container — same fill, different metaphor.',
+      statePatch: { shape: 'pin' },
     },
     {
       id: 'rect-shape',
