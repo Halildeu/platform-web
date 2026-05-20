@@ -14,6 +14,15 @@ import NotificationPreferenceForm from '../NotificationPreferenceForm';
  * stay out of the form's behaviour tests).
  */
 
+// Faz 23.5 M5 G3b: mock the topic catalog RTK Query hook so the form
+// can render without a Redux Provider wrapper in these unit tests.
+// Form tests focus on payload contract (submit shape, validation); the
+// catalog autocomplete itself is exercised via notify-topic-catalog.api
+// tests + a future integration / Playwright pass.
+vi.mock('../../../features/notifications/api/notify-topic-catalog.api', () => ({
+  useListTopicCatalogQuery: () => ({ data: undefined, isLoading: false, error: undefined }),
+}));
+
 vi.mock('@mfe/design-system', () => ({
   FormDrawer: ({
     children,
