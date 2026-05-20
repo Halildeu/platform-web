@@ -184,6 +184,60 @@ describe('chartPlaygroundModel — type detection', () => {
     expect(opts).toBeDefined();
     expect(opts?.map((o) => o.value)).toEqual(['full', 'readonly', 'disabled', 'hidden']);
   });
+
+  it('exposes LiquidFillShape as exactly 7 shapes (Codex iter-5 P1 fix)', () => {
+    // Codex thread 019e4301 iter-5 P1 BLOCKER regression guard. Without
+    // this enum entry the descriptor falls to `complex` and the
+    // playground hides the `shape` prop — defeating the count-lock
+    // N=18 claim. iter-1 path strings deliberately omitted from V1.
+    const opts = getEnumOptions('LiquidFillShape');
+    expect(opts).toBeDefined();
+    expect(opts?.map((o) => o.value)).toEqual([
+      'circle',
+      'rect',
+      'roundRect',
+      'triangle',
+      'diamond',
+      'pin',
+      'arrow',
+    ]);
+  });
+
+  it('buildDescriptor liquid-fill-chart.shape is a live enum editor (P1 fix)', () => {
+    const d = buildDescriptor('liquid-fill-chart', {
+      name: 'shape',
+      type: 'LiquidFillShape',
+      required: false,
+      default: '"circle"',
+      description: '',
+    });
+    expect(d.kind).toBe('enum');
+    expect(d.liveEditable).toBe(true);
+    expect(d.options.map((o) => o.value)).toContain('pin');
+  });
+
+  it.each([
+    ['radius', '"50%"', '50%'],
+    ['amplitude', '"8%"', '8%'],
+    ['waveLength', '"80%"', '80%'],
+  ])(
+    'buildDescriptor liquid-fill-chart.%s is a live string editor with default %s (P1 fix)',
+    (name, defaultLiteral, expectedDefault) => {
+      // Codex iter-5 P1 fix: `string | number` union props get a
+      // `string` editor override so the playground exposes a text
+      // input. Wrapper coerces the literal verbatim.
+      const d = buildDescriptor('liquid-fill-chart', {
+        name,
+        type: 'string | number',
+        required: false,
+        default: defaultLiteral,
+        description: '',
+      });
+      expect(d.kind).toBe('string');
+      expect(d.liveEditable).toBe(true);
+      expect(d.defaultValue).toBe(expectedDefault);
+    },
+  );
 });
 
 describe('chartPlaygroundModel — default parsing', () => {

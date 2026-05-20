@@ -3885,9 +3885,11 @@ const CHART_PRESETS: Record<string, ChartPlaygroundPreset[]> = {
     },
   ],
   // LiquidFillChart (Codex 019e4301 AGREE_WITH_REVISIONS): lazy-loaded
-  // KPI gauge preset gallery. 6 entries: starter, full container
-  // (value=1), shape (rect override), dark theme, no-animation
-  // (waveAnimation off), readonly.
+  // KPI gauge preset gallery. 6 entries: starter, pin-shape (Codex
+  // iter-5 P2 fix — replaces the previous "full container value=1"
+  // preset which drifted from the generated snippet's sample scaffold
+  // literal), rect-shape, dark, no-animation (waveAnimation off),
+  // readonly.
   'liquid-fill-chart': [
     {
       id: 'basic',
