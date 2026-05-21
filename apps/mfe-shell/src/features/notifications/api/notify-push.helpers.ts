@@ -40,12 +40,31 @@ export type BrowserPushSupport =
   | { supported: false; reason: string };
 
 /**
+ * Custom error class signaling that the user explicitly denied
+ * notification permission (DOMException NotAllowedError or user-reject
+ * on `Notification.requestPermission()`). Used by usePushSubscription
+ * hook for typed status transitions (Codex 019e4a87 P2 absorb).
+ */
+export class PushPermissionDeniedError extends Error {
+  constructor(message: string = 'notification permission denied by user') {
+    super(message);
+    this.name = 'PushPermissionDeniedError';
+  }
+}
+
+/**
  * Detect Web Push Protocol support in the current browser.
  * Faz 22.2 mobile FCM/APNS scope DIŞI — sadece browser-side capability check.
+ *
+ * Codex 019e4a87 P2 absorb (iter-2): SSR + secure context guards
+ * sıkılaştırıldı.
  */
 export function detectBrowserPushSupport(): BrowserPushSupport {
   if (typeof window === 'undefined') {
     return { supported: false, reason: 'no_window' };
+  }
+  if (typeof navigator === 'undefined') {
+    return { supported: false, reason: 'no_navigator' };
   }
   if (!('serviceWorker' in navigator)) {
     return { supported: false, reason: 'no_service_worker' };
@@ -55,6 +74,10 @@ export function detectBrowserPushSupport(): BrowserPushSupport {
   }
   if (!('Notification' in window)) {
     return { supported: false, reason: 'no_notification_api' };
+  }
+  // Service worker registration HTTPS veya localhost (isSecureContext) ister
+  if (typeof window.isSecureContext === 'boolean' && !window.isSecureContext) {
+    return { supported: false, reason: 'insecure_context' };
   }
   return { supported: true };
 }
@@ -70,12 +93,18 @@ export interface BrowserSubscription {
  * subscribe via PushManager. Returns subscription material ready
  * to POST to backend.
  *
+ * Codex 019e4a87 P2 absorb (iter-2): permission denial typed via
+ * {@link PushPermissionDeniedError} (önceki string-based "permission"
+ * substring check fragile).
+ *
  * @param vapidPublicKey base64url-encoded VAPID public key (from backend ConfigMap)
- * @returns Subscription material or null if denied/error
+ * @returns Subscription material ready to POST to backend
+ * @throws PushPermissionDeniedError if user denied notification permission
+ * @throws Error for other capability/network failures
  */
 export async function registerAndSubscribe(
   vapidPublicKey: string
-): Promise<BrowserSubscription | null> {
+): Promise<BrowserSubscription> {
   const support = detectBrowserPushSupport();
   if (!support.supported) {
     throw new Error(`browser does not support Web Push: ${support.reason}`);
@@ -83,12 +112,12 @@ export async function registerAndSubscribe(
 
   // 1. Permission
   if (Notification.permission === 'denied') {
-    throw new Error('notification permission previously denied by user');
+    throw new PushPermissionDeniedError('notification permission previously denied by user');
   }
   if (Notification.permission === 'default') {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      throw new Error('notification permission not granted');
+      throw new PushPermissionDeniedError('notification permission not granted');
     }
   }
 
@@ -100,10 +129,19 @@ export async function registerAndSubscribe(
 
   // 3. PushManager subscribe
   // userVisibleOnly=true zorunlu (Chrome/Edge browser policy)
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: base64UrlToUint8Array(vapidPublicKey),
-  });
+  let subscription: PushSubscription;
+  try {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: base64UrlToUint8Array(vapidPublicKey),
+    });
+  } catch (e) {
+    // DOMException NotAllowedError → permission denied; diğerleri network/capability
+    if (e instanceof DOMException && e.name === 'NotAllowedError') {
+      throw new PushPermissionDeniedError(e.message);
+    }
+    throw e;
+  }
 
   return {
     endpointUrl: subscription.endpoint,

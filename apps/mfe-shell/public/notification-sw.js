@@ -61,7 +61,26 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/notifications';
+
+  // URL trust boundary (Codex 019e4a87 iter-2 P2 absorb): payload.url
+  // backend'den gelse bile SW tarafı trust limiti olarak ele alır.
+  // Sadece same-origin path-only relative URL kabul edilir; mutlak URL
+  // veya farklı origin fallback'e düşer.
+  const rawUrl = event.notification.data && event.notification.data.url;
+  const fallbackUrl = '/notifications';
+  let targetUrl = fallbackUrl;
+  if (typeof rawUrl === 'string') {
+    try {
+      const resolved = new URL(rawUrl, self.location.origin);
+      // Same-origin only
+      if (resolved.origin === self.location.origin) {
+        targetUrl = resolved.pathname + resolved.search + resolved.hash;
+      }
+    } catch (e) {
+      // Invalid URL — fallback
+      targetUrl = fallbackUrl;
+    }
+  }
 
   event.waitUntil(
     self.clients
@@ -85,14 +104,14 @@ self.addEventListener('notificationclick', (event) => {
 // pushsubscriptionchange: subscription endpoint browser tarafından yeniden
 // üretildiğinde (örn. quota refresh, expiration), backend'e re-subscribe
 // gerek. Bu event browser-side rare; mfe-shell session başında
-// usePushSubscriptionLifecycle hook ile re-check yapılır.
+// usePushSubscription hook ile re-check yapılır.
+//
+// Codex 019e4a87 iter-2 P2 absorb: console.info logging eklendi (operator
+// visibility için). Auth header (X-Org-Id + X-Subscriber-Id) SW context'inde
+// olmadığı için fetch yapılmaz — main thread'in iş. PII-free log:
+// sadece event timestamp + reason (raw endpointUrl loglanmaz).
 self.addEventListener('pushsubscriptionchange', (event) => {
-  // Logging only — actual re-subscribe handled by main thread
-  // (mfe-shell usePushSubscription hook will detect the changed endpoint
-  // on next visibility check and call POST /api/v1/notify/push/subscribe
-  // with the new subscription material).
-  // Service worker'da fetch yapılabilirdi, ama auth header (X-Org-Id +
-  // X-Subscriber-Id) SW context'inde yok; main thread'in işi.
-  // event.waitUntil(self.registration.pushManager.subscribe(...))
-  // pattern future iteration.
+  // PII-safe log: subscription objesi içermez, sadece olay sinyali
+  console.info('[notification-sw] pushsubscriptionchange event received; '
+    + 'main thread will re-subscribe on next session visibility check');
 });
