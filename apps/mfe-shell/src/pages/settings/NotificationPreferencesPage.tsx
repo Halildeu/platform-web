@@ -15,6 +15,7 @@ import type {
 import { selectNotifyIdentity } from '../../features/notifications/model/identity.selectors';
 import { formatQuietHours } from '../../features/notifications/model/quiet-hours';
 import NotificationPreferenceForm from './NotificationPreferenceForm';
+import PushSubscriptionCard from './PushSubscriptionCard';
 
 /**
  * Subscriber notification preferences page (Faz 23.5 PR3 + Faz 23.6 PR-B1).
@@ -170,6 +171,13 @@ const NotificationPreferencesPage: React.FC = () => {
         Hangi konularda hangi kanallardan bildirim almak istediğinizi buradan yönetebilirsiniz. Boş
         kural varsayılan olarak izinlidir.
       </p>
+
+      {/* Faz 23.7 M7 T4.2 PR-W5 follow-up: WebPush browser subscription card.
+          PushManager.subscribe + endpoint registration UI; current-browser
+          scoped (localStorage 'notify.push.browserEndpointId'). */}
+      <div className="mt-4">
+        <PushSubscriptionCard />
+      </div>
 
       {/* Faz 23.6 PR-C1 + PR-C2: bulk action bar — restore-defaults
           (destructive two-stage confirm) and per-channel mute (also
