@@ -7,6 +7,7 @@ import { notifyInboxApi } from '../../features/notifications/api/notify-inbox.ap
 import { notifyPrefsApi } from '../../features/notifications/api/notify-prefs.api';
 import { notifyUnsubscribeApi } from '../../features/notifications/api/notify-unsubscribe.api';
 import { notifyTopicCatalogApi } from '../../features/notifications/api/notify-topic-catalog.api';
+import { notifyPushApi } from '../../features/notifications/api/notify-push.api';
 
 export const store = configureStore({
   reducer: {
@@ -25,6 +26,8 @@ export const store = configureStore({
     // Faz 23.5 M5 G3b: topic catalog (powers preference form autocomplete +
     // critical-eligible badge + channel multi-select restriction).
     [notifyTopicCatalogApi.reducerPath]: notifyTopicCatalogApi.reducer,
+    // Faz 23.7 M7 T4.2 PR-W5: WebPush subscription REST cache.
+    [notifyPushApi.reducerPath]: notifyPushApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(
@@ -32,6 +35,7 @@ export const store = configureStore({
       notifyPrefsApi.middleware,
       notifyUnsubscribeApi.middleware,
       notifyTopicCatalogApi.middleware,
+      notifyPushApi.middleware,
     ),
 });
 
