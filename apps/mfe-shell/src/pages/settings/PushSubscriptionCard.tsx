@@ -1,4 +1,5 @@
 import { Bell, BellOff, AlertCircle, Loader } from 'lucide-react';
+// (Loader, AlertCircle kept for status/error feedback render paths)
 import React from 'react';
 import { useAppSelector } from '../../app/store/store.hooks';
 import { selectNotifyIdentity } from '../../features/notifications/model/identity.selectors';
@@ -52,16 +53,11 @@ const PushSubscriptionCard: React.FC = () => {
     );
   }
 
-  // Identity not ready → skeleton state
+  // Identity not ready → render nothing (parent NotificationPreferencesPage
+  // already early-returns "Önce oturum açın" before this card renders;
+  // standalone defensive fallback for non-parent embeddings).
   if (!identity) {
-    return (
-      <div className="rounded-md border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          <Loader className="mr-2 inline h-4 w-4 animate-spin" />
-          Kimlik yükleniyor…
-        </p>
-      </div>
-    );
+    return null;
   }
 
   return (

@@ -117,6 +117,7 @@ jobs:
             VITE_AUTH_MODE=keycloak
             VITE_AG_GRID_LICENSE_KEY=${{ secrets.AG_GRID_LICENSE_KEY }}
             VITE_MFE_ON_DEMAND_BOOTSTRAP=${{ matrix.mfe_on_demand_bootstrap }}
+            VITE_NOTIFY_VAPID_PUBLIC_KEY=${{ vars.NOTIFY_VAPID_PUBLIC_KEY }}
             BUILD_SHA=${{ github.sha }}
             BUILD_REF=${{ github.ref_name }}
           tags: |

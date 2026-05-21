@@ -51,6 +51,14 @@ ARG BUILD_REF=""
 # audit `apps/mfe-shell/src/app/config/mfe-bootstrap-flag.ts`).
 ARG VITE_MFE_ON_DEMAND_BOOTSTRAP="false"
 
+# Faz 23.7 M7 T4.2 PR-W5 follow-up — Web Push Protocol VAPID public key.
+# Backend Vault `kv/platform/notification-orchestrator/vapid_public_key`
+# ile sync olmalı (operator action — RB-graph-mail-adapter-activation pattern).
+# Public key gizli değil; GitHub Actions `vars` ile build-arg pass edilir.
+# Empty default → frontend PushSubscriptionCard "configuration missing"
+# warning state'inde gösterir (fail-closed UI; subscribe button disabled).
+ARG VITE_NOTIFY_VAPID_PUBLIC_KEY=""
+
 ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM} \
     VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID} \
@@ -59,6 +67,7 @@ ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_AUTH_MODE=${VITE_AUTH_MODE} \
     VITE_AG_GRID_LICENSE_KEY=${VITE_AG_GRID_LICENSE_KEY} \
     VITE_MFE_ON_DEMAND_BOOTSTRAP=${VITE_MFE_ON_DEMAND_BOOTSTRAP} \
+    VITE_NOTIFY_VAPID_PUBLIC_KEY=${VITE_NOTIFY_VAPID_PUBLIC_KEY} \
     BUILD_SHA=${BUILD_SHA} \
     BUILD_REF=${BUILD_REF}
 
