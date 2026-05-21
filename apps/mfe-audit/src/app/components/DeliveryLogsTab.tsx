@@ -12,6 +12,7 @@ import type {
   DeliveryLogResponse,
   DeliveryLogStatus,
 } from '../types/delivery-log';
+import { DeliveryStatusPill, FailureCategoryLabel } from './DeliveryStatusPill';
 
 /**
  * Faz 23.5 PR6 FE — Delivery Logs tab.
@@ -188,18 +189,24 @@ export const DeliveryLogsTab: React.FC = () => {
       {mode === 'intent' ? (
         <IntentModeForm intentId={intentId} onIntentIdChange={setIntentId} />
       ) : (
-        <AdminModeForm
-          status={statusFilter}
-          onStatusChange={setStatusFilter}
-          channel={channelFilter}
-          onChannelChange={setChannelFilter}
-          provider={providerFilter}
-          onProviderChange={setProviderFilter}
-          from={fromFilter}
-          onFromChange={setFromFilter}
-          to={toFilter}
-          onToChange={setToFilter}
-        />
+        <>
+          {/* Faz 23.4 M6b — channel quick-filter chip row. SMS/email/
+              slack/in-app one-click filter; toggles channel state
+              between target value and empty string. */}
+          <QuickFilterChips channel={channelFilter} onChannelChange={setChannelFilter} />
+          <AdminModeForm
+            status={statusFilter}
+            onStatusChange={setStatusFilter}
+            channel={channelFilter}
+            onChannelChange={setChannelFilter}
+            provider={providerFilter}
+            onProviderChange={setProviderFilter}
+            from={fromFilter}
+            onFromChange={setFromFilter}
+            to={toFilter}
+            onToChange={setToFilter}
+          />
+        </>
       )}
 
       <PageSizeSelect size={size} onSizeChange={setSize} />
@@ -291,6 +298,65 @@ interface AdminModeFormProps {
   to: string;
   onToChange: (value: string) => void;
 }
+
+/**
+ * Faz 23.4 M6b — quick-filter chip row.
+ *
+ * Codex thread `019e4925` AGREE: SMS channel shortcut sets channel
+ * filter in one click. Future quick filters (email, slack) can drop
+ * here without rewiring the entire AdminModeForm. Active state is
+ * implied by the underlying channel filter value matching this chip's
+ * target — so the chip toggles between "set channel=sms" and "clear
+ * channel filter" while preserving every other filter (status, from,
+ * to, provider).
+ */
+interface QuickFilterChipsProps {
+  channel: string;
+  onChannelChange: (value: string) => void;
+}
+
+const QUICK_FILTER_CHANNELS = [
+  { value: 'sms', label: 'SMS' },
+  { value: 'email', label: 'Email' },
+  { value: 'slack', label: 'Slack' },
+  { value: 'in_app', label: 'In-app' },
+] as const;
+
+const QuickFilterChips: React.FC<QuickFilterChipsProps> = ({ channel, onChannelChange }) => (
+  <div
+    role="group"
+    aria-label="Hızlı kanal filtreleri"
+    data-testid="delivery-logs-quick-filters"
+    style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
+  >
+    {QUICK_FILTER_CHANNELS.map((chip) => {
+      const active = channel === chip.value;
+      return (
+        <button
+          key={chip.value}
+          type="button"
+          data-testid={`delivery-logs-quick-filter-${chip.value}`}
+          aria-pressed={active}
+          onClick={() => onChannelChange(active ? '' : chip.value)}
+          style={{
+            padding: '0.25rem 0.75rem',
+            borderRadius: '999px',
+            border: active
+              ? '1px solid rgba(59, 130, 246, 0.6)'
+              : '1px solid var(--border-subtle, rgba(148, 163, 184, 0.4))',
+            backgroundColor: active ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
+            color: active ? 'rgb(29, 78, 216)' : 'var(--text-secondary)',
+            cursor: 'pointer',
+            fontSize: '0.8rem',
+            fontWeight: active ? 600 : 500,
+          }}
+        >
+          {chip.label}
+        </button>
+      );
+    })}
+  </div>
+);
 
 const AdminModeForm: React.FC<AdminModeFormProps> = ({
   status,
@@ -423,15 +489,61 @@ const DeliveryLogsTable: React.FC<DeliveryLogsTableProps> = ({ rows }) => {
             <td title={row.correlation_id ?? ''}>{row.intent_id}</td>
             <td>{row.channel}</td>
             <td>{row.provider}</td>
-            <td>{row.status}</td>
-            <td title={row.failure_summary_redacted}>{row.failure_category}</td>
-            <td>{row.provider_msg_id_masked ?? '—'}</td>
+            <td>
+              <DeliveryStatusPill status={row.status} detail={resolveDlrDetail(row)} />
+            </td>
+            <td>
+              <FailureCategoryLabel
+                category={row.failure_category}
+                redactedSummary={row.failure_summary_redacted}
+              />
+            </td>
+            <td
+              style={{
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: '0.75rem',
+              }}
+            >
+              {row.provider_msg_id_masked ?? '—'}
+            </td>
             <td>{formatTimestamp(row.activity_at)}</td>
           </tr>
         ))}
       </tbody>
     </table>
   );
+};
+
+/**
+ * Faz 23.4 M6b — DLR terminal timestamp resolver.
+ *
+ * Picks the most informative timestamp for the status pill tooltip:
+ * - DELIVERED → delivered_at  (asıl teslim anı)
+ * - FAILED/BOUNCED → permanent_failure_at  (kalıcı fail anı)
+ * - RETRY → next_retry_at  (sıradaki deneme anı)
+ * - Other → null (pill shows just the status label)
+ *
+ * Returns the timestamp in the same human-friendly format as the
+ * activity column ({@link formatTimestamp}); the pill tooltip already
+ * carries the localized status label.
+ */
+const resolveDlrDetail = (row: DeliveryLogResponse): string | null => {
+  const raw = pickDlrTimestamp(row);
+  return raw ? formatTimestamp(raw) : null;
+};
+
+const pickDlrTimestamp = (row: DeliveryLogResponse): string | null => {
+  switch (row.status) {
+    case 'DELIVERED':
+      return row.delivered_at;
+    case 'FAILED':
+    case 'BOUNCED':
+      return row.permanent_failure_at;
+    case 'RETRY':
+      return row.next_retry_at;
+    default:
+      return null;
+  }
 };
 
 interface PaginationProps {
