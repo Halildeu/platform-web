@@ -72,7 +72,67 @@ describe('DeliveryLogsTab — admin mode (default)', () => {
 
     expect(screen.getByText('intent-123')).toBeTruthy();
     expect(screen.getByText('netgsm-***1234')).toBeTruthy();
-    expect(screen.getByText('RECIPIENT_REJECTED')).toBeTruthy();
+    // Faz 23.4 M6b — failure category is now rendered as a localized
+    // Turkish label via FailureCategoryLabel; the raw enum value moves
+    // to data-testid for assertion stability across copy edits.
+    expect(screen.getByTestId('delivery-failure-category-RECIPIENT_REJECTED')).toBeTruthy();
+    expect(screen.getByText('Alıcı reddetti')).toBeTruthy();
+  });
+
+  // Faz 23.4 M6b — DLR visualization specs
+  describe('DLR visualization (M6b)', () => {
+    it('renders status as a localized pill with icon and aria-label', async () => {
+      fetchAdminDeliveriesMock.mockResolvedValueOnce(deliveryLogListFixture);
+
+      renderWithQueryClient(<DeliveryLogsTab />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('delivery-logs-table')).toBeTruthy();
+      });
+
+      // First fixture row status is FAILED (see deliveryLogListFixture).
+      const pill = screen.getByTestId('delivery-status-pill-FAILED');
+      expect(pill).toBeTruthy();
+      expect(pill.getAttribute('aria-label')).toContain('Başarısız');
+      expect(pill.textContent).toContain('Başarısız');
+    });
+
+    it('renders quick-filter chip row and toggles channel filter on click', async () => {
+      fetchAdminDeliveriesMock.mockResolvedValue(deliveryLogEmptyFixture);
+
+      renderWithQueryClient(<DeliveryLogsTab />);
+
+      await waitFor(() => expect(fetchAdminDeliveriesMock).toHaveBeenCalledTimes(1));
+
+      const smsChip = screen.getByTestId('delivery-logs-quick-filter-sms');
+      expect(smsChip.getAttribute('aria-pressed')).toBe('false');
+
+      fireEvent.click(smsChip);
+
+      await waitFor(() => expect(fetchAdminDeliveriesMock).toHaveBeenCalledTimes(2));
+      const second = fetchAdminDeliveriesMock.mock.calls[1][0];
+      expect(second.channel).toBe('sms');
+      expect(
+        screen.getByTestId('delivery-logs-quick-filter-sms').getAttribute('aria-pressed'),
+      ).toBe('true');
+    });
+
+    it('clears channel filter when the active quick-filter chip is clicked again', async () => {
+      fetchAdminDeliveriesMock.mockResolvedValue(deliveryLogEmptyFixture);
+
+      renderWithQueryClient(<DeliveryLogsTab />);
+
+      await waitFor(() => expect(fetchAdminDeliveriesMock).toHaveBeenCalledTimes(1));
+
+      const smsChip = screen.getByTestId('delivery-logs-quick-filter-sms');
+      fireEvent.click(smsChip);
+      await waitFor(() => expect(fetchAdminDeliveriesMock).toHaveBeenCalledTimes(2));
+
+      fireEvent.click(smsChip);
+      await waitFor(() => expect(fetchAdminDeliveriesMock).toHaveBeenCalledTimes(3));
+      const third = fetchAdminDeliveriesMock.mock.calls[2][0];
+      expect(third.channel).toBeUndefined();
+    });
   });
 
   it('passes orgId and page/size to the admin endpoint', async () => {
