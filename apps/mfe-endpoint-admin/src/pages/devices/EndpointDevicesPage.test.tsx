@@ -37,7 +37,7 @@ describe('EndpointDevicesPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the device list returned by /api/v1/admin/endpoint-devices', async () => {
+  it('renders the device list returned by /api/v1/endpoint-admin/endpoint-devices', async () => {
     const payload = [
       {
         id: 'b1c2d3e4-1111-2222-3333-444455556666',
@@ -59,7 +59,7 @@ describe('EndpointDevicesPage', () => {
 
     globalThis.fetch = vi.fn(async (input) => {
       const url = typeof input === 'string' ? input : (input as Request).url;
-      expect(url).toContain('/api/v1/admin/endpoint-devices');
+      expect(url).toContain('/api/v1/endpoint-admin/endpoint-devices');
       return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

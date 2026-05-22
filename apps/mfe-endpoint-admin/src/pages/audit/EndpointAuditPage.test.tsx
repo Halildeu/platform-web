@@ -67,7 +67,7 @@ describe('EndpointAuditPage', () => {
     await waitFor(() => {
       expect(screen.getByText('DEVICE_ENROLLED')).toBeInTheDocument();
     });
-    expect(capturedUrl).toContain('/api/v1/admin/endpoint-audit-events');
+    expect(capturedUrl).toContain('/api/v1/endpoint-admin/endpoint-audit-events');
     expect(capturedUrl).toContain('limit=50');
     expect(screen.getByTestId('endpoint-admin-audit-table')).toBeInTheDocument();
   });

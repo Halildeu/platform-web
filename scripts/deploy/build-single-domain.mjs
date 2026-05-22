@@ -23,6 +23,9 @@ const outputDir = path.resolve(webRoot, 'dist/ubuntu-single-domain');
 // User bulgusu 2026-04-25: /admin/schema-explorer remoteEntry.js yüklenemedi
 // Kök sebep: build-single-domain.mjs sadece 4 MFE alıyordu (access/audit/reporting/users)
 // Shell routing 7 MFE bekliyor (+ schema-explorer + suggestions + ethic)
+// Faz 22 Web endpoint-admin (#653): mfe-endpoint-admin testai-only — bu
+// listeye aşağıda (publicOrigin hesaplandıktan sonra) `endpointAdminEnabled`
+// koşuluyla push edilir.
 const coreRemotes = [
   { app: 'mfe-access', slug: 'access' },
   { app: 'mfe-audit', slug: 'audit' },
@@ -287,6 +290,16 @@ const publicOrigin = resolvePublicOrigin(
     PROD_PUBLIC_ORIGIN,
 );
 const remoteEntryUrlFor = (slug) => `${publicOrigin}/remotes/${slug}/remoteEntry.js`;
+
+// Faz 22 Web endpoint-admin runtime acceptance (#653): endpoint-admin MFE
+// is testai-only. PLAN.md Faz 22 prod is deferred, so the prod single-domain
+// build omits the remote entirely — no eager /remotes/endpoint-admin/
+// remoteEntry.js fetch on prod bootstrap. Faz 22.2 prod activation makes
+// this unconditional.
+const endpointAdminEnabled = publicOrigin === STAGE_PUBLIC_ORIGIN;
+if (endpointAdminEnabled) {
+  coreRemotes.push({ app: 'mfe-endpoint-admin', slug: 'endpoint-admin' });
+}
 const authMode =
   process.env.VITE_AUTH_MODE || process.env.AUTH_MODE || process.env.WEB_AUTH_MODE || 'keycloak';
 const keycloakUrl = resolveKeycloakPublicUrl(
@@ -356,6 +369,18 @@ const shellEnv = {
   SHELL_ENABLE_ETHIC_REMOTE: '1',
   VITE_SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '1',
   SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE: '1',
+  // Faz 22 Web endpoint-admin runtime acceptance (#653): testai-only remote
+  // URL + build/runtime enable flags. Empty spread for the prod build
+  // (endpointAdminEnabled false) so vite.config buildRemotes() omits the
+  // manifest entry and lazy-routes DCE's the static import.
+  ...(endpointAdminEnabled
+    ? {
+        MFE_ENDPOINT_ADMIN_URL: remoteEntryUrlFor('endpoint-admin'),
+        VITE_MFE_ENDPOINT_ADMIN_URL: remoteEntryUrlFor('endpoint-admin'),
+        SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE: '1',
+        VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE: '1',
+      }
+    : {}),
 };
 
 const shellRemoteUrl = `${publicOrigin}/remoteEntry.js`;
