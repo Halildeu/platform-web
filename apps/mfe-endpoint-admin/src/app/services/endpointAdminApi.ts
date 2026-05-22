@@ -11,9 +11,17 @@ import type {
 /**
  * RTK Query slice for the endpoint-admin backend.
  *
+ * Gateway-external vs backend-internal paths: the browser talks to the
+ * api-gateway, not the service directly. Gateway route
+ * `endpoint-admin-admin-route` matches `/api/v1/endpoint-admin/**` and
+ * RewritePath-s it to the service-internal `/api/v1/admin/**`. Every
+ * `url` below MUST use the `/endpoint-admin/...` external prefix — a raw
+ * `/admin/...` path matches no gateway route and 404s. The status route
+ * is gateway-routed verbatim (`/api/v1/endpoint-agents/**`, no rewrite).
+ *
  * Backend authority: platform-backend@e9cb8dd0
- *   - GET /api/v1/endpoint-agents/status        (auth-only, no module check)
- *   - /api/v1/admin/endpoint-* (later FE-001+)  (JWT role + can_view/can_manage)
+ *   - gateway GET /api/v1/endpoint-agents/status → service /api/v1/endpoint-agents/status (auth-only)
+ *   - gateway /api/v1/endpoint-admin/endpoint-* → service /api/v1/admin/endpoint-* (JWT role + can_view/can_manage)
  *
  * Auth model: shell registers a token resolver via @mfe/shared-http; we
  * bridge it through `prepareHeaders` so SSR/standalone fallbacks still
@@ -66,12 +74,13 @@ export const endpointAdminApi = createApi({
     }),
     /**
      * Backend: `AdminEndpointDeviceController.listDevices` —
-     *   GET /api/v1/admin/endpoint-devices
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices
+     *   → service /api/v1/admin/endpoint-devices
      *   class-level @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
      *   401 (no JWT) / 403 (FGA tuple yok) / 200 + EndpointDeviceDto[]
      */
     listEndpointDevices: builder.query<EndpointDevice[], void>({
-      query: () => ({ url: '/admin/endpoint-devices', method: 'GET' }),
+      query: () => ({ url: '/endpoint-admin/endpoint-devices', method: 'GET' }),
       providesTags: (result) =>
         result
           ? [
@@ -82,11 +91,12 @@ export const endpointAdminApi = createApi({
     }),
     /**
      * Backend: `AdminEndpointDeviceController.getDevice` —
-     *   GET /api/v1/admin/endpoint-devices/{deviceId}
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}
      */
     getEndpointDevice: builder.query<EndpointDevice, string>({
       query: (deviceId) => ({
-        url: `/admin/endpoint-devices/${encodeURIComponent(deviceId)}`,
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}`,
         method: 'GET',
       }),
       providesTags: (_result, _error, deviceId) => [
@@ -95,7 +105,8 @@ export const endpointAdminApi = createApi({
     }),
     /**
      * Backend: `AdminEndpointAuditController.listAuditEvents` —
-     *   GET /api/v1/admin/endpoint-audit-events?deviceId=&commandId=&eventType=&limit=50
+     *   gateway GET /api/v1/endpoint-admin/endpoint-audit-events?deviceId=&commandId=&eventType=&limit=50
+     *   → service /api/v1/admin/endpoint-audit-events
      *   class-level @RequireModule(VIEWER='can_view')
      */
     listEndpointAuditEvents: builder.query<EndpointAuditEvent[], ListAuditEventsArgs | void>({
@@ -105,7 +116,7 @@ export const endpointAdminApi = createApi({
         if (args?.commandId) params.commandId = args.commandId;
         if (args?.eventType) params.eventType = args.eventType;
         if (typeof args?.limit === 'number') params.limit = String(args.limit);
-        return { url: '/admin/endpoint-audit-events', method: 'GET', params };
+        return { url: '/endpoint-admin/endpoint-audit-events', method: 'GET', params };
       },
       providesTags: (result) =>
         result
