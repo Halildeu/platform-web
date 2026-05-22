@@ -1,5 +1,8 @@
 /**
- * Shared `fetchFn` for every notification-orchestrator RTK Query client.
+ * Shared `fetchFn` for the authenticated notification-orchestrator RTK
+ * Query clients (inbox / preferences / push / topic-catalog). The public
+ * unsubscribe client carries no auth/identity headers, so it does not
+ * need this workaround.
  *
  * Workaround for `Request`-object header drop observed at the wire layer
  * (PR-5.X-quartet follow-up; Codex thread {@code 019e075d} iter-7).

@@ -2,6 +2,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { RootState } from '../../../app/store/store';
 import { selectAuthToken } from '../../auth/model/auth.slice';
 import { selectNotifyIdentity } from '../model/identity.selectors';
+import { unwrapRequestFetchFn } from './notify-request-fetch-fn';
 
 /**
  * RTK Query client for the subscriber-facing topic catalog
@@ -53,6 +54,11 @@ export const notifyTopicCatalogApi = createApi({
   reducerPath: 'notifyTopicCatalogApi',
   baseQuery: fetchBaseQuery({
     baseUrl: resolveTopicCatalogBaseUrl(),
+    // Codex 019e50ac/019e5112 re-smoke fix — RTK Query's default
+    // Request-object fetch drops headers at the wire layer (nginx ↔
+    // orchestrator). Re-issue as string-form fetch so Authorization +
+    // identity headers survive end-to-end. See notify-request-fetch-fn.ts.
+    fetchFn: unwrapRequestFetchFn,
     credentials: 'include',
     prepareHeaders: (headers, { getState }) => {
       const state = getState() as RootState;
