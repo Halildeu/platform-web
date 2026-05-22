@@ -24,6 +24,8 @@
 
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { useCallback, useMemo, useState } from 'react';
+import { useAppSelector } from '../../../app/store/store.hooks';
+import { selectAuthToken } from '../../auth/model/auth.slice';
 import {
   useListMyPushEndpointsQuery,
   useSubscribePushMutation,
@@ -101,9 +103,15 @@ export function usePushSubscription({
   vapidPublicKey,
 }: UsePushSubscriptionArgs): UsePushSubscriptionResult {
   const support = useMemo(() => detectBrowserPushSupport(), []);
+  const authToken = useAppSelector(selectAuthToken);
 
-  // Codex 019e4a87 iter-2 P2: identity hazır değilken query skip
-  const queryArg = support.supported && !!orgId && !!subscriberId ? undefined : skipToken;
+  // Codex 019e4a87 iter-2 P2: identity hazır değilken query skip.
+  // Codex 019e50ac: ayrıca bearer token Redux state'e dispatch edilmeden
+  // query fire etmemeli — /settings/notifications cold direct-load'da
+  // identity (profile/authz claim) token'dan önce çözülüp header-sız
+  // GET /push/subscribe/me → 401 üretiyordu.
+  const queryArg =
+    support.supported && !!orgId && !!subscriberId && !!authToken ? undefined : skipToken;
   const { data, isLoading: isListLoading, refetch } = useListMyPushEndpointsQuery(queryArg);
   const endpoints = data?.endpoints ?? [];
 
@@ -114,7 +122,7 @@ export function usePushSubscription({
     () =>
       currentBrowserEndpointId !== null &&
       endpoints.some((ep) => ep.endpointId === currentBrowserEndpointId),
-    [endpoints, currentBrowserEndpointId]
+    [endpoints, currentBrowserEndpointId],
   );
 
   const [subscribeMutation] = useSubscribePushMutation();
@@ -125,7 +133,7 @@ export function usePushSubscription({
       ? isSubscribed
         ? { kind: 'subscribed' }
         : { kind: 'idle' }
-      : { kind: 'unsupported', reason: support.reason }
+      : { kind: 'unsupported', reason: support.reason },
   );
 
   const subscribe = useCallback(async () => {

@@ -14,6 +14,12 @@ import NotificationPreferencesPage from '../NotificationPreferencesPage';
  */
 
 let identityMock: { orgId: string; subscriberId: string } | null = null;
+// Codex 019e50ac: auth-token fixture — the notify query must be gated on the
+// bearer token, not identity alone. Default non-null so existing tests keep
+// the query un-skipped.
+let authTokenMock: string | null = 'test-bearer-token';
+// Captures the `skip` option the page passes to useListPreferencesQuery.
+let lastListQuerySkip: boolean | undefined;
 
 let listQueryMock = {
   data: undefined as unknown[] | undefined,
@@ -26,12 +32,20 @@ const deleteMutationMock = vi.fn();
 const restoreDefaultsMutationMock = vi.fn();
 const muteChannelMutationMock = vi.fn();
 
+// Selector-aware mock: invoke the passed selector so selectNotifyIdentity and
+// selectAuthToken each resolve to their own fixture. Safe because the page +
+// the real-rendered NotificationPreferenceForm only call useAppSelector with
+// those two (mocked) selectors.
 vi.mock('../../../app/store/store.hooks', () => ({
-  useAppSelector: () => identityMock,
+  useAppSelector: (selector: () => unknown) => selector(),
 }));
 
 vi.mock('../../../features/notifications/model/identity.selectors', () => ({
   selectNotifyIdentity: () => identityMock,
+}));
+
+vi.mock('../../../features/auth/model/auth.slice', () => ({
+  selectAuthToken: () => authTokenMock,
 }));
 
 // Faz 23.5 M5 G3b: NotificationPreferenceForm (loaded transitively when
@@ -46,7 +60,12 @@ vi.mock('../../../features/notifications/api/notify-topic-catalog.api', () => ({
 }));
 
 vi.mock('../../../features/notifications/api/notify-prefs.api', () => ({
-  useListPreferencesQuery: () => listQueryMock,
+  useListPreferencesQuery: (_arg: unknown, opts?: { skip?: boolean }) => {
+    lastListQuerySkip = opts?.skip;
+    return opts?.skip
+      ? { data: undefined, isLoading: false, isError: false, error: undefined }
+      : listQueryMock;
+  },
   useUpsertPreferenceMutation: () => [
     (args: unknown) => ({
       unwrap: async () => upsertMutationMock(args),
@@ -75,6 +94,8 @@ vi.mock('../../../features/notifications/api/notify-prefs.api', () => ({
 
 beforeEach(() => {
   identityMock = null;
+  authTokenMock = 'test-bearer-token';
+  lastListQuerySkip = undefined;
   listQueryMock = { data: undefined, isLoading: false, isError: false, error: undefined };
   upsertMutationMock.mockReset();
   deleteMutationMock.mockReset();
@@ -90,6 +111,29 @@ describe('NotificationPreferencesPage', () => {
   it('shows the sign-in fallback when identity unresolved', () => {
     render(<NotificationPreferencesPage />);
     expect(screen.getByText('Önce oturum açın.')).toBeInTheDocument();
+  });
+
+  it('skips the preference query until the bearer token is in Redux state (Codex 019e50ac)', () => {
+    // Cold direct-load: identity resolves from a profile/authz claim before
+    // auth.token is dispatched. The query must NOT fire header-less → no 401.
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    authTokenMock = null;
+
+    render(<NotificationPreferencesPage />);
+
+    expect(lastListQuerySkip).toBe(true);
+    expect(screen.getByTestId('notification-preferences-loading')).toBeInTheDocument();
+    expect(screen.queryByText(/Tercihler yüklenemedi/)).not.toBeInTheDocument();
+  });
+
+  it('fires the preference query once identity AND token are both ready', () => {
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    authTokenMock = 'bearer-xyz';
+    listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
+
+    render(<NotificationPreferencesPage />);
+
+    expect(lastListQuerySkip).toBe(false);
   });
 
   it('renders empty state when there are no rules', () => {
