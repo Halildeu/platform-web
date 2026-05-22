@@ -4,6 +4,7 @@
 
 import React from 'react';
 import { createLazyRemoteModule } from '../createLazyRemoteModule';
+import { createEndpointAdminApp } from '../createEndpointAdminApp';
 import { SuggestionsAppOnDemand } from '../createSuggestionsAppOnDemand';
 import { EthicAppOnDemand } from '../createEthicAppOnDemand';
 import { SchemaExplorerAppOnDemand } from '../createSchemaExplorerAppOnDemand';
@@ -115,6 +116,16 @@ declare const __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__: boolean;
 const EndpointAdminNoop: React.FC = () => null;
 EndpointAdminNoop.displayName = 'EndpointAdminNoop';
 
+// #655: route-level wrapper awaits `configureShellServices` (shell auth
+// token resolver injection) BEFORE EndpointAdminApp mounts + fires its
+// RTK queries — deep-link race protection (the idle-batch wiring in
+// shell-services-wiring.ts can otherwise lose the race → API 401).
+// The federation specifiers stay here, inside the
+// `__SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__` ternary, so a disabled-remote
+// build DCE's them; `createEndpointAdminApp` itself carries no specifiers.
 export const EndpointAdminModule: React.ComponentType = __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__
-  ? createLazyRemoteModule('EndpointAdmin', () => import('mfe_endpoint_admin/EndpointAdminApp'))
+  ? createEndpointAdminApp(
+      () => import('mfe_endpoint_admin/EndpointAdminApp'),
+      () => import('mfe_endpoint_admin/shell-services'),
+    )
   : EndpointAdminNoop;
