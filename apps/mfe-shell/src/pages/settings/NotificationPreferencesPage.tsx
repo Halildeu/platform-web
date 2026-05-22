@@ -1,6 +1,7 @@
 import { BellOff, BellRing, Clock, Gauge } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store/store.hooks';
+import { selectAuthToken } from '../../features/auth/model/auth.slice';
 import {
   useDeletePreferenceMutation,
   useListPreferencesQuery,
@@ -44,10 +45,17 @@ import PushSubscriptionCard from './PushSubscriptionCard';
  */
 const NotificationPreferencesPage: React.FC = () => {
   const identity = useAppSelector(selectNotifyIdentity);
+  const authToken = useAppSelector(selectAuthToken);
   const isReady = identity !== null;
+  // Codex 019e50ac: the preference list query must NOT fire until the bearer
+  // token is in Redux state. selectNotifyIdentity can resolve from a
+  // profile/authz claim before auth.token is dispatched (cold direct-load);
+  // firing then sends a header-less GET /preferences/me → 401. Gate the
+  // query on the token too, not identity alone.
+  const authReady = isReady && !!authToken;
   const queryArg = identity ?? { orgId: '', subscriberId: '' };
 
-  const listQuery = useListPreferencesQuery(queryArg, { skip: !isReady });
+  const listQuery = useListPreferencesQuery(queryArg, { skip: !authReady });
   const [upsert, upsertStatus] = useUpsertPreferenceMutation();
   const [deletePref, deleteStatus] = useDeletePreferenceMutation();
   const [restoreDefaults, restoreStatus] = useRestoreDefaultsMutation();
@@ -348,7 +356,7 @@ const NotificationPreferencesPage: React.FC = () => {
       {/* Existing rows */}
       <PreferenceTable
         rows={listQuery.data ?? []}
-        loading={listQuery.isLoading}
+        loading={listQuery.isLoading || !authReady}
         onToggle={async (row) =>
           // Faz 23.6 absorb — quick toggle preserves rich fields so the
           // backend round-trips quietHours / frequencyLimitPerDay /
