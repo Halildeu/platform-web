@@ -25,7 +25,7 @@
 import { skipToken } from '@reduxjs/toolkit/query/react';
 import { useCallback, useMemo, useState } from 'react';
 import { useAppSelector } from '../../../app/store/store.hooks';
-import { selectAuthToken } from '../../auth/model/auth.slice';
+import { selectAuthToken, selectIsTransportReady } from '../../auth/model/auth.slice';
 import {
   useListMyPushEndpointsQuery,
   useSubscribePushMutation,
@@ -104,14 +104,18 @@ export function usePushSubscription({
 }: UsePushSubscriptionArgs): UsePushSubscriptionResult {
   const support = useMemo(() => detectBrowserPushSupport(), []);
   const authToken = useAppSelector(selectAuthToken);
+  const isTransportReady = useAppSelector(selectIsTransportReady);
 
   // Codex 019e4a87 iter-2 P2: identity hazır değilken query skip.
-  // Codex 019e50ac: ayrıca bearer token Redux state'e dispatch edilmeden
-  // query fire etmemeli — /settings/notifications cold direct-load'da
-  // identity (profile/authz claim) token'dan önce çözülüp header-sız
-  // GET /push/subscribe/me → 401 üretiyordu.
+  // Codex 019e50ac: ayrıca auth transport hazır olmadan query fire etmemeli —
+  // /settings/notifications cold direct-load'da identity (profile/authz claim)
+  // token kullanılabilir olmadan çözülüp header-sız GET /push/subscribe/me →
+  // 401 üretiyordu. transportReady + token birlikte gate edilir — yalnız token
+  // yetmiyor (ara auth fazında set olabiliyor; 2026-05-22 re-smoke kanıtı).
   const queryArg =
-    support.supported && !!orgId && !!subscriberId && !!authToken ? undefined : skipToken;
+    support.supported && !!orgId && !!subscriberId && !!authToken && isTransportReady
+      ? undefined
+      : skipToken;
   const { data, isLoading: isListLoading, refetch } = useListMyPushEndpointsQuery(queryArg);
   const endpoints = data?.endpoints ?? [];
 

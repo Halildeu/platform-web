@@ -17,6 +17,9 @@ import { skipToken } from '@reduxjs/toolkit/query/react';
  */
 
 let authTokenMock: string | null = 'test-bearer-token';
+// Codex 019e50ac re-smoke: transport-readiness fixture — token alone is not a
+// sufficient gate. Default true so existing tests keep the query un-skipped.
+let transportReadyMock = true;
 
 const listQueryMock = vi.fn(() => ({
   data: undefined,
@@ -30,6 +33,7 @@ vi.mock('../../../../app/store/store.hooks', () => ({
 
 vi.mock('../../../auth/model/auth.slice', () => ({
   selectAuthToken: () => authTokenMock,
+  selectIsTransportReady: () => transportReadyMock,
 }));
 
 vi.mock('../../api/notify-push.api', () => ({
@@ -50,6 +54,7 @@ import { usePushSubscription } from '../use-push-subscription.model';
 describe('usePushSubscription — auth-ready query gate (Codex 019e50ac)', () => {
   beforeEach(() => {
     authTokenMock = 'test-bearer-token';
+    transportReadyMock = true;
     listQueryMock.mockClear();
   });
 
@@ -78,6 +83,17 @@ describe('usePushSubscription — auth-ready query gate (Codex 019e50ac)', () =>
     authTokenMock = 'bearer-xyz';
     renderHook(() =>
       usePushSubscription({ orgId: '', subscriberId: 'sub-1', vapidPublicKey: 'k' }),
+    );
+    expect(listQueryMock).toHaveBeenCalledWith(skipToken);
+  });
+
+  it('skips the query until the auth transport is ready (Codex 019e50ac re-smoke)', () => {
+    // identity + token present, but transport not yet validated — token can be
+    // populated in an intermediate auth phase, so the query must still wait.
+    authTokenMock = 'bearer-xyz';
+    transportReadyMock = false;
+    renderHook(() =>
+      usePushSubscription({ orgId: 'org-1', subscriberId: 'sub-1', vapidPublicKey: 'k' }),
     );
     expect(listQueryMock).toHaveBeenCalledWith(skipToken);
   });
