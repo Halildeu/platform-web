@@ -1,7 +1,7 @@
 import { BellOff, BellRing, Clock, Gauge } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useAppSelector } from '../../app/store/store.hooks';
-import { selectAuthToken } from '../../features/auth/model/auth.slice';
+import { selectAuthToken, selectIsTransportReady } from '../../features/auth/model/auth.slice';
 import {
   useDeletePreferenceMutation,
   useListPreferencesQuery,
@@ -46,13 +46,17 @@ import PushSubscriptionCard from './PushSubscriptionCard';
 const NotificationPreferencesPage: React.FC = () => {
   const identity = useAppSelector(selectNotifyIdentity);
   const authToken = useAppSelector(selectAuthToken);
+  const isTransportReady = useAppSelector(selectIsTransportReady);
   const isReady = identity !== null;
-  // Codex 019e50ac: the preference list query must NOT fire until the bearer
-  // token is in Redux state. selectNotifyIdentity can resolve from a
-  // profile/authz claim before auth.token is dispatched (cold direct-load);
-  // firing then sends a header-less GET /preferences/me → 401. Gate the
-  // query on the token too, not identity alone.
-  const authReady = isReady && !!authToken;
+  // Codex 019e50ac: the preference list query must NOT fire until the auth
+  // transport is ready. selectNotifyIdentity can resolve from a profile/authz
+  // claim before the bearer token is usable (cold direct-load); firing then
+  // sends a header-less GET /preferences/me → 401. The token alone is not a
+  // sufficient gate — auth.token can be populated during an intermediate auth
+  // phase before the transport contract is validated, so gate on
+  // transportReady + token together (re-smoke 2026-05-22: token-only let the
+  // query through too early and the 401 persisted).
+  const authReady = isReady && isTransportReady && !!authToken;
   const queryArg = identity ?? { orgId: '', subscriberId: '' };
 
   const listQuery = useListPreferencesQuery(queryArg, { skip: !authReady });

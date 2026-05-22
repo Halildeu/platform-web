@@ -18,6 +18,10 @@ let identityMock: { orgId: string; subscriberId: string } | null = null;
 // bearer token, not identity alone. Default non-null so existing tests keep
 // the query un-skipped.
 let authTokenMock: string | null = 'test-bearer-token';
+// Codex 019e50ac re-smoke: transport-readiness fixture — the bearer token
+// alone is not a sufficient gate. Default true so existing tests keep the
+// query un-skipped.
+let transportReadyMock = true;
 // Captures the `skip` option the page passes to useListPreferencesQuery.
 let lastListQuerySkip: boolean | undefined;
 
@@ -46,6 +50,7 @@ vi.mock('../../../features/notifications/model/identity.selectors', () => ({
 
 vi.mock('../../../features/auth/model/auth.slice', () => ({
   selectAuthToken: () => authTokenMock,
+  selectIsTransportReady: () => transportReadyMock,
 }));
 
 // Faz 23.5 M5 G3b: NotificationPreferenceForm (loaded transitively when
@@ -95,6 +100,7 @@ vi.mock('../../../features/notifications/api/notify-prefs.api', () => ({
 beforeEach(() => {
   identityMock = null;
   authTokenMock = 'test-bearer-token';
+  transportReadyMock = true;
   lastListQuerySkip = undefined;
   listQueryMock = { data: undefined, isLoading: false, isError: false, error: undefined };
   upsertMutationMock.mockReset();
@@ -126,14 +132,28 @@ describe('NotificationPreferencesPage', () => {
     expect(screen.queryByText(/Tercihler yüklenemedi/)).not.toBeInTheDocument();
   });
 
-  it('fires the preference query once identity AND token are both ready', () => {
+  it('fires the preference query once identity, token AND transport are all ready', () => {
     identityMock = { orgId: 'default', subscriberId: 'sub-1' };
     authTokenMock = 'bearer-xyz';
+    transportReadyMock = true;
     listQueryMock = { data: [], isLoading: false, isError: false, error: undefined };
 
     render(<NotificationPreferencesPage />);
 
     expect(lastListQuerySkip).toBe(false);
+  });
+
+  it('skips the preference query until the auth transport is ready (Codex 019e50ac re-smoke)', () => {
+    // identity + token present, but the transport contract not yet validated;
+    // the bearer token can be populated in an intermediate auth phase. Wait.
+    identityMock = { orgId: 'default', subscriberId: 'sub-1' };
+    authTokenMock = 'bearer-xyz';
+    transportReadyMock = false;
+
+    render(<NotificationPreferencesPage />);
+
+    expect(lastListQuerySkip).toBe(true);
+    expect(screen.getByTestId('notification-preferences-loading')).toBeInTheDocument();
   });
 
   it('renders empty state when there are no rules', () => {
