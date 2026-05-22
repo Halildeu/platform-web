@@ -113,7 +113,16 @@ beforeEach(() => {
         method = (init?.method ?? 'GET').toUpperCase();
         headers = headersToRecord(init?.headers);
         credentials = init?.credentials;
-        body = typeof init?.body === 'string' ? init.body : null;
+        // The notify clients wire `unwrapRequestFetchFn` (string-form
+        // fetch); it re-issues a non-GET body as an ArrayBuffer, so decode
+        // it back to text for body assertions.
+        if (typeof init?.body === 'string') {
+          body = init.body;
+        } else if (init?.body instanceof ArrayBuffer) {
+          body = new TextDecoder().decode(init.body);
+        } else {
+          body = null;
+        }
       }
       recorded.push({ url, method, headers, credentials, body });
       return fetchHandler(input, init);

@@ -2,6 +2,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { RootState } from '../../../app/store/store';
 import { selectNotifyIdentity } from '../model/identity.selectors';
 import { selectAuthToken } from '../../auth/model/auth.slice';
+import { unwrapRequestFetchFn } from './notify-request-fetch-fn';
 import type {
   PreferenceDeleteArgs,
   PreferenceDto,
@@ -46,6 +47,11 @@ export const notifyPrefsApi = createApi({
   reducerPath: 'notifyPrefsApi',
   baseQuery: fetchBaseQuery({
     baseUrl: resolvePreferencesBaseUrl(),
+    // Codex 019e50ac/019e5112 re-smoke fix — RTK Query's default
+    // Request-object fetch drops headers at the wire layer (nginx ↔
+    // orchestrator). Re-issue as string-form fetch so Authorization +
+    // identity headers survive end-to-end. See notify-request-fetch-fn.ts.
+    fetchFn: unwrapRequestFetchFn,
     // Wire-level safety net — set bearer + identity headers for every
     // request. Endpoint-level `headers: identityHeaders(arg)` stays for
     // cache-key parity; prepareHeaders is the guaranteed wire write.
