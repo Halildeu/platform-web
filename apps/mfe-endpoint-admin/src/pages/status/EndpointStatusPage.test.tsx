@@ -25,15 +25,23 @@ describe('EndpointStatusPage', () => {
     globalThis.fetch = originalFetch;
     // Reset shared-http resolver so other specs aren't poisoned.
     registerAuthTokenResolver(undefined);
+    // Faz 22 #655 — clean up the localStorage-fallback token between tests
+    // so the "omits Authorization" spec can't see a leftover from spec #1.
+    try {
+      window.localStorage.removeItem('token');
+    } catch {
+      // ignore
+    }
     vi.restoreAllMocks();
   });
 
   it('renders the agent service status returned by /api/v1/endpoint-agents/status', async () => {
-    // Codex iter-1 PARTIAL absorb (must-fix #2): assert that
-    // shared-http resolver feeds the Authorization header. Without
-    // this bridge the previous skeleton would emit unauthenticated
-    // requests even when the shell user was logged in.
-    registerAuthTokenResolver(() => 'fake-jwt-token');
+    // Faz 22 #655 — `endpointAdminApi.ts` `readBearerToken` resolves the
+    // Bearer from `localStorage.token` (the fallback after the
+    // shell-injected `getShellServices().auth.getToken()`; the original
+    // `@mfe/shared-http` `resolveAuthToken` path was dropped — MF
+    // singleton sharing is not effective for this MFE, see #655).
+    window.localStorage.setItem('token', 'fake-jwt-token');
 
     const payload = {
       service: 'endpoint-admin-service',

@@ -1,6 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
-import { resolveAuthToken } from '@mfe/shared-http';
+import { getShellServices } from './shell-services';
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
 import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import type {
@@ -23,9 +23,16 @@ import type {
  *   - gateway GET /api/v1/endpoint-agents/status → service /api/v1/endpoint-agents/status (auth-only)
  *   - gateway /api/v1/endpoint-admin/endpoint-* → service /api/v1/admin/endpoint-* (JWT role + can_view/can_manage)
  *
- * Auth model: shell registers a token resolver via @mfe/shared-http; we
- * bridge it through `prepareHeaders` so SSR/standalone fallbacks still
- * compile. The backend rejects unauthenticated requests with `401 JSON`
+ * Auth model (Faz 22 #655 fix — mirrors mfe-users `mergeHeaders` pattern):
+ * `prepareHeaders` tries the shell-injected `getShellServices().auth.getToken()`
+ * (set by `configureShellServices`; `createEndpointAdminApp` route-level
+ * await — #656 — guarantees this runs before any query), then falls back
+ * to `localStorage.token` (the shell persists the JWT there). The original
+ * `resolveAuthToken()` (`@mfe/shared-http`) path was insufficient — MF
+ * singleton sharing is not effective for endpoint-admin (separate
+ * federation instance per remote — see `window.__FEDERATION__.__INSTANCES__`),
+ * so the shell-registered resolver did not reach this MFE → 401 storm
+ * (#655 browser forensics). The backend rejects unauthenticated requests with `401 JSON`
  * (Spring Security) or `403 JSON` (RequireModule interceptor) — both
  * surface as RTK Query errors and the UI maps to the correct
  * permission-state component.
@@ -46,16 +53,54 @@ function resolveBaseUrl(): string {
   return 'http://localhost/api/v1';
 }
 
+/**
+ * Normalise a candidate token value — strip whitespace and reject the
+ * literal strings `'undefined'` / `'null'` (legacy persistence artefacts
+ * occasionally observed in storage). Returns `null` for any non-usable
+ * value so the caller can fall through to the next source.
+ */
+function normalizeAuthToken(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return null;
+  return trimmed;
+}
+
+/**
+ * Resolve the bearer token for an outgoing endpoint-admin RTK request.
+ *
+ * Mirrors the `mergeHeaders` precedent in
+ * `apps/mfe-users/src/entities/user/api/users.api.ts` (~lines 671-694):
+ * try the shell-injected getter first, fall back to `localStorage.token`
+ * (the shell-persisted JWT). See the file header for the #655 rationale.
+ *
+ * Both sources are wrapped in try/catch so any failure mode (shell
+ * services not yet configured, `localStorage` access denied) returns
+ * `null` silently rather than throwing inside RTK Query's
+ * `prepareHeaders`.
+ */
+function readBearerToken(): string | null {
+  let token: string | null = null;
+  try {
+    token = normalizeAuthToken(getShellServices().auth.getToken());
+  } catch {
+    // getShellServices() throws when shell services haven't been
+    // configured yet (standalone dev / pre-#656 race). Fall through.
+  }
+  if (!token && typeof window !== 'undefined') {
+    try {
+      token = normalizeAuthToken(window.localStorage.getItem('token'));
+    } catch {
+      // localStorage access denied (SSR / sandbox). Return null.
+    }
+  }
+  return token;
+}
+
 const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = fetchBaseQuery({
   baseUrl: resolveBaseUrl(),
   prepareHeaders: (headers) => {
-    // Codex iter-1 PARTIAL absorb: önceki `window.__endpointAdminToken__`
-    // sahte bridge idi — repo içinde hiçbir yer set etmiyordu, shell-mounted
-    // kullanıcıda bile 401 üretirdi. Gerçek yol shared-http resolver:
-    // shell `registerAuthTokenResolver(() => store.getState().auth.token)`
-    // ile bağlıyor (apps/mfe-shell/src/app/config/http-config.ts), her
-    // tüketici `resolveAuthToken()` ile çekiyor (mfe-users pattern).
-    const token = resolveAuthToken();
+    const token = readBearerToken();
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }

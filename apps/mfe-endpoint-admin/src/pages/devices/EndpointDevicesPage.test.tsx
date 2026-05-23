@@ -34,6 +34,12 @@ describe('EndpointDevicesPage', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     registerAuthTokenResolver(undefined);
+    // Faz 22 #655 — clean up the localStorage-fallback token between tests.
+    try {
+      window.localStorage.removeItem('token');
+    } catch {
+      // ignore
+    }
     vi.restoreAllMocks();
   });
 
@@ -105,5 +111,38 @@ describe('EndpointDevicesPage', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
     expect(screen.getByRole('alert').textContent).toContain('403');
+  });
+
+  it('sends Authorization: Bearer from localStorage when shell services are not configured (#655 fallback)', async () => {
+    // Faz 22 #655 — verifies the `readBearerToken` localStorage fallback in
+    // `endpointAdminApi.ts` `prepareHeaders`. In test env, `getShellServices()`
+    // returns the noop fallback (auth.getToken → null), so the fallback
+    // path must read `localStorage.token` and produce a Bearer header.
+    let capturedAuthHeader: string | null = null;
+    try {
+      window.localStorage.setItem('token', 'ls-fallback-jwt-xyz');
+    } catch {
+      // ignore localStorage write failures in sandbox envs
+    }
+    globalThis.fetch = vi.fn(async (input) => {
+      const req = typeof input === 'string' ? null : (input as Request);
+      capturedAuthHeader = req?.headers?.get('Authorization') ?? null;
+      return new Response('[]', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(capturedAuthHeader).toBe('Bearer ls-fallback-jwt-xyz');
+    });
+
+    try {
+      window.localStorage.removeItem('token');
+    } catch {
+      // ignore
+    }
   });
 });
