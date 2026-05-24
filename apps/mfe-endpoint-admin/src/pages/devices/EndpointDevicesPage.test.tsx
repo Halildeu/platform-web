@@ -124,9 +124,20 @@ describe('EndpointDevicesPage', () => {
     } catch {
       // ignore localStorage write failures in sandbox envs
     }
-    globalThis.fetch = vi.fn(async (input) => {
-      const req = typeof input === 'string' ? null : (input as Request);
-      capturedAuthHeader = req?.headers?.get('Authorization') ?? null;
+    globalThis.fetch = vi.fn(async (input, init) => {
+      // Faz 22 follow-on (#657 + unwrapRequestFetchFn): the RTK client
+      // wires `fetchFn: unwrapRequestFetchFn` to dodge the wire-layer
+      // header drop on `fetch(new Request(...))`. As a result the
+      // captured `input` is a plain string URL and headers travel in
+      // `init.headers` instead of on a Request object. Read from
+      // whichever path the call took.
+      const requestHeaders =
+        typeof input === 'string'
+          ? init?.headers instanceof Headers
+            ? init.headers
+            : new Headers((init?.headers as HeadersInit | undefined) ?? {})
+          : (input as Request).headers;
+      capturedAuthHeader = requestHeaders.get('Authorization');
       return new Response('[]', {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
