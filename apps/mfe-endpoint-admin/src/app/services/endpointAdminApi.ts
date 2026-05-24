@@ -1,6 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
 import { getShellServices } from './shell-services';
+import { unwrapRequestFetchFn } from './unwrap-request-fetch-fn';
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
 import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import type {
@@ -99,6 +100,17 @@ function readBearerToken(): string | null {
 
 const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = fetchBaseQuery({
   baseUrl: resolveBaseUrl(),
+  // Faz 22 follow-on (post-#657 ALLOW-path browser smoke): RTK Query 2.x
+  // `fetchBaseQuery` defaults to `fetch(new Request(url, init))` which
+  // trips a wire-layer header drop somewhere between the frontend pod's
+  // nginx and the orchestrator. Live in-browser evidence on testai
+  // (2026-05-24): the same 3 endpoint-admin routes return 200/403 with
+  // `fetch(url, { headers })` but 401 "JWT token zorunludur." with
+  // `fetch(new Request(url, { headers }))`. Mirrors the notify-domain
+  // shim (`apps/mfe-shell/src/features/notifications/api/notify-request-fetch-fn.ts`,
+  // platform-web #652 `07805aa`). See `./unwrap-request-fetch-fn.ts`
+  // doc comment for full rationale + Codex thread references.
+  fetchFn: unwrapRequestFetchFn,
   prepareHeaders: (headers) => {
     const token = readBearerToken();
     if (token) {
