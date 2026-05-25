@@ -1,4 +1,12 @@
 import React from 'react';
+import {
+  registerLayer,
+  unregisterLayer,
+  useEscapeKey,
+  useFocusTrap,
+  useScrollLock,
+  useSiblingIsolation,
+} from '@mfe/design-system/internal/overlay-engine';
 import type {
   CommandType,
   CreateEndpointCommandBody,
@@ -13,18 +21,35 @@ export interface DestructiveCommandModalProps {
   >;
   isSubmitting: boolean;
   onCancel: () => void;
-  onSubmit: (body: CreateEndpointCommandBody) => void;
+  onSubmit: (body: DestructiveCommandSubmitBody) => void;
+}
+
+/**
+ * Defence-in-depth payload shape for destructive commands. The parent
+ * RTK `CreateEndpointCommandBody.payload` is `Record<string, unknown>`
+ * by necessity (it is shared with non-destructive command types). At
+ * this layer we narrow it: `payload` carries ONLY `username`, and the
+ * `never`-typed sentinel keys prevent a future change from
+ * accidentally adding `password`, `newPassword`, or other secret
+ * material to the wire. Secret material must not transit the UI — the
+ * agent / Vault / backend perform credential rotation server-side.
+ */
+export interface DestructiveCommandSubmitBody extends CreateEndpointCommandBody {
+  payload: {
+    username: string;
+    password?: never;
+    newPassword?: never;
+    secret?: never;
+    credential?: never;
+  };
 }
 
 /**
  * Confirmation modal for dual-control destructive commands.
  *
- * Captures the target `username` and a free-text `reason` (audit
- * payload). Intentionally does **not** capture passwords, secrets, or
- * any other privileged material — the agent / Vault / backend perform
- * credential rotation server-side after the command is approved.
- * Putting a `newPassword` in the command payload would persist it in
- * the command store and the audit chain, which is unacceptable.
+ * Participates in the overlay-engine LIFO via its own `layerId` so a
+ * nested ESC press inside an open `BottomSheetDrawer` closes THIS modal
+ * first and the sheet on the second press (Codex 019e602f iter-1 fix).
  */
 export const DestructiveCommandModal: React.FC<DestructiveCommandModalProps> = ({
   open,
@@ -34,9 +59,34 @@ export const DestructiveCommandModal: React.FC<DestructiveCommandModalProps> = (
   onSubmit,
 }) => {
   const { t } = useEndpointAdminI18n();
+  const layerId = React.useId();
   const [username, setUsername] = React.useState('');
   const [reason, setReason] = React.useState('');
   const [submitted, setSubmitted] = React.useState(false);
+
+  const panelRef = useFocusTrap({
+    active: open,
+    autoFocus: true,
+    restoreFocus: true,
+    layerId,
+  });
+
+  useSiblingIsolation({
+    active: open,
+    layerId,
+    panelRef,
+  });
+
+  useScrollLock(open);
+
+  React.useEffect(() => {
+    if (open) registerLayer(layerId, 'modal');
+    return () => {
+      if (open) unregisterLayer(layerId);
+    };
+  }, [open, layerId]);
+
+  useEscapeKey(open, onCancel, { layerId });
 
   // Reset state every time the modal opens or the command type changes.
   React.useEffect(() => {
@@ -81,11 +131,14 @@ export const DestructiveCommandModal: React.FC<DestructiveCommandModalProps> = (
       aria-modal="true"
       aria-label={t(titleKey)}
       data-testid="destructive-command-modal"
+      data-layer-id={layerId}
       className="fixed inset-0 z-[1400] flex items-center justify-center"
     >
       <div className="absolute inset-0 bg-surface-overlay/60" onClick={onCancel} aria-hidden />
       <form
+        ref={panelRef as React.RefObject<HTMLFormElement>}
         onSubmit={handleSubmit}
+        tabIndex={-1}
         className="relative w-full max-w-md bg-surface-default rounded-xl shadow-2xl p-6 mx-4"
         data-testid="destructive-command-modal-form"
       >
@@ -103,7 +156,6 @@ export const DestructiveCommandModal: React.FC<DestructiveCommandModalProps> = (
             data-testid="destructive-command-username"
             aria-invalid={usernameError}
             className="w-full rounded-md border border-border-default px-3 py-2 text-sm bg-surface-default"
-            autoFocus
           />
           {usernameError && (
             <span

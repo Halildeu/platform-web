@@ -105,11 +105,7 @@ export const EndpointDevicesPage: React.FC = () => {
           if (!status) return null;
           const color = STATUS_VARIANT_MAP[status] ?? 'var(--text-secondary)';
           return (
-            <span
-              data-testid={`device-status-${status}`}
-              data-no-row-open
-              style={{ color, fontWeight: 500 }}
-            >
+            <span data-testid={`device-status-${status}`} style={{ color, fontWeight: 500 }}>
               {t(`endpointAdmin.devices.status.${status}`)}
             </span>
           );

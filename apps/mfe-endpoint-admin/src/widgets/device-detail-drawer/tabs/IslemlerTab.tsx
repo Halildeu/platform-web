@@ -7,7 +7,10 @@ import type {
 } from '../../../entities/endpoint-command/types';
 import { isDestructiveCommand } from '../../../entities/endpoint-command/types';
 import { useEndpointAdminI18n } from '../../../i18n';
-import { DestructiveCommandModal } from '../components/DestructiveCommandModal';
+import {
+  DestructiveCommandModal,
+  type DestructiveCommandSubmitBody,
+} from '../components/DestructiveCommandModal';
 
 export interface IslemlerTabProps {
   device: EndpointDevice;
@@ -68,7 +71,7 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
     setActiveModalType(type);
   };
 
-  const handleDestructiveSubmit = (body: CreateEndpointCommandBody) => {
+  const handleDestructiveSubmit = (body: DestructiveCommandSubmitBody) => {
     onIssueCommand(body);
     setActiveModalType(null);
   };
