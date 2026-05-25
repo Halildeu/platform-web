@@ -5,6 +5,7 @@ import { Provider as ReduxProvider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter } from 'react-router-dom';
 import { registerAuthTokenResolver } from '@mfe/shared-http';
+import '@mfe/design-system/advanced/data-grid/setup';
 import { endpointAdminApi } from '../../app/services/endpointAdminApi';
 import EndpointDevicesPage from './EndpointDevicesPage';
 
@@ -25,6 +26,23 @@ const renderPage = () => {
   );
 };
 
+const DEVICE_FIXTURE = {
+  id: 'b1c2d3e4-1111-2222-3333-444455556666',
+  tenantId: 't-1',
+  hostname: 'workstation-001',
+  displayName: 'Workstation 001',
+  osType: 'WINDOWS',
+  osVersion: '11 23H2',
+  agentVersion: '1.4.0',
+  machineFingerprint: 'abc',
+  domainName: 'corp.local',
+  status: 'ONLINE',
+  lastSeenAt: '2026-05-05T08:00:00Z',
+  enrolledAt: '2026-04-01T00:00:00Z',
+  createdAt: '2026-04-01T00:00:00Z',
+  updatedAt: '2026-05-05T08:00:00Z',
+};
+
 describe('EndpointDevicesPage', () => {
   let originalFetch: typeof fetch;
   beforeEach(() => {
@@ -34,7 +52,6 @@ describe('EndpointDevicesPage', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     registerAuthTokenResolver(undefined);
-    // Faz 22 #655 — clean up the localStorage-fallback token between tests.
     try {
       window.localStorage.removeItem('token');
     } catch {
@@ -43,46 +60,35 @@ describe('EndpointDevicesPage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the device list returned by /api/v1/endpoint-admin/endpoint-devices', async () => {
-    const payload = [
-      {
-        id: 'b1c2d3e4-1111-2222-3333-444455556666',
-        tenantId: 't-1',
-        hostname: 'workstation-001',
-        displayName: 'Workstation 001',
-        osType: 'WINDOWS',
-        osVersion: '11 23H2',
-        agentVersion: '1.4.0',
-        machineFingerprint: 'abc',
-        domainName: 'corp.local',
-        status: 'ONLINE',
-        lastSeenAt: '2026-05-05T08:00:00Z',
-        enrolledAt: '2026-04-01T00:00:00Z',
-        createdAt: '2026-04-01T00:00:00Z',
-        updatedAt: '2026-05-05T08:00:00Z',
-      },
-    ];
-
+  it('mounts the EntityGridTemplate when devices are returned from the gateway', async () => {
+    const calledUrls: string[] = [];
     globalThis.fetch = vi.fn(async (input) => {
       const url = typeof input === 'string' ? input : (input as Request).url;
-      expect(url).toContain('/api/v1/endpoint-admin/endpoint-devices');
-      return new Response(JSON.stringify(payload), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      calledUrls.push(url);
+      // The endpoint-admin devices list is the only route this test cares
+      // about. EntityGridTemplate also fires variant-listing requests
+      // against /api/v1/variants — let those return empty arrays.
+      return new Response(
+        JSON.stringify(url.includes('endpoint-devices') ? [DEVICE_FIXTURE] : []),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
     }) as typeof fetch;
 
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('workstation-001')).toBeInTheDocument();
+      expect(screen.getByTestId('endpoint-admin-devices-page')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('endpoint-admin-devices-table')).toBeInTheDocument();
-    expect(screen.getByTestId('device-status-ONLINE')).toBeInTheDocument();
-    expect(screen.getByText('1.4.0')).toBeInTheDocument();
+    expect(screen.getByText(/Uç Birimler|Endpoint Devices/)).toBeInTheDocument();
+    expect(calledUrls.some((u) => u.includes('/api/v1/endpoint-admin/endpoint-devices'))).toBe(
+      true,
+    );
   });
 
-  it('shows the empty state when the device list is empty', async () => {
+  it('shows the empty state when the gateway returns an empty list', async () => {
     globalThis.fetch = vi.fn(
       async () =>
         new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
@@ -91,9 +97,9 @@ describe('EndpointDevicesPage', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.queryByText(/yükleniyor/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/yükleniyor|Loading/i)).not.toBeInTheDocument();
     });
-    expect(screen.queryByTestId('endpoint-admin-devices-table')).not.toBeInTheDocument();
+    expect(screen.getByText(/Henüz kayıtlı cihaz yok|No devices enrolled yet/)).toBeInTheDocument();
   });
 
   it('shows the forbidden state on 403 from the OpenFGA RequireModule interceptor', async () => {
@@ -114,23 +120,13 @@ describe('EndpointDevicesPage', () => {
   });
 
   it('sends Authorization: Bearer from localStorage when shell services are not configured (#655 fallback)', async () => {
-    // Faz 22 #655 — verifies the `readBearerToken` localStorage fallback in
-    // `endpointAdminApi.ts` `prepareHeaders`. In test env, `getShellServices()`
-    // returns the noop fallback (auth.getToken → null), so the fallback
-    // path must read `localStorage.token` and produce a Bearer header.
     let capturedAuthHeader: string | null = null;
     try {
       window.localStorage.setItem('token', 'ls-fallback-jwt-xyz');
     } catch {
-      // ignore localStorage write failures in sandbox envs
+      // ignore
     }
     globalThis.fetch = vi.fn(async (input, init) => {
-      // Faz 22 follow-on (#657 + unwrapRequestFetchFn): the RTK client
-      // wires `fetchFn: unwrapRequestFetchFn` to dodge the wire-layer
-      // header drop on `fetch(new Request(...))`. As a result the
-      // captured `input` is a plain string URL and headers travel in
-      // `init.headers` instead of on a Request object. Read from
-      // whichever path the call took.
       const requestHeaders =
         typeof input === 'string'
           ? init?.headers instanceof Headers

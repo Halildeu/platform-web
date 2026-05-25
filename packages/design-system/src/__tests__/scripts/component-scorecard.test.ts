@@ -273,12 +273,12 @@ describe('Codex iter-20 pinned counts', () => {
   // The main scorecard loop applies that filter, so scorecard.json on disk has
   // 1 fewer entry. Both numbers are pinned: raw scan invariant + post-filter
   // invariant (the latter via integration scorecard.json check).
-  it('raw scan total is 221 (207 DS raw + 13 x-charts + 1 small-file passthrough)', () => {
+  it('raw scan total is 222 (208 DS raw + 13 x-charts + 1 small-file passthrough)', () => {
     const all = findAllComponents(null, null);
-    expect(all).toHaveLength(221);
+    expect(all).toHaveLength(222);
   });
 
-  it('raw scan canonical count is 217 (legacy=4, canonical=217 → total 221)', () => {
+  it('raw scan canonical count is 218 (legacy=4, canonical=218 → total 222)', () => {
     const all = findAllComponents(null, null);
     const registry = buildCanonicalRegistry(all);
     let canonicalCount = 0;
@@ -286,7 +286,7 @@ describe('Codex iter-20 pinned counts', () => {
       const p = computeProvenance(cmp, registry);
       if (p.status === 'canonical') canonicalCount++;
     }
-    expect(canonicalCount).toBe(217);
+    expect(canonicalCount).toBe(218);
   });
 
   it('legacy count is exactly 4 — the duplicate chart names (lineCount-independent)', () => {

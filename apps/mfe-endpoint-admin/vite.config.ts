@@ -90,6 +90,13 @@ const sharedCore = {
   'react-redux': hostOnly('react-redux'),
   '@reduxjs/toolkit': hostOnly('@reduxjs/toolkit'),
   '@tanstack/react-query': singleton('@tanstack/react-query'),
+  // Faz 22.2 — AG Grid singletons mirror the mfe-users pattern so the
+  // shell + every grid-enabled MFE share one ag-grid runtime instance.
+  // Duplicate runtimes break module registration and silently strip
+  // enterprise features.
+  'ag-grid-react': singleton('ag-grid-react'),
+  'ag-grid-community': singleton('ag-grid-community'),
+  'ag-grid-enterprise': singleton('ag-grid-enterprise'),
 };
 const sharedProdOnly = {
   '@mfe/design-system': singleton('@mfe/design-system', '@mfe/design-system', false),
@@ -199,6 +206,9 @@ export default defineConfig(({ mode }) => {
         'react-router-dom',
         '@reduxjs/toolkit',
         'react-redux',
+        'ag-grid-community',
+        'ag-grid-enterprise',
+        'ag-grid-react',
       ],
       exclude: ['mfe_shell', '@tanstack/react-query'],
     },

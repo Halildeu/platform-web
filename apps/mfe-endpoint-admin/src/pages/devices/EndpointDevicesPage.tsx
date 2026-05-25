@@ -1,13 +1,25 @@
 import React from 'react';
+import { EntityGridTemplate } from '@mfe/design-system';
+import type { ColDef, GridOptions } from '@mfe/design-system';
 import { useListEndpointDevicesQuery } from '../../app/services/endpointAdminApi';
 import { useEndpointAdminI18n } from '../../i18n';
-import type { DeviceStatus, OsType } from '../../entities/endpoint-device/types';
+import type { DeviceStatus, EndpointDevice, OsType } from '../../entities/endpoint-device/types';
+import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
 
 /**
- * Read-only devices surface — backed by `AdminEndpointDeviceController.listDevices`.
+ * Devices surface — backed by `AdminEndpointDeviceController.listDevices`.
  *
- * FE-001 scope keeps the table flat: hostname, OS, agent version,
- * status, lastSeenAt. Filtering, drawer, mutations belong to FE-002+.
+ * Faz 22.2: upgraded from a plain HTML table to `EntityGridTemplate`
+ * (AG Grid v34.3.1) to bring the platform grid contract — column
+ * filter/sort/group, density toggle, export (CSV/Excel), quick filter,
+ * variant integration. Row click opens a bottom-sheet drawer (see
+ * `widgets/device-detail-drawer/DeviceDetailDrawer.tsx`) with 4 tabs:
+ * Detay, İşlemler, Audit Geçmişi, Inventory.
+ *
+ * Single-click row open (vs the platform `onRowDoubleClick` default in
+ * RolesGrid) is intentional: bottom-sheet is mobile-first and tap-to-
+ * open is the natural touch semantic. Guards on the click handler
+ * prevent accidental drawer opens from button/checkbox/link clicks.
  *
  * Auth model: backend enforces JWT role + OpenFGA `module:endpoint-admin`
  * `can_view`. The shell-side `<ProtectedRoute requiredModule="ENDPOINT_ADMIN">`
@@ -37,9 +49,110 @@ const formatTimestamp = (value: string | null): string => {
   return d.toLocaleString();
 };
 
+const GRID_ID = 'endpoint-admin-devices';
+const GRID_SCHEMA_VERSION = 1;
+
 export const EndpointDevicesPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
   const { data, isLoading, isError, error } = useListEndpointDevicesQuery();
+  const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | null>(null);
+
+  const rows = React.useMemo<EndpointDevice[]>(() => data ?? [], [data]);
+  const selectedDevice = React.useMemo(
+    () => rows.find((d) => d.id === selectedDeviceId) ?? null,
+    [rows, selectedDeviceId],
+  );
+
+  const columnDefs = React.useMemo<ColDef<EndpointDevice>[]>(
+    () => [
+      {
+        field: 'hostname',
+        headerName: t('endpointAdmin.devices.col.hostname'),
+        minWidth: 200,
+        cellStyle: { fontFamily: 'monospace' },
+        valueGetter: (params) => {
+          const row = params.data;
+          if (!row) return '';
+          return row.displayName && row.displayName !== row.hostname
+            ? `${row.hostname} (${row.displayName})`
+            : row.hostname;
+        },
+      },
+      {
+        field: 'osType',
+        headerName: t('endpointAdmin.devices.col.os'),
+        minWidth: 160,
+        valueGetter: (params) => {
+          const row = params.data;
+          if (!row) return '';
+          const label = OS_LABEL[row.osType] ?? row.osType;
+          return row.osVersion ? `${label} ${row.osVersion}` : label;
+        },
+      },
+      {
+        field: 'agentVersion',
+        headerName: t('endpointAdmin.devices.col.agentVersion'),
+        minWidth: 140,
+        cellStyle: { fontFamily: 'monospace' },
+        valueGetter: (params) => params.data?.agentVersion ?? '—',
+      },
+      {
+        field: 'status',
+        headerName: t('endpointAdmin.devices.col.status'),
+        minWidth: 140,
+        cellRenderer: (params: { value: DeviceStatus; data?: EndpointDevice }) => {
+          const status = params.value;
+          if (!status) return null;
+          const color = STATUS_VARIANT_MAP[status] ?? 'var(--text-secondary)';
+          return (
+            <span data-testid={`device-status-${status}`} style={{ color, fontWeight: 500 }}>
+              {t(`endpointAdmin.devices.status.${status}`)}
+            </span>
+          );
+        },
+      },
+      {
+        field: 'lastSeenAt',
+        headerName: t('endpointAdmin.devices.col.lastSeenAt'),
+        minWidth: 180,
+        valueGetter: (params) => formatTimestamp(params.data?.lastSeenAt ?? null),
+      },
+    ],
+    [t],
+  );
+
+  const gridOptions = React.useMemo<GridOptions<EndpointDevice>>(
+    () => ({
+      multiSortKey: 'ctrl' as const,
+      onRowClicked: (event) => {
+        const ev = event.event as MouseEvent | undefined;
+        // Only the primary (left) mouse button opens the drawer.
+        if (ev && ev.button !== undefined && ev.button !== 0) return;
+        if (ev && ev.defaultPrevented) return;
+        if (!event.data?.id) return;
+        if (event.node.group) return;
+
+        const target = (event.event?.target as HTMLElement | null) ?? null;
+        if (target) {
+          if (target.closest('button, a, input, select, textarea, [contenteditable="true"]')) {
+            return;
+          }
+          if (target.closest('[role="button"], [role="menuitem"]')) return;
+          if (target.closest('[data-no-row-open]')) return;
+          if (
+            target.closest(
+              '.ag-checkbox-input-wrapper, .ag-selection-checkbox, .ag-group-expanded, .ag-group-contracted',
+            )
+          ) {
+            return;
+          }
+        }
+
+        setSelectedDeviceId(event.data.id);
+      },
+    }),
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -70,7 +183,6 @@ export const EndpointDevicesPage: React.FC = () => {
     );
   }
 
-  const rows = data ?? [];
   if (rows.length === 0) {
     return (
       <section style={{ padding: 24 }}>
@@ -85,86 +197,35 @@ export const EndpointDevicesPage: React.FC = () => {
   }
 
   return (
-    <section style={{ padding: 24 }}>
+    <section style={{ padding: 24 }} data-testid="endpoint-admin-devices-page">
       <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
         {t('endpointAdmin.devices.heading')}
       </h2>
       <p style={{ marginTop: 4, color: 'var(--text-secondary)', fontSize: 13 }}>
         {t('endpointAdmin.devices.countLabel')}: {rows.length}
       </p>
-      <div
-        role="region"
-        aria-label={t('endpointAdmin.devices.heading')}
-        style={{ marginTop: 16, overflowX: 'auto' }}
-      >
-        <table
-          data-testid="endpoint-admin-devices-table"
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: 13,
-          }}
-        >
-          <thead>
-            <tr
-              style={{
-                textAlign: 'left',
-                color: 'var(--text-secondary)',
-                borderBottom: '1px solid var(--border-subtle)',
-              }}
-            >
-              <th style={{ padding: '8px 12px' }}>{t('endpointAdmin.devices.col.hostname')}</th>
-              <th style={{ padding: '8px 12px' }}>{t('endpointAdmin.devices.col.os')}</th>
-              <th style={{ padding: '8px 12px' }}>{t('endpointAdmin.devices.col.agentVersion')}</th>
-              <th style={{ padding: '8px 12px' }}>{t('endpointAdmin.devices.col.status')}</th>
-              <th style={{ padding: '8px 12px' }}>{t('endpointAdmin.devices.col.lastSeenAt')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>
-                  {row.hostname}
-                  {row.displayName && row.displayName !== row.hostname ? (
-                    <span
-                      style={{
-                        color: 'var(--text-secondary)',
-                        marginLeft: 8,
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      ({row.displayName})
-                    </span>
-                  ) : null}
-                </td>
-                <td style={{ padding: '8px 12px' }}>
-                  {OS_LABEL[row.osType] ?? row.osType}
-                  {row.osVersion ? (
-                    <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>
-                      {row.osVersion}
-                    </span>
-                  ) : null}
-                </td>
-                <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>
-                  {row.agentVersion ?? '—'}
-                </td>
-                <td style={{ padding: '8px 12px' }}>
-                  <span
-                    data-testid={`device-status-${row.status}`}
-                    style={{
-                      color: STATUS_VARIANT_MAP[row.status],
-                      fontWeight: 500,
-                    }}
-                  >
-                    {t(`endpointAdmin.devices.status.${row.status}` as never)}
-                  </span>
-                </td>
-                <td style={{ padding: '8px 12px' }}>{formatTimestamp(row.lastSeenAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
+        <React.Suspense fallback={<div style={{ height: 400 }} />}>
+          <EntityGridTemplate<EndpointDevice>
+            gridId={GRID_ID}
+            gridSchemaVersion={GRID_SCHEMA_VERSION}
+            columnDefs={columnDefs}
+            gridOptions={gridOptions}
+            dataSourceMode="client"
+            rowData={rows}
+            total={rows.length}
+            themeLabel="Tema"
+            quickFilterLabel="Hızlı Filtre"
+            quickFilterPlaceholder="Hostname, durum, ajan sürümü…"
+            resetFiltersLabel="Filtreleri Temizle"
+          />
+        </React.Suspense>
       </div>
+      <DeviceDetailDrawer
+        open={selectedDevice !== null}
+        device={selectedDevice}
+        onClose={() => setSelectedDeviceId(null)}
+      />
     </section>
   );
 };
