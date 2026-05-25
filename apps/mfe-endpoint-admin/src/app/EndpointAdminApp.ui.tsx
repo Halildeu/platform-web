@@ -1,3 +1,10 @@
+// Faz 22.2 — AG Grid module registration at the federation EXPOSE entry.
+// Shell host imports `mfe_endpoint_admin/EndpointAdminApp` (this file),
+// NOT bootstrap.tsx — so the bootstrap-level setup import only covers
+// standalone open of the MFE. When loaded as a remote into the shell,
+// the shell host bundle is responsible for registering AG Grid modules
+// via this side-effect import. Mirror of `apps/mfe-users/src/app/UsersApp.ui.tsx`.
+import '@mfe/design-system/advanced/data-grid/setup';
 import React, { useMemo } from 'react';
 import { Provider as ReduxProvider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';

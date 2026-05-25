@@ -8,6 +8,10 @@ import type {
   EndpointAuditEvent,
   ListAuditEventsArgs,
 } from '../../entities/endpoint-audit-event/types';
+import type {
+  EndpointCommand,
+  CreateEndpointCommandBody,
+} from '../../entities/endpoint-command/types';
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -123,7 +127,7 @@ const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError
 export const endpointAdminApi = createApi({
   reducerPath: 'endpointAdminApi',
   baseQuery: rawBaseQuery,
-  tagTypes: ['AgentStatus', 'EndpointDevice', 'EndpointAuditEvent'] as const,
+  tagTypes: ['AgentStatus', 'EndpointDevice', 'EndpointAuditEvent', 'EndpointCommand'] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
       query: () => ({ url: '/endpoint-agents/status', method: 'GET' }),
@@ -175,13 +179,82 @@ export const endpointAdminApi = createApi({
         if (typeof args?.limit === 'number') params.limit = String(args.limit);
         return { url: '/endpoint-admin/endpoint-audit-events', method: 'GET', params };
       },
-      providesTags: (result) =>
-        result
-          ? [
-              ...result.map(({ id }) => ({ type: 'EndpointAuditEvent' as const, id })),
-              { type: 'EndpointAuditEvent' as const, id: 'LIST' },
-            ]
-          : [{ type: 'EndpointAuditEvent' as const, id: 'LIST' }],
+      providesTags: (result, _err, args) => {
+        const deviceScope = args?.deviceId
+          ? [{ type: 'EndpointAuditEvent' as const, id: `device-${args.deviceId}` }]
+          : [];
+        if (!result) {
+          return [{ type: 'EndpointAuditEvent' as const, id: 'LIST' }, ...deviceScope];
+        }
+        return [
+          ...result.map(({ id }) => ({ type: 'EndpointAuditEvent' as const, id })),
+          { type: 'EndpointAuditEvent' as const, id: 'LIST' },
+          ...deviceScope,
+        ];
+      },
+    }),
+    /**
+     * Backend: `AdminEndpointCommandController.listDeviceCommands` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/commands
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/commands
+     *   @RequireModule(VIEWER='can_view')
+     */
+    listDeviceCommands: builder.query<EndpointCommand[], { deviceId: string }>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/commands`,
+        method: 'GET',
+      }),
+      providesTags: (result, _err, { deviceId }) => {
+        const deviceScope = [{ type: 'EndpointCommand' as const, id: `device-${deviceId}` }];
+        if (!result) return deviceScope;
+        return [
+          ...result.map((c) => ({ type: 'EndpointCommand' as const, id: c.id })),
+          ...deviceScope,
+        ];
+      },
+    }),
+    /**
+     * Backend: `AdminEndpointCommandController.getCommand` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-commands/{commandId}
+     *   → service /api/v1/admin/endpoint-commands/{commandId}
+     *   @RequireModule(VIEWER='can_view')
+     */
+    getEndpointCommand: builder.query<EndpointCommand, { commandId: string }>({
+      query: ({ commandId }) => ({
+        url: `/endpoint-admin/endpoint-commands/${encodeURIComponent(commandId)}`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _err, { commandId }) => [
+        { type: 'EndpointCommand' as const, id: commandId },
+      ],
+    }),
+    /**
+     * Backend: `AdminEndpointCommandController.createCommand` —
+     *   gateway POST /api/v1/endpoint-admin/endpoint-devices/{deviceId}/commands
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/commands
+     *   @RequireModule(MANAGER='can_manage')
+     *
+     * Destructive command types (LOCK_USER_LOGIN, UNLOCK_USER_LOGIN,
+     * CHANGE_LOCAL_PASSWORD, ROTATE_CREDENTIAL) return
+     * approvalStatus=PENDING and require a second admin's approval
+     * before the agent can claim them (BE-017 dual-control).
+     *
+     * Invalidation scope: device-scoped command list + device-scoped
+     * audit event list (every command create triggers an audit event).
+     */
+    createDeviceCommand: builder.mutation<
+      EndpointCommand,
+      { deviceId: string; body: CreateEndpointCommandBody }
+    >({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/commands`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+      ],
     }),
   }),
 });
@@ -191,4 +264,7 @@ export const {
   useListEndpointDevicesQuery,
   useGetEndpointDeviceQuery,
   useListEndpointAuditEventsQuery,
+  useListDeviceCommandsQuery,
+  useGetEndpointCommandQuery,
+  useCreateDeviceCommandMutation,
 } = endpointAdminApi;

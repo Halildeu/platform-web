@@ -20,6 +20,12 @@ export { FormDrawer } from './form-drawer';
 export type { FormDrawerProps, FormDrawerSize, FormDrawerPlacement } from './form-drawer';
 export { DetailDrawer } from './detail-drawer';
 export type { DetailDrawerProps, DetailDrawerSize, DetailDrawerSection } from './detail-drawer';
+export { BottomSheetDrawer } from './bottom-sheet';
+export type {
+  BottomSheetDrawerProps,
+  BottomSheetDrawerSize,
+  BottomSheetDrawerRef,
+} from './bottom-sheet';
 
 /* Filters */
 export { FilterBar } from './filter-bar';
