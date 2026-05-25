@@ -35,6 +35,23 @@ import { render, act } from '@testing-library/react';
 import authReducer from '../../features/auth/model/auth.slice';
 
 // Mock keycloak module BEFORE importing AuthBootstrapper.
+//
+// 2026-05-25 Codex iter-1 P2 absorb (cross-AI peer review, thread
+// 019e6061): kcInit is configurable per-test. The default mock
+// resolves immediately, but the StrictMode + concurrent-mount
+// regression installs a pending Promise so that the second
+// useEffect run is guaranteed to observe an in-flight bootstrap —
+// the production failure mode (keycloak.init returns a long-lived
+// Promise; second bootstrap interleaves before the first emits the
+// token via the live getter).
+type DeferredInit = { promise: Promise<void>; resolve: () => void };
+const makeDeferredInit = (): DeferredInit => {
+  let resolveFn: () => void = () => undefined;
+  const promise = new Promise<void>((resolve) => {
+    resolveFn = resolve;
+  });
+  return { promise, resolve: resolveFn };
+};
 const kcInit = vi.fn().mockResolvedValue(undefined);
 let kcToken: string | undefined = 'mock-jwt-token';
 vi.mock('../auth/keycloakClient', () => ({
@@ -176,40 +193,94 @@ describe('AuthBootstrapper — cold-mount triple-init guard (2026-05-25)', () =>
     expect(countInitStartingLogs()).toBe(1);
   });
 
-  it('a separately-mounted second AuthBootstrapper tree shares the page singleton (no second keycloak.init)', async () => {
-    const store1 = buildStore();
-    const store2 = buildStore();
+  it('StrictMode dev-mode double-mount + pending keycloak.init: bootstrap stays single-fire and final auth state populated', async () => {
+    // Codex iter-1 P2 absorb (cross-AI peer review, thread 019e6061):
+    // the earlier "forced parent re-render" spec did not actually
+    // exercise the multi-fire path because the useEffect deps were
+    // stable. React StrictMode reliably double-fires useEffects
+    // (setup → cleanup → setup) and is the canonical local proxy
+    // for the live testai multi-fire. Combined with a deliberately
+    // *pending* kc.init promise, the second mount enters the
+    // bootstrap-in-flight window where pre-fix code would race
+    // dispatchSessionClear over the first one's success.
+    const deferred = makeDeferredInit();
+    kcInit.mockReturnValueOnce(deferred.promise);
 
-    // First tree
-    const r1 = render(
-      <Provider store={store1}>
-        <AuthBootstrapper>
-          <div />
-        </AuthBootstrapper>
-      </Provider>,
-    );
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(kcInit).toHaveBeenCalledTimes(1);
-    expect(countInitStartingLogs()).toBe(1);
-
-    // Second tree — would happen if a Module Federation remote
-    // hosts its own AuthBootstrapper alongside the shell's. Without
-    // the page singleton, this would call keycloak.init() AGAIN.
+    const store = buildStore();
     render(
-      <Provider store={store2}>
-        <AuthBootstrapper>
-          <div />
-        </AuthBootstrapper>
-      </Provider>,
+      <React.StrictMode>
+        <Provider store={store}>
+          <AuthBootstrapper>
+            <div data-testid="strict-child" />
+          </AuthBootstrapper>
+        </Provider>
+      </React.StrictMode>,
     );
+
+    // Let StrictMode's double-mount complete its setup/cleanup/setup
+    // pass. The first mount's bootstrap is still in-flight on the
+    // pending kc.init Promise; the second mount must NOT start a
+    // second keycloak.init() call.
     await act(async () => {
       await Promise.resolve();
     });
     expect(kcInit).toHaveBeenCalledTimes(1);
     expect(countInitStartingLogs()).toBe(1);
 
-    r1.unmount();
+    // Now resolve kc.init. The single in-flight bootstrap should
+    // continue through cookie + authz + session dispatches.
+    await act(async () => {
+      deferred.resolve();
+      // Flush all microtasks the bootstrap chain creates.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Final auth state must be populated — pre-fix code left
+    // state.auth.user=null because dispatchSessionClear from a
+    // second bootstrap stomped over the first's success.
+    const finalState = store.getState().auth;
+    expect(finalState.phase).toBe('transportReady');
+    expect(finalState.initialized).toBe(true);
+    expect(finalState.token).toBeTruthy();
+
+    // Still exactly one bootstrap fire end-to-end.
+    expect(kcInit).toHaveBeenCalledTimes(1);
+    expect(countInitStartingLogs()).toBe(1);
+  });
+
+  it('two AuthBootstrapper instances sharing the same Provider/store still share the page singleton', async () => {
+    // Codex iter-1 P2 absorb: this replaces the misleading
+    // "separately-mounted second tree with its own store" spec. The
+    // page singleton lives at module level, so two AuthBootstrapper
+    // instances under the SAME canonical store (the actual
+    // production topology if a remote ever hosts its own
+    // AuthBootstrapper in the same React root) must still result
+    // in exactly one keycloak.init + one terminal dispatch chain.
+    const store = buildStore();
+    render(
+      <Provider store={store}>
+        <AuthBootstrapper>
+          <div data-testid="tree-1" />
+        </AuthBootstrapper>
+        <AuthBootstrapper>
+          <div data-testid="tree-2" />
+        </AuthBootstrapper>
+      </Provider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(kcInit).toHaveBeenCalledTimes(1);
+    expect(countInitStartingLogs()).toBe(1);
+
+    // The single canonical store reached transportReady.
+    const finalState = store.getState().auth;
+    expect(finalState.phase).toBe('transportReady');
+    expect(finalState.initialized).toBe(true);
+    expect(finalState.token).toBeTruthy();
   });
 });

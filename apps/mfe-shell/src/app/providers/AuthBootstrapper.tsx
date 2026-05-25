@@ -434,12 +434,22 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
   // component itself was still alive. The ref below decouples the
   // two: only true component unmount flips it false.
   const componentMountedRef = useRef<boolean>(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Codex iter-1 P2 absorb (cross-AI peer review, thread
+    // 019e6061): re-assert {@code true} on setup. React 18 dev
+    // StrictMode runs setup → cleanup → setup again on initial
+    // mount; without the setup-side write the ref would stay
+    // {@code false} after the first cleanup, making bootstrap's
+    // {@code isMounted} return false for the rest of the page
+    // even though the component is alive. Production NODE_ENV
+    // doesn't double-mount, so the live fix doesn't depend on
+    // this — but the dev-mode regression matters for the
+    // {@code AuthBootstrapper.coldMount.test.tsx} StrictMode case.
+    componentMountedRef.current = true;
+    return () => {
       componentMountedRef.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
   const shouldUseKeycloak = isKeycloakMode();
 
   useEffect(() => {
