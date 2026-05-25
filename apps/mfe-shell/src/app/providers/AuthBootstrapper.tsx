@@ -340,6 +340,73 @@ export function clearPersistedAuthKeys(): void {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Page-lifecycle singletons — cold-mount triple-init guard            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 2026-05-25 cold-mount race fix.
+ *
+ * <p>Live testai forensics (deep-link to
+ * {@code /endpoint-admin/devices}): {@code [AuthBootstrapper] init
+ * starting} fires <strong>three</strong> times within one second of
+ * a fresh page load. Same {@code bootstrap-*.js:1:41662} call site,
+ * same useEffect deps {@code [dispatch, shouldUseKeycloak]} — so the
+ * effect itself is invoking {@code bootstrap()} multiple times before
+ * the first one settles. Sibling design-system shared module's
+ * {@code [ag-grid-license]} debug log fires the same N times,
+ * confirming the trigger is on the eager Module Federation
+ * remote-init pass (each of the 5 eager remotes — mfe_endpoint_admin /
+ * users / audit / access / reporting — pulls a fresh evaluation
+ * through the host's shared scope, churning a re-render path the
+ * MF runtime threads back into the shell's React tree).
+ *
+ * <p>Symptom chain:
+ * <ol>
+ *   <li>bootstrap #1 calls {@code keycloak.init()}, sets
+ *       {@code state.auth.user / token / phase=transportReady}.</li>
+ *   <li>bootstrap #2 runs while keycloak-js hasn't yet re-emitted
+ *       the token via its live getters → controller sees
+ *       {@code getToken() == null} → calls
+ *       {@code dispatchSessionClear()} → wipes #1's user+token
+ *       and re-dispatches {@code unauthenticated}.</li>
+ *   <li>bootstrap #3 may recover, but RTK Query subscriptions
+ *       opened during the brief {@code transportReady} window
+ *       (gated through {@code auth.ready()}) are stuck on the
+ *       intermediate state. Result: cold-mount UI shows
+ *       "Cihazlar yükleniyor…" forever, top-nav permission-gated
+ *       items hidden, no {@code /api/v1/endpoint-admin/*}
+ *       request fires at all.</li>
+ *   <li>F5 reload masks the bug: cached keycloak-js state +
+ *       valid auth cookie make the second/third bootstrap fast
+ *       enough that they no-op via the {@code kcToken!=null}
+ *       happy path, never tripping the SessionClear branch.</li>
+ * </ol>
+ *
+ * <p>Fix: make {@code bootstrap()} idempotent at the module level.
+ * {@code keycloak.init()} (and the surrounding cookie/authz/session
+ * dispatch chain) must run <strong>exactly once</strong> per page
+ * lifecycle. Subsequent useEffect mounts re-attach the keycloak
+ * event handlers (which legitimately close over the current
+ * {@code mounted} flag) but share the original Promise's outcome
+ * via {@code pageBootstrapOutcomeDeferred}, so
+ * {@code keycloak.onAuthSuccess} still sees a live outcome and
+ * the catch-up closure for {@code unauthenticated}-then-recover
+ * (PR-2 / Codex thread {@code 019e362e}) still works.
+ *
+ * <p>Reset path: {@code __resetAuthBootstrapperPageStateForTests}
+ * is exported solely for vitest isolation between specs. Production
+ * code never invalidates these — the cache lives for the page
+ * lifecycle (consistent with the {@code cachedSharedShellServices}
+ * pattern in {@link shell-services-wiring}).
+ */
+let pageBootstrapOutcomeDeferred: BootstrapOutcomeDeferred | null = null;
+
+/** @internal — test reset only. Production must never call. */
+export function __resetAuthBootstrapperPageStateForTests(): void {
+  pageBootstrapOutcomeDeferred = null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  AuthBootstrapper — Keycloak initialization & token management      */
 /* ------------------------------------------------------------------ */
 
@@ -353,6 +420,26 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
   // {@code isImpersonating=false}). Updated whenever the selector
   // changes so {@code onTokenExpired} can decide whether to skip.
   const isImpersonatingRef = useRef<boolean>(false);
+  // 2026-05-25 cold-mount race fix companion ref: bootstrap()'s
+  // {@code isMounted} liveness signal MUST track the React COMPONENT
+  // lifetime, not the {@code useEffect} run lifetime. Without this
+  // ref, the bootstrap's {@code mounted} closure was the local
+  // {@code let mounted} in the {@code [dispatch, shouldUseKeycloak]}
+  // useEffect, which cleanup flips to {@code false} BEFORE the next
+  // useEffect re-run (cleanup-of-previous semantics). When that
+  // useEffect re-ran 3 times on cold deep-link mount, the first
+  // (and now only — see page singleton above) bootstrap aborted
+  // mid-flight because its closed-over {@code mounted} flipped
+  // false at the first re-run cleanup — even though the React
+  // component itself was still alive. The ref below decouples the
+  // two: only true component unmount flips it false.
+  const componentMountedRef = useRef<boolean>(true);
+  useEffect(
+    () => () => {
+      componentMountedRef.current = false;
+    },
+    [],
+  );
   const shouldUseKeycloak = isKeycloakMode();
 
   useEffect(() => {
@@ -447,12 +534,31 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
       dispatch(setAuthInitialized(true));
       return;
     }
-    let mounted = true;
+    // 2026-05-25 cold-mount race fix: the local
+    // {@code let mounted = true; ... return () => mounted = false;}
+    // pattern was removed because its lifetime tracked useEffect re-run
+    // semantics (cleanup-of-previous fires BEFORE the next effect body),
+    // not the React component's true mount/unmount. Liveness now reads
+    // {@link componentMountedRef} (initialized to {@code true}; flipped
+    // {@code false} only by the {@code [] }-deps cleanup useEffect on
+    // genuine component unmount).
+    //
     // PR-2 (Codex AGREE thread 019e362e): one-shot deferred bridging
     // bootstrap() and the keycloak.onAuthSuccess handler. Created here —
     // before either handler is attached — so onAuthSuccess can await the
     // bootstrap outcome no matter how early keycloak-js fires the event.
-    const bootstrapOutcomeDeferred = createBootstrapOutcomeDeferred();
+    //
+    // 2026-05-25 cold-mount race fix: page-lifecycle singleton (see
+    // module-level doc above {@link __resetAuthBootstrapperPageStateForTests}).
+    // If a previous useEffect mount already kicked off bootstrap, reuse
+    // its deferred so this mount's handlers wait on the same outcome
+    // instead of starting a second keycloak.init() that races
+    // dispatchSessionClear over the first one's success.
+    const isFirstBootstrap = pageBootstrapOutcomeDeferred === null;
+    if (isFirstBootstrap) {
+      pageBootstrapOutcomeDeferred = createBootstrapOutcomeDeferred();
+    }
+    const bootstrapOutcomeDeferred = pageBootstrapOutcomeDeferred;
 
     /**
      * Phase 2 PR-Auth-1 (Codex iter-22/23 §Auth-1 absorb, thread 019e0119):
@@ -744,7 +850,12 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
               }),
             );
           },
-          isMounted: () => mounted,
+          // 2026-05-25 cold-mount race fix: liveness reads the
+          // component ref, NOT the useEffect-scoped {@code mounted}.
+          // Multi-fire useEffect cleanups would flip the local
+          // {@code mounted} false and abort bootstrap mid-flight even
+          // though the React component is still alive.
+          isMounted: () => componentMountedRef.current,
         });
 
         // 2026-05-20 hotfix: when controller dispatched
@@ -777,7 +888,9 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
         // dispatchFailed; this catch covers anything outside the
         // controller boundary (e.g. setKeycloakSession dispatch crash).
         console.error('[AuthBootstrapper] outer bootstrap error:', err);
-        if (mounted && !tokenRef.current) {
+        // 2026-05-25 cold-mount race fix: liveness reads the component
+        // ref, NOT the useEffect-scoped {@code mounted}.
+        if (componentMountedRef.current && !tokenRef.current) {
           dispatch(setKeycloakSession({ token: null }));
           dispatch(
             setAuthFailed({
@@ -792,7 +905,9 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
         // unexpected throw after the controller returned). resolve is
         // idempotent — a no-op on every path that already settled.
         bootstrapOutcomeDeferred.resolve({ kind: 'failed' });
-        if (mounted) {
+        // 2026-05-25 cold-mount race fix: read component ref instead
+        // of the useEffect-scoped {@code mounted}.
+        if (componentMountedRef.current) {
           // Backward-compat: legacy {@code initialized} boolean is now
           // derived from {@link AuthPhase}; calling setAuthInitialized
           // after bootstrap completes keeps existing consumers (those
@@ -825,7 +940,10 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
     //      bootstrap reaches `transportReady` and the handler is a
     //      no-op — the controller already did the cookie + authz work.
     keycloak.onAuthSuccess = createOnAuthSuccessHandler({
-      getMounted: () => mounted,
+      // 2026-05-25 cold-mount race fix: see {@link componentMountedRef}
+      // doc above — liveness MUST track component lifetime, not the
+      // useEffect dep-change cleanup.
+      getMounted: () => componentMountedRef.current,
       getIsImpersonating: () => isImpersonatingRef.current,
       getKeycloakToken: () => keycloak.token,
       getKeycloakTokenParsed: () => keycloak.tokenParsed,
@@ -934,11 +1052,29 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
     // handlers are attached — so onAuthSuccess (which keycloak-js can
     // fire synchronously inside keycloak.init()) always finds its
     // handler in place and a live bootstrapOutcome deferred to await.
-    bootstrap();
+    //
+    // 2026-05-25 cold-mount race fix: page-lifecycle singleton. Only
+    // the first useEffect mount per page actually invokes bootstrap().
+    // Subsequent mounts (Module Federation eager-remote re-render
+    // trigger, React 18 dev StrictMode, or any future cause that
+    // re-fires this effect) attach their own keycloak handlers but
+    // share the original Promise — preventing the multi-init →
+    // dispatchSessionClear race that wipes
+    // {@code state.auth.user / token} on cold deep-link mount.
+    if (isFirstBootstrap) {
+      bootstrap();
+    } else if (process.env.NODE_ENV !== 'production') {
+      console.debug('[AuthBootstrapper] init skipped — page bootstrap already in flight');
+    }
 
-    return () => {
-      mounted = false;
-    };
+    // 2026-05-25 cold-mount race fix: cleanup is now a no-op.
+    // Liveness is owned by {@link componentMountedRef} which is
+    // flipped only by the {@code []}-deps cleanup useEffect on
+    // genuine component unmount. The keycloak event handlers
+    // attached above ({@code onAuthSuccess} / {@code onTokenExpired})
+    // intentionally survive a useEffect re-run — the latest closure
+    // wins, and reads liveness through the component ref.
+    return undefined;
   }, [dispatch, shouldUseKeycloak]);
 
   return <>{children}</>;
