@@ -13,6 +13,7 @@ import {
   PieChart,
   Lightbulb,
   Scale,
+  Monitor,
 } from 'lucide-react';
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
 
@@ -141,6 +142,14 @@ export const NAV_GROUPS: NavGroup[] = [
         /* permission field removed — module field drives access check */
       },
       {
+        key: 'endpointAdmin',
+        labelKey: 'shell.mega.admin.endpointAdmin',
+        descriptionKey: 'shell.mega.admin.endpointAdmin.desc',
+        path: '/endpoint-admin/devices',
+        icon: Monitor,
+        module: MODULE_KEYS.ENDPOINT_ADMIN,
+      },
+      {
         key: 'services',
         labelKey: 'shell.mega.admin.services',
         descriptionKey: 'shell.mega.admin.services.desc',
@@ -229,7 +238,15 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
     pattern: '/admin/services',
     labelKey: 'shell.breadcrumb.services',
     parent: '/',
-    siblings: ['/admin/users', '/access/roles', '/audit/events'],
+    siblings: ['/admin/users', '/access/roles', '/audit/events', '/endpoint-admin/devices'],
+  },
+
+  // Endpoint Admin
+  {
+    pattern: '/endpoint-admin/devices',
+    labelKey: 'shell.breadcrumb.endpointAdmin',
+    parent: '/',
+    siblings: ['/admin/users', '/access/roles', '/audit/events', '/admin/services'],
   },
 
   // Reports
