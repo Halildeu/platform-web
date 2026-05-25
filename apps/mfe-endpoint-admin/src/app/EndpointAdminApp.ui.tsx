@@ -1,17 +1,16 @@
 // Faz 22.2 — AG Grid module registration at the federation EXPOSE entry.
 // Shell host imports `mfe_endpoint_admin/EndpointAdminApp` (this file),
 // NOT bootstrap.tsx — so the bootstrap-level setup import only covers
-// standalone open of the MFE. When loaded as a remote into the shell,
-// the shell host bundle is responsible for registering AG Grid modules
-// via this side-effect import. Mirror of `apps/mfe-users/src/app/UsersApp.ui.tsx`.
+// standalone open of the MFE.
 import '@mfe/design-system/advanced/data-grid/setup';
 import React from 'react';
-import { Provider as ReduxProvider, ReactReduxContext } from 'react-redux';
+import { Provider as ReduxProvider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
 import EndpointAdminRouter from './router/EndpointAdminRouter';
 import { endpointAdminApi } from './services/endpointAdminApi';
+import { endpointAdminReduxContext } from './services/redux-context';
 
 /**
  * Codex iter-1 PARTIAL absorb (must-fix #1): MFE always owns its own
@@ -65,26 +64,23 @@ class EndpointAdminAppErrorBoundary extends React.Component<
 }
 
 /**
- * Codex iter-2 absorb (post-#660 regression): mirror the `mfe-users`
- * `UsersAppProviders` pattern exactly — `useRef` for store identity,
- * `useContext(ReactReduxContext)` to honor an outer Redux Provider when
- * one is genuinely present, and only wrap with our own Provider when
- * the host context isn't already in scope. The previous `useMemo`
- * variant lost its store ref under the new ag-grid setup import +
- * StrictMode double-mount combination, leaving the page subscribed to
- * an empty store ↔ data lived in a sibling store → `isLoading` stuck
- * true forever (live testai smoke 2026-05-25). The `useRef` value
- * persists across renders + StrictMode double-mount; the outer-
- * context check matches the working `mfe-users` shape so we stay
- * trace-compatible with the rest of the monorepo's MFE conventions.
+ * Codex iter-3 absorb (thread 019e6068): bind both the MFE-local
+ * `<ReduxProvider>` and every generated RTK Query hook to a single
+ * locally-owned `React.createContext` instance. The default
+ * `ReactReduxContext` becomes irrelevant — even when the AG Grid +
+ * ag-charts chain pulls in a second react-redux instance with its
+ * own internal context, our subscription chain stays intact because
+ * Provider and hooks share the explicit `endpointAdminReduxContext`
+ * import. Previous source-order / Provider-mirror attempts did not
+ * change runtime behavior because (a) the bundler reorders chunks
+ * regardless of source line order, and (b) `mfe-users` works only
+ * because it uses TanStack Query, not RTK Query — `mfe-endpoint-admin`
+ * cannot rely on the same survival pattern.
+ *
+ * QueryClient bridge from the shell stays (mirrors mfe-users +
+ * mfe-access window-bridge convention).
  */
 const EndpointAdminAppProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const existingReduxContext = React.useContext(ReactReduxContext);
-
-  // Shell's QueryClient is shared via window bridge because
-  // @tanstack/react-query is resolved via alias in shell (bypassing MF
-  // loadShare), so React context from shell's instance is not accessible
-  // here. Window bridge is the safe path (mirror of mfe-users / mfe-access).
   const shellQueryClient = (
     typeof window !== 'undefined'
       ? (window as Record<string, unknown>).__SHELL_QUERY_CLIENT__
@@ -99,40 +95,16 @@ const EndpointAdminAppProviders: React.FC<{ children: React.ReactNode }> = ({ ch
   }
   const effectiveQueryClient = shellQueryClient ?? queryClientRef.current!;
 
-  // Codex iter-1 P2 absorb (thread 019e6068): outer context truthiness
-  // alone isn't a safe reuse signal — the shell store does NOT include
-  // `endpointAdminApi.reducer`, so a future singleton-share fix that
-  // makes the cross-bundle context visible to this MFE would land us
-  // in a "shared context but missing slice" trap and resurrect the
-  // exact stuck-loading symptom this hotfix is meant to close. We only
-  // reuse the outer Provider if its store actually carries our
-  // `endpointAdminApi.reducerPath` slice; otherwise we wrap with our
-  // own local store. Today both branches behave identically (the
-  // outer context is always invisible due to cross-bundle isolation),
-  // but the check guards the day singleton resolution gets fixed.
-  const outerStoreHasOurSlice =
-    !!existingReduxContext &&
-    typeof existingReduxContext.store?.getState === 'function' &&
-    (existingReduxContext.store.getState() as Record<string, unknown>)[
-      endpointAdminApi.reducerPath
-    ] !== undefined;
-
-  const shouldOwnStore = !existingReduxContext || !outerStoreHasOurSlice;
-
   const storeRef = React.useRef<ReturnType<typeof createEndpointAdminStore>>();
-  if (shouldOwnStore && !storeRef.current) {
+  if (!storeRef.current) {
     storeRef.current = createEndpointAdminStore();
   }
 
-  let content = children;
-
-  content = <QueryClientProvider client={effectiveQueryClient}>{content}</QueryClientProvider>;
-
-  if (shouldOwnStore && storeRef.current) {
-    content = <ReduxProvider store={storeRef.current}>{content}</ReduxProvider>;
-  }
-
-  return <>{content}</>;
+  return (
+    <ReduxProvider store={storeRef.current} context={endpointAdminReduxContext}>
+      <QueryClientProvider client={effectiveQueryClient}>{children}</QueryClientProvider>
+    </ReduxProvider>
+  );
 };
 
 export const EndpointAdminApp: React.FC = () => {

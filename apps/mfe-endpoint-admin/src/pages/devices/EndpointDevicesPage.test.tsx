@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { registerAuthTokenResolver } from '@mfe/shared-http';
 import '@mfe/design-system/advanced/data-grid/setup';
 import { endpointAdminApi } from '../../app/services/endpointAdminApi';
+import { endpointAdminReduxContext } from '../../app/services/redux-context';
 import EndpointDevicesPage from './EndpointDevicesPage';
 
 const buildStore = () =>
@@ -18,7 +19,7 @@ const buildStore = () =>
 const renderPage = () => {
   const store = buildStore();
   return render(
-    <ReduxProvider store={store}>
+    <ReduxProvider store={store} context={endpointAdminReduxContext}>
       <MemoryRouter>
         <EndpointDevicesPage />
       </MemoryRouter>

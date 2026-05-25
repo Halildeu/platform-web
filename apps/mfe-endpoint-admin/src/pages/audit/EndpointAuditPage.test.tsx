@@ -6,6 +6,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import { MemoryRouter } from 'react-router-dom';
 import { registerAuthTokenResolver } from '@mfe/shared-http';
 import { endpointAdminApi } from '../../app/services/endpointAdminApi';
+import { endpointAdminReduxContext } from '../../app/services/redux-context';
 import EndpointAuditPage from './EndpointAuditPage';
 
 const buildStore = () =>
@@ -16,7 +17,7 @@ const buildStore = () =>
 
 const renderPage = () =>
   render(
-    <ReduxProvider store={buildStore()}>
+    <ReduxProvider store={buildStore()} context={endpointAdminReduxContext}>
       <MemoryRouter>
         <EndpointAuditPage />
       </MemoryRouter>
