@@ -55,6 +55,16 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start", "--prefix", "apps/mfe-reporting"],
       "port": 3007
+    },
+    {
+      "name": "mfe-endpoint-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start", "--prefix", "apps/mfe-endpoint-admin"],
+      "port": 3009,
+      "env": {
+        "AUTH_MODE": "permitAll",
+        "VITE_ENABLE_FAKE_AUTH": "true"
+      }
     }
   ]
 }
