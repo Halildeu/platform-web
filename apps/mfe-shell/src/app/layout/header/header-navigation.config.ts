@@ -13,6 +13,7 @@ import {
   PieChart,
   Lightbulb,
   Scale,
+  Monitor,
 } from 'lucide-react';
 import { MODULE_KEYS } from '../../../features/auth/lib/permissions.constants';
 
@@ -31,7 +32,7 @@ export interface NavGroupItem {
   /** OpenFGA module key — preferred over permission. */
   module?: string;
   /** If true, item is only shown when the corresponding remote is enabled. */
-  remoteFlag?: 'suggestions' | 'ethic';
+  remoteFlag?: 'suggestions' | 'ethic' | 'endpointAdmin';
 }
 
 export interface NavGroup {
@@ -141,6 +142,19 @@ export const NAV_GROUPS: NavGroup[] = [
         /* permission field removed — module field drives access check */
       },
       {
+        key: 'endpointAdmin',
+        labelKey: 'shell.mega.admin.endpointAdmin',
+        descriptionKey: 'shell.mega.admin.endpointAdmin.desc',
+        path: '/endpoint-admin/devices',
+        icon: Monitor,
+        // remoteFlag = build/deploy capability gate (AppRouter redirects to /home
+        // when endpoint-admin remote disabled, see createEndpointAdminApp.tsx).
+        // module = OpenFGA per-user auth gate. Both must pass for item to show
+        // (suggestions/ethic ile aynı pattern).
+        remoteFlag: 'endpointAdmin',
+        module: MODULE_KEYS.ENDPOINT_ADMIN,
+      },
+      {
         key: 'services',
         labelKey: 'shell.mega.admin.services',
         descriptionKey: 'shell.mega.admin.services.desc',
@@ -211,25 +225,33 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
     pattern: '/admin/users',
     labelKey: 'shell.breadcrumb.users',
     parent: '/',
-    siblings: ['/access/roles', '/audit/events', '/admin/services'],
+    siblings: ['/access/roles', '/audit/events', '/admin/services', '/endpoint-admin/devices'],
   },
   {
     pattern: '/access/roles',
     labelKey: 'shell.breadcrumb.access',
     parent: '/',
-    siblings: ['/admin/users', '/audit/events', '/admin/services'],
+    siblings: ['/admin/users', '/audit/events', '/admin/services', '/endpoint-admin/devices'],
   },
   {
     pattern: '/audit/events',
     labelKey: 'shell.breadcrumb.audit',
     parent: '/',
-    siblings: ['/admin/users', '/access/roles', '/admin/services'],
+    siblings: ['/admin/users', '/access/roles', '/admin/services', '/endpoint-admin/devices'],
   },
   {
     pattern: '/admin/services',
     labelKey: 'shell.breadcrumb.services',
     parent: '/',
-    siblings: ['/admin/users', '/access/roles', '/audit/events'],
+    siblings: ['/admin/users', '/access/roles', '/audit/events', '/endpoint-admin/devices'],
+  },
+
+  // Endpoint Admin
+  {
+    pattern: '/endpoint-admin/devices',
+    labelKey: 'shell.breadcrumb.endpointAdmin',
+    parent: '/',
+    siblings: ['/admin/users', '/access/roles', '/audit/events', '/admin/services'],
   },
 
   // Reports

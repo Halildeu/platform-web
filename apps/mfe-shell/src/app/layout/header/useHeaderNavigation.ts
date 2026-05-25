@@ -5,6 +5,7 @@ import { useAppSelector } from '../../store/store.hooks';
 import {
   isSuggestionsRemoteEnabled,
   isEthicRemoteEnabled,
+  isEndpointAdminRemoteEnabled,
 } from '../../shell-navigation';
 import { useShellCommonI18n } from '../../i18n';
 import type { NavGroup, NavGroupItem } from './header-navigation.config';
@@ -48,6 +49,7 @@ export function useHeaderNavigation(): HeaderNavigationState {
 
   const suggestionsEnabled = isSuggestionsRemoteEnabled();
   const ethicEnabled = isEthicRemoteEnabled();
+  const endpointAdminEnabled = isEndpointAdminRemoteEnabled();
 
   /** Check if a nav config item is accessible. Prefers module key over legacy permission. */
   const canAccess = (item: { module?: string; permission?: string }) => {
@@ -79,6 +81,7 @@ export function useHeaderNavigation(): HeaderNavigationState {
       const filteredItems = (group.items ?? []).reduce<ResolvedNavItem[]>((items, item) => {
         if (item.remoteFlag === 'suggestions' && !suggestionsEnabled) return items;
         if (item.remoteFlag === 'ethic' && !ethicEnabled) return items;
+        if (item.remoteFlag === 'endpointAdmin' && !endpointAdminEnabled) return items;
         if (item.module && !canAccess(item)) return items;
         items.push({
           key: item.key,
@@ -101,7 +104,15 @@ export function useHeaderNavigation(): HeaderNavigationState {
       });
       return acc;
     }, []);
-  }, [initialized, hasModule, isSuperAdmin, suggestionsEnabled, ethicEnabled, t]);
+  }, [
+    initialized,
+    hasModule,
+    isSuperAdmin,
+    suggestionsEnabled,
+    ethicEnabled,
+    endpointAdminEnabled,
+    t,
+  ]);
 
   // Resolve active group and item from current path (longest prefix match)
   const { activeGroupKey, activeItemKey } = useMemo(() => {

@@ -28,9 +28,11 @@ vi.mock('../../../i18n', () => ({
 
 let suggestionsEnabled = true;
 let ethicEnabled = true;
+let endpointAdminEnabled = true;
 vi.mock('../../../shell-navigation', () => ({
   isSuggestionsRemoteEnabled: () => suggestionsEnabled,
   isEthicRemoteEnabled: () => ethicEnabled,
+  isEndpointAdminRemoteEnabled: () => endpointAdminEnabled,
 }));
 
 const groupKeys = () =>
@@ -43,10 +45,18 @@ const hrItems = () => {
   return (hr?.items ?? []).map((i) => i.key);
 };
 
+const adminItems = () => {
+  const admin = renderHook(() => useHeaderNavigation()).result.current.groups.find(
+    (g) => g.key === 'admin',
+  );
+  return (admin?.items ?? []).map((i) => i.key);
+};
+
 describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
   beforeEach(() => {
     suggestionsEnabled = true;
     ethicEnabled = true;
+    endpointAdminEnabled = true;
     permissionsMock.hasModule.mockImplementation(() => false);
     permissionsMock.isSuperAdmin.mockImplementation(() => false);
   });
@@ -82,5 +92,46 @@ describe('useHeaderNavigation — İK (HR) mega-menu module gating', () => {
     permissionsMock.hasModule.mockImplementation((m) => m === 'SUGGESTIONS');
     suggestionsEnabled = false;
     expect(hrItems()).not.toContain('suggestions');
+  });
+});
+
+describe('useHeaderNavigation — Yönetim (admin) mega-menu endpointAdmin gating', () => {
+  beforeEach(() => {
+    suggestionsEnabled = true;
+    ethicEnabled = true;
+    endpointAdminEnabled = true;
+    permissionsMock.hasModule.mockImplementation(() => false);
+    permissionsMock.isSuperAdmin.mockImplementation(() => false);
+  });
+
+  it('shows endpointAdmin under Yönetim when ENDPOINT_ADMIN module is granted and remote enabled', () => {
+    permissionsMock.hasModule.mockImplementation((m) => m === 'ENDPOINT_ADMIN');
+    expect(adminItems()).toContain('endpointAdmin');
+  });
+
+  it('hides endpointAdmin when ENDPOINT_ADMIN module granted but remote disabled', () => {
+    // Remote off (build/deploy capability gate) must drop the item even if
+    // the per-user OpenFGA module gate would otherwise allow it. Same pattern
+    // as suggestions/ethic.
+    permissionsMock.hasModule.mockImplementation((m) => m === 'ENDPOINT_ADMIN');
+    endpointAdminEnabled = false;
+    expect(adminItems()).not.toContain('endpointAdmin');
+  });
+
+  it('hides endpointAdmin when remote enabled but ENDPOINT_ADMIN module not granted', () => {
+    // Module gate independently blocks the item.
+    endpointAdminEnabled = true;
+    expect(adminItems()).not.toContain('endpointAdmin');
+  });
+
+  it('shows endpointAdmin for super admin when remote enabled', () => {
+    permissionsMock.isSuperAdmin.mockImplementation(() => true);
+    expect(adminItems()).toContain('endpointAdmin');
+  });
+
+  it('hides endpointAdmin for super admin when remote disabled', () => {
+    permissionsMock.isSuperAdmin.mockImplementation(() => true);
+    endpointAdminEnabled = false;
+    expect(adminItems()).not.toContain('endpointAdmin');
   });
 });
