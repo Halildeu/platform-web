@@ -1,7 +1,17 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import {
+  buildCreateApi,
+  coreModule,
+  fetchBaseQuery,
+  reactHooksModule,
+} from '@reduxjs/toolkit/query/react';
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query/react';
 import { getShellServices } from './shell-services';
 import { unwrapRequestFetchFn } from './unwrap-request-fetch-fn';
+import {
+  useEndpointAdminDispatch,
+  useEndpointAdminSelector,
+  useEndpointAdminStore,
+} from './redux-context';
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
 import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import type {
@@ -123,6 +133,29 @@ const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError
     return headers;
   },
 });
+
+/**
+ * Custom `createApi` that wires React hooks to the MFE-local explicit
+ * Redux context. This bypasses the default `ReactReduxContext`
+ * identity routing that breaks under Module Federation's load-share
+ * graph (the AG Grid + ag-charts chain can resolve react-redux from
+ * a separate bundle before host registers the singleton, giving the
+ * generated hooks a different context than the `<Provider>` mounts
+ * to). Live testai smoke (2026-05-25) confirmed the symptom: inner
+ * store fulfilled, hook stuck pending. Pinning both ends of the
+ * subscription to `endpointAdminReduxContext` closes the identity
+ * gap deterministically — Codex iter-3 review (thread 019e6068).
+ */
+const createApi = buildCreateApi(
+  coreModule(),
+  reactHooksModule({
+    hooks: {
+      useDispatch: useEndpointAdminDispatch,
+      useSelector: useEndpointAdminSelector,
+      useStore: useEndpointAdminStore,
+    },
+  }),
+);
 
 export const endpointAdminApi = createApi({
   reducerPath: 'endpointAdminApi',
