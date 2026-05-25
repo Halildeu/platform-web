@@ -1,10 +1,3 @@
-// Faz 22.2 — AG Grid module registration at the federation EXPOSE entry.
-// Shell host imports `mfe_endpoint_admin/EndpointAdminApp` (this file),
-// NOT bootstrap.tsx — so the bootstrap-level setup import only covers
-// standalone open of the MFE. When loaded as a remote into the shell,
-// the shell host bundle is responsible for registering AG Grid modules
-// via this side-effect import. Mirror of `apps/mfe-users/src/app/UsersApp.ui.tsx`.
-import '@mfe/design-system/advanced/data-grid/setup';
 import React from 'react';
 import { Provider as ReduxProvider, ReactReduxContext } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
@@ -12,6 +5,24 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { logUnexpected } from '@mfe/shared-http';
 import EndpointAdminRouter from './router/EndpointAdminRouter';
 import { endpointAdminApi } from './services/endpointAdminApi';
+// Faz 22.2 iter-3 (post-#662 deep regression) — the AG Grid setup import
+// must run AFTER react-redux + @reduxjs/toolkit imports because under
+// Module Federation `loadShare` the eager ag-grid + ag-charts chain
+// would otherwise resolve `react-redux`/`@reduxjs/toolkit` from a
+// secondary bundle (HOST_ONLY_STUB_VERSION fallback), giving the
+// component tree a different `ReactReduxContext` than the Provider's
+// inner store and stranding `useListEndpointDevicesQuery` in
+// `status: pending`. ES modules hoist imports but execute their
+// side-effects in source order — placing this last ensures the
+// federation share scope is populated with the canonical
+// react-redux singleton before AG Grid's heavy chunk pulls anything
+// transitive that could trigger a duplicate share. Live testai
+// browser smoke (2026-05-25) showed bundle-side fulfilled state but
+// hook-side pending → the order swap is the minimum delta that
+// restores the singleton chain. mfe-users does not exhibit this
+// because it uses TanStack Query + plain fetch (no RTK Query store
+// dependency), so it survives an out-of-order load.
+import '@mfe/design-system/advanced/data-grid/setup';
 
 /**
  * Codex iter-1 PARTIAL absorb (must-fix #1): MFE always owns its own
