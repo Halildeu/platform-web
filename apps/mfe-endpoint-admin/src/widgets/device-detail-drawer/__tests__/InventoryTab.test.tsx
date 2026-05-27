@@ -48,14 +48,24 @@ type QueryResult = {
   error?: { status: number };
   isLoading?: boolean;
   isFetching?: boolean;
+  isUninitialized?: boolean;
 };
 
 function mockQuery(result: QueryResult): void {
+  // isUninitialized mirrors RTK Query: true when the hook is skipped or
+  // before the first fetch resolves. Tests that pass `data` or an
+  // `error` explicitly should override it to `false` to mimic the
+  // resolved-cache shape; the default `true` here only matters for the
+  // `skip` lifecycle case.
+  const isUninitialized =
+    result.isUninitialized ??
+    (result.data === undefined && result.error === undefined && !result.isLoading);
   useGetDeviceSoftwareInventoryQueryMock.mockReturnValue({
     data: undefined,
     error: undefined,
     isLoading: false,
     isFetching: false,
+    isUninitialized,
     ...result,
   });
 }
@@ -130,24 +140,29 @@ afterEach(() => {
 });
 
 describe('InventoryTab — skip + lifecycle states', () => {
-  it('active=false iken query skip edilir ve hicbir tab body render edilmez', () => {
-    mockQuery({ data: undefined });
-    render(<InventoryTab deviceId="d-1" active={false} />);
+  it('active=false iken query skip edilir ve component null doner', () => {
+    // RTK Query'nin skip durumunu birebir aynalayan mock:
+    // isUninitialized=true → component erken return null
+    // (Codex 019e6b2b iter-1 MUST-FIX #2).
+    mockQuery({ isUninitialized: true });
+    const { container } = render(<InventoryTab deviceId="d-1" active={false} />);
 
-    // When the query is skipped, RTK Query returns `{ data: undefined,
-    // error: undefined, isLoading: false }`. The component must NOT
-    // surface a misleading state — it shows the empty placeholder
-    // because there is no snapshot to render. Either behaviour is
-    // acceptable so long as it is NOT loading/error.
+    // Hicbir lifecycle UI render edilmemeli (loading/error/empty/forbidden).
     expect(screen.queryByTestId('inventory-tab-loading')).toBeNull();
     expect(screen.queryByTestId('inventory-tab-error')).toBeNull();
-    // Hook was called with skip=true.
+    expect(screen.queryByTestId('inventory-tab-empty')).toBeNull();
+    expect(screen.queryByTestId('inventory-tab-forbidden')).toBeNull();
+    expect(screen.queryByTestId('inventory-tab')).toBeNull();
+    // Container'in icerigi tam olarak bos olmali.
+    expect(container.firstChild).toBeNull();
+
+    // Hook skip=true ile cagirilmis olmali.
     const lastCall = useGetDeviceSoftwareInventoryQueryMock.mock.calls.at(-1);
     expect(lastCall?.[1]).toMatchObject({ skip: true });
   });
 
   it('isLoading=true iken loading placeholder gosterir', () => {
-    mockQuery({ isLoading: true });
+    mockQuery({ isLoading: true, isUninitialized: false });
     render(<InventoryTab deviceId="d-1" active />);
     expect(screen.getByTestId('inventory-tab-loading')).toBeInTheDocument();
   });
@@ -302,5 +317,101 @@ describe('InventoryTab — pagination', () => {
     mockQuery({ data: buildResponse(buildSnapshot(), [buildItem()]) });
     render(<InventoryTab deviceId="d-1" active />);
     expect(screen.queryByTestId('inventory-pager')).toBeNull();
+  });
+});
+
+describe('InventoryTab — filter/page race regression (Codex 019e6b2b MUST-FIX #1)', () => {
+  it('page=1 iken q filtresi degisince son hook cagrisi page=0 olur', () => {
+    // Backend bir page=1 yaniti dondurmus durumda; kullanici sonraki
+    // sayfaya gectikten sonra q filtresine yazmaya basliyor. Onceki
+    // useEffect-based reset patterninde ilk subscription yeni q + eski
+    // page=1 ile fetch ediyordu; inline reset pattern ile ayni event
+    // batch icinde page=0'a duser.
+    mockQuery({
+      data: buildResponse(buildSnapshot({ appCount: 60 }), [buildItem()], {
+        totalPages: 3,
+        totalElements: 60,
+        number: 1,
+      }),
+    });
+    render(<InventoryTab deviceId="d-1" active />);
+
+    // Sayfa 2'ye gec (next click).
+    fireEvent.click(screen.getByTestId('inventory-pager-next'));
+    let lastCallArgs = useGetDeviceSoftwareInventoryQueryMock.mock.calls.at(-1)?.[0];
+    expect(lastCallArgs).toMatchObject({ page: 2 });
+
+    // Simdi q filtresine yaz.
+    const input = screen.getByTestId('inventory-filter-q') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'firefox' } });
+
+    lastCallArgs = useGetDeviceSoftwareInventoryQueryMock.mock.calls.at(-1)?.[0];
+    // Inline reset sayesinde son hook cagrisi page=0 ile yeni q'yu icermeli.
+    expect(lastCallArgs).toMatchObject({ q: 'firefox', page: 0 });
+  });
+
+  it('publisher filtresi degisince son hook cagrisi page=0 olur', () => {
+    mockQuery({
+      data: buildResponse(buildSnapshot({ appCount: 60 }), [buildItem()], {
+        totalPages: 3,
+        totalElements: 60,
+        number: 1,
+      }),
+    });
+    render(<InventoryTab deviceId="d-1" active />);
+    fireEvent.click(screen.getByTestId('inventory-pager-next'));
+
+    const input = screen.getByTestId('inventory-filter-publisher') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Mozilla' } });
+
+    const lastCallArgs = useGetDeviceSoftwareInventoryQueryMock.mock.calls.at(-1)?.[0];
+    expect(lastCallArgs).toMatchObject({ publisher: 'Mozilla', page: 0 });
+  });
+
+  it('installSource filtresi degisince son hook cagrisi page=0 olur', () => {
+    mockQuery({
+      data: buildResponse(buildSnapshot({ appCount: 60 }), [buildItem()], {
+        totalPages: 3,
+        totalElements: 60,
+        number: 1,
+      }),
+    });
+    render(<InventoryTab deviceId="d-1" active />);
+    fireEvent.click(screen.getByTestId('inventory-pager-next'));
+
+    const select = screen.getByTestId('inventory-filter-installSource') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'HKLM_WOW6432' } });
+
+    const lastCallArgs = useGetDeviceSoftwareInventoryQueryMock.mock.calls.at(-1)?.[0];
+    expect(lastCallArgs).toMatchObject({ installSource: 'HKLM_WOW6432', page: 0 });
+  });
+
+  it('deviceId degisince filter + page state sifirlanir (cihazlar arasi sizinti yok)', () => {
+    // Bir onceki cihazda kullanici sayfa 2 + q="firefox" yapmis.
+    mockQuery({
+      data: buildResponse(buildSnapshot({ appCount: 60 }), [buildItem()], {
+        totalPages: 3,
+        totalElements: 60,
+        number: 1,
+      }),
+    });
+    const { rerender } = render(<InventoryTab deviceId="device-A" active />);
+    fireEvent.click(screen.getByTestId('inventory-pager-next'));
+    fireEvent.change(screen.getByTestId('inventory-filter-q') as HTMLInputElement, {
+      target: { value: 'firefox' },
+    });
+
+    // Yeni cihaza geciliyor (drawer ayni Tab'i remount etmeden farkli
+    // device gosteriyor).
+    rerender(<InventoryTab deviceId="device-B" active />);
+
+    const lastCallArgs = useGetDeviceSoftwareInventoryQueryMock.mock.calls.at(-1)?.[0];
+    expect(lastCallArgs).toMatchObject({
+      deviceId: 'device-B',
+      page: 0,
+      q: undefined,
+      publisher: undefined,
+      installSource: undefined,
+    });
   });
 });

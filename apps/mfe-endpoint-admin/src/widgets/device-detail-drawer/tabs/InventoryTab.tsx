@@ -56,9 +56,23 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) 
   const [page, setPage] = React.useState(0);
   const [size] = React.useState(DEFAULT_PAGE_SIZE);
 
-  React.useEffect(() => {
+  // Codex 019e6b2b iter-1 MUST-FIX #1: reset filters AND page in the same
+  // event batch as the device change, so the very first hook subscription
+  // for a new device cannot inherit a stale page / filter combo from the
+  // previous selection. The drawer keeps `InventoryTab` mounted across
+  // devices (the `Tabs` widget does not unmount inactive tabs), so we
+  // cannot rely on remount alone.
+  const previousDeviceIdRef = React.useRef(deviceId);
+  if (previousDeviceIdRef.current !== deviceId) {
+    previousDeviceIdRef.current = deviceId;
+    // Synchronous state reset during render is safe here because the
+    // setters short-circuit when values match. React batches these into
+    // a single re-render before any effect runs.
+    setQ('');
+    setPublisher('');
+    setInstallSource('');
     setPage(0);
-  }, [q, publisher, installSource]);
+  }
 
   const queryResult = endpointAdminApi.useGetDeviceSoftwareInventoryQuery(
     {
@@ -72,7 +86,18 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) 
     { skip: !active || !deviceId },
   );
 
-  const { data, error, isLoading, isFetching } = queryResult;
+  const { data, error, isLoading, isFetching, isUninitialized } = queryResult;
+
+  // Codex 019e6b2b iter-1 MUST-FIX #2: short-circuit BEFORE any
+  // empty/loading/error branch when the hook is skipped. RTK Query returns
+  // `{ data: undefined, error: undefined, isLoading: false, isUninitialized: true }`
+  // in that case, which the previous wide `!data && !error` fallback was
+  // silently rendering as the empty state. Skipped == not active or
+  // missing deviceId == nothing to render at all.
+  if (!active || !deviceId || isUninitialized) {
+    return null;
+  }
+
   const status404 =
     error &&
     typeof error === 'object' &&
@@ -92,7 +117,14 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) 
     );
   }
 
-  if (status404 || (!isLoading && !data && !error)) {
+  // Codex 019e6b2b iter-1 MUST-FIX #2 (cont.): empty-state is now strictly
+  // `status === 404` (the canonical "no snapshot ingested yet" backend
+  // signal). The prior wide `!data && !error` fallback would silently
+  // swallow future API drift (e.g. a server returning HTTP 200 with an
+  // empty body). With the early-return above, the only way to reach this
+  // point with `!data && !error` is a transient pre-fetch frame; we let
+  // the loading branch handle that.
+  if (status404) {
     return (
       <div className="px-6 py-6 text-sm text-text-secondary" data-testid="inventory-tab-empty">
         {t('endpointAdmin.drawer.inventory.empty')}
@@ -100,7 +132,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) 
     );
   }
 
-  if (isLoading) {
+  if (isLoading || (!data && !error)) {
     return (
       <div className="px-6 py-6 text-sm text-text-secondary" data-testid="inventory-tab-loading">
         {t('endpointAdmin.drawer.inventory.loading')}
@@ -189,7 +221,16 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) 
               <input
                 type="text"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => {
+                  // Codex 019e6b2b iter-1 MUST-FIX #1: inline page reset
+                  // in the same event batch as the filter change. The
+                  // previous useEffect-based reset fired AFTER the next
+                  // render, so the first hook subscription used the new
+                  // filter + stale page (e.g. page=2 from a prior next-
+                  // click) and only the second render corrected it.
+                  setQ(e.target.value);
+                  setPage(0);
+                }}
                 data-testid="inventory-filter-q"
                 className="px-3 py-1.5 rounded border border-border-default bg-surface-default text-sm"
               />
@@ -201,7 +242,10 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) 
               <input
                 type="text"
                 value={publisher}
-                onChange={(e) => setPublisher(e.target.value)}
+                onChange={(e) => {
+                  setPublisher(e.target.value);
+                  setPage(0);
+                }}
                 data-testid="inventory-filter-publisher"
                 className="px-3 py-1.5 rounded border border-border-default bg-surface-default text-sm"
               />
@@ -212,7 +256,10 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) 
               </span>
               <select
                 value={installSource}
-                onChange={(e) => setInstallSource(e.target.value as SoftwareInstallSource | '')}
+                onChange={(e) => {
+                  setInstallSource(e.target.value as SoftwareInstallSource | '');
+                  setPage(0);
+                }}
                 data-testid="inventory-filter-installSource"
                 className="px-3 py-1.5 rounded border border-border-default bg-surface-default text-sm"
               >
