@@ -104,7 +104,6 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
   if (!device) return null;
 
   const deviceCommands = commands ?? [];
-  const isOnline = device.status === 'ONLINE';
 
   const tabItems = [
     {
@@ -135,14 +134,7 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
     {
       key: 'inventory',
       label: t('endpointAdmin.drawer.tab.inventory'),
-      content: (
-        <InventoryTab
-          commands={deviceCommands}
-          isDeviceOnline={isOnline}
-          isSubmitting={createState.isLoading}
-          onCollectInventory={() => handleIssueCommand({ type: 'COLLECT_INVENTORY' })}
-        />
-      ),
+      content: <InventoryTab deviceId={device.id} active={activeTab === 'inventory'} />,
     },
   ];
 

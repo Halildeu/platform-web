@@ -42,7 +42,13 @@ export type ApprovalStatus = 'NOT_REQUIRED' | 'PENDING' | 'APPROVED' | 'REJECTED
 
 export type ApprovalDecision = 'APPROVE' | 'REJECT';
 
-export type CommandResultStatus = 'SUCCEEDED' | 'FAILED' | 'TIMEOUT' | 'CANCELLED';
+// Backend-exact mirror of platform-backend
+// `endpoint-admin-service/.../model/CommandResultStatus.java` —
+// `SUCCEEDED | FAILED | PARTIAL | UNSUPPORTED`. Old `TIMEOUT | CANCELLED`
+// values were drift; Codex 019e6b16 iter-2 must-fix #2 (WEB-011 review).
+// `CommandStatus.CANCELLED` is a separate domain (delivery lifecycle) and
+// is left untouched above.
+export type CommandResultStatus = 'SUCCEEDED' | 'FAILED' | 'PARTIAL' | 'UNSUPPORTED';
 
 export interface EndpointCommandResult {
   id: string;

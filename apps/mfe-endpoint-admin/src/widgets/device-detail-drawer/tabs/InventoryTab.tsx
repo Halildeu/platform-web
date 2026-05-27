@@ -1,38 +1,36 @@
 import React from 'react';
-import type { EndpointCommand } from '../../../entities/endpoint-command/types';
-import { isCommandActive } from '../../../entities/endpoint-command/types';
+
+import { endpointAdminApi } from '../../../app/services/endpointAdminApi';
+import type {
+  SoftwareInstallSource,
+  SoftwareInventoryItem,
+} from '../../../entities/endpoint-software-inventory/types';
 import { useEndpointAdminI18n } from '../../../i18n';
 
+/**
+ * WEB-011 — Faz 22.5.1B (Codex 019e6b16 iter-3 AGREE).
+ *
+ * Read-only software inventory + WinGet readiness view for the device
+ * detail drawer. Backed by the platform-backend BE-020I endpoint
+ *   GET /api/v1/admin/endpoint-devices/{deviceId}/software-inventory
+ * exposed through the gateway at
+ *   /api/v1/endpoint-admin/endpoint-devices/{deviceId}/software-inventory
+ *
+ * 404 is the canonical "no snapshot ingested yet" empty state (Codex
+ * iter-2 must-fix #1). Mutation surface (COLLECT_INVENTORY command issue)
+ * was deliberately moved out of this tab — command issuance belongs to
+ * the İşlemler tab (Codex iter-1 acceptance + iter-2 boundary).
+ */
 export interface InventoryTabProps {
-  /** All commands for the device (newest first not required). */
-  commands: EndpointCommand[];
-  isDeviceOnline: boolean;
-  isSubmitting: boolean;
-  onCollectInventory: () => void;
+  deviceId: string;
+  active: boolean;
 }
 
-interface ParsedInventory {
-  localUsers: unknown[] | null;
-  services: unknown[] | null;
-  systemInfo: Record<string, unknown> | null;
-  networkAdapters: unknown[] | null;
-  diskVolumes: unknown[] | null;
-}
+const INSTALL_SOURCE_OPTIONS: ReadonlyArray<SoftwareInstallSource> = ['HKLM', 'HKLM_WOW6432'];
 
-function parseInventory(payload: Record<string, unknown>): ParsedInventory {
-  return {
-    localUsers: Array.isArray(payload.localUsers) ? payload.localUsers : null,
-    services: Array.isArray(payload.services) ? payload.services : null,
-    systemInfo:
-      payload.systemInfo && typeof payload.systemInfo === 'object'
-        ? (payload.systemInfo as Record<string, unknown>)
-        : null,
-    networkAdapters: Array.isArray(payload.networkAdapters) ? payload.networkAdapters : null,
-    diskVolumes: Array.isArray(payload.diskVolumes) ? payload.diskVolumes : null,
-  };
-}
+const DEFAULT_PAGE_SIZE = 25;
 
-function formatTimestamp(value: string | null): string {
+function formatTimestamp(value: string | null | undefined): string {
   if (!value) return '—';
   try {
     return new Date(value).toLocaleString();
@@ -41,173 +39,315 @@ function formatTimestamp(value: string | null): string {
   }
 }
 
-export const InventoryTab: React.FC<InventoryTabProps> = ({
-  commands,
-  isDeviceOnline,
-  isSubmitting,
-  onCollectInventory,
-}) => {
+function renderTriStateWingetReady(
+  ready: boolean | null | undefined,
+  t: (key: string) => string,
+): string {
+  if (ready === true) return t('endpointAdmin.drawer.inventory.winget.ready');
+  if (ready === false) return t('endpointAdmin.drawer.inventory.winget.notReady');
+  return t('endpointAdmin.drawer.inventory.winget.unknown');
+}
+
+export const InventoryTab: React.FC<InventoryTabProps> = ({ deviceId, active }) => {
   const { t } = useEndpointAdminI18n();
-  const [showRaw, setShowRaw] = React.useState(false);
+  const [q, setQ] = React.useState('');
+  const [publisher, setPublisher] = React.useState('');
+  const [installSource, setInstallSource] = React.useState<SoftwareInstallSource | ''>('');
+  const [page, setPage] = React.useState(0);
+  const [size] = React.useState(DEFAULT_PAGE_SIZE);
 
-  const inventoryCommands = commands.filter((c) => c.type === 'COLLECT_INVENTORY');
+  // Codex 019e6b2b iter-1 MUST-FIX #1: reset filters AND page in the same
+  // event batch as the device change, so the very first hook subscription
+  // for a new device cannot inherit a stale page / filter combo from the
+  // previous selection. The drawer keeps `InventoryTab` mounted across
+  // devices (the `Tabs` widget does not unmount inactive tabs), so we
+  // cannot rely on remount alone.
+  const previousDeviceIdRef = React.useRef(deviceId);
+  if (previousDeviceIdRef.current !== deviceId) {
+    previousDeviceIdRef.current = deviceId;
+    // Synchronous state reset during render is safe here because the
+    // setters short-circuit when values match. React batches these into
+    // a single re-render before any effect runs.
+    setQ('');
+    setPublisher('');
+    setInstallSource('');
+    setPage(0);
+  }
 
-  const latestSucceeded = React.useMemo(() => {
-    const candidates = inventoryCommands
-      .filter((c) => c.status === 'SUCCEEDED' && c.result?.payload)
-      .sort((a, b) => {
-        const aTs = a.completedAt ?? a.createdAt;
-        const bTs = b.completedAt ?? b.createdAt;
-        return Date.parse(bTs) - Date.parse(aTs);
-      });
-    return candidates[0] ?? null;
-  }, [inventoryCommands]);
+  const queryResult = endpointAdminApi.useGetDeviceSoftwareInventoryQuery(
+    {
+      deviceId,
+      q: q.trim() || undefined,
+      publisher: publisher.trim() || undefined,
+      installSource: installSource || undefined,
+      page,
+      size,
+    },
+    { skip: !active || !deviceId },
+  );
 
-  const pendingInventory = inventoryCommands.find((c) => isCommandActive(c.status));
+  const { data, error, isLoading, isFetching, isUninitialized } = queryResult;
 
-  const inventoryPayload = latestSucceeded?.result?.payload ?? null;
-  const parsed = inventoryPayload ? parseInventory(inventoryPayload) : null;
+  // Codex 019e6b2b iter-1 MUST-FIX #2: short-circuit BEFORE any
+  // empty/loading/error branch when the hook is skipped. RTK Query returns
+  // `{ data: undefined, error: undefined, isLoading: false, isUninitialized: true }`
+  // in that case, which the previous wide `!data && !error` fallback was
+  // silently rendering as the empty state. Skipped == not active or
+  // missing deviceId == nothing to render at all.
+  if (!active || !deviceId || isUninitialized) {
+    return null;
+  }
 
-  if (!latestSucceeded && !pendingInventory) {
+  const status404 =
+    error &&
+    typeof error === 'object' &&
+    'status' in error &&
+    (error as { status: unknown }).status === 404;
+  const status403 =
+    error &&
+    typeof error === 'object' &&
+    'status' in error &&
+    (error as { status: unknown }).status === 403;
+
+  if (status403) {
     return (
-      <div className="px-6 py-6 text-sm text-text-secondary" data-testid="inventory-tab-empty">
-        <p className="mb-3">{t('endpointAdmin.drawer.inventory.empty')}</p>
-        <button
-          type="button"
-          onClick={onCollectInventory}
-          disabled={!isDeviceOnline || isSubmitting}
-          data-testid="inventory-collect-button"
-          className="px-4 py-2 rounded-md border border-border-default bg-surface-default text-sm text-text-primary disabled:opacity-50"
-        >
-          {t('endpointAdmin.drawer.inventory.collectNow')}
-        </button>
+      <div className="px-6 py-6 text-sm text-text-secondary" data-testid="inventory-tab-forbidden">
+        {t('endpointAdmin.drawer.inventory.forbidden')}
       </div>
     );
   }
 
+  // Codex 019e6b2b iter-1 MUST-FIX #2 (cont.): empty-state is now strictly
+  // `status === 404` (the canonical "no snapshot ingested yet" backend
+  // signal). The prior wide `!data && !error` fallback would silently
+  // swallow future API drift (e.g. a server returning HTTP 200 with an
+  // empty body). With the early-return above, the only way to reach this
+  // point with `!data && !error` is a transient pre-fetch frame; we let
+  // the loading branch handle that.
+  if (status404) {
+    return (
+      <div className="px-6 py-6 text-sm text-text-secondary" data-testid="inventory-tab-empty">
+        {t('endpointAdmin.drawer.inventory.empty')}
+      </div>
+    );
+  }
+
+  if (isLoading || (!data && !error)) {
+    return (
+      <div className="px-6 py-6 text-sm text-text-secondary" data-testid="inventory-tab-loading">
+        {t('endpointAdmin.drawer.inventory.loading')}
+      </div>
+    );
+  }
+
+  if (error && !status404 && !status403) {
+    return (
+      <div className="px-6 py-6 text-sm text-text-danger" data-testid="inventory-tab-error">
+        {t('endpointAdmin.drawer.inventory.error')}
+      </div>
+    );
+  }
+
+  const snapshot = data?.snapshot;
+  const items = data?.items;
+  const itemRows: SoftwareInventoryItem[] = items?.content ?? [];
+
   return (
     <div className="px-6 py-4 space-y-4" data-testid="inventory-tab">
-      {pendingInventory && (
-        <div
-          className="rounded-md border border-state-info-border bg-state-info-subtle px-4 py-2 text-sm text-state-info-text"
-          data-testid="inventory-pending-banner"
-          role="status"
-        >
-          {t('endpointAdmin.drawer.inventory.collecting').replace(
-            '{status}',
-            pendingInventory.status,
-          )}
+      <div
+        className="rounded-md border border-border-default bg-surface-default p-4 grid grid-cols-2 gap-2 text-sm"
+        data-testid="inventory-summary"
+      >
+        <div>
+          <strong>{t('endpointAdmin.drawer.inventory.summary.appCount')}:</strong>{' '}
+          <span data-testid="inventory-summary-appCount">{snapshot?.appCount ?? '—'}</span>
         </div>
-      )}
+        <div>
+          <strong>{t('endpointAdmin.drawer.inventory.summary.wingetReady')}:</strong>{' '}
+          <span data-testid="inventory-summary-wingetReady">
+            {renderTriStateWingetReady(snapshot?.wingetReady ?? null, t)}
+          </span>
+        </div>
+        <div>
+          <strong>{t('endpointAdmin.drawer.inventory.summary.wingetVersion')}:</strong>{' '}
+          <span data-testid="inventory-summary-wingetVersion">
+            {snapshot?.wingetVersion ?? '—'}
+          </span>
+        </div>
+        <div>
+          <strong>{t('endpointAdmin.drawer.inventory.summary.appsAvailable')}:</strong>{' '}
+          <span data-testid="inventory-summary-appsAvailable">
+            {snapshot?.appsAvailable
+              ? t('endpointAdmin.drawer.inventory.summary.appsAvailable.yes')
+              : t('endpointAdmin.drawer.inventory.summary.appsAvailable.no')}
+          </span>
+        </div>
+        <div>
+          <strong>{t('endpointAdmin.drawer.inventory.summary.summaryCollectedAt')}:</strong>{' '}
+          <span data-testid="inventory-summary-summaryCollectedAt">
+            {formatTimestamp(snapshot?.summaryCollectedAt)}
+          </span>
+        </div>
+        <div>
+          <strong>{t('endpointAdmin.drawer.inventory.summary.appsCollectedAt')}:</strong>{' '}
+          <span data-testid="inventory-summary-appsCollectedAt">
+            {formatTimestamp(snapshot?.appsCollectedAt)}
+          </span>
+        </div>
+        {snapshot?.truncated && (
+          <div
+            className="col-span-2 mt-2 rounded bg-warning-soft px-3 py-2 text-xs text-warning-strong"
+            data-testid="inventory-summary-truncated"
+          >
+            {t('endpointAdmin.drawer.inventory.summary.truncated')}
+          </div>
+        )}
+      </div>
 
-      {latestSucceeded && (
+      {!snapshot?.appsAvailable ? (
+        <div
+          className="rounded-md border border-border-default bg-surface-muted p-4 text-sm text-text-secondary"
+          data-testid="inventory-apps-unavailable"
+        >
+          {t('endpointAdmin.drawer.inventory.appsUnavailable')}
+        </div>
+      ) : (
         <>
-          <div className="flex items-center justify-between text-xs text-text-secondary">
-            <span>
-              {t('endpointAdmin.drawer.inventory.lastUpdated')}:{' '}
-              {formatTimestamp(latestSucceeded.completedAt ?? latestSucceeded.createdAt)}
-            </span>
-            <div className="inline-flex rounded-md border border-border-default overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowRaw(false)}
-                aria-pressed={!showRaw}
-                data-testid="inventory-toggle-structured"
-                className={
-                  showRaw
-                    ? 'px-3 py-1 text-xs'
-                    : 'px-3 py-1 text-xs bg-surface-hover text-text-primary'
-                }
+          <div className="flex flex-wrap items-end gap-3" data-testid="inventory-filters">
+            <label className="flex flex-col text-xs">
+              <span className="text-text-secondary mb-1">
+                {t('endpointAdmin.drawer.inventory.filter.q')}
+              </span>
+              <input
+                type="text"
+                value={q}
+                onChange={(e) => {
+                  // Codex 019e6b2b iter-1 MUST-FIX #1: inline page reset
+                  // in the same event batch as the filter change. The
+                  // previous useEffect-based reset fired AFTER the next
+                  // render, so the first hook subscription used the new
+                  // filter + stale page (e.g. page=2 from a prior next-
+                  // click) and only the second render corrected it.
+                  setQ(e.target.value);
+                  setPage(0);
+                }}
+                data-testid="inventory-filter-q"
+                className="px-3 py-1.5 rounded border border-border-default bg-surface-default text-sm"
+              />
+            </label>
+            <label className="flex flex-col text-xs">
+              <span className="text-text-secondary mb-1">
+                {t('endpointAdmin.drawer.inventory.filter.publisher')}
+              </span>
+              <input
+                type="text"
+                value={publisher}
+                onChange={(e) => {
+                  setPublisher(e.target.value);
+                  setPage(0);
+                }}
+                data-testid="inventory-filter-publisher"
+                className="px-3 py-1.5 rounded border border-border-default bg-surface-default text-sm"
+              />
+            </label>
+            <label className="flex flex-col text-xs">
+              <span className="text-text-secondary mb-1">
+                {t('endpointAdmin.drawer.inventory.filter.installSource')}
+              </span>
+              <select
+                value={installSource}
+                onChange={(e) => {
+                  setInstallSource(e.target.value as SoftwareInstallSource | '');
+                  setPage(0);
+                }}
+                data-testid="inventory-filter-installSource"
+                className="px-3 py-1.5 rounded border border-border-default bg-surface-default text-sm"
               >
-                {t('endpointAdmin.drawer.inventory.viewStructured')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowRaw(true)}
-                aria-pressed={showRaw}
-                data-testid="inventory-toggle-raw"
-                className={
-                  showRaw
-                    ? 'px-3 py-1 text-xs bg-surface-hover text-text-primary'
-                    : 'px-3 py-1 text-xs'
-                }
-              >
-                {t('endpointAdmin.drawer.inventory.viewRaw')}
-              </button>
-            </div>
+                <option value="">
+                  {t('endpointAdmin.drawer.inventory.filter.installSource.any')}
+                </option>
+                {INSTALL_SOURCE_OPTIONS.map((src) => (
+                  <option key={src} value={src}>
+                    {src}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          {showRaw ? (
-            <pre
-              data-testid="inventory-raw-json"
-              className="bg-surface-subtle text-xs p-3 rounded-md overflow-auto max-h-[400px] font-mono"
-            >
-              {JSON.stringify(inventoryPayload, null, 2)}
-            </pre>
-          ) : (
-            <div data-testid="inventory-structured" className="space-y-4">
-              {parsed?.systemInfo && (
-                <InventorySection
-                  title={t('endpointAdmin.drawer.inventory.section.systemInfo')}
-                  testId="inventory-systeminfo"
-                >
-                  <KeyValueList data={parsed.systemInfo} />
-                </InventorySection>
-              )}
-
-              {parsed?.localUsers && parsed.localUsers.length > 0 && (
-                <InventorySection
-                  title={t('endpointAdmin.drawer.inventory.section.localUsers')}
-                  testId="inventory-localusers"
-                >
-                  <ArrayList items={parsed.localUsers} fields={['name', 'enabled', 'lastLogon']} />
-                </InventorySection>
-              )}
-
-              {parsed?.services && parsed.services.length > 0 && (
-                <InventorySection
-                  title={t('endpointAdmin.drawer.inventory.section.services')}
-                  testId="inventory-services"
-                >
-                  <ArrayList items={parsed.services} fields={['name', 'status', 'startMode']} />
-                </InventorySection>
-              )}
-
-              {parsed?.networkAdapters && parsed.networkAdapters.length > 0 && (
-                <InventorySection
-                  title={t('endpointAdmin.drawer.inventory.section.networkAdapters')}
-                  testId="inventory-networkadapters"
-                >
-                  <ArrayList
-                    items={parsed.networkAdapters}
-                    fields={['name', 'macAddress', 'ipAddress']}
-                  />
-                </InventorySection>
-              )}
-
-              {parsed?.diskVolumes && parsed.diskVolumes.length > 0 && (
-                <InventorySection
-                  title={t('endpointAdmin.drawer.inventory.section.diskVolumes')}
-                  testId="inventory-diskvolumes"
-                >
-                  <ArrayList items={parsed.diskVolumes} fields={['name', 'sizeGb', 'freeGb']} />
-                </InventorySection>
-              )}
-
-              {/* Fallback: if no known sections matched, show raw JSON */}
-              {parsed &&
-                !parsed.systemInfo &&
-                !parsed.localUsers &&
-                !parsed.services &&
-                !parsed.networkAdapters &&
-                !parsed.diskVolumes && (
-                  <pre
-                    data-testid="inventory-fallback-raw"
-                    className="bg-surface-subtle text-xs p-3 rounded-md overflow-auto max-h-[400px] font-mono"
-                  >
-                    {JSON.stringify(inventoryPayload, null, 2)}
-                  </pre>
+          <div className="rounded-md border border-border-default overflow-hidden">
+            <table className="w-full text-sm" data-testid="inventory-items-table">
+              <thead className="bg-surface-muted text-text-secondary text-xs">
+                <tr>
+                  <th className="text-left px-3 py-2">
+                    {t('endpointAdmin.drawer.inventory.col.displayName')}
+                  </th>
+                  <th className="text-left px-3 py-2">
+                    {t('endpointAdmin.drawer.inventory.col.displayVersion')}
+                  </th>
+                  <th className="text-left px-3 py-2">
+                    {t('endpointAdmin.drawer.inventory.col.publisher')}
+                  </th>
+                  <th className="text-left px-3 py-2">
+                    {t('endpointAdmin.drawer.inventory.col.installSource')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {itemRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="px-3 py-4 text-center text-text-secondary"
+                      data-testid="inventory-items-empty"
+                    >
+                      {t('endpointAdmin.drawer.inventory.items.empty')}
+                    </td>
+                  </tr>
+                ) : (
+                  itemRows.map((item) => (
+                    <tr key={item.id} className="border-t border-border-subtle">
+                      <td className="px-3 py-2">{item.displayName}</td>
+                      <td className="px-3 py-2">{item.displayVersion ?? '—'}</td>
+                      <td className="px-3 py-2">{item.publisher ?? '—'}</td>
+                      <td className="px-3 py-2">{item.installSource}</td>
+                    </tr>
+                  ))
                 )}
+              </tbody>
+            </table>
+          </div>
+
+          {items && items.totalPages > 1 && (
+            <div
+              className="flex items-center justify-between text-xs text-text-secondary"
+              data-testid="inventory-pager"
+            >
+              <span>
+                {t('endpointAdmin.drawer.inventory.pager.page')} {items.number + 1} /{' '}
+                {items.totalPages} ({items.totalElements}{' '}
+                {t('endpointAdmin.drawer.inventory.pager.total')})
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.max(0, items.number - 1))}
+                  disabled={items.number === 0 || isFetching}
+                  className="px-3 py-1 rounded border border-border-default disabled:opacity-50"
+                  data-testid="inventory-pager-prev"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage(items.number + 1)}
+                  disabled={items.number + 1 >= items.totalPages || isFetching}
+                  className="px-3 py-1 rounded border border-border-default disabled:opacity-50"
+                  data-testid="inventory-pager-next"
+                >
+                  ›
+                </button>
+              </div>
             </div>
           )}
         </>
@@ -215,58 +355,3 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
     </div>
   );
 };
-
-const InventorySection: React.FC<{
-  title: string;
-  testId?: string;
-  children: React.ReactNode;
-}> = ({ title, testId, children }) => (
-  <section data-testid={testId}>
-    <h5 className="text-xs font-semibold uppercase tracking-wider text-text-secondary mb-1">
-      {title}
-    </h5>
-    {children}
-  </section>
-);
-
-const KeyValueList: React.FC<{ data: Record<string, unknown> }> = ({ data }) => (
-  <dl className="text-sm">
-    {Object.entries(data).map(([k, v]) => (
-      <div key={k} className="grid grid-cols-[160px_1fr] gap-2 py-0.5">
-        <dt className="text-text-secondary text-xs">{k}</dt>
-        <dd className="text-text-primary text-xs break-all font-mono">
-          {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-        </dd>
-      </div>
-    ))}
-  </dl>
-);
-
-const ArrayList: React.FC<{ items: unknown[]; fields: string[] }> = ({ items, fields }) => (
-  <ul className="text-xs space-y-1">
-    {items.slice(0, 20).map((item, idx) => {
-      if (typeof item !== 'object' || item === null) {
-        return (
-          <li key={idx} className="font-mono">
-            {String(item)}
-          </li>
-        );
-      }
-      const rec = item as Record<string, unknown>;
-      const visible = fields.filter((f) => rec[f] !== undefined);
-      return (
-        <li key={idx} className="border-b border-border-subtle py-1">
-          {visible.map((f) => (
-            <span key={f} className="mr-3">
-              <span className="text-text-secondary">{f}:</span>{' '}
-              <span className="font-mono">{String(rec[f] ?? '—')}</span>
-            </span>
-          ))}
-        </li>
-      );
-    })}
-    {items.length > 20 && <li className="text-text-secondary">… {items.length - 20} satır daha</li>}
-  </ul>
-);
-
-InventoryTab.displayName = 'InventoryTab';
