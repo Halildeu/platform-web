@@ -22,6 +22,10 @@ import type {
   EndpointCommand,
   CreateEndpointCommandBody,
 } from '../../entities/endpoint-command/types';
+import type {
+  DeviceSoftwareInventory,
+  GetDeviceSoftwareInventoryArgs,
+} from '../../entities/endpoint-software-inventory/types';
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -160,7 +164,13 @@ const createApi = buildCreateApi(
 export const endpointAdminApi = createApi({
   reducerPath: 'endpointAdminApi',
   baseQuery: rawBaseQuery,
-  tagTypes: ['AgentStatus', 'EndpointDevice', 'EndpointAuditEvent', 'EndpointCommand'] as const,
+  tagTypes: [
+    'AgentStatus',
+    'EndpointDevice',
+    'EndpointAuditEvent',
+    'EndpointCommand',
+    'EndpointSoftwareInventory',
+  ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
       query: () => ({ url: '/endpoint-agents/status', method: 'GET' }),
@@ -195,6 +205,43 @@ export const endpointAdminApi = createApi({
       }),
       providesTags: (_result, _error, deviceId) => [
         { type: 'EndpointDevice' as const, id: deviceId },
+      ],
+    }),
+    /**
+     * WEB-011 — Faz 22.5.1B (Codex 019e6b16 iter-3 AGREE).
+     *
+     * Backend: `AdminEndpointSoftwareInventoryController.getDeviceSnapshot` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/software-inventory
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/software-inventory
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns `{ snapshot, items: Page<...> }`. When no snapshot has been
+     * ingested for the device the service throws 404 (not snapshot=null);
+     * RTK Query surfaces it as `error.status === 404` and the
+     * `InventoryTab` maps it to the "no inventory yet" empty state per
+     * Codex iter-2 must-fix #1.
+     */
+    getDeviceSoftwareInventory: builder.query<
+      DeviceSoftwareInventory,
+      GetDeviceSoftwareInventoryArgs
+    >({
+      query: ({ deviceId, q, publisher, installSource, page, size }) => {
+        const params: Record<string, string> = {};
+        if (q && q.trim()) params.q = q.trim();
+        if (publisher && publisher.trim()) params.publisher = publisher.trim();
+        if (installSource) params.installSource = installSource;
+        if (typeof page === 'number') params.page = String(page);
+        if (typeof size === 'number') params.size = String(size);
+        return {
+          url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+            deviceId,
+          )}/software-inventory`,
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointSoftwareInventory' as const, id: deviceId },
       ],
     }),
     /**
