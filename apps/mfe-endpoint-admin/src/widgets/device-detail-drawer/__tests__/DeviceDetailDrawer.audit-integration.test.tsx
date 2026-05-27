@@ -31,18 +31,23 @@ import type { EndpointAuditEvent } from '../../../entities/endpoint-audit-event/
 /*  architecturally sound, no behavior-change fix; lock the            */
 /*  drawer-nested RTK-Query integration with a regression test.        */
 /*                                                                     */
-/*  This file fills the coverage gap that PR #664 left: the explicit   */
-/*  context routing is exercised inside the `<BottomSheetDrawer>` →    */
-/*  `<Tabs>` → `<AuditTab>` subtree, with a real RTK store and a       */
-/*  fetched audit payload. A future regression that breaks the         */
-/*  Provider ↔ hook context bond (e.g. dropping `context={...}` on     */
-/*  the Provider, or importing the wrong `redux-context` from a fork)  */
-/*  surfaces here as `data` never reaching the rendered timeline.      */
+/*  Scope (narrow on purpose):                                          */
+/*  The suite mounts `DeviceDetailDrawer` under a manually constructed */
+/*  `<ReduxProvider context={endpointAdminReduxContext}>` that mirrors */
+/*  the shape of `EndpointAdminAppProviders` in production. It does    */
+/*  NOT render the production provider itself, so it does NOT guard   */
+/*  against a regression that drops `context={endpointAdminReduxContext}` */
+/*  in `EndpointAdminApp.ui.tsx` — only against regressions inside the */
+/*  drawer subtree (the `AuditTab` skip-guard, the cache subscription, */
+/*  and the loading/empty/error UI contract).                          */
 /*                                                                     */
 /*  jsdom caveat: the original cross-bundle identity split cannot be   */
-/*  reproduced here because vitest loads a single bundle, so this      */
-/*  suite is NOT a probe for the original #664 symptom. It is a        */
-/*  contract test: drawer + AuditTab + explicit context = data flows. */
+/*  reproduced here because vitest loads a single bundle. This suite   */
+/*  is NOT a probe for the original #664 symptom — it is a contract   */
+/*  test: drawer + AuditTab + explicit context = data flows. A future */
+/*  provider-wiring contract test would need a separate file that     */
+/*  mounts `EndpointAdminApp` (the real Providers component) end-to-  */
+/*  end, which is out of scope here.                                  */
 /* ------------------------------------------------------------------ */
 
 const DEVICE_ID = '423b6fc3-7497-4083-bd2f-5e2fe543bfe9';
@@ -137,23 +142,20 @@ const renderDrawer = (device: EndpointDevice = mockDevice()) => {
 };
 
 /**
- * Inspect the live RTK Query slice for an audit-events cache entry that
- * matches the args we expect. Used to assert the cache key serialization
- * the hook subscribes to is identical to the one the fetch dispatches
- * to — the single most reproducible signature of the original cross-
- * bundle hook-stranding symptom.
+ * Read the RTK Query cache entry for a given audit-events arg-set via
+ * the endpoint's public selector. Using the selector instead of indexing
+ * `state[reducerPath].queries[serializedKey]` keeps the assertion robust
+ * against `serializeQueryArgs` / cache-shape changes in future RTK Query
+ * versions — Codex 019e6826 iter-1: the contract the test cares about is
+ * "the hook saw a fulfilled cache for these args", not the exact string
+ * key the runtime chose.
  */
-const findAuditCacheEntry = (store: Store, deviceId: string, limit: number) => {
-  const state = store.getState() as Record<string, unknown>;
-  const slice = state[endpointAdminApi.reducerPath] as
-    | { queries?: Record<string, unknown> }
-    | undefined;
-  const queries = slice?.queries ?? {};
-  // Default `serializeQueryArgs` sorts keys alphabetically; `deviceId`
-  // < `limit` so the canonical form is `{"deviceId":"...","limit":N}`.
-  const expectedKey = `listEndpointAuditEvents({"deviceId":"${deviceId}","limit":${limit}})`;
-  return { key: expectedKey, entry: queries[expectedKey] };
-};
+const selectAuditQuery = (store: Store, deviceId: string, limit: number) =>
+  endpointAdminApi.endpoints.listEndpointAuditEvents.select({ deviceId, limit })(
+    store.getState() as Parameters<
+      ReturnType<typeof endpointAdminApi.endpoints.listEndpointAuditEvents.select>
+    >[0],
+  );
 
 describe('DeviceDetailDrawer — AuditTab RTK Query integration (regression for PR #664 scope)', () => {
   let originalFetch: typeof fetch;
@@ -232,14 +234,15 @@ describe('DeviceDetailDrawer — AuditTab RTK Query integration (regression for 
       ),
     ).toBe(true);
 
-    // The hook subscribed to the canonical cache key (sorted JSON). A
-    // regression that introduces a divergent serialization on either
-    // side (subscribe vs dispatch) trips this assertion before the UI
-    // assertions, narrowing the failure to the cache-key contract.
-    const { entry } = findAuditCacheEntry(store, DEVICE_ID, 50);
-    expect(entry).toBeDefined();
-    expect((entry as { status: string }).status).toBe('fulfilled');
-    expect(((entry as { data: unknown[] }).data ?? []).length).toBe(3);
+    // Cross-check via the endpoint's public selector: the cache entry
+    // for these exact args must be fulfilled with three rows. A
+    // regression that strands the hook on a different cache key (the
+    // class of bug PR #664 fixed at the page level) would leave this
+    // selector returning `uninitialized` even though the UI assertions
+    // above might still pass against a different hook instance.
+    const auditQuery = selectAuditQuery(store, DEVICE_ID, 50);
+    expect(auditQuery.status).toBe('fulfilled');
+    expect(auditQuery.data).toHaveLength(3);
   });
 
   it('AuditTab hook stays skipped until the audit tab is active (no premature fetch)', async () => {
@@ -254,14 +257,17 @@ describe('DeviceDetailDrawer — AuditTab RTK Query integration (regression for 
 
     renderDrawer();
 
-    // The drawer renders Detay by default. The audit `skip` guard
-    // (`!active || !deviceId`) must keep the hook dormant — no audit
-    // request before the user opens the tab.
+    // The drawer renders Detay by default. To make this assertion
+    // resistant to async-turn ambiguity (Codex 019e6826 iter-1: a bare
+    // `waitFor(detay-tab)` resolves on the synchronous first render
+    // and would not catch an audit fetch fired in the next tick), wait
+    // for the parent's commands query to actually hit the network —
+    // that is the signal the drawer is fully mounted and its hooks
+    // have run a microtask. THEN assert no audit endpoint was touched.
     await waitFor(() => {
-      // Wait one async turn so polling/initial fetches settle.
-      expect(screen.getByTestId('device-detay-tab')).toBeInTheDocument();
+      expect(fetchUrls.some((u) => u.includes('/endpoint-admin/endpoint-devices/'))).toBe(true);
     });
-
+    expect(screen.getByTestId('device-detay-tab')).toBeInTheDocument();
     expect(fetchUrls.some((u) => u.includes('endpoint-audit-events'))).toBe(false);
   });
 
