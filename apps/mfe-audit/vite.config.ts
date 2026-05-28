@@ -55,9 +55,19 @@ const hostOnly = (
 // PR-B2-rollout: convert @tanstack/react-query to hostOnly().  Shell
 // already declares it with `singleton: true, eager: true`; remote should
 // consume from host's share-scope rather than ship its own copy.
+// jsx-runtime / jsx-dev-runtime explicitly shared so that the @vitejs/plugin-react
+// auto-injected `import { jsx, jsxs } from "react/jsx-runtime"` (dev: jsx-dev-runtime)
+// resolves through the federation loadShare scope instead of racing against the
+// host's shared React instance. Without these entries the runtimes go through
+// the slower per-import loadShare chunk path, which the federation runtime warns
+// about with `Shared module react/jsx-dev-runtime was imported before federation
+// bootstrap finished`. Pinned to react's version because they ship inside the
+// react package (no independent semver).
 const sharedCore = {
   react: hostOnly('react'),
   'react-dom': hostOnly('react-dom'),
+  'react/jsx-runtime': hostOnly('react/jsx-runtime', 'react'),
+  'react/jsx-dev-runtime': hostOnly('react/jsx-dev-runtime', 'react'),
   'react-router': hostOnly('react-router'),
   'react-router-dom': hostOnly('react-router-dom'),
   '@reduxjs/toolkit': hostOnly('@reduxjs/toolkit'),

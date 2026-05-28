@@ -394,9 +394,18 @@ const singleton = (
   requiredVersion: deps[versionKey] ?? fallback,
   ...(eager && { eager: true }),
 });
+// jsx-runtime / jsx-dev-runtime declared on the host so the @vitejs/plugin-react
+// auto-injected `import { jsx, jsxs } from "react/jsx-runtime"` (dev:
+// jsx-dev-runtime) resolves through the federation loadShare scope owned by the
+// host, instead of remotes loading their own copy and racing the host's React
+// instance. Pinned to the host's react version (no independent semver — they
+// ship inside the react package). Mirrors the host-only shape that every remote
+// MFE declares for `react/jsx-runtime` + `react/jsx-dev-runtime`.
 const sharedCore = {
   react: singleton('react', 'react', false, true),
   'react-dom': singleton('react-dom', 'react-dom', false, true),
+  'react/jsx-runtime': singleton('react/jsx-runtime', 'react', false, true),
+  'react/jsx-dev-runtime': singleton('react/jsx-dev-runtime', 'react', false, true),
   'react-router': singleton('react-router', 'react-router', false, true),
   'react-router-dom': singleton('react-router-dom', 'react-router-dom', false, true),
   '@reduxjs/toolkit': singleton('@reduxjs/toolkit', '@reduxjs/toolkit', false, true),
