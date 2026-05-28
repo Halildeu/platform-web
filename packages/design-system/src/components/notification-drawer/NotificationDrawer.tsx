@@ -56,24 +56,27 @@ export interface NotificationDrawerProps
 
 /** Slide-over drawer that wraps the NotificationPanel in an overlay surface. */
 export const NotificationDrawer = React.forwardRef<HTMLDivElement, NotificationDrawerProps>(
-  ({
-    open,
-    onClose,
-    closeLabel = 'Bildirim merkezini kapat',
-    closeOnOverlayClick = true,
-    closeOnEscape = true,
-    keepMounted = false,
-    destroyOnHidden = true,
-    portalTarget,
-    disablePortal = false,
-    dialogLabel = 'Bildirimler',
-    widthClassName = 'max-w-md',
-    panelClassName = '',
-    access = 'full',
-    accessReason,
-    title = 'Bildirimler',
-    ...panelProps
-  }) => {
+  (
+    {
+      open,
+      onClose,
+      closeLabel = 'Bildirim merkezini kapat',
+      closeOnOverlayClick = true,
+      closeOnEscape = true,
+      keepMounted = false,
+      destroyOnHidden = true,
+      portalTarget,
+      disablePortal = false,
+      dialogLabel = 'Bildirimler',
+      widthClassName = 'max-w-md',
+      panelClassName = '',
+      access = 'full',
+      accessReason,
+      title = 'Bildirimler',
+      ...panelProps
+    },
+    _ref,
+  ) => {
     const accessState = resolveAccessState(access);
     // Caller-supplied panel header content (e.g. tab switcher in
     // notification-orchestrator inbox UX). Combined with the drawer's
