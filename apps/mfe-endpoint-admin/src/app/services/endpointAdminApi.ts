@@ -27,6 +27,12 @@ import type {
   GetDeviceSoftwareInventoryArgs,
 } from '../../entities/endpoint-software-inventory/types';
 import type {
+  GetDeviceHardwareInventoryHistoryArgs,
+  GetDeviceHardwareInventoryLatestArgs,
+  HardwareInventoryHistoryPage,
+  HardwareInventorySnapshot,
+} from '../../entities/endpoint-hardware-inventory/types';
+import type {
   CompliancePolicyItem,
   CompliancePolicyItemRequest,
   ComplianceEvaluationListResponse,
@@ -198,6 +204,7 @@ export const endpointAdminApi = createApi({
     'EndpointAuditEvent',
     'EndpointCommand',
     'EndpointSoftwareInventory',
+    'EndpointHardwareInventory',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -274,6 +281,73 @@ export const endpointAdminApi = createApi({
       },
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointSoftwareInventory' as const, id: deviceId },
+      ],
+    }),
+    /**
+     * WEB-013 — Hardware inventory latest (Faz 22.5.2 / 22.5.5
+     * frontend closure). Codex 019e70ce plan-time PARTIAL AGREE
+     * absorb.
+     *
+     * Backend: `AdminEndpointHardwareInventoryController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/hardware-inventory/latest
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/hardware-inventory/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the most-recent {@link HardwareInventorySnapshot} with
+     * disks + network interfaces folded into the response. When no
+     * snapshot has been ingested for the device the service throws
+     * 404; RTK Query surfaces it as {@code error.status === 404} and
+     * the {@code HardwareInventoryView} maps that to the "no hardware
+     * snapshot yet" empty state. Cross-tenant requests fall into the
+     * same 404 branch — device existence does not leak (BE-022Q
+     * tenant isolation contract).
+     */
+    getDeviceHardwareInventoryLatest: builder.query<
+      HardwareInventorySnapshot,
+      GetDeviceHardwareInventoryLatestArgs
+    >({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+          deviceId,
+        )}/hardware-inventory/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointHardwareInventory' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * WEB-013 — Hardware inventory history (paged summary).
+     *
+     * Backend: `AdminEndpointHardwareInventoryController.getHistory` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/hardware-inventory/history?page=0&size=20
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/hardware-inventory/history
+     *
+     * Returns a Spring Page envelope of
+     * {@link HardwareInventorySnapshotSummary} (no child arrays;
+     * surfaces {@code diskCount} / {@code networkInterfaceCount} /
+     * {@code probeErrorCount}). Backend clamps {@code size} into
+     * [1, 50] silently — a request of {@code size=200} returns
+     * {@code totalElements} with {@code size === 50}.
+     */
+    getDeviceHardwareInventoryHistory: builder.query<
+      HardwareInventoryHistoryPage,
+      GetDeviceHardwareInventoryHistoryArgs
+    >({
+      query: ({ deviceId, page, size }) => {
+        const params: Record<string, string> = {};
+        if (typeof page === 'number') params.page = String(page);
+        if (typeof size === 'number') params.size = String(size);
+        return {
+          url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+            deviceId,
+          )}/hardware-inventory/history`,
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointHardwareInventory' as const, id: `${deviceId}::history` },
       ],
     }),
     /**

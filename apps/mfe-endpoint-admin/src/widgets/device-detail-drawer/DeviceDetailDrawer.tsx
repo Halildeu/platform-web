@@ -45,6 +45,15 @@ const ComplianceTab = React.lazy(() =>
 const SoftwareCatalogTab = React.lazy(() =>
   import('./tabs/SoftwareCatalogTab').then((m) => ({ default: m.SoftwareCatalogTab })),
 );
+// WEB-013 — Faz 22.5.2 / 22.5.5 frontend closure. Hardware tab is
+// lazy because the WMI/CIM tables, history accordion, and probe-error
+// list never render until the operator selects this tab. Keeping it
+// out of the drawer cold path preserves the WEB-014D perf budget.
+const HardwareInventoryTab = React.lazy(() =>
+  import('./components/hardware-inventory/HardwareInventoryView').then((m) => ({
+    default: m.HardwareInventoryView,
+  })),
+);
 
 const TabFallback: React.FC = () => (
   <div
@@ -62,6 +71,7 @@ export type DeviceDetailDrawerTabKey =
   | 'islemler'
   | 'audit'
   | 'inventory'
+  | 'hardware'
   | 'software-catalog'
   | 'compliance';
 
@@ -214,6 +224,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <InventoryTab deviceId={device.id} active={activeTab === 'inventory'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'hardware' as const,
+        label: t('endpointAdmin.drawer.tab.hardware'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <HardwareInventoryTab deviceId={device.id} active={activeTab === 'hardware'} />
           </React.Suspense>
         ),
       },
