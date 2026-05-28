@@ -140,12 +140,80 @@ const INLINE_HELPER = [
 
 const AUTH_LOADSHARE_TOKEN = '__loadShare___mf_0_mfe_mf_1_auth__loadShare__';
 
-// Matches `import { r } from "...auth_loadShare..."` and the alias variant
-// `import { r as alias } from "...auth_loadShare..."`. The fail-closed audit
-// below catches any other shape (multi-specifier, namespace, re-export, etc.)
-// rather than silently leaving them in place.
-const AUTH_HELPER_IMPORT_RE =
-  /import\s*\{\s*r(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*\}\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+// Matches any named import statement (`import { ... } from "...auth_loadShare..."`)
+// regardless of specifier count or alias usage. The captured group is the raw
+// specifier list inside the braces, which `parseSpecifiers` then decomposes
+// into `{ importedName, localName }` entries. The rewrite then validates each
+// `importedName` against `ALLOWED_AUTH_IMPORTS`; only `r` (preload helper) and
+// `i` (lazy init wrapper) are accepted — `r` is inlined, `i` is replaced with
+// a no-op. Any other imported name (e.g. `t` = PermissionProvider) causes the
+// rewrite to skip this import statement, so the fail-closed audit then fires
+// with the offending chunk file name. This preserves the Codex iter-5 audit
+// invariant end-to-end (Codex iter-6 absorb on PR-I1).
+//
+// Observed shapes (Vite 8 + @module-federation/vite 1.15.1 + Rolldown rc.17):
+//   `import { r } from "..."`               — original PR-X8 shape
+//   `import { r as alias } from "..."`      — original PR-X8 alias variant
+//   `import { i as n, r } from "..."`       — new (router__loadShare__)
+//   `import { i as t, r as n } from "..."`  — new (router_dom__loadShare__)
+//
+// Multi-line specifier lists are not produced by Vite/Rolldown for federation
+// chunks (single-line minified output), but the regex tolerates whitespace.
+const AUTH_HELPER_NAMED_IMPORT_RE =
+  /import\s*\{([^}]+)\}\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+
+// Matches namespace import: `import * as ns from "...auth_loadShare..."`.
+// Replacement is a Proxy that enforces the same allowlist at runtime: `.r`
+// returns the inline helper, `.i` returns a no-op, and any other property
+// access throws a meaningful error so a future MF shape that reaches into a
+// real auth binding fails visibly instead of silently. Not currently observed
+// in Vite output for our federation graph, but covered defensively because
+// the fail-closed audit would otherwise throw on any future occurrence and
+// extending coverage is cheaper than re-running the build to debug.
+const AUTH_HELPER_NAMESPACE_IMPORT_RE =
+  /import\s*\*\s+as\s+([A-Za-z_$][\w$]*)\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+
+interface ParsedSpecifier {
+  /** Imported (pre-alias) name as it appears on the export side. */
+  importedName: string;
+  /** Local binding name introduced by this specifier (alias if present). */
+  localName: string;
+}
+
+/**
+ * Allowlist of auth-loadShare exports that the rewrite is permitted to
+ * inline or no-op. The chunk graph we are breaking only references the
+ * preload helper (`r`) and the lazy init wrapper (`i`); any other imported
+ * name means a consumer chunk is reaching into a real auth binding (e.g.
+ * `t` = PermissionProvider React component, `n` = usePermissions hook) that
+ * MUST NOT be silently rewritten to a no-op. Such bindings are not safe to
+ * replace and the rewrite refuses them so the fail-closed audit fires
+ * (Codex iter-5 invariant preserved end-to-end).
+ */
+const ALLOWED_AUTH_IMPORTS = new Set(['r', 'i']);
+
+/**
+ * Parse the inner text of an `import { ... }` specifier list. Tolerates
+ * whitespace, `<imported> as <local>` aliasing, and trailing commas. Each
+ * entry reports the imported (pre-alias) name and the local binding it
+ * introduces. The caller validates `importedName` against
+ * `ALLOWED_AUTH_IMPORTS` before generating the rewrite so unknown bindings
+ * are not silently converted to no-ops.
+ */
+function parseSpecifiers(inner: string): ParsedSpecifier[] {
+  return inner
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const aliasMatch = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
+      if (aliasMatch) {
+        const [, importedName, localName] = aliasMatch;
+        return { importedName, localName };
+      }
+      return { importedName: part, localName: part };
+    });
+}
 
 export interface MfPreloadHelperIsolationOptions {
   /** Verbose logging of every rewrite. Defaults to false. */
@@ -173,16 +241,55 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'chunk') continue;
         const code = chunk.code;
-        // Reset stateful regex before reuse.
-        AUTH_HELPER_IMPORT_RE.lastIndex = 0;
-        if (!AUTH_HELPER_IMPORT_RE.test(code)) continue;
-        AUTH_HELPER_IMPORT_RE.lastIndex = 0;
+        // Reset stateful regex state before reuse.
+        AUTH_HELPER_NAMED_IMPORT_RE.lastIndex = 0;
+        AUTH_HELPER_NAMESPACE_IMPORT_RE.lastIndex = 0;
 
         let chunkRewrites = 0;
-        const rewritten = code.replace(AUTH_HELPER_IMPORT_RE, (_match, alias) => {
-          const localName = (alias as string | undefined) ?? 'r';
+        let rewritten = code;
+
+        // Pass 1: named imports `import { ... } from "...auth_loadShare..."`
+        // Refuses to rewrite if any specifier names an import outside
+        // ALLOWED_AUTH_IMPORTS — keeping the original import statement intact
+        // so the fail-closed audit fires with a meaningful chunk reference
+        // instead of silently masking a real auth binding (e.g. PermissionProvider).
+        rewritten = rewritten.replace(AUTH_HELPER_NAMED_IMPORT_RE, (match, inner) => {
+          const specifiers = parseSpecifiers(inner as string);
+          if (specifiers.length === 0) return match as string;
+          const disallowed = specifiers.filter((s) => !ALLOWED_AUTH_IMPORTS.has(s.importedName));
+          if (disallowed.length > 0) {
+            // Leave the import untouched. The audit gate will throw on this
+            // chunk and report the offending file name to the maintainer.
+            return match as string;
+          }
           chunkRewrites += 1;
-          return `const ${localName} = ${INLINE_HELPER};`;
+          const decls = specifiers
+            .map(({ importedName, localName }) =>
+              importedName === 'r'
+                ? `const ${localName} = ${INLINE_HELPER};`
+                : `const ${localName} = () => {};`,
+            )
+            .join('');
+          return decls;
+        });
+
+        // Pass 2: namespace imports `import * as ns from "...auth_loadShare..."`
+        // The Proxy enforces the same allowlist at runtime: `.r` returns the
+        // inline helper, `.i` returns a no-op, and any other property access
+        // throws so a future MF shape that reaches into a real binding fails
+        // visibly instead of silently rendering nothing (or worse, calling a
+        // React component as a function).
+        rewritten = rewritten.replace(AUTH_HELPER_NAMESPACE_IMPORT_RE, (_match, nsName) => {
+          chunkRewrites += 1;
+          return (
+            `const ${nsName as string} = new Proxy({}, { get: (_, k) => { ` +
+            `if (k === 'r') return ${INLINE_HELPER}; ` +
+            `if (k === 'i') return () => {}; ` +
+            `throw new Error('[mf-preload-helper-isolation] namespace import of auth loadShare ' + ` +
+            `'access "' + String(k) + '" not in allowlist {r,i}. ' + ` +
+            `'If this is a legitimate auth binding, add a dedicated import and review the share graph.'); ` +
+            `} });`
+          );
         });
 
         if (chunkRewrites > 0 && rewritten !== code) {
@@ -190,7 +297,6 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
           totalRewrites += chunkRewrites;
           rewrittenChunks.push(fileName);
           if (debug) {
-             
             console.log(
               `[mf-preload-helper-isolation] ${fileName}: inlined ${chunkRewrites} helper import(s)`,
             );
@@ -199,7 +305,6 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
       }
 
       if (debug) {
-         
         console.log(
           `[mf-preload-helper-isolation] total rewrites: ${totalRewrites} across ${rewrittenChunks.length} chunk(s)`,
         );
@@ -228,8 +333,9 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
           throw new Error(
             `[mf-preload-helper-isolation] FAIL: ${leaks.length} loadShare chunk(s) still reference the auth loadShare token after rewrite:\n${list}\n` +
               `This is the back-edge that closes the auth ↔ design-system runtime cycle. ` +
-              `The rewrite regex AUTH_HELPER_IMPORT_RE in scripts/vite-plugins/mf-preload-helper-isolation.ts ` +
-              `did not match the new import shape — extend it to cover the offending chunks above.`,
+              `Neither AUTH_HELPER_NAMED_IMPORT_RE nor AUTH_HELPER_NAMESPACE_IMPORT_RE in ` +
+              `scripts/vite-plugins/mf-preload-helper-isolation.ts matched the new import shape — ` +
+              `inspect the offending chunks above and extend the regexes (and parseSpecifiers) to cover them.`,
           );
         }
       }

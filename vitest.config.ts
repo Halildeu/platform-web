@@ -48,6 +48,7 @@ export default defineConfig({
       'apps/mfe-audit/vitest.config.ts',
       'apps/mfe-access/vitest.config.ts',
       'apps/mfe-users/vitest.config.ts',
+      'scripts/vitest.config.ts',
     ],
     coverage: {
       provider: 'v8',
