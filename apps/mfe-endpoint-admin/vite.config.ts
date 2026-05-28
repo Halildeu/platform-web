@@ -82,9 +82,19 @@ const hostOnly = (
   fallback: string | boolean = false,
 ) => singleton(shareKey, versionKey, fallback, { import: false, version: HOST_ONLY_STUB_VERSION });
 
+// jsx-runtime / jsx-dev-runtime explicitly shared so that the @vitejs/plugin-react
+// auto-injected `import { jsx, jsxs } from "react/jsx-runtime"` (dev: jsx-dev-runtime)
+// resolves through the federation loadShare scope instead of racing against the
+// host's shared React instance. Without these entries the runtimes go through
+// the slower per-import loadShare chunk path, which the federation runtime warns
+// about with `Shared module react/jsx-dev-runtime was imported before federation
+// bootstrap finished`. Pinned to react's version because they ship inside the
+// react package (no independent semver).
 const sharedCore = {
   react: hostOnly('react'),
   'react-dom': hostOnly('react-dom'),
+  'react/jsx-runtime': hostOnly('react/jsx-runtime', 'react'),
+  'react/jsx-dev-runtime': hostOnly('react/jsx-dev-runtime', 'react'),
   'react-router': hostOnly('react-router'),
   'react-router-dom': hostOnly('react-router-dom'),
   'react-redux': hostOnly('react-redux'),
@@ -105,6 +115,19 @@ const sharedProdOnly = {
 };
 
 const isTest = !!process.env['VITEST'];
+// Standalone dev mode opt-in. When `VITE_ENDPOINT_ADMIN_STANDALONE=true` is
+// exported (e.g. `pnpm --filter mfe-endpoint-admin start` for solo browser
+// smoke), the federation plugin block is skipped entirely. Rationale: the
+// @module-federation/vite 1.15.x host bootstrap emits a `hostAutoInit` virtual
+// module that dynamic-imports React from the raw pnpm `node_modules/.pnpm/
+// react@18.2.0/node_modules/react/index.js` CommonJS shim. In a browser ESM
+// context the CJS shim throws `ReferenceError: module is not defined`, so the
+// app never mounts. Production builds and shell-mounted dev runs both DO NOT
+// set this flag — federation stays active so the remote is consumable from
+// the host. The `shell-services.ts` module already has a noop fallback for
+// the standalone path, so skipping federation does not break anything inside
+// the remote bundle itself.
+const isStandalone = process.env['VITE_ENDPOINT_ADMIN_STANDALONE'] === 'true';
 
 export default defineConfig(({ mode }) => {
   const runtimeEnv = buildRuntimeEnv(mode);
@@ -123,7 +146,7 @@ export default defineConfig(({ mode }) => {
 
     plugins: [
       react(),
-      ...(isTest
+      ...(isTest || isStandalone
         ? []
         : [
             federation({

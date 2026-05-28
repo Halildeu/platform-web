@@ -21,6 +21,25 @@
       }
     },
     {
+      "name": "mfe-shell-endpoint-admin-verify",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "apps/mfe-shell/vite.config.ts"],
+      "port": 3000,
+      "env": {
+        "AUTH_MODE": "permitAll",
+        "VITE_ENABLE_FAKE_AUTH": "true",
+        "SHELL_ENABLE_SUGGESTIONS_REMOTE": "false",
+        "SHELL_ENABLE_ETHIC_REMOTE": "false",
+        "SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE": "false",
+        "SHELL_ENABLE_REPORTING_REMOTE": "false",
+        "SHELL_ENABLE_ACCESS_REMOTE": "true",
+        "SHELL_ENABLE_AUDIT_REMOTE": "true",
+        "SHELL_ENABLE_USERS_REMOTE": "true",
+        "SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE": "true",
+        "WEB_RUNTIME_REQUIRE_BACKEND_GUARD": "0"
+      }
+    },
+    {
       "name": "mfe-suggestions",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["start", "--prefix", "apps/mfe-suggestions"],
@@ -64,6 +83,17 @@
       "env": {
         "AUTH_MODE": "permitAll",
         "VITE_ENABLE_FAKE_AUTH": "true"
+      }
+    },
+    {
+      "name": "mfe-endpoint-admin-standalone",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start", "--prefix", "apps/mfe-endpoint-admin"],
+      "port": 3009,
+      "env": {
+        "AUTH_MODE": "permitAll",
+        "VITE_ENABLE_FAKE_AUTH": "true",
+        "VITE_ENDPOINT_ADMIN_STANDALONE": "true"
       }
     }
   ]
