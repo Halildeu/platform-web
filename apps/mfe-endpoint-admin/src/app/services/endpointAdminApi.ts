@@ -27,13 +27,24 @@ import type {
   GetDeviceSoftwareInventoryArgs,
 } from '../../entities/endpoint-software-inventory/types';
 import type {
+  CompliancePolicyItem,
+  CompliancePolicyItemRequest,
   ComplianceEvaluationListResponse,
   ComplianceStateResponse,
+  DeleteCompliancePolicyItemArgs,
   ForceEvaluateDeviceComplianceArgs,
   GetComplianceDeviceListArgs,
+  GetCompliancePolicyItemArgs,
+  GetCompliancePolicyItemsArgs,
   GetDeviceComplianceArgs,
   GetDeviceComplianceEvaluationsArgs,
+  UpdateCompliancePolicyItemArgs,
 } from '../../entities/endpoint-device-compliance/types';
+import type {
+  AdminCatalogItemSummary,
+  ListCatalogItemsArgs,
+  SpringPage,
+} from '../../entities/endpoint-software-catalog/types';
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -179,6 +190,8 @@ export const endpointAdminApi = createApi({
     'EndpointCommand',
     'EndpointSoftwareInventory',
     'EndpointDeviceCompliance',
+    'CompliancePolicyItem',
+    'EndpointSoftwareCatalog',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -466,6 +479,132 @@ export const endpointAdminApi = createApi({
         { type: 'EndpointDeviceCompliance' as const, id: `history-${deviceId}` },
       ],
     }),
+    /**
+     * WEB-014C — List compliance policy items.
+     *   gateway GET /api/v1/endpoint-admin/compliance/policy-items?page=&size=
+     *   → service /api/v1/admin/compliance/policy-items
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Response envelope is the SAME BE-023 custom shape
+     * (`ComplianceEvaluationListResponse<T>`) — NOT Spring Page<T>.
+     */
+    listCompliancePolicyItems: builder.query<
+      ComplianceEvaluationListResponse<CompliancePolicyItem>,
+      GetCompliancePolicyItemsArgs
+    >({
+      query: ({ page = 0, size = 20 } = {}) => ({
+        url: '/endpoint-admin/compliance/policy-items',
+        method: 'GET',
+        params: { page: String(page), size: String(size) },
+      }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.items.map((item) => ({
+                type: 'CompliancePolicyItem' as const,
+                id: item.id,
+              })),
+              { type: 'CompliancePolicyItem' as const, id: 'LIST' },
+            ]
+          : [{ type: 'CompliancePolicyItem' as const, id: 'LIST' }],
+    }),
+    /**
+     * WEB-014C — Single policy item read (used by EditDialog pre-load).
+     */
+    getCompliancePolicyItem: builder.query<CompliancePolicyItem, GetCompliancePolicyItemArgs>({
+      query: ({ id }) => ({
+        url: `/endpoint-admin/compliance/policy-items/${encodeURIComponent(id)}`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { id }) => [{ type: 'CompliancePolicyItem' as const, id }],
+    }),
+    /**
+     * WEB-014C — Create policy item. 409 surfaces as duplicate-policy
+     * toast (catalog item already has a policy row for this tenant).
+     * 403 surfaces as MANAGE-required toast. Invalidates the list +
+     * cross-device compliance LIST (policy drift surfaces on the
+     * compliance overview after mutation; Codex 019e6dff iter-1 §6).
+     */
+    createCompliancePolicyItem: builder.mutation<CompliancePolicyItem, CompliancePolicyItemRequest>(
+      {
+        query: (body) => ({
+          url: '/endpoint-admin/compliance/policy-items',
+          method: 'POST',
+          body,
+        }),
+        invalidatesTags: [
+          { type: 'CompliancePolicyItem' as const, id: 'LIST' },
+          { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
+        ],
+      },
+    ),
+    /**
+     * WEB-014C — Update policy item. Backend enforces `catalogItemId`
+     * immutability (changing it returns 400); EditDialog disables the
+     * field. Body intentionally omits `version` — backend does NOT
+     * honor optimistic concurrency on the request DTO (Codex 019e6dff
+     * iter-1 §4). 409 surfaces as generic conflict toast.
+     */
+    updateCompliancePolicyItem: builder.mutation<
+      CompliancePolicyItem,
+      UpdateCompliancePolicyItemArgs
+    >({
+      query: ({ id, body }) => ({
+        url: `/endpoint-admin/compliance/policy-items/${encodeURIComponent(id)}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { id }) => [
+        { type: 'CompliancePolicyItem' as const, id },
+        { type: 'CompliancePolicyItem' as const, id: 'LIST' },
+        { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
+      ],
+    }),
+    /**
+     * WEB-014C — Delete policy item (hard remove). Missing policy is
+     * interpreted as `ALLOWED` by the evaluator, so deleting a row is
+     * semantically different from `enabled=false` (soft disable).
+     */
+    deleteCompliancePolicyItem: builder.mutation<void, DeleteCompliancePolicyItemArgs>({
+      query: ({ id }) => ({
+        url: `/endpoint-admin/compliance/policy-items/${encodeURIComponent(id)}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_res, _err, { id }) => [
+        { type: 'CompliancePolicyItem' as const, id },
+        { type: 'CompliancePolicyItem' as const, id: 'LIST' },
+        { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
+      ],
+    }),
+    /**
+     * WEB-014C — Endpoint software catalog list (BE-020 admin list).
+     *   gateway GET /api/v1/endpoint-admin/endpoint-software-catalog
+     *           ?status=&enabled=&page=&size=
+     *   → service /api/v1/admin/endpoint-software-catalog
+     *
+     * Response is a Spring `Page<AdminCatalogItemSummary>` — distinct
+     * from the BE-023 custom envelope. Used by the policy CreateDialog
+     * catalog dropdown (`status=APPROVED&enabled=true&size=200` covers
+     * the common case; server-side typeahead is a separate backlog if
+     * a tenant ever exceeds 200 active catalog items — Codex 019e6dff
+     * iter-1 §A).
+     */
+    listCatalogItems: builder.query<SpringPage<AdminCatalogItemSummary>, ListCatalogItemsArgs>({
+      query: ({ status, enabled, page = 0, size = 200 } = {}) => {
+        const params: Record<string, string> = {
+          page: String(page),
+          size: String(size),
+        };
+        if (status) params.status = status;
+        if (enabled !== undefined) params.enabled = String(enabled);
+        return {
+          url: '/endpoint-admin/endpoint-software-catalog',
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: [{ type: 'EndpointSoftwareCatalog' as const, id: 'LIST' }],
+    }),
   }),
 });
 
@@ -481,4 +620,10 @@ export const {
   useForceEvaluateDeviceComplianceMutation,
   useGetComplianceDeviceListQuery,
   useGetDeviceComplianceEvaluationsQuery,
+  useListCompliancePolicyItemsQuery,
+  useGetCompliancePolicyItemQuery,
+  useCreateCompliancePolicyItemMutation,
+  useUpdateCompliancePolicyItemMutation,
+  useDeleteCompliancePolicyItemMutation,
+  useListCatalogItemsQuery,
 } = endpointAdminApi;

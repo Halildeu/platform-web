@@ -120,3 +120,78 @@ export interface GetDeviceComplianceEvaluationsArgs {
   page?: number;
   size?: number;
 }
+
+/* ------------------------------------------------------------------ */
+/*  WEB-014C — Compliance Policy CRUD (Codex 019e6dff plan-time iter-2 */
+/*  AGREE-with-minor-revisions / ready_for_impl=true).                 */
+/*                                                                     */
+/*  Mirrors the BE-023 admin policy endpoints:                          */
+/*    GET    /api/v1/admin/compliance/policy-items?page=&size=         */
+/*    GET    /api/v1/admin/compliance/policy-items/{id}                */
+/*    POST   /api/v1/admin/compliance/policy-items                     */
+/*    PUT    /api/v1/admin/compliance/policy-items/{id}                */
+/*    DELETE /api/v1/admin/compliance/policy-items/{id}                */
+/*                                                                     */
+/*  List response is the SAME custom envelope as WEB-014B              */
+/*  (ComplianceEvaluationListResponse<T>) — NOT Spring Page<T>.        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Per-catalog-item enforcement intent. Backend interprets a missing
+ * policy row as `ALLOWED` for backward compatibility.
+ *   REQUIRED  -> catalog item MUST be installed
+ *   ALLOWED   -> catalog item approved but optional
+ *   FORBIDDEN -> catalog item MUST NOT be installed
+ */
+export type ComplianceEnforcementMode = 'REQUIRED' | 'ALLOWED' | 'FORBIDDEN';
+
+/**
+ * Read shape for a compliance policy item. Mirrors BE-023
+ * `CompliancePolicyItemResponse` 1:1.
+ */
+export interface CompliancePolicyItem {
+  id: string;
+  tenantId: string;
+  catalogItemId: string;
+  catalogItemKey: string;
+  catalogDisplayName: string;
+  enforcementMode: ComplianceEnforcementMode;
+  enabled: boolean;
+  createdBySubject: string | null;
+  createdAt: string;
+  lastUpdatedBySubject: string | null;
+  lastUpdatedAt: string;
+  /** Hibernate `@Version` — surfaced for audit but NOT sent back in
+   *  PUT body (backend does not honor optimistic concurrency on the
+   *  request DTO; Codex 019e6dff iter-1 §4). */
+  version: number;
+}
+
+/**
+ * Create / update request body. `version` intentionally excluded.
+ * Backend enforces `catalogItemId` immutability on update (changing it
+ * returns 400); EditDialog disables the catalog field accordingly.
+ */
+export interface CompliancePolicyItemRequest {
+  catalogItemId: string;
+  enforcementMode: ComplianceEnforcementMode;
+  enabled?: boolean;
+}
+
+export interface GetCompliancePolicyItemsArgs {
+  page?: number;
+  size?: number;
+}
+
+export interface GetCompliancePolicyItemArgs {
+  id: string;
+}
+
+export interface DeleteCompliancePolicyItemArgs {
+  id: string;
+}
+
+export interface UpdateCompliancePolicyItemArgs {
+  id: string;
+  body: CompliancePolicyItemRequest;
+}
