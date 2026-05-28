@@ -1,6 +1,10 @@
 import React, { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ApprovalCaseView, DecisionRecordPanel, type ApprovalActor } from '@mfe/design-system';
+// WEB-014D perf follow-up: deep imports — see ApprovalInboxPage.tsx
+// rationale.
+import { ApprovalCaseView } from '@mfe/design-system/components/approval-case-view';
+import { DecisionRecordPanel } from '@mfe/design-system/components/decision-record-panel';
+import type { ApprovalActor } from '@mfe/design-system/types/approval';
 import {
   useEndpointPolicyApprovals,
   buildEndpointPolicyEligibilityResolver,

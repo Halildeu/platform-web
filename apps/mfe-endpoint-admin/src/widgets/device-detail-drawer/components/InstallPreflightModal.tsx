@@ -293,18 +293,22 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
     }
   }, [open, deviceId, catalogItemId]);
 
-  // Must-fix #3 defence-in-depth: refetch on every mount / args change
-  // so a router-level cache cannot serve a stale preflight even with
-  // `keepUnusedDataFor: 0` on the endpoint.
+  // Codex 019e6fd1 must-fix #3 + WEB-014D perf follow-up (Codex
+  // 019e707e iter-2): the endpoint config already pins
+  // `keepUnusedDataFor: 0` (see `endpointAdminApi.ts`), so unmounting
+  // the modal evicts the cache entry immediately and the next open
+  // always issues a fresh preflight. Pairing that with
+  // `refetchOnMountOrArgChange: true` here caused duplicate requests
+  // (live testai network log: 2 install-preflight requests per
+  // modal open) without any additional freshness guarantee. The
+  // double-fetch is removed; the safety contract (every modal open
+  // sees a fresh evaluate) is preserved by the endpoint-level setting.
   const {
     data: serverPreflight,
     error: preflightError,
     isLoading: preflightLoading,
     isFetching: preflightFetching,
-  } = useGetInstallPreflightQuery(
-    { deviceId, catalogItemId },
-    { skip: !open, refetchOnMountOrArgChange: true },
-  );
+  } = useGetInstallPreflightQuery({ deviceId, catalogItemId }, { skip: !open });
 
   const [createInstall, createState] = useCreateInstallMutation();
 

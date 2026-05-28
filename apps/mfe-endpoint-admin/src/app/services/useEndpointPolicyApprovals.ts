@@ -13,6 +13,10 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+// WEB-014D perf follow-up: pull approval types from the dedicated
+// `types/approval` subpath instead of the design-system barrel. Hook
+// is type-only consumer, so the runtime barrel cost was pure waste
+// (Codex 019e707e iter-2 must-fix #1).
 import type {
   ApprovalActor,
   ApprovalRequest,
@@ -20,7 +24,7 @@ import type {
   DecisionAttestation,
   DecisionRecord,
   EligibilityReason,
-} from '@mfe/design-system';
+} from '@mfe/design-system/types/approval';
 
 export interface PolicyApprovalDomainExtras {
   /** Change kind — drives request copy + UI affordances. */

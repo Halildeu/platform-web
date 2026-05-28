@@ -12,7 +12,19 @@ import type {
   InstallPreflightDecisionRecorded,
 } from '../../../entities/endpoint-install/types';
 import { useEndpointAdminI18n } from '../../../i18n';
-import { InstallPreflightModal } from '../components/InstallPreflightModal';
+
+// WEB-014D perf follow-up (Codex 019e707e iter-2 PARTIAL absorb):
+// load the install confirmation modal lazily so the catalog tab's cold
+// render path does not pay for the modal's overlay-engine, focus-trap,
+// idempotency, and preflight-evidence layer until the operator actually
+// clicks "Kur" on a catalog row. The modal is rendered behind a
+// `<React.Suspense fallback={null}>` because the click-to-open
+// transition is fast; a visible fallback would flash on the first open.
+const InstallPreflightModal = React.lazy(() =>
+  import('../components/InstallPreflightModal').then((m) => ({
+    default: m.InstallPreflightModal,
+  })),
+);
 
 /**
  * WEB-014D — Software catalog tab for the device detail drawer (Faz
@@ -93,11 +105,15 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
   // invalidation refetches immediately on POST, before the row exists;
   // the agent's later report does NOT trigger a fresh RTK tag
   // invalidation. The IslemlerTab command-list poll is on a different
-  // cache. Poll every 10s while the tab is active so terminal results
-  // surface without forcing an operator refresh.
+  // cache.
+  //
+  // WEB-014D perf follow-up: poll interval relaxed from 10 s to 30 s.
+  // Terminal install results from the Windows agent typically arrive
+  // 5–60 s after the POST; a 30 s tab-active poll still surfaces them
+  // promptly while cutting the background request rate by 3×.
   const installAuditQuery = useListInstallAuditsQuery(
     { deviceId: device.id, page: 0, size: 10 },
-    { skip: !active, pollingInterval: active ? 10_000 : 0 },
+    { skip: !active, pollingInterval: active ? 30_000 : 0 },
   );
 
   if (!active) return null;
@@ -327,14 +343,16 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
       </section>
 
       {selected && (
-        <InstallPreflightModal
-          open={selected !== null}
-          deviceId={device.id}
-          catalogItemId={selected.catalogItemId}
-          catalogDisplayName={selected.displayName}
-          onClose={closeInstallModal}
-          onInstalled={handleInstalled}
-        />
+        <React.Suspense fallback={null}>
+          <InstallPreflightModal
+            open={selected !== null}
+            deviceId={device.id}
+            catalogItemId={selected.catalogItemId}
+            catalogDisplayName={selected.displayName}
+            onClose={closeInstallModal}
+            onInstalled={handleInstalled}
+          />
+        </React.Suspense>
       )}
     </div>
   );

@@ -1,10 +1,12 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+// WEB-014D perf follow-up: deep imports — see ApprovalInboxPage.tsx
+// rationale.
 import {
   ApprovalRequestForm,
-  type ApprovalActor,
   type ApprovalRequestDraft,
-} from '@mfe/design-system';
+} from '@mfe/design-system/components/approval-request-form';
+import type { ApprovalActor } from '@mfe/design-system/types/approval';
 import { useEndpointPolicyApprovals } from '../../app/services/useEndpointPolicyApprovals';
 
 const CURRENT_USER: ApprovalActor = {
