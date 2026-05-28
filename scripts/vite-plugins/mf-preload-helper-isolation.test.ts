@@ -217,15 +217,94 @@ describe('mfPreloadHelperIsolation — inline helper contract', () => {
   });
 });
 
+describe('mfPreloadHelperIsolation — multi-specifier import shapes (PR-I1)', () => {
+  // Real shapes observed in Vite 8 + @module-federation/vite 1.15.1 +
+  // Rolldown rc.17 output for the react-router and react-router-dom
+  // loadShare chunks. Both forms broke the original PR-X8 regex (which
+  // only matched a sole `r` specifier) and triggered the fail-closed audit.
+  it('rewrites `import{i as n,r}from "...auth_loadShare..."` (router__loadShare__ shape)', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const routerName = `__mfe_internal__mfe_shell__loadShare__react_mf_2_router__loadShare__.mjs-D7IHbesp.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-B0A0IPli.js`;
+    const bundle = {
+      [authName]: makeChunk(authName, `export var r;`),
+      [routerName]: makeChunk(
+        routerName,
+        `import{i as n,r}from"./${authName}";b(),n();var x=r(()=>import('./y.js'),[]);`,
+      ),
+    };
+
+    callGenerateBundle(plugin, bundle);
+
+    const code = (bundle[routerName] as { code: string }).code;
+    expect(code).not.toContain(AUTH_TOKEN);
+    // `r` gets the inline helper
+    expect(code).toMatch(/const r =\s*\(\(\)=>\{/);
+    // `n` (alias for `i`, the init wrapper) becomes a no-op
+    expect(code).toContain(`const n = () => {};`);
+    // Call sites remain untouched so `n()` and `r(...)` still resolve.
+    expect(code).toContain(`b(),n()`);
+    expect(code).toContain(`r(()=>import('./y.js'),[])`);
+  });
+
+  it('rewrites `import{i as t,r as n}from "...auth_loadShare..."` (router_dom shape)', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const routerDomName = `__mfe_internal__mfe_shell__loadShare__react_mf_2_router_mf_2_dom__loadShare__.mjs-BM_6ykBD.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-B0A0IPli.js`;
+    const bundle = {
+      [authName]: makeChunk(authName, `export var r;`),
+      [routerDomName]: makeChunk(
+        routerDomName,
+        `import{i as t,r as n}from"./${authName}";t();export var z=n(()=>import('./w.js'),[]);`,
+      ),
+    };
+
+    callGenerateBundle(plugin, bundle);
+
+    const code = (bundle[routerDomName] as { code: string }).code;
+    expect(code).not.toContain(AUTH_TOKEN);
+    // Both bindings are aliased: `r as n` → helper, `i as t` → no-op
+    expect(code).toMatch(/const n =\s*\(\(\)=>\{/);
+    expect(code).toContain(`const t = () => {};`);
+    expect(code).toContain(`t()`);
+    expect(code).toContain(`n(()=>import('./w.js'),[])`);
+  });
+
+  it('rewrites `import * as ns from "...auth_loadShare..."` namespace shape', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const nsName = `__mfe_internal__mfe_shell__loadShare__example__loadShare__.mjs-NS.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-NSAUTH.js`;
+    const bundle = {
+      [authName]: makeChunk(authName, `export var r;`),
+      [nsName]: makeChunk(
+        nsName,
+        `import * as authNs from "./${authName}";authNs.i();var z=authNs.r(()=>import('./q.js'),[]);`,
+      ),
+    };
+
+    callGenerateBundle(plugin, bundle);
+
+    const code = (bundle[nsName] as { code: string }).code;
+    expect(code).not.toContain(AUTH_TOKEN);
+    expect(code).toContain(`const authNs = new Proxy({}, { get: (_, k) =>`);
+    // Proxy must serve the inline helper at `.r` and no-op everywhere else.
+    expect(code).toContain(`k === 'r' ?`);
+    // Call sites untouched.
+    expect(code).toContain(`authNs.i()`);
+    expect(code).toContain(`authNs.r(()=>import('./q.js'),[])`);
+  });
+});
+
 describe('mfPreloadHelperIsolation — fail-closed audit', () => {
-  it('throws when a non-auth loadShare chunk still references the auth token', () => {
+  it('throws when a non-auth loadShare chunk still references the auth token (unknown shape)', () => {
     const plugin = mfPreloadHelperIsolation();
     const dsName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-LEAK.js`;
     const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-AUTH.js`;
-    // Multi-specifier import: regex won't rewrite this, audit must catch it.
+    // Re-export shape — neither named nor namespace import regex handles this.
+    // Audit must still catch it so a future MF shape can't silently regress.
     const bundle = {
       [authName]: makeChunk(authName, `export var r;`),
-      [dsName]: makeChunk(dsName, `import { r, t } from "./${authName}";`),
+      [dsName]: makeChunk(dsName, `export { r } from "./${authName}";`),
     };
 
     expect(() => callGenerateBundle(plugin, bundle)).toThrowError(
@@ -254,7 +333,7 @@ describe('mfPreloadHelperIsolation — fail-closed audit', () => {
     const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-AUTH.js`;
     const bundle = {
       [authName]: makeChunk(authName, `export var r;`),
-      [dsName]: makeChunk(dsName, `import { r, t } from "./${authName}";`),
+      [dsName]: makeChunk(dsName, `export { r } from "./${authName}";`),
     };
 
     expect(() => callGenerateBundle(plugin, bundle)).not.toThrow();

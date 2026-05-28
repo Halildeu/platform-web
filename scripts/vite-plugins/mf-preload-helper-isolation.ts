@@ -140,12 +140,63 @@ const INLINE_HELPER = [
 
 const AUTH_LOADSHARE_TOKEN = '__loadShare___mf_0_mfe_mf_1_auth__loadShare__';
 
-// Matches `import { r } from "...auth_loadShare..."` and the alias variant
-// `import { r as alias } from "...auth_loadShare..."`. The fail-closed audit
-// below catches any other shape (multi-specifier, namespace, re-export, etc.)
-// rather than silently leaving them in place.
-const AUTH_HELPER_IMPORT_RE =
-  /import\s*\{\s*r(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*\}\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+// Matches any named import statement (`import { ... } from "...auth_loadShare..."`)
+// regardless of specifier count or alias usage. The captured group is the raw
+// specifier list inside the braces, which `parseSpecifiers` then decomposes
+// into `{ localName, isHelper }` entries. The preload helper (`r`) becomes a
+// local inline binding; other specifiers (init wrapper `i`, etc.) become inert
+// no-op bindings so consumer call sites still resolve.
+//
+// Observed shapes (Vite 8 + @module-federation/vite 1.15.1 + Rolldown rc.17):
+//   `import { r } from "..."`               — original PR-X8 shape
+//   `import { r as alias } from "..."`      — original PR-X8 alias variant
+//   `import { i as n, r } from "..."`       — new (router__loadShare__)
+//   `import { i as t, r as n } from "..."`  — new (router_dom__loadShare__)
+//
+// Multi-line specifier lists are not produced by Vite/Rolldown for federation
+// chunks (single-line minified output), but the regex tolerates whitespace.
+const AUTH_HELPER_NAMED_IMPORT_RE =
+  /import\s*\{([^}]+)\}\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+
+// Matches namespace import: `import * as ns from "...auth_loadShare..."`.
+// Replacement is a Proxy that returns the inline helper for `.r` and a no-op
+// for every other property access, so `ns.r(...)` and `ns.i()` both resolve
+// without crossing the chunk boundary. Not currently observed in Vite output
+// for our federation graph, but covered defensively because the fail-closed
+// audit would otherwise throw on any future occurrence.
+const AUTH_HELPER_NAMESPACE_IMPORT_RE =
+  /import\s*\*\s+as\s+([A-Za-z_$][\w$]*)\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
+
+interface ParsedSpecifier {
+  /** Local binding name introduced by this specifier. */
+  localName: string;
+  /** True if the imported (pre-alias) name is `r` — the preload helper. */
+  isHelper: boolean;
+}
+
+/**
+ * Parse the inner text of an `import { ... }` specifier list. Tolerates
+ * whitespace, `<imported> as <local>` aliasing, and trailing commas. Each
+ * entry reports its local binding name and whether it maps to the `r` export
+ * (the modulepreload helper). Other auth-loadShare exports (`i` init wrapper,
+ * etc.) are inert here because the auth chunk performs its own top-level init
+ * when first imported elsewhere — eager re-trigger from these consumer chunks
+ * is redundant and can be replaced with a no-op.
+ */
+function parseSpecifiers(inner: string): ParsedSpecifier[] {
+  return inner
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => {
+      const aliasMatch = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
+      if (aliasMatch) {
+        const [, importedName, localName] = aliasMatch;
+        return { localName, isHelper: importedName === 'r' };
+      }
+      return { localName: part, isHelper: part === 'r' };
+    });
+}
 
 export interface MfPreloadHelperIsolationOptions {
   /** Verbose logging of every rewrite. Defaults to false. */
@@ -173,16 +224,35 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
       for (const [fileName, chunk] of Object.entries(bundle)) {
         if (chunk.type !== 'chunk') continue;
         const code = chunk.code;
-        // Reset stateful regex before reuse.
-        AUTH_HELPER_IMPORT_RE.lastIndex = 0;
-        if (!AUTH_HELPER_IMPORT_RE.test(code)) continue;
-        AUTH_HELPER_IMPORT_RE.lastIndex = 0;
+        // Reset stateful regex state before reuse.
+        AUTH_HELPER_NAMED_IMPORT_RE.lastIndex = 0;
+        AUTH_HELPER_NAMESPACE_IMPORT_RE.lastIndex = 0;
 
         let chunkRewrites = 0;
-        const rewritten = code.replace(AUTH_HELPER_IMPORT_RE, (_match, alias) => {
-          const localName = (alias as string | undefined) ?? 'r';
+        let rewritten = code;
+
+        // Pass 1: named imports `import { ... } from "...auth_loadShare..."`
+        rewritten = rewritten.replace(AUTH_HELPER_NAMED_IMPORT_RE, (_match, inner) => {
+          const specifiers = parseSpecifiers(inner as string);
+          if (specifiers.length === 0) return _match as string;
           chunkRewrites += 1;
-          return `const ${localName} = ${INLINE_HELPER};`;
+          const decls = specifiers
+            .map(({ localName, isHelper }) =>
+              isHelper
+                ? `const ${localName} = ${INLINE_HELPER};`
+                : `const ${localName} = () => {};`,
+            )
+            .join('');
+          return decls;
+        });
+
+        // Pass 2: namespace imports `import * as ns from "...auth_loadShare..."`
+        rewritten = rewritten.replace(AUTH_HELPER_NAMESPACE_IMPORT_RE, (_match, nsName) => {
+          chunkRewrites += 1;
+          return (
+            `const ${nsName as string} = new Proxy({}, { get: (_, k) => ` +
+            `k === 'r' ? ${INLINE_HELPER} : () => {} });`
+          );
         });
 
         if (chunkRewrites > 0 && rewritten !== code) {
@@ -190,7 +260,6 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
           totalRewrites += chunkRewrites;
           rewrittenChunks.push(fileName);
           if (debug) {
-             
             console.log(
               `[mf-preload-helper-isolation] ${fileName}: inlined ${chunkRewrites} helper import(s)`,
             );
@@ -199,7 +268,6 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
       }
 
       if (debug) {
-         
         console.log(
           `[mf-preload-helper-isolation] total rewrites: ${totalRewrites} across ${rewrittenChunks.length} chunk(s)`,
         );
@@ -228,8 +296,9 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
           throw new Error(
             `[mf-preload-helper-isolation] FAIL: ${leaks.length} loadShare chunk(s) still reference the auth loadShare token after rewrite:\n${list}\n` +
               `This is the back-edge that closes the auth ↔ design-system runtime cycle. ` +
-              `The rewrite regex AUTH_HELPER_IMPORT_RE in scripts/vite-plugins/mf-preload-helper-isolation.ts ` +
-              `did not match the new import shape — extend it to cover the offending chunks above.`,
+              `Neither AUTH_HELPER_NAMED_IMPORT_RE nor AUTH_HELPER_NAMESPACE_IMPORT_RE in ` +
+              `scripts/vite-plugins/mf-preload-helper-isolation.ts matched the new import shape — ` +
+              `inspect the offending chunks above and extend the regexes (and parseSpecifiers) to cover them.`,
           );
         }
       }
