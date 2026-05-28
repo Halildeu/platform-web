@@ -101,29 +101,25 @@ export const HardwareInventoryView: React.FC<HardwareInventoryViewProps> = ({
     <div data-testid="hardware-inventory-view">
       <h3>{t('endpointAdmin.drawer.inventory.hardware.title')}</h3>
 
-      {latestResult.isLoading && (
-        <p data-testid="hardware-loading">{t('endpointAdmin.drawer.inventory.loading')}</p>
-      )}
-
-      {latestResult.isError && resolveStatus(latestResult.error) === 404 && (
-        <p data-testid="hardware-empty">{t('endpointAdmin.drawer.inventory.hardware.empty')}</p>
-      )}
-
-      {latestResult.isError && resolveStatus(latestResult.error) === 403 && (
-        <p data-testid="hardware-forbidden">{t('endpointAdmin.drawer.inventory.forbidden')}</p>
-      )}
-
-      {latestResult.isError && ![404, 403].includes(resolveStatus(latestResult.error) ?? -1) && (
-        <p data-testid="hardware-error">{t('endpointAdmin.drawer.inventory.error')}</p>
-      )}
-
-      {latestResult.data && (
-        <HardwareSnapshotPanel
-          snapshot={latestResult.data}
-          formatBytes={formatBytes}
-          formatTimestamp={formatTimestamp}
-        />
-      )}
+      {renderLatestState({
+        isLoading: latestResult.isLoading,
+        isError: latestResult.isError ?? false,
+        error: latestResult.error,
+        // Codex 019e70ce post-impl iter-1 P1: use currentData (the
+        // result for the active arg) instead of data (the last
+        // successful result, which can belong to a previous deviceId
+        // during refetch). Plus an explicit deviceId guard so a stale
+        // snapshot for the previous device cannot render under the
+        // new drawer header.
+        snapshot:
+          latestResult.currentData && latestResult.currentData.deviceId === deviceId
+            ? latestResult.currentData
+            : null,
+        deviceId,
+        t,
+        formatBytes,
+        formatTimestamp,
+      })}
 
       <section data-testid="hardware-history-section" style={{ marginTop: 24 }}>
         <details
@@ -144,10 +140,12 @@ export const HardwareInventoryView: React.FC<HardwareInventoryViewProps> = ({
           {historyOpen && historyResult.isError && (
             <p data-testid="hardware-history-error">{t('endpointAdmin.drawer.inventory.error')}</p>
           )}
-          {historyOpen && historyResult.data && (
+          {historyOpen && historyResult.currentData && (
             <HardwareHistoryPage
-              page={historyResult.data}
-              currentPage={historyPage}
+              // Codex iter-1 P2: bind the page indicator to the
+              // response's own page.number so a stale page slice
+              // does not render under the wrong index.
+              page={historyResult.currentData}
               onPageChange={setHistoryPage}
               formatTimestamp={formatTimestamp}
             />
@@ -157,6 +155,59 @@ export const HardwareInventoryView: React.FC<HardwareInventoryViewProps> = ({
     </div>
   );
 };
+
+interface RenderLatestArgs {
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  snapshot: HardwareInventorySnapshot | null;
+  deviceId: string;
+  t: (key: string) => string;
+  formatBytes: (n: number | null | undefined) => string;
+  formatTimestamp: (s: string | null | undefined) => string;
+}
+
+/**
+ * Codex 019e70ce post-impl iter-1 P1 absorb — render the latest
+ * snapshot state with strict precedence so error / empty / forbidden
+ * branches cannot co-exist with a stale snapshot panel.
+ *
+ * Precedence: loading -> error class -> snapshot (only if it belongs
+ * to the active deviceId). The caller passes the deviceId-guarded
+ * snapshot (currentData with a deviceId check), so when the operator
+ * switches device the new drawer renders the empty / forbidden /
+ * loading branch — never the previous device's data.
+ */
+function renderLatestState(args: RenderLatestArgs): React.ReactNode {
+  const { isLoading, isError, error, snapshot, t, formatBytes, formatTimestamp } = args;
+  if (isLoading) {
+    return <p data-testid="hardware-loading">{t('endpointAdmin.drawer.inventory.loading')}</p>;
+  }
+  if (isError) {
+    const status = resolveStatus(error);
+    if (status === 404) {
+      return (
+        <p data-testid="hardware-empty">{t('endpointAdmin.drawer.inventory.hardware.empty')}</p>
+      );
+    }
+    if (status === 403) {
+      return (
+        <p data-testid="hardware-forbidden">{t('endpointAdmin.drawer.inventory.forbidden')}</p>
+      );
+    }
+    return <p data-testid="hardware-error">{t('endpointAdmin.drawer.inventory.error')}</p>;
+  }
+  if (snapshot) {
+    return (
+      <HardwareSnapshotPanel
+        snapshot={snapshot}
+        formatBytes={formatBytes}
+        formatTimestamp={formatTimestamp}
+      />
+    );
+  }
+  return null;
+}
 
 interface HardwareSnapshotPanelProps {
   snapshot: HardwareInventorySnapshot;
@@ -204,14 +255,12 @@ const HardwareSnapshotPanel: React.FC<HardwareSnapshotPanelProps> = ({
         </dd>
         <dt>{t('endpointAdmin.drawer.inventory.hardware.summary.domain')}</dt>
         <dd>
-          {snapshot.domainJoined ? (
-            <>
-              {t('endpointAdmin.drawer.inventory.hardware.summary.domain')}:{' '}
-              {or(snapshot.domainName)}
-            </>
-          ) : (
-            t('endpointAdmin.drawer.inventory.hardware.summary.workgroup')
-          )}
+          {/* Codex iter-1 P2: tri-state. null is unknown, not workgroup. */}
+          {snapshot.domainJoined === true
+            ? or(snapshot.domainName)
+            : snapshot.domainJoined === false
+              ? t('endpointAdmin.drawer.inventory.hardware.summary.workgroup')
+              : '—'}
         </dd>
         <dt>{t('endpointAdmin.drawer.inventory.hardware.summary.lastBoot')}</dt>
         <dd>{formatTimestamp(snapshot.lastBootAt)}</dd>
@@ -358,17 +407,20 @@ interface HardwareHistoryPageProps {
     totalPages: number;
     empty: boolean;
   };
-  currentPage: number;
   onPageChange: (page: number) => void;
   formatTimestamp: (s: string | null | undefined) => string;
 }
 
 const HardwareHistoryPage: React.FC<HardwareHistoryPageProps> = ({
   page,
-  currentPage,
   onPageChange,
   formatTimestamp,
 }) => {
+  // Codex 019e70ce iter-1 P2: bind the indicator to the response's
+  // own page number rather than the local request state, so a stale
+  // page slice cannot render under the wrong index while RTK Query
+  // refetches.
+  const currentPage = page.number;
   const { t } = useEndpointAdminI18n();
   if (page.empty) {
     return (

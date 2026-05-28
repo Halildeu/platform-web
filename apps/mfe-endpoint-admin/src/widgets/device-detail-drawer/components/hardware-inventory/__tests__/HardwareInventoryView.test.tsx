@@ -4,8 +4,15 @@
  *
  * Pattern mirrors the WEB-011 InventoryTab test approach: vi.mock the
  * RTK Query slice and drive each branch via the generated hooks'
- * return values directly. No MSW; route typo coverage lives in a
- * dedicated contract test (see endpointAdminApi.hardware-inventory.test.tsx).
+ * return values directly. Route shape is enforced at compile time —
+ * the generated useGetDeviceHardwareInventoryLatestQuery /
+ * useGetDeviceHardwareInventoryHistoryQuery hooks only exist if the
+ * builder.query URLs in endpointAdminApi.ts are correct; a route typo
+ * fails the TypeScript build before this file runs.
+ *
+ * Codex 019e70ce post-impl iter-1 P1+P2 absorb covered in the last
+ * three cases (stale-snapshot guard, tri-state domain, history
+ * pagination indicator bound to response page.number).
  */
 
 import { render, screen } from '@testing-library/react';
@@ -147,8 +154,10 @@ describe('HardwareInventoryView', () => {
   });
 
   it('renders snapshot summary + disks + network interfaces on 200', () => {
+    const snap = buildSnapshot();
     mockedLatest.mockReturnValue({
-      data: buildSnapshot(),
+      data: snap,
+      currentData: snap,
       error: undefined,
       isError: false,
       isLoading: false,
@@ -157,7 +166,9 @@ describe('HardwareInventoryView', () => {
     });
     mockedHistory.mockReturnValue(emptyHistoryResult());
 
-    render(<HardwareInventoryView deviceId="dev-1" active />);
+    // Codex iter-1 P1: the guard requires snapshot.deviceId === deviceId,
+    // so the render call must pass the fixture's own deviceId.
+    render(<HardwareInventoryView deviceId={snap.deviceId} active />);
 
     expect(screen.getByTestId('hardware-snapshot-panel')).toBeInTheDocument();
     expect(screen.getByTestId('hardware-summary-grid')).toBeInTheDocument();
@@ -173,8 +184,10 @@ describe('HardwareInventoryView', () => {
   });
 
   it('history hook is skipped while the accordion is closed', () => {
+    const snap = buildSnapshot();
     mockedLatest.mockReturnValue({
-      data: buildSnapshot(),
+      data: snap,
+      currentData: snap,
       error: undefined,
       isError: false,
       isLoading: false,
@@ -183,7 +196,7 @@ describe('HardwareInventoryView', () => {
     });
     mockedHistory.mockReturnValue(emptyHistoryResult());
 
-    render(<HardwareInventoryView deviceId="dev-1" active />);
+    render(<HardwareInventoryView deviceId={snap.deviceId} active />);
     // Codex must-fix #6 / lazy contract: history hook is invoked with
     // skip=true while the <details> stays collapsed.
     expect(mockedHistory).toHaveBeenCalled();
@@ -194,6 +207,7 @@ describe('HardwareInventoryView', () => {
   it('resets history page/open when the device id changes', () => {
     mockedLatest.mockReturnValue({
       data: buildSnapshot(),
+      currentData: buildSnapshot(),
       error: undefined,
       isError: false,
       isLoading: false,
@@ -209,5 +223,55 @@ describe('HardwareInventoryView', () => {
     // and the page reset to 0 after a device switch.
     const lastCall = mockedHistory.mock.calls[mockedHistory.mock.calls.length - 1];
     expect(lastCall?.[0]).toMatchObject({ deviceId: 'dev-2', page: 0 });
+  });
+
+  it('does not render a stale snapshot when currentData belongs to a previous device', () => {
+    // Codex 019e70ce post-impl iter-1 P1 regression: data (the last
+    // successful result) belongs to dev-1, but currentData (the
+    // result for the active arg dev-2) is still undefined while the
+    // refetch is in flight. The view MUST NOT render the dev-1
+    // snapshot under the dev-2 drawer.
+    const dev1Snapshot = buildSnapshot({
+      deviceId: 'dev-1',
+      cpuModel: 'OLD CPU FROM DEV-1',
+    });
+    mockedLatest.mockReturnValue({
+      data: dev1Snapshot, // stale `.data` from the previous arg
+      currentData: undefined, // refetch for dev-2 still in flight
+      error: undefined,
+      isError: false,
+      isLoading: true,
+      isFetching: true,
+      isUninitialized: false,
+    });
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<HardwareInventoryView deviceId="dev-2" active />);
+
+    // Loading branch wins; no stale snapshot panel.
+    expect(screen.getByTestId('hardware-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('hardware-snapshot-panel')).not.toBeInTheDocument();
+    expect(screen.queryByText('OLD CPU FROM DEV-1')).not.toBeInTheDocument();
+  });
+
+  it('renders domain workgroup as workgroup, null as unknown', () => {
+    // Codex iter-1 P2 tri-state: null is unknown, not workgroup.
+    const nullDomain = buildSnapshot({ domainJoined: null, domainName: null });
+    mockedLatest.mockReturnValue({
+      data: nullDomain,
+      currentData: nullDomain,
+      error: undefined,
+      isError: false,
+      isLoading: false,
+      isFetching: false,
+      isUninitialized: false,
+    });
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<HardwareInventoryView deviceId={nullDomain.deviceId} active />);
+    // The domain row's dd should fall back to "—" (not workgroup).
+    expect(
+      screen.queryByText('endpointAdmin.drawer.inventory.hardware.summary.workgroup'),
+    ).not.toBeInTheDocument();
   });
 });
