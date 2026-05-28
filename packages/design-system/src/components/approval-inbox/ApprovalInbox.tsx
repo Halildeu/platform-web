@@ -32,6 +32,17 @@ export interface ApprovalInboxProps extends AccessControlledProps {
   requests: ApprovalRequest[];
   /** Active user — used for per-row eligibility (4-eyes proposer self-check). */
   currentUser: ApprovalActor;
+  /**
+   * Consumer-supplied eligibility resolver. Overrides the built-in
+   * `proposer_self` 4-eyes check so a domain consumer (e.g. endpoint-admin)
+   * can return its own reason set (`role_insufficient`, `tier_mismatch`, …)
+   * and have it flow through bulk eligibility split + row blocked badges.
+   * When omitted, the default `proposer_self` compute is used.
+   */
+  getEligibilityReasons?: (
+    request: ApprovalRequest,
+    currentUser: ApprovalActor,
+  ) => EligibilityReason[];
   /** Optional request-type filter values. */
   typeOptions?: Array<{ value: string; label: string }>;
   /** Optional status filter values. */
@@ -136,6 +147,7 @@ export const ApprovalInbox = React.forwardRef<HTMLDivElement, ApprovalInboxProps
       currentUser,
       typeOptions = [],
       statusOptions = ['pending', 'in_review', 'approved', 'rejected'],
+      getEligibilityReasons,
       filters: filtersProp,
       onFiltersChange,
       onRequestOpen,
@@ -175,14 +187,17 @@ export const ApprovalInbox = React.forwardRef<HTMLDivElement, ApprovalInboxProps
 
     // Eligibility lookup — computed across the full request set so bulk
     // payloads keep correct context even if a selected row is currently
-    // filtered out of view.
+    // filtered out of view. Consumer-supplied resolver overrides the
+    // built-in proposer_self compute so domain consumers can carry
+    // role_insufficient / tier_mismatch / delegate_conflict semantics.
     const eligibilityById = useMemo(() => {
       const map = new Map<string, EligibilityReason[]>();
+      const resolve = getEligibilityReasons ?? computeRowEligibility;
       for (const req of requests) {
-        map.set(req.id, computeRowEligibility(req, currentUser));
+        map.set(req.id, resolve(req, currentUser));
       }
       return map;
-    }, [requests, currentUser]);
+    }, [requests, currentUser, getEligibilityReasons]);
 
     const toggleSelect = useCallback(
       (id: string) => {

@@ -7,6 +7,16 @@
  * - breaking_change: propose -> impact analysis -> approve
  *
  * Storage: localStorage in dev, API endpoint in prod
+ *
+ * @deprecated
+ * Design-lab governance dogfood only. New domain consumers (e.g.
+ * endpoint-admin policy approvals — see `apps/mfe-endpoint-admin/src/app/
+ * services/useEndpointPolicyApprovals.ts`) must NOT depend on this hook.
+ * It carries a narrower type union (deprecation / quality_exception /
+ * breaking_change only), a flatter decision shape (no delegate / attest)
+ * and a fixed localStorage key (design-lab scoped). Domain hooks own
+ * their own repository port. PR-5 will retire this hook once the
+ * design-lab governance surface migrates to the shared API contract.
  */
 
 import { useState, useCallback, useEffect } from 'react';
