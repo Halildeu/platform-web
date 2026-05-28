@@ -26,6 +26,11 @@ import type {
   DeviceSoftwareInventory,
   GetDeviceSoftwareInventoryArgs,
 } from '../../entities/endpoint-software-inventory/types';
+import type {
+  ComplianceStateResponse,
+  ForceEvaluateDeviceComplianceArgs,
+  GetDeviceComplianceArgs,
+} from '../../entities/endpoint-device-compliance/types';
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -170,6 +175,7 @@ export const endpointAdminApi = createApi({
     'EndpointAuditEvent',
     'EndpointCommand',
     'EndpointSoftwareInventory',
+    'EndpointDeviceCompliance',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -336,6 +342,48 @@ export const endpointAdminApi = createApi({
         { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
       ],
     }),
+    /**
+     * WEB-014A — Faz 22.5 Compliance State (Codex 019e6d68 plan-time
+     * AGREE).
+     *
+     * Backend: `AdminEndpointComplianceController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/compliance
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/compliance
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * 404 maps to "never evaluated" empty state; the tab renders a
+     * single "Evaluate now" CTA so the operator can prime the state
+     * without leaving the drawer.
+     */
+    getDeviceCompliance: builder.query<ComplianceStateResponse, GetDeviceComplianceArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/compliance`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointDeviceCompliance' as const, id: deviceId },
+      ],
+    }),
+    /**
+     * WEB-014A force evaluate. Returns the newly persisted state
+     * (Codex 019e6bbf force-evaluate response shape: same DTO as GET
+     * latest). 409 + Retry-After: 5 surfaces as RTK Query error
+     * (`error.status === 409`); the tab renders a 5 s cooldown toast
+     * and re-enables the button. 403 surfaces likewise; tab renders a
+     * permission toast.
+     */
+    forceEvaluateDeviceCompliance: builder.mutation<
+      ComplianceStateResponse,
+      ForceEvaluateDeviceComplianceArgs
+    >({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/compliance/evaluate`,
+        method: 'POST',
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointDeviceCompliance' as const, id: deviceId },
+      ],
+    }),
   }),
 });
 
@@ -347,4 +395,6 @@ export const {
   useListDeviceCommandsQuery,
   useGetEndpointCommandQuery,
   useCreateDeviceCommandMutation,
+  useGetDeviceComplianceQuery,
+  useForceEvaluateDeviceComplianceMutation,
 } = endpointAdminApi;

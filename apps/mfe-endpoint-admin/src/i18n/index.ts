@@ -124,6 +124,76 @@ const DICT_TR = {
   'endpointAdmin.drawer.inventory.items.empty': 'Filtreyle eşleşen uygulama yok.',
   'endpointAdmin.drawer.inventory.pager.page': 'Sayfa',
   'endpointAdmin.drawer.inventory.pager.total': 'toplam',
+  // Compliance tab (WEB-014A — BE-023 compliance state read + force evaluate)
+  'endpointAdmin.drawer.compliance.tabLabel': 'Uyum',
+  'endpointAdmin.drawer.compliance.loading': 'Uyum durumu yükleniyor…',
+  'endpointAdmin.drawer.compliance.error': 'Uyum durumu alınamadı.',
+  'endpointAdmin.drawer.compliance.forbidden': 'Bu cihazın uyum durumunu görüntüleme yetkiniz yok.',
+  'endpointAdmin.drawer.compliance.empty':
+    'Bu cihaz henüz değerlendirilmemiş. Aşağıdaki düğmeyle ilk değerlendirmeyi başlatabilirsiniz.',
+  'endpointAdmin.drawer.compliance.evaluatedAt': 'Değerlendirme zamanı',
+  'endpointAdmin.drawer.compliance.policyDrift':
+    'Politika kümesi değerlendirme sonrası değiştirildi; yeniden değerlendirme önerilir.',
+  'endpointAdmin.drawer.compliance.evaluate.cta': 'Yeniden değerlendir',
+  'endpointAdmin.drawer.compliance.evaluate.cooldown': 'Bekleyin… ({seconds}s)',
+  'endpointAdmin.drawer.compliance.decision.compliant.label': 'Uyumlu',
+  'endpointAdmin.drawer.compliance.decision.compliant.aria': 'Cihaz uyumlu durumda',
+  'endpointAdmin.drawer.compliance.decision.nonCompliant.label': 'Uyumsuz',
+  'endpointAdmin.drawer.compliance.decision.nonCompliant.aria':
+    'Cihaz uyumsuz; eksik veya güncel olmayan zorunlu yazılım var',
+  'endpointAdmin.drawer.compliance.decision.unauthorized.label': 'Yetkisiz',
+  'endpointAdmin.drawer.compliance.decision.unauthorized.aria':
+    'Cihazda yasaklı yazılım tespit edildi',
+  'endpointAdmin.drawer.compliance.decision.unknown.label': 'Bilinmiyor',
+  'endpointAdmin.drawer.compliance.decision.unknown.aria': 'Telemetri yetersiz; karar verilemiyor',
+  'endpointAdmin.drawer.compliance.staleness.heading': 'Envanter güncelliği',
+  'endpointAdmin.drawer.compliance.staleness.soft':
+    'Envanter 24–72 saat eski. Doğruluk azalmış olabilir.',
+  'endpointAdmin.drawer.compliance.staleness.hard':
+    'Envanter 72+ saat eski; karar güvenilir değil. Yeniden değerlendirme önerilir.',
+  'endpointAdmin.drawer.compliance.staleness.unavailable': 'Envanter henüz toplanmadı.',
+  'endpointAdmin.drawer.compliance.staleness.stream.summary': 'Özet',
+  'endpointAdmin.drawer.compliance.staleness.stream.apps': 'Uygulama listesi',
+  'endpointAdmin.drawer.compliance.staleness.stream.wingetEgress': 'WinGet egress',
+  'endpointAdmin.drawer.compliance.staleness.stream.fresh': 'Taze (<24s)',
+  'endpointAdmin.drawer.compliance.staleness.stream.soft': 'Eski (24–72s)',
+  'endpointAdmin.drawer.compliance.staleness.stream.hard': 'Çok eski (>72s)',
+  'endpointAdmin.drawer.compliance.staleness.stream.unavailable': 'Toplanmadı',
+  'endpointAdmin.drawer.compliance.reasons.heading': 'Sebepler',
+  'endpointAdmin.drawer.compliance.reasons.blocking': 'Engelleyen',
+  'endpointAdmin.drawer.compliance.reasons.warnings': 'Uyarılar',
+  'endpointAdmin.drawer.compliance.reason.missing_required_app': 'Zorunlu uygulama yüklü değil',
+  'endpointAdmin.drawer.compliance.reason.outdated_required_app':
+    'Zorunlu uygulama sürümü yetersiz',
+  'endpointAdmin.drawer.compliance.reason.forbidden_app_installed':
+    'Yasaklı uygulama tespit edildi',
+  'endpointAdmin.drawer.compliance.reason.inventory_missing': 'Envanter alınmamış',
+  'endpointAdmin.drawer.compliance.reason.inventory_unsupported': 'Cihazda envanter desteği yok',
+  'endpointAdmin.drawer.compliance.reason.apps_unavailable': 'Uygulama listesi henüz alınmadı',
+  'endpointAdmin.drawer.compliance.reason.inventory_stale_hard': 'Envanter çok eski',
+  'endpointAdmin.drawer.compliance.reason.inventory_stale_soft': 'Envanter eski',
+  'endpointAdmin.drawer.compliance.reason.inventory_truncated': 'Envanter kesildi',
+  'endpointAdmin.drawer.compliance.reason.version_compare_unsupported':
+    'Sürüm karşılaştırması yapılamadı',
+  'endpointAdmin.drawer.compliance.reason.detection_rule_unsupported':
+    'Tespit kuralı desteklenmiyor',
+  'endpointAdmin.drawer.compliance.reason.policy_catalog_item_unavailable':
+    'Politika hedefi katalogda yok',
+  'endpointAdmin.drawer.compliance.reason.policy_empty': 'Bu kiracıda politika tanımlı değil',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_missing': 'WinGet egress kanıtı yok',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_unsupported':
+    'WinGet egress desteklenmiyor',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_schema_unsupported':
+    'WinGet egress şeması uyumsuz',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_partial': 'WinGet egress kısmen başarılı',
+  'endpointAdmin.drawer.compliance.reason.winget_source_list_warning':
+    'WinGet kaynak listesi uyarısı',
+  'endpointAdmin.drawer.compliance.toast.evaluated': 'Yeni değerlendirme tamamlandı.',
+  'endpointAdmin.drawer.compliance.toast.locked':
+    'Şu anda başka bir değerlendirme sürüyor; 5 saniye içinde tekrar deneyin.',
+  'endpointAdmin.drawer.compliance.toast.forbidden': 'Bu eylem için yönetici yetkisi gerekiyor.',
+  'endpointAdmin.drawer.compliance.toast.deviceMissing': 'Cihaz bulunamadı.',
+  'endpointAdmin.drawer.compliance.toast.error': 'Değerlendirme başarısız oldu.',
   // Destructive command modal
   'endpointAdmin.modal.title.LOCK_USER_LOGIN': 'Kullanıcı Girişini Kilitle',
   'endpointAdmin.modal.title.UNLOCK_USER_LOGIN': 'Kullanıcı Girişini Aç',
@@ -267,6 +337,78 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.inventory.items.empty': 'No applications match the current filter.',
   'endpointAdmin.drawer.inventory.pager.page': 'Page',
   'endpointAdmin.drawer.inventory.pager.total': 'total',
+  // Compliance tab (WEB-014A)
+  'endpointAdmin.drawer.compliance.tabLabel': 'Compliance',
+  'endpointAdmin.drawer.compliance.loading': 'Loading compliance state…',
+  'endpointAdmin.drawer.compliance.error': 'Failed to load compliance state.',
+  'endpointAdmin.drawer.compliance.forbidden':
+    'You do not have permission to view compliance state.',
+  'endpointAdmin.drawer.compliance.empty':
+    'This device has not been evaluated yet. Click the button below to run the first evaluation.',
+  'endpointAdmin.drawer.compliance.evaluatedAt': 'Evaluated at',
+  'endpointAdmin.drawer.compliance.policyDrift':
+    'Policy set changed after evaluation; re-evaluation recommended.',
+  'endpointAdmin.drawer.compliance.evaluate.cta': 'Evaluate now',
+  'endpointAdmin.drawer.compliance.evaluate.cooldown': 'Wait… ({seconds}s)',
+  'endpointAdmin.drawer.compliance.decision.compliant.label': 'Compliant',
+  'endpointAdmin.drawer.compliance.decision.compliant.aria': 'Device is compliant',
+  'endpointAdmin.drawer.compliance.decision.nonCompliant.label': 'Non-compliant',
+  'endpointAdmin.drawer.compliance.decision.nonCompliant.aria':
+    'Device is non-compliant; required software is missing or outdated',
+  'endpointAdmin.drawer.compliance.decision.unauthorized.label': 'Unauthorized',
+  'endpointAdmin.drawer.compliance.decision.unauthorized.aria':
+    'Forbidden software detected on this device',
+  'endpointAdmin.drawer.compliance.decision.unknown.label': 'Unknown',
+  'endpointAdmin.drawer.compliance.decision.unknown.aria':
+    'Telemetry insufficient; verdict not available',
+  'endpointAdmin.drawer.compliance.staleness.heading': 'Inventory freshness',
+  'endpointAdmin.drawer.compliance.staleness.soft':
+    'Inventory is 24–72 hours old. Accuracy may be reduced.',
+  'endpointAdmin.drawer.compliance.staleness.hard':
+    'Inventory is 72+ hours old; the verdict is unreliable. Re-evaluation recommended.',
+  'endpointAdmin.drawer.compliance.staleness.unavailable': 'Inventory not collected yet.',
+  'endpointAdmin.drawer.compliance.staleness.stream.summary': 'Summary',
+  'endpointAdmin.drawer.compliance.staleness.stream.apps': 'Apps list',
+  'endpointAdmin.drawer.compliance.staleness.stream.wingetEgress': 'WinGet egress',
+  'endpointAdmin.drawer.compliance.staleness.stream.fresh': 'Fresh (<24h)',
+  'endpointAdmin.drawer.compliance.staleness.stream.soft': 'Stale (24–72h)',
+  'endpointAdmin.drawer.compliance.staleness.stream.hard': 'Very stale (>72h)',
+  'endpointAdmin.drawer.compliance.staleness.stream.unavailable': 'Not collected',
+  'endpointAdmin.drawer.compliance.reasons.heading': 'Reasons',
+  'endpointAdmin.drawer.compliance.reasons.blocking': 'Blocking',
+  'endpointAdmin.drawer.compliance.reasons.warnings': 'Warnings',
+  'endpointAdmin.drawer.compliance.reason.missing_required_app': 'Required app not installed',
+  'endpointAdmin.drawer.compliance.reason.outdated_required_app':
+    'Required app version insufficient',
+  'endpointAdmin.drawer.compliance.reason.forbidden_app_installed': 'Forbidden app detected',
+  'endpointAdmin.drawer.compliance.reason.inventory_missing': 'Inventory not collected',
+  'endpointAdmin.drawer.compliance.reason.inventory_unsupported':
+    'Device does not support inventory',
+  'endpointAdmin.drawer.compliance.reason.apps_unavailable': 'App list not yet collected',
+  'endpointAdmin.drawer.compliance.reason.inventory_stale_hard': 'Inventory is very stale',
+  'endpointAdmin.drawer.compliance.reason.inventory_stale_soft': 'Inventory is stale',
+  'endpointAdmin.drawer.compliance.reason.inventory_truncated': 'Inventory was truncated',
+  'endpointAdmin.drawer.compliance.reason.version_compare_unsupported':
+    'Version comparison not possible',
+  'endpointAdmin.drawer.compliance.reason.detection_rule_unsupported':
+    'Detection rule not supported',
+  'endpointAdmin.drawer.compliance.reason.policy_catalog_item_unavailable':
+    'Policy target missing from catalog',
+  'endpointAdmin.drawer.compliance.reason.policy_empty': 'No policies defined for this tenant',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_missing': 'WinGet egress evidence missing',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_unsupported': 'WinGet egress not supported',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_schema_unsupported':
+    'WinGet egress schema mismatch',
+  'endpointAdmin.drawer.compliance.reason.winget_egress_partial':
+    'WinGet egress partially successful',
+  'endpointAdmin.drawer.compliance.reason.winget_source_list_warning': 'WinGet source list warning',
+  'endpointAdmin.drawer.compliance.toast.evaluated': 'New evaluation completed.',
+  'endpointAdmin.drawer.compliance.toast.locked':
+    'Another evaluation is in flight; retry in 5 seconds.',
+  'endpointAdmin.drawer.compliance.toast.forbidden':
+    'Admin permission required to run this action.',
+  'endpointAdmin.drawer.compliance.toast.deviceMissing': 'Device not found.',
+  'endpointAdmin.drawer.compliance.toast.error': 'Evaluation failed.',
   'endpointAdmin.modal.title.LOCK_USER_LOGIN': 'Lock User Login',
   'endpointAdmin.modal.title.UNLOCK_USER_LOGIN': 'Unlock User Login',
   'endpointAdmin.modal.title.CHANGE_LOCAL_PASSWORD': 'Change Local Password',
