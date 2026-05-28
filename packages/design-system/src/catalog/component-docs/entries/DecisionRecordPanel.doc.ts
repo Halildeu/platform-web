@@ -1,0 +1,120 @@
+import type { DesignLabComponentDocEntry } from '../types';
+
+const entry: DesignLabComponentDocEntry = {
+  name: 'DecisionRecordPanel',
+  indexItem: {
+    name: 'DecisionRecordPanel',
+    kind: 'component',
+    availability: 'exported',
+    lifecycle: 'stable',
+    maturity: 'beta',
+    group: 'ai_helpers',
+    subgroup: 'approval_audit',
+    taxonomyGroupId: 'ai_native_helpers',
+    taxonomySubgroup: 'Approval / Audit',
+    demoMode: 'live',
+    description:
+      'Immutable governance karar kaydi paneli: bir ApprovalRequest icin DecisionRecord listesini Avatar + Badge + Text bazli custom row olarak render eder; secilen kayit icin focused detail; CSV/JSON export DataExportDialog ile.',
+    sectionIds: ['governance_contribution', 'integration_distribution', 'documentation_standards'],
+    qualityGates: [
+      'design_tokens',
+      'preview_visibility',
+      'registry_export_sync',
+      'ux_catalog_alignment',
+      'a11y_keyboard_support',
+    ],
+    tags: ['wave-12', 'approval-foundation', 'beta', 'approval', 'audit'],
+    uxPrimaryThemeId: 'ai_assisted_decision_experience',
+    uxPrimarySubthemeId: 'human_approval_checkpoints',
+    roadmapWaveId: 'wave_12_approval_foundation',
+    acceptanceContractId: 'ui-library-wave-12-approval-foundation-v1',
+    importStatement: "import { DecisionRecordPanel } from '@mfe/design-system';",
+    whereUsed: [],
+    dependsOn: ['Avatar', 'Badge', 'Button', 'Text', 'DataExportDialog'],
+  },
+  apiItem: {
+    name: 'DecisionRecordPanel',
+    variantAxes: [
+      'selection: controlled | uncontrolled',
+      'export: enabled | disabled',
+      'access: full | readonly | hidden',
+    ],
+    stateModel: ['selected record id', 'export dialog open'],
+    previewStates: [
+      'empty',
+      'mixed-actions',
+      'with-delegate-detail',
+      'with-attest-detail',
+      'export-disabled-empty',
+    ],
+    behaviorModel: [
+      'Strictly read-only — no revoke/withdraw action surface',
+      'Per-row click toggles focused-detail',
+      'delegateTo + attestation rendered when action is delegate / attest',
+      'Export dispatches { format, records } via DataExportDialog (csv/json by default)',
+    ],
+    props: [
+      {
+        name: 'history',
+        type: 'DecisionRecord[]',
+        default: '[]',
+        required: true,
+        description: 'Immutable karar kayitlari.',
+      },
+      {
+        name: 'request',
+        type: "Pick<ApprovalRequest, 'id'|'title'|'type'|'target'>",
+        default: '-',
+        required: false,
+        description: 'Optional request meta gosterimi.',
+      },
+      {
+        name: 'selectedRecordId',
+        type: 'string | null',
+        default: '-',
+        required: false,
+        description: 'Controlled secim id.',
+      },
+      {
+        name: 'onRecordSelect',
+        type: '(id) => void',
+        default: '-',
+        required: false,
+        description: 'Secim callback (controlled mode).',
+      },
+      {
+        name: 'onExport',
+        type: '(payload: { format, records }) => void',
+        default: '-',
+        required: false,
+        description: 'Export callback; consumer serialization + download.',
+      },
+      {
+        name: 'exportFormats',
+        type: 'ExportFormat[]',
+        default: "['csv', 'json']",
+        required: false,
+        description: 'DataExportDialog formats.',
+      },
+      {
+        name: 'access',
+        type: 'AccessLevel',
+        default: 'full',
+        required: false,
+        description: 'Erisim seviyesi.',
+      },
+    ],
+    previewFocus: [
+      'immutable read-only audit',
+      'delegate + attest detail panes',
+      'csv/json export wiring',
+    ],
+    regressionFocus: [
+      'No revoke / withdraw action surface',
+      'Action label/tone discrimination by record.action',
+      'Empty state copy',
+    ],
+  },
+};
+
+export default entry;

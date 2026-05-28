@@ -15,11 +15,13 @@ import {
   type ApprovalInboxBulkPayload,
   type ApprovalActor,
   type ApprovalRequest as DesignSystemApprovalRequest,
+  type DecisionRecord,
 } from '@mfe/design-system';
 import {
   useApprovalWorkflow,
   type ApprovalRequest as LegacyApprovalRequest,
   type ApprovalType,
+  type LegacyApprovalDecision,
 } from './useApprovalWorkflow';
 import { RoleGate } from './RoleGate';
 import { useDesignLabRBAC } from './useDesignLabRBAC';
@@ -35,10 +37,41 @@ const TYPE_OPTIONS = (Object.entries(TYPE_LABELS) as Array<[ApprovalType, string
 );
 
 /**
- * Adapter — legacy shape → DS shape. Title falls back to `target` since the
- * legacy record has no title field. Approvers / history / evidenceRefs are
- * empty placeholders pending PR-3 (`ApprovalCaseView` + `DecisionRecordPanel`)
- * which will widen the legacy hook with full history.
+ * Adapter — legacy decision → DS DecisionRecord. PR-3 minimal widening:
+ * the legacy hook now appends a decision on approve/reject; here we
+ * synthesize the full discriminated DS shape (approve / reject only at
+ * this layer; delegate / attest land via PR-4 backend integration).
+ */
+function adaptLegacyDecision(decision: LegacyApprovalDecision): DecisionRecord {
+  if (decision.action === 'approve') {
+    return {
+      id: decision.id,
+      actor: { id: decision.actor, name: decision.actor },
+      actorRole: '',
+      action: 'approve',
+      reason: decision.reason,
+      previousStatus: decision.previousStatus,
+      newStatus: decision.newStatus,
+      timestamp: decision.timestamp,
+    };
+  }
+  return {
+    id: decision.id,
+    actor: { id: decision.actor, name: decision.actor },
+    actorRole: '',
+    action: 'reject',
+    reason: decision.reason,
+    previousStatus: decision.previousStatus,
+    newStatus: decision.newStatus,
+    timestamp: decision.timestamp,
+  };
+}
+
+/**
+ * Adapter — legacy request → DS request. Title falls back to `target` since
+ * the legacy record has no title field. Approvers / evidenceRefs stay empty
+ * placeholders; backend wiring lands in PR-4. History is now populated
+ * via PR-3's hook widening.
  */
 function adaptLegacyRequest(legacy: LegacyApprovalRequest): DesignSystemApprovalRequest {
   return {
@@ -53,7 +86,7 @@ function adaptLegacyRequest(legacy: LegacyApprovalRequest): DesignSystemApproval
     deadline: legacy.expiresAt,
     status: legacy.status,
     currentApprovers: [],
-    history: [],
+    history: (legacy.history ?? []).map(adaptLegacyDecision),
   };
 }
 

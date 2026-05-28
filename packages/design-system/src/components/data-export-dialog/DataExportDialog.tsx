@@ -10,7 +10,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = 'pdf' | 'excel' | 'csv' | 'png';
+export type ExportFormat = 'pdf' | 'excel' | 'csv' | 'png' | 'json';
 export type ExportScope = 'visible' | 'all' | 'selected' | 'filtered';
 
 export interface RecordCounts {
@@ -81,6 +81,13 @@ const FORMAT_LABELS: Record<ExportFormat, { label: string; icon: string }> = {
     label: 'PNG',
     icon: 'M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z',
   },
+  // Audit-record export added in PR-3 (wave_12_approval_foundation). Opt-in
+  // via `formats={['csv', 'json']}` on consumer side; not in the default set
+  // so existing chart/grid surfaces remain unchanged.
+  json: {
+    label: 'JSON',
+    icon: 'M4 4h6v2H6v12h4v2H4V4zm10 0h6v16h-6v-2h4V6h-4V4z',
+  },
 };
 
 const DEFAULT_SCOPE_LABELS: Record<ExportScope, string> = {
@@ -99,6 +106,7 @@ const FORMAT_COLORS: Record<ExportFormat, string> = {
   excel: 'var(--state-success-text)',
   csv: 'var(--action-primary)',
   png: 'var(--chart-purple)',
+  json: 'var(--state-info-text)',
 };
 
 // ---------------------------------------------------------------------------

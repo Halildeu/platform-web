@@ -279,6 +279,15 @@ export type {
 export { ApprovalReview } from './approval-review';
 export type { ApprovalReviewProps } from './approval-review';
 
+/* Approval foundation detail surfaces (PR-3, wave_12_approval_foundation) */
+export { ApprovalCaseView } from './approval-case-view';
+export type { ApprovalCaseViewProps, ApprovalCaseViewDiff } from './approval-case-view';
+export { DecisionRecordPanel } from './decision-record-panel';
+export type {
+  DecisionRecordPanelProps,
+  DecisionRecordPanelExportPayload,
+} from './decision-record-panel';
+
 /* Approval foundation submission + inbox (PR-2, wave_12_approval_foundation) */
 export { ApprovalRequestForm } from './approval-request-form';
 export type {
