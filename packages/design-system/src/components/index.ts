@@ -274,6 +274,7 @@ export type {
   ApprovalCheckpointItem,
   ApprovalCheckpointStatus,
   ApprovalCheckpointItemStatus,
+  ApprovalCheckpointDensity,
 } from './approval-checkpoint';
 export { ApprovalReview } from './approval-review';
 export type { ApprovalReviewProps } from './approval-review';
