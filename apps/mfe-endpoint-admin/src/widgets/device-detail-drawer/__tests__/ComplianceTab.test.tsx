@@ -116,17 +116,7 @@ function buildState(overrides: Partial<ComplianceStateResponse> = {}): Complianc
 function mockHistory(
   result: {
     data?: {
-      items: Array<{
-        evaluationId: string;
-        decision: 'COMPLIANT' | 'NON_COMPLIANT' | 'UNAUTHORIZED' | 'UNKNOWN';
-        evaluatedAt: string;
-        worstStaleness: 'FRESH' | 'SOFT' | 'HARD' | 'UNAVAILABLE';
-        reasons: string[];
-        blockingReasons: string[];
-        warnings: string[];
-        policyDrift: boolean | null;
-        catalogPolicyHash: string | null;
-      }>;
+      items: ComplianceStateResponse[];
       page: number;
       size: number;
       totalElements: number;
@@ -326,17 +316,21 @@ describe('ComplianceTab', () => {
     mockHistory({
       data: {
         items: [
-          {
-            evaluationId: 'eval-1',
+          buildState({
+            latestEvaluationId: 'eval-1',
             decision: 'NON_COMPLIANT',
             evaluatedAt: '2026-05-28T10:00:00Z',
-            worstStaleness: 'SOFT',
-            reasons: [],
+            staleness: {
+              summary: 'SOFT',
+              apps: 'SOFT',
+              wingetEgress: 'UNAVAILABLE',
+              worst: 'SOFT',
+            },
             blockingReasons: ['forbidden_app_installed'],
-            warnings: [],
             policyDrift: true,
             catalogPolicyHash: 'a'.repeat(64),
-          },
+            catalogPolicyHashCurrent: 'b'.repeat(64),
+          }),
         ],
         page: 0,
         size: 20,

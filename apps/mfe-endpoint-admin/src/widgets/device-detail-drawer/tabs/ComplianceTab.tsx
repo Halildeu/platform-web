@@ -3,8 +3,8 @@ import React from 'react';
 import { endpointAdminApi } from '../../../app/services/endpointAdminApi';
 import type {
   ComplianceDecision,
-  ComplianceEvaluationHistoryItem,
   ComplianceStalenessReport,
+  ComplianceStateResponse,
   StalenessSeverity,
 } from '../../../entities/endpoint-device-compliance/types';
 import { useEndpointAdminI18n } from '../../../i18n';
@@ -365,6 +365,7 @@ export const ComplianceTab: React.FC<ComplianceTabProps> = ({ deviceId, active }
             ? (historyQuery.error.status as number | string | undefined)
             : undefined
         }
+        open={historyOpen}
         onToggle={setHistoryOpen}
         onPageChange={setHistoryPage}
         t={t}
@@ -455,12 +456,13 @@ const StalenessDetails: React.FC<StalenessDetailsProps> = ({ staleness, t }) => 
 };
 
 interface ComplianceHistoryProps {
-  items: ComplianceEvaluationHistoryItem[];
+  items: ComplianceStateResponse[];
   page: number;
   totalPages: number;
   totalElements: number;
   isLoading: boolean;
   error: number | string | undefined;
+  open: boolean;
   onToggle: (open: boolean) => void;
   onPageChange: (page: number) => void;
   t: (key: string) => string;
@@ -474,10 +476,22 @@ interface ComplianceHistoryProps {
  * pagination row exposes prev/next nudges only — no jump-to-page UI to
  * stay consistent with the WEB-011 InventoryTab pattern.
  *
- * Codex 019e6db0 iter-2 guard: `event.currentTarget.open` is the
- * authoritative open flag for the parent. The toggle handler funnels
- * that to `setHistoryOpen` so React re-renders with the right skip
- * state.
+ * Codex 019e6dd9 iter-1 absorb (P1): the `<details>` is now CONTROLLED
+ * via `open={open}` so device change collapses the DOM the same render
+ * cycle as the React `historyOpen` state flips back to false. Previous
+ * uncontrolled form left the DOM expanded if the operator clicked
+ * another row in the cross-device list while the drawer stayed open.
+ *
+ * Codex 019e6db0 iter-2 guard: `event.currentTarget.open` remains the
+ * authoritative open flag from the operator's click; the toggle
+ * handler funnels that into the parent via `onToggle` so React
+ * re-renders with the right skip state.
+ *
+ * Codex 019e6dd9 iter-1 absorb (P0): items render
+ * `ComplianceStateResponse` (the actual BE-023 response shape) — row
+ * key uses `latestEvaluationId` and the staleness chip reads
+ * `item.staleness.worst`, NOT the previously-invented top-level
+ * `evaluationId` / `worstStaleness` fields the backend never emits.
  */
 const ComplianceHistory: React.FC<ComplianceHistoryProps> = ({
   items,
@@ -486,6 +500,7 @@ const ComplianceHistory: React.FC<ComplianceHistoryProps> = ({
   totalElements,
   isLoading,
   error,
+  open,
   onToggle,
   onPageChange,
   t,
@@ -500,6 +515,7 @@ const ComplianceHistory: React.FC<ComplianceHistoryProps> = ({
   return (
     <details
       className="compliance-history"
+      open={open}
       onToggle={handleToggle}
       data-testid="compliance-history"
     >
@@ -527,56 +543,60 @@ const ComplianceHistory: React.FC<ComplianceHistoryProps> = ({
       {!error && !isLoading && items.length > 0 ? (
         <>
           <ul className="compliance-history__list" data-testid="compliance-history-list">
-            {items.map((item) => (
-              <li
-                key={item.evaluationId}
-                className="compliance-history__row"
-                data-testid={`compliance-history-row-${item.evaluationId}`}
-              >
-                <div className="compliance-history__row-header">
-                  <span
-                    className={decisionToneClass(item.decision)}
-                    aria-label={decisionAriaLabel(item.decision, t)}
-                  >
-                    {decisionLabel(item.decision, t)}
-                  </span>
-                  <span className="compliance-history__row-evaluated-at">
-                    {formatTimestamp(item.evaluatedAt)}
-                  </span>
-                  <span
-                    className={`compliance-history__staleness-chip compliance-history__staleness-chip--${item.worstStaleness.toLowerCase()}`}
-                  >
-                    {streamStalenessLabel(item.worstStaleness, t)}
-                  </span>
-                  {item.policyDrift ? (
+            {items.map((item) => {
+              const evalId = item.latestEvaluationId;
+              const worst = item.staleness.worst;
+              return (
+                <li
+                  key={evalId}
+                  className="compliance-history__row"
+                  data-testid={`compliance-history-row-${evalId}`}
+                >
+                  <div className="compliance-history__row-header">
                     <span
-                      className="compliance-history__drift-chip"
-                      data-testid={`compliance-history-drift-${item.evaluationId}`}
+                      className={decisionToneClass(item.decision)}
+                      aria-label={decisionAriaLabel(item.decision, t)}
                     >
-                      {t('endpointAdmin.drawer.compliance.history.drift')}
+                      {decisionLabel(item.decision, t)}
                     </span>
+                    <span className="compliance-history__row-evaluated-at">
+                      {formatTimestamp(item.evaluatedAt)}
+                    </span>
+                    <span
+                      className={`compliance-history__staleness-chip compliance-history__staleness-chip--${worst.toLowerCase()}`}
+                    >
+                      {streamStalenessLabel(worst, t)}
+                    </span>
+                    {item.policyDrift ? (
+                      <span
+                        className="compliance-history__drift-chip"
+                        data-testid={`compliance-history-drift-${evalId}`}
+                      >
+                        {t('endpointAdmin.drawer.compliance.history.drift')}
+                      </span>
+                    ) : null}
+                  </div>
+                  {item.blockingReasons.length > 0 ? (
+                    <ul className="compliance-history__reasons compliance-history__reasons--blocking">
+                      {item.blockingReasons.map((reason) => (
+                        <li key={`${evalId}-blocking-${reason}`}>
+                          {t(`endpointAdmin.drawer.compliance.reason.${reason}`)}
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
-                </div>
-                {item.blockingReasons.length > 0 ? (
-                  <ul className="compliance-history__reasons compliance-history__reasons--blocking">
-                    {item.blockingReasons.map((reason) => (
-                      <li key={`${item.evaluationId}-blocking-${reason}`}>
-                        {t(`endpointAdmin.drawer.compliance.reason.${reason}`)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {item.warnings.length > 0 ? (
-                  <ul className="compliance-history__reasons compliance-history__reasons--warning">
-                    {item.warnings.map((reason) => (
-                      <li key={`${item.evaluationId}-warning-${reason}`}>
-                        {t(`endpointAdmin.drawer.compliance.reason.${reason}`)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </li>
-            ))}
+                  {item.warnings.length > 0 ? (
+                    <ul className="compliance-history__reasons compliance-history__reasons--warning">
+                      {item.warnings.map((reason) => (
+                        <li key={`${evalId}-warning-${reason}`}>
+                          {t(`endpointAdmin.drawer.compliance.reason.${reason}`)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
           {totalPages > 1 ? (
             <nav

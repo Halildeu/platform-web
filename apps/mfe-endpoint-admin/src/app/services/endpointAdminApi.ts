@@ -27,8 +27,6 @@ import type {
   GetDeviceSoftwareInventoryArgs,
 } from '../../entities/endpoint-software-inventory/types';
 import type {
-  ComplianceDeviceListItem,
-  ComplianceEvaluationHistoryItem,
   ComplianceEvaluationListResponse,
   ComplianceStateResponse,
   ForceEvaluateDeviceComplianceArgs,
@@ -419,7 +417,7 @@ export const endpointAdminApi = createApi({
      * `Page<T>` (no `content` / `number`).
      */
     getComplianceDeviceList: builder.query<
-      ComplianceEvaluationListResponse<ComplianceDeviceListItem>,
+      ComplianceEvaluationListResponse<ComplianceStateResponse>,
       GetComplianceDeviceListArgs
     >({
       query: ({ decision, page = 0, size = 20 }) => {
@@ -451,7 +449,7 @@ export const endpointAdminApi = createApi({
      * open never costs an extra request).
      */
     getDeviceComplianceEvaluations: builder.query<
-      ComplianceEvaluationListResponse<ComplianceEvaluationHistoryItem>,
+      ComplianceEvaluationListResponse<ComplianceStateResponse>,
       GetDeviceComplianceEvaluationsArgs
     >({
       query: ({ deviceId, page = 0, size = 20 }) => ({

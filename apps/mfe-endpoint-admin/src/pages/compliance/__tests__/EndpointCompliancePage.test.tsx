@@ -5,8 +5,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { EndpointCompliancePage } from '../EndpointCompliancePage';
 import type {
-  ComplianceDeviceListItem,
   ComplianceEvaluationListResponse,
+  ComplianceStateResponse,
 } from '../../../entities/endpoint-device-compliance/types';
 
 /* ------------------------------------------------------------------ */
@@ -47,7 +47,7 @@ vi.mock('../../../widgets/device-detail-drawer', () => ({
 }));
 
 type ListResult = {
-  data?: ComplianceEvaluationListResponse<ComplianceDeviceListItem>;
+  data?: ComplianceEvaluationListResponse<ComplianceStateResponse>;
   error?: { status: number };
   isLoading?: boolean;
   isFetching?: boolean;
@@ -62,15 +62,46 @@ function mockList(result: ListResult): void {
   });
 }
 
-function buildItem(overrides: Partial<ComplianceDeviceListItem> = {}): ComplianceDeviceListItem {
+/**
+ * Build a `ComplianceStateResponse` fixture in the EXACT shape BE-023
+ * returns (Codex 019e6dd9 iter-1 absorb — invented sibling DTOs in
+ * the prior fixture set caused the post-impl RED). `hostname` is NOT
+ * part of `ComplianceStateResponse`; the cross-device list page
+ * resolves it from `useListEndpointDevicesQuery` cache.
+ */
+function buildItem(overrides: Partial<ComplianceStateResponse> = {}): ComplianceStateResponse {
   return {
     deviceId: 'device-1',
-    hostname: 'host-1',
     latestEvaluationId: 'eval-1',
     decision: 'COMPLIANT',
     evaluatedAt: '2026-05-28T10:00:00Z',
-    worstStaleness: 'FRESH',
+    staleness: {
+      summary: 'FRESH',
+      apps: 'FRESH',
+      wingetEgress: 'UNAVAILABLE',
+      worst: 'FRESH',
+    },
+    reasons: [],
+    blockingReasons: [],
+    warnings: [],
+    evidence: {
+      inventorySnapshotId: null,
+      inventorySnapshotRowVersion: null,
+      inventoryUpdatedAt: null,
+      summaryCollectedAt: null,
+      appsCollectedAt: null,
+      latestSummaryCommandResultId: null,
+      latestFullCommandResultId: null,
+      latestWingetEgressCommandResultId: null,
+      wingetEgressCollectedAt: null,
+      wingetEgressSchemaVersion: null,
+      matchedItems: {},
+    },
+    catalogPolicyHash: '0'.repeat(64),
+    catalogPolicyHashCurrent: '0'.repeat(64),
     policyDrift: false,
+    catalogRowVersionMax: 1,
+    policyRowVersionMax: 1,
     ...overrides,
   };
 }
@@ -124,8 +155,8 @@ describe('EndpointCompliancePage', () => {
     mockList({
       data: {
         items: [
-          buildItem({ deviceId: 'd1', hostname: 'host-1', decision: 'NON_COMPLIANT' }),
-          buildItem({ deviceId: 'd2', hostname: 'host-2', decision: 'COMPLIANT' }),
+          buildItem({ deviceId: 'd1', decision: 'NON_COMPLIANT' }),
+          buildItem({ deviceId: 'd2', decision: 'COMPLIANT' }),
         ],
         page: 0,
         size: 20,

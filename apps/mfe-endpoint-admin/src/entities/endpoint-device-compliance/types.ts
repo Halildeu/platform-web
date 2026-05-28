@@ -92,39 +92,22 @@ export interface ComplianceEvaluationListResponse<T> {
 }
 
 /**
- * Cross-device compliance list row. Backed by
- * `endpoint_device_compliance_states` (latest pointer) joined with
- * the matching evaluation. WorstStaleness and policyDrift are surfaced
- * as columns; they are NOT server-side filter parameters in this PR
- * (Codex iter-2: filtering them would break pagination totals because
- * they are computed at GET time, not stored as repository columns).
+ * Both BE-023 list endpoints — cross-device latest list and per-device
+ * append-only history — return the SAME row DTO: `ComplianceStateResponse`.
+ *
+ *   GET /api/v1/admin/compliance/devices
+ *     -> ComplianceEvaluationListResponse<ComplianceStateResponse>
+ *   GET /api/v1/admin/endpoint-devices/{id}/compliance/evaluations
+ *     -> ComplianceEvaluationListResponse<ComplianceStateResponse>
+ *
+ * (Codex 019e6dd9 post-impl RED absorb — initial WEB-014B types
+ * invented sibling DTOs with top-level `worstStaleness` /
+ * `evaluationId` / `hostname` that the backend never emits. Aligning
+ * the type chain to the actual contract makes accessors
+ * `item.staleness.worst` and `item.latestEvaluationId`; hostname is
+ * resolved from the device list cache that
+ * `EndpointCompliancePage` already pre-warms.)
  */
-export interface ComplianceDeviceListItem {
-  deviceId: string;
-  hostname: string | null;
-  latestEvaluationId: string;
-  decision: ComplianceDecision;
-  evaluatedAt: string;
-  worstStaleness: StalenessSeverity;
-  policyDrift: boolean | null;
-}
-
-/**
- * Per-device evaluation history row. Backed by the append-only
- * `endpoint_compliance_evaluations` table; one row per evaluation.
- * Returned newest-first by the backend.
- */
-export interface ComplianceEvaluationHistoryItem {
-  evaluationId: string;
-  decision: ComplianceDecision;
-  evaluatedAt: string;
-  worstStaleness: StalenessSeverity;
-  reasons: string[];
-  blockingReasons: string[];
-  warnings: string[];
-  policyDrift: boolean | null;
-  catalogPolicyHash: string | null;
-}
 
 export interface GetComplianceDeviceListArgs {
   decision?: ComplianceDecision;
