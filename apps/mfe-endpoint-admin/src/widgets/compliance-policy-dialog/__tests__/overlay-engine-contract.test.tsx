@@ -14,10 +14,23 @@
  * and asserts each dialog invokes the primitives with the canonical
  * shape. If a future change reverts to the legacy 2-arg pattern, this
  * test fails fast in CI — before TypeScript or runtime errors surface.
+ *
+ * Codex 019e6fc1 iter-3 AGREE non-blocking hardening absorbed:
+ *   1. useScrollLock(open) is asserted called with `true` — the dialogs
+ *      always call useScrollLock(open) but the mock was previously never
+ *      checked. A regression dropping the call (or passing the wrong arg)
+ *      would silently allow background scroll when a modal is open.
+ *   2. panelRef.current is asserted to be the actual dialog HTMLDivElement
+ *      instead of `typeof === 'object'`. The previous check passed for
+ *      `null` (since `typeof null === 'object'`), so a refactor that
+ *      detached the ref from the dialog div would slip through. The
+ *      useFocusTrap mock now returns a real React.useRef so React's ref
+ *      flow populates `.current` on commit; the assertion compares that
+ *      ref to `getByRole('dialog')` to verify the wiring.
  */
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 const registerLayerMock = vi.fn(() => 301);
 const unregisterLayerMock = vi.fn();
@@ -29,9 +42,18 @@ const useScrollLockMock = vi.fn();
 vi.mock('@mfe/design-system/internal/overlay-engine', () => ({
   registerLayer: (...args: unknown[]) => registerLayerMock(...args),
   unregisterLayer: (...args: unknown[]) => unregisterLayerMock(...args),
+  // Codex 019e6fc1 iter-3 hardening: return a real React.useRef so that
+  // when the dialog assigns it via `ref={panelRef}` on its <div role="dialog">,
+  // React's ref-callback flow populates `.current` with the actual
+  // HTMLDivElement after commit. This lets us assert
+  // `panelRef.current instanceof HTMLDivElement` and detect a regression
+  // where the ref is never attached. React.useRef inside the mock is
+  // safe — `useFocusTrap` is called from the dialog's render context,
+  // so the hook is invoked under React's reconciliation. Identity is
+  // preserved across re-renders of the same dialog instance.
   useFocusTrap: (...args: unknown[]) => {
     useFocusTrapMock(...args);
-    return { current: null };
+    return React.useRef<HTMLDivElement | null>(null);
   },
   useSiblingIsolation: (...args: unknown[]) => useSiblingIsolationMock(...args),
   useEscapeKey: (...args: unknown[]) => useEscapeKeyMock(...args),
@@ -124,13 +146,25 @@ function assertCanonicalContract() {
   const isoArg = useSiblingIsolationMock.mock.calls[0][0] as Record<string, unknown>;
   expect(isoArg).toMatchObject({ active: true, layerId });
   expect(isoArg.panelRef).toBeTruthy();
-  expect(typeof (isoArg.panelRef as { current: unknown }).current).toBe('object');
+  // Codex 019e6fc1 iter-3 hardening: `typeof null === 'object'` would
+  // pass a ref that was never attached. Assert the ref is wired to the
+  // actual dialog HTMLDivElement and that `getByRole('dialog')` returns
+  // the same node — this catches a regression where someone moves
+  // `ref={panelRef}` off the dialog's panel div.
+  const panelRef = isoArg.panelRef as React.RefObject<HTMLDivElement>;
+  expect(panelRef.current).toBeInstanceOf(HTMLDivElement);
+  expect(screen.getByRole('dialog')).toBe(panelRef.current);
 
   expect(useEscapeKeyMock).toHaveBeenCalled();
   const escapeCall = useEscapeKeyMock.mock.calls[0];
   expect(escapeCall[0]).toBe(true);
   expect(typeof escapeCall[1]).toBe('function');
   expect(escapeCall[2]).toEqual({ layerId });
+
+  // Codex 019e6fc1 iter-3 hardening: useScrollLock(open) was mocked but
+  // never asserted. A regression that drops the call (or flips the arg)
+  // would silently allow background scroll when a modal is open.
+  expect(useScrollLockMock).toHaveBeenCalledWith(true);
 }
 
 describe('compliance-policy-dialog overlay-engine contract', () => {
