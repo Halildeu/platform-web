@@ -31,6 +31,17 @@ export interface ApprovalCaseViewDiff {
 export interface ApprovalCaseViewProps extends AccessControlledProps {
   request: ApprovalRequest;
   currentUser: ApprovalActor;
+  /**
+   * Consumer-supplied eligibility resolver. Overrides the built-in
+   * `proposer_self` 4-eyes check so a domain consumer (e.g. endpoint-admin)
+   * can return its own reason set (`role_insufficient`, `tier_mismatch`, …)
+   * and have it surface in the eligibility banner + disable the footer
+   * action buttons. When omitted, the default proposer_self compute is used.
+   */
+  getEligibilityReasons?: (
+    request: ApprovalRequest,
+    currentUser: ApprovalActor,
+  ) => EligibilityReason[];
   /** Optional comment thread entries; rendered when provided. */
   comments?: Comment[];
   /** Reply callback for CommentThread (parentId 'root' for top-level). */
@@ -141,6 +152,7 @@ export const ApprovalCaseView = React.forwardRef<HTMLDivElement, ApprovalCaseVie
     {
       request,
       currentUser,
+      getEligibilityReasons,
       comments,
       onCommentReply,
       diff,
@@ -168,8 +180,11 @@ export const ApprovalCaseView = React.forwardRef<HTMLDivElement, ApprovalCaseVie
     const [decisionMode, setDecisionMode] = useState<ApprovalAction | null>(null);
 
     const eligibilityReasons = useMemo(
-      () => computeEligibility(request, currentUser),
-      [request, currentUser],
+      () =>
+        getEligibilityReasons
+          ? getEligibilityReasons(request, currentUser)
+          : computeEligibility(request, currentUser),
+      [getEligibilityReasons, request, currentUser],
     );
     const isEligible = eligibilityReasons.length === 0 && !interactionBlocked;
 
