@@ -132,6 +132,7 @@ export const ApprovalEligibilityGuard = React.forwardRef<
         role="group"
         aria-label={bannerTitle ? String(bannerTitle) : 'Yetkisiz islem'}
         className={`relative inline-block ${className}`.trim()}
+        onPointerDownCapture={handleCapture}
         onClickCapture={handleCapture}
         onKeyDownCapture={(event) => {
           // intercept Enter / Space activations

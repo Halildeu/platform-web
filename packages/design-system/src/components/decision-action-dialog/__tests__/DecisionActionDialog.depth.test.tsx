@@ -99,7 +99,59 @@ describe('DecisionActionDialog — reject mode', () => {
   });
 });
 
+describe('DecisionActionDialog — attest mode safety', () => {
+  it('disables confirm when attestationStatement is missing even if checkbox accepted', async () => {
+    const user = userEvent.setup();
+    render(
+      <DecisionActionDialog
+        {...makeProps({
+          mode: 'attest',
+          // intentionally no attestationStatement
+        })}
+      />,
+    );
+    const confirm = screen.getByRole('button', { name: /Beyan Et/ });
+    expect(confirm).toBeDisabled();
+    await user.click(screen.getByRole('checkbox'));
+    expect(confirm).toBeDisabled();
+  });
+});
+
 describe('DecisionActionDialog — delegate mode', () => {
+  it('honors requireReason=true (confirm disabled until reason provided)', async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DecisionActionDialog
+        {...makeProps({
+          onConfirm,
+          mode: 'delegate',
+          candidates: [alice, bob],
+          requireReason: true,
+        })}
+      />,
+    );
+    const confirm = screen.getByRole('button', { name: /Devret/ });
+    expect(confirm).toBeDisabled();
+
+    const picker = screen.getAllByRole('combobox')[0];
+    await user.click(picker);
+    await user.type(picker, 'Alice');
+    await user.click(await screen.findByRole('option', { name: /Alice Adams/ }));
+
+    // still disabled because requireReason=true and reason empty
+    expect(confirm).toBeDisabled();
+
+    await user.type(screen.getByRole('textbox'), 'Tatildeyim.');
+    expect(confirm).not.toBeDisabled();
+    await user.click(confirm);
+    expect(onConfirm).toHaveBeenCalledWith({
+      action: 'delegate',
+      delegateTo: alice,
+      reason: 'Tatildeyim.',
+    });
+  });
+
   it('requires a selected actor and emits delegateTo in payload', async () => {
     const onConfirm = vi.fn();
     const user = userEvent.setup();

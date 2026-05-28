@@ -74,6 +74,24 @@ describe('ApprovalEligibilityGuard — keyboard interception', () => {
   });
 });
 
+describe('ApprovalEligibilityGuard — pointer interception', () => {
+  it('intercepts pointerdown on blocked children (DialogTrigger / MenuItem case)', () => {
+    const onBlocked = vi.fn();
+    const childPointerDown = vi.fn();
+    render(
+      <ApprovalEligibilityGuard reasons={[proposerSelf]} onBlocked={onBlocked}>
+        <button type="button" onPointerDown={childPointerDown}>
+          Onayla
+        </button>
+      </ApprovalEligibilityGuard>,
+    );
+    const btn = screen.getByRole('button', { name: 'Onayla' });
+    btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
+    expect(childPointerDown).not.toHaveBeenCalled();
+    expect(onBlocked).toHaveBeenCalled();
+  });
+});
+
 describe('ApprovalEligibilityGuard — variant switching', () => {
   it('eligible -> blocked transition adds data-blocked attribute', () => {
     function Harness({ blocked }: { blocked: boolean }) {

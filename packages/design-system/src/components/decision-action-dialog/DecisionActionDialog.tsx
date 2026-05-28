@@ -141,13 +141,25 @@ export const DecisionActionDialog = React.forwardRef<HTMLDialogElement, Decision
         case 'request_changes':
           return reason.trim().length > 0;
         case 'delegate':
-          return delegateTo !== null;
+          return delegateTo !== null && (!needsReason || reason.trim().length > 0);
         case 'attest':
-          return attestationAccepted && (!needsReason || reason.trim().length > 0);
+          return (
+            attestationAccepted &&
+            Boolean(attestationStatement?.trim()) &&
+            (!needsReason || reason.trim().length > 0)
+          );
         default:
           return false;
       }
-    }, [mode, needsReason, reason, delegateTo, attestationAccepted, interactionBlocked]);
+    }, [
+      mode,
+      needsReason,
+      reason,
+      delegateTo,
+      attestationAccepted,
+      attestationStatement,
+      interactionBlocked,
+    ]);
 
     const handleConfirm = useCallback(() => {
       if (!isValid || busy) return;
@@ -272,12 +284,13 @@ export const DecisionActionDialog = React.forwardRef<HTMLDialogElement, Decision
                 showRole
               />
               <Textarea
-                label="Devir notu (istege bagli)"
+                label={needsReason ? 'Devir notu (gerekli)' : 'Devir notu (istege bagli)'}
                 placeholder="Neden devrediliyor..."
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 rows={2}
                 disabled={interactionBlocked}
+                required={needsReason}
               />
             </div>
           );
