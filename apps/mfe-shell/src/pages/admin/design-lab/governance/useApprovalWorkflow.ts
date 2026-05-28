@@ -9,14 +9,27 @@
  * Storage: localStorage in dev, API endpoint in prod
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from 'react';
 
-export type ApprovalType =
-  | "deprecation"
-  | "quality_exception"
-  | "breaking_change";
+export type ApprovalType = 'deprecation' | 'quality_exception' | 'breaking_change';
 
-export type ApprovalStatus = "pending" | "approved" | "rejected";
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+/**
+ * Legacy decision record — minimal dogfood widening (PR-3, wave_12).
+ * Mirrors the DS-side `DecisionRecord` discriminated union in a smaller
+ * localStorage-safe shape; the full DS shape is synthesized in the
+ * `ApprovalQueue` adapter when feeding `DecisionRecordPanel`.
+ */
+export interface LegacyApprovalDecision {
+  id: string;
+  actor: string;
+  action: 'approve' | 'reject';
+  reason?: string;
+  timestamp: string;
+  previousStatus: ApprovalStatus;
+  newStatus: ApprovalStatus;
+}
 
 export interface ApprovalRequest {
   id: string;
@@ -29,9 +42,11 @@ export interface ApprovalRequest {
   createdAt: string;
   resolvedAt?: string;
   expiresAt?: string;
+  /** Append-only history of decisions taken on this request. */
+  history?: LegacyApprovalDecision[];
 }
 
-const STORAGE_KEY = "design-lab-approval-requests";
+const STORAGE_KEY = 'design-lab-approval-requests';
 
 function loadRequests(): ApprovalRequest[] {
   try {
@@ -55,19 +70,13 @@ let nextId = Date.now();
 
 export function useApprovalWorkflow(): {
   requests: ApprovalRequest[];
-  propose: (
-    type: ApprovalType,
-    target: string,
-    reason: string,
-  ) => ApprovalRequest;
+  propose: (type: ApprovalType, target: string, reason: string) => ApprovalRequest;
   approve: (id: string, reviewer: string) => void;
   reject: (id: string, reviewer: string, reason: string) => void;
   getPending: () => ApprovalRequest[];
   getByTarget: (target: string) => ApprovalRequest[];
 } {
-  const [requests, setRequests] = useState<ApprovalRequest[]>(() =>
-    loadRequests(),
-  );
+  const [requests, setRequests] = useState<ApprovalRequest[]>(() => loadRequests());
 
   useEffect(() => {
     persistRequests(requests);
@@ -78,13 +87,13 @@ export function useApprovalWorkflow(): {
       const request: ApprovalRequest = {
         id: `approval-${++nextId}`,
         type,
-        status: "pending",
-        proposer: "current-user",
+        status: 'pending',
+        proposer: 'current-user',
         target,
         reason,
         createdAt: new Date().toISOString(),
         expiresAt:
-          type === "quality_exception"
+          type === 'quality_exception'
             ? new Date(Date.now() + 30 * 24 * 60 * 60_000).toISOString()
             : undefined,
       };
@@ -96,41 +105,54 @@ export function useApprovalWorkflow(): {
 
   const approve = useCallback((id: string, reviewer: string) => {
     setRequests((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: "approved" as const,
-              reviewer,
-              resolvedAt: new Date().toISOString(),
-            }
-          : r,
-      ),
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const now = new Date().toISOString();
+        const decision: LegacyApprovalDecision = {
+          id: `dec-${Date.now()}-${id}`,
+          actor: reviewer,
+          action: 'approve',
+          timestamp: now,
+          previousStatus: r.status,
+          newStatus: 'approved',
+        };
+        return {
+          ...r,
+          status: 'approved' as const,
+          reviewer,
+          resolvedAt: now,
+          history: [...(r.history ?? []), decision],
+        };
+      }),
     );
   }, []);
 
-  const reject = useCallback(
-    (id: string, reviewer: string, _reason: string) => {
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? {
-                ...r,
-                status: "rejected" as const,
-                reviewer,
-                resolvedAt: new Date().toISOString(),
-              }
-            : r,
-        ),
-      );
-    },
-    [],
-  );
+  const reject = useCallback((id: string, reviewer: string, reason: string) => {
+    setRequests((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const now = new Date().toISOString();
+        const decision: LegacyApprovalDecision = {
+          id: `dec-${Date.now()}-${id}`,
+          actor: reviewer,
+          action: 'reject',
+          reason,
+          timestamp: now,
+          previousStatus: r.status,
+          newStatus: 'rejected',
+        };
+        return {
+          ...r,
+          status: 'rejected' as const,
+          reviewer,
+          resolvedAt: now,
+          history: [...(r.history ?? []), decision],
+        };
+      }),
+    );
+  }, []);
 
-  const getPending = useCallback(
-    () => requests.filter((r) => r.status === "pending"),
-    [requests],
-  );
+  const getPending = useCallback(() => requests.filter((r) => r.status === 'pending'), [requests]);
 
   const getByTarget = useCallback(
     (target: string) => requests.filter((r) => r.target === target),
