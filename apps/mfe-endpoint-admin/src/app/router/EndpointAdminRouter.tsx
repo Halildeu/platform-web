@@ -4,6 +4,7 @@ import EndpointStatusPage from '../../pages/status/EndpointStatusPage';
 import EndpointDevicesPage from '../../pages/devices/EndpointDevicesPage';
 import EndpointAuditPage from '../../pages/audit/EndpointAuditPage';
 import EndpointCompliancePage from '../../pages/compliance/EndpointCompliancePage';
+import EndpointCompliancePoliciesPage from '../../pages/compliance-policies/EndpointCompliancePoliciesPage';
 
 /**
  * Internal sub-router for the endpoint-admin MFE. The shell mounts the
@@ -30,6 +31,7 @@ export const EndpointAdminRouter: React.FC = () => {
       <Route path="devices" element={<EndpointDevicesPage />} />
       <Route path="audit" element={<EndpointAuditPage />} />
       <Route path="compliance" element={<EndpointCompliancePage />} />
+      <Route path="compliance/policies" element={<EndpointCompliancePoliciesPage />} />
       <Route path="*" element={<Navigate to="devices" replace />} />
     </Routes>
   );

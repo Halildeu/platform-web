@@ -229,6 +229,78 @@ const DICT_TR = {
   'endpointAdmin.compliance.list.next': 'Sonraki',
   'endpointAdmin.compliance.list.pageIndicator':
     '{page} / {totalPages} sayfa · {totalElements} cihaz',
+  // WEB-014C — Compliance policy CRUD
+  'endpointAdmin.compliance.policies.title': 'Uyum Politikaları',
+  'endpointAdmin.compliance.policies.subtitle':
+    'Katalog kalemleri için GEREKLİ / İZİNLİ / YASAK politika tanımları. Politika yokken davranış İZİNLİ olarak kabul edilir.',
+  'endpointAdmin.compliance.policies.createButton': '+ Yeni Politika',
+  'endpointAdmin.compliance.policies.editButton': 'Düzenle',
+  'endpointAdmin.compliance.policies.deleteButton': 'Sil',
+  'endpointAdmin.compliance.policies.manageDeniedTooltip':
+    'Bu işlem için yönetici (MANAGE) yetkisi gerekiyor.',
+  'endpointAdmin.compliance.policies.loading': 'Politikalar yükleniyor…',
+  'endpointAdmin.compliance.policies.empty': 'Henüz politika tanımı yok.',
+  'endpointAdmin.compliance.policies.forbidden':
+    'Politika listesi için yönetici yetkisi gerekiyor.',
+  'endpointAdmin.compliance.policies.error':
+    'Politikalar yüklenemedi. Sayfayı yenileyip tekrar deneyin.',
+  'endpointAdmin.compliance.policies.col.catalogItemKey': 'Katalog Anahtarı',
+  'endpointAdmin.compliance.policies.col.displayName': 'Uygulama',
+  'endpointAdmin.compliance.policies.col.enforcement': 'Politika',
+  'endpointAdmin.compliance.policies.col.enabled': 'Aktif',
+  'endpointAdmin.compliance.policies.col.lastUpdated': 'Son Güncelleme',
+  'endpointAdmin.compliance.policies.col.actions': 'İşlemler',
+  'endpointAdmin.compliance.policies.enforcement.required': 'GEREKLİ',
+  'endpointAdmin.compliance.policies.enforcement.allowed': 'İZİNLİ',
+  'endpointAdmin.compliance.policies.enforcement.forbidden': 'YASAK',
+  'endpointAdmin.compliance.policies.enabled.yes': 'Evet',
+  'endpointAdmin.compliance.policies.enabled.no': 'Hayır',
+  'endpointAdmin.compliance.policies.paginationAria': 'Politika listesi sayfalama',
+  'endpointAdmin.compliance.policies.prev': 'Önceki',
+  'endpointAdmin.compliance.policies.next': 'Sonraki',
+  'endpointAdmin.compliance.policies.pageIndicator':
+    '{page} / {totalPages} sayfa · {totalElements} politika',
+  // Create dialog
+  'endpointAdmin.compliance.policies.createDialog.title': 'Yeni Uyum Politikası',
+  'endpointAdmin.compliance.policies.createDialog.catalogLabel': 'Katalog Kalemi',
+  'endpointAdmin.compliance.policies.createDialog.catalogPlaceholder': '— Seçin —',
+  'endpointAdmin.compliance.policies.createDialog.catalogLoading': 'Katalog yükleniyor…',
+  'endpointAdmin.compliance.policies.createDialog.enforcementLabel': 'Uygulama Modu',
+  'endpointAdmin.compliance.policies.createDialog.enabledLabel':
+    'Aktif (değerlendiriciye dahil et)',
+  'endpointAdmin.compliance.policies.createDialog.save': 'Kaydet',
+  'endpointAdmin.compliance.policies.createDialog.saving': 'Kaydediliyor…',
+  'endpointAdmin.compliance.policies.createDialog.cancel': 'İptal',
+  // Edit dialog
+  'endpointAdmin.compliance.policies.editDialog.title': 'Politikayı Düzenle',
+  'endpointAdmin.compliance.policies.editDialog.catalogLabel': 'Katalog Kalemi (değiştirilemez)',
+  'endpointAdmin.compliance.policies.editDialog.enforcementLabel': 'Uygulama Modu',
+  'endpointAdmin.compliance.policies.editDialog.enabledLabel': 'Aktif (değerlendiriciye dahil et)',
+  'endpointAdmin.compliance.policies.editDialog.save': 'Güncelle',
+  'endpointAdmin.compliance.policies.editDialog.saving': 'Güncelleniyor…',
+  'endpointAdmin.compliance.policies.editDialog.cancel': 'İptal',
+  // Delete confirm
+  'endpointAdmin.compliance.policies.deleteDialog.title': 'Politikayı Sil',
+  'endpointAdmin.compliance.policies.deleteDialog.body':
+    '{catalog} için tanımlanan politikayı silmek istediğinize emin misiniz? Politika kaydı geri alınamaz.',
+  'endpointAdmin.compliance.policies.deleteDialog.softDisableHint':
+    'Geçici devre dışı bırakmak için "Düzenle" üzerinden Aktif kutusunu kapatabilirsiniz.',
+  'endpointAdmin.compliance.policies.deleteDialog.confirm': 'Sil',
+  'endpointAdmin.compliance.policies.deleteDialog.deleting': 'Siliniyor…',
+  'endpointAdmin.compliance.policies.deleteDialog.cancel': 'İptal',
+  // Toasts
+  'endpointAdmin.compliance.policies.toast.catalogRequired': 'Bir katalog kalemi seçin.',
+  'endpointAdmin.compliance.policies.toast.duplicate':
+    'Bu katalog kalemi için zaten bir politika var.',
+  'endpointAdmin.compliance.policies.toast.forbidden': 'Bu işlem için yönetici yetkisi gerekiyor.',
+  'endpointAdmin.compliance.policies.toast.invalid': 'Form doğrulanmadı. Alanları kontrol edin.',
+  'endpointAdmin.compliance.policies.toast.conflict':
+    'Politika başka bir oturumdan değiştirildi. Sayfayı yenileyip tekrar deneyin.',
+  'endpointAdmin.compliance.policies.toast.notFound':
+    'Politika kaydı bulunamadı. Liste yenilenecek.',
+  'endpointAdmin.compliance.policies.toast.createFailed': 'Politika oluşturulamadı.',
+  'endpointAdmin.compliance.policies.toast.updateFailed': 'Politika güncellenemedi.',
+  'endpointAdmin.compliance.policies.toast.deleteFailed': 'Politika silinemedi.',
   // Destructive command modal
   'endpointAdmin.modal.title.LOCK_USER_LOGIN': 'Kullanıcı Girişini Kilitle',
   'endpointAdmin.modal.title.UNLOCK_USER_LOGIN': 'Kullanıcı Girişini Aç',
@@ -479,6 +551,71 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.compliance.list.next': 'Next',
   'endpointAdmin.compliance.list.pageIndicator':
     'Page {page} of {totalPages} · {totalElements} devices',
+  // WEB-014C — Compliance policy CRUD
+  'endpointAdmin.compliance.policies.title': 'Compliance Policies',
+  'endpointAdmin.compliance.policies.subtitle':
+    'REQUIRED / ALLOWED / FORBIDDEN policy intent per catalog item. Missing policy defaults to ALLOWED.',
+  'endpointAdmin.compliance.policies.createButton': '+ New Policy',
+  'endpointAdmin.compliance.policies.editButton': 'Edit',
+  'endpointAdmin.compliance.policies.deleteButton': 'Delete',
+  'endpointAdmin.compliance.policies.manageDeniedTooltip':
+    'Admin (MANAGE) permission required for this action.',
+  'endpointAdmin.compliance.policies.loading': 'Loading policies…',
+  'endpointAdmin.compliance.policies.empty': 'No policies defined yet.',
+  'endpointAdmin.compliance.policies.forbidden':
+    'Admin permission required to view the policy list.',
+  'endpointAdmin.compliance.policies.error': 'Failed to load policies. Refresh and try again.',
+  'endpointAdmin.compliance.policies.col.catalogItemKey': 'Catalog Key',
+  'endpointAdmin.compliance.policies.col.displayName': 'Application',
+  'endpointAdmin.compliance.policies.col.enforcement': 'Policy',
+  'endpointAdmin.compliance.policies.col.enabled': 'Active',
+  'endpointAdmin.compliance.policies.col.lastUpdated': 'Last Updated',
+  'endpointAdmin.compliance.policies.col.actions': 'Actions',
+  'endpointAdmin.compliance.policies.enforcement.required': 'REQUIRED',
+  'endpointAdmin.compliance.policies.enforcement.allowed': 'ALLOWED',
+  'endpointAdmin.compliance.policies.enforcement.forbidden': 'FORBIDDEN',
+  'endpointAdmin.compliance.policies.enabled.yes': 'Yes',
+  'endpointAdmin.compliance.policies.enabled.no': 'No',
+  'endpointAdmin.compliance.policies.paginationAria': 'Policy list pagination',
+  'endpointAdmin.compliance.policies.prev': 'Previous',
+  'endpointAdmin.compliance.policies.next': 'Next',
+  'endpointAdmin.compliance.policies.pageIndicator':
+    'Page {page} of {totalPages} · {totalElements} policies',
+  'endpointAdmin.compliance.policies.createDialog.title': 'New Compliance Policy',
+  'endpointAdmin.compliance.policies.createDialog.catalogLabel': 'Catalog Item',
+  'endpointAdmin.compliance.policies.createDialog.catalogPlaceholder': '— Select —',
+  'endpointAdmin.compliance.policies.createDialog.catalogLoading': 'Loading catalog…',
+  'endpointAdmin.compliance.policies.createDialog.enforcementLabel': 'Enforcement Mode',
+  'endpointAdmin.compliance.policies.createDialog.enabledLabel': 'Active (include in evaluator)',
+  'endpointAdmin.compliance.policies.createDialog.save': 'Save',
+  'endpointAdmin.compliance.policies.createDialog.saving': 'Saving…',
+  'endpointAdmin.compliance.policies.createDialog.cancel': 'Cancel',
+  'endpointAdmin.compliance.policies.editDialog.title': 'Edit Policy',
+  'endpointAdmin.compliance.policies.editDialog.catalogLabel': 'Catalog Item (immutable)',
+  'endpointAdmin.compliance.policies.editDialog.enforcementLabel': 'Enforcement Mode',
+  'endpointAdmin.compliance.policies.editDialog.enabledLabel': 'Active (include in evaluator)',
+  'endpointAdmin.compliance.policies.editDialog.save': 'Update',
+  'endpointAdmin.compliance.policies.editDialog.saving': 'Updating…',
+  'endpointAdmin.compliance.policies.editDialog.cancel': 'Cancel',
+  'endpointAdmin.compliance.policies.deleteDialog.title': 'Delete Policy',
+  'endpointAdmin.compliance.policies.deleteDialog.body':
+    'Are you sure you want to delete the policy for {catalog}? Policy record cannot be restored.',
+  'endpointAdmin.compliance.policies.deleteDialog.softDisableHint':
+    'To temporarily disable, use Edit and uncheck the Active box instead.',
+  'endpointAdmin.compliance.policies.deleteDialog.confirm': 'Delete',
+  'endpointAdmin.compliance.policies.deleteDialog.deleting': 'Deleting…',
+  'endpointAdmin.compliance.policies.deleteDialog.cancel': 'Cancel',
+  'endpointAdmin.compliance.policies.toast.catalogRequired': 'Select a catalog item.',
+  'endpointAdmin.compliance.policies.toast.duplicate':
+    'A policy already exists for this catalog item.',
+  'endpointAdmin.compliance.policies.toast.forbidden': 'Admin permission required for this action.',
+  'endpointAdmin.compliance.policies.toast.invalid': 'Form validation failed.',
+  'endpointAdmin.compliance.policies.toast.conflict':
+    'Policy was modified by another session. Refresh and retry.',
+  'endpointAdmin.compliance.policies.toast.notFound': 'Policy not found. List will refresh.',
+  'endpointAdmin.compliance.policies.toast.createFailed': 'Failed to create policy.',
+  'endpointAdmin.compliance.policies.toast.updateFailed': 'Failed to update policy.',
+  'endpointAdmin.compliance.policies.toast.deleteFailed': 'Failed to delete policy.',
   'endpointAdmin.modal.title.LOCK_USER_LOGIN': 'Lock User Login',
   'endpointAdmin.modal.title.UNLOCK_USER_LOGIN': 'Unlock User Login',
   'endpointAdmin.modal.title.CHANGE_LOCAL_PASSWORD': 'Change Local Password',
