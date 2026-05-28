@@ -25,11 +25,14 @@ import { ComplianceTab } from '../tabs/ComplianceTab';
 
 const useGetDeviceComplianceQueryMock = vi.fn();
 const useForceEvaluateDeviceComplianceMutationMock = vi.fn();
+const useGetDeviceComplianceEvaluationsQueryMock = vi.fn();
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
   endpointAdminApi: {
     useGetDeviceComplianceQuery: (...args: unknown[]) => useGetDeviceComplianceQueryMock(...args),
     useForceEvaluateDeviceComplianceMutation: () => useForceEvaluateDeviceComplianceMutationMock(),
+    useGetDeviceComplianceEvaluationsQuery: (...args: unknown[]) =>
+      useGetDeviceComplianceEvaluationsQueryMock(...args),
   },
 }));
 
@@ -110,11 +113,46 @@ function buildState(overrides: Partial<ComplianceStateResponse> = {}): Complianc
   };
 }
 
+function mockHistory(
+  result: {
+    data?: {
+      items: Array<{
+        evaluationId: string;
+        decision: 'COMPLIANT' | 'NON_COMPLIANT' | 'UNAUTHORIZED' | 'UNKNOWN';
+        evaluatedAt: string;
+        worstStaleness: 'FRESH' | 'SOFT' | 'HARD' | 'UNAVAILABLE';
+        reasons: string[];
+        blockingReasons: string[];
+        warnings: string[];
+        policyDrift: boolean | null;
+        catalogPolicyHash: string | null;
+      }>;
+      page: number;
+      size: number;
+      totalElements: number;
+      totalPages: number;
+    };
+    error?: { status: number };
+    isLoading?: boolean;
+    isFetching?: boolean;
+  } = {},
+): void {
+  useGetDeviceComplianceEvaluationsQueryMock.mockReturnValue({
+    data: result.data,
+    error: result.error,
+    isLoading: result.isLoading ?? false,
+    isFetching: result.isFetching ?? false,
+    isUninitialized: !(result.data || result.error || result.isLoading || result.isFetching),
+  });
+}
+
 describe('ComplianceTab', () => {
   beforeEach(() => {
     useGetDeviceComplianceQueryMock.mockReset();
     useForceEvaluateDeviceComplianceMutationMock.mockReset();
+    useGetDeviceComplianceEvaluationsQueryMock.mockReset();
     mockMutation();
+    mockHistory();
   });
 
   afterEach(() => {
@@ -244,5 +282,96 @@ describe('ComplianceTab', () => {
     await waitFor(() => {
       expect(screen.getByTestId('compliance-toast-success')).toBeTruthy();
     });
+  });
+
+  /* ---------------------------------------------------------------- */
+  /*  WEB-014B — history accordion (lazy <details>)                    */
+  /* ---------------------------------------------------------------- */
+
+  it('renders history accordion in collapsed state by default', () => {
+    mockQuery({ data: buildState() });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+  });
+
+  it('skips history query while accordion is closed (lazy load)', () => {
+    mockQuery({ data: buildState() });
+    render(<ComplianceTab deviceId="device-1" active />);
+    expect(useGetDeviceComplianceEvaluationsQueryMock).toHaveBeenCalled();
+    // The skip flag is the SECOND argument; we assert it is true (skipped).
+    const lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    const opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(true);
+  });
+
+  it('fires history query when accordion opens (toggle event)', () => {
+    mockQuery({ data: buildState() });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    // Simulate the operator expanding the accordion. JSDOM does not
+    // dispatch a `toggle` event when `open` is mutated, so we fire it
+    // ourselves with `currentTarget.open === true`.
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    // After the next render, the skip flag must be false (query fires).
+    const lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    const opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(false);
+  });
+
+  it('renders history rows + drift chip when items return', () => {
+    mockQuery({ data: buildState() });
+    mockHistory({
+      data: {
+        items: [
+          {
+            evaluationId: 'eval-1',
+            decision: 'NON_COMPLIANT',
+            evaluatedAt: '2026-05-28T10:00:00Z',
+            worstStaleness: 'SOFT',
+            reasons: [],
+            blockingReasons: ['forbidden_app_installed'],
+            warnings: [],
+            policyDrift: true,
+            catalogPolicyHash: 'a'.repeat(64),
+          },
+        ],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      },
+    });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByTestId('compliance-history-list')).toBeTruthy();
+    expect(screen.getByTestId('compliance-history-row-eval-1')).toBeTruthy();
+    expect(screen.getByTestId('compliance-history-drift-eval-1')).toBeTruthy();
+  });
+
+  it('renders history empty state when items=[]', () => {
+    mockQuery({ data: buildState() });
+    mockHistory({
+      data: { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 },
+    });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByTestId('compliance-history-empty')).toBeTruthy();
+  });
+
+  it('renders history forbidden state on 403', () => {
+    mockQuery({ data: buildState() });
+    mockHistory({ error: { status: 403 } });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByTestId('compliance-history-forbidden')).toBeTruthy();
   });
 });

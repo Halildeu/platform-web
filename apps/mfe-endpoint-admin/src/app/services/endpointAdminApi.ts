@@ -27,9 +27,14 @@ import type {
   GetDeviceSoftwareInventoryArgs,
 } from '../../entities/endpoint-software-inventory/types';
 import type {
+  ComplianceDeviceListItem,
+  ComplianceEvaluationHistoryItem,
+  ComplianceEvaluationListResponse,
   ComplianceStateResponse,
   ForceEvaluateDeviceComplianceArgs,
+  GetComplianceDeviceListArgs,
   GetDeviceComplianceArgs,
+  GetDeviceComplianceEvaluationsArgs,
 } from '../../entities/endpoint-device-compliance/types';
 
 /**
@@ -371,6 +376,12 @@ export const endpointAdminApi = createApi({
      * (`error.status === 409`); the tab renders a 5 s cooldown toast
      * and re-enables the button. 403 surfaces likewise; tab renders a
      * permission toast.
+     *
+     * WEB-014B widens the invalidation tag set so the force-evaluate
+     * also refreshes:
+     *   - latest pointer for this device
+     *   - per-device history (append-only row appended by the POST)
+     *   - cross-device list (latest pointer row updated)
      */
     forceEvaluateDeviceCompliance: builder.mutation<
       ComplianceStateResponse,
@@ -382,6 +393,79 @@ export const endpointAdminApi = createApi({
       }),
       invalidatesTags: (_res, _err, { deviceId }) => [
         { type: 'EndpointDeviceCompliance' as const, id: deviceId },
+        { type: 'EndpointDeviceCompliance' as const, id: `history-${deviceId}` },
+        { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
+      ],
+    }),
+    /**
+     * WEB-014B — Cross-device compliance list.
+     *   gateway GET /api/v1/endpoint-admin/compliance/devices
+     *           ?decision=&page=&size=
+     *   → service /api/v1/admin/compliance/devices
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Server-side filter: only `decision` (one of COMPLIANT /
+     * NON_COMPLIANT / UNAUTHORIZED / UNKNOWN). `worstStaleness` and
+     * `policyDrift` are NOT server-side filterable in this PR — they
+     * are rendered as columns/badges only (Codex 019e6db0 iter-1: the
+     * staleness band is computed at GET time from collectedAt
+     * timestamps, and `policyDrift` is computed from a live hash
+     * comparison; filtering them in-page would silently break pagination
+     * totals).
+     *
+     * Pagination envelope is the BE-023 custom shape
+     * `ComplianceEvaluationListResponse<T>` —
+     * `{ items, page, size, totalElements, totalPages }` — NOT Spring
+     * `Page<T>` (no `content` / `number`).
+     */
+    getComplianceDeviceList: builder.query<
+      ComplianceEvaluationListResponse<ComplianceDeviceListItem>,
+      GetComplianceDeviceListArgs
+    >({
+      query: ({ decision, page = 0, size = 20 }) => {
+        const params: Record<string, string> = {
+          page: String(page),
+          size: String(size),
+        };
+        if (decision) params.decision = decision;
+        return {
+          url: '/endpoint-admin/compliance/devices',
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: (_result, _error) => [
+        { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
+      ],
+    }),
+    /**
+     * WEB-014B — Per-device evaluation history.
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{id}/compliance/evaluations
+     *           ?page=&size=
+     *   → service /api/v1/admin/endpoint-devices/{id}/compliance/evaluations
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Append-only history table; backend returns newest-first. Used by
+     * the ComplianceTab history accordion (lazy `<details>` — query
+     * stays skipped until the operator opens the accordion, so a tab
+     * open never costs an extra request).
+     */
+    getDeviceComplianceEvaluations: builder.query<
+      ComplianceEvaluationListResponse<ComplianceEvaluationHistoryItem>,
+      GetDeviceComplianceEvaluationsArgs
+    >({
+      query: ({ deviceId, page = 0, size = 20 }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+          deviceId,
+        )}/compliance/evaluations`,
+        method: 'GET',
+        params: {
+          page: String(page),
+          size: String(size),
+        },
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointDeviceCompliance' as const, id: `history-${deviceId}` },
       ],
     }),
   }),
@@ -397,4 +481,6 @@ export const {
   useCreateDeviceCommandMutation,
   useGetDeviceComplianceQuery,
   useForceEvaluateDeviceComplianceMutation,
+  useGetComplianceDeviceListQuery,
+  useGetDeviceComplianceEvaluationsQuery,
 } = endpointAdminApi;

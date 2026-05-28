@@ -65,3 +65,75 @@ export interface GetDeviceComplianceArgs {
 export interface ForceEvaluateDeviceComplianceArgs {
   deviceId: string;
 }
+
+/* ------------------------------------------------------------------ */
+/*  WEB-014B — Cross-device compliance list + evaluation history       */
+/*  (Codex 019e6db0 plan-time iter-2 AGREE / ready_for_impl=true).     */
+/*                                                                     */
+/*  Mirrors the BE-023 admin endpoints:                                 */
+/*    GET /api/v1/admin/compliance/devices?decision=&page=&size=       */
+/*    GET /api/v1/admin/endpoint-devices/{id}/compliance/evaluations   */
+/*                                                                     */
+/*  Backend envelope is NOT Spring Page<T> — it is a custom shape       */
+/*  emitted by ComplianceEvaluationListResponse.java:                   */
+/*    { items, page, size, totalElements, totalPages }                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Custom pagination envelope returned by the BE-023 list endpoints.
+ * NOT Spring `Page<T>` (no `content` / `number` fields).
+ */
+export interface ComplianceEvaluationListResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+/**
+ * Cross-device compliance list row. Backed by
+ * `endpoint_device_compliance_states` (latest pointer) joined with
+ * the matching evaluation. WorstStaleness and policyDrift are surfaced
+ * as columns; they are NOT server-side filter parameters in this PR
+ * (Codex iter-2: filtering them would break pagination totals because
+ * they are computed at GET time, not stored as repository columns).
+ */
+export interface ComplianceDeviceListItem {
+  deviceId: string;
+  hostname: string | null;
+  latestEvaluationId: string;
+  decision: ComplianceDecision;
+  evaluatedAt: string;
+  worstStaleness: StalenessSeverity;
+  policyDrift: boolean | null;
+}
+
+/**
+ * Per-device evaluation history row. Backed by the append-only
+ * `endpoint_compliance_evaluations` table; one row per evaluation.
+ * Returned newest-first by the backend.
+ */
+export interface ComplianceEvaluationHistoryItem {
+  evaluationId: string;
+  decision: ComplianceDecision;
+  evaluatedAt: string;
+  worstStaleness: StalenessSeverity;
+  reasons: string[];
+  blockingReasons: string[];
+  warnings: string[];
+  policyDrift: boolean | null;
+  catalogPolicyHash: string | null;
+}
+
+export interface GetComplianceDeviceListArgs {
+  decision?: ComplianceDecision;
+  page?: number;
+  size?: number;
+}
+
+export interface GetDeviceComplianceEvaluationsArgs {
+  deviceId: string;
+  page?: number;
+  size?: number;
+}
