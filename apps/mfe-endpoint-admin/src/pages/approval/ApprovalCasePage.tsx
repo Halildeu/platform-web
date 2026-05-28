@@ -88,14 +88,19 @@ export const ApprovalCasePage: React.FC = () => {
             type: request.type,
             target: request.target,
           }}
-          onExport={({ format, records }) => {
+          exportFormats={['json']}
+          onExport={({ records }) => {
+            // PR-4 pilot ships JSON-only audit export — CSV serializer
+            // lives in PR-5 alongside the backend audit-log endpoint
+            // (Codex 019e6e76 post-impl: don't ship a JSON payload under
+            // a CSV mime type).
             const blob = new Blob([JSON.stringify(records, null, 2)], {
-              type: format === 'json' ? 'application/json' : 'text/csv;charset=utf-8',
+              type: 'application/json',
             });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `approval-${request.id}.${format}`;
+            a.download = `approval-${request.id}.json`;
             a.click();
             URL.revokeObjectURL(url);
           }}

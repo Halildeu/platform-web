@@ -12,7 +12,7 @@
  * request id. Consumers join them in the page composition layer.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type {
   ApprovalActor,
   ApprovalRequest,
@@ -141,39 +141,47 @@ export function useEndpointPolicyApprovals(
 
   const [state, setState] = useState<StoredApprovalsState>(() => repositoryRef.current.load());
 
-  useEffect(() => {
-    repositoryRef.current.save(state);
-  }, [state]);
-
-  const propose = useCallback((input: ProposePolicyChangeInput): ApprovalRequest => {
-    const id = makeRequestId();
-    const createdAt = new Date().toISOString();
-    const request: ApprovalRequest = {
-      id,
-      type: 'policy_change',
-      title: input.title,
-      target: input.policyId,
-      proposer: input.proposer,
-      reason: input.reason,
-      evidenceRefs: input.evidenceRefs,
-      createdAt,
-      deadline: input.deadline,
-      status: 'pending',
-      currentApprovers: input.approvers,
-      history: [],
-    };
-    const extras: PolicyApprovalDomainExtras = {
-      changeKind: input.changeKind,
-      riskTier: input.riskTier,
-      before: input.before,
-      after: input.after,
-    };
-    setState((prev) => ({
-      requests: [request, ...prev.requests],
-      extras: { ...prev.extras, [id]: extras },
-    }));
-    return request;
+  // Race-condition fix (Codex 019e6e76 post-impl): persist synchronously
+  // alongside setState rather than relying on a deferred useEffect. Otherwise
+  // a propose() → navigate() in the same submit handler can land the case
+  // page before the new request is in localStorage, causing "Talep bulunamadi".
+  const commit = useCallback((next: StoredApprovalsState) => {
+    repositoryRef.current.save(next);
+    setState(next);
   }, []);
+
+  const propose = useCallback(
+    (input: ProposePolicyChangeInput): ApprovalRequest => {
+      const id = makeRequestId();
+      const createdAt = new Date().toISOString();
+      const request: ApprovalRequest = {
+        id,
+        type: 'policy_change',
+        title: input.title,
+        target: input.policyId,
+        proposer: input.proposer,
+        reason: input.reason,
+        evidenceRefs: input.evidenceRefs,
+        createdAt,
+        deadline: input.deadline,
+        status: 'pending',
+        currentApprovers: input.approvers,
+        history: [],
+      };
+      const extras: PolicyApprovalDomainExtras = {
+        changeKind: input.changeKind,
+        riskTier: input.riskTier,
+        before: input.before,
+        after: input.after,
+      };
+      commit({
+        requests: [request, ...state.requests],
+        extras: { ...state.extras, [id]: extras },
+      });
+      return request;
+    },
+    [commit, state],
+  );
 
   const transition = useCallback(
     (
@@ -181,16 +189,17 @@ export function useEndpointPolicyApprovals(
       buildDecision: (prev: ApprovalRequest) => DecisionRecord,
       nextStatus: ApprovalRequestStatus,
     ) => {
-      setState((prev) => ({
-        ...prev,
-        requests: prev.requests.map((r) => {
+      const next: StoredApprovalsState = {
+        ...state,
+        requests: state.requests.map((r) => {
           if (r.id !== id) return r;
           const decision = buildDecision(r);
           return applyDecision(r, decision, nextStatus);
         }),
-      }));
+      };
+      commit(next);
     },
-    [],
+    [commit, state],
   );
 
   const approve = useCallback(
