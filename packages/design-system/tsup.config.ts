@@ -40,6 +40,12 @@ const entry = [
   'src/icons/index.ts',
   // Advanced
   'src/advanced/data-grid/setup.ts',
+  // WEB-014D perf follow-up: dedicated data-grid subpath entry — the
+  // `./advanced/data-grid` package.json export pre-existed but tsup
+  // never emitted the sibling `index.js`, so endpoint-admin's deep
+  // import would resolve to a missing dist file in any external
+  // (non-source-alias) consumer.
+  'src/advanced/data-grid/index.ts',
   'src/advanced/index.ts',
   // Form Validation Adapter (F4A)
   'src/form/index.ts',
