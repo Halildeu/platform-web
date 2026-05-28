@@ -277,6 +277,28 @@ export type {
 } from './approval-checkpoint';
 export { ApprovalReview } from './approval-review';
 export type { ApprovalReviewProps } from './approval-review';
+
+/* Approval foundation primitives (PR-1, wave_12_approval_foundation) */
+export { AssigneePicker } from './assignee-picker';
+export type {
+  AssigneePickerProps,
+  AssigneePickerSingleProps,
+  AssigneePickerMultiProps,
+  AssigneePickerSize,
+} from './assignee-picker';
+export { DecisionActionDialog } from './decision-action-dialog';
+export type {
+  DecisionActionDialogProps,
+  DecisionActionDialogRequestSummary,
+  DecisionActionPresetReason,
+  DecisionActionConfirmPayload,
+} from './decision-action-dialog';
+export { ApprovalEligibilityGuard } from './approval-eligibility-guard';
+export type {
+  ApprovalEligibilityGuardProps,
+  ApprovalEligibilityGuardVariant,
+  ApprovalEligibilityGuardBlockedInfo,
+} from './approval-eligibility-guard';
 export { AIGuidedAuthoring } from './ai-guided-authoring';
 export type {
   AIGuidedAuthoringProps,
