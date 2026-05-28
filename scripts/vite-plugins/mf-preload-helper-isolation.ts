@@ -143,9 +143,13 @@ const AUTH_LOADSHARE_TOKEN = '__loadShare___mf_0_mfe_mf_1_auth__loadShare__';
 // Matches any named import statement (`import { ... } from "...auth_loadShare..."`)
 // regardless of specifier count or alias usage. The captured group is the raw
 // specifier list inside the braces, which `parseSpecifiers` then decomposes
-// into `{ localName, isHelper }` entries. The preload helper (`r`) becomes a
-// local inline binding; other specifiers (init wrapper `i`, etc.) become inert
-// no-op bindings so consumer call sites still resolve.
+// into `{ importedName, localName }` entries. The rewrite then validates each
+// `importedName` against `ALLOWED_AUTH_IMPORTS`; only `r` (preload helper) and
+// `i` (lazy init wrapper) are accepted — `r` is inlined, `i` is replaced with
+// a no-op. Any other imported name (e.g. `t` = PermissionProvider) causes the
+// rewrite to skip this import statement, so the fail-closed audit then fires
+// with the offending chunk file name. This preserves the Codex iter-5 audit
+// invariant end-to-end (Codex iter-6 absorb on PR-I1).
 //
 // Observed shapes (Vite 8 + @module-federation/vite 1.15.1 + Rolldown rc.17):
 //   `import { r } from "..."`               — original PR-X8 shape
@@ -159,11 +163,13 @@ const AUTH_HELPER_NAMED_IMPORT_RE =
   /import\s*\{([^}]+)\}\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
 
 // Matches namespace import: `import * as ns from "...auth_loadShare..."`.
-// Replacement is a Proxy that returns the inline helper for `.r` and a no-op
-// for every other property access, so `ns.r(...)` and `ns.i()` both resolve
-// without crossing the chunk boundary. Not currently observed in Vite output
-// for our federation graph, but covered defensively because the fail-closed
-// audit would otherwise throw on any future occurrence.
+// Replacement is a Proxy that enforces the same allowlist at runtime: `.r`
+// returns the inline helper, `.i` returns a no-op, and any other property
+// access throws a meaningful error so a future MF shape that reaches into a
+// real auth binding fails visibly instead of silently. Not currently observed
+// in Vite output for our federation graph, but covered defensively because
+// the fail-closed audit would otherwise throw on any future occurrence and
+// extending coverage is cheaper than re-running the build to debug.
 const AUTH_HELPER_NAMESPACE_IMPORT_RE =
   /import\s*\*\s+as\s+([A-Za-z_$][\w$]*)\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
 
