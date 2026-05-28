@@ -168,20 +168,31 @@ const AUTH_HELPER_NAMESPACE_IMPORT_RE =
   /import\s*\*\s+as\s+([A-Za-z_$][\w$]*)\s*from\s*["']\.\/[^"']*__loadShare___mf_0_mfe_mf_1_auth__loadShare__[^"']*["'];?/g;
 
 interface ParsedSpecifier {
-  /** Local binding name introduced by this specifier. */
+  /** Imported (pre-alias) name as it appears on the export side. */
+  importedName: string;
+  /** Local binding name introduced by this specifier (alias if present). */
   localName: string;
-  /** True if the imported (pre-alias) name is `r` — the preload helper. */
-  isHelper: boolean;
 }
+
+/**
+ * Allowlist of auth-loadShare exports that the rewrite is permitted to
+ * inline or no-op. The chunk graph we are breaking only references the
+ * preload helper (`r`) and the lazy init wrapper (`i`); any other imported
+ * name means a consumer chunk is reaching into a real auth binding (e.g.
+ * `t` = PermissionProvider React component, `n` = usePermissions hook) that
+ * MUST NOT be silently rewritten to a no-op. Such bindings are not safe to
+ * replace and the rewrite refuses them so the fail-closed audit fires
+ * (Codex iter-5 invariant preserved end-to-end).
+ */
+const ALLOWED_AUTH_IMPORTS = new Set(['r', 'i']);
 
 /**
  * Parse the inner text of an `import { ... }` specifier list. Tolerates
  * whitespace, `<imported> as <local>` aliasing, and trailing commas. Each
- * entry reports its local binding name and whether it maps to the `r` export
- * (the modulepreload helper). Other auth-loadShare exports (`i` init wrapper,
- * etc.) are inert here because the auth chunk performs its own top-level init
- * when first imported elsewhere — eager re-trigger from these consumer chunks
- * is redundant and can be replaced with a no-op.
+ * entry reports the imported (pre-alias) name and the local binding it
+ * introduces. The caller validates `importedName` against
+ * `ALLOWED_AUTH_IMPORTS` before generating the rewrite so unknown bindings
+ * are not silently converted to no-ops.
  */
 function parseSpecifiers(inner: string): ParsedSpecifier[] {
   return inner
@@ -192,9 +203,9 @@ function parseSpecifiers(inner: string): ParsedSpecifier[] {
       const aliasMatch = part.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
       if (aliasMatch) {
         const [, importedName, localName] = aliasMatch;
-        return { localName, isHelper: importedName === 'r' };
+        return { importedName, localName };
       }
-      return { localName: part, isHelper: part === 'r' };
+      return { importedName: part, localName: part };
     });
 }
 
@@ -232,13 +243,23 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
         let rewritten = code;
 
         // Pass 1: named imports `import { ... } from "...auth_loadShare..."`
-        rewritten = rewritten.replace(AUTH_HELPER_NAMED_IMPORT_RE, (_match, inner) => {
+        // Refuses to rewrite if any specifier names an import outside
+        // ALLOWED_AUTH_IMPORTS — keeping the original import statement intact
+        // so the fail-closed audit fires with a meaningful chunk reference
+        // instead of silently masking a real auth binding (e.g. PermissionProvider).
+        rewritten = rewritten.replace(AUTH_HELPER_NAMED_IMPORT_RE, (match, inner) => {
           const specifiers = parseSpecifiers(inner as string);
-          if (specifiers.length === 0) return _match as string;
+          if (specifiers.length === 0) return match as string;
+          const disallowed = specifiers.filter((s) => !ALLOWED_AUTH_IMPORTS.has(s.importedName));
+          if (disallowed.length > 0) {
+            // Leave the import untouched. The audit gate will throw on this
+            // chunk and report the offending file name to the maintainer.
+            return match as string;
+          }
           chunkRewrites += 1;
           const decls = specifiers
-            .map(({ localName, isHelper }) =>
-              isHelper
+            .map(({ importedName, localName }) =>
+              importedName === 'r'
                 ? `const ${localName} = ${INLINE_HELPER};`
                 : `const ${localName} = () => {};`,
             )
@@ -247,11 +268,21 @@ export function mfPreloadHelperIsolation(options: MfPreloadHelperIsolationOption
         });
 
         // Pass 2: namespace imports `import * as ns from "...auth_loadShare..."`
+        // The Proxy enforces the same allowlist at runtime: `.r` returns the
+        // inline helper, `.i` returns a no-op, and any other property access
+        // throws so a future MF shape that reaches into a real binding fails
+        // visibly instead of silently rendering nothing (or worse, calling a
+        // React component as a function).
         rewritten = rewritten.replace(AUTH_HELPER_NAMESPACE_IMPORT_RE, (_match, nsName) => {
           chunkRewrites += 1;
           return (
-            `const ${nsName as string} = new Proxy({}, { get: (_, k) => ` +
-            `k === 'r' ? ${INLINE_HELPER} : () => {} });`
+            `const ${nsName as string} = new Proxy({}, { get: (_, k) => { ` +
+            `if (k === 'r') return ${INLINE_HELPER}; ` +
+            `if (k === 'i') return () => {}; ` +
+            `throw new Error('[mf-preload-helper-isolation] namespace import of auth loadShare ' + ` +
+            `'access "' + String(k) + '" not in allowlist {r,i}. ' + ` +
+            `'If this is a legitimate auth binding, add a dedicated import and review the share graph.'); ` +
+            `} });`
           );
         });
 

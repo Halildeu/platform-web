@@ -286,12 +286,76 @@ describe('mfPreloadHelperIsolation — multi-specifier import shapes (PR-I1)', (
 
     const code = (bundle[nsName] as { code: string }).code;
     expect(code).not.toContain(AUTH_TOKEN);
-    expect(code).toContain(`const authNs = new Proxy({}, { get: (_, k) =>`);
-    // Proxy must serve the inline helper at `.r` and no-op everywhere else.
-    expect(code).toContain(`k === 'r' ?`);
+    expect(code).toContain(`const authNs = new Proxy({}, { get: (_, k) => {`);
+    // Proxy serves inline helper at `.r`, no-op at `.i`, throws otherwise.
+    expect(code).toContain(`if (k === 'r')`);
+    expect(code).toContain(`if (k === 'i')`);
+    expect(code).toContain(`not in allowlist {r,i}`);
     // Call sites untouched.
     expect(code).toContain(`authNs.i()`);
     expect(code).toContain(`authNs.r(()=>import('./q.js'),[])`);
+  });
+});
+
+describe('mfPreloadHelperIsolation — allowlist guard (Codex iter-6)', () => {
+  // Codex REVISE on PR-I1: rewriting non-{r,i} specifiers to no-op silently
+  // masks real auth bindings (PermissionProvider as `t`, usePermissions as
+  // `n`, etc.). The rewrite must refuse anything outside the allowlist so the
+  // fail-closed audit catches it with the offending chunk file name.
+  it('refuses to rewrite named imports with non-{r,i} specifiers (audit catches)', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const dsName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_design_mf_2_system__loadShare__.mjs-DENY.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-AUTH.js`;
+    // `t` is PermissionProvider (a real React component) — must NOT be
+    // silently rewritten to () => {}.
+    const bundle = {
+      [authName]: makeChunk(authName, `export var r;`),
+      [dsName]: makeChunk(dsName, `import { r, t } from "./${authName}";`),
+    };
+
+    expect(() => callGenerateBundle(plugin, bundle)).toThrowError(
+      /still reference the auth loadShare token/,
+    );
+  });
+
+  it('refuses {r as a, t as b} where `t` is a real binding (audit catches)', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const dsName = `__mfe_internal__mfe_shell__loadShare__some_chunk__loadShare__.mjs-ALIAS.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-AUTH.js`;
+    const bundle = {
+      [authName]: makeChunk(authName, `export var r;`),
+      [dsName]: makeChunk(dsName, `import { r as a, t as b } from "./${authName}";`),
+    };
+
+    expect(() => callGenerateBundle(plugin, bundle)).toThrowError(
+      /still reference the auth loadShare token/,
+    );
+  });
+
+  it('namespace proxy throws at runtime for non-{r,i} property access', () => {
+    const plugin = mfPreloadHelperIsolation();
+    const nsName = `__mfe_internal__mfe_shell__loadShare__example__loadShare__.mjs-DENYNS.js`;
+    const authName = `__mfe_internal__mfe_shell__loadShare___mf_0_mfe_mf_1_auth__loadShare__.mjs-AUTH.js`;
+    const bundle = {
+      [authName]: makeChunk(authName, `export var r;`),
+      [nsName]: makeChunk(nsName, `import * as ns from "./${authName}";`),
+    };
+
+    callGenerateBundle(plugin, bundle);
+
+    const code = (bundle[nsName] as { code: string }).code;
+    // Extract just the Proxy declaration so we can instantiate it. The Proxy
+    // body contains the inline helper IIFE which references `import.meta.url`;
+    // since `new Function(...)` is not a module, replace it with a fixed test
+    // URL (same trick the helper-contract suite above uses).
+    const proxyMatch = code.match(/const ns = (new Proxy\([\s\S]+?\}\s*\}\));/);
+    if (!proxyMatch) throw new Error(`Could not extract Proxy from chunk:\n${code}`);
+    const proxyExpr = proxyMatch[1].replace(/import\.meta\.url/g, '"http://test/chunks/test.js"');
+    const ns = new Function(`return ${proxyExpr};`)() as Record<string, unknown>;
+    expect(typeof ns.r).toBe('function');
+    expect(typeof ns.i).toBe('function');
+    expect(() => ns.t).toThrow(/not in allowlist/);
+    expect(() => ns.somethingElse).toThrow(/not in allowlist/);
   });
 });
 
