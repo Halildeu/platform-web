@@ -1,6 +1,9 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApprovalInbox, type ApprovalActor } from '@mfe/design-system';
+// WEB-014D perf follow-up: deep import to avoid the design-system
+// barrel pulling `./charts` / ECharts into the approvals cold path.
+import { ApprovalInbox } from '@mfe/design-system/components/approval-inbox';
+import type { ApprovalActor } from '@mfe/design-system/types/approval';
 import {
   useEndpointPolicyApprovals,
   buildEndpointPolicyEligibilityResolver,

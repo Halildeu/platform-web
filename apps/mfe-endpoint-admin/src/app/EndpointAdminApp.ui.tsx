@@ -1,8 +1,12 @@
-// Faz 22.2 — AG Grid module registration at the federation EXPOSE entry.
-// Shell host imports `mfe_endpoint_admin/EndpointAdminApp` (this file),
-// NOT bootstrap.tsx — so the bootstrap-level setup import only covers
-// standalone open of the MFE.
-import '@mfe/design-system/advanced/data-grid/setup';
+// WEB-014D perf follow-up (Codex 019e707e iter-2 must-fix #2 absorb):
+// AG Grid module registration moved out of the federation EXPOSE entry
+// and into the `EndpointDevicesPage` lazy route wrapper (see
+// `./router/EndpointAdminRouter.tsx`). The previous eager import pulled
+// ag-grid-community + ag-grid-enterprise + setup into the cold graph
+// for every endpoint-admin sub-route, even ones that never render a
+// grid. With route-level lazy loading the setup runs before the
+// devices page's first render via `Promise.all([setup, page])` and the
+// other routes pay zero AG Grid cost.
 import React from 'react';
 import { Provider as ReduxProvider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';

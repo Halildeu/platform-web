@@ -9,7 +9,22 @@ const entry = [
   'src/tokens/index.ts',
   'src/primitives/index.ts',
   'src/components/index.ts',
+  // WEB-014D perf follow-up: component-specific subpath entries so
+  // endpoint-admin (and other MFEs) can import e.g. `Tabs` /
+  // `ApprovalInbox` without dragging the `./charts` re-export and its
+  // ECharts dependency into the cold-load graph (Codex 019e707e iter-2
+  // must-fix #1 absorb).
+  'src/components/tabs/index.ts',
+  'src/components/approval-inbox/index.ts',
+  'src/components/approval-case-view/index.ts',
+  'src/components/approval-request-form/index.ts',
+  'src/components/decision-record-panel/index.ts',
   'src/patterns/index.ts',
+  'src/patterns/bottom-sheet/index.ts',
+  // Canonical approval types — emitted as a dedicated subpath so the
+  // endpoint-admin policy approvals hook can pull type-only symbols
+  // without importing the components barrel.
+  'src/types/approval.ts',
   // Blocks — component-marketplace surface (Phase 4.6 public wiring)
   'src/blocks/index.ts',
   'src/providers/index.ts',

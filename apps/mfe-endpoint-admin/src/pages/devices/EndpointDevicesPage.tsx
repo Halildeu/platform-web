@@ -1,6 +1,11 @@
 import React from 'react';
-import { EntityGridTemplate } from '@mfe/design-system';
-import type { ColDef, GridOptions } from '@mfe/design-system';
+// WEB-014D perf follow-up: pull EntityGridTemplate from the
+// `advanced/data-grid` subpath instead of the design-system barrel.
+// The barrel re-exports `./charts` which transitively imports ECharts
+// + @mfe/x-charts — none of which the devices grid needs at runtime
+// (Codex 019e707e iter-2 must-fix #1).
+import { EntityGridTemplate } from '@mfe/design-system/advanced/data-grid';
+import type { ColDef, GridOptions } from 'ag-grid-community';
 import { useListEndpointDevicesQuery } from '../../app/services/endpointAdminApi';
 import { useEndpointAdminI18n } from '../../i18n';
 import type { DeviceStatus, EndpointDevice, OsType } from '../../entities/endpoint-device/types';

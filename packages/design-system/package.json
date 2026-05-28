@@ -27,10 +27,45 @@
       "import": "./dist/esm/components/index.js",
       "require": "./dist/cjs/components/index.cjs"
     },
+    "./components/tabs": {
+      "types": "./dist/components/tabs/index.d.ts",
+      "import": "./dist/esm/components/tabs/index.js",
+      "require": "./dist/cjs/components/tabs/index.cjs"
+    },
+    "./components/approval-inbox": {
+      "types": "./dist/components/approval-inbox/index.d.ts",
+      "import": "./dist/esm/components/approval-inbox/index.js",
+      "require": "./dist/cjs/components/approval-inbox/index.cjs"
+    },
+    "./components/approval-case-view": {
+      "types": "./dist/components/approval-case-view/index.d.ts",
+      "import": "./dist/esm/components/approval-case-view/index.js",
+      "require": "./dist/cjs/components/approval-case-view/index.cjs"
+    },
+    "./components/approval-request-form": {
+      "types": "./dist/components/approval-request-form/index.d.ts",
+      "import": "./dist/esm/components/approval-request-form/index.js",
+      "require": "./dist/cjs/components/approval-request-form/index.cjs"
+    },
+    "./components/decision-record-panel": {
+      "types": "./dist/components/decision-record-panel/index.d.ts",
+      "import": "./dist/esm/components/decision-record-panel/index.js",
+      "require": "./dist/cjs/components/decision-record-panel/index.cjs"
+    },
     "./patterns": {
       "types": "./dist/patterns/index.d.ts",
       "import": "./dist/esm/patterns/index.js",
       "require": "./dist/cjs/patterns/index.cjs"
+    },
+    "./patterns/bottom-sheet": {
+      "types": "./dist/patterns/bottom-sheet/index.d.ts",
+      "import": "./dist/esm/patterns/bottom-sheet/index.js",
+      "require": "./dist/cjs/patterns/bottom-sheet/index.cjs"
+    },
+    "./types/approval": {
+      "types": "./dist/types/approval.d.ts",
+      "import": "./dist/esm/types/approval.js",
+      "require": "./dist/cjs/types/approval.cjs"
     },
     "./blocks": {
       "types": "./dist/blocks/index.d.ts",

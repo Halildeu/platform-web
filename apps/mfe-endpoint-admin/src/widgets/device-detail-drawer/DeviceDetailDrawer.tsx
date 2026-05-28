@@ -1,5 +1,11 @@
 import React from 'react';
-import { BottomSheetDrawer, Tabs } from '@mfe/design-system';
+// WEB-014D perf follow-up (Codex 019e707e iter-2 must-fix #1 absorb):
+// deep imports from `@mfe/design-system/patterns/bottom-sheet` and
+// `@mfe/design-system/components/tabs` so the drawer surface never
+// drags the design-system root barrel (which re-exports `./charts` +
+// the ECharts dependency chain) into the drawer cold path.
+import { BottomSheetDrawer } from '@mfe/design-system/patterns/bottom-sheet';
+import { Tabs } from '@mfe/design-system/components/tabs';
 import type { EndpointDevice } from '../../entities/endpoint-device/types';
 import type {
   CreateEndpointCommandBody,
@@ -12,10 +18,44 @@ import {
 import { useEndpointAdminI18n } from '../../i18n';
 import { DetayTab } from './tabs/DetayTab';
 import { IslemlerTab } from './tabs/IslemlerTab';
-import { AuditTab } from './tabs/AuditTab';
-import { InventoryTab } from './tabs/InventoryTab';
-import { ComplianceTab } from './tabs/ComplianceTab';
-import { SoftwareCatalogTab } from './tabs/SoftwareCatalogTab';
+
+/**
+ * WEB-014D perf follow-up (Codex 019e707e iter-2 PARTIAL absorb):
+ *
+ * Heavy tabs (`Audit`, `Inventory`, `Compliance`, `SoftwareCatalog`)
+ * are loaded via `React.lazy` and rendered through `<Suspense>` so the
+ * drawer's first paint only pays for the default tab (`Detay`) and the
+ * cheap `Islemler` action surface. The previous eager import chain
+ * pulled `SoftwareCatalogTab` + `InstallPreflightModal` +
+ * `ComplianceHistory` into the drawer cold graph even when the operator
+ * never clicked beyond `Detay`.
+ *
+ * `DetayTab` and `IslemlerTab` stay eager because:
+ *  - `Detay` is the default-active tab on every open.
+ *  - `Islemler` is the next-most-used tab and is a small action surface
+ *    (no AG Grid, no compliance graph) so its eager cost is negligible.
+ */
+const AuditTab = React.lazy(() => import('./tabs/AuditTab').then((m) => ({ default: m.AuditTab })));
+const InventoryTab = React.lazy(() =>
+  import('./tabs/InventoryTab').then((m) => ({ default: m.InventoryTab })),
+);
+const ComplianceTab = React.lazy(() =>
+  import('./tabs/ComplianceTab').then((m) => ({ default: m.ComplianceTab })),
+);
+const SoftwareCatalogTab = React.lazy(() =>
+  import('./tabs/SoftwareCatalogTab').then((m) => ({ default: m.SoftwareCatalogTab })),
+);
+
+const TabFallback: React.FC = () => (
+  <div
+    role="status"
+    aria-live="polite"
+    className="px-6 py-4 text-sm text-text-secondary"
+    data-testid="drawer-tab-fallback"
+  >
+    Yükleniyor…
+  </div>
+);
 
 export type DeviceDetailDrawerTabKey =
   | 'detay'
@@ -42,10 +82,6 @@ export interface DeviceDetailDrawerProps {
 type TabKey = DeviceDetailDrawerTabKey;
 
 function generateIdempotencyKey(): string {
-  // crypto.randomUUID is widely available in modern browsers + jsdom
-  // (Node 19+). Fall back to a timestamp-based id only in degraded
-  // environments — duplicate keys are tolerated server-side (the
-  // unique-violation triggers a 409 the UI surfaces as an error toast).
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
@@ -64,13 +100,22 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
   const [lastError, setLastError] = React.useState<string | null>(null);
 
   const deviceId = device?.id ?? null;
-  const shouldPoll = Boolean(open && deviceId);
+
+  // WEB-014D perf follow-up (Codex 019e707e iter-2 must-fix B1): poll
+  // the device command list ONLY while the operator is on the
+  // `islemler` tab. The previous condition `open && deviceId` kept the
+  // 10-second poll alive any time the drawer was open — even on
+  // `detay`, `audit`, `inventory`, `compliance`, or `software-catalog`
+  // where the command list never renders. Combined with a slower 30 s
+  // interval this drops background CPU + network noise to the minimum
+  // surface that actually displays the data.
+  const shouldPollCommands = Boolean(open && deviceId && activeTab === 'islemler');
 
   const { data: commands } = useListDeviceCommandsQuery(
     { deviceId: deviceId ?? '' },
     {
-      skip: !shouldPoll,
-      pollingInterval: shouldPoll ? 10_000 : 0,
+      skip: !shouldPollCommands,
+      pollingInterval: shouldPollCommands ? 30_000 : 0,
     },
   );
 
@@ -86,13 +131,6 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
   }, [open]);
 
   // WEB-014B — Honor `initialTab` on every open / device change.
-  // Mount-only assignment would miss the case where the cross-device
-  // compliance list opens the drawer for a different device while it is
-  // already open (e.g. operator clicks a second row before closing).
-  // Codex 019e6db0 iter-2 guard: re-apply on `open || deviceId ||
-  // initialTab` so the Compliance tab stays selected per click. The
-  // default `initialTab ?? 'detay'` preserves WEB-014A's reset-to-detay
-  // behavior when consumers don't pass `initialTab`.
   React.useEffect(() => {
     if (open) {
       setActiveTab(initialTab ?? 'detay');
@@ -132,52 +170,84 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
     [createCommand, deviceId, t],
   );
 
+  // WEB-014D perf follow-up: memoise the tab items list so the array
+  // identity is stable across drawer renders unless the underlying
+  // inputs change. Without this every render produced a new array +
+  // new content nodes, forcing the design-system `Tabs` widget to
+  // reconcile fresh JSX even when the operator merely moved the mouse.
+  const tabItems = React.useMemo(() => {
+    if (!device) return [];
+    const deviceCommands = commands ?? [];
+    return [
+      {
+        key: 'detay' as const,
+        label: t('endpointAdmin.drawer.tab.detay'),
+        content: <DetayTab device={device} />,
+      },
+      {
+        key: 'islemler' as const,
+        label: t('endpointAdmin.drawer.tab.islemler'),
+        content: (
+          <IslemlerTab
+            device={device}
+            recentCommands={deviceCommands}
+            isSubmitting={createState.isLoading}
+            lastIssuedCommandId={lastIssuedCommand?.id ?? null}
+            lastIssuedRequiresApproval={lastIssuedCommand?.approvalStatus === 'PENDING'}
+            lastError={lastError}
+            onIssueCommand={handleIssueCommand}
+          />
+        ),
+      },
+      {
+        key: 'audit' as const,
+        label: t('endpointAdmin.drawer.tab.audit'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <AuditTab deviceId={device.id} active={activeTab === 'audit'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'inventory' as const,
+        label: t('endpointAdmin.drawer.tab.inventory'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <InventoryTab deviceId={device.id} active={activeTab === 'inventory'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'software-catalog' as const,
+        label: t('endpointAdmin.drawer.tab.softwareCatalog'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <SoftwareCatalogTab device={device} active={activeTab === 'software-catalog'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'compliance' as const,
+        label: t('endpointAdmin.drawer.compliance.tabLabel'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <ComplianceTab deviceId={device.id} active={activeTab === 'compliance'} />
+          </React.Suspense>
+        ),
+      },
+    ];
+  }, [
+    device,
+    commands,
+    createState.isLoading,
+    lastIssuedCommand,
+    lastError,
+    handleIssueCommand,
+    activeTab,
+    t,
+  ]);
+
   if (!device) return null;
-
-  const deviceCommands = commands ?? [];
-
-  const tabItems = [
-    {
-      key: 'detay',
-      label: t('endpointAdmin.drawer.tab.detay'),
-      content: <DetayTab device={device} />,
-    },
-    {
-      key: 'islemler',
-      label: t('endpointAdmin.drawer.tab.islemler'),
-      content: (
-        <IslemlerTab
-          device={device}
-          recentCommands={deviceCommands}
-          isSubmitting={createState.isLoading}
-          lastIssuedCommandId={lastIssuedCommand?.id ?? null}
-          lastIssuedRequiresApproval={lastIssuedCommand?.approvalStatus === 'PENDING'}
-          lastError={lastError}
-          onIssueCommand={handleIssueCommand}
-        />
-      ),
-    },
-    {
-      key: 'audit',
-      label: t('endpointAdmin.drawer.tab.audit'),
-      content: <AuditTab deviceId={device.id} active={activeTab === 'audit'} />,
-    },
-    {
-      key: 'inventory',
-      label: t('endpointAdmin.drawer.tab.inventory'),
-      content: <InventoryTab deviceId={device.id} active={activeTab === 'inventory'} />,
-    },
-    {
-      key: 'software-catalog',
-      label: t('endpointAdmin.drawer.tab.softwareCatalog'),
-      content: <SoftwareCatalogTab device={device} active={activeTab === 'software-catalog'} />,
-    },
-    {
-      key: 'compliance',
-      label: t('endpointAdmin.drawer.compliance.tabLabel'),
-      content: <ComplianceTab deviceId={device.id} active={activeTab === 'compliance'} />,
-    },
-  ];
 
   const subtitle = device.hostname;
 

@@ -276,13 +276,13 @@ describe('SoftwareCatalogTab — query args (Codex must-fix #B)', () => {
     });
   });
 
-  it('install audit active iken pollingInterval=10s (Codex 019e6fe4 must-fix #3)', () => {
+  it('install audit active iken pollingInterval=30s (WEB-014D perf follow-up — 10s→30s)', () => {
     mockCatalog([]);
     mockAudits([]);
     render(<SoftwareCatalogTab device={buildDevice()} active />);
     expect(useListInstallAuditsQueryMock.mock.calls.at(-1)?.[1]).toMatchObject({
       skip: false,
-      pollingInterval: 10_000,
+      pollingInterval: 30_000,
     });
   });
 
@@ -338,7 +338,10 @@ describe('SoftwareCatalogTab — catalog list rendering', () => {
     expect(button.getAttribute('title')).toBeNull();
   });
 
-  it('Kur button click InstallPreflightModal acar (catalogItemId + displayName props)', () => {
+  it('Kur button click InstallPreflightModal acar (catalogItemId + displayName props)', async () => {
+    // WEB-014D perf follow-up: InstallPreflightModal is now lazy-loaded
+    // via `React.lazy()` + `<Suspense>`, so the assertion must await
+    // the Suspense boundary resolving the chunk on first open.
     mockCatalog([
       buildCatalog({
         id: 'cat-1',
@@ -349,27 +352,27 @@ describe('SoftwareCatalogTab — catalog list rendering', () => {
     mockAudits([]);
     render(<SoftwareCatalogTab device={buildDevice()} active />);
     fireEvent.click(screen.getByTestId('kur-button-7zip.7zip'));
-    expect(screen.getByTestId('mock-install-modal')).toBeInTheDocument();
+    expect(await screen.findByTestId('mock-install-modal')).toBeInTheDocument();
     expect(screen.getByTestId('mock-install-modal-catalogId').textContent).toBe('7zip.7zip');
     expect(screen.getByTestId('mock-install-modal-displayName').textContent).toBe('7-Zip');
     expect(capturedModalProps?.deviceId).toBe('d-1');
   });
 
-  it('modal onClose modal kapanmasini saglar', () => {
+  it('modal onClose modal kapanmasini saglar', async () => {
     mockCatalog([buildCatalog()]);
     mockAudits([]);
     render(<SoftwareCatalogTab device={buildDevice()} active />);
     fireEvent.click(screen.getByTestId('kur-button-7zip.7zip'));
-    fireEvent.click(screen.getByTestId('mock-install-modal-close'));
+    fireEvent.click(await screen.findByTestId('mock-install-modal-close'));
     expect(screen.queryByTestId('mock-install-modal')).toBeNull();
   });
 
-  it('modal onInstalled callback success toast goruntuler ve modal kapatir', () => {
+  it('modal onInstalled callback success toast goruntuler ve modal kapatir', async () => {
     mockCatalog([buildCatalog()]);
     mockAudits([]);
     render(<SoftwareCatalogTab device={buildDevice()} active />);
     fireEvent.click(screen.getByTestId('kur-button-7zip.7zip'));
-    fireEvent.click(screen.getByTestId('mock-install-modal-fire-installed'));
+    fireEvent.click(await screen.findByTestId('mock-install-modal-fire-installed'));
     expect(screen.queryByTestId('mock-install-modal')).toBeNull();
     const toast = screen.getByTestId('software-catalog-toast');
     expect(toast.textContent).toContain('cmd-success-1');

@@ -175,15 +175,20 @@ describe('InstallPreflightModal — lifecycle / render gates', () => {
     expect(screen.getByTestId('install-modal-error').textContent).toMatch(/bulunamadı|not found/i);
   });
 
-  it('hook refetchOnMountOrArgChange:true ile cagirilir (must-fix #3)', () => {
+  it('hook subscribes with skip:false on open; freshness via endpoint keepUnusedDataFor:0 (WEB-014D perf follow-up — refetchOnMountOrArgChange removed)', () => {
+    // The endpoint config pins `keepUnusedDataFor: 0` so unmounting
+    // the modal evicts the cache entry and every reopen issues a
+    // fresh preflight. The hook-level `refetchOnMountOrArgChange:true`
+    // duplicated that guarantee and caused double network requests
+    // (live testai network log evidence); it has been removed in
+    // favor of the endpoint-level setting (Codex 019e707e iter-2
+    // PARTIAL absorb — preflight TTL).
     mockPreflight({ data: buildPreflight('PASS') });
     mockInstall(vi.fn());
     render(<InstallPreflightModal {...baseProps} />);
     const lastCall = useGetInstallPreflightQueryMock.mock.calls.at(-1);
-    expect(lastCall?.[1]).toMatchObject({
-      skip: false,
-      refetchOnMountOrArgChange: true,
-    });
+    expect(lastCall?.[1]).toMatchObject({ skip: false });
+    expect(lastCall?.[1]).not.toHaveProperty('refetchOnMountOrArgChange');
   });
 });
 

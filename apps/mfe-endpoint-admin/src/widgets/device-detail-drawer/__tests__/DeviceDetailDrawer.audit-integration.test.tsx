@@ -257,17 +257,20 @@ describe('DeviceDetailDrawer — AuditTab RTK Query integration (regression for 
 
     renderDrawer();
 
-    // The drawer renders Detay by default. To make this assertion
-    // resistant to async-turn ambiguity (Codex 019e6826 iter-1: a bare
-    // `waitFor(detay-tab)` resolves on the synchronous first render
-    // and would not catch an audit fetch fired in the next tick), wait
-    // for the parent's commands query to actually hit the network —
-    // that is the signal the drawer is fully mounted and its hooks
-    // have run a microtask. THEN assert no audit endpoint was touched.
-    await waitFor(() => {
-      expect(fetchUrls.some((u) => u.includes('/endpoint-admin/endpoint-devices/'))).toBe(true);
-    });
-    expect(screen.getByTestId('device-detay-tab')).toBeInTheDocument();
+    // WEB-014D perf follow-up: the parent's `useListDeviceCommandsQuery`
+    // is now gated on `activeTab === 'islemler'` (Codex 019e707e iter-2
+    // must-fix B1 — drawer-wide polling was wasted on every other tab).
+    // The default tab is `detay`, so no devices/commands network call
+    // fires on initial drawer mount; the only safe mount signal is the
+    // eager-rendered Detay panel itself, which `findByTestId` awaits.
+    //
+    // Codex 019e6826 iter-1 spirit (no async-turn ambiguity) is
+    // preserved by also flushing any pending microtasks before asserting
+    // the audit endpoint stayed cold: the drawer's effects have run by
+    // the time `findByTestId` resolves, so a stray audit fetch fired in
+    // a queued microtask would still surface here.
+    await screen.findByTestId('device-detay-tab');
+    await Promise.resolve();
     expect(fetchUrls.some((u) => u.includes('endpoint-audit-events'))).toBe(false);
   });
 

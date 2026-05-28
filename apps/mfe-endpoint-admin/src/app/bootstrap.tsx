@@ -1,8 +1,9 @@
-// Faz 22.2 — AG Grid module registration for standalone dev runs (port
-// 3009). When loaded under the shell via Module Federation the
-// EndpointAdminApp.ui.tsx import covers registration; this entry only
-// fires for `pnpm --filter mfe-endpoint-admin start`.
-import '@mfe/design-system/advanced/data-grid/setup';
+// WEB-014D perf follow-up: AG Grid module registration is now performed
+// inside the `EndpointDevicesPage` lazy route wrapper (see
+// `./router/EndpointAdminRouter.tsx`). Standalone dev runs (port 3009)
+// reach `/devices` through the same router, so the setup still fires
+// before the grid renders — without paying for every other route's
+// cold path the way an eager bootstrap import did.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
