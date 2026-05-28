@@ -15,8 +15,15 @@ import { IslemlerTab } from './tabs/IslemlerTab';
 import { AuditTab } from './tabs/AuditTab';
 import { InventoryTab } from './tabs/InventoryTab';
 import { ComplianceTab } from './tabs/ComplianceTab';
+import { SoftwareCatalogTab } from './tabs/SoftwareCatalogTab';
 
-export type DeviceDetailDrawerTabKey = 'detay' | 'islemler' | 'audit' | 'inventory' | 'compliance';
+export type DeviceDetailDrawerTabKey =
+  | 'detay'
+  | 'islemler'
+  | 'audit'
+  | 'inventory'
+  | 'software-catalog'
+  | 'compliance';
 
 export interface DeviceDetailDrawerProps {
   open: boolean;
@@ -159,6 +166,11 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
       key: 'inventory',
       label: t('endpointAdmin.drawer.tab.inventory'),
       content: <InventoryTab deviceId={device.id} active={activeTab === 'inventory'} />,
+    },
+    {
+      key: 'software-catalog',
+      label: t('endpointAdmin.drawer.tab.softwareCatalog'),
+      content: <SoftwareCatalogTab device={device} active={activeTab === 'software-catalog'} />,
     },
     {
       key: 'compliance',

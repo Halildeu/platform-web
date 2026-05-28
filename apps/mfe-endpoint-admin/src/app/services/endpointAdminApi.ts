@@ -45,6 +45,15 @@ import type {
   ListCatalogItemsArgs,
   SpringPage,
 } from '../../entities/endpoint-software-catalog/types';
+import type {
+  CreateInstallArgs,
+  CreateInstallSuccess,
+  EndpointInstallAuditDto,
+  GetInstallAuditArgs,
+  GetInstallPreflightArgs,
+  InstallPreflightResponse,
+  ListInstallAuditsArgs,
+} from '../../entities/endpoint-install/types';
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -192,6 +201,7 @@ export const endpointAdminApi = createApi({
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
+    'EndpointInstallAudit',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -617,6 +627,96 @@ export const endpointAdminApi = createApi({
       },
       providesTags: [{ type: 'EndpointSoftwareCatalog' as const, id: 'LIST' }],
     }),
+    /**
+     * WEB-014D — Install preflight (BE-021A read-only decision).
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/install-preflight
+     *           ?catalogItemId={slug}
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/install-preflight
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the canonical PASS / WARN / BLOCK contract. The decision
+     * is computed on-demand — there is no persisted row, so no
+     * provides-tag is meaningful. Codex 019e6fd1 must-fix #3:
+     * `keepUnusedDataFor: 0` so the modal always sees a fresh evaluation
+     * when reopened; the parent component combines this with
+     * `refetchOnMountOrArgChange: true` on the hook subscription for
+     * defence-in-depth against router-level cache reuse.
+     */
+    getInstallPreflight: builder.query<InstallPreflightResponse, GetInstallPreflightArgs>({
+      query: ({ deviceId, catalogItemId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/install-preflight`,
+        method: 'GET',
+        params: { catalogItemId },
+      }),
+      keepUnusedDataFor: 0,
+    }),
+    /**
+     * WEB-014D — Create install command (BE-021 dedicated POST surface).
+     *   gateway POST /api/v1/endpoint-admin/endpoint-devices/{deviceId}/installs
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/installs
+     *   @RequireModule(MODULE='endpoint-admin', MANAGER='can_manage')
+     *
+     * HTTP semantics:
+     *  - 201 → EndpointCommandDto (PASS / WARN — command queued)
+     *  - 409 → InstallPreflightResponse (BLOCK recompute) OR an
+     *          idempotency-key collision; callers must shape-guard via
+     *          `tryReadBlockRecompute(error.data)` before mounting.
+     *  - 400 → request validation failure
+     *  - 404 → device or catalog item not visible to caller tenant
+     *
+     * Invalidation: device command list (the new INSTALL_SOFTWARE row
+     * appears immediately in IslemlerTab), device audit event list
+     * (every command create triggers an audit event), and the
+     * install-audit list (the dedicated `Son Kurulumlar` panel inside
+     * SoftwareCatalogTab refetches on mutation).
+     */
+    createInstall: builder.mutation<CreateInstallSuccess, CreateInstallArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/installs`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+        { type: 'EndpointInstallAudit' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
+     * WEB-014D — Per-device install audit list (BE-021 read).
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/installs
+     *           ?page=&size=
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/installs
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Response envelope is Spring `Page<EndpointInstallAuditDto>`
+     * (NOT the BE-023 custom envelope). Default page size 25, max 100.
+     */
+    listInstallAudits: builder.query<SpringPage<EndpointInstallAuditDto>, ListInstallAuditsArgs>({
+      query: ({ deviceId, page = 0, size = 25 }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/installs`,
+        method: 'GET',
+        params: { page: String(page), size: String(size) },
+      }),
+      providesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointInstallAudit' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
+     * WEB-014D — Single install audit row (drill-down detail).
+     *   gateway GET /api/v1/endpoint-admin/endpoint-install-audits/{auditId}
+     *   → service /api/v1/admin/endpoint-install-audits/{auditId}
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     */
+    getInstallAudit: builder.query<EndpointInstallAuditDto, GetInstallAuditArgs>({
+      query: ({ auditId }) => ({
+        url: `/endpoint-admin/endpoint-install-audits/${encodeURIComponent(auditId)}`,
+        method: 'GET',
+      }),
+      providesTags: (_res, _err, { auditId }) => [
+        { type: 'EndpointInstallAudit' as const, id: auditId },
+      ],
+    }),
   }),
 });
 
@@ -638,4 +738,8 @@ export const {
   useUpdateCompliancePolicyItemMutation,
   useDeleteCompliancePolicyItemMutation,
   useListCatalogItemsQuery,
+  useGetInstallPreflightQuery,
+  useCreateInstallMutation,
+  useListInstallAuditsQuery,
+  useGetInstallAuditQuery,
 } = endpointAdminApi;

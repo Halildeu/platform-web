@@ -26,7 +26,8 @@ export type CommandType =
   | 'SMB_LIST_ALLOWED_PATH'
   | 'SMB_READ_FILE_METADATA'
   | 'SMB_DOWNLOAD_FILE'
-  | 'SMB_UPLOAD_FILE';
+  | 'SMB_UPLOAD_FILE'
+  | 'INSTALL_SOFTWARE';
 
 export type CommandStatus =
   | 'QUEUED'

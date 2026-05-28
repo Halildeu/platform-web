@@ -59,6 +59,7 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.islemler': 'İşlemler',
   'endpointAdmin.drawer.tab.audit': 'Denetim Geçmişi',
   'endpointAdmin.drawer.tab.inventory': 'Envanter',
+  'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
   // Detay tab
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Görünen Ad',
@@ -301,6 +302,110 @@ const DICT_TR = {
   'endpointAdmin.compliance.policies.toast.createFailed': 'Politika oluşturulamadı.',
   'endpointAdmin.compliance.policies.toast.updateFailed': 'Politika güncellenemedi.',
   'endpointAdmin.compliance.policies.toast.deleteFailed': 'Politika silinemedi.',
+  // WEB-014D — Software Catalog tab (per-device installable catalog)
+  'endpointAdmin.drawer.softwareCatalog.heading': 'Yüklenebilir Yazılımlar',
+  'endpointAdmin.drawer.softwareCatalog.subtitle':
+    'Onaylanmış katalog kalemleri. Kurulum öncesi ön kontrol yapılır; engelli durumlarda sebep gösterilir.',
+  'endpointAdmin.drawer.softwareCatalog.loading': 'Katalog yükleniyor…',
+  'endpointAdmin.drawer.softwareCatalog.error':
+    'Katalog yüklenemedi. Sayfayı yenileyip tekrar deneyin.',
+  'endpointAdmin.drawer.softwareCatalog.forbidden': 'Bu cihaza yazılım kurma yetkiniz yok.',
+  'endpointAdmin.drawer.softwareCatalog.empty': 'Onaylanmış ve aktif katalog kalemi bulunmuyor.',
+  'endpointAdmin.drawer.softwareCatalog.col.displayName': 'Uygulama',
+  'endpointAdmin.drawer.softwareCatalog.col.publisher': 'Yayıncı',
+  'endpointAdmin.drawer.softwareCatalog.col.packageId': 'Paket Kimliği',
+  'endpointAdmin.drawer.softwareCatalog.col.riskTier': 'Risk',
+  'endpointAdmin.drawer.softwareCatalog.col.actions': 'İşlem',
+  'endpointAdmin.drawer.softwareCatalog.kur': 'Kur',
+  'endpointAdmin.drawer.softwareCatalog.kur.offlineHint':
+    'Cihaz çevrim dışı; kurulum sırada bekletilir ama önerilmez.',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.heading': 'Son Kurulumlar',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.empty':
+    'Bu cihazda henüz kurulum yapılmadı.',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.loading': 'Son kurulumlar yükleniyor…',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.app': 'Uygulama',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.decision': 'Ön Kontrol',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.result': 'Sonuç',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.reportedAt': 'Zaman',
+  'endpointAdmin.drawer.softwareCatalog.riskTier.LOW': 'Düşük',
+  'endpointAdmin.drawer.softwareCatalog.riskTier.MEDIUM': 'Orta',
+  'endpointAdmin.drawer.softwareCatalog.riskTier.HIGH': 'Yüksek',
+  // Install preflight modal (WEB-014D)
+  'endpointAdmin.drawer.install.modal.title': '{name} kurulumu',
+  'endpointAdmin.drawer.install.modal.loading': 'Ön kontrol yapılıyor…',
+  'endpointAdmin.drawer.install.modal.error': 'Ön kontrol alınamadı. Modali kapatıp tekrar açın.',
+  'endpointAdmin.drawer.install.modal.forbidden':
+    'Bu işlem için yönetici (MANAGE) yetkisi gerekiyor.',
+  'endpointAdmin.drawer.install.modal.notFound':
+    'Katalog kalemi bulunamadı veya cihaz erişiminizin dışında.',
+  'endpointAdmin.drawer.install.decision.PASS.label': 'GEÇTİ',
+  'endpointAdmin.drawer.install.decision.PASS.aria': 'Ön kontrol geçti, kurulum başlatılabilir',
+  'endpointAdmin.drawer.install.decision.WARN.label': 'UYARI',
+  'endpointAdmin.drawer.install.decision.WARN.aria': 'Ön kontrol uyarıyla geçti, dikkatle başlatın',
+  'endpointAdmin.drawer.install.decision.BLOCK.label': 'ENGELLENDİ',
+  'endpointAdmin.drawer.install.decision.BLOCK.aria': 'Ön kontrol engellendi, kurulum yapılamaz',
+  'endpointAdmin.drawer.install.installedState.INSTALLED': 'Cihazda zaten yüklü',
+  'endpointAdmin.drawer.install.installedState.NOT_INSTALLED': 'Cihazda yüklü değil',
+  'endpointAdmin.drawer.install.installedState.UNKNOWN': 'Yüklü durumu envanterden teyit edilemedi',
+  'endpointAdmin.drawer.install.reasons.heading': 'Sebepler',
+  'endpointAdmin.drawer.install.blockingReasons.heading': 'Engelleyen sebepler',
+  'endpointAdmin.drawer.install.warnings.heading': 'Uyarılar',
+  'endpointAdmin.drawer.install.requirements.heading': 'Gereksinimler',
+  'endpointAdmin.drawer.install.evidence.heading': 'Karar kanıtı',
+  'endpointAdmin.drawer.install.evidence.inventoryUpdated': 'Envanter güncellendi: {timestamp}',
+  'endpointAdmin.drawer.install.evidence.summaryCollected': 'Özet alındı: {timestamp}',
+  'endpointAdmin.drawer.install.evidence.appsCollected': 'Uygulama listesi alındı: {timestamp}',
+  'endpointAdmin.drawer.install.evidence.wingetEgress':
+    'WinGet egress: {timestamp} (şema v{schemaVersion})',
+  'endpointAdmin.drawer.install.evidence.catalogRev': 'Katalog sürümü: {rowVersion} ({timestamp})',
+  'endpointAdmin.drawer.install.reason.label': 'Kurulum gerekçesi (opsiyonel)',
+  'endpointAdmin.drawer.install.reason.placeholder':
+    'Bu kurulumun amacını yazın (audit kaydına eklenir).',
+  'endpointAdmin.drawer.install.confirm': 'Kurulumu Onayla',
+  'endpointAdmin.drawer.install.cancel': 'İptal',
+  'endpointAdmin.drawer.install.toast.success': 'Kurulum komutu sıraya alındı (ID: {commandId})',
+  'endpointAdmin.drawer.install.toast.blockRecompute':
+    'Ön kontrol değişti: katalog veya envanter güncellendiği için kurulum engellendi.',
+  'endpointAdmin.drawer.install.toast.validation': 'İstek doğrulanamadı. Alanları kontrol edin.',
+  'endpointAdmin.drawer.install.toast.notFound': 'Katalog kalemi bulunamadı; liste yenilenecek.',
+  'endpointAdmin.drawer.install.toast.forbidden':
+    'Bu işlem için yönetici (MANAGE) yetkisi gerekiyor.',
+  'endpointAdmin.drawer.install.toast.error': 'Kurulum başlatılamadı.',
+  // Reason code vocabulary (full BE-021A enum mirror, 20 codes)
+  'endpointAdmin.drawer.install.reasonCode.already_installed_different_version':
+    'Cihazda farklı bir sürüm yüklü.',
+  'endpointAdmin.drawer.install.reasonCode.apps_unavailable': 'Uygulama listesi henüz toplanmadı.',
+  'endpointAdmin.drawer.install.reasonCode.catalog_item_disabled': 'Katalog kalemi devre dışı.',
+  'endpointAdmin.drawer.install.reasonCode.catalog_item_draft':
+    'Katalog kalemi henüz taslak; onaylanmadan kurulum yapılamaz.',
+  'endpointAdmin.drawer.install.reasonCode.catalog_item_revoked': 'Katalog kalemi geri çekildi.',
+  'endpointAdmin.drawer.install.reasonCode.device_decommissioned': 'Cihaz hizmet dışı bırakıldı.',
+  'endpointAdmin.drawer.install.reasonCode.device_not_online':
+    'Cihaz çevrim dışı; kurulum çevrim içi olmasını bekler.',
+  'endpointAdmin.drawer.install.reasonCode.installed_state_unknown':
+    'Yüklü durumu envanterden anlaşılamadı.',
+  'endpointAdmin.drawer.install.reasonCode.installer_type_not_install_ready':
+    'Bu kurulumcu tipi henüz kurulum modunu desteklemiyor.',
+  'endpointAdmin.drawer.install.reasonCode.inventory_missing':
+    'Envanter henüz toplanmadı; önce envanter toplayın.',
+  'endpointAdmin.drawer.install.reasonCode.inventory_stale':
+    'Envanter eski; güncellenmesi önerilir.',
+  'endpointAdmin.drawer.install.reasonCode.inventory_unsupported':
+    'Cihazda envanter toplama desteklenmiyor.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_missing':
+    'WinGet egress kanıtı bulunamadı.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_partial': 'WinGet egress kısmen başarılı.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_schema_unsupported':
+    'WinGet egress şeması uyumsuz.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_unsupported':
+    'WinGet egress desteklenmiyor.',
+  'endpointAdmin.drawer.install.reasonCode.winget_fixed_probe_package_mismatch':
+    'WinGet sabit prob paketi eşleşmedi.',
+  'endpointAdmin.drawer.install.reasonCode.winget_not_ready': 'WinGet cihazda hazır değil.',
+  'endpointAdmin.drawer.install.reasonCode.winget_package_query_not_found':
+    'WinGet kaynağında paket bulunamadı.',
+  'endpointAdmin.drawer.install.reasonCode.winget_source_list_warning':
+    'WinGet kaynak listesi uyarı verdi.',
   // Destructive command modal
   'endpointAdmin.modal.title.LOCK_USER_LOGIN': 'Kullanıcı Girişini Kilitle',
   'endpointAdmin.modal.title.UNLOCK_USER_LOGIN': 'Kullanıcı Girişini Aç',
@@ -324,6 +429,12 @@ const DICT_TR = {
   'endpointAdmin.command.status.FAILED': 'Başarısız',
   'endpointAdmin.command.status.EXPIRED': 'Süresi Doldu',
   'endpointAdmin.command.status.CANCELLED': 'İptal',
+  // Install audit result status (mirror CommandResultStatus)
+  'endpointAdmin.drawer.install.resultStatus.SUCCEEDED': 'Başarılı',
+  'endpointAdmin.drawer.install.resultStatus.FAILED': 'Başarısız',
+  'endpointAdmin.drawer.install.resultStatus.PARTIAL': 'Kısmen',
+  'endpointAdmin.drawer.install.resultStatus.UNSUPPORTED': 'Desteklenmiyor',
+  'endpointAdmin.drawer.install.resultStatus.pending': '—',
   'endpointAdmin.command.approval.NOT_REQUIRED': 'Onay gerekmez',
   'endpointAdmin.command.approval.PENDING': 'Onay bekliyor',
   'endpointAdmin.command.approval.APPROVED': 'Onaylandı',
@@ -381,6 +492,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.tab.islemler': 'Actions',
   'endpointAdmin.drawer.tab.audit': 'Audit History',
   'endpointAdmin.drawer.tab.inventory': 'Inventory',
+  'endpointAdmin.drawer.tab.softwareCatalog': 'Software Catalog',
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Display Name',
   'endpointAdmin.drawer.detay.osType': 'Operating System',
@@ -616,6 +728,113 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.compliance.policies.toast.createFailed': 'Failed to create policy.',
   'endpointAdmin.compliance.policies.toast.updateFailed': 'Failed to update policy.',
   'endpointAdmin.compliance.policies.toast.deleteFailed': 'Failed to delete policy.',
+  // WEB-014D — Software Catalog tab (EN)
+  'endpointAdmin.drawer.softwareCatalog.heading': 'Installable Software',
+  'endpointAdmin.drawer.softwareCatalog.subtitle':
+    'Approved catalog items. Preflight runs before each install; blocking reasons are shown.',
+  'endpointAdmin.drawer.softwareCatalog.loading': 'Loading catalog…',
+  'endpointAdmin.drawer.softwareCatalog.error': 'Failed to load catalog. Refresh and try again.',
+  'endpointAdmin.drawer.softwareCatalog.forbidden':
+    'You do not have permission to install software on this device.',
+  'endpointAdmin.drawer.softwareCatalog.empty': 'No approved + enabled catalog items available.',
+  'endpointAdmin.drawer.softwareCatalog.col.displayName': 'Application',
+  'endpointAdmin.drawer.softwareCatalog.col.publisher': 'Publisher',
+  'endpointAdmin.drawer.softwareCatalog.col.packageId': 'Package ID',
+  'endpointAdmin.drawer.softwareCatalog.col.riskTier': 'Risk',
+  'endpointAdmin.drawer.softwareCatalog.col.actions': 'Action',
+  'endpointAdmin.drawer.softwareCatalog.kur': 'Install',
+  'endpointAdmin.drawer.softwareCatalog.kur.offlineHint':
+    'Device is offline; the install will queue but is not recommended.',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.heading': 'Recent Installs',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.empty':
+    'No installs recorded for this device yet.',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.loading': 'Loading recent installs…',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.app': 'Application',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.decision': 'Preflight',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.result': 'Result',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.reportedAt': 'Time',
+  'endpointAdmin.drawer.softwareCatalog.riskTier.LOW': 'Low',
+  'endpointAdmin.drawer.softwareCatalog.riskTier.MEDIUM': 'Medium',
+  'endpointAdmin.drawer.softwareCatalog.riskTier.HIGH': 'High',
+  'endpointAdmin.drawer.install.modal.title': '{name} install',
+  'endpointAdmin.drawer.install.modal.loading': 'Running preflight…',
+  'endpointAdmin.drawer.install.modal.error': 'Preflight failed. Close and reopen this dialog.',
+  'endpointAdmin.drawer.install.modal.forbidden':
+    'Admin (MANAGE) permission required for this action.',
+  'endpointAdmin.drawer.install.modal.notFound':
+    'Catalog item not found or device is out of scope.',
+  'endpointAdmin.drawer.install.decision.PASS.label': 'PASS',
+  'endpointAdmin.drawer.install.decision.PASS.aria': 'Preflight passed; install may proceed',
+  'endpointAdmin.drawer.install.decision.WARN.label': 'WARN',
+  'endpointAdmin.drawer.install.decision.WARN.aria':
+    'Preflight passed with warnings; proceed carefully',
+  'endpointAdmin.drawer.install.decision.BLOCK.label': 'BLOCK',
+  'endpointAdmin.drawer.install.decision.BLOCK.aria': 'Preflight blocked; install cannot proceed',
+  'endpointAdmin.drawer.install.installedState.INSTALLED': 'Already installed on this device',
+  'endpointAdmin.drawer.install.installedState.NOT_INSTALLED': 'Not installed on this device',
+  'endpointAdmin.drawer.install.installedState.UNKNOWN':
+    'Installed status could not be verified from inventory',
+  'endpointAdmin.drawer.install.reasons.heading': 'Reasons',
+  'endpointAdmin.drawer.install.blockingReasons.heading': 'Blocking reasons',
+  'endpointAdmin.drawer.install.warnings.heading': 'Warnings',
+  'endpointAdmin.drawer.install.requirements.heading': 'Requirements',
+  'endpointAdmin.drawer.install.evidence.heading': 'Decision evidence',
+  'endpointAdmin.drawer.install.evidence.inventoryUpdated': 'Inventory updated: {timestamp}',
+  'endpointAdmin.drawer.install.evidence.summaryCollected': 'Summary collected: {timestamp}',
+  'endpointAdmin.drawer.install.evidence.appsCollected': 'Apps list collected: {timestamp}',
+  'endpointAdmin.drawer.install.evidence.wingetEgress':
+    'WinGet egress: {timestamp} (schema v{schemaVersion})',
+  'endpointAdmin.drawer.install.evidence.catalogRev': 'Catalog rev: {rowVersion} ({timestamp})',
+  'endpointAdmin.drawer.install.reason.label': 'Install reason (optional)',
+  'endpointAdmin.drawer.install.reason.placeholder':
+    'Describe why this install is needed (added to the audit trail).',
+  'endpointAdmin.drawer.install.confirm': 'Confirm Install',
+  'endpointAdmin.drawer.install.cancel': 'Cancel',
+  'endpointAdmin.drawer.install.toast.success': 'Install command queued (ID: {commandId})',
+  'endpointAdmin.drawer.install.toast.blockRecompute':
+    'Preflight changed: catalog or inventory updated since open, install is now blocked.',
+  'endpointAdmin.drawer.install.toast.validation': 'Request validation failed. Check the fields.',
+  'endpointAdmin.drawer.install.toast.notFound': 'Catalog item not found; list will refresh.',
+  'endpointAdmin.drawer.install.toast.forbidden':
+    'Admin (MANAGE) permission required for this action.',
+  'endpointAdmin.drawer.install.toast.error': 'Failed to start install.',
+  'endpointAdmin.drawer.install.reasonCode.already_installed_different_version':
+    'A different version is already installed.',
+  'endpointAdmin.drawer.install.reasonCode.apps_unavailable':
+    'Application list has not been collected yet.',
+  'endpointAdmin.drawer.install.reasonCode.catalog_item_disabled': 'Catalog item is disabled.',
+  'endpointAdmin.drawer.install.reasonCode.catalog_item_draft':
+    'Catalog item is still a draft and cannot be installed.',
+  'endpointAdmin.drawer.install.reasonCode.catalog_item_revoked': 'Catalog item has been revoked.',
+  'endpointAdmin.drawer.install.reasonCode.device_decommissioned':
+    'Device has been decommissioned.',
+  'endpointAdmin.drawer.install.reasonCode.device_not_online':
+    'Device is offline; install waits for online state.',
+  'endpointAdmin.drawer.install.reasonCode.installed_state_unknown':
+    'Installed state could not be determined from inventory.',
+  'endpointAdmin.drawer.install.reasonCode.installer_type_not_install_ready':
+    'This installer type does not yet support installs.',
+  'endpointAdmin.drawer.install.reasonCode.inventory_missing':
+    'Inventory has not been collected yet; collect inventory first.',
+  'endpointAdmin.drawer.install.reasonCode.inventory_stale':
+    'Inventory is stale; refresh is recommended.',
+  'endpointAdmin.drawer.install.reasonCode.inventory_unsupported':
+    'Device does not support inventory collection.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_missing':
+    'WinGet egress evidence missing.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_partial':
+    'WinGet egress partially succeeded.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_schema_unsupported':
+    'WinGet egress schema is unsupported.',
+  'endpointAdmin.drawer.install.reasonCode.winget_egress_unsupported':
+    'WinGet egress is not supported on this device.',
+  'endpointAdmin.drawer.install.reasonCode.winget_fixed_probe_package_mismatch':
+    'WinGet fixed probe package mismatch.',
+  'endpointAdmin.drawer.install.reasonCode.winget_not_ready': 'WinGet is not ready on this device.',
+  'endpointAdmin.drawer.install.reasonCode.winget_package_query_not_found':
+    'WinGet package not found in the source.',
+  'endpointAdmin.drawer.install.reasonCode.winget_source_list_warning':
+    'WinGet source list warning.',
   'endpointAdmin.modal.title.LOCK_USER_LOGIN': 'Lock User Login',
   'endpointAdmin.modal.title.UNLOCK_USER_LOGIN': 'Unlock User Login',
   'endpointAdmin.modal.title.CHANGE_LOCAL_PASSWORD': 'Change Local Password',
@@ -637,6 +856,11 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.command.status.FAILED': 'Failed',
   'endpointAdmin.command.status.EXPIRED': 'Expired',
   'endpointAdmin.command.status.CANCELLED': 'Cancelled',
+  'endpointAdmin.drawer.install.resultStatus.SUCCEEDED': 'Succeeded',
+  'endpointAdmin.drawer.install.resultStatus.FAILED': 'Failed',
+  'endpointAdmin.drawer.install.resultStatus.PARTIAL': 'Partial',
+  'endpointAdmin.drawer.install.resultStatus.UNSUPPORTED': 'Unsupported',
+  'endpointAdmin.drawer.install.resultStatus.pending': '—',
   'endpointAdmin.command.approval.NOT_REQUIRED': 'No approval needed',
   'endpointAdmin.command.approval.PENDING': 'Awaiting approval',
   'endpointAdmin.command.approval.APPROVED': 'Approved',
