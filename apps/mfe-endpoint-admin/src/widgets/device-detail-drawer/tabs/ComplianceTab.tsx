@@ -143,18 +143,48 @@ export const ComplianceTab: React.FC<ComplianceTabProps> = ({ deviceId, active }
   const { t } = useEndpointAdminI18n();
   const [cooldownRemainingSeconds, setCooldownRemainingSeconds] = React.useState(0);
   const [toast, setToast] = React.useState<{ tone: 'error' | 'success'; key: string } | null>(null);
-  // WEB-014B — Lazy history accordion. `historyOpen` stays false until
-  // the operator expands the <details>; the RTK Query skip flag depends
-  // on it so opening the Compliance tab itself never costs an extra
-  // history request. `historyPage` is reset to 0 on every device change
-  // so navigating between devices does not show stale-page state.
-  const [historyOpen, setHistoryOpen] = React.useState(false);
-  const [historyPage, setHistoryPage] = React.useState(0);
+  // WEB-014B — Lazy history accordion. State is keyed by `deviceId` so
+  // that device change is RENDER-SYNCHRONOUS — the derived `historyOpen`
+  // and `historyPage` collapse to `false` / `0` the moment a new device
+  // arrives in props, without waiting for a useEffect to fire. The
+  // alternative (`useEffect` reset) leaves one render where the new
+  // `deviceId` is paired with the previous open/page state, which fires
+  // a history GET against the new device under the old skip flag. The
+  // drawer does NOT remount this tab on device change (it just swaps
+  // the `deviceId` prop), so a render-time guard is the only way to
+  // close the lazy-history window. Codex 019e6dd9 iter-3 absorb (P1).
+  const [history, setHistory] = React.useState<{
+    deviceId: string | null;
+    open: boolean;
+    page: number;
+  }>({ deviceId: null, open: false, page: 0 });
 
-  React.useEffect(() => {
-    setHistoryPage(0);
-    setHistoryOpen(false);
-  }, [deviceId]);
+  const historyMatchesDevice = history.deviceId === deviceId;
+  const historyOpen = historyMatchesDevice && history.open;
+  const historyPage = historyMatchesDevice ? history.page : 0;
+
+  const setHistoryOpen = React.useCallback(
+    (open: boolean) => {
+      setHistory((prev) => ({
+        deviceId,
+        open,
+        // When opening the accordion for a new device, start at page 0.
+        page: prev.deviceId === deviceId ? prev.page : 0,
+      }));
+    },
+    [deviceId],
+  );
+
+  const setHistoryPage = React.useCallback(
+    (page: number) => {
+      setHistory((prev) => ({
+        deviceId,
+        open: prev.deviceId === deviceId ? prev.open : false,
+        page,
+      }));
+    },
+    [deviceId],
+  );
 
   // Cooldown ticker: when 409 Retry-After fires, count down to enable
   // the evaluate button again. React 18 strict-mode safe because the

@@ -368,4 +368,28 @@ describe('ComplianceTab', () => {
     fireEvent(details, new Event('toggle'));
     expect(screen.getByTestId('compliance-history-forbidden')).toBeTruthy();
   });
+
+  it('history skip resets render-synchronously on device change (Codex 019e6dd9 iter-3 P1)', () => {
+    mockQuery({ data: buildState() });
+    // Open the accordion for device-1 — history query should fire.
+    const { rerender } = render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    let lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    let opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(false);
+
+    // Swap to a different deviceId. The tab is NOT remounted — only the
+    // prop changes. The render-synchronous derive in ComplianceTab
+    // (history.deviceId !== deviceId) must collapse historyOpen + page
+    // immediately, so the next render's skip flag is true.
+    rerender(<ComplianceTab deviceId="device-2" active />);
+    lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(true);
+    // And the DOM details element should reflect the controlled false.
+    const detailsAfter = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    expect(detailsAfter.open).toBe(false);
+  });
 });
