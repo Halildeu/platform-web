@@ -274,9 +274,24 @@ export type {
   ApprovalCheckpointItem,
   ApprovalCheckpointStatus,
   ApprovalCheckpointItemStatus,
+  ApprovalCheckpointDensity,
 } from './approval-checkpoint';
 export { ApprovalReview } from './approval-review';
 export type { ApprovalReviewProps } from './approval-review';
+
+/* Approval foundation submission + inbox (PR-2, wave_12_approval_foundation) */
+export { ApprovalRequestForm } from './approval-request-form';
+export type {
+  ApprovalRequestFormProps,
+  ApprovalRequestDraft,
+  ApprovalRequestType,
+} from './approval-request-form';
+export { ApprovalInbox } from './approval-inbox';
+export type {
+  ApprovalInboxProps,
+  ApprovalInboxFilters,
+  ApprovalInboxBulkPayload,
+} from './approval-inbox';
 
 /* Approval foundation primitives (PR-1, wave_12_approval_foundation) */
 export { AssigneePicker } from './assignee-picker';
