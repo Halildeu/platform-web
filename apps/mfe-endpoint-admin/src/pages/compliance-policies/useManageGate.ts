@@ -3,15 +3,26 @@ import { getShellServices } from '../../app/services/shell-services';
 /**
  * WEB-014C — Frontend MANAGE gate for the policy CRUD page.
  *
- * Pulls the module-level permission from the shell-injected
- * `auth.getModuleLevel('ENDPOINT_ADMIN')` getter (matches the shared
- * `PermissionProvider` contract — see Codex 019e6dff iter-1 §B).
- * Returns `true` only when the level is `'MANAGE'` (or the user is a
- * super admin — same as the shell-side gate).
+ * Codex 019e6e10 iter-1 RED absorb: the shared shell-services contract
+ * (`SharedShellServices.auth` / `RemoteShellServices.auth`) does NOT
+ * yet expose `getModuleLevel(module)`; wiring that getter through the
+ * shell is a separate change. Until that lands, the only authoritative
+ * MANAGE signal the remote can read is `isSuperAdmin()`. To avoid
+ * false-negatives that would block legitimate MANAGE-level operators
+ * from using the page, the frontend gate runs in PERMISSIVE mode by
+ * default: it returns `true` UNLESS the shell explicitly signals
+ * `VIEW` via the future `getModuleLevel` API.
  *
- * Frontend-only — backend remains authoritative (`can_manage`
- * relation), and any mutation that slips through still surfaces 403
- * via the dialog toasts.
+ * Backend remains authoritative (`can_manage` relation gates the
+ * mutation endpoints); 403 responses surface as dialog toasts. The
+ * frontend gate is therefore an ergonomics layer, not a security
+ * boundary — a permissive default is the right failure mode here.
+ *
+ * When the shell-side `getModuleLevel` wiring lands as a follow-up,
+ * this hook tightens automatically: explicit `'VIEW'` returns `false`,
+ * everything else (`'MANAGE'`, super admin, missing API) stays
+ * permissive and only the explicit VIEW signal disables the page
+ * mutations.
  */
 export function useManageGate(): boolean {
   try {
@@ -22,16 +33,17 @@ export function useManageGate(): boolean {
           isSuperAdmin?: () => boolean;
         }
       | undefined;
-    if (!auth) return false;
+    if (!auth) return true;
     if (typeof auth.isSuperAdmin === 'function' && auth.isSuperAdmin()) {
       return true;
     }
     if (typeof auth.getModuleLevel === 'function') {
-      return auth.getModuleLevel('ENDPOINT_ADMIN') === 'MANAGE';
+      const level = auth.getModuleLevel('ENDPOINT_ADMIN');
+      if (level === 'VIEW') return false;
+      return true;
     }
-    return false;
+    return true;
   } catch {
-    // Shell services not yet configured (standalone dev) — fail closed.
-    return false;
+    return true;
   }
 }

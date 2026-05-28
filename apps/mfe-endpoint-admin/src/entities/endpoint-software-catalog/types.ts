@@ -14,7 +14,7 @@
  * catalog item id when an operator clicks into a single catalog item.
  */
 
-export type CatalogItemStatus = 'PROPOSED' | 'APPROVED' | 'REVOKED';
+export type CatalogItemStatus = 'DRAFT' | 'APPROVED' | 'REVOKED';
 
 export type CatalogProvider = 'WINGET' | 'CHOCOLATEY' | 'MANUAL';
 

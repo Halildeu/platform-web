@@ -532,10 +532,22 @@ export const endpointAdminApi = createApi({
           method: 'POST',
           body,
         }),
-        invalidatesTags: [
-          { type: 'CompliancePolicyItem' as const, id: 'LIST' },
-          { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
-        ],
+        // Codex 019e6e10 iter-1 §4: invalidate the new policy item id
+        // when the server returns it, so an in-flight
+        // `getCompliancePolicyItem` subscription for that id refetches
+        // with the freshly-created entity instead of relying on the
+        // broader LIST refetch alone.
+        invalidatesTags: (result) =>
+          result
+            ? [
+                { type: 'CompliancePolicyItem' as const, id: result.id },
+                { type: 'CompliancePolicyItem' as const, id: 'LIST' },
+                { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
+              ]
+            : [
+                { type: 'CompliancePolicyItem' as const, id: 'LIST' },
+                { type: 'EndpointDeviceCompliance' as const, id: 'LIST' },
+              ],
       },
     ),
     /**
