@@ -267,6 +267,10 @@ import entry267 from './entries/BottomNavigation.doc';
 import entry268 from './entries/ServerPaginationFooter.doc';
 import entry269 from './entries/useDownloadWithProgress.doc';
 import entry270 from './entries/GroupedCardGallery.doc';
+// PR-1 wave_12_approval_foundation primitives.
+import entry271 from './entries/AssigneePicker.doc';
+import entry272 from './entries/DecisionActionDialog.doc';
+import entry273 from './entries/ApprovalEligibilityGuard.doc';
 
 export const designLabComponentDocEntries: DesignLabComponentDocEntry[] = [
   entry1,
@@ -528,6 +532,9 @@ export const designLabComponentDocEntries: DesignLabComponentDocEntry[] = [
   entry268,
   entry269,
   entry270,
+  entry271,
+  entry272,
+  entry273,
 ];
 
 export const designLabIndexItems = designLabComponentDocEntries.map((entry) => entry.indexItem);

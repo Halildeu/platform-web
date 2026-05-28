@@ -13,6 +13,9 @@
 /*    advanced/    — EntityGrid, AG Grid, Charts, ...                  */
 /* ------------------------------------------------------------------ */
 
+/* ---- Domain Types ---- */
+export * from './types';
+
 /* ---- Utils ---- */
 export { cn, formatValue, getTrendColor, getTrendIcon, getToneClasses } from './utils';
 export type {
