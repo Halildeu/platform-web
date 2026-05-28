@@ -14,6 +14,7 @@ import { DetayTab } from './tabs/DetayTab';
 import { IslemlerTab } from './tabs/IslemlerTab';
 import { AuditTab } from './tabs/AuditTab';
 import { InventoryTab } from './tabs/InventoryTab';
+import { ComplianceTab } from './tabs/ComplianceTab';
 
 export interface DeviceDetailDrawerProps {
   open: boolean;
@@ -21,7 +22,7 @@ export interface DeviceDetailDrawerProps {
   onClose: () => void;
 }
 
-type TabKey = 'detay' | 'islemler' | 'audit' | 'inventory';
+type TabKey = 'detay' | 'islemler' | 'audit' | 'inventory' | 'compliance';
 
 function generateIdempotencyKey(): string {
   // crypto.randomUUID is widely available in modern browsers + jsdom
@@ -135,6 +136,11 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
       key: 'inventory',
       label: t('endpointAdmin.drawer.tab.inventory'),
       content: <InventoryTab deviceId={device.id} active={activeTab === 'inventory'} />,
+    },
+    {
+      key: 'compliance',
+      label: t('endpointAdmin.drawer.compliance.tabLabel'),
+      content: <ComplianceTab deviceId={device.id} active={activeTab === 'compliance'} />,
     },
   ];
 
