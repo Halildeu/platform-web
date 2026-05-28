@@ -139,16 +139,27 @@ export function useEndpointPolicyApprovals(
 ): UseEndpointPolicyApprovalsReturn {
   const repositoryRef = useRef<ApprovalsRepository>(options.repository ?? localStorageRepository());
 
-  const [state, setState] = useState<StoredApprovalsState>(() => repositoryRef.current.load());
+  // stateRef mirrors the React state synchronously so an updater can see
+  // the latest committed value even if multiple operations run in the
+  // same event tick (e.g. bulk approve loop). Without this, closures
+  // capture a stale `state` and the second op overwrites the first.
+  const stateRef = useRef<StoredApprovalsState>(repositoryRef.current.load());
+  const [state, setState] = useState<StoredApprovalsState>(() => stateRef.current);
 
   // Race-condition fix (Codex 019e6e76 post-impl): persist synchronously
-  // alongside setState rather than relying on a deferred useEffect. Otherwise
-  // a propose() → navigate() in the same submit handler can land the case
-  // page before the new request is in localStorage, causing "Talep bulunamadi".
-  const commit = useCallback((next: StoredApprovalsState) => {
-    repositoryRef.current.save(next);
-    setState(next);
-  }, []);
+  // alongside setState rather than relying on a deferred useEffect.
+  // Updater pattern reads from `stateRef.current`, not the closure state,
+  // so back-to-back commits in the same event are correctly composed.
+  const commit = useCallback(
+    (updater: (prev: StoredApprovalsState) => StoredApprovalsState): StoredApprovalsState => {
+      const next = updater(stateRef.current);
+      repositoryRef.current.save(next);
+      stateRef.current = next;
+      setState(next);
+      return next;
+    },
+    [],
+  );
 
   const propose = useCallback(
     (input: ProposePolicyChangeInput): ApprovalRequest => {
@@ -174,13 +185,13 @@ export function useEndpointPolicyApprovals(
         before: input.before,
         after: input.after,
       };
-      commit({
-        requests: [request, ...state.requests],
-        extras: { ...state.extras, [id]: extras },
-      });
+      commit((prev) => ({
+        requests: [request, ...prev.requests],
+        extras: { ...prev.extras, [id]: extras },
+      }));
       return request;
     },
-    [commit, state],
+    [commit],
   );
 
   const transition = useCallback(
@@ -189,17 +200,16 @@ export function useEndpointPolicyApprovals(
       buildDecision: (prev: ApprovalRequest) => DecisionRecord,
       nextStatus: ApprovalRequestStatus,
     ) => {
-      const next: StoredApprovalsState = {
-        ...state,
-        requests: state.requests.map((r) => {
+      commit((prev) => ({
+        ...prev,
+        requests: prev.requests.map((r) => {
           if (r.id !== id) return r;
           const decision = buildDecision(r);
           return applyDecision(r, decision, nextStatus);
         }),
-      };
-      commit(next);
+      }));
     },
-    [commit, state],
+    [commit],
   );
 
   const approve = useCallback(

@@ -111,6 +111,52 @@ describe('useEndpointPolicyApprovals — propose persistence (race condition fix
     expect(stored.history[0].newStatus).toBe('approved');
   });
 
+  it('bulk approve sequence preserves all histories (updater pattern locks in)', () => {
+    const memo = memoryRepository();
+    const { result } = renderHook(() => useEndpointPolicyApprovals({ repository: memo.repo }));
+
+    // Seed two requests.
+    let id1 = '';
+    let id2 = '';
+    act(() => {
+      id1 = result.current.propose({
+        policyId: 'policy-bulk-a',
+        title: 'A',
+        reason: 'a',
+        proposer,
+        approvers: [reviewer],
+        changeKind: 'update',
+        riskTier: 'low',
+      }).id;
+      id2 = result.current.propose({
+        policyId: 'policy-bulk-b',
+        title: 'B',
+        reason: 'b',
+        proposer,
+        approvers: [reviewer],
+        changeKind: 'update',
+        riskTier: 'low',
+      }).id;
+    });
+
+    // Approve both in the same event tick (mimics ApprovalInboxPage bulk approve).
+    act(() => {
+      result.current.approve(id1, reviewer, 'ok-1');
+      result.current.approve(id2, reviewer, 'ok-2');
+    });
+
+    // Both requests must be approved and carry their own decision in history.
+    const stored = memo.lastWrite!.requests;
+    const a = stored.find((r) => r.id === id1)!;
+    const b = stored.find((r) => r.id === id2)!;
+    expect(a.status).toBe('approved');
+    expect(b.status).toBe('approved');
+    expect(a.history).toHaveLength(1);
+    expect(b.history).toHaveLength(1);
+    expect(a.history[0].reason).toBe('ok-1');
+    expect(b.history[0].reason).toBe('ok-2');
+  });
+
   it('attest() emits attestation discriminated record with statement', () => {
     const memo = memoryRepository();
     const { result } = renderHook(() => useEndpointPolicyApprovals({ repository: memo.repo }));
