@@ -275,6 +275,26 @@ describe('SoftwareCatalogTab — query args (Codex must-fix #B)', () => {
       size: 10,
     });
   });
+
+  it('install audit active iken pollingInterval=10s (Codex 019e6fe4 must-fix #3)', () => {
+    mockCatalog([]);
+    mockAudits([]);
+    render(<SoftwareCatalogTab device={buildDevice()} active />);
+    expect(useListInstallAuditsQueryMock.mock.calls.at(-1)?.[1]).toMatchObject({
+      skip: false,
+      pollingInterval: 10_000,
+    });
+  });
+
+  it('install audit inactive iken polling kapali', () => {
+    mockCatalog([]);
+    mockAudits([]);
+    render(<SoftwareCatalogTab device={buildDevice()} active={false} />);
+    expect(useListInstallAuditsQueryMock.mock.calls.at(-1)?.[1]).toMatchObject({
+      skip: true,
+      pollingInterval: 0,
+    });
+  });
 });
 
 describe('SoftwareCatalogTab — catalog list rendering', () => {

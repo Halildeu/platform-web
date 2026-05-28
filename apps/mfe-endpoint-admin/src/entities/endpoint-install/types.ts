@@ -168,20 +168,43 @@ export interface GetInstallAuditArgs {
  */
 export type CreateInstallSuccess = EndpointCommand;
 
+const INSTALLED_STATES: ReadonlySet<InstalledState> = new Set<InstalledState>([
+  'INSTALLED',
+  'NOT_INSTALLED',
+  'UNKNOWN',
+]);
+
 /**
  * Helper — narrow an unknown RTK Query mutation error payload to an
  * `InstallPreflightResponse` when the backend returned 409 + BLOCK
- * recompute (Codex 019e6fd1 must-fix #4: shape guard before mounting
- * the new preflight state). Returns the response or null.
+ * recompute (Codex 019e6fd1 must-fix #4 + 019e6fe4 must-fix #1: shape
+ * guard before mounting the new preflight state). Validates EVERY
+ * field the modal dereferences (decision / catalogItemId /
+ * catalogItemUuid / deviceId / evaluatedAt / installedState (enum) /
+ * evidence object / reasons / blockingReasons / warnings /
+ * requirements). A future backend or proxy that drops one of these
+ * keys must fall through to the generic error toast rather than
+ * promote a malformed object and crash render. Returns the response
+ * or null.
  */
 export function tryReadBlockRecompute(data: unknown): InstallPreflightResponse | null {
   if (!data || typeof data !== 'object') return null;
   const candidate = data as Partial<InstallPreflightResponse>;
   if (candidate.decision !== 'BLOCK') return null;
   if (typeof candidate.catalogItemId !== 'string') return null;
+  if (typeof candidate.catalogItemUuid !== 'string') return null;
   if (typeof candidate.deviceId !== 'string') return null;
+  if (typeof candidate.evaluatedAt !== 'string') return null;
+  if (
+    typeof candidate.installedState !== 'string' ||
+    !INSTALLED_STATES.has(candidate.installedState as InstalledState)
+  ) {
+    return null;
+  }
+  if (!candidate.evidence || typeof candidate.evidence !== 'object') return null;
   if (!Array.isArray(candidate.reasons)) return null;
   if (!Array.isArray(candidate.blockingReasons)) return null;
   if (!Array.isArray(candidate.warnings)) return null;
+  if (!Array.isArray(candidate.requirements)) return null;
   return candidate as InstallPreflightResponse;
 }

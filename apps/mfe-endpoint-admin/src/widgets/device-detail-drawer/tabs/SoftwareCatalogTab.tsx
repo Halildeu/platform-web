@@ -86,9 +86,18 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
     { skip: !active },
   );
 
+  // Codex 019e6fe4 must-fix #3: the install audit row is created only
+  // when the agent reports a terminal install result
+  // (EndpointInstallAuditService writes from
+  // EndpointAgentCommandService#reportResult). The `createInstall`
+  // invalidation refetches immediately on POST, before the row exists;
+  // the agent's later report does NOT trigger a fresh RTK tag
+  // invalidation. The IslemlerTab command-list poll is on a different
+  // cache. Poll every 10s while the tab is active so terminal results
+  // surface without forcing an operator refresh.
   const installAuditQuery = useListInstallAuditsQuery(
     { deviceId: device.id, page: 0, size: 10 },
-    { skip: !active },
+    { skip: !active, pollingInterval: active ? 10_000 : 0 },
   );
 
   if (!active) return null;

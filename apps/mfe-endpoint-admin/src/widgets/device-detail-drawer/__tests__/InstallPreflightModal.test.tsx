@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { InstallPreflightModal } from '../components/InstallPreflightModal';
-import type {
-  InstallPreflightDecision,
-  InstallPreflightResponse,
+import {
+  tryReadBlockRecompute,
+  type InstallPreflightDecision,
+  type InstallPreflightResponse,
 } from '../../../entities/endpoint-install/types';
 import type { EndpointCommand } from '../../../entities/endpoint-command/types';
 
@@ -471,5 +472,73 @@ describe('InstallPreflightModal — cancel + ESC', () => {
     render(<InstallPreflightModal {...baseProps} onClose={onClose} />);
     fireEvent.click(screen.getByTestId('install-modal-cancel'));
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('InstallPreflightModal — isFetching gate (Codex 019e6fe4 must-fix #2)', () => {
+  it('isFetching=true iken loading placeholder + confirm disabled', () => {
+    // Stale data sits next to a fresh `isFetching: true` while RTK
+    // Query recomputes; the modal must NOT show the stale PASS body
+    // (loading placeholder takes over) AND Confirm must stay disabled.
+    mockPreflight({ data: buildPreflight('PASS'), isFetching: true });
+    mockInstall(vi.fn());
+    render(<InstallPreflightModal {...baseProps} />);
+    expect(screen.getByTestId('install-modal-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('install-modal-decision-PASS')).toBeNull();
+    expect(screen.getByTestId('install-modal-confirm')).toBeDisabled();
+  });
+});
+
+describe('tryReadBlockRecompute — strict shape guard (Codex 019e6fe4 must-fix #1)', () => {
+  const minimalBlock = (): InstallPreflightResponse =>
+    buildPreflight('BLOCK', {
+      blockingReasons: ['catalog_item_revoked'],
+      reasons: ['catalog_item_revoked'],
+    });
+
+  it('tam BLOCK gövdesi promote edilir', () => {
+    expect(tryReadBlockRecompute(minimalBlock())).not.toBeNull();
+  });
+
+  it('decision != BLOCK reddedilir', () => {
+    const candidate = { ...minimalBlock(), decision: 'PASS' } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('catalogItemUuid eksikse reddedilir', () => {
+    const { catalogItemUuid: _drop, ...rest } = minimalBlock();
+    expect(tryReadBlockRecompute(rest)).toBeNull();
+  });
+
+  it('evaluatedAt eksikse reddedilir', () => {
+    const { evaluatedAt: _drop, ...rest } = minimalBlock();
+    expect(tryReadBlockRecompute(rest)).toBeNull();
+  });
+
+  it('installedState gecersiz string ise reddedilir', () => {
+    const candidate = { ...minimalBlock(), installedState: 'BOGUS' } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('evidence yoksa reddedilir', () => {
+    const { evidence: _drop, ...rest } = minimalBlock();
+    expect(tryReadBlockRecompute(rest)).toBeNull();
+  });
+
+  it('requirements array degilse reddedilir', () => {
+    const candidate = { ...minimalBlock(), requirements: 'oops' } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('blockingReasons array degilse reddedilir', () => {
+    const candidate = { ...minimalBlock(), blockingReasons: null } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('non-object input reddedilir', () => {
+    expect(tryReadBlockRecompute(null)).toBeNull();
+    expect(tryReadBlockRecompute('string')).toBeNull();
+    expect(tryReadBlockRecompute(42)).toBeNull();
+    expect(tryReadBlockRecompute(undefined)).toBeNull();
   });
 });

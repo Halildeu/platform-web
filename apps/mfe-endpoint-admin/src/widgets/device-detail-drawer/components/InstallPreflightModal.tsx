@@ -397,11 +397,19 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
     );
   };
 
+  // Codex 019e6fe4 must-fix #2: confirm gate guards against (a) RTK
+  // Query refetch frames where stale data sits next to a fresh
+  // `isFetching: true` (would otherwise let the user submit on the
+  // stale PASS while a recompute is in flight), and (b) the brief
+  // mount tick before the per-intent effect populates the idempotency
+  // key (would otherwise send an empty key).
   const confirmDisabled =
     !effectivePreflight ||
     effectivePreflight.decision === 'BLOCK' ||
     createState.isLoading ||
-    preflightLoading;
+    preflightLoading ||
+    preflightFetching ||
+    !idempotencyKey;
 
   const title = t('endpointAdmin.drawer.install.modal.title').replace('{name}', catalogDisplayName);
 
