@@ -21,8 +21,8 @@ export interface DeletePolicyConfirmProps {
 }
 
 /**
- * WEB-014C — Delete policy confirmation modal. Tailwind + overlay-
- * engine pattern (Codex 019e6e10 iter-1 §2 absorb). Hard delete with
+ * WEB-014C — Delete policy confirmation modal. Tailwind + overlay-engine
+ * canonical pattern (Codex 019e6e10 iter-2 absorb). Hard delete with
  * soft-disable hint (Codex 019e6dff iter-1 §D).
  */
 export const DeletePolicyConfirm: React.FC<DeletePolicyConfirmProps> = ({
@@ -34,25 +34,24 @@ export const DeletePolicyConfirm: React.FC<DeletePolicyConfirmProps> = ({
   error,
 }) => {
   const { t } = useEndpointAdminI18n();
-  const panelRef = React.useRef<HTMLDivElement>(null);
-  const layerIdRef = React.useRef<string | null>(null);
+  const layerId = React.useId();
+  const panelRef = useFocusTrap({
+    active: open,
+    autoFocus: true,
+    restoreFocus: true,
+    layerId,
+  });
+
+  useSiblingIsolation({ active: open, layerId, panelRef });
+  useScrollLock(open);
 
   React.useEffect(() => {
     if (!open) return undefined;
-    const id = registerLayer({ name: 'DeletePolicyConfirm' });
-    layerIdRef.current = id;
-    return () => {
-      if (layerIdRef.current) {
-        unregisterLayer(layerIdRef.current);
-        layerIdRef.current = null;
-      }
-    };
-  }, [open]);
+    registerLayer(layerId, 'modal');
+    return () => unregisterLayer(layerId);
+  }, [open, layerId]);
 
-  useFocusTrap(panelRef as React.RefObject<HTMLElement>, open);
-  useScrollLock(open);
-  useSiblingIsolation(panelRef as React.RefObject<HTMLElement>, open);
-  useEscapeKey(open, onClose);
+  useEscapeKey(open, onClose, { layerId });
 
   if (!open || !item) return null;
 
@@ -67,16 +66,16 @@ export const DeletePolicyConfirm: React.FC<DeletePolicyConfirmProps> = ({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('endpointAdmin.compliance.policies.deleteDialog.title')}
       data-testid="delete-policy-confirm"
-      data-layer-id={layerIdRef.current ?? undefined}
+      data-layer-id={layerId}
       className="fixed inset-0 z-[1400] flex items-center justify-center"
     >
       <div className="absolute inset-0 bg-surface-overlay/60" onClick={onClose} aria-hidden />
       <div
-        ref={panelRef}
+        ref={panelRef as React.RefObject<HTMLDivElement>}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('endpointAdmin.compliance.policies.deleteDialog.title')}
         tabIndex={-1}
         className="relative w-full max-w-md bg-surface-default rounded-xl shadow-2xl p-6 mx-4"
       >
