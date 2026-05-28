@@ -286,6 +286,12 @@ export type {
   ApprovalRequestDraft,
   ApprovalRequestType,
 } from './approval-request-form';
+export { ApprovalInbox } from './approval-inbox';
+export type {
+  ApprovalInboxProps,
+  ApprovalInboxFilters,
+  ApprovalInboxBulkPayload,
+} from './approval-inbox';
 
 /* Approval foundation primitives (PR-1, wave_12_approval_foundation) */
 export { AssigneePicker } from './assignee-picker';

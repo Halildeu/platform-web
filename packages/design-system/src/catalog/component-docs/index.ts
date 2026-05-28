@@ -273,6 +273,7 @@ import entry272 from './entries/DecisionActionDialog.doc';
 import entry273 from './entries/ApprovalEligibilityGuard.doc';
 // PR-2 wave_12_approval_foundation submission + inbox.
 import entry274 from './entries/ApprovalRequestForm.doc';
+import entry275 from './entries/ApprovalInbox.doc';
 
 export const designLabComponentDocEntries: DesignLabComponentDocEntry[] = [
   entry1,
@@ -538,6 +539,7 @@ export const designLabComponentDocEntries: DesignLabComponentDocEntry[] = [
   entry272,
   entry273,
   entry274,
+  entry275,
 ];
 
 export const designLabIndexItems = designLabComponentDocEntries.map((entry) => entry.indexItem);
