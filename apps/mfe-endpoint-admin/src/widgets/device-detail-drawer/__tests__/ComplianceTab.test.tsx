@@ -25,11 +25,14 @@ import { ComplianceTab } from '../tabs/ComplianceTab';
 
 const useGetDeviceComplianceQueryMock = vi.fn();
 const useForceEvaluateDeviceComplianceMutationMock = vi.fn();
+const useGetDeviceComplianceEvaluationsQueryMock = vi.fn();
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
   endpointAdminApi: {
     useGetDeviceComplianceQuery: (...args: unknown[]) => useGetDeviceComplianceQueryMock(...args),
     useForceEvaluateDeviceComplianceMutation: () => useForceEvaluateDeviceComplianceMutationMock(),
+    useGetDeviceComplianceEvaluationsQuery: (...args: unknown[]) =>
+      useGetDeviceComplianceEvaluationsQueryMock(...args),
   },
 }));
 
@@ -110,11 +113,36 @@ function buildState(overrides: Partial<ComplianceStateResponse> = {}): Complianc
   };
 }
 
+function mockHistory(
+  result: {
+    data?: {
+      items: ComplianceStateResponse[];
+      page: number;
+      size: number;
+      totalElements: number;
+      totalPages: number;
+    };
+    error?: { status: number };
+    isLoading?: boolean;
+    isFetching?: boolean;
+  } = {},
+): void {
+  useGetDeviceComplianceEvaluationsQueryMock.mockReturnValue({
+    data: result.data,
+    error: result.error,
+    isLoading: result.isLoading ?? false,
+    isFetching: result.isFetching ?? false,
+    isUninitialized: !(result.data || result.error || result.isLoading || result.isFetching),
+  });
+}
+
 describe('ComplianceTab', () => {
   beforeEach(() => {
     useGetDeviceComplianceQueryMock.mockReset();
     useForceEvaluateDeviceComplianceMutationMock.mockReset();
+    useGetDeviceComplianceEvaluationsQueryMock.mockReset();
     mockMutation();
+    mockHistory();
   });
 
   afterEach(() => {
@@ -244,5 +272,124 @@ describe('ComplianceTab', () => {
     await waitFor(() => {
       expect(screen.getByTestId('compliance-toast-success')).toBeTruthy();
     });
+  });
+
+  /* ---------------------------------------------------------------- */
+  /*  WEB-014B — history accordion (lazy <details>)                    */
+  /* ---------------------------------------------------------------- */
+
+  it('renders history accordion in collapsed state by default', () => {
+    mockQuery({ data: buildState() });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+  });
+
+  it('skips history query while accordion is closed (lazy load)', () => {
+    mockQuery({ data: buildState() });
+    render(<ComplianceTab deviceId="device-1" active />);
+    expect(useGetDeviceComplianceEvaluationsQueryMock).toHaveBeenCalled();
+    // The skip flag is the SECOND argument; we assert it is true (skipped).
+    const lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    const opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(true);
+  });
+
+  it('fires history query when accordion opens (toggle event)', () => {
+    mockQuery({ data: buildState() });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    // Simulate the operator expanding the accordion. JSDOM does not
+    // dispatch a `toggle` event when `open` is mutated, so we fire it
+    // ourselves with `currentTarget.open === true`.
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    // After the next render, the skip flag must be false (query fires).
+    const lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    const opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(false);
+  });
+
+  it('renders history rows + drift chip when items return', () => {
+    mockQuery({ data: buildState() });
+    mockHistory({
+      data: {
+        items: [
+          buildState({
+            latestEvaluationId: 'eval-1',
+            decision: 'NON_COMPLIANT',
+            evaluatedAt: '2026-05-28T10:00:00Z',
+            staleness: {
+              summary: 'SOFT',
+              apps: 'SOFT',
+              wingetEgress: 'UNAVAILABLE',
+              worst: 'SOFT',
+            },
+            blockingReasons: ['forbidden_app_installed'],
+            policyDrift: true,
+            catalogPolicyHash: 'a'.repeat(64),
+            catalogPolicyHashCurrent: 'b'.repeat(64),
+          }),
+        ],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      },
+    });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByTestId('compliance-history-list')).toBeTruthy();
+    expect(screen.getByTestId('compliance-history-row-eval-1')).toBeTruthy();
+    expect(screen.getByTestId('compliance-history-drift-eval-1')).toBeTruthy();
+  });
+
+  it('renders history empty state when items=[]', () => {
+    mockQuery({ data: buildState() });
+    mockHistory({
+      data: { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 },
+    });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByTestId('compliance-history-empty')).toBeTruthy();
+  });
+
+  it('renders history forbidden state on 403', () => {
+    mockQuery({ data: buildState() });
+    mockHistory({ error: { status: 403 } });
+    render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    expect(screen.getByTestId('compliance-history-forbidden')).toBeTruthy();
+  });
+
+  it('history skip resets render-synchronously on device change (Codex 019e6dd9 iter-3 P1)', () => {
+    mockQuery({ data: buildState() });
+    // Open the accordion for device-1 — history query should fire.
+    const { rerender } = render(<ComplianceTab deviceId="device-1" active />);
+    const details = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event('toggle'));
+    let lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    let opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(false);
+
+    // Swap to a different deviceId. The tab is NOT remounted — only the
+    // prop changes. The render-synchronous derive in ComplianceTab
+    // (history.deviceId !== deviceId) must collapse historyOpen + page
+    // immediately, so the next render's skip flag is true.
+    rerender(<ComplianceTab deviceId="device-2" active />);
+    lastCallArgs = useGetDeviceComplianceEvaluationsQueryMock.mock.calls.at(-1) ?? [];
+    opts = lastCallArgs[1] as { skip?: boolean } | undefined;
+    expect(opts?.skip).toBe(true);
+    // And the DOM details element should reflect the controlled false.
+    const detailsAfter = screen.getByTestId('compliance-history') as HTMLDetailsElement;
+    expect(detailsAfter.open).toBe(false);
   });
 });

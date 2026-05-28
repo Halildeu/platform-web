@@ -65,3 +65,58 @@ export interface GetDeviceComplianceArgs {
 export interface ForceEvaluateDeviceComplianceArgs {
   deviceId: string;
 }
+
+/* ------------------------------------------------------------------ */
+/*  WEB-014B — Cross-device compliance list + evaluation history       */
+/*  (Codex 019e6db0 plan-time iter-2 AGREE / ready_for_impl=true).     */
+/*                                                                     */
+/*  Mirrors the BE-023 admin endpoints:                                 */
+/*    GET /api/v1/admin/compliance/devices?decision=&page=&size=       */
+/*    GET /api/v1/admin/endpoint-devices/{id}/compliance/evaluations   */
+/*                                                                     */
+/*  Backend envelope is NOT Spring Page<T> — it is a custom shape       */
+/*  emitted by ComplianceEvaluationListResponse.java:                   */
+/*    { items, page, size, totalElements, totalPages }                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Custom pagination envelope returned by the BE-023 list endpoints.
+ * NOT Spring `Page<T>` (no `content` / `number` fields).
+ */
+export interface ComplianceEvaluationListResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+/**
+ * Both BE-023 list endpoints — cross-device latest list and per-device
+ * append-only history — return the SAME row DTO: `ComplianceStateResponse`.
+ *
+ *   GET /api/v1/admin/compliance/devices
+ *     -> ComplianceEvaluationListResponse<ComplianceStateResponse>
+ *   GET /api/v1/admin/endpoint-devices/{id}/compliance/evaluations
+ *     -> ComplianceEvaluationListResponse<ComplianceStateResponse>
+ *
+ * (Codex 019e6dd9 post-impl RED absorb — initial WEB-014B types
+ * invented sibling DTOs with top-level `worstStaleness` /
+ * `evaluationId` / `hostname` that the backend never emits. Aligning
+ * the type chain to the actual contract makes accessors
+ * `item.staleness.worst` and `item.latestEvaluationId`; hostname is
+ * resolved from the device list cache that
+ * `EndpointCompliancePage` already pre-warms.)
+ */
+
+export interface GetComplianceDeviceListArgs {
+  decision?: ComplianceDecision;
+  page?: number;
+  size?: number;
+}
+
+export interface GetDeviceComplianceEvaluationsArgs {
+  deviceId: string;
+  page?: number;
+  size?: number;
+}

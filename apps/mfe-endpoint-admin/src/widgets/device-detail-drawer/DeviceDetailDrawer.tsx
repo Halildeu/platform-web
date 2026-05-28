@@ -16,13 +16,23 @@ import { AuditTab } from './tabs/AuditTab';
 import { InventoryTab } from './tabs/InventoryTab';
 import { ComplianceTab } from './tabs/ComplianceTab';
 
+export type DeviceDetailDrawerTabKey = 'detay' | 'islemler' | 'audit' | 'inventory' | 'compliance';
+
 export interface DeviceDetailDrawerProps {
   open: boolean;
   device: EndpointDevice | null;
   onClose: () => void;
+  /**
+   * WEB-014B — Optional initial tab. When the drawer is opened from the
+   * cross-device compliance list page the row click should land on the
+   * Compliance tab instead of the default `detay`. Re-applied on every
+   * `open` / `deviceId` / `initialTab` change so navigating between
+   * rows while the drawer is open keeps the Compliance tab selected.
+   */
+  initialTab?: DeviceDetailDrawerTabKey;
 }
 
-type TabKey = 'detay' | 'islemler' | 'audit' | 'inventory' | 'compliance';
+type TabKey = DeviceDetailDrawerTabKey;
 
 function generateIdempotencyKey(): string {
   // crypto.randomUUID is widely available in modern browsers + jsdom
@@ -39,9 +49,10 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
   open,
   device,
   onClose,
+  initialTab,
 }) => {
   const { t } = useEndpointAdminI18n();
-  const [activeTab, setActiveTab] = React.useState<TabKey>('detay');
+  const [activeTab, setActiveTab] = React.useState<TabKey>(initialTab ?? 'detay');
   const [lastIssuedCommand, setLastIssuedCommand] = React.useState<EndpointCommand | null>(null);
   const [lastError, setLastError] = React.useState<string | null>(null);
 
@@ -58,16 +69,28 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
 
   const [createCommand, createState] = useCreateDeviceCommandMutation();
 
-  // Reset transient toast state when the drawer closes or the device
-  // changes — stale "command queued" banners must not bleed across
-  // selections.
+  // Reset transient toast state when the drawer closes — stale
+  // "command queued" banners must not bleed across selections.
   React.useEffect(() => {
     if (!open) {
       setLastIssuedCommand(null);
       setLastError(null);
-      setActiveTab('detay');
     }
   }, [open]);
+
+  // WEB-014B — Honor `initialTab` on every open / device change.
+  // Mount-only assignment would miss the case where the cross-device
+  // compliance list opens the drawer for a different device while it is
+  // already open (e.g. operator clicks a second row before closing).
+  // Codex 019e6db0 iter-2 guard: re-apply on `open || deviceId ||
+  // initialTab` so the Compliance tab stays selected per click. The
+  // default `initialTab ?? 'detay'` preserves WEB-014A's reset-to-detay
+  // behavior when consumers don't pass `initialTab`.
+  React.useEffect(() => {
+    if (open) {
+      setActiveTab(initialTab ?? 'detay');
+    }
+  }, [open, deviceId, initialTab]);
 
   React.useEffect(() => {
     setLastIssuedCommand(null);

@@ -4,6 +4,7 @@ import { endpointAdminApi } from '../../../app/services/endpointAdminApi';
 import type {
   ComplianceDecision,
   ComplianceStalenessReport,
+  ComplianceStateResponse,
   StalenessSeverity,
 } from '../../../entities/endpoint-device-compliance/types';
 import { useEndpointAdminI18n } from '../../../i18n';
@@ -136,10 +137,54 @@ function streamStalenessLabel(severity: StalenessSeverity, t: (key: string) => s
   }
 }
 
+const HISTORY_PAGE_SIZE = 20;
+
 export const ComplianceTab: React.FC<ComplianceTabProps> = ({ deviceId, active }) => {
   const { t } = useEndpointAdminI18n();
   const [cooldownRemainingSeconds, setCooldownRemainingSeconds] = React.useState(0);
   const [toast, setToast] = React.useState<{ tone: 'error' | 'success'; key: string } | null>(null);
+  // WEB-014B — Lazy history accordion. State is keyed by `deviceId` so
+  // that device change is RENDER-SYNCHRONOUS — the derived `historyOpen`
+  // and `historyPage` collapse to `false` / `0` the moment a new device
+  // arrives in props, without waiting for a useEffect to fire. The
+  // alternative (`useEffect` reset) leaves one render where the new
+  // `deviceId` is paired with the previous open/page state, which fires
+  // a history GET against the new device under the old skip flag. The
+  // drawer does NOT remount this tab on device change (it just swaps
+  // the `deviceId` prop), so a render-time guard is the only way to
+  // close the lazy-history window. Codex 019e6dd9 iter-3 absorb (P1).
+  const [history, setHistory] = React.useState<{
+    deviceId: string | null;
+    open: boolean;
+    page: number;
+  }>({ deviceId: null, open: false, page: 0 });
+
+  const historyMatchesDevice = history.deviceId === deviceId;
+  const historyOpen = historyMatchesDevice && history.open;
+  const historyPage = historyMatchesDevice ? history.page : 0;
+
+  const setHistoryOpen = React.useCallback(
+    (open: boolean) => {
+      setHistory((prev) => ({
+        deviceId,
+        open,
+        // When opening the accordion for a new device, start at page 0.
+        page: prev.deviceId === deviceId ? prev.page : 0,
+      }));
+    },
+    [deviceId],
+  );
+
+  const setHistoryPage = React.useCallback(
+    (page: number) => {
+      setHistory((prev) => ({
+        deviceId,
+        open: prev.deviceId === deviceId ? prev.open : false,
+        page,
+      }));
+    },
+    [deviceId],
+  );
 
   // Cooldown ticker: when 409 Retry-After fires, count down to enable
   // the evaluate button again. React 18 strict-mode safe because the
@@ -158,6 +203,17 @@ export const ComplianceTab: React.FC<ComplianceTabProps> = ({ deviceId, active }
       // Skip when the drawer is hidden so closing the drawer does not
       // keep a stale poll alive.
       skip: !active || !deviceId,
+    },
+  );
+
+  // WEB-014B — Lazy history query. Stays skipped until `historyOpen`
+  // flips to true (operator opens the <details>). `forceEvaluate`
+  // mutation already invalidates the matching cache tag, so re-opening
+  // the accordion after a force-evaluate refetches automatically.
+  const historyQuery = endpointAdminApi.useGetDeviceComplianceEvaluationsQuery(
+    { deviceId, page: historyPage, size: HISTORY_PAGE_SIZE },
+    {
+      skip: !active || !deviceId || !historyOpen,
     },
   );
 
@@ -328,6 +384,23 @@ export const ComplianceTab: React.FC<ComplianceTabProps> = ({ deviceId, active }
         </button>
       </div>
 
+      <ComplianceHistory
+        items={historyQuery.data?.items ?? []}
+        page={historyQuery.data?.page ?? historyPage}
+        totalPages={historyQuery.data?.totalPages ?? 0}
+        totalElements={historyQuery.data?.totalElements ?? 0}
+        isLoading={Boolean(historyQuery.isLoading || historyQuery.isFetching)}
+        error={
+          historyQuery.error && 'status' in historyQuery.error
+            ? (historyQuery.error.status as number | string | undefined)
+            : undefined
+        }
+        open={historyOpen}
+        onToggle={setHistoryOpen}
+        onPageChange={setHistoryPage}
+        t={t}
+      />
+
       {toast ? (
         <div
           role="status"
@@ -408,6 +481,185 @@ const StalenessDetails: React.FC<StalenessDetailsProps> = ({ staleness, t }) => 
         <dt>{t('endpointAdmin.drawer.compliance.staleness.stream.wingetEgress')}</dt>
         <dd>{streamStalenessLabel(staleness.wingetEgress, t)}</dd>
       </dl>
+    </details>
+  );
+};
+
+interface ComplianceHistoryProps {
+  items: ComplianceStateResponse[];
+  page: number;
+  totalPages: number;
+  totalElements: number;
+  isLoading: boolean;
+  error: number | string | undefined;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  onPageChange: (page: number) => void;
+  t: (key: string) => string;
+}
+
+/**
+ * WEB-014B — Evaluation history accordion. Lazy `<details>` driven by
+ * the operator: query stays skipped until the element opens, so a tab
+ * open never triggers a history fetch. Backend returns newest-first.
+ * Page size is fixed at 20 (matches the BE-023 internal default); the
+ * pagination row exposes prev/next nudges only — no jump-to-page UI to
+ * stay consistent with the WEB-011 InventoryTab pattern.
+ *
+ * Codex 019e6dd9 iter-1 absorb (P1): the `<details>` is now CONTROLLED
+ * via `open={open}` so device change collapses the DOM the same render
+ * cycle as the React `historyOpen` state flips back to false. Previous
+ * uncontrolled form left the DOM expanded if the operator clicked
+ * another row in the cross-device list while the drawer stayed open.
+ *
+ * Codex 019e6db0 iter-2 guard: `event.currentTarget.open` remains the
+ * authoritative open flag from the operator's click; the toggle
+ * handler funnels that into the parent via `onToggle` so React
+ * re-renders with the right skip state.
+ *
+ * Codex 019e6dd9 iter-1 absorb (P0): items render
+ * `ComplianceStateResponse` (the actual BE-023 response shape) — row
+ * key uses `latestEvaluationId` and the staleness chip reads
+ * `item.staleness.worst`, NOT the previously-invented top-level
+ * `evaluationId` / `worstStaleness` fields the backend never emits.
+ */
+const ComplianceHistory: React.FC<ComplianceHistoryProps> = ({
+  items,
+  page,
+  totalPages,
+  totalElements,
+  isLoading,
+  error,
+  open,
+  onToggle,
+  onPageChange,
+  t,
+}) => {
+  const handleToggle = React.useCallback(
+    (event: React.SyntheticEvent<HTMLDetailsElement>) => {
+      onToggle(event.currentTarget.open);
+    },
+    [onToggle],
+  );
+
+  return (
+    <details
+      className="compliance-history"
+      open={open}
+      onToggle={handleToggle}
+      data-testid="compliance-history"
+    >
+      <summary>{t('endpointAdmin.drawer.compliance.history.heading')}</summary>
+      {error === 403 ? (
+        <div className="compliance-history__forbidden" data-testid="compliance-history-forbidden">
+          {t('endpointAdmin.drawer.compliance.history.forbidden')}
+        </div>
+      ) : null}
+      {error && error !== 403 ? (
+        <div className="compliance-history__error" data-testid="compliance-history-error">
+          {t('endpointAdmin.drawer.compliance.history.error')}
+        </div>
+      ) : null}
+      {!error && isLoading ? (
+        <div className="compliance-history__loading" data-testid="compliance-history-loading">
+          {t('endpointAdmin.drawer.compliance.history.loading')}
+        </div>
+      ) : null}
+      {!error && !isLoading && items.length === 0 ? (
+        <div className="compliance-history__empty" data-testid="compliance-history-empty">
+          {t('endpointAdmin.drawer.compliance.history.empty')}
+        </div>
+      ) : null}
+      {!error && !isLoading && items.length > 0 ? (
+        <>
+          <ul className="compliance-history__list" data-testid="compliance-history-list">
+            {items.map((item) => {
+              const evalId = item.latestEvaluationId;
+              const worst = item.staleness.worst;
+              return (
+                <li
+                  key={evalId}
+                  className="compliance-history__row"
+                  data-testid={`compliance-history-row-${evalId}`}
+                >
+                  <div className="compliance-history__row-header">
+                    <span
+                      className={decisionToneClass(item.decision)}
+                      aria-label={decisionAriaLabel(item.decision, t)}
+                    >
+                      {decisionLabel(item.decision, t)}
+                    </span>
+                    <span className="compliance-history__row-evaluated-at">
+                      {formatTimestamp(item.evaluatedAt)}
+                    </span>
+                    <span
+                      className={`compliance-history__staleness-chip compliance-history__staleness-chip--${worst.toLowerCase()}`}
+                    >
+                      {streamStalenessLabel(worst, t)}
+                    </span>
+                    {item.policyDrift ? (
+                      <span
+                        className="compliance-history__drift-chip"
+                        data-testid={`compliance-history-drift-${evalId}`}
+                      >
+                        {t('endpointAdmin.drawer.compliance.history.drift')}
+                      </span>
+                    ) : null}
+                  </div>
+                  {item.blockingReasons.length > 0 ? (
+                    <ul className="compliance-history__reasons compliance-history__reasons--blocking">
+                      {item.blockingReasons.map((reason) => (
+                        <li key={`${evalId}-blocking-${reason}`}>
+                          {t(`endpointAdmin.drawer.compliance.reason.${reason}`)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {item.warnings.length > 0 ? (
+                    <ul className="compliance-history__reasons compliance-history__reasons--warning">
+                      {item.warnings.map((reason) => (
+                        <li key={`${evalId}-warning-${reason}`}>
+                          {t(`endpointAdmin.drawer.compliance.reason.${reason}`)}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {totalPages > 1 ? (
+            <nav
+              className="compliance-history__pagination"
+              aria-label={t('endpointAdmin.drawer.compliance.history.paginationAria')}
+              data-testid="compliance-history-pagination"
+            >
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.max(0, page - 1))}
+                disabled={page <= 0}
+                data-testid="compliance-history-prev"
+              >
+                {t('endpointAdmin.drawer.compliance.history.prev')}
+              </button>
+              <span data-testid="compliance-history-page-indicator">
+                {t('endpointAdmin.drawer.compliance.history.pageIndicator')
+                  .replace('{page}', String(page + 1))
+                  .replace('{totalPages}', String(totalPages))
+                  .replace('{totalElements}', String(totalElements))}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
+                disabled={page + 1 >= totalPages}
+                data-testid="compliance-history-next"
+              >
+                {t('endpointAdmin.drawer.compliance.history.next')}
+              </button>
+            </nav>
+          ) : null}
+        </>
+      ) : null}
     </details>
   );
 };
