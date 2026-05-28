@@ -174,18 +174,74 @@ const INSTALLED_STATES: ReadonlySet<InstalledState> = new Set<InstalledState>([
   'UNKNOWN',
 ]);
 
+/* ------------------------------------------------------------------ */
+/* Codex 019e6ff0 post-impl must-fix #2 — strict shape validators.    */
+/*                                                                     */
+/* Background: the previous `tryReadBlockRecompute` only checked       */
+/* `Array.isArray(...)` for the four reason/requirements arrays and    */
+/* `typeof candidate.evidence === 'object'` for the evidence sub-      */
+/* object. A malformed 409 body — e.g. `requirements: [{}, null]` or   */
+/* `evidence: { inventorySnapshotRowVersion: "1" }` — therefore        */
+/* passed the guard and would crash the modal render at the first      */
+/* `.toString()` / `.replace(...)` / `String(rowVersion)` call.        */
+/*                                                                     */
+/* The validators below mirror the backend record shape one-to-one     */
+/* (InstallPreflightEvidence: 12 nullable scalar fields, four          */
+/* string-array fields on InstallPreflightResponse). A future backend  */
+/* expansion that adds a new scalar to InstallPreflightEvidence is     */
+/* allowed (additional properties are accepted), but every key the     */
+/* modal already references must satisfy the exact type contract.     */
+/* ------------------------------------------------------------------ */
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((item) => typeof item === 'string');
+}
+
+function isStringOrNull(v: unknown): v is string | null {
+  return v === null || typeof v === 'string';
+}
+
+function isNumberOrNull(v: unknown): v is number | null {
+  return v === null || typeof v === 'number';
+}
+
+function isValidEvidence(v: unknown): v is InstallPreflightEvidence {
+  if (!v || typeof v !== 'object') return false;
+  const e = v as Partial<InstallPreflightEvidence>;
+  if (!isStringOrNull(e.inventorySnapshotId)) return false;
+  if (!isNumberOrNull(e.inventorySnapshotRowVersion)) return false;
+  if (!isStringOrNull(e.inventoryUpdatedAt)) return false;
+  if (!isStringOrNull(e.summaryCollectedAt)) return false;
+  if (!isStringOrNull(e.appsCollectedAt)) return false;
+  if (!isStringOrNull(e.latestSummaryCommandResultId)) return false;
+  if (!isStringOrNull(e.latestFullCommandResultId)) return false;
+  if (!isStringOrNull(e.latestWingetEgressCommandResultId)) return false;
+  if (!isStringOrNull(e.wingetEgressCollectedAt)) return false;
+  if (!isNumberOrNull(e.wingetEgressSchemaVersion)) return false;
+  if (!isNumberOrNull(e.catalogRowVersion)) return false;
+  if (!isStringOrNull(e.catalogLastUpdatedAt)) return false;
+  return true;
+}
+
 /**
  * Helper — narrow an unknown RTK Query mutation error payload to an
  * `InstallPreflightResponse` when the backend returned 409 + BLOCK
- * recompute (Codex 019e6fd1 must-fix #4 + 019e6fe4 must-fix #1: shape
- * guard before mounting the new preflight state). Validates EVERY
- * field the modal dereferences (decision / catalogItemId /
- * catalogItemUuid / deviceId / evaluatedAt / installedState (enum) /
- * evidence object / reasons / blockingReasons / warnings /
- * requirements). A future backend or proxy that drops one of these
- * keys must fall through to the generic error toast rather than
- * promote a malformed object and crash render. Returns the response
- * or null.
+ * recompute.
+ *
+ * Codex review chain:
+ *  - 019e6fd1 must-fix #4 + 019e6fe4 must-fix #1: shape guard before
+ *    mounting the new preflight state.
+ *  - 019e6ff0 post-impl must-fix #2: array elements must be strings;
+ *    evidence sub-object must satisfy `InstallPreflightEvidence` field
+ *    types one-by-one. A malformed body (e.g. `requirements: [{}]` or
+ *    `evidence: { inventoryUpdatedAt: 42 }`) now falls through to the
+ *    generic error toast instead of crashing render.
+ *
+ * Validates EVERY field the modal dereferences (decision /
+ * catalogItemId / catalogItemUuid / deviceId / evaluatedAt /
+ * installedState (enum) / evidence object FIELD-BY-FIELD / reasons /
+ * blockingReasons / warnings / requirements arrays-of-string).
+ * Returns the response or null.
  */
 export function tryReadBlockRecompute(data: unknown): InstallPreflightResponse | null {
   if (!data || typeof data !== 'object') return null;
@@ -201,10 +257,10 @@ export function tryReadBlockRecompute(data: unknown): InstallPreflightResponse |
   ) {
     return null;
   }
-  if (!candidate.evidence || typeof candidate.evidence !== 'object') return null;
-  if (!Array.isArray(candidate.reasons)) return null;
-  if (!Array.isArray(candidate.blockingReasons)) return null;
-  if (!Array.isArray(candidate.warnings)) return null;
-  if (!Array.isArray(candidate.requirements)) return null;
+  if (!isValidEvidence(candidate.evidence)) return null;
+  if (!isStringArray(candidate.reasons)) return null;
+  if (!isStringArray(candidate.blockingReasons)) return null;
+  if (!isStringArray(candidate.warnings)) return null;
+  if (!isStringArray(candidate.requirements)) return null;
   return candidate as InstallPreflightResponse;
 }

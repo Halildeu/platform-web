@@ -233,17 +233,63 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
       if (open) unregisterLayer(layerId);
     };
   }, [open, layerId]);
-  useEscapeKey(open, onClose, { layerId });
+
+  /* ------------------------------------------------------------------ */
+  /* Codex 019e6ff0 post-impl must-fix #1 — in-flight POST race guard.  */
+  /*                                                                     */
+  /* Background: cancel button was already gated on `createState.       */
+  /* isLoading` (see footer), but ESC + overlay click still routed       */
+  /* straight to onClose. If the operator pressed ESC after Confirm,    */
+  /* the parent would close the modal while the install POST was still  */
+  /* in flight; the eventual 201/409 resolution would then fire         */
+  /* `onInstalled` / `setLocalBlock` on a closed (or re-opened with a    */
+  /* different catalog) modal, leaking commands and producing stale     */
+  /* toasts on the next intent. Two defences combine below:             */
+  /*                                                                     */
+  /*  (a) `guardedOnClose` — ESC / overlay / explicit cancel-style      */
+  /*      callers route through this; when the mutation is in flight,   */
+  /*      close requests are absorbed (matching the disabled cancel     */
+  /*      button semantics so the UI is internally consistent).         */
+  /*                                                                     */
+  /*  (b) `intentRef` — every mutation captures the active intent       */
+  /*      `(deviceId, catalogItemId, idempotencyKey)` at submit time.   */
+  /*      A late resolve / reject is dropped if the active intent has   */
+  /*      since changed (reopen, different catalog, fresh key). Pairs   */
+  /*      with mountedRef so unmount-during-flight also drops the       */
+  /*      resolution silently (no state update on unmounted component). */
+  /*                                                                     */
+  /* Hook ordering note: `useEscapeKey(open, guardedOnClose, ...)` and  */
+  /* the `useCallback` it depends on must be declared AFTER             */
+  /* `useCreateInstallMutation` because the callback closes over        */
+  /* `createState.isLoading`. The refs are declared early so the        */
+  /* per-intent reset effect below can write to `intentRef.current`.    */
+  /* ------------------------------------------------------------------ */
+
+  const intentRef = React.useRef<string>('');
+  const mountedRef = React.useRef<boolean>(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Must-fix #5: per-intent state reset. Keyed on (open, deviceId,
   // catalogItemId) so reopening the modal for the same catalog item
   // also issues a fresh idempotency key (treated as a new intent).
   React.useEffect(() => {
     if (open) {
-      setIdempotencyKey(generateIdempotencyKey());
+      const nextKey = generateIdempotencyKey();
+      setIdempotencyKey(nextKey);
       setReason('');
       setLocalBlock(null);
       setToast(null);
+      intentRef.current = `${deviceId}:${catalogItemId}:${nextKey}`;
+    } else {
+      // Modal closed (parent-driven or via guardedOnClose). Invalidate
+      // the current intent so any still-in-flight resolution returning
+      // after close also drops to the no-op branch in handleSubmit.
+      intentRef.current = '';
     }
   }, [open, deviceId, catalogItemId]);
 
@@ -262,6 +308,16 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
 
   const [createInstall, createState] = useCreateInstallMutation();
 
+  // guardedOnClose declared after `createState` so the closure can
+  // observe the live `isLoading` flag. `useEscapeKey` is registered
+  // here so the modal mounts with the guard already in place.
+  const guardedOnClose = React.useCallback(() => {
+    if (createState.isLoading) return;
+    onClose();
+  }, [createState.isLoading, onClose]);
+
+  useEscapeKey(open, guardedOnClose, { layerId });
+
   // Must-fix #4 + #C answer: local BLOCK override has priority over
   // any server preflight render. A 409 BLOCK recompute mutates only
   // localBlock; the underlying query data is not invalidated.
@@ -271,6 +327,10 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
 
   const handleSubmit = async () => {
     setToast(null);
+    // Capture the active intent at submit time. A late resolve / reject
+    // returning after the operator has closed the modal or reopened it
+    // for a different catalog must be dropped (must-fix #1).
+    const submittedIntent = intentRef.current;
     try {
       const command = await createInstall({
         deviceId,
@@ -280,8 +340,10 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
           reason: reason.trim() ? reason.trim() : undefined,
         },
       }).unwrap();
+      if (!mountedRef.current || intentRef.current !== submittedIntent) return;
       onInstalled(command);
     } catch (err: unknown) {
+      if (!mountedRef.current || intentRef.current !== submittedIntent) return;
       const status =
         err && typeof err === 'object' && 'status' in err
           ? (err as { status: unknown }).status
@@ -422,7 +484,11 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
       data-layer-id={layerId}
       className="fixed inset-0 z-[1500] flex items-center justify-center"
     >
-      <div className="absolute inset-0 bg-surface-overlay/60" onClick={onClose} aria-hidden />
+      <div
+        className="absolute inset-0 bg-surface-overlay/60"
+        onClick={guardedOnClose}
+        aria-hidden
+      />
       <div
         ref={panelRef as React.RefObject<HTMLDivElement>}
         tabIndex={-1}
@@ -464,7 +530,7 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
         <footer className="px-6 py-4 border-t border-border-subtle flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardedOnClose}
             disabled={createState.isLoading}
             data-testid="install-modal-cancel"
             className="px-4 py-2 rounded-md border border-border-default text-sm text-text-primary"
