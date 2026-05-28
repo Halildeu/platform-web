@@ -541,4 +541,219 @@ describe('tryReadBlockRecompute — strict shape guard (Codex 019e6fe4 must-fix 
     expect(tryReadBlockRecompute(42)).toBeNull();
     expect(tryReadBlockRecompute(undefined)).toBeNull();
   });
+
+  /* ---------------------------------------------------------------- */
+  /* Codex 019e6ff0 post-impl must-fix #2 — strict shape guard.       */
+  /*                                                                   */
+  /* The previous Array.isArray + typeof 'object' checks passed        */
+  /* malformed bodies (e.g. requirements: [{}]) through, which crashed */
+  /* render at the first .replace() / String() call. New validators    */
+  /* must reject EVERY non-conforming sub-shape.                       */
+  /* ---------------------------------------------------------------- */
+
+  it('Codex 019e6ff0 #2: requirements eleman tipi string degilse reddedilir', () => {
+    const candidate = { ...minimalBlock(), requirements: [{}, null, 42] } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: reasons eleman tipi string degilse reddedilir', () => {
+    const candidate = { ...minimalBlock(), reasons: [{ wrong: 'shape' }] } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: warnings eleman tipi string degilse reddedilir', () => {
+    const candidate = { ...minimalBlock(), warnings: [123, 456] } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: blockingReasons eleman tipi string degilse reddedilir', () => {
+    const candidate = { ...minimalBlock(), blockingReasons: [null] } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: evidence.inventoryUpdatedAt yanlis tipte (number) ise reddedilir', () => {
+    const candidate = {
+      ...minimalBlock(),
+      evidence: { ...minimalBlock().evidence, inventoryUpdatedAt: 12345 },
+    } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: evidence.inventorySnapshotRowVersion yanlis tipte (string) ise reddedilir', () => {
+    const candidate = {
+      ...minimalBlock(),
+      evidence: { ...minimalBlock().evidence, inventorySnapshotRowVersion: '5' },
+    } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: evidence.catalogRowVersion yanlis tipte (object) ise reddedilir', () => {
+    const candidate = {
+      ...minimalBlock(),
+      evidence: { ...minimalBlock().evidence, catalogRowVersion: { v: 3 } },
+    } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: evidence kismi alan kayipsa (inventorySnapshotId eksik) reddedilir', () => {
+    const { inventorySnapshotId: _drop, ...evidenceRest } = minimalBlock().evidence;
+    const candidate = { ...minimalBlock(), evidence: evidenceRest } as unknown;
+    expect(tryReadBlockRecompute(candidate)).toBeNull();
+  });
+
+  it('Codex 019e6ff0 #2: evidence sub-object tum null alanlar PASS eder (canonical empty)', () => {
+    const allNullEvidence = {
+      inventorySnapshotId: null,
+      inventorySnapshotRowVersion: null,
+      inventoryUpdatedAt: null,
+      summaryCollectedAt: null,
+      appsCollectedAt: null,
+      latestSummaryCommandResultId: null,
+      latestFullCommandResultId: null,
+      latestWingetEgressCommandResultId: null,
+      wingetEgressCollectedAt: null,
+      wingetEgressSchemaVersion: null,
+      catalogRowVersion: null,
+      catalogLastUpdatedAt: null,
+    };
+    const candidate = {
+      ...minimalBlock(),
+      evidence: allNullEvidence,
+    } as unknown;
+    expect(tryReadBlockRecompute(candidate)).not.toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Codex 019e6ff0 post-impl must-fix #1 — in-flight POST race guard.  */
+/*                                                                     */
+/* Before this absorb, ESC / overlay click / cancel button all hit    */
+/* onClose directly. If the operator pressed Confirm and then ESC     */
+/* during the in-flight POST, the parent would close the modal and    */
+/* the eventual resolve would still call `onInstalled` on the now-    */
+/* closed modal's promise, leaking commands or replaying toasts on    */
+/* the next intent.                                                   */
+/*                                                                     */
+/* Two defences:                                                       */
+/*  - `guardedOnClose` absorbs ESC / overlay / cancel while            */
+/*    `createState.isLoading === true`.                                */
+/*  - `intentRef` + `mountedRef` drop late resolutions when the active*/
+/*    intent has changed (reopen, different catalog, unmount).        */
+/* ------------------------------------------------------------------ */
+
+describe('InstallPreflightModal — in-flight POST race guard (Codex 019e6ff0 must-fix #1)', () => {
+  function mockInstallLoading(trigger: ReturnType<typeof vi.fn>) {
+    useCreateInstallMutationMock.mockReturnValue([trigger, { isLoading: true }]);
+  }
+
+  it('createState.isLoading=true iken ESC onClose tetiklemez', () => {
+    mockPreflight({ data: buildPreflight('PASS') });
+    mockInstallLoading(vi.fn());
+    const onClose = vi.fn();
+    render(<InstallPreflightModal {...baseProps} onClose={onClose} />);
+    // Modal mounted under load; useEscapeKey is registered. Dispatch ESC
+    // and assert the guarded close swallows it.
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('createState.isLoading=true iken overlay click onClose tetiklemez', () => {
+    mockPreflight({ data: buildPreflight('PASS') });
+    mockInstallLoading(vi.fn());
+    const onClose = vi.fn();
+    const { container } = render(<InstallPreflightModal {...baseProps} onClose={onClose} />);
+    // The overlay div has aria-hidden + bg-surface-overlay; query by
+    // class to avoid coupling to test-ids that don't exist on the
+    // overlay element itself.
+    const overlay = container.querySelector('[aria-hidden="true"]') as HTMLElement;
+    expect(overlay).not.toBeNull();
+    fireEvent.click(overlay);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('createState.isLoading=true iken cancel button onClick onClose tetiklemez', () => {
+    // Button is already disabled, but the guardedOnClose handler also
+    // absorbs the click defensively (defence-in-depth).
+    mockPreflight({ data: buildPreflight('PASS') });
+    mockInstallLoading(vi.fn());
+    const onClose = vi.fn();
+    render(<InstallPreflightModal {...baseProps} onClose={onClose} />);
+    const cancel = screen.getByTestId('install-modal-cancel') as HTMLButtonElement;
+    expect(cancel).toBeDisabled();
+    // Even if a test calls click() directly, guardedOnClose absorbs it.
+    fireEvent.click(cancel);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('createState.isLoading=false iken ESC onClose tetikler (regression sentinel)', () => {
+    // Sanity check that the guard is gated on isLoading and not blanket.
+    mockPreflight({ data: buildPreflight('PASS') });
+    mockInstall(vi.fn());
+    const onClose = vi.fn();
+    render(<InstallPreflightModal {...baseProps} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('Confirm sirasinda modal kapatilirsa late resolve onInstalled tetiklemez', async () => {
+    // Simulate: operator clicks Confirm. The mutation enters in-flight.
+    // The parent re-renders with open=false (drawer dismissed by some
+    // other path), then the POST resolves. The component must NOT call
+    // onInstalled because the intent has been invalidated.
+    mockPreflight({ data: buildPreflight('PASS') });
+    let resolveInstall: (cmd: EndpointCommand) => void = () => undefined;
+    const trigger = vi.fn(() => ({
+      unwrap: () =>
+        new Promise<EndpointCommand>((resolve) => {
+          resolveInstall = resolve;
+        }),
+    }));
+    mockInstall(trigger);
+    const onInstalled = vi.fn();
+    const { rerender } = render(<InstallPreflightModal {...baseProps} onInstalled={onInstalled} />);
+    fireEvent.click(screen.getByTestId('install-modal-confirm'));
+    await waitFor(() => expect(trigger).toHaveBeenCalled());
+
+    // Parent closes the modal mid-flight (open=false invalidates intent).
+    rerender(<InstallPreflightModal {...baseProps} open={false} onInstalled={onInstalled} />);
+
+    // Late resolve arrives — must be dropped by the intent guard.
+    await act(async () => {
+      resolveInstall(buildCommand());
+      await Promise.resolve();
+    });
+
+    expect(onInstalled).not.toHaveBeenCalled();
+  });
+
+  it('Confirm sirasinda farkli catalog ile reopen olursa eski resolve eski intent ile dusurulur', async () => {
+    // Intent changes from (deviceId, catalog A, key 1) to (deviceId,
+    // catalog B, key 2) — late resolution of intent 1 must be ignored.
+    mockPreflight({ data: buildPreflight('PASS') });
+    let resolveInstall: (cmd: EndpointCommand) => void = () => undefined;
+    const trigger = vi.fn(() => ({
+      unwrap: () =>
+        new Promise<EndpointCommand>((resolve) => {
+          resolveInstall = resolve;
+        }),
+    }));
+    mockInstall(trigger);
+    const onInstalled = vi.fn();
+    const { rerender } = render(<InstallPreflightModal {...baseProps} onInstalled={onInstalled} />);
+    fireEvent.click(screen.getByTestId('install-modal-confirm'));
+    await waitFor(() => expect(trigger).toHaveBeenCalled());
+
+    // Reopen with a different catalog item — per-intent effect generates
+    // a fresh idempotency key and overwrites intentRef.
+    rerender(
+      <InstallPreflightModal {...baseProps} catalogItemId="vlc.vlc" onInstalled={onInstalled} />,
+    );
+
+    await act(async () => {
+      resolveInstall(buildCommand());
+      await Promise.resolve();
+    });
+
+    expect(onInstalled).not.toHaveBeenCalled();
+  });
 });
