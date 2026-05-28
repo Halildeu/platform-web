@@ -112,6 +112,65 @@ describe('ApprovalInbox contract', () => {
     expect(onRequestOpen).toHaveBeenCalledWith(req);
   });
 
+  it('applies the free-text query filter (uncontrolled)', async () => {
+    const user = userEvent.setup();
+    render(
+      <ApprovalInbox
+        requests={[
+          makeRequest({ id: 'r1', title: 'Policy edit' }),
+          makeRequest({ id: 'r2', title: 'Role grant' }),
+        ]}
+        currentUser={currentUser}
+      />,
+    );
+    expect(screen.getByText('Policy edit')).toBeInTheDocument();
+    expect(screen.getByText('Role grant')).toBeInTheDocument();
+
+    const search = screen.getByRole('searchbox', { name: 'Inbox icinde ara' });
+    await user.type(search, 'Role');
+
+    expect(screen.queryByText('Policy edit')).not.toBeInTheDocument();
+    expect(screen.getByText('Role grant')).toBeInTheDocument();
+  });
+
+  it('applies the type filter via select (uncontrolled)', async () => {
+    const user = userEvent.setup();
+    render(
+      <ApprovalInbox
+        requests={[
+          makeRequest({ id: 'r1', type: 'policy_change', title: 'Policy edit' }),
+          makeRequest({ id: 'r2', type: 'role_grant', title: 'Role grant' }),
+        ]}
+        currentUser={currentUser}
+        typeOptions={[
+          { value: 'policy_change', label: 'Policy' },
+          { value: 'role_grant', label: 'Rol' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Policy edit')).toBeInTheDocument();
+    expect(screen.getByText('Role grant')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Tip filtresi' }), 'role_grant');
+
+    expect(screen.queryByText('Policy edit')).not.toBeInTheDocument();
+    expect(screen.getByText('Role grant')).toBeInTheDocument();
+  });
+
+  it('shows "filter matched none" empty copy when filters hide all rows', async () => {
+    const user = userEvent.setup();
+    render(
+      <ApprovalInbox
+        requests={[makeRequest({ id: 'r1', title: 'Only one' })]}
+        currentUser={currentUser}
+        emptyMessage="Bekleyen yok."
+      />,
+    );
+    const search = screen.getByRole('searchbox', { name: 'Inbox icinde ara' });
+    await user.type(search, 'no-match');
+    expect(screen.getByText('Filtreyle eslesen talep yok.')).toBeInTheDocument();
+  });
+
   it('renders nothing when access=hidden', () => {
     const { container } = render(
       <ApprovalInbox requests={[makeRequest()]} currentUser={currentUser} access="hidden" />,

@@ -110,6 +110,25 @@ function computeRowEligibility(
   return reasons;
 }
 
+function applyFilters(
+  requests: ApprovalRequest[],
+  filters: ApprovalInboxFilters,
+): ApprovalRequest[] {
+  const query = filters.query?.trim().toLowerCase();
+  return requests.filter((req) => {
+    if (filters.type && req.type !== filters.type) return false;
+    if (filters.status && req.status !== filters.status) return false;
+    if (query) {
+      const haystack = [req.title, req.target, req.reason, req.proposer.name, req.proposer.id]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+}
+
 export const ApprovalInbox = React.forwardRef<HTMLDivElement, ApprovalInboxProps>(
   (
     {
@@ -151,7 +170,12 @@ export const ApprovalInbox = React.forwardRef<HTMLDivElement, ApprovalInboxProps
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // Eligibility lookup
+    // Apply filters (controlled or internal) before rendering rows.
+    const visibleRequests = useMemo(() => applyFilters(requests, filters), [requests, filters]);
+
+    // Eligibility lookup — computed across the full request set so bulk
+    // payloads keep correct context even if a selected row is currently
+    // filtered out of view.
     const eligibilityById = useMemo(() => {
       const map = new Map<string, EligibilityReason[]>();
       for (const req of requests) {
@@ -316,18 +340,18 @@ export const ApprovalInbox = React.forwardRef<HTMLDivElement, ApprovalInboxProps
         ) : null}
 
         {/* ----- Request rows ----- */}
-        {requests.length === 0 ? (
+        {visibleRequests.length === 0 ? (
           <div
             className="rounded-lg border border-border-subtle bg-surface-canvas px-4 py-6 text-center"
             data-slot="empty"
           >
             <Text variant="secondary" className="text-sm">
-              {emptyMessage}
+              {requests.length === 0 ? emptyMessage : 'Filtreyle eslesen talep yok.'}
             </Text>
           </div>
         ) : (
           <div className="flex flex-col gap-2" data-slot="rows">
-            {requests.map((request) => {
+            {visibleRequests.map((request) => {
               const reasons = eligibilityById.get(request.id) ?? [];
               const isBlocked = reasons.length > 0;
               const isSelected = selectedIds.has(request.id);
