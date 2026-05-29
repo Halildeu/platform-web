@@ -208,6 +208,45 @@ describe('EnrollmentListPage', () => {
     expect(screen.queryByTestId('enrollment-list-empty')).not.toBeInTheDocument();
   });
 
+  it('ignores any window env knob and always derives /endpoint-agent (Codex iter-2 P0)', async () => {
+    // Codex 019e713c iter-2 hardening: env-override branch removed.
+    // Even if a future deploy sets the admin-scoped env key, the
+    // snippet must NOT pick it up. We render WITHOUT apiUrlOverride
+    // so the production path runs (resolveApiUrl reads window.location
+    // only). jsdom sets window.location.origin to http://localhost
+    // by default; the assertion proves the resolver derives from
+    // origin + /api/v1/endpoint-agent and ignores the admin env knob.
+    const fakeEnv = {
+      __env__: { VITE_ENDPOINT_ADMIN_API_URL: 'https://testai.acik.com/api/v1/endpoint-admin' },
+    };
+    Object.assign(window, fakeEnv);
+    try {
+      const response: CreateEndpointEnrollmentResponse = {
+        enrollmentId: '88888888-8888-8888-8888-888888888888',
+        token: 'env-not-honored-token',
+        expiresAt: '2026-05-29T13:00:00Z',
+      };
+      mockedList.mockReturnValue({
+        data: [],
+        error: undefined,
+        isLoading: false,
+        isFetching: false,
+      });
+      mockCreate.mockReturnValue({ unwrap: () => Promise.resolve(response) });
+
+      render(<EnrollmentListPage />);
+      fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
+      fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
+      await Promise.resolve();
+      await Promise.resolve();
+      const snippet = screen.getByTestId('enrollment-token-modal-snippet').textContent ?? '';
+      expect(snippet).toContain('/api/v1/endpoint-agent');
+      expect(snippet).not.toContain('/endpoint-admin');
+    } finally {
+      delete (window as unknown as { __env__?: unknown }).__env__;
+    }
+  });
+
   it('install snippet uses /endpoint-agent canonical path (Codex iter-1 P0)', async () => {
     // Codex 019e713c iter-1 must-fix #1: install snippet -ApiUrl must
     // point at HMAC agent base /api/v1/endpoint-agent, not admin base.

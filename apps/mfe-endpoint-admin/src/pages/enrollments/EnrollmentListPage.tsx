@@ -38,28 +38,27 @@ export interface EnrollmentListPageProps {
 /**
  * Resolve the API URL the install snippet hands to the operator.
  *
- * Codex 019e713c post-impl iter-1 P0 fix: previous fallback pointed at
- * `/api/v1/endpoint-admin` which is the admin (manager-facing) gateway
- * path. The HMAC enrollment client appends `/enrollments/consume` to
- * the configured base — so the agent would have hit
- * `/api/v1/endpoint-admin/enrollments/consume`, an admin route that
- * does not exist. The canonical V1 HMAC agent base is
- * `/api/v1/endpoint-agent` (see platform-agent
- * `internal/protocol/endpoints.go` + `internal/protocol/client.go`).
+ * Codex 019e713c iter-2 P0 hardening: the env-override branch was
+ * dropped entirely. The HMAC enrollment contract is fully determined
+ * by the deploy topology — same gateway as the browser sees — so we
+ * derive `${window.location.origin}/api/v1/endpoint-agent` and call
+ * it canonical. An env knob just added a way to point the snippet at
+ * `/api/v1/endpoint-admin` (the admin manager-facing base, which the
+ * HMAC client would extend to `/enrollments/consume` on a route that
+ * does not exist).
  *
  * Auto-enroll mTLS (Faz 22.3 ADR-0029) uses a separate base
  * (`endpoint-agent-mtls.testai.acik.com/api/v1/endpoint-admin`) and is
  * out of scope for this V1 reveal-once token flow.
+ *
+ * Code paths needing a non-window environment fallback (SSR, tests
+ * without a window) get the absolute testai URL hard-coded — the
+ * value is operator-facing display text, not a runtime client call,
+ * so a missing window cannot mislead a live agent.
  */
 function resolveApiUrl(): string {
-  if (typeof window !== 'undefined') {
-    const env = (window as unknown as { __env__?: Record<string, unknown> }).__env__;
-    if (env && typeof env['VITE_ENDPOINT_ADMIN_API_URL'] === 'string') {
-      return env['VITE_ENDPOINT_ADMIN_API_URL'] as string;
-    }
-    if (window.location && window.location.origin) {
-      return `${window.location.origin}/api/v1/endpoint-agent`;
-    }
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return `${window.location.origin}/api/v1/endpoint-agent`;
   }
   return 'https://testai.acik.com/api/v1/endpoint-agent';
 }
