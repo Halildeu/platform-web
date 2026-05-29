@@ -10,6 +10,8 @@ import { useListEndpointDevicesQuery } from '../../app/services/endpointAdminApi
 import { useEndpointAdminI18n } from '../../i18n';
 import type { DeviceStatus, EndpointDevice, OsType } from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
+import { InventoryExportButton } from '../../widgets/inventory-export/InventoryExportButton';
+import { buildDeviceInventoryColumns } from '../../widgets/inventory-export/deviceInventoryColumns';
 
 /**
  * Devices surface — backed by `AdminEndpointDeviceController.listDevices`.
@@ -63,6 +65,32 @@ export const EndpointDevicesPage: React.FC = () => {
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | null>(null);
 
   const rows = React.useMemo<EndpointDevice[]>(() => data ?? [], [data]);
+
+  // WEB-015 — localised status label, shared between the grid cell
+  // renderer and the CSV export column set so the exported value matches
+  // exactly what the operator sees on screen.
+  const statusLabel = React.useCallback(
+    (status: DeviceStatus) => t(`endpointAdmin.devices.status.${status}`),
+    [t],
+  );
+
+  // WEB-015 — CSV export columns (only already-fetched inventory fields;
+  // no v2 device-health / diagnostics columns).
+  const exportColumns = React.useMemo(
+    () => buildDeviceInventoryColumns(t, statusLabel),
+    [t, statusLabel],
+  );
+
+  // WEB-015 RBAC gate: there is no client-side capability list in this
+  // MFE — `can_view` is enforced server-side via `@RequireModule`. We
+  // derive the UI gate from the load outcome: a 403 means the operator
+  // cannot view the inventory, so the export affordance is hidden.
+  const forbidden =
+    isError &&
+    error &&
+    'status' in error &&
+    String((error as { status: unknown }).status) === '403';
+  const canView = !forbidden;
   const selectedDevice = React.useMemo(
     () => rows.find((d) => d.id === selectedDeviceId) ?? null,
     [rows, selectedDeviceId],
@@ -203,12 +231,31 @@ export const EndpointDevicesPage: React.FC = () => {
 
   return (
     <section style={{ padding: 24 }} data-testid="endpoint-admin-devices-page">
-      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-        {t('endpointAdmin.devices.heading')}
-      </h2>
-      <p style={{ marginTop: 4, color: 'var(--text-secondary)', fontSize: 13 }}>
-        {t('endpointAdmin.devices.countLabel')}: {rows.length}
-      </p>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
+            {t('endpointAdmin.devices.heading')}
+          </h2>
+          <p style={{ marginTop: 4, color: 'var(--text-secondary)', fontSize: 13 }}>
+            {t('endpointAdmin.devices.countLabel')}: {rows.length}
+          </p>
+        </div>
+        {/* WEB-015 — RBAC-gated CSV export of the current device inventory. */}
+        <InventoryExportButton<EndpointDevice>
+          canView={canView}
+          rows={rows}
+          columns={exportColumns}
+          fileBaseName="endpoint-inventory"
+        />
+      </div>
       <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
         <React.Suspense fallback={<div style={{ height: 400 }} />}>
           <EntityGridTemplate<EndpointDevice>

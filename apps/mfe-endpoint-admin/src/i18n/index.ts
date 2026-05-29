@@ -36,6 +36,12 @@ const DICT_TR = {
   'endpointAdmin.devices.status.STALE': 'Bekleme',
   'endpointAdmin.devices.status.OFFLINE': 'Çevrim dışı',
   'endpointAdmin.devices.status.DECOMMISSIONED': 'Hizmet dışı',
+  // WEB-015 — Inventory CSV export (RBAC-gated, client-side)
+  'endpointAdmin.export.csvLabel': 'CSV indir',
+  'endpointAdmin.export.csvAria': 'Cihaz envanterini CSV olarak indir',
+  'endpointAdmin.export.emptyHint': 'Dışa aktarılacak kayıt yok.',
+  'endpointAdmin.export.truncatedNotice':
+    'İlk {writtenRows} / {totalRows} satır dışa aktarıldı (üst sınır {rowCap}).',
   'endpointAdmin.audit.heading': 'Denetim Olayları',
   'endpointAdmin.audit.subtitle': 'Son 50 olay',
   'endpointAdmin.audit.refreshing': 'Yenileniyor…',
@@ -549,6 +555,12 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.status.STALE': 'Stale',
   'endpointAdmin.devices.status.OFFLINE': 'Offline',
   'endpointAdmin.devices.status.DECOMMISSIONED': 'Decommissioned',
+  // WEB-015 — Inventory CSV export (RBAC-gated, client-side)
+  'endpointAdmin.export.csvLabel': 'Export CSV',
+  'endpointAdmin.export.csvAria': 'Export device inventory as CSV',
+  'endpointAdmin.export.emptyHint': 'No rows to export.',
+  'endpointAdmin.export.truncatedNotice':
+    'Exported the first {writtenRows} of {totalRows} rows (cap {rowCap}).',
   'endpointAdmin.audit.heading': 'Audit Events',
   'endpointAdmin.audit.subtitle': 'Last 50 events',
   'endpointAdmin.audit.refreshing': 'Refreshing…',
