@@ -72,6 +72,8 @@ const DICT_TR = {
   'endpointAdmin.enrollments.page.error':
     'Enrollment listesi alınamadı. Tekrar deneyin veya yöneticinizle görüşün.',
   'endpointAdmin.enrollments.page.forbidden': 'Bu sayfa için yetkiniz yok. Yöneticinizle görüşün.',
+  'endpointAdmin.enrollments.page.notDeployed':
+    'Enrollment yönetim sayfası henüz bu ortama dağıtılmamış (backend 404). Sistem yöneticinizle görüşün.',
   'endpointAdmin.enrollments.table.id': 'ID',
   'endpointAdmin.enrollments.table.note': 'Açıklama',
   'endpointAdmin.enrollments.table.status': 'Durum',
@@ -583,6 +585,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
     'Could not load enrollments. Retry or contact your administrator.',
   'endpointAdmin.enrollments.page.forbidden':
     'You do not have access to this page. Contact your administrator.',
+  'endpointAdmin.enrollments.page.notDeployed':
+    'The enrollment management page is not deployed to this environment yet (backend 404). Contact your administrator.',
   'endpointAdmin.enrollments.table.id': 'ID',
   'endpointAdmin.enrollments.table.note': 'Note',
   'endpointAdmin.enrollments.table.status': 'Status',

@@ -35,14 +35,33 @@ export interface EnrollmentListPageProps {
   apiUrlOverride?: string;
 }
 
+/**
+ * Resolve the API URL the install snippet hands to the operator.
+ *
+ * Codex 019e713c post-impl iter-1 P0 fix: previous fallback pointed at
+ * `/api/v1/endpoint-admin` which is the admin (manager-facing) gateway
+ * path. The HMAC enrollment client appends `/enrollments/consume` to
+ * the configured base — so the agent would have hit
+ * `/api/v1/endpoint-admin/enrollments/consume`, an admin route that
+ * does not exist. The canonical V1 HMAC agent base is
+ * `/api/v1/endpoint-agent` (see platform-agent
+ * `internal/protocol/endpoints.go` + `internal/protocol/client.go`).
+ *
+ * Auto-enroll mTLS (Faz 22.3 ADR-0029) uses a separate base
+ * (`endpoint-agent-mtls.testai.acik.com/api/v1/endpoint-admin`) and is
+ * out of scope for this V1 reveal-once token flow.
+ */
 function resolveApiUrl(): string {
   if (typeof window !== 'undefined') {
     const env = (window as unknown as { __env__?: Record<string, unknown> }).__env__;
     if (env && typeof env['VITE_ENDPOINT_ADMIN_API_URL'] === 'string') {
       return env['VITE_ENDPOINT_ADMIN_API_URL'] as string;
     }
+    if (window.location && window.location.origin) {
+      return `${window.location.origin}/api/v1/endpoint-agent`;
+    }
   }
-  return 'https://endpoint-agent-mtls.testai.acik.com/api/v1/endpoint-admin';
+  return 'https://testai.acik.com/api/v1/endpoint-agent';
 }
 
 const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride }) => {
@@ -91,6 +110,12 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
       {status403 && (
         <p data-testid="enrollment-list-forbidden">
           {t('endpointAdmin.enrollments.page.forbidden')}
+        </p>
+      )}
+
+      {status404 && (
+        <p data-testid="enrollment-list-not-deployed">
+          {t('endpointAdmin.enrollments.page.notDeployed')}
         </p>
       )}
 

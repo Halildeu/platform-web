@@ -12,7 +12,7 @@
  * endpointAdminApi.ts and the test asserts the canonical hook).
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -174,10 +174,58 @@ describe('EnrollmentListPage', () => {
     expect(screen.queryByTestId('enrollment-token-modal')).not.toBeInTheDocument();
   });
 
-  it.skip('rejects invalid expiresInMinutes (0)', () => {
-    // TODO(WEB-017 iter-2): state batching pattern needs `act()` wrap or
-    // user-event helpers; the validation logic itself is exercised by
-    // the type-level guard in CreateEnrollmentDialog. Skipping until
-    // the next iter brings user-event into the test dep set.
+  it('rejects invalid expiresInMinutes (0) with validation error', async () => {
+    // Codex 019e713c iter-1 un-skip: directly submit the form so the
+    // controlled-input batched re-render and the form handler share a
+    // single microtask flush. waitFor pulls until the error node
+    // appears (max 1s by default; the real time-to-render here is
+    // < 16ms).
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    render(<EnrollmentListPage apiUrlOverride="https://example/api/v1/endpoint-agent" />);
+    fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
+    const input = screen.getByTestId('create-enrollment-dialog-expires-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '0' } });
+    const form = input.closest('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+    await waitFor(() => {
+      expect(screen.getByTestId('create-enrollment-dialog-error')).toBeInTheDocument();
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('shows not-deployed state on 404 (Codex iter-1 P1)', () => {
+    // Codex 019e713c iter-1 must-fix #2: 404 was silently swallowed.
+    mockedList.mockReturnValue({
+      data: undefined,
+      error: { status: 404 },
+      isLoading: false,
+      isFetching: false,
+    });
+    render(<EnrollmentListPage apiUrlOverride="https://example/api/v1/endpoint-agent" />);
+    expect(screen.getByTestId('enrollment-list-not-deployed')).toBeInTheDocument();
+    expect(screen.queryByTestId('enrollment-list-error')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('enrollment-list-empty')).not.toBeInTheDocument();
+  });
+
+  it('install snippet uses /endpoint-agent canonical path (Codex iter-1 P0)', async () => {
+    // Codex 019e713c iter-1 must-fix #1: install snippet -ApiUrl must
+    // point at HMAC agent base /api/v1/endpoint-agent, not admin base.
+    const response: CreateEndpointEnrollmentResponse = {
+      enrollmentId: '66666666-6666-6666-6666-666666666666',
+      token: 'canonical-path-token',
+      expiresAt: '2026-05-29T13:00:00Z',
+    };
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    mockCreate.mockReturnValue({ unwrap: () => Promise.resolve(response) });
+
+    render(<EnrollmentListPage apiUrlOverride="https://testai.acik.com/api/v1/endpoint-agent" />);
+    fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
+    await Promise.resolve();
+    await Promise.resolve();
+    const snippet = screen.getByTestId('enrollment-token-modal-snippet').textContent ?? '';
+    expect(snippet).toContain('/api/v1/endpoint-agent');
+    expect(snippet).not.toContain('/endpoint-admin');
   });
 });
