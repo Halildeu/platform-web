@@ -64,6 +64,33 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
     : null;
 
   const handleNonDestructive = (type: CommandType) => {
+    // WEB-018 — Faz 22.5.x. The default COLLECT_INVENTORY command used
+    // to land at the agent with no payload, which falls through every
+    // opt-in flag and runs the AG-025H lightweight contract (host / os /
+    // identity only). That meant the WEB-013 Donanım drawer tab could
+    // never get hardware evidence because AG-035's
+    // CollectOptions.IncludeHardware was always false. We now set all
+    // three opt-in bits when the operator triggers "Envanteri Şimdi
+    // Topla" — software inventory + WinGet egress preflight + hardware
+    // probe — so a single click produces the full snapshot the
+    // Envanter / Donanım tabs render.
+    //
+    // The field name is `payload` to match the backend
+    // CreateEndpointCommandRequest record (Map<String, Object> payload).
+    // The agent's COLLECT_INVENTORY executor reads
+    // `boolPayload(command.Payload, "includeHardware")` etc. directly
+    // from this map.
+    if (type === 'COLLECT_INVENTORY') {
+      onIssueCommand({
+        type,
+        payload: {
+          includeSoftware: true,
+          includeWinGetEgress: true,
+          includeHardware: true,
+        },
+      });
+      return;
+    }
     onIssueCommand({ type });
   };
 
