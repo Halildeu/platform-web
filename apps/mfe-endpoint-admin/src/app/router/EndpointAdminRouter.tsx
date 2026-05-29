@@ -48,6 +48,8 @@ const EndpointCompliancePoliciesPage = React.lazy(
 const ApprovalInboxPage = React.lazy(() => import('../../pages/approval/ApprovalInboxPage'));
 const ApprovalCasePage = React.lazy(() => import('../../pages/approval/ApprovalCasePage'));
 const ApprovalProposeForm = React.lazy(() => import('../../pages/approval/ApprovalProposeForm'));
+// WEB-017 — Endpoint enrollment management lazy route.
+const EnrollmentListPage = React.lazy(() => import('../../pages/enrollments/EnrollmentListPage'));
 
 const RouteFallback: React.FC = () => (
   <div
@@ -72,6 +74,7 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="approvals" element={<ApprovalInboxPage />} />
         <Route path="approvals/:requestId" element={<ApprovalCasePage />} />
         <Route path="policies/:policyId/approval/new" element={<ApprovalProposeForm />} />
+        <Route path="enrollments" element={<EnrollmentListPage />} />
         <Route path="*" element={<Navigate to="devices" replace />} />
       </Routes>
     </Suspense>
