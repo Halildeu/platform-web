@@ -236,4 +236,22 @@ describe('triggerCsvDownload — browser download smoke', () => {
       URL.createObjectURL = original;
     }
   });
+
+  it('synchronously revokes the URL and removes the anchor when click throws (no leak)', () => {
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+      throw new Error('click blocked');
+    });
+
+    const ok = triggerCsvDownload('a,b\r\n1,2', 'fail.csv');
+
+    // Error path: returns false; cleanup is SYNCHRONOUS (no pending
+    // macrotask) so the blob URL is never leaked and no orphan anchor
+    // remains in the DOM (Codex 019e7530 P2 regression guard).
+    expect(ok).toBe(false);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    expect(revokeSpy).toHaveBeenCalledWith('blob:mock-url');
+    expect(document.querySelector('a[download="fail.csv"]')).toBeNull();
+  });
 });

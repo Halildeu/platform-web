@@ -197,8 +197,21 @@ export function triggerCsvDownload(
   anchor.href = url;
   anchor.download = filename;
   anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
+  try {
+    document.body.appendChild(anchor);
+    anchor.click();
+  } catch {
+    // Synchronous cleanup on failure: never leak the object URL or
+    // leave an orphan anchor in the DOM when appendChild/click throws
+    // (Codex 019e7530 P2 — error-path revoke not guaranteed).
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore — best-effort cleanup
+    }
+    anchor.remove();
+    return false;
+  }
   // Defer revoke so the click navigation is committed first.
   setTimeout(() => {
     try {
