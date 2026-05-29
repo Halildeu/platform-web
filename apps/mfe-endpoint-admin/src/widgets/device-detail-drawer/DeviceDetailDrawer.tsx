@@ -54,6 +54,15 @@ const HardwareInventoryTab = React.lazy(() =>
     default: m.HardwareInventoryView,
   })),
 );
+// WEB device-health — Faz 22.5 second wave (AG-033). Lazy because the
+// disk/memory/uptime panels, history accordion, and probe-error list
+// never render until the operator selects this tab. Keeping it out of
+// the drawer cold path preserves the WEB-014D perf budget.
+const DeviceHealthTab = React.lazy(() =>
+  import('./components/device-health/DeviceHealthView').then((m) => ({
+    default: m.DeviceHealthView,
+  })),
+);
 
 const TabFallback: React.FC = () => (
   <div
@@ -72,6 +81,7 @@ export type DeviceDetailDrawerTabKey =
   | 'audit'
   | 'inventory'
   | 'hardware'
+  | 'health'
   | 'software-catalog'
   | 'compliance';
 
@@ -233,6 +243,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <HardwareInventoryTab deviceId={device.id} active={activeTab === 'hardware'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'health' as const,
+        label: t('endpointAdmin.drawer.tab.health'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <DeviceHealthTab deviceId={device.id} active={activeTab === 'health'} />
           </React.Suspense>
         ),
       },
