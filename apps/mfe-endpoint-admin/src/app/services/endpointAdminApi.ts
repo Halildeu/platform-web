@@ -60,6 +60,11 @@ import type {
   InstallPreflightResponse,
   ListInstallAuditsArgs,
 } from '../../entities/endpoint-install/types';
+import type {
+  CreateEndpointEnrollmentArgs,
+  CreateEndpointEnrollmentResponse,
+  EndpointEnrollment,
+} from '../../entities/endpoint-enrollment/types';
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -209,6 +214,7 @@ export const endpointAdminApi = createApi({
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
     'EndpointInstallAudit',
+    'EndpointEnrollment',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -791,6 +797,51 @@ export const endpointAdminApi = createApi({
         { type: 'EndpointInstallAudit' as const, id: auditId },
       ],
     }),
+    /**
+     * WEB-017 — Endpoint enrollment list (Faz 22.5.x manager surface).
+     *
+     * Backend: `AdminEndpointEnrollmentController.listEnrollments` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-enrollments
+     *   → service /api/v1/admin/endpoint-enrollments
+     *   class-level @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Backend returns a PLAIN List<EndpointEnrollmentDto>, NOT a
+     * Spring Page envelope — Codex 019e711f plan-time must-fix #2.
+     */
+    listEndpointEnrollments: builder.query<EndpointEnrollment[], void>({
+      query: () => ({ url: '/endpoint-admin/endpoint-enrollments', method: 'GET' }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: 'EndpointEnrollment' as const, id })),
+              { type: 'EndpointEnrollment' as const, id: 'LIST' },
+            ]
+          : [{ type: 'EndpointEnrollment' as const, id: 'LIST' }],
+    }),
+    /**
+     * WEB-017 — Create endpoint enrollment token (reveal-once).
+     *
+     * Backend: `AdminEndpointEnrollmentController.createEnrollment` —
+     *   POST /api/v1/endpoint-admin/endpoint-enrollments
+     *   @RequireModule(MODULE='endpoint-admin', MANAGER='can_manage')
+     *
+     * Response contains the RAW token — this is the ONLY moment the
+     * raw value is exposed. Subsequent list responses surface metadata
+     * (status / expiresAt / consumedAt / deviceId) but never the raw
+     * token. The UI must surface it in a reveal-once modal and discard
+     * it from state on close (Codex 019e711f iter-1 reveal-once UX).
+     */
+    createEndpointEnrollment: builder.mutation<
+      CreateEndpointEnrollmentResponse,
+      CreateEndpointEnrollmentArgs
+    >({
+      query: (body) => ({
+        url: '/endpoint-admin/endpoint-enrollments',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'EndpointEnrollment' as const, id: 'LIST' }],
+    }),
   }),
 });
 
@@ -798,6 +849,8 @@ export const {
   useGetAgentStatusQuery,
   useListEndpointDevicesQuery,
   useGetEndpointDeviceQuery,
+  useListEndpointEnrollmentsQuery,
+  useCreateEndpointEnrollmentMutation,
   useListEndpointAuditEventsQuery,
   useListDeviceCommandsQuery,
   useGetEndpointCommandQuery,

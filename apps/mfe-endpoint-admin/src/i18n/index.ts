@@ -61,6 +61,49 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.inventory': 'Envanter',
   'endpointAdmin.drawer.tab.hardware': 'Donanım',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
+  // WEB-017 — Enrollment management (Faz 22.5.x)
+  'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
+  'endpointAdmin.enrollments.page.description':
+    'Yeni Windows cihazlarına agent kurarken tek kullanımlık enrollment token üretin. Token oluşturulduktan sonra yalnızca tek bir kez gösterilir.',
+  'endpointAdmin.enrollments.page.createButton': 'Yeni Enrollment Oluştur',
+  'endpointAdmin.enrollments.page.loading': 'Enrollment listesi yükleniyor…',
+  'endpointAdmin.enrollments.page.refreshing': 'Liste güncelleniyor…',
+  'endpointAdmin.enrollments.page.empty': 'Henüz enrollment yok.',
+  'endpointAdmin.enrollments.page.error':
+    'Enrollment listesi alınamadı. Tekrar deneyin veya yöneticinizle görüşün.',
+  'endpointAdmin.enrollments.page.forbidden': 'Bu sayfa için yetkiniz yok. Yöneticinizle görüşün.',
+  'endpointAdmin.enrollments.page.notDeployed':
+    'Enrollment yönetim sayfası henüz bu ortama dağıtılmamış (backend 404). Sistem yöneticinizle görüşün.',
+  'endpointAdmin.enrollments.table.id': 'ID',
+  'endpointAdmin.enrollments.table.note': 'Açıklama',
+  'endpointAdmin.enrollments.table.status': 'Durum',
+  'endpointAdmin.enrollments.table.requestedBy': 'Talep Eden',
+  'endpointAdmin.enrollments.table.expiresAt': 'Geçerlilik',
+  'endpointAdmin.enrollments.table.consumedAt': 'Kullanıldı',
+  'endpointAdmin.enrollments.table.deviceId': 'Cihaz',
+  'endpointAdmin.enrollments.dialog.title': 'Yeni Enrollment Oluştur',
+  'endpointAdmin.enrollments.dialog.expiresLabel': 'Geçerlilik (dakika)',
+  'endpointAdmin.enrollments.dialog.noteLabel': 'Açıklama (opsiyonel)',
+  'endpointAdmin.enrollments.dialog.cancel': 'İptal',
+  'endpointAdmin.enrollments.dialog.submit': 'Oluştur',
+  'endpointAdmin.enrollments.dialog.submitting': 'Oluşturuluyor…',
+  'endpointAdmin.enrollments.dialog.close': 'Kapat',
+  'endpointAdmin.enrollments.dialog.forbiddenTitle': 'Yetki Yok',
+  'endpointAdmin.enrollments.dialog.forbiddenBody':
+    'Enrollment oluşturmak için MANAGER yetkisi gereklidir. Yöneticinizle görüşün.',
+  'endpointAdmin.enrollments.dialog.errorExpiresRange':
+    'Geçerlilik süresi 1 ile 10080 (7 gün) arasında olmalı.',
+  'endpointAdmin.enrollments.dialog.errorNoteLength': 'Açıklama 512 karakteri aşamaz.',
+  'endpointAdmin.enrollments.dialog.errorGeneric': 'Enrollment oluşturulamadı. Tekrar deneyin.',
+  'endpointAdmin.enrollments.modal.title': 'Enrollment Token (Tek Defa Görünür)',
+  'endpointAdmin.enrollments.modal.warning':
+    'Bu token yalnızca şimdi gösterilir. Kapattıktan sonra tekrar görüntülenemez. Hemen güvenli bir yere kopyalayın veya aşağıdaki komutu hedef cihaza yapıştırın.',
+  'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
+  'endpointAdmin.enrollments.modal.snippetLabel': 'PowerShell Kurulum Komutu (Administrator)',
+  'endpointAdmin.enrollments.modal.expiresLabel': 'Geçerlilik',
+  'endpointAdmin.enrollments.modal.copy': 'Kopyala',
+  'endpointAdmin.enrollments.modal.copied': 'Kopyalandı ✓',
+  'endpointAdmin.enrollments.modal.close': 'Kapat',
   // WEB-013 — Hardware inventory tab (Faz 22.5.2 / 22.5.5)
   'endpointAdmin.drawer.inventory.hardware.title': 'Donanım Envanteri',
   'endpointAdmin.drawer.inventory.hardware.empty':
@@ -530,6 +573,50 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.tab.inventory': 'Inventory',
   'endpointAdmin.drawer.tab.hardware': 'Hardware',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Software Catalog',
+  // WEB-017 — Enrollment management (Faz 22.5.x)
+  'endpointAdmin.enrollments.page.title': 'Device Enrollment Management',
+  'endpointAdmin.enrollments.page.description':
+    'Mint one-time enrollment tokens for installing the agent on new Windows hosts. The raw token is revealed exactly once.',
+  'endpointAdmin.enrollments.page.createButton': 'Create new enrollment',
+  'endpointAdmin.enrollments.page.loading': 'Loading enrollments…',
+  'endpointAdmin.enrollments.page.refreshing': 'Refreshing…',
+  'endpointAdmin.enrollments.page.empty': 'No enrollments yet.',
+  'endpointAdmin.enrollments.page.error':
+    'Could not load enrollments. Retry or contact your administrator.',
+  'endpointAdmin.enrollments.page.forbidden':
+    'You do not have access to this page. Contact your administrator.',
+  'endpointAdmin.enrollments.page.notDeployed':
+    'The enrollment management page is not deployed to this environment yet (backend 404). Contact your administrator.',
+  'endpointAdmin.enrollments.table.id': 'ID',
+  'endpointAdmin.enrollments.table.note': 'Note',
+  'endpointAdmin.enrollments.table.status': 'Status',
+  'endpointAdmin.enrollments.table.requestedBy': 'Requested by',
+  'endpointAdmin.enrollments.table.expiresAt': 'Expires',
+  'endpointAdmin.enrollments.table.consumedAt': 'Consumed',
+  'endpointAdmin.enrollments.table.deviceId': 'Device',
+  'endpointAdmin.enrollments.dialog.title': 'Create new enrollment',
+  'endpointAdmin.enrollments.dialog.expiresLabel': 'Expires in (minutes)',
+  'endpointAdmin.enrollments.dialog.noteLabel': 'Note (optional)',
+  'endpointAdmin.enrollments.dialog.cancel': 'Cancel',
+  'endpointAdmin.enrollments.dialog.submit': 'Create',
+  'endpointAdmin.enrollments.dialog.submitting': 'Creating…',
+  'endpointAdmin.enrollments.dialog.close': 'Close',
+  'endpointAdmin.enrollments.dialog.forbiddenTitle': 'Forbidden',
+  'endpointAdmin.enrollments.dialog.forbiddenBody':
+    'Creating enrollments requires MANAGER permission. Contact your administrator.',
+  'endpointAdmin.enrollments.dialog.errorExpiresRange':
+    'Expiration must be between 1 and 10080 minutes (7 days).',
+  'endpointAdmin.enrollments.dialog.errorNoteLength': 'Note must not exceed 512 characters.',
+  'endpointAdmin.enrollments.dialog.errorGeneric': 'Could not create the enrollment. Please retry.',
+  'endpointAdmin.enrollments.modal.title': 'Enrollment token (reveal once)',
+  'endpointAdmin.enrollments.modal.warning':
+    'This token is shown only now. After closing this dialog it cannot be retrieved. Copy it to a secure place or paste the install snippet on the target host now.',
+  'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
+  'endpointAdmin.enrollments.modal.snippetLabel': 'PowerShell install snippet (Administrator)',
+  'endpointAdmin.enrollments.modal.expiresLabel': 'Expires',
+  'endpointAdmin.enrollments.modal.copy': 'Copy',
+  'endpointAdmin.enrollments.modal.copied': 'Copied ✓',
+  'endpointAdmin.enrollments.modal.close': 'Close',
   // WEB-013 — Hardware inventory tab (Faz 22.5.2 / 22.5.5)
   'endpointAdmin.drawer.inventory.hardware.title': 'Hardware Inventory',
   'endpointAdmin.drawer.inventory.hardware.empty':
