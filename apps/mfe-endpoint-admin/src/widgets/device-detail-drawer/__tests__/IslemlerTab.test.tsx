@@ -61,11 +61,25 @@ describe('IslemlerTab — offline guard', () => {
 });
 
 describe('IslemlerTab — non-destructive flow', () => {
-  it('COLLECT_INVENTORY click onIssueCommand tetikler (type only payload)', () => {
+  it('COLLECT_INVENTORY click onIssueCommand tetikler (WEB-018: 3 opt-in bit payload)', () => {
+    // WEB-018 (Faz 22.5.x) — "Envanteri Şimdi Topla" artık 3 opt-in
+    // bit set ediyor (includeSoftware + includeWinGetEgress +
+    // includeHardware). Tek tıklama ile agent AG-025H lightweight
+    // contract'tan çıkıp software inventory + WinGet egress preflight
+    // + AG-035 hardware probe çalıştırır. Field name `payload` çünkü
+    // backend CreateEndpointCommandRequest record Map<String, Object>
+    // payload alır (details DEĞİL).
     const onIssueCommand = vi.fn();
     render(<IslemlerTab {...defaults} device={baseDevice} onIssueCommand={onIssueCommand} />);
     fireEvent.click(screen.getByTestId('command-button-COLLECT_INVENTORY'));
-    expect(onIssueCommand).toHaveBeenCalledWith({ type: 'COLLECT_INVENTORY' });
+    expect(onIssueCommand).toHaveBeenCalledWith({
+      type: 'COLLECT_INVENTORY',
+      payload: {
+        includeSoftware: true,
+        includeWinGetEgress: true,
+        includeHardware: true,
+      },
+    });
   });
 });
 
