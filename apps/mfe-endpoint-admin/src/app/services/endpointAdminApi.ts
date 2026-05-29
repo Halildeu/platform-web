@@ -33,6 +33,12 @@ import type {
   HardwareInventorySnapshot,
 } from '../../entities/endpoint-hardware-inventory/types';
 import type {
+  DeviceHealthHistoryPage,
+  DeviceHealthSnapshot,
+  GetDeviceHealthHistoryArgs,
+  GetDeviceHealthLatestArgs,
+} from '../../entities/endpoint-device-health/types';
+import type {
   CompliancePolicyItem,
   CompliancePolicyItemRequest,
   ComplianceEvaluationListResponse,
@@ -210,6 +216,7 @@ export const endpointAdminApi = createApi({
     'EndpointCommand',
     'EndpointSoftwareInventory',
     'EndpointHardwareInventory',
+    'EndpointDeviceHealth',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -354,6 +361,64 @@ export const endpointAdminApi = createApi({
       },
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointHardwareInventory' as const, id: `${deviceId}::history` },
+      ],
+    }),
+    /**
+     * WEB device-health latest — Faz 22.5 second wave (AG-033 device
+     * health). Mirrors the WEB-013 hardware-inventory slice.
+     *
+     * Backend: `AdminEndpointDeviceHealthController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/device-health/latest
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/device-health/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the most-recent {@link DeviceHealthSnapshot} (the
+     * AG-033 v1 payload block, contract-frozen at
+     * schema/endpoint-device-health-payload-v1.schema.json). When no
+     * snapshot has been ingested the service throws 404; RTK Query
+     * surfaces it as {@code error.status === 404} and the
+     * {@code DeviceHealthView} maps that to the "no device-health
+     * snapshot yet" empty state. Cross-tenant requests fall into the
+     * same 404 branch — device existence does not leak.
+     */
+    getDeviceHealthLatest: builder.query<DeviceHealthSnapshot, GetDeviceHealthLatestArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+          deviceId,
+        )}/device-health/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointDeviceHealth' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * WEB device-health history (paged summary).
+     *
+     * Backend: `AdminEndpointDeviceHealthController.getHistory` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/device-health/history?page=0&size=20
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/device-health/history
+     *
+     * Returns a Spring Page envelope of
+     * {@link DeviceHealthSnapshotSummary} (no child disk array;
+     * surfaces the warning booleans + {@code fixedDiskCount}). Backend
+     * clamps {@code size} silently per the BE-022 precedent.
+     */
+    getDeviceHealthHistory: builder.query<DeviceHealthHistoryPage, GetDeviceHealthHistoryArgs>({
+      query: ({ deviceId, page, size }) => {
+        const params: Record<string, string> = {};
+        if (typeof page === 'number') params.page = String(page);
+        if (typeof size === 'number') params.size = String(size);
+        return {
+          url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+            deviceId,
+          )}/device-health/history`,
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointDeviceHealth' as const, id: `${deviceId}::history` },
       ],
     }),
     /**
