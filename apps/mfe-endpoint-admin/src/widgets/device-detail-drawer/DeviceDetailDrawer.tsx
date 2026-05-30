@@ -63,6 +63,15 @@ const DeviceHealthTab = React.lazy(() =>
     default: m.DeviceHealthView,
   })),
 );
+// AG-036 outdated-software — Faz 22.5 Track C. Lazy because the package
+// table, history accordion, and probe-error list never render until the
+// operator selects this tab. Keeping it out of the drawer cold path
+// preserves the WEB-014D perf budget.
+const OutdatedSoftwareTab = React.lazy(() =>
+  import('./components/outdated-software/OutdatedSoftwareView').then((m) => ({
+    default: m.OutdatedSoftwareView,
+  })),
+);
 
 const TabFallback: React.FC = () => (
   <div
@@ -82,6 +91,7 @@ export type DeviceDetailDrawerTabKey =
   | 'inventory'
   | 'hardware'
   | 'health'
+  | 'outdated-software'
   | 'software-catalog'
   | 'compliance';
 
@@ -252,6 +262,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <DeviceHealthTab deviceId={device.id} active={activeTab === 'health'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'outdated-software' as const,
+        label: t('endpointAdmin.drawer.tab.outdatedSoftware'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <OutdatedSoftwareTab deviceId={device.id} active={activeTab === 'outdated-software'} />
           </React.Suspense>
         ),
       },
