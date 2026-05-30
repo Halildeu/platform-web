@@ -42,6 +42,24 @@ const DICT_TR = {
   'endpointAdmin.export.emptyHint': 'Dışa aktarılacak kayıt yok.',
   'endpointAdmin.export.truncatedNotice':
     'İlk {writtenRows} / {totalRows} satır dışa aktarıldı (üst sınır {rowCap}).',
+  // WEB-015 v2 — Device-health (AG-033) + outdated-software (AG-036)
+  // summary export columns + fail-closed sentinel values.
+  'endpointAdmin.export.val.yes': 'Evet',
+  'endpointAdmin.export.val.no': 'Hayır',
+  'endpointAdmin.export.val.unsupported': 'Desteklenmiyor',
+  'endpointAdmin.export.val.incomplete': 'Eksik',
+  'endpointAdmin.export.col.health.supported': 'Sağlık: Destekleniyor',
+  'endpointAdmin.export.col.health.probeComplete': 'Sağlık: Probe Tamam',
+  'endpointAdmin.export.col.health.anyLowDisk': 'Sağlık: Düşük Disk',
+  'endpointAdmin.export.col.health.memoryUsedPercent': 'Sağlık: Bellek Kullanım %',
+  'endpointAdmin.export.col.health.memoryHighPressure': 'Sağlık: Yüksek Bellek Baskısı',
+  'endpointAdmin.export.col.health.uptimeDays': 'Sağlık: Çalışma Süresi (gün)',
+  'endpointAdmin.export.col.health.longUptimeWarning': 'Sağlık: Uzun Çalışma Süresi',
+  'endpointAdmin.export.col.outdated.supported': 'Güncellik: Destekleniyor',
+  'endpointAdmin.export.col.outdated.probeComplete': 'Güncellik: Probe Tamam',
+  'endpointAdmin.export.col.outdated.hasUpgrades': 'Güncellik: Yükseltme Var',
+  'endpointAdmin.export.col.outdated.upgradeCount': 'Güncellik: Yükseltilebilir Sayısı',
+  'endpointAdmin.export.col.outdated.possiblyTruncated': 'Güncellik: Liste Kısaltılmış Olabilir',
   'endpointAdmin.audit.heading': 'Denetim Olayları',
   'endpointAdmin.audit.subtitle': 'Son 50 olay',
   'endpointAdmin.audit.refreshing': 'Yenileniyor…',
@@ -636,6 +654,24 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.export.emptyHint': 'No rows to export.',
   'endpointAdmin.export.truncatedNotice':
     'Exported the first {writtenRows} of {totalRows} rows (cap {rowCap}).',
+  // WEB-015 v2 — Device-health (AG-033) + outdated-software (AG-036)
+  // summary export columns + fail-closed sentinel values.
+  'endpointAdmin.export.val.yes': 'Yes',
+  'endpointAdmin.export.val.no': 'No',
+  'endpointAdmin.export.val.unsupported': 'Unsupported',
+  'endpointAdmin.export.val.incomplete': 'Incomplete',
+  'endpointAdmin.export.col.health.supported': 'Health: Supported',
+  'endpointAdmin.export.col.health.probeComplete': 'Health: Probe Complete',
+  'endpointAdmin.export.col.health.anyLowDisk': 'Health: Low Disk',
+  'endpointAdmin.export.col.health.memoryUsedPercent': 'Health: Memory Used %',
+  'endpointAdmin.export.col.health.memoryHighPressure': 'Health: High Memory Pressure',
+  'endpointAdmin.export.col.health.uptimeDays': 'Health: Uptime (days)',
+  'endpointAdmin.export.col.health.longUptimeWarning': 'Health: Long Uptime',
+  'endpointAdmin.export.col.outdated.supported': 'Outdated: Supported',
+  'endpointAdmin.export.col.outdated.probeComplete': 'Outdated: Probe Complete',
+  'endpointAdmin.export.col.outdated.hasUpgrades': 'Outdated: Has Upgrades',
+  'endpointAdmin.export.col.outdated.upgradeCount': 'Outdated: Upgrade Count',
+  'endpointAdmin.export.col.outdated.possiblyTruncated': 'Outdated: List Possibly Truncated',
   'endpointAdmin.audit.heading': 'Audit Events',
   'endpointAdmin.audit.subtitle': 'Last 50 events',
   'endpointAdmin.audit.refreshing': 'Refreshing…',
@@ -1194,16 +1230,30 @@ function resolveLocale(): 'tr' | 'en' {
   return lang === 'en' ? 'en' : 'tr';
 }
 
+/** Known UI locales for this MFE. */
+export type EndpointAdminLocale = 'tr' | 'en';
+
+/**
+ * Build a standalone `t(key)` accessor for an explicit locale. Mirrors
+ * the hook's lookup semantics (missing key → literal fallback) but
+ * without the React/`navigator` dependency, so non-React callers (e.g.
+ * the CSV column builder) and unit tests can resolve labels
+ * deterministically.
+ */
+export function createEndpointAdminT(locale: EndpointAdminLocale): (key: string) => string {
+  const dict = locale === 'en' ? DICT_EN : DICT_TR;
+  return (key: string): string => (dict as Record<string, string>)[key] ?? key;
+}
+
 export function useEndpointAdminI18n() {
   const locale = resolveLocale();
-  const dict = locale === 'en' ? DICT_EN : DICT_TR;
   return {
     /**
      * Forward-compatible: `key` accepts any string so that placeholder
      * keys for future tier scopes don't break the build. Missing keys
      * fall through to the literal value (visible during development).
      */
-    t: (key: string): string => (dict as Record<string, string>)[key] ?? key,
+    t: createEndpointAdminT(locale),
     locale,
   };
 }
