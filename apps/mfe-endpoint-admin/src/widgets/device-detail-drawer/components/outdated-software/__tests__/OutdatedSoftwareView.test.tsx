@@ -15,15 +15,26 @@
  * which the contract designates as the cross-repo regression corpus
  * (backend ingest + web render MUST accept/render each). The golden
  * examples carry the upgradeable list under the wire key `upgrade`; the
- * view reads `packages ?? upgrade`, so the verbatim examples exercise the
- * same render path as the backend `packages` response shape.
+ * view reads packages-canonical-then-`upgrade`, so the verbatim examples
+ * exercise the contract render path, and a separate test exercises the
+ * live backend `packages` response shape.
+ *
+ * Redaction is machine-enforced with a POISONED package fixture (carrying
+ * every off-contract key with realistic, non-key-echoing VALUES): the
+ * renderer reads only the 3 contract keys BY KEY, so none of the poisoned
+ * values may reach the DOM. Truncation is fail-safe: the contract rule
+ * (upgradeCount == maxUpgrade ⇒ possibly truncated) is ORed in so a wrong
+ * backend possiblyTruncated flag can never suppress the hint.
  */
 
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { OutdatedSoftwareView } from '../OutdatedSoftwareView';
-import type { OutdatedSoftwareSnapshot } from '../../../../../entities/endpoint-outdated-software/types';
+import type {
+  OutdatedSoftwarePackage,
+  OutdatedSoftwareSnapshot,
+} from '../../../../../entities/endpoint-outdated-software/types';
 
 vi.mock('../../../../../app/services/endpointAdminApi', () => ({
   endpointAdminApi: {
@@ -130,6 +141,59 @@ function latestOk(snapshot: OutdatedSoftwareSnapshot) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// POISONED redaction fixture. A package object that carries every known
+// off-contract key (publisher / name / displayName / installLocation / path /
+// license / downloadUrl / url) with REALISTIC VALUES that do NOT echo their
+// key name. The renderer reads only `packageId` / `installedVersion` /
+// `availableVersion` by key (NOT via Object.entries / map-over-keys), so a
+// machine-enforced assertion that NONE of these poisoned VALUES appears in the
+// rendered DOM proves the off-contract keys are never surfaced. This catches a
+// future leak even of a value that does not contain the substrings
+// "publisher"/"license"/etc. — the previous key-name-substring check could not.
+//
+// Cast through `unknown` because `OutdatedSoftwarePackage` is exactly the 3
+// contract keys; the extra keys are intentionally off-contract here. This is a
+// payload an attacker / a leaky future backend could send — the view must drop
+// them regardless of the compile-time type.
+const POISONED_OFF_CONTRACT_VALUES = [
+  'Igor Pavlov', // publisher
+  '7-Zip File Manager', // name
+  '7-Zip', // displayName (also a substring guard for the id 7zip.7zip → see note)
+  'C:/Program Files/7-Zip', // installLocation
+  'C:/Program Files/7-Zip/7zFM.exe', // path
+  'GNU LGPL', // license
+  'https://example.com/7z.exe', // downloadUrl
+  'https://example.com', // url
+] as const;
+
+const POISONED_PACKAGE = {
+  packageId: '7zip.7zip',
+  installedVersion: '24.09',
+  availableVersion: '25.01',
+  // --- off-contract keys (MUST never render) ---
+  publisher: 'Igor Pavlov',
+  name: '7-Zip File Manager',
+  displayName: '7-Zip',
+  installLocation: 'C:/Program Files/7-Zip',
+  path: 'C:/Program Files/7-Zip/7zFM.exe',
+  license: 'GNU LGPL',
+  downloadUrl: 'https://example.com/7z.exe',
+  url: 'https://example.com',
+} as unknown as OutdatedSoftwarePackage;
+
+const GOLDEN_POISONED: OutdatedSoftwareSnapshot = {
+  schemaVersion: 1,
+  supported: true,
+  probeComplete: true,
+  upgradeCount: 1,
+  upgrade: [POISONED_PACKAGE],
+  upgradeTruncated: false,
+  maxUpgrade: 512,
+  sourceUsed: 'winget',
+  probeDurationMs: 33,
+};
+
 describe('OutdatedSoftwareView', () => {
   it('renders nothing while the tab is inactive', () => {
     mockedLatest.mockReturnValue({
@@ -229,16 +293,82 @@ describe('OutdatedSoftwareView', () => {
     expect(screen.getByTestId('outdated-software-meta-sourceUsed')).toHaveTextContent('winget');
     expect(screen.queryByTestId('outdated-software-possiblyTruncated')).not.toBeInTheDocument();
 
-    // Redaction: the only table columns are the 3 contract keys.
+    // Redaction: the only table columns are the 3 contract keys, and each
+    // package row renders exactly 3 cells (packageId / installed / available).
     const headers = screen
       .getByTestId('outdated-software-packages-table')
       .querySelectorAll('thead th');
     expect(headers).toHaveLength(3);
+    const bodyRows = screen
+      .getByTestId('outdated-software-packages-table')
+      .querySelectorAll('tbody tr');
+    expect(bodyRows).toHaveLength(2);
+    for (const row of bodyRows) {
+      expect(row.querySelectorAll('td')).toHaveLength(3);
+    }
     // No off-contract field text leaks into the rendered DOM. (None of
     // these exist on the wire; this guards against any future widening.)
     const dom = screen.getByTestId('outdated-software-panel').textContent ?? '';
     for (const forbidden of ['publisher', 'license', 'installLocation', 'downloadUrl']) {
       expect(dom.toLowerCase()).not.toContain(forbidden.toLowerCase());
+    }
+  });
+
+  it('redaction: a poisoned package carrying off-contract keys renders ONLY the 3 contract cells, leaking no off-contract VALUE', () => {
+    // Machine-enforced redaction with a POISONED payload: the package object
+    // carries every off-contract key (publisher / name / displayName /
+    // installLocation / path / license / downloadUrl / url) with realistic
+    // values that do NOT echo their key name. The renderer accesses only
+    // packageId / installedVersion / availableVersion BY KEY (not via
+    // Object.entries / map-over-keys), so none of the poisoned values must
+    // reach the DOM. This proves a future leak of an arbitrary off-contract
+    // value is caught even when the value contains none of the
+    // "publisher"/"license"/... key-name substrings.
+    mockedLatest.mockReturnValue(latestOk(GOLDEN_POISONED));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<OutdatedSoftwareView deviceId="dev-1" active />);
+
+    expect(screen.getByTestId('outdated-software-panel')).toBeInTheDocument();
+
+    // Exactly 3 column headers (the contract keys) — no widening.
+    const headers = screen
+      .getByTestId('outdated-software-packages-table')
+      .querySelectorAll('thead th');
+    expect(headers).toHaveLength(3);
+
+    // Exactly one row, exactly 3 cells — the renderer does not emit an extra
+    // cell per off-contract key.
+    const bodyRows = screen
+      .getByTestId('outdated-software-packages-table')
+      .querySelectorAll('tbody tr');
+    expect(bodyRows).toHaveLength(1);
+    expect(bodyRows[0]?.querySelectorAll('td')).toHaveLength(3);
+
+    // The 3 contract values DO render (positive control: the redaction did
+    // not over-redact the legitimate fields).
+    expect(screen.getByTestId('outdated-software-package-id-7zip.7zip')).toHaveTextContent(
+      '7zip.7zip',
+    );
+    expect(screen.getByTestId('outdated-software-package-installed-7zip.7zip')).toHaveTextContent(
+      '24.09',
+    );
+    expect(screen.getByTestId('outdated-software-package-available-7zip.7zip')).toHaveTextContent(
+      '25.01',
+    );
+
+    // NONE of the poisoned off-contract VALUES appears anywhere in the
+    // rendered DOM (whole-view scope, not just the panel).
+    const fullDom = screen.getByTestId('outdated-software-view').textContent ?? '';
+    for (const leaked of POISONED_OFF_CONTRACT_VALUES) {
+      expect(fullDom).not.toContain(leaked);
+    }
+    // Belt-and-suspenders: also assert the rendered HTML markup (attributes
+    // included) carries no poisoned value, in case a value ever lands in an
+    // attribute rather than text content.
+    const html = screen.getByTestId('outdated-software-view').innerHTML;
+    for (const leaked of POISONED_OFF_CONTRACT_VALUES) {
+      expect(html).not.toContain(leaked);
     }
   });
 
@@ -307,6 +437,137 @@ describe('OutdatedSoftwareView', () => {
 
     expect(screen.getByTestId('outdated-software-possiblyTruncated')).toBeInTheDocument();
     expect(screen.getByTestId('outdated-software-possiblyTruncated')).toHaveTextContent('512');
+  });
+
+  it('truncation fail-safe (a): possiblyTruncated ABSENT + upgradeCount==maxUpgrade → hint shown', () => {
+    // The contract rule (upgradeCount == maxUpgrade ⇒ possibly truncated) is
+    // authoritative. With no backend-derived flag (a verbatim golden block),
+    // the view must derive the hint locally from the count == cap condition.
+    const truncated: OutdatedSoftwareSnapshot = {
+      ...GOLDEN_WITH_UPGRADES,
+      upgradeCount: 512,
+      maxUpgrade: 512,
+    };
+    // The golden block does NOT carry possiblyTruncated; assert it really is
+    // absent so this test exercises the local-derivation path.
+    expect('possiblyTruncated' in truncated).toBe(false);
+    mockedLatest.mockReturnValue(latestOk(truncated));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<OutdatedSoftwareView deviceId="dev-1" active />);
+
+    expect(screen.getByTestId('outdated-software-possiblyTruncated')).toBeInTheDocument();
+    expect(screen.getByTestId('outdated-software-possiblyTruncated')).toHaveTextContent('512');
+  });
+
+  it('truncation fail-safe (b): possiblyTruncated=FALSE + 512/512 → hint STILL shown (fail-safe over a wrong backend flag)', () => {
+    // A wrong / stale / false backend flag must NOT suppress the hint when
+    // the count is at the cap. The view ORs the contract condition in, so a
+    // contradictory possiblyTruncated:false still renders the hint.
+    const truncated: OutdatedSoftwareSnapshot = {
+      ...GOLDEN_WITH_UPGRADES,
+      upgradeCount: 512,
+      maxUpgrade: 512,
+      possiblyTruncated: false,
+    };
+    mockedLatest.mockReturnValue(latestOk(truncated));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<OutdatedSoftwareView deviceId="dev-1" active />);
+
+    expect(screen.getByTestId('outdated-software-possiblyTruncated')).toBeInTheDocument();
+    expect(screen.getByTestId('outdated-software-possiblyTruncated')).toHaveTextContent('512');
+  });
+
+  it('renders the backend `packages` response shape (live envelope), not just the `upgrade` golden', () => {
+    // The live backend response surfaces the upgradeable list under
+    // `packages` (AdminOutdatedSoftwareSnapshotResponse.packages) folded
+    // inside the persistence envelope; the contract golden uses `upgrade`.
+    // This exercises the real backend shape end-to-end through the view.
+    const backendShape: OutdatedSoftwareSnapshot = {
+      schemaVersion: 1,
+      supported: true,
+      probeComplete: true,
+      upgradeCount: 1,
+      // NOTE: list under `packages` (backend), NOT `upgrade` (golden).
+      packages: [
+        { packageId: 'Mozilla.Firefox', installedVersion: '128.0', availableVersion: '129.0' },
+      ],
+      upgradeTruncated: false,
+      maxUpgrade: 512,
+      sourceUsed: 'winget',
+      probeDurationMs: 41,
+    };
+    mockedLatest.mockReturnValue(latestOk(backendShape));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<OutdatedSoftwareView deviceId="dev-1" active />);
+
+    expect(screen.getByTestId('outdated-software-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('outdated-software-upgradeCount-badge')).toHaveTextContent('1');
+    expect(screen.getByTestId('outdated-software-package-id-Mozilla.Firefox')).toHaveTextContent(
+      'Mozilla.Firefox',
+    );
+    expect(
+      screen.getByTestId('outdated-software-package-installed-Mozilla.Firefox'),
+    ).toHaveTextContent('128.0');
+    expect(
+      screen.getByTestId('outdated-software-package-available-Mozilla.Firefox'),
+    ).toHaveTextContent('129.0');
+  });
+
+  it('mixed payload: an EMPTY `packages` must not silently drop a populated `upgrade`', () => {
+    // Codex concern: `packages ?? upgrade` would render empty for a
+    // contradictory payload because `[]` is non-nullish. The view selects the
+    // first NON-EMPTY of [packages, upgrade], so a populated `upgrade` is
+    // never dropped by an empty `packages`.
+    const mixed: OutdatedSoftwareSnapshot = {
+      ...GOLDEN_WITH_UPGRADES,
+      packages: [],
+      // upgrade still carries the two GOLDEN_WITH_UPGRADES packages.
+    };
+    mockedLatest.mockReturnValue(latestOk(mixed));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<OutdatedSoftwareView deviceId="dev-1" active />);
+
+    // The populated `upgrade` list renders — NOT the empty `packages`.
+    expect(screen.getByTestId('outdated-software-packages-table')).toBeInTheDocument();
+    expect(screen.getByTestId('outdated-software-package-id-7zip.7zip')).toHaveTextContent(
+      '7zip.7zip',
+    );
+    expect(screen.queryByTestId('outdated-software-packages-empty')).not.toBeInTheDocument();
+  });
+
+  it('packages is canonical for the live path: a populated `packages` wins over a populated `upgrade`', () => {
+    // When BOTH carry entries (the backend folds its own `packages` AND a
+    // golden-style `upgrade` is somehow present), `packages` is canonical for
+    // the live path and is the rendered list.
+    const both: OutdatedSoftwareSnapshot = {
+      schemaVersion: 1,
+      supported: true,
+      probeComplete: true,
+      upgradeCount: 1,
+      packages: [
+        { packageId: 'Backend.Canonical', installedVersion: '1.0', availableVersion: '2.0' },
+      ],
+      upgrade: [{ packageId: 'Golden.Fallback', installedVersion: '9.0', availableVersion: '9.1' }],
+      upgradeTruncated: false,
+      maxUpgrade: 512,
+      sourceUsed: 'winget',
+      probeDurationMs: 50,
+    };
+    mockedLatest.mockReturnValue(latestOk(both));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<OutdatedSoftwareView deviceId="dev-1" active />);
+
+    expect(
+      screen.getByTestId('outdated-software-package-id-Backend.Canonical'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('outdated-software-package-id-Golden.Fallback'),
+    ).not.toBeInTheDocument();
   });
 
   it('history hook is skipped while the accordion is closed', () => {

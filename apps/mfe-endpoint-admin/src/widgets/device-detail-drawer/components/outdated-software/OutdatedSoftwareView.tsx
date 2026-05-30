@@ -63,25 +63,59 @@ function resolveStatus(error: unknown): number | null {
 /**
  * Read the upgradeable package list from a snapshot regardless of whether
  * it arrived under the backend response key (`packages`) or the contract
- * golden-example key (`upgrade`). Always returns an array so callers can
- * iterate unconditionally (the contract guarantees `upgrade` is never
- * null on the wire).
+ * golden-example key (`upgrade`).
+ *
+ * Envelope split (same shape as the AG-033 device-health #705 precedent):
+ * the backend ingest folds a persistence envelope (id / deviceId /
+ * collectedAt + a child `packages[]` association) around the validated
+ * wire block, so the live response surfaces the list under
+ * `AdminOutdatedSoftwareSnapshotResponse.packages`; the contract golden
+ * examples carry the identical data under the wire key `upgrade`.
+ *
+ * Selection rule — packages-canonical, but mixed-payload-safe:
+ *  1. `packages` is canonical for the LIVE path (the backend response is
+ *     the source of truth there), so it is preferred when present.
+ *  2. BUT a contradictory payload (`packages: []` + a populated `upgrade`)
+ *     must NOT silently drop the populated list just because `[]` is
+ *     non-nullish (the `??` trap). When exactly one of the two is
+ *     non-empty, return that one — the populated list can never be
+ *     dropped by an empty sibling.
+ *  3. Both empty (clean snapshot) or both absent → []. Always returns an
+ *     array so callers iterate unconditionally (the contract guarantees
+ *     `upgrade` is never null on the wire).
  */
 function readPackages(snapshot: OutdatedSoftwareSnapshot): OutdatedSoftwarePackage[] {
-  return snapshot.packages ?? snapshot.upgrade ?? [];
+  const fromPackages = snapshot.packages;
+  const fromUpgrade = snapshot.upgrade;
+
+  // Mixed/contradictory guard: when exactly one source carries entries,
+  // use it so a populated list is never dropped by an empty sibling.
+  if (fromPackages && fromPackages.length > 0) {
+    return fromPackages;
+  }
+  if (fromUpgrade && fromUpgrade.length > 0) {
+    return fromUpgrade;
+  }
+
+  // Neither carries entries: prefer the present-but-empty key (preserves
+  // "packages present" semantics) before the [] fallback.
+  return fromPackages ?? fromUpgrade ?? [];
 }
 
 /**
- * Derive the "possibly truncated" signal. The backend folds a computed
- * `possiblyTruncated` boolean into the response; when it is absent (a
- * verbatim contract golden example) fall back to the contract definition
- * `upgradeCount == maxUpgrade`.
+ * Derive the "possibly truncated" signal FAIL-CLOSED. The contract rule is
+ * authoritative: `upgradeCount == maxUpgrade (512)` ⇒ possibly truncated
+ * (the agent parser caps at 512 before `upgradeTruncated` is evaluated, so a
+ * host with >512 pending upgrades is reported with upgradeTruncated=false).
+ *
+ * The backend folds a computed `possiblyTruncated` boolean into the response,
+ * but we do NOT trust that flag as absolute: derive the contract condition
+ * locally and OR it in. This way a wrong/stale/false backend flag can never
+ * SUPPRESS the hint when the count is at the cap — the hint shows whenever
+ * EITHER the backend says so OR the contract condition holds.
  */
 function isPossiblyTruncated(snapshot: OutdatedSoftwareSnapshot): boolean {
-  if (typeof snapshot.possiblyTruncated === 'boolean') {
-    return snapshot.possiblyTruncated;
-  }
-  return snapshot.upgradeCount === snapshot.maxUpgrade;
+  return snapshot.possiblyTruncated === true || snapshot.upgradeCount === snapshot.maxUpgrade;
 }
 
 export const OutdatedSoftwareView: React.FC<OutdatedSoftwareViewProps> = ({ deviceId, active }) => {
