@@ -39,6 +39,12 @@ import type {
   GetDeviceHealthLatestArgs,
 } from '../../entities/endpoint-device-health/types';
 import type {
+  GetOutdatedSoftwareHistoryArgs,
+  GetOutdatedSoftwareLatestArgs,
+  OutdatedSoftwareHistoryPage,
+  OutdatedSoftwareSnapshot,
+} from '../../entities/endpoint-outdated-software/types';
+import type {
   CompliancePolicyItem,
   CompliancePolicyItemRequest,
   ComplianceEvaluationListResponse,
@@ -217,6 +223,7 @@ export const endpointAdminApi = createApi({
     'EndpointSoftwareInventory',
     'EndpointHardwareInventory',
     'EndpointDeviceHealth',
+    'EndpointOutdatedSoftware',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -419,6 +426,73 @@ export const endpointAdminApi = createApi({
       },
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointDeviceHealth' as const, id: `${deviceId}::history` },
+      ],
+    }),
+    /**
+     * AG-036 outdated-software latest — Faz 22.5 Track C
+     * (contract-gated consumer). Mirrors the AG-033 device-health slice.
+     *
+     * Backend: `AdminEndpointOutdatedSoftwareController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/outdated-software/latest
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/outdated-software/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the most-recent {@link OutdatedSoftwareSnapshot} (the
+     * AG-036 v1 payload block, contract-frozen at
+     * schema/endpoint-outdated-software-payload-v1.schema.json) with the
+     * upgradeable `packages[]` child list folded in. When no snapshot has
+     * been ingested the service throws 404; RTK Query surfaces it as
+     * {@code error.status === 404} and the {@code OutdatedSoftwareView}
+     * maps that to the "no outdated-software snapshot yet" empty state.
+     * Cross-tenant requests fall into the same 404 branch — device
+     * existence does not leak (the repository query is tenant-scoped).
+     */
+    getOutdatedSoftwareLatest: builder.query<
+      OutdatedSoftwareSnapshot,
+      GetOutdatedSoftwareLatestArgs
+    >({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+          deviceId,
+        )}/outdated-software/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointOutdatedSoftware' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * AG-036 outdated-software history (paged summary).
+     *
+     * Backend: `AdminEndpointOutdatedSoftwareController.getHistory` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/outdated-software/history?page=0&size=20
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/outdated-software/history
+     *
+     * Returns a Spring Page envelope of
+     * {@link OutdatedSoftwareSnapshotSummary} (no child packages array;
+     * surfaces {@code upgradeCount} / {@code upgradeTruncated} /
+     * {@code possiblyTruncated} / {@code packageCount} /
+     * {@code probeErrorCount}). Backend clamps {@code size} into [1, 50]
+     * silently per the device-health history precedent.
+     */
+    getOutdatedSoftwareHistory: builder.query<
+      OutdatedSoftwareHistoryPage,
+      GetOutdatedSoftwareHistoryArgs
+    >({
+      query: ({ deviceId, page, size }) => {
+        const params: Record<string, string> = {};
+        if (typeof page === 'number') params.page = String(page);
+        if (typeof size === 'number') params.size = String(size);
+        return {
+          url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+            deviceId,
+          )}/outdated-software/history`,
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointOutdatedSoftware' as const, id: `${deviceId}::history` },
       ],
     }),
     /**
@@ -934,4 +1008,6 @@ export const {
   useCreateInstallMutation,
   useListInstallAuditsQuery,
   useGetInstallAuditQuery,
+  useGetOutdatedSoftwareLatestQuery,
+  useGetOutdatedSoftwareHistoryQuery,
 } = endpointAdminApi;
