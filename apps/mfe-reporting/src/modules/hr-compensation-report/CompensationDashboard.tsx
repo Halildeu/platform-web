@@ -16,9 +16,23 @@ import {
 import type { Bar3DDataPoint } from '@mfe/x-charts';
 import type { ChartClickEvent, ChartSize, CrossFilterEntry } from '@mfe/x-charts';
 import { KPICard as XKPICard } from '@mfe/x-charts';
-// ESLint exception: lightweight read-only chart-summary grid, no toolbar/variant needed — see CONTRIBUTING grid-contract section.
-import { AgGridReact } from 'ag-grid-react';
+// PR-A grid-contract migration (Codex thread 019e7f8f cross-AI plan-
+// time consensus, 2026-05-31): chart-summary mini-tables route
+// through the design-system `GridShell` grid contract instead of a
+// direct `<AgGridReact>`. The side-effect `setup` import registers
+// AG Grid modules through the canonical wrapper; the previous
+// CompensationDashboard-specific `ag-grid-react` ESLint allowlist
+// entry + CONTRIBUTING grid-contract permanent exception are
+// removed in this PR so the unified-grid invariant (PR-B vitest
+// gate) holds with no app-side exemptions.
+import '@mfe/design-system/advanced/data-grid/setup';
+import { GridShell, buildColDefs } from '@mfe/design-system/advanced/data-grid';
 import type { ColDef } from 'ag-grid-community';
+import {
+  buildChartGridColumnMetas,
+  identityTranslate,
+  type ChartGridColumn,
+} from './chartGridColumnMapper';
 import type { CrossFilter } from './crossFilterTypes';
 import { CHART_FILTER_MAP, KPI_FILTER_MAP } from './crossFilterTypes';
 import ActiveFilterChips from './ActiveFilterChips';
@@ -187,56 +201,96 @@ const KPICard: React.FC<{ kpi: DashboardKPI; onClick?: () => void; active?: bool
 };
 
 /* ------------------------------------------------------------------ */
-/*  ChartDataGrid — AG Grid client-mode for chart data                 */
+/*  ChartDataGrid — design-system GridShell for chart summary data     */
 /* ------------------------------------------------------------------ */
 
-interface ChartGridColumn {
-  key: string;
-  label: string;
-  format?: 'currency' | 'percent' | 'number';
-}
-
-/** Lightweight AG Grid for chart summary data — no toolbar/variant overhead */
+/**
+ * Per-chart summary mini-table. Renders through the design-system
+ * `GridShell` grid contract + `buildColDefs(ColumnMeta[], identity)`
+ * column-system — same pattern `context-health/grids/GridTabPanel.tsx`
+ * uses for read-only no-toolbar grids. The chart-summary `format`
+ * vocabulary (currency / percent / number) is mapped to the column-
+ * system's typed renderers (`CurrencyColumnMeta`,
+ * `PercentColumnMeta`, `NumberColumnMeta`) in
+ * `chartGridColumnMapper.ts`; tests there pin the mapping policy so
+ * a future format addition can't silently revert to ad-hoc
+ * formatters.
+ *
+ * Grid options notes:
+ *   - `density="compact"` + `rowHeight={32}` + `gridOptions.headerHeight: 32`
+ *     reproduce the pre-migration `headerHeight=32` / `rowHeight=32`
+ *     pair. The `gridOptions` spread inside `GridShell` runs AFTER
+ *     its explicit `headerHeight={density === 'compact' ? 40 : 48}`
+ *     prop assignment, so the 32-px override survives.
+ *   - `defaultColDef={{ filter: false, floatingFilter: false,
+ *     resizable: false, enableRowGroup/Pivot/Value: false }}` strips
+ *     the grid-contract's default heavyweight column UX from these
+ *     read-only mini-tables (no filter chrome / no aggregation hooks)
+ *     while keeping `sortable: true` parity.
+ *   - `rowSelection={{ mode: 'multiRow', checkboxes: false,
+ *     headerCheckbox: false }}` suppresses the checkbox column —
+ *     `GridShell` would otherwise default to checkbox-on multiRow
+ *     selection, which the pre-migration raw grid did not render.
+ *   - `pagination: false` / `statusBar: false`: chart-summary mini-
+ *     tables are bounded by the chart's bound data set (~5-15 rows)
+ *     and the wrapper clamps height to ≤ 260 px; pagination + status
+ *     panels would be visually distracting on a 2-3-row table.
+ */
 const ChartDataGrid: React.FC<{
   data: DashboardChartItem[];
   columns: ChartGridColumn[];
 }> = ({ data, columns }) => {
   if (!data || data.length === 0) return null;
 
-  const colDefs = React.useMemo<ColDef[]>(
-    () =>
-      columns.map((col, idx) => ({
-        field: col.key,
-        headerName: col.label,
-        flex: idx === 0 ? 1.5 : 1,
-        minWidth: idx === 0 ? 160 : 100,
-        sortable: true,
-        type: idx > 0 ? 'rightAligned' : undefined,
-        valueFormatter:
-          idx > 0
-            ? (params: { value: unknown }) => {
-                const v = params.value;
-                if (v == null) return '-';
-                const num = typeof v === 'number' ? v : Number(v);
-                if (isNaN(num)) return String(v);
-                if (col.format === 'currency') return formatCurrency(num);
-                if (col.format === 'percent') return formatPercent(num);
-                return formatNumber(num);
-              }
-            : undefined,
-      })),
+  const columnDefs = React.useMemo<ColDef[]>(
+    () => buildColDefs(buildChartGridColumnMetas(columns), identityTranslate) as ColDef[],
     [columns],
   );
 
   return (
-    <div className="ag-theme-quartz mt-3" style={{ height: Math.min(data.length * 32 + 42, 260) }}>
-      <AgGridReact
+    <div className="mt-3">
+      <GridShell
+        columnDefs={columnDefs}
         rowData={data}
-        columnDefs={colDefs}
-        headerHeight={32}
+        rowModelType="clientSide"
+        density="compact"
         rowHeight={32}
-        suppressCellFocus
-        suppressMovableColumns
+        height={Math.min(data.length * 32 + 42, 260)}
+        defaultColDef={{
+          sortable: true,
+          filter: false,
+          floatingFilter: false,
+          resizable: false,
+          enableRowGroup: false,
+          enablePivot: false,
+          enableValue: false,
+        }}
+        rowSelection={{
+          mode: 'multiRow' as const,
+          checkboxes: false,
+          headerCheckbox: false,
+        }}
+        gridOptions={{
+          headerHeight: 32,
+          suppressCellFocus: true,
+          suppressMovableColumns: true,
+          pagination: false,
+          // GridShell hardcodes `statusBar={{...}}` at its
+          // AgGridReact callsite but spreads `gridOptions` AFTER
+          // those explicit props, so setting `statusBar` to
+          // `undefined` here cancels the panel for these chart-
+          // summary mini-tables (2-15 rows; status / aggregation
+          // panels are noise).
+          statusBar: undefined,
+          // Codex 019e7f8f post-impl review finding #1: GridShell
+          // hardcodes `rowGroupPanelShow="always"` for the grid-
+          // contract's full-toolbar grids. The chart-summary mini-
+          // tables (read-only, no aggregation hooks) must NOT show
+          // the row-group drop zone — overriding it here strips that
+          // chrome to match the pre-migration raw AgGridReact UX.
+          rowGroupPanelShow: 'never',
+        }}
+        animateRows={false}
       />
     </div>
   );
