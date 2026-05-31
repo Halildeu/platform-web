@@ -22,9 +22,12 @@
  * Redaction is machine-enforced with a POISONED package fixture (carrying
  * every off-contract key with realistic, non-key-echoing VALUES): the
  * renderer reads only the 3 contract keys BY KEY, so none of the poisoned
- * values may reach the DOM. Truncation is fail-safe: the contract rule
- * (upgradeCount == maxUpgrade ⇒ possibly truncated) is ORed in so a wrong
- * backend possiblyTruncated flag can never suppress the hint.
+ * values may reach the DOM. Truncation rule (#1148, mirrored from the
+ * backend OutdatedSnapshotTruncation helper) is THREE-leg ORed:
+ * upgradeTruncated===true (agent authoritative) OR possiblyTruncated===true
+ * (backend-computed) OR upgradeCount >= maxUpgrade (defence-in-depth) — so a
+ * wrong backend possiblyTruncated flag can never suppress the hint when the
+ * agent says so or the fallback fires.
  */
 
 import { render, screen } from '@testing-library/react';

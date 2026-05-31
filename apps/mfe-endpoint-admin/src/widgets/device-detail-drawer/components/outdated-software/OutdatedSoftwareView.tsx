@@ -23,7 +23,11 @@ import { useEndpointAdminI18n } from '../../../../i18n';
  *   schema/endpoint-outdated-software-payload-v1.schema.json @ 73f0db0f):
  *  - per-package row: packageId + installedVersion → availableVersion,
  *  - an "N upgradeable" count badge,
- *  - a "possibly truncated" hint when upgradeCount == maxUpgrade (512).
+ *  - a "possibly truncated" hint per the rule mirrored from the backend
+ *    OutdatedSnapshotTruncation helper (#1148): upgradeTruncated===true
+ *    (agent authoritative) OR possiblyTruncated===true (backend-computed)
+ *    OR upgradeCount >= maxUpgrade (defence-in-depth). See
+ *    {@link isPossiblyTruncated} below.
  *
  * Redaction boundary (do NOT widen): only the three contract package
  * keys render — NO display name / publisher / install location /
