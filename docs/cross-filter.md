@@ -129,6 +129,14 @@ const clearAll = useCrossFilter((s) => s.clearAllFilters);
 Cross-filter event'lerini AG Grid filter model'a translate eder
 (tenant-aware, SSRM uyumlu).
 
+> **Not (PR-C grid-rendering contract, 2026-05-31):** Aşağıdaki örnek
+> library-level demo bağlamıdır. Reporting app kodu `apps/` altında
+> doğrudan `ag-grid-react` import edemez (CI hard gate). Reporting'de
+> `useGridCrossFilter`'ı `GridShell` / `EntityGridTemplate` çıktısındaki
+> AG Grid API'siyle bağlayın; raw `AgGridReact` ekrana mount eden
+> örnekleri sadece library/demo katmanında bırakın. Canonical
+> sözleşme: [`docs/architecture/grid-rendering.md`](./architecture/grid-rendering.md).
+
 ```tsx
 import { useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
