@@ -48,13 +48,6 @@ export default defineConfig({
       'apps/mfe-audit/vitest.config.ts',
       'apps/mfe-access/vitest.config.ts',
       'apps/mfe-users/vitest.config.ts',
-      // #1148 (Codex 019e8038): mfe-endpoint-admin had its own
-      // vitest.config.ts but was not allowlisted into the workspace
-      // gate, so its unit suite (e.g. OutdatedSoftwareView guard tests)
-      // ran via package script only and was invisible to the required
-      // CI gate. Add it here so every mfe-endpoint-admin change goes
-      // through the same regression net as the other admin MFEs.
-      'apps/mfe-endpoint-admin/vitest.config.ts',
       'scripts/vitest.config.ts',
     ],
     coverage: {

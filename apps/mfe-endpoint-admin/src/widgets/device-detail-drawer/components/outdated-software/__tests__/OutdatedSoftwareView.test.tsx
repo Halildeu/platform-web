@@ -22,12 +22,9 @@
  * Redaction is machine-enforced with a POISONED package fixture (carrying
  * every off-contract key with realistic, non-key-echoing VALUES): the
  * renderer reads only the 3 contract keys BY KEY, so none of the poisoned
- * values may reach the DOM. Truncation rule (#1148, mirrored from the
- * backend OutdatedSnapshotTruncation helper) is THREE-leg ORed:
- * upgradeTruncated===true (agent authoritative) OR possiblyTruncated===true
- * (backend-computed) OR upgradeCount >= maxUpgrade (defence-in-depth) — so a
- * wrong backend possiblyTruncated flag can never suppress the hint when the
- * agent says so or the fallback fires.
+ * values may reach the DOM. Truncation is fail-safe: the contract rule
+ * (upgradeCount == maxUpgrade ⇒ possibly truncated) is ORed in so a wrong
+ * backend possiblyTruncated flag can never suppress the hint.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -480,64 +477,6 @@ describe('OutdatedSoftwareView', () => {
 
     expect(screen.getByTestId('outdated-software-possiblyTruncated')).toBeInTheDocument();
     expect(screen.getByTestId('outdated-software-possiblyTruncated')).toHaveTextContent('512');
-  });
-
-  it('#1148: upgradeTruncated=TRUE wins regardless of count (agent authoritative)', () => {
-    // The agent's authoritative upgradeTruncated flag (set post-platform-agent
-    // #40 / e64c131) takes precedence: even a count well below the cap with
-    // both possiblyTruncated and the fallback inactive must still render the
-    // hint when the agent says the list was truncated.
-    const truncated: OutdatedSoftwareSnapshot = {
-      ...GOLDEN_WITH_UPGRADES,
-      upgradeCount: 17,
-      maxUpgrade: 512,
-      upgradeTruncated: true,
-      possiblyTruncated: false,
-    };
-    mockedLatest.mockReturnValue(latestOk(truncated));
-    mockedHistory.mockReturnValue(emptyHistoryResult());
-
-    render(<OutdatedSoftwareView deviceId="dev-1" active />);
-
-    expect(screen.getByTestId('outdated-software-possiblyTruncated')).toBeInTheDocument();
-  });
-
-  it('#1148: upgradeTruncated=FALSE + count<max + possiblyTruncated absent → hint HIDDEN (regression on lower bound)', () => {
-    // Pre-#1148 the rule was `possiblyTruncated || count === max`. The new
-    // helper is `upgradeTruncated || possiblyTruncated || count >= max`. This
-    // case pins the lower bound of `>=`: just-below-cap with no agent flag and
-    // no backend flag must NOT render the hint (regression guard).
-    const safe: OutdatedSoftwareSnapshot = {
-      ...GOLDEN_WITH_UPGRADES,
-      upgradeCount: 511,
-      maxUpgrade: 512,
-      upgradeTruncated: false,
-    };
-    expect('possiblyTruncated' in safe).toBe(false);
-    mockedLatest.mockReturnValue(latestOk(safe));
-    mockedHistory.mockReturnValue(emptyHistoryResult());
-
-    render(<OutdatedSoftwareView deviceId="dev-1" active />);
-
-    expect(screen.queryByTestId('outdated-software-possiblyTruncated')).not.toBeInTheDocument();
-  });
-
-  it('#1148: count > maxUpgrade (above-cap aggregate, future bulk path) → hint shown', () => {
-    // Widening the fallback from `==` to `>=` keeps the hint stable if a
-    // future projection (e.g. fleet-wide bulk path) ever surfaces a count
-    // above the per-snapshot cap. Codex thread 019e77df / 019e802d.
-    const truncated: OutdatedSoftwareSnapshot = {
-      ...GOLDEN_WITH_UPGRADES,
-      upgradeCount: 700,
-      maxUpgrade: 512,
-      upgradeTruncated: false,
-    };
-    mockedLatest.mockReturnValue(latestOk(truncated));
-    mockedHistory.mockReturnValue(emptyHistoryResult());
-
-    render(<OutdatedSoftwareView deviceId="dev-1" active />);
-
-    expect(screen.getByTestId('outdated-software-possiblyTruncated')).toBeInTheDocument();
   });
 
   it('renders the backend `packages` response shape (live envelope), not just the `upgrade` golden', () => {

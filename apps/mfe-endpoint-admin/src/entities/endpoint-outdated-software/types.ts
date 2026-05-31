@@ -61,12 +61,12 @@ export interface OutdatedSoftwareProbeError {
  * incomplete probe as "fully up to date". `supported=false` on
  * non-Windows runtimes.
  *
- * `possiblyTruncated` is the rendering hint per the rule shared with the
- * backend helper {@code OutdatedSnapshotTruncation} (#1148):
- * `upgradeTruncated === true` (agent authoritative, set post-platform-agent
- * #40 / e64c131) OR `upgradeCount >= maxUpgrade` (defence-in-depth
- * fallback). The backend computes this flag from the persisted columns;
- * consumers should render a "possibly truncated" hint when it is true.
+ * `possiblyTruncated` surfaces the known v1 limitation: when
+ * `upgradeCount == maxUpgrade (512)` the host may have more pending
+ * upgrades than were reported (the agent parser caps at 512 before
+ * `upgradeTruncated` is evaluated). The backend computes this flag from
+ * the persisted columns; consumers should render a "possibly truncated"
+ * hint when it is true.
  *
  * This is the validated wire block. The backend ingest persists it
  * (append-only snapshot); the latest/history endpoints surface it. The
@@ -84,12 +84,10 @@ export interface OutdatedSoftwarePayload {
   upgradeTruncated: boolean;
   maxUpgrade: number;
   /**
-   * Backend-derived rendering hint (#1148): `upgradeTruncated === true` OR
-   * `upgradeCount >= maxUpgrade`. Optional so a verbatim contract golden
-   * example (which does not carry the derived field) still type-checks as
-   * a snapshot; the view derives the same rule locally and ORs it in, so
-   * a wrong / stale / false backend flag can never SUPPRESS the hint when
-   * `upgradeTruncated` or the fallback signals it.
+   * Backend-derived signal (`upgradeCount == maxUpgrade`). Optional so a
+   * verbatim contract golden example (which does not carry the derived
+   * field) still type-checks as a snapshot; the view falls back to
+   * computing it from `upgradeCount === maxUpgrade` when absent.
    */
   possiblyTruncated?: boolean;
   sourceUsed: OutdatedSoftwareSource;
