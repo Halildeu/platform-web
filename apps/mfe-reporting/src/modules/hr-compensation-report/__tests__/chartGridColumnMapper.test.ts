@@ -39,6 +39,7 @@ describe('buildChartGridColumnMetas — chart-summary mini-table mapper', () => 
         columnType: 'bold-text',
         flex: 1.5,
         minWidth: 160,
+        filterable: false,
       });
     });
 
@@ -85,6 +86,7 @@ describe('buildChartGridColumnMetas — chart-summary mini-table mapper', () => 
         decimals: 0,
         flex: 1,
         minWidth: 100,
+        filterable: false,
       });
     });
 
@@ -101,6 +103,7 @@ describe('buildChartGridColumnMetas — chart-summary mini-table mapper', () => 
         decimals: 1,
         flex: 1,
         minWidth: 100,
+        filterable: false,
       });
     });
 
@@ -117,6 +120,7 @@ describe('buildChartGridColumnMetas — chart-summary mini-table mapper', () => 
         decimals: 0,
         flex: 1,
         minWidth: 100,
+        filterable: false,
       });
     });
 

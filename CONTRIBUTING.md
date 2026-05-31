@@ -88,7 +88,7 @@ Bu repo `platform-ssot` `web/` subdirectory'sinden `git filter-repo` ile migrate
   gerekmeyen salt-okunur grid'lerde `GridShell` kullanılabilir — yine
   kontratın parçasıdır.
 - **Doğrudan `ag-grid-react` / `AgGridReact` import etmek YASAK.** Bu
-  `eslint.config.mjs` içinde `no-restricted-imports` ile zorlanır (`error`).
+  `eslint.config.mjs` içinde `no-restricted-syntax` ile zorlanır (`error`).
 
 **İstisnalar** — sadece kontratın stabil iç parçaları:
 
@@ -97,14 +97,16 @@ Bu repo `platform-ssot` `web/` subdirectory'sinden `git filter-repo` ile migrate
 - `packages/x-data-grid/**` — enterprise grid kiti (pivot / tree /
   master-detail).
 
-**`apps/**`altında istisna yoktur.** Hafif salt-okunur chart-özet grid'leri
-dahil her grid`GridShell`(toolbar/variant gereksinimi yoksa) veya`EntityGridTemplate`(tam kontrat) üzerinden gider; column meta`ColumnMeta[]`
+**`apps/` altında istisna yoktur.** Hafif salt-okunur chart-özet grid'leri
+dahil her grid `GridShell` (toolbar/variant gereksinimi yoksa) veya
+`EntityGridTemplate` (tam kontrat) üzerinden gider; kolon meta'sı
+`ColumnMeta[]` + `buildColDefs` ile üretilir.
 
-- `buildColDefs` ile üretilir. Önceki `CompensationDashboard.tsx` kalıcı
-  istisnası PR-A grid-contract migration (2026-05-31, Codex thread 019e7f8f)
-  ile retire edildi — chart-özet mini-tabloları artık `GridShell` +
-  `buildChartGridColumnMetas(...) → buildColDefs(metas, identityTranslate)`
-  zinciri üzerinden render ediliyor.
+Önceki `CompensationDashboard.tsx` kalıcı istisnası PR-A grid-contract
+migration (2026-05-31, Codex thread 019e7f8f) ile retire edildi:
+chart-özet mini-tabloları artık `GridShell` +
+`buildChartGridColumnMetas(...) → buildColDefs(metas, identityTranslate)`
+zinciri üzerinden render ediliyor.
 
 ## Referans
 

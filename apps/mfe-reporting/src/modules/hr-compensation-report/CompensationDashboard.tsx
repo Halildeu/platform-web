@@ -275,7 +275,20 @@ const ChartDataGrid: React.FC<{
           suppressCellFocus: true,
           suppressMovableColumns: true,
           pagination: false,
+          // GridShell hardcodes `statusBar={{...}}` at its
+          // AgGridReact callsite but spreads `gridOptions` AFTER
+          // those explicit props, so setting `statusBar` to
+          // `undefined` here cancels the panel for these chart-
+          // summary mini-tables (2-15 rows; status / aggregation
+          // panels are noise).
           statusBar: undefined,
+          // Codex 019e7f8f post-impl review finding #1: GridShell
+          // hardcodes `rowGroupPanelShow="always"` for the grid-
+          // contract's full-toolbar grids. The chart-summary mini-
+          // tables (read-only, no aggregation hooks) must NOT show
+          // the row-group drop zone — overriding it here strips that
+          // chrome to match the pre-migration raw AgGridReact UX.
+          rowGroupPanelShow: 'never',
         }}
         animateRows={false}
       />

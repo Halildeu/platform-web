@@ -78,6 +78,18 @@ export const buildChartGridColumnMetas = (columns: ChartGridColumn[]): ColumnMet
         columnType: 'bold-text',
         flex: 1.5,
         minWidth: 160,
+        // Codex 019e7f8f post-impl review finding #2: per-column
+        // `filterable` wins over `defaultColDef.filter`. AG Grid
+        // applies the `defaultColDef` per-key only when the column
+        // ColDef omits the key — and `buildColDefs` always emits a
+        // per-column filter via `buildFilterConfig` (filters.ts).
+        // The grid-contract `defaultColDef={{ filter: false }}` set
+        // at the GridShell consumer would therefore be silently
+        // overridden. Pin `filterable: false` here so the column-
+        // system transformer skips the filter wiring and the mini-
+        // table actually ships without filter chrome (matches the
+        // pre-migration raw AgGridReact which had no filter at all).
+        filterable: false,
       };
     }
     const base = {
@@ -85,6 +97,7 @@ export const buildChartGridColumnMetas = (columns: ChartGridColumn[]): ColumnMet
       headerNameKey: col.label,
       flex: 1,
       minWidth: 100,
+      filterable: false,
     } as const;
     switch (col.format) {
       case 'currency':
