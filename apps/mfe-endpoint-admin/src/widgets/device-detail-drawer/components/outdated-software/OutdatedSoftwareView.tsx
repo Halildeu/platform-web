@@ -103,19 +103,34 @@ function readPackages(snapshot: OutdatedSoftwareSnapshot): OutdatedSoftwarePacka
 }
 
 /**
- * Derive the "possibly truncated" signal FAIL-CLOSED. The contract rule is
- * authoritative: `upgradeCount == maxUpgrade (512)` ⇒ possibly truncated
- * (the agent parser caps at 512 before `upgradeTruncated` is evaluated, so a
- * host with >512 pending upgrades is reported with upgradeTruncated=false).
+ * Derive the "possibly truncated" signal FAIL-CLOSED, mirroring the backend
+ * helper {@code OutdatedSnapshotTruncation} (#1148):
  *
- * The backend folds a computed `possiblyTruncated` boolean into the response,
- * but we do NOT trust that flag as absolute: derive the contract condition
- * locally and OR it in. This way a wrong/stale/false backend flag can never
- * SUPPRESS the hint when the count is at the cap — the hint shows whenever
- * EITHER the backend says so OR the contract condition holds.
+ *   possiblyTruncated =
+ *       upgradeTruncated === true                      // agent authoritative
+ *    || possiblyTruncated  === true                    // backend-computed
+ *    || upgradeCount >= maxUpgrade                      // defence-in-depth
+ *
+ * Why three legs:
+ * - `upgradeTruncated === true` is the AUTHORITATIVE agent signal (set by the
+ *   parser post-platform-agent #40 / e64c131). Before #1148 the web only
+ *   considered `possiblyTruncated || upgradeCount === maxUpgrade`, silently
+ *   disagreeing with `AdminOutdatedSoftwareLatestEntry` on the bulk path
+ *   (which already used the agent flag).
+ * - `possiblyTruncated === true` is the backend-derived hint (now computed
+ *   from the same rule on the backend); we trust it but never let a wrong /
+ *   stale `false` SUPPRESS the hint when other signals fire.
+ * - `upgradeCount >= maxUpgrade` is the widened pre-#40 heuristic kept as
+ *   defence-in-depth (so an above-cap aggregate from any future bulk path
+ *   cannot fail-open the hint). Widened from `==` to `>=` to match the
+ *   backend helper.
  */
 function isPossiblyTruncated(snapshot: OutdatedSoftwareSnapshot): boolean {
-  return snapshot.possiblyTruncated === true || snapshot.upgradeCount === snapshot.maxUpgrade;
+  return (
+    snapshot.upgradeTruncated === true ||
+    snapshot.possiblyTruncated === true ||
+    snapshot.upgradeCount >= snapshot.maxUpgrade
+  );
 }
 
 export const OutdatedSoftwareView: React.FC<OutdatedSoftwareViewProps> = ({ deviceId, active }) => {
