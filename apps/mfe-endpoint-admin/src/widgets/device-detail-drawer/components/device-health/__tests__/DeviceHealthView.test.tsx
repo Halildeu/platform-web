@@ -9,11 +9,21 @@
  * URLs in endpointAdminApi.ts are correct; a route typo fails the
  * TypeScript build before this file runs.
  *
- * The three healthy/warning/unsupported snapshots are the contract's
- * golden examples loaded VERBATIM
- *   (schema/endpoint-device-health-payload-v1.schema.json `examples`),
- * which the contract designates as the cross-repo regression corpus
- * (backend ingest + web render MUST accept/render each).
+ * SHAPE (the #705 real-data crash fix): these fixtures are the FLAT
+ * `AdminDeviceHealthSnapshotResponse` projection the latest/history
+ * endpoints actually return — flat `memoryUsedPercent` /
+ * `memoryHighPressure` / `uptimeDays` / `longUptimeWarning` scalar
+ * columns + a `disks[]` child list — NOT the agent-wire nested
+ * `memory:{…}` / `uptime:{…}` / `fixedDisks:[…]` contract block.
+ *
+ * The OLD fixtures used the nested contract shape, so the deployed view's
+ * `const { memory, uptime } = snapshot` passed the tests while crashing on
+ * real flat-DTO data (`Cannot read properties of undefined (reading
+ * 'usedPercent')`). The healthy / warning data VALUES are the contract
+ * golden examples (same used %, uptime days, disk free %, warning flags),
+ * now carried under the real DTO field names; the new "real-data render"
+ * test exercises a fully-populated supported+complete snapshot end to end
+ * and would have caught the crash.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -53,17 +63,18 @@ function emptyHistoryResult() {
 }
 
 // ---------------------------------------------------------------------------
-// Contract golden examples (schema `examples`), loaded verbatim. These are
-// the AG-033 v1 payload blocks; the backend folds a persistence envelope
-// (deviceId / collectedAt) around them at ingest, which the type tolerates.
+// FLAT DTO fixtures (AdminDeviceHealthSnapshotResponse). The latest endpoint
+// returns the flat projection — scalar memory/uptime columns + a disks[]
+// child list, folded around the persistence envelope (id / deviceId /
+// collectedAt). The data VALUES mirror the contract golden examples.
 // ---------------------------------------------------------------------------
 
-/** Golden example #1 — healthy. */
+/** Fixture #1 — healthy (flat DTO; contract golden-example values). */
 const GOLDEN_HEALTHY: DeviceHealthSnapshot = {
   schemaVersion: 1,
   supported: true,
   probeComplete: true,
-  fixedDisks: [
+  disks: [
     {
       driveLetter: 'C:',
       totalBytes: 536870912000,
@@ -75,31 +86,23 @@ const GOLDEN_HEALTHY: DeviceHealthSnapshot = {
   fixedDiskCount: 1,
   fixedDisksTruncated: false,
   maxFixedDisks: 64,
-  memory: {
-    totalPhysicalBytes: 17179869184,
-    availableBytes: 9663676416,
-    usedPercent: 42,
-    highPressureWarning: false,
-    commitLimitBytes: 25769803776,
-    commitUsedBytes: 10307921920,
-  },
-  uptime: {
-    lastBootEpochSec: 1748275200,
-    uptimeSeconds: 259200,
-    uptimeDays: 3,
-    longUptimeWarning: false,
-  },
+  memoryUsedPercent: 42,
+  memoryHighPressure: false,
+  uptimeDays: 3,
+  uptimeSeconds: 259200,
+  lastBootEpochSec: 1748275200,
+  longUptimeWarning: false,
   anyLowDisk: false,
   sourceUsed: 'win32',
   probeDurationMs: 12,
 };
 
-/** Golden example #2 — low-disk + high-pressure + long-uptime. */
+/** Fixture #2 — low-disk + high-pressure + long-uptime (flat DTO). */
 const GOLDEN_WARNING: DeviceHealthSnapshot = {
   schemaVersion: 1,
   supported: true,
   probeComplete: true,
-  fixedDisks: [
+  disks: [
     {
       driveLetter: 'C:',
       totalBytes: 536870912000,
@@ -111,43 +114,32 @@ const GOLDEN_WARNING: DeviceHealthSnapshot = {
   fixedDiskCount: 1,
   fixedDisksTruncated: false,
   maxFixedDisks: 64,
-  memory: {
-    totalPhysicalBytes: 17179869184,
-    availableBytes: 1073741824,
-    usedPercent: 95,
-    highPressureWarning: true,
-    commitLimitBytes: 34359738368,
-    commitUsedBytes: 25769803776,
-  },
-  uptime: {
-    lastBootEpochSec: 1745683200,
-    uptimeSeconds: 2851200,
-    uptimeDays: 33,
-    longUptimeWarning: true,
-  },
+  memoryUsedPercent: 95,
+  memoryHighPressure: true,
+  uptimeDays: 33,
+  uptimeSeconds: 2851200,
+  lastBootEpochSec: 1745683200,
+  longUptimeWarning: true,
   anyLowDisk: true,
   sourceUsed: 'win32',
   probeDurationMs: 18,
 };
 
-/** Golden example #3 — non-Windows unsupported. */
+/** Fixture #3 — non-Windows unsupported (flat DTO; nullable columns null). */
 const GOLDEN_UNSUPPORTED: DeviceHealthSnapshot = {
   schemaVersion: 1,
   supported: false,
   probeComplete: false,
-  fixedDisks: [],
+  disks: [],
   fixedDiskCount: 0,
   fixedDisksTruncated: false,
   maxFixedDisks: 64,
-  memory: {
-    totalPhysicalBytes: 0,
-    availableBytes: 0,
-    usedPercent: 0,
-    highPressureWarning: false,
-    commitLimitBytes: 0,
-    commitUsedBytes: 0,
-  },
-  uptime: { lastBootEpochSec: 0, uptimeSeconds: 0, uptimeDays: 0, longUptimeWarning: false },
+  memoryUsedPercent: null,
+  memoryHighPressure: null,
+  uptimeDays: null,
+  uptimeSeconds: null,
+  lastBootEpochSec: null,
+  longUptimeWarning: null,
   anyLowDisk: false,
   sourceUsed: 'none',
   probeErrors: [
@@ -279,6 +271,124 @@ describe('DeviceHealthView', () => {
     // Long-uptime badge.
     expect(screen.getByTestId('device-health-uptime-days')).toHaveTextContent('33');
     expect(screen.getByTestId('device-health-uptime-long-badge')).toBeInTheDocument();
+  });
+
+  it('renders REAL backend flat-DTO data (#705 regression) without crashing', () => {
+    // #705 real-data crash repro: the deployed view destructured
+    // `const { memory, uptime } = snapshot` and read `memory.usedPercent`
+    // against a flat AdminDeviceHealthSnapshotResponse (no nested
+    // memory/uptime), throwing
+    // `Cannot read properties of undefined (reading 'usedPercent')`. This
+    // fixture is EXACTLY the flat DTO the live latest endpoint returns —
+    // scalar memory/uptime columns + a disks[] child list, folded around
+    // the persistence envelope (id / deviceId / collectedAt). It is
+    // supported=true + probeComplete=true with a populated memory % +
+    // disks + uptime, i.e. the real-data path that crashed.
+    const realFlatDto: DeviceHealthSnapshot = {
+      id: '11111111-1111-1111-1111-111111111111',
+      tenantId: '22222222-2222-2222-2222-222222222222',
+      deviceId: 'dev-real',
+      sourceCommandResultId: '33333333-3333-3333-3333-333333333333',
+      schemaVersion: 1,
+      supported: true,
+      probeComplete: true,
+      anyLowDisk: false,
+      fixedDiskCount: 2,
+      fixedDisksTruncated: false,
+      maxFixedDisks: 64,
+      memoryUsedPercent: 67,
+      memoryHighPressure: false,
+      uptimeDays: 12,
+      uptimeSeconds: 1036800,
+      lastBootEpochSec: 1748275200,
+      longUptimeWarning: false,
+      sourceUsed: 'win32',
+      probeDurationMs: 23,
+      payloadHashSha256: 'a'.repeat(64),
+      collectedAt: '2026-05-29T10:00:00Z',
+      createdAt: '2026-05-29T10:00:01Z',
+      disks: [
+        {
+          driveLetter: 'C:',
+          totalBytes: 1099511627776,
+          freeBytes: 549755813888,
+          freePercent: 50,
+          lowDiskWarning: false,
+        },
+        {
+          driveLetter: 'D:',
+          totalBytes: 2199023255552,
+          freeBytes: 1099511627776,
+          freePercent: 50,
+          lowDiskWarning: false,
+        },
+      ],
+      probeErrors: [],
+    };
+    mockedLatest.mockReturnValue(latestOk(realFlatDto));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<DeviceHealthView deviceId="dev-real" active />);
+
+    // The panel renders (no crash, no error boundary).
+    expect(screen.getByTestId('device-health-panel')).toBeInTheDocument();
+    // Flat scalar memory column renders the used %.
+    expect(screen.getByTestId('device-health-memory-usedPercent')).toHaveTextContent('67%');
+    // Flat scalar uptime column renders the days.
+    expect(screen.getByTestId('device-health-uptime-days')).toHaveTextContent('12');
+    // Both disks from the `disks[]` child list render.
+    expect(screen.getByTestId('device-health-disk-row-C:')).toBeInTheDocument();
+    expect(screen.getByTestId('device-health-disk-row-D:')).toBeInTheDocument();
+    expect(screen.getByTestId('device-health-disk-freePercent-C:')).toHaveTextContent('50%');
+    // Meta row reads the flat scalar columns.
+    expect(screen.getByTestId('device-health-meta-sourceUsed')).toHaveTextContent('win32');
+    // The DTO does NOT carry memory byte totals (total / available /
+    // commit live only in redacted_payload, which the DTO does not
+    // surface) — the view must render ONLY the fields the DTO returns, so
+    // those rows are absent (not a crash, not an undefined render).
+    const memoryGrid = screen.getByTestId('device-health-memory-grid');
+    expect(memoryGrid.textContent).not.toMatch(/Total physical|Toplam Fiziksel|memory\.total/);
+    expect(memoryGrid.textContent).not.toMatch(/Available|Kullanılabilir|memory\.available/);
+    expect(memoryGrid.textContent).not.toMatch(/Commit|memory\.commit/);
+  });
+
+  it('null-guards a supported+complete snapshot with null scalar columns (no crash)', () => {
+    // Defensive: every flat DTO scalar is a nullable boxed type. A
+    // supported+complete snapshot whose nullable columns are null must
+    // render the panel with em-dash placeholders, never throw.
+    const sparse: DeviceHealthSnapshot = {
+      deviceId: 'dev-sparse',
+      schemaVersion: 1,
+      supported: true,
+      probeComplete: true,
+      anyLowDisk: false,
+      fixedDiskCount: 0,
+      fixedDisksTruncated: false,
+      maxFixedDisks: 64,
+      memoryUsedPercent: null,
+      memoryHighPressure: null,
+      uptimeDays: null,
+      uptimeSeconds: null,
+      lastBootEpochSec: null,
+      longUptimeWarning: null,
+      sourceUsed: 'win32',
+      probeDurationMs: null,
+      disks: [],
+      probeErrors: [],
+    };
+    mockedLatest.mockReturnValue(latestOk(sparse));
+    mockedHistory.mockReturnValue(emptyHistoryResult());
+
+    render(<DeviceHealthView deviceId="dev-sparse" active />);
+
+    expect(screen.getByTestId('device-health-panel')).toBeInTheDocument();
+    // Null used % / uptime days render as the em-dash sentinel, no badge.
+    expect(screen.getByTestId('device-health-memory-usedPercent')).toHaveTextContent('—');
+    expect(screen.queryByTestId('device-health-memory-pressure-badge')).not.toBeInTheDocument();
+    expect(screen.getByTestId('device-health-uptime-days')).toHaveTextContent('—');
+    expect(screen.queryByTestId('device-health-uptime-long-badge')).not.toBeInTheDocument();
+    // No disks → the disks-empty placeholder.
+    expect(screen.getByTestId('device-health-disks-empty')).toBeInTheDocument();
   });
 
   it('renders the unsupported state for the non-Windows golden example (probe not supported)', () => {

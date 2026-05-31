@@ -3,15 +3,31 @@
  * ingest → web view). Mirrors the WEB-013 hardware-inventory entity
  * precedent.
  *
- * Wire shape is frozen by the cross-repo contract:
- *   platform-k8s-gitops/schema/endpoint-device-health-payload-v1.schema.json
- *   (AG-033 v1, schemaVersion=1; source of truth =
- *    platform-agent internal/inventory/device_health.go DeviceHealthResult).
+ * SHAPE SOURCE OF TRUTH = the backend QUERY DTO, not the agent-wire
+ * contract. The latest/history endpoints return the FLAT projection
+ *   endpoint-admin-service AdminDeviceHealthSnapshotResponse
+ *   + AdminDeviceHealthDiskResponse (whitelisted scalar columns +
+ *     bounded probeErrors[] + child disks[]).
+ * It does NOT nest `memory` / `uptime` objects and it does NOT surface
+ * the agent-wire `redacted_payload` (the memory BYTE totals — total /
+ * available / commit — live only inside that JSONB and are NOT exposed
+ * by the DTO, so they are NOT modelled here and the view does not read
+ * them). The disk list arrives under `disks` (NOT `fixedDisks`).
  *
- * Field names match the contract / backend record component names
- * exactly so the RTK Query slice does not need a mapping layer.
+ * Historical note (#705 real-data render crash): these types used to
+ * mirror the agent-wire contract's NESTED block (`memory:{…}`,
+ * `uptime:{…}`, `fixedDisks:[…]`). The deployed view destructured
+ * `const { memory, uptime } = snapshot` and crashed
+ * (`Cannot read properties of undefined (reading 'usedPercent')`) the
+ * moment it received a REAL flat-DTO snapshot. The web tests passed
+ * only because their fixtures used the contract NESTED shape — i.e.
+ * they tested the wrong shape. The types + view + fixtures are now
+ * aligned to the flat DTO field-for-field.
  *
- * Security invariant (do NOT widen): the disk block carries
+ * Field names match the backend record component names exactly so the
+ * RTK Query slice does not need a mapping layer.
+ *
+ * Security invariant (do NOT widen): each disk row carries
  * `driveLetter` only — NO volume label / serial / filesystem / mount
  * path / GUID; `lastBootEpochSec` is unix seconds (never a local-time
  * string); `probeError.summary` is bounded operator text. Thresholds
@@ -34,34 +50,19 @@ export type DeviceHealthProbeErrorCode =
   | 'NO_EVIDENCE';
 
 /**
- * Per-volume fixed-disk health. `driveLetter` matches `^[A-Z]:$`.
- * `freeBytes` is freeBytesAvailableToCaller (LocalSystem-writable) —
- * the correct denominator for a "can this install succeed?" gate.
+ * Per-volume fixed-disk health — the `AdminDeviceHealthDiskResponse`
+ * record shape. `driveLetter` matches `^[A-Z]:$`. `freeBytes` is
+ * freeBytesAvailableToCaller (LocalSystem-writable) — the correct
+ * denominator for a "can this install succeed?" gate. The byte / percent
+ * fields are nullable boxed types on the backend (`Long` / `Short`), so
+ * they are typed `| null` and null-guarded at the render site.
  */
 export interface DeviceHealthFixedDisk {
   driveLetter: string;
-  totalBytes: number;
-  freeBytes: number;
-  freePercent: number;
-  lowDiskWarning: boolean;
-}
-
-/** Physical/commit memory health. `usedPercent` is 0..100. */
-export interface DeviceHealthMemory {
-  totalPhysicalBytes: number;
-  availableBytes: number;
-  usedPercent: number;
-  highPressureWarning: boolean;
-  commitLimitBytes: number;
-  commitUsedBytes: number;
-}
-
-/** Uptime/last-boot health. `lastBootEpochSec` is unix seconds. */
-export interface DeviceHealthUptime {
-  lastBootEpochSec: number;
-  uptimeSeconds: number;
-  uptimeDays: number;
-  longUptimeWarning: boolean;
+  totalBytes: number | null;
+  freeBytes: number | null;
+  freePercent: number | null;
+  lowDiskWarning: boolean | null;
 }
 
 /** Typed probe error. Any entry flips `probeComplete=false`. */
@@ -72,42 +73,53 @@ export interface DeviceHealthProbeError {
 }
 
 /**
- * The AG-033 v1 device-health probe block. `probeComplete=false` is
- * fail-closed: treat as "evidence incomplete", never render the
+ * The flat device-health snapshot projection — `probeComplete=false`
+ * is fail-closed: treat as "evidence incomplete", never render the
  * zero-values as a healthy device. `supported=false` on non-Windows
  * runtimes.
  *
- * This is the validated wire block (contract root). The backend ingest
- * persists it (append-only snapshot, BE-022 precedent); the latest/
- * history endpoints surface it. The backend may fold persistence
- * metadata (id / deviceId / collectedAt) around the block — those are
- * declared optionally on {@link DeviceHealthSnapshot} so the view can
- * use the snapshot envelope's own `deviceId` for the stale-guard.
+ * Field-for-field this is the backend `AdminDeviceHealthSnapshotResponse`
+ * record (FLAT — no nested `memory` / `uptime`):
+ *  - memory summary  → `memoryUsedPercent` (0..100) + `memoryHighPressure`
+ *  - uptime summary  → `uptimeDays` / `uptimeSeconds` / `lastBootEpochSec`
+ *                      / `longUptimeWarning`
+ *  - fixed disks     → `disks[]` (NOT `fixedDisks`)
+ * The memory BYTE totals (total / available / commit) are NOT on the DTO
+ * — they live only inside the agent-wire `redacted_payload` JSONB, which
+ * the DTO deliberately does not surface — so they are absent here and
+ * the view does not render those rows.
+ *
+ * The nullable boxed backend types (`Short` / `Integer` / `Long` /
+ * `Boolean`) are modelled `| null`; every read site null-guards.
  */
 export interface DeviceHealthPayload {
-  schemaVersion: number;
-  supported: boolean;
-  probeComplete: boolean;
-  fixedDisks: DeviceHealthFixedDisk[];
-  fixedDiskCount: number;
-  fixedDisksTruncated: boolean;
-  maxFixedDisks: number;
-  memory: DeviceHealthMemory;
-  uptime: DeviceHealthUptime;
-  anyLowDisk: boolean;
-  sourceUsed: DeviceHealthSource;
+  schemaVersion: number | null;
+  supported: boolean | null;
+  probeComplete: boolean | null;
+  disks: DeviceHealthFixedDisk[];
+  fixedDiskCount: number | null;
+  fixedDisksTruncated: boolean | null;
+  maxFixedDisks: number | null;
+  memoryUsedPercent: number | null;
+  memoryHighPressure: boolean | null;
+  uptimeDays: number | null;
+  uptimeSeconds: number | null;
+  lastBootEpochSec: number | null;
+  longUptimeWarning: boolean | null;
+  anyLowDisk: boolean | null;
+  sourceUsed: DeviceHealthSource | null;
+  probeDurationMs: number | null;
   probeErrors?: DeviceHealthProbeError[];
-  probeDurationMs: number;
 }
 
 /**
- * Latest device-health snapshot response. The contract payload block
- * plus the backend persistence envelope (mirrors the BE-022Q hardware
- * snapshot shape: id / tenantId / deviceId / collectedAt around the
- * validated block). The persistence-envelope fields are typed as the
- * union of "present" (real backend) and "absent" (golden-example
- * verbatim) so the golden contract examples — which are just the
- * payload block — type-check directly as a snapshot.
+ * Latest device-health snapshot response — the flat
+ * `AdminDeviceHealthSnapshotResponse` record. The persistence-envelope
+ * fields (id / tenantId / deviceId / collectedAt / createdAt /
+ * payloadHashSha256 / sourceCommandResultId) are always present on the
+ * real DTO; they are declared optional so a partial test fixture stays
+ * convenient and the view can use the envelope's own `deviceId` for the
+ * stale-guard.
  */
 export interface DeviceHealthSnapshot extends DeviceHealthPayload {
   id?: string;

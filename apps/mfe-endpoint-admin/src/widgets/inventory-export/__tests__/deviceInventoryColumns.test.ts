@@ -20,10 +20,17 @@ import type { OutdatedSoftwareSnapshot } from '../../../entities/endpoint-outdat
  * unsupported / incomplete evidence (never a misleading "0 upgrades" /
  * "healthy"); (4) NO off-contract field value leaks into any cell
  * (redaction); (5) CSV formula-injection escaping of a malicious
- * `=cmd`-style value. Fixtures are the cross-repo contract golden
- * examples verbatim:
- *   platform-k8s-gitops/schema/endpoint-device-health-payload-v1.schema.json
- *   platform-k8s-gitops/schema/endpoint-outdated-software-payload-v1.schema.json
+ * `=cmd`-style value.
+ *
+ * SHAPE: the device-health fixtures are the FLAT
+ * `AdminDeviceHealthSnapshotResponse` projection (the actual query DTO the
+ * CSV export consumes) — NOT the agent-wire nested `memory:{…}`/`uptime:{…}`
+ * contract block. The data VALUES are the contract golden examples (same
+ * used %, uptime days, warning flags) carried under the flat field names
+ * (`memoryUsedPercent`, `memoryHighPressure`, `uptimeDays`,
+ * `longUptimeWarning`, `disks[]`). This is the #705 real-data fix: the old
+ * nested fixtures tested the wrong shape. The outdated-software fixtures
+ * are already flat (the DTO shape) and carry the golden-example values.
  */
 
 const t = createEndpointAdminT('tr');
@@ -53,12 +60,12 @@ function mkDevice(id: string, overrides: Partial<EndpointDevice> = {}): Endpoint
 
 // ── Contract golden examples (verbatim) ──────────────────────────────
 
-/** device-health example[0]: supported + complete, all-healthy. */
+/** device-health example[0]: supported + complete, all-healthy (FLAT DTO). */
 const HEALTH_HEALTHY: DeviceHealthSnapshot = {
   schemaVersion: 1,
   supported: true,
   probeComplete: true,
-  fixedDisks: [
+  disks: [
     {
       driveLetter: 'C:',
       totalBytes: 536870912000,
@@ -70,31 +77,23 @@ const HEALTH_HEALTHY: DeviceHealthSnapshot = {
   fixedDiskCount: 1,
   fixedDisksTruncated: false,
   maxFixedDisks: 64,
-  memory: {
-    totalPhysicalBytes: 17179869184,
-    availableBytes: 9663676416,
-    usedPercent: 42,
-    highPressureWarning: false,
-    commitLimitBytes: 25769803776,
-    commitUsedBytes: 10307921920,
-  },
-  uptime: {
-    lastBootEpochSec: 1748275200,
-    uptimeSeconds: 259200,
-    uptimeDays: 3,
-    longUptimeWarning: false,
-  },
+  memoryUsedPercent: 42,
+  memoryHighPressure: false,
+  uptimeDays: 3,
+  uptimeSeconds: 259200,
+  lastBootEpochSec: 1748275200,
+  longUptimeWarning: false,
   anyLowDisk: false,
   sourceUsed: 'win32',
   probeDurationMs: 12,
 };
 
-/** device-health example[1]: supported + complete, all warnings tripped. */
+/** device-health example[1]: supported + complete, all warnings tripped (FLAT DTO). */
 const HEALTH_WARNINGS: DeviceHealthSnapshot = {
   schemaVersion: 1,
   supported: true,
   probeComplete: true,
-  fixedDisks: [
+  disks: [
     {
       driveLetter: 'C:',
       totalBytes: 536870912000,
@@ -106,43 +105,32 @@ const HEALTH_WARNINGS: DeviceHealthSnapshot = {
   fixedDiskCount: 1,
   fixedDisksTruncated: false,
   maxFixedDisks: 64,
-  memory: {
-    totalPhysicalBytes: 17179869184,
-    availableBytes: 1073741824,
-    usedPercent: 95,
-    highPressureWarning: true,
-    commitLimitBytes: 34359738368,
-    commitUsedBytes: 25769803776,
-  },
-  uptime: {
-    lastBootEpochSec: 1745683200,
-    uptimeSeconds: 2851200,
-    uptimeDays: 33,
-    longUptimeWarning: true,
-  },
+  memoryUsedPercent: 95,
+  memoryHighPressure: true,
+  uptimeDays: 33,
+  uptimeSeconds: 2851200,
+  lastBootEpochSec: 1745683200,
+  longUptimeWarning: true,
   anyLowDisk: true,
   sourceUsed: 'win32',
   probeDurationMs: 18,
 };
 
-/** device-health example[2]: unsupported runtime (supported=false). */
+/** device-health example[2]: unsupported runtime (supported=false) (FLAT DTO). */
 const HEALTH_UNSUPPORTED: DeviceHealthSnapshot = {
   schemaVersion: 1,
   supported: false,
   probeComplete: false,
-  fixedDisks: [],
+  disks: [],
   fixedDiskCount: 0,
   fixedDisksTruncated: false,
   maxFixedDisks: 64,
-  memory: {
-    totalPhysicalBytes: 0,
-    availableBytes: 0,
-    usedPercent: 0,
-    highPressureWarning: false,
-    commitLimitBytes: 0,
-    commitUsedBytes: 0,
-  },
-  uptime: { lastBootEpochSec: 0, uptimeSeconds: 0, uptimeDays: 0, longUptimeWarning: false },
+  memoryUsedPercent: null,
+  memoryHighPressure: null,
+  uptimeDays: null,
+  uptimeSeconds: null,
+  lastBootEpochSec: null,
+  longUptimeWarning: null,
   anyLowDisk: false,
   sourceUsed: 'none',
   probeErrors: [
@@ -166,8 +154,10 @@ const HEALTH_INCOMPLETE: DeviceHealthSnapshot = {
   ...HEALTH_HEALTHY,
   probeComplete: false,
   anyLowDisk: false,
-  memory: { ...HEALTH_HEALTHY.memory, usedPercent: 0, highPressureWarning: false },
-  uptime: { ...HEALTH_HEALTHY.uptime, uptimeDays: 0, longUptimeWarning: false },
+  memoryUsedPercent: 0,
+  memoryHighPressure: false,
+  uptimeDays: 0,
+  longUptimeWarning: false,
   probeErrors: [{ source: 'win32', code: 'DISK_ENUM_FAILED', summary: 'disk enumeration failed' }],
 };
 
