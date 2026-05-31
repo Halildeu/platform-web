@@ -41,47 +41,47 @@ item 4 closure — no new numbered ADR is created.
   `PivotGrid`, `EditableGrid`) plus composition hooks
   (`useColumnBuilder`, `useGridExport`).
 
-Repo signal (2026-05): across `apps/` + `packages/` source,
-`EntityGridTemplate` is referenced in dozens of files while direct
-raw-`AgGridReact` mounts are confined to two reporting modules (see
-exceptions below) — consumers already converge on the template.
+Repo signal (2026-05-31, post PR-A + PR-B): across `apps/` + `packages/`
+source, `EntityGridTemplate` / `GridShell` is referenced in dozens of
+files and **zero `apps/` files import `ag-grid-react` directly**. The
+unified-grid invariant is machine-enforced by the Vitest CI gate (PR-B
+`grid-architecture.contract.test.ts`), so any future drift fails CI
+instead of code review.
 
 **Decision**
 
-| Context                                    | Canonical choice                                                                                                                                              |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Standard reporting / result grid           | `EntityGridTemplate`                                                                                                                                          |
-| Inside `apps/mfe-reporting`                | import via the reporting facade `apps/mfe-reporting/src/grid` (re-exports `EntityGridTemplate` + `normalizeServerSideRequest` + `buildEntityGridQueryParams`) |
-| Cross-package consumer                     | `@mfe/x-data-grid` public exports                                                                                                                             |
-| Master-detail / tree / pivot / inline-edit | the matching `x-data-grid` recipe (`MasterDetailGrid` / `TreeDataGrid` / `PivotGrid` / `EditableGrid`)                                                        |
-| Raw `AgGridReact` from `ag-grid-react`     | **discouraged** — documented exception only (see below)                                                                                                       |
+| Context                                         | Canonical choice                                                                                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Standard reporting / result grid                | `EntityGridTemplate`                                                                                                                                          |
+| Inside `apps/mfe-reporting`                     | import via the reporting facade `apps/mfe-reporting/src/grid` (re-exports `EntityGridTemplate` + `normalizeServerSideRequest` + `buildEntityGridQueryParams`) |
+| Read-only mini-table inside `renderDashboard()` | `GridShell` (toolbar / variant intentionally absent) via `@mfe/design-system/advanced/data-grid`                                                              |
+| Cross-package consumer                          | `@mfe/x-data-grid` public exports — package internals only; **not** consumable from `apps/mfe-reporting/**`                                                   |
+| Master-detail / tree / pivot / inline-edit      | the matching `x-data-grid` recipe (`MasterDetailGrid` / `TreeDataGrid` / `PivotGrid` / `EditableGrid`) configured through `GridShell`                         |
+| Raw `AgGridReact` from `ag-grid-react`          | **YASAK in `apps/`.** Only legitimate locations: `packages/design-system/src/advanced/data-grid/**` (the wrapper itself) and `packages/x-data-grid/**`        |
 
-**Documented exceptions / migration follow-up**
+**Enforcement**
 
-Two reporting modules still mount `AgGridReact` directly instead of
-`EntityGridTemplate`:
+- IDE / dev-time: ESLint `no-restricted-syntax` rule (`eslint.config.mjs:220-296`) reports the import as `error`. Root lint step in `ci-web-check.yml:41` swallows lint failures (the run line falls back to `echo "Lint warnings tolerated"`), so this layer is advisory only.
+- CI hard gate: `pnpm --filter mfe-reporting run test:grid-contract` (`apps/mfe-reporting/src/__tests__/grid-architecture.contract.test.ts`) — Vitest source-AST scan catches static `import`, dynamic `import()`, `require()`, re-export (`export ... from`), and TypeScript `import = require()` forms.
+- Escape hatch: `apps/mfe-reporting/src/__tests__/grid-architecture-exceptions.json` — CODEOWNERS-gated, schema-validated (path, kind, reason ≥ 20 chars, owner @user / @org/team, expiresAt ISO date NOT in past). Empty as of 2026-05-31.
+
+**Historical note — retired exceptions**
+
+Two reporting modules previously mounted `AgGridReact` directly:
 
 - `apps/mfe-reporting/src/modules/hr-compensation-report/CompensationDashboard.tsx`
+  — chart-summary mini-tables. Migrated to `GridShell` in PR #711
+  (commit `e7048944`) on 2026-05-31 (Codex thread `019e7f8f`
+  cross-AI plan-time consensus); browser-verified live on testai.
 - `apps/mfe-reporting/src/modules/context-health/grids/GridTabPanel.tsx`
+  — observability debug grids. Migrated to `GridShell` earlier (Codex
+  thread `019e2f86`); the only `ag-grid-react` import surviving in
+  reporting was the bootstrap Enterprise-license comment in
+  `apps/mfe-reporting/src/app/bootstrap.tsx`, which is a comment, not
+  a grid mount.
 
-(`apps/mfe-reporting/src/app/bootstrap.tsx` also names `AgGridReact` —
-that is only an Enterprise-license bootstrap comment, not a grid mount.)
-
-These two are out of scope for the decision PR; they are tracked as a
-migration follow-up, not a blocker.
-
-**Migration path (per module)**
-
-1. **Inventory** — locate the raw `AgGridReact` / ad-hoc table mount.
-2. **Classify** — server-side (SSRM) vs client-side; which toolbar /
-   variant / export / filter features are in use.
-3. **Replace** — swap to `EntityGridTemplate` via the reporting `grid`
-   facade, mapping `ColDef[]` and datasource mode across.
-4. **Preserve semantics** — keep SSRM request shape, column-variant
-   persistence, export, and filter-form wiring behaviourally identical.
-5. **Test the route** — unit + Storybook + browser smoke on the
-   migrated module (HARD RULE: a FE change is not done until the agent
-   has driven the real screen end-to-end).
+Both exceptions are retired. The full canonical contract lives in
+[`docs/architecture/grid-rendering.md`](../../architecture/grid-rendering.md).
 
 ---
 
