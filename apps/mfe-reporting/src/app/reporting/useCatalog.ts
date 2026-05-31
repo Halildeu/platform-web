@@ -61,7 +61,11 @@ function mapDynamic(report: ReportListItem): CatalogItem {
     icon: '📊',
     tags: [],
     badge: { label: 'Grid', tone: 'primary' },
-    route: report.key,
+    // PR-D1b (Codex thread 019e800b, 2026-05-31): prefer backend-
+    // supplied `routeSegment` alias when present (e.g. backend key
+    // `hr-compensation-detay` aliased to route `hr-compensation`)
+    // so the URL stays the legacy module's URL.
+    route: report.routeSegment ?? report.key,
     type: 'grid',
     category: report.category || 'Diger',
     source: 'dynamic',
@@ -141,7 +145,13 @@ export function useCatalog() {
 
     const staticRoutes = new Set(staticItems.map((s) => s.route));
 
-    const dynamicItems = dynamicReports.filter((r) => !staticRoutes.has(r.key)).map(mapDynamic);
+    // PR-D1b (Codex thread 019e800b, 2026-05-31): dedupe against
+    // `r.routeSegment ?? r.key` so a dynamic entry whose backend
+    // alias matches a legacy static module's route replaces it
+    // instead of shadowing.
+    const dynamicItems = dynamicReports
+      .filter((r) => !staticRoutes.has(r.routeSegment ?? r.key))
+      .map(mapDynamic);
 
     const allRoutes = new Set([...staticRoutes, ...dynamicItems.map((d) => d.route)]);
 

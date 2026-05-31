@@ -97,6 +97,24 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
    */
   requiredFilterFields?: ReadonlyArray<string>;
 
+  /**
+   * PR-D1b (Codex thread 019e800b, 2026-05-31) — indicates this module's
+   * filter UI is driven by backend {@code ReportMetadata.filterDefinitions}
+   * (resolved AFTER {@link ensureColumnMeta} promise settles), NOT a
+   * synchronous {@code renderFilters} declaration. When true, ReportPage
+   * re-hydrates {@link createInitialFilters} after metadata resolves so a
+   * cold deep-link URL (e.g. {@code ?department=X}) can populate
+   * definition-driven filters that did not exist at mount time. The
+   * re-hydration is guarded so it cannot clobber user edits performed
+   * between mount and metadata resolution.
+   *
+   * <p>Module boundary intent: ReportPage MUST NOT import the dynamic
+   * factory's metadata cache directly to detect "is this dynamic" —
+   * this flag is the contract surface for the same intent without
+   * leaking module-internal cache plumbing.
+   */
+  hasMetadataDrivenFilters?: boolean;
+
   /** Database tables this report reads from — enables schema lineage, related reports, FK lookup */
   sourceTables?: string[];
   /** Schema/tier identifier (e.g., 'workcube_mikrolink', 'workcube_mikrolink_2026_1') */

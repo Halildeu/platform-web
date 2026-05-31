@@ -44,6 +44,15 @@ import { getShellServices } from '../../app/services/shell-services';
 export interface CachedMeta {
   columns: ColumnMeta[];
   capabilities: ReportCapabilities | undefined;
+  /**
+   * PR-D1b (Codex thread 019e800b, 2026-05-31): metadata-driven sidebar
+   * filter widget contract returned by the backend
+   * {@code ReportMetadataDto.filterDefinitions} field. When present, the
+   * dynamic factory renders these widgets in place of the legacy
+   * CompanyPicker + search pair. Absent (undefined) → factory falls back
+   * to the legacy filter pair.
+   */
+  filterDefinitions: import('./types').FilterDefinition[] | undefined;
 }
 
 /** Default concurrency cap. Picked to keep dashboards smooth without bursting. */
@@ -293,6 +302,10 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
       const result: CachedMeta = {
         columns: meta.columns.map(mapBackendColumnMeta),
         capabilities: meta.capabilities,
+        // PR-D1b (Codex 019e800b): preserve filter definitions
+        // end-to-end so the dynamic factory + ReportPage rehydration
+        // can read them via getCachedFilterDefinitions(key).
+        filterDefinitions: meta.filterDefinitions,
       };
       // Identity + epoch fence: only commit to the cache if WE are still
       // the registered inflight promise AND the epoch hasn't advanced.
@@ -361,6 +374,23 @@ export function getCachedColumns(reportKey: string): ColumnMeta[] {
 export function getCachedCapabilities(reportKey: string): ReportCapabilities | undefined {
   ensureFreshEpoch();
   return state.success.get(reportKey)?.capabilities;
+}
+
+/**
+ * PR-D1b (Codex thread 019e800b, 2026-05-31) — synchronous read of cached
+ * filter definitions. Returns {@code undefined} when no successful fetch
+ * has resolved yet for the key, OR when the backend ReportMetadataDto
+ * lacks the {@code filterDefinitions} field (legacy reports). The dynamic
+ * factory falls back to the legacy CompanyPicker + search pair in either
+ * case.
+ *
+ * <p>Same epoch invalidation pattern as {@link getCachedColumns}.
+ */
+export function getCachedFilterDefinitions(
+  reportKey: string,
+): import('./types').FilterDefinition[] | undefined {
+  ensureFreshEpoch();
+  return state.success.get(reportKey)?.filterDefinitions;
 }
 
 /* -------------------------------------------------------------------------- */

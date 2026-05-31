@@ -45,12 +45,25 @@ export const createDynamicReportModule = (
     return cached.columns;
   };
 
+  // PR-D1b (Codex thread 019e800b, 2026-05-31):
+  //   - `route`: prefer backend-supplied `routeSegment` alias when present
+  //     (e.g. backend key `hr-compensation-detay` aliased to route
+  //     `hr-compensation`); falls back to `report.key` for legacy reports
+  //     without the alias. This is the platform-web side of the contract
+  //     defined in `ReportListItemDto.routeSegment` (PR-D1a).
+  //   - `sharedReportId`: prefer backend-supplied legacy `sharedReportId`
+  //     carry so favorites + saved filters + sidebar default + export
+  //     mode survive a static module → dynamic catalog migration. The
+  //     frontend favorites sanitizer at `report-preferences.ts:48,56`
+  //     keys off `SharedReportId`, not route. Falls back to the runtime
+  //     `dynamic:${key}` cast for legacy reports without the carry.
+  const route = report.routeSegment ?? report.key;
+  const sharedReportId = (report.sharedReportId ?? `dynamic:${report.key}`) as SharedReportId;
+
   return {
     id: moduleId,
-    // The runtime-generated `dynamic:{key}` SharedReportId isn't part
-    // of the static union; cast through the type instead of `any`.
-    sharedReportId: `dynamic:${report.key}` as SharedReportId,
-    route: report.key,
+    sharedReportId,
+    route,
     navKey: report.title,
     titleKey: report.title,
     descriptionKey: report.description,
@@ -101,6 +114,17 @@ export const createDynamicReportModule = (
       );
     },
     requiredFilterFields: ['companyId'],
+    /**
+     * PR-D1b (Codex thread 019e800b, 2026-05-31) — opt-in flag that tells
+     * ReportPage this module's filter UI depends on backend metadata
+     * resolved AFTER `ensureColumnMeta()`. Cold deep-link URLs need a
+     * second `createInitialFilters` pass once `filterDefinitions` arrive
+     * in the cache so widgets that did not exist at mount time can
+     * still hydrate from `?param=value` deep links. Re-hydration is
+     * guarded so it cannot clobber user edits performed between mount
+     * and metadata resolution.
+     */
+    hasMetadataDrivenFilters: true,
     getColumnMeta: () => getCachedColumns(report.key),
     /*
      * a11y-pr1 follow-up: expose the async loader so ReportPage can
