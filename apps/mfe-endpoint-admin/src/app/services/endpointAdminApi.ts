@@ -45,6 +45,13 @@ import type {
   OutdatedSoftwareSnapshot,
 } from '../../entities/endpoint-outdated-software/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
+import {
+  DeviceGridExportError,
+  type DeviceGridErrorBody,
+  type DeviceGridExportArgs,
+  type DeviceGridQueryRequest,
+  type DeviceGridQueryResponse,
+} from '../../entities/endpoint-device-grid/types';
 import type {
   CompliancePolicyItem,
   CompliancePolicyItemRequest,
@@ -166,6 +173,80 @@ function readBearerToken(): string | null {
     }
   }
   return token;
+}
+
+const GRID_BASE = '/endpoint-admin/endpoint-devices';
+
+function gridAuthHeaders(): Record<string, string> {
+  const token = readBearerToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+/**
+ * #1154 PR-3 — server-mode device grid datasource fetch. A plain async
+ * function (not an RTK hook) so the AG Grid SSRM {@code getRows} callback
+ * can call it imperatively, mirroring the reporting module's
+ * {@code fetchRows}. Uses the same auth ({@link readBearerToken}) + the
+ * unwrapped {@code fetch(url, init)} form the RTK baseQuery relies on (a
+ * {@code new Request(...)} wrapper drops headers on the testai wire — see
+ * {@link rawBaseQuery} doc).
+ */
+export async function queryDevices(
+  request: DeviceGridQueryRequest,
+): Promise<DeviceGridQueryResponse> {
+  const res = await fetch(`${resolveBaseUrl()}${GRID_BASE}/query`, {
+    method: 'POST',
+    headers: gridAuthHeaders(),
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    let code = String(res.status);
+    try {
+      const body = (await res.json()) as DeviceGridErrorBody;
+      if (body?.code) code = body.code;
+    } catch {
+      // non-JSON error body — keep the HTTP status as the code
+    }
+    throw new DeviceGridExportError({ code, message: `device grid query failed (${code})` });
+  }
+  return (await res.json()) as DeviceGridQueryResponse;
+}
+
+/**
+ * #1154 PR-3 — report-style export blob fetch (raw/view × csv/xlsx). RTK
+ * mutations don't surface a {@code Blob} cleanly, so this is a plain fetch
+ * with the same auth + unwrapped-fetch contract. Returns the blob + a
+ * deterministic filename; throws {@link DeviceGridExportError} carrying the
+ * structured {@code code}/{@code limit} (e.g. {@code EXPORT_ROW_LIMIT_EXCEEDED})
+ * on a non-2xx so the caller can branch.
+ */
+export async function exportDevices(
+  args: DeviceGridExportArgs,
+): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`${resolveBaseUrl()}${GRID_BASE}/export`, {
+    method: 'POST',
+    headers: gridAuthHeaders(),
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) {
+    let body: DeviceGridErrorBody = {
+      code: String(res.status),
+      message: `export failed (${res.status})`,
+    };
+    try {
+      body = (await res.json()) as DeviceGridErrorBody;
+    } catch {
+      // keep the status-based fallback
+    }
+    throw new DeviceGridExportError(body);
+  }
+  const blob = await res.blob();
+  const ext = args.format === 'xlsx' ? 'xlsx' : 'csv';
+  const filename = `endpoint-devices-${args.exportMode}.${ext}`;
+  return { blob, filename };
 }
 
 const rawBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = fetchBaseQuery({

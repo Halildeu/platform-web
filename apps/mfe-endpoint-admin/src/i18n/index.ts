@@ -36,6 +36,19 @@ const DICT_TR = {
   'endpointAdmin.devices.status.STALE': 'Bekleme',
   'endpointAdmin.devices.status.OFFLINE': 'Çevrim dışı',
   'endpointAdmin.devices.status.DECOMMISSIONED': 'Hizmet dışı',
+  // #1154 PR-3 — server-mode grid + İndir export
+  'endpointAdmin.devices.subtitle':
+    'Sunucu taraflı cihaz envanteri; filtre/sıralama ve İndir menüsünden Excel/CSV dışa aktarma.',
+  'endpointAdmin.devices.col.domain': 'Etki Alanı',
+  'endpointAdmin.devices.col.memoryUsedPercent': 'Bellek %',
+  'endpointAdmin.devices.col.lowDisk': 'Düşük Disk',
+  'endpointAdmin.devices.col.uptimeDays': 'Çalışma (gün)',
+  'endpointAdmin.devices.col.longUptime': 'Uzun Çalışma Uyarısı',
+  'endpointAdmin.devices.col.upgradeCount': 'Güncellenebilir Yazılım',
+  'endpointAdmin.devices.col.upgradeTruncated': 'Güncellik Liste Kırpıldı',
+  'endpointAdmin.export.rowLimitExceeded':
+    'Dışa aktarma {limit} satır sınırını aşıyor; görünümü (filtre) daraltıp tekrar deneyin.',
+  'endpointAdmin.export.failed': 'Dışa aktarma başlatılamadı.',
   // WEB-015 — Inventory CSV export (RBAC-gated, client-side)
   'endpointAdmin.export.csvLabel': 'CSV indir',
   'endpointAdmin.export.csvAria': 'Cihaz envanterini CSV olarak indir',
@@ -654,6 +667,19 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.status.STALE': 'Stale',
   'endpointAdmin.devices.status.OFFLINE': 'Offline',
   'endpointAdmin.devices.status.DECOMMISSIONED': 'Decommissioned',
+  // #1154 PR-3 — server-mode grid + İndir export
+  'endpointAdmin.devices.subtitle':
+    'Server-side device inventory; filter/sort and export to Excel/CSV from the Download menu.',
+  'endpointAdmin.devices.col.domain': 'Domain',
+  'endpointAdmin.devices.col.memoryUsedPercent': 'Memory %',
+  'endpointAdmin.devices.col.lowDisk': 'Low Disk',
+  'endpointAdmin.devices.col.uptimeDays': 'Uptime (days)',
+  'endpointAdmin.devices.col.longUptime': 'Long Uptime Warning',
+  'endpointAdmin.devices.col.upgradeCount': 'Upgradable Software',
+  'endpointAdmin.devices.col.upgradeTruncated': 'Upgrade List Truncated',
+  'endpointAdmin.export.rowLimitExceeded':
+    'Export exceeds the {limit}-row limit; narrow the view (filter) and retry.',
+  'endpointAdmin.export.failed': 'Could not start the export.',
   // WEB-015 — Inventory CSV export (RBAC-gated, client-side)
   'endpointAdmin.export.csvLabel': 'Export CSV',
   'endpointAdmin.export.csvAria': 'Export device inventory as CSV',
