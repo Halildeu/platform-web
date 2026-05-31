@@ -4,7 +4,7 @@
 > **Owner**: Halildeu
 > **Codex thread**: `019e7f8f` (cross-AI plan-time consensus)
 > **Prior chain**: PR-A `e7048944` (grid contract code) + PR-B `f814f190` (CI gate) + PR-C `74d6818b` (rendering contract docs).
-> **Context**: Grid-rendering contract (PR-A/B/C) made all `apps/` grids route through the single `ReportPage → EntityGridTemplate → GridShell → AgGridReact` chain. The remaining gap is the **source of column metadata**: 32 dynamic reports read it from `/api/v1/reports/{key}/metadata` (backend definition); 7 static modules hardcode it in TS. The user's directive "dinamik rapor olmalı" ("they should be dynamic reports") makes the static path the obstacle to "rapora göre sütunlar değişecek yalnızca" (only column metadata changes per report; zero frontend code per new/changed report).
+> **Context**: Grid-rendering contract (PR-A/B/C) made all `apps/` grids route through the single `ReportPage → EntityGridTemplate → GridShell → AgGridReact` chain. The remaining gap is the **source of column metadata**: 33 dynamic reports read it from `/api/v1/reports/{key}/metadata` (verified 2026-05-31 via `gh api .../reports --jq 'length'`) (backend definition); 7 static modules hardcode it in TS. The user's directive "dinamik rapor olmalı" ("they should be dynamic reports") makes the static path the obstacle to "rapora göre sütunlar değişecek yalnızca" (only column metadata changes per report; zero frontend code per new/changed report).
 > **This document is docs-only.** No code changes ship in PR-D0. The deliverable is a verified parity matrix + ranked schema/contract proposals so PR-D1+ implementations do not discover blockers mid-PR.
 
 ---
@@ -22,18 +22,21 @@ The "grid contract" is not a single object. Three distinct contracts cooperate; 
 **Observed mismatches**:
 
 - L1 → L2: backend schema rejects 6 of the 9 variants L2 already declares (badge, status, currency, boolean, percent, enum). Backend producers cannot emit them.
-- L2 → L3: L2 is missing 3 variants present in L3 (bold-text, link, actions). The metadata-cache mapper in `metadata-cache.ts` either downgrades these (e.g., bold-text → text) or leaves them unsupported.
+- L2 → L3: L2 is missing 3 variants present in L3 (bold-text, link, actions).
+- L2 → L3: L2 also missing config fields present in L3 — `format` (date: short/long/datetime/relative), `defaultVariant` (badge / status fallback), `filterValues` (badge / status set filter override). Codex iter-2 absorbed: L2 `ReportColumnMeta` does NOT model these today; `metadata-cache.ts` mapper drops them silently.
 
 **Decision proposal**:
 
-- Extend L1 to cover the 6 missing variants used by the 7 static modules (badge, status, currency, boolean), plus `variantMap` / `labelMap` / `statusMap` / `currencyCode` / `decimals` / `suffix` / `filterValues` config object support.
-- Decide explicitly whether to ALSO extend L2 + L1 to cover `bold-text` (used in 5 of 7 modules for the label column). Two options below in §3.
+- Extend **L1** to cover badge / status / currency / boolean / bold-text variants used by the 7 static modules + per-variant config objects: `variantMap` / `labelMap` / `statusMap` / `currencyCode` / `decimals` / `suffix` / **`format`** / **`defaultVariant`** / **`filterValues`** (Codex iter-2: do not drop the last three; modules use them today).
+- Extend **L2** in lockstep — adding to L1 alone without updating `dynamic-report/types.ts` + the mapper leaves backend metadata produced-but-discarded.
+- Keep legacy `variantMap` / `labelMap` / `statusMap` shape as `Record<string, string>` for backward compat; tighten via JSON Schema constraints (badge variant enum, statusMap value `{variant, labelKey}`, numeric raw keys accepted as string). Do NOT retire the legacy maps in this chain (Codex iter-2: retiring expands D scope unnecessarily).
+- Decide explicitly whether to ALSO extend bold-text / link / actions to L1+L2 — recommendation in §3.
 
 **Required PR-D1+ work**:
 
 - L1 JSON Schema extension + Java record producer updates + per-variant config object handling.
-- L2 transport DTO extension if bold-text/link/actions are in scope.
-- L3 already supports the full 12 variants; no change.
+- L2 transport DTO extension (`ReportColumnMeta` type widening + mapper updates) — required for badge/status/currency/boolean/bold-text + the three missing config fields (format, defaultVariant, filterValues).
+- L3 already supports the full 12 variants + config fields; no change.
 
 ---
 
@@ -280,7 +283,7 @@ Each module is documented in the canonical 5-section form: **Observed current st
 - Filter UI sidebar: `search`, `department` (text contains), `location` (text contains), `gender` (select Erkek/Kadın), `employmentType` (select 4 fixed values)
 - Columns: 11 — `fullName` (bold-text), `department` (text), `position` (text), `gender` (badge variantMap Erkek=info/Kadın=primary), `age` (number), `education` (text), `employmentType` (badge 4-state), `location` (text), `tenureYears` (number with suffix 'yıl'), `hireDate` (date format short), `generation` (text)
 - Field aliasing: backend UPPER_SNAKE columns → frontend camelCase (FULL_NAME → fullName, DEPARTMENT_NAME → department, etc.)
-- Mock fallback: dev/staging only — `mockRows` array of 2545 generated employees; prod returns `[]` if fetchReportData fails
+- Mock fallback: dev/staging only — `mockRows` array of 2545 generated employees. **NOTE (Codex iter-2 accuracy)**: `fetchHrDemographicRows` does NOT catch fetchReportData errors today — failures propagate upward. Prod's `mockRows = []` only suppresses the seeded demo dataset; an actual data-fetch failure surfaces as an error. Verify error-handling acceptance before drop.
 
 **Identity / persisted state**
 
@@ -312,7 +315,56 @@ Each module is documented in the canonical 5-section form: **Observed current st
 
 ---
 
-## 3. Route alias — two options
+## 3. Identity + route alias — two options
+
+> **Codex iter-2 finding (High)**: `routeSegment` alone does NOT preserve the catalog's existing identity model. Frontend uses `SharedReportId` (not route) as the key for favorites, saved filters, export mode, sidebar default, and capability lookup. Without a parallel `sharedReportId` carry on the dynamic list item, migrations will silently break user-persistent state.
+
+### Identity surfaces (verified) that depend on `SharedReportId`, not route
+
+| Surface                                     | Authority                                            | File / line                                                              |
+| ------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| Favorites persistence sanitizer             | `isSharedReportId(item)` filter on stored favorites  | `apps/mfe-reporting/src/lib/report-preferences/report-preferences.ts:48` |
+| Saved filter scope binding                  | `isSharedReportId(item.reportId)` filter             | `apps/mfe-reporting/src/lib/report-preferences/report-preferences.ts:56` |
+| Saved filter grid id template               | `reports.saved-filters.${channel}.${reportId}`       | `packages/platform-capabilities/src/index.ts:1037`                       |
+| Export mode lookup                          | `getSharedReportExportMode(sharedReportId)`          | `apps/mfe-reporting/src/app/reporting/ReportPage.tsx`                    |
+| Sidebar default route + capability metadata | `getSharedReport(id).webRouteSegment`, `webModuleId` | `packages/platform-capabilities/src/index.ts`                            |
+
+### Catalog dedupe surface (verified)
+
+| Surface                              | Key used                     | File / line                                                                  |
+| ------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------- |
+| ReportingApp `allRoutes` dedupe      | `report.key`                 | `apps/mfe-reporting/src/app/reporting/ReportingApp.tsx:108`                  |
+| `useCatalog` static-vs-dynamic split | `report.key`                 | `apps/mfe-reporting/src/app/reporting/useCatalog.ts:142`                     |
+| Dynamic factory `sharedReportId`     | `dynamic:${report.key}` cast | `apps/mfe-reporting/src/modules/dynamic-report/create-dynamic-module.tsx:48` |
+| Dynamic factory `route`              | `report.key`                 | `apps/mfe-reporting/src/modules/dynamic-report/create-dynamic-module.tsx:53` |
+
+**Conclusion**: a backend rename or pure `routeSegment` addition cannot preserve favorites, saved filters, or export-mode lookups. The dynamic list item must carry the existing `SharedReportId` so the factory can mint stable identity AND so the dedupe surfaces can match against the legacy module's `getSharedReport(...).id`.
+
+### Decision — dynamic `ReportListItem` extension (Codex iter-2 absorbed)
+
+Extend backend `ReportListItemDto` with TWO optional fields, NOT one:
+
+```ts
+type ReportListItem = {
+  key: string;
+  title: string;
+  description: string;
+  category: string;
+  /** Optional: backend hints at the web route segment when it differs from key. */
+  routeSegment?: string;
+  /** Optional: backend hints at the legacy SharedReportId so favorites + saved filters + export mode + sidebar default survive migration. */
+  sharedReportId?: SharedReportId; // e.g., 'users-overview', 'hr-compensation'
+};
+```
+
+Dynamic factory then resolves:
+
+```ts
+const route = report.routeSegment ?? report.key;
+const sharedReportId = report.sharedReportId ?? (`dynamic:${report.key}` as SharedReportId);
+```
+
+ReportingApp + useCatalog dedupe surfaces must also be updated to dedupe against `routeSegment ?? key` (not raw `key`) so the migrated dynamic entry replaces the legacy static module instead of shadowing it.
 
 ### Option A — backend report key equals current web route segment
 
@@ -333,7 +385,7 @@ Each module is documented in the canonical 5-section form: **Observed current st
 
 - Decouples backend semantic key from saved data (`hr-compensation-detay` already has historical SQL + tests + permission seeds — renaming forces backend migration).
 - Loses semantic clarity: `users` is less descriptive than `users-overview`.
-- Risk of key collision with existing dynamic catalog (32 keys today).
+- Risk of key collision with existing dynamic catalog (33 keys today (2026-05-31 verified)).
 
 ### Option B — backend report key stays semantic; list item adds `routeSegment`
 
@@ -344,21 +396,22 @@ Each module is documented in the canonical 5-section form: **Observed current st
 - Preserves old URLs without renaming backend keys.
 - Keeps semantic backend keys readable.
 - Backend definitions already in production keep their existing filenames / SQL / tests.
-- Backward compat: 32 existing dynamic reports where route == key continue working when `routeSegment` is absent.
+- Backward compat: 33 existing dynamic reports where route == key continue working when `routeSegment` is absent.
 
 **Cons**:
 
 - Requires DTO + factory change.
 - Adds a small piece of state to remember (which item uses alias).
 
-**Recommendation**: **Option B** — preserves old URLs + semantic keys + minimal backend churn. Codex iter-REVISE also leaned this way; final preference confirmed.
+**Recommendation**: **Option B + sharedReportId carry** — preserves old URLs + semantic keys + minimal backend churn + persistent state.
 
-**Required PR-D1+ work** (Option B):
+**Required PR-D1+ work** (Option B + identity):
 
-- Backend: `ReportListItemDto` adds `routeSegment?: string`.
-- Backend: per-key opt-in mechanism (e.g., `routeSegment` field in the JSON file).
-- Frontend: dynamic-factory uses `report.routeSegment ?? report.key`.
-- Migration table for the 7 static modules: which use the alias.
+- Backend: `ReportListItemDto` adds `routeSegment?: string` AND `sharedReportId?: string`.
+- Backend: per-key opt-in mechanism (fields in the JSON file).
+- Frontend: dynamic-factory uses `report.routeSegment ?? report.key` for route AND `report.sharedReportId ?? 'dynamic:${report.key}'` for SharedReportId.
+- Frontend: ReportingApp + useCatalog dedupe against `routeSegment ?? key`.
+- Migration table for the 7 static modules: which use the alias + which use SharedReportId carry (all 7 should set both).
 
 ---
 
@@ -425,6 +478,26 @@ type FilterDefinition = {
 
 Static modules read URL params at init (`createInitialFilters(context)` uses `context.searchParams`). The dynamic factory currently reads only `?search=`. Without `urlParam` per filter entry, every existing deep link (e.g., `?status=ACTIVE`, `?department=...`) breaks on migration. The proposed contract preserves these.
 
+### Frontend execution path — required acceptance pieces (Codex iter-2 absorbed)
+
+> A backend `filterDefinitions` contract alone does NOTHING. The frontend currently renders only `CompanyPicker + search` and has no machinery to consume metadata-driven filters. Without these pieces wired BEFORE the first migration slice, PR-D1+D2 will land with dead filters.
+
+| Layer                | Required change                                                                                                                                                                                       | Verified gap                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| L2 transport DTO     | `ReportMetadata.filterDefinitions: FilterDefinition[]` field added; mapper preserves it through metadata-cache                                                                                        | currently absent in `dynamic-report/types.ts`                                                                         |
+| L2 filter state type | `DynamicReportFilters` widened beyond `{ search }` to dynamic Record keyed by each `FilterDefinition.key`                                                                                             | currently `{ search: string }` only                                                                                   |
+| Renderer             | Dynamic factory `renderFilters` reads `getCachedFilterDefinitions(report.key)` and emits per-kind widgets (text-search / enum-select / date-range / number-range / company-picker / month-picker)     | currently hand-codes CompanyPicker + search                                                                           |
+| Init                 | `createInitialFilters(context)` reads `urlParam` per FilterDefinition; populates default values from `defaultValue` + URL search params                                                               | currently reads only `?search=`                                                                                       |
+| Translator           | `buildAdvancedFilter` (or new `buildAdvancedFilterFromDefinitions`) translates sidebar values + grid filterModel into the backend's advancedFilter JSON, honoring `operator` + `advancedFilterTarget` | currently passes sidebar state through unchanged; advancedFilter wiring lives in static modules, not the dynamic path |
+| Dynamic options      | `optionsSource: { type: 'endpoint' }` fetched at mount with cache; `type: 'filter-values'` delegates to existing `fetchFilterValues(report.key, column)`                                              | currently no dynamic-options machinery in dynamic factory                                                             |
+| Tests                | Per-kind renderer test + URL-param round-trip test + advancedFilter translator test + optionsSource cache test                                                                                        | currently absent                                                                                                      |
+
+**Acceptance** (must land before PR-D2 frontend module deletion can be safe):
+
+- All 7 module's `renderFilters` shapes producible by the dynamic factory from `filterDefinitions` JSON.
+- All 7 module's URL-deep-link parameters preserved.
+- Per-module visual smoke + browser-verified deep-link round trip.
+
 ---
 
 ## 5. Data-source strategy (verify, don't assume)
@@ -434,7 +507,7 @@ For each of the 5 non-report-service modules, the data source needs explicit dec
 | Module                | Today's endpoint            | Candidate path                                                                                          | Verification needed before PR-D1                                                                                                                                                                                              |
 | --------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | users-overview        | `/v1/users`                 | (a) Report-service SQL view over `users` table                                                          | Confirm: does report-service have access to the users-table schema? Are role / status enum values stable enough for an SSRM-paginated view?                                                                                   |
-| roles-access          | `/v1/roles` (no pagination) | (a) Report-service SQL with computed `moduleSummary` column OR (b) Virtual adapter wrapping `/v1/roles` | (a) requires SQL `STRING_AGG` over role_policies + module_labels — verify backend dialect supports it. (b) requires deciding if "virtual adapter" is part of the report-service contract; no precedent in current 32 reports. |
+| roles-access          | `/v1/roles` (no pagination) | (a) Report-service SQL with computed `moduleSummary` column OR (b) Virtual adapter wrapping `/v1/roles` | (a) requires SQL `STRING_AGG` over role_policies + module_labels — verify backend dialect supports it. (b) requires deciding if "virtual adapter" is part of the report-service contract; no precedent in current 33 reports. |
 | audit-activity        | `/audit/events`             | (b) Virtual adapter (audit data lives in a separate service with its own DB)                            | Audit service ownership: does platform-backend expose audit data via SQL? Or is audit service Kafka-streamed-only?                                                                                                            |
 | weekly-audit-digest   | `/audit/events` (same)      | Same as audit-activity OR consolidate into audit-activity with default filter                           | Path A/B/C decision per §2.4                                                                                                                                                                                                  |
 | monthly-login-summary | `/v1/users?status=ACTIVE`   | Same as users-overview, possibly with default filter                                                    | Path A/B decision per §2.2                                                                                                                                                                                                    |
@@ -459,6 +532,10 @@ For the 2 karma modules (hr-compensation-detay, hr-demografik-yapi), the data so
 - D1 schema work pays dividends most on hr-compensation (7 currency columns) — getting that right validates the full L1 extension before pure-grid modules need it.
 - Audit consolidation forces the data-source question for the audit service, which is the hardest non-report-service decision.
 - users-overview lets us validate the SQL-view vs virtual-adapter choice on a simple module before tackling roles-access.
+
+### PR slicing (Codex iter-2 absorbed)
+
+D1 is split into two PRs (see §9): **D1a contract slice** (backend Java records + schema + registry tests — NO module migration) then **D1b frontend transport DTO + dynamic factory** (parallel L2 work + renderer + identity dedupe + filter execution path). PR-D2 (first actual module migration on `hr-demografik-yapi`) requires BOTH D1a and D1b to be merged first. This split prevents discovering filter-rendering or identity-dedupe gaps mid-migration.
 
 ---
 
@@ -491,20 +568,117 @@ This document is ready to ship when:
 
 ---
 
-## 9. Next step (PR-D1 candidate)
+## 9. Next steps — split PR-D1 into D1a (contract slice) + D1b (apply slice)
 
-**First candidate**: `hr-demografik-yapi` (lowest risk per §6).
+Codex iter-2 absorbed: do not collapse contract + first migration into one PR. Two slices:
 
-PR-D1 will:
+### PR-D1a — Backend contract slice (NO module migration yet)
 
-1. Land L1 (backend schema) extension: badge, bold-text, currency, status, boolean variants + `variantMap` / `labelMap` / `statusMap` / `currencyCode` / `decimals` / `suffix` / `filterValues` config objects.
-2. Update `hr-demografik-yapi.json` columns with the new variant types + camelCase aliases (move case mapping into SQL).
-3. Add backend `ReportListItemDto.routeSegment` field (Option B per §3).
-4. Add backend `ReportDefinition.filterDefinitions` array contract.
-5. Migrate `hr-demografik-yapi`'s filterDefinitions into the JSON.
-6. Verify backend tests pass with the extended schema + verify the 32 existing dynamic reports still validate (no regression).
+Backend-only contract widening so PR-D1b has a stable producer to author against.
 
-PR-D1 does NOT yet drop the frontend static module — that happens in PR-D2 once L1 + L2 + dynamic factory all support the new variant set.
+1. Extend backend L1 (`report-definition.schema.json`) ColumnDefinition vocabulary:
+   - Variants: `badge`, `status`, `currency`, `boolean`, `bold-text` (plus retained `text`, `number`, `date`).
+   - Per-variant config: `variantMap` / `labelMap` / `statusMap` / `defaultVariant` / `filterValues` / `currencyCode` / `decimals` / `suffix` / `format`.
+   - `additionalProperties: false` retained; new fields opt-in with strict typing (badge variant enum, statusMap value `{variant, labelKey}` schema).
+2. Update backend Java records: `ReportDefinition.java` / `ColumnDefinition.java` (or nested per-variant config records) + DTOs (`ReportListItemDto.java`, `ReportMetadataDto.java`).
+3. Add `ReportListItemDto.routeSegment?: string` + `ReportListItemDto.sharedReportId?: string` (§3).
+4. Add `ReportDefinition.filterDefinitions: FilterDefinition[]` (§4).
+5. Extend the schema-validation contract tests + registry sweep — all 33 existing dynamic reports must continue to validate.
+6. **NO** report definitions are modified; NO frontend changes; NO module migration.
+
+### PR-D1b — Frontend transport DTO + dynamic factory extension
+
+Frontend pieces required before any module can be migrated. Lands AFTER PR-D1a.
+
+1. Extend L2 `ReportColumnMeta`: 4 new variants + 3 new config fields (format, defaultVariant, filterValues).
+2. Extend L2 `ReportMetadata`: add `filterDefinitions?: FilterDefinition[]`.
+3. Extend L2 `ReportListItem`: add `routeSegment?`, `sharedReportId?`.
+4. Update `metadata-cache.ts` mapper to preserve all new fields end-to-end.
+5. Extend `DynamicReportFilters` from `{ search }` to dynamic Record keyed per FilterDefinition.
+6. Implement `renderFilters` dispatcher that reads `getCachedFilterDefinitions(report.key)` and emits per-kind widgets.
+7. Implement `createInitialFilters` URL-param round-trip per FilterDefinition.
+8. Implement advancedFilter translator (sidebar values + grid filterModel → backend JSON, honoring `operator` + `advancedFilterTarget`).
+9. Implement `optionsSource` resolver (`endpoint` + `filter-values` modes; cache; tenant-aware).
+10. ReportingApp + useCatalog dedupe against `routeSegment ?? key` (§3 identity).
+11. Dynamic factory `sharedReportId` uses `report.sharedReportId ?? 'dynamic:${report.key}'` (§3 identity).
+12. Tests: per-kind renderer + URL-param round-trip + advancedFilter translator + optionsSource cache.
+
+### PR-D2 — First migration slice (hr-demografik-yapi)
+
+After D1a + D1b land, the smallest backend definition update + frontend module drop:
+
+1. Update `hr-demografik-yapi.json` columns with the new variant types + camelCase aliases (move case mapping into SQL).
+2. Author `filterDefinitions` array for hr-demografik's 5 sidebar entries.
+3. Set `routeSegment: 'hr-demografik-yapi'` + `sharedReportId: 'hr-demografik-yapi'`.
+4. Frontend: drop `apps/mfe-reporting/src/modules/hr-demographic-report/` (grid path); keep `DemographicDashboard` only if registered through a thinner wrapper or moved to dashboard-only side channel.
+5. testai deploy + browser smoke: route preserved, badge variants render, suffix "yıl" appears, date format short parity, favorites/saved filters survive (capability binding tested).
+
+PR-D2 sets the migration pattern; subsequent module migrations (PR-D2.x) follow it.
+
+---
+
+## 10. PR-D1 backend touchpoints
+
+Files in `platform-backend` that PR-D1a + PR-D1b will modify (Codex iter-2 absorbed: enumerate ahead of time to prevent D1 scope sprawl).
+
+### Backend Java records (D1a)
+
+| File                                                      | Change                                                                                          |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `report-service/src/main/java/.../ReportDefinition.java`  | Extend column shape; add `filterDefinitions` field                                              |
+| `report-service/src/main/java/.../ColumnDefinition.java`  | Widen `type` to 8 variants (+ bold-text); add per-variant config nested records                 |
+| `report-service/src/main/java/.../ReportListItemDto.java` | Add `routeSegment?`, `sharedReportId?`                                                          |
+| `report-service/src/main/java/.../ReportMetadataDto.java` | Carry `filterDefinitions` + extended ColumnDefinition shape                                     |
+| `report-service/src/main/java/.../FilterDefinition.java`  | NEW record per §4 contract                                                                      |
+| `report-service/src/main/java/.../FilterKind.java`        | NEW enum: text-search / enum-select / date-range / number-range / company-picker / month-picker |
+| `report-service/src/main/java/.../ReportController.java`  | List + metadata constructors return new fields                                                  |
+
+### Backend JSON contracts (D1a)
+
+| File                                                                       | Change                       |
+| -------------------------------------------------------------------------- | ---------------------------- |
+| `report-service/src/main/resources/contract/report-definition.schema.json` | Schema extension per §1 + §4 |
+
+### Backend tests (D1a)
+
+| File                                 | Change                                                           |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| Contract validation test             | All 33 existing reports must continue to validate post-extension |
+| Registry sweep test                  | Verifies no regression in catalog                                |
+| New: filterDefinitions contract test | Schema-validates new FilterDefinition shape                      |
+
+### Frontend types + mapper (D1b)
+
+| File                                                                      | Change                                                                                                                      |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `apps/mfe-reporting/src/modules/dynamic-report/types.ts`                  | Extend `ReportColumnMeta` + `ReportMetadata` + `ReportListItem` + add FilterDefinition types + widen `DynamicReportFilters` |
+| `apps/mfe-reporting/src/modules/dynamic-report/metadata-cache.ts`         | Mapper carries new fields end-to-end without downgrade                                                                      |
+| `apps/mfe-reporting/src/modules/dynamic-report/create-dynamic-module.tsx` | `renderFilters` dispatcher; identity resolution (route + sharedReportId); createInitialFilters URL-param round-trip         |
+| `apps/mfe-reporting/src/modules/dynamic-report/api.ts`                    | advancedFilter translator extension; optionsSource resolver                                                                 |
+| `apps/mfe-reporting/src/app/reporting/ReportingApp.tsx`                   | Dedupe against `routeSegment ?? key`                                                                                        |
+| `apps/mfe-reporting/src/app/reporting/useCatalog.ts`                      | Dedupe against `routeSegment ?? key`                                                                                        |
+
+### Frontend tests (D1b)
+
+| File                                                                                        | Change                                        |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `apps/mfe-reporting/src/modules/dynamic-report/__tests__/filter-renderer.test.tsx`          | NEW — per-kind widget render                  |
+| `apps/mfe-reporting/src/modules/dynamic-report/__tests__/createInitialFilters.test.ts`      | NEW — URL-param round-trip                    |
+| `apps/mfe-reporting/src/modules/dynamic-report/__tests__/advancedFilter-translator.test.ts` | NEW — sidebar + grid model → backend JSON     |
+| `apps/mfe-reporting/src/modules/dynamic-report/__tests__/optionsSource-resolver.test.ts`    | NEW — endpoint cache + filter-values delegate |
+| `apps/mfe-reporting/src/app/reporting/__tests__/dedupe.test.tsx`                            | Extend — dedupe against routeSegment          |
+
+---
+
+## 11. roles-access — multi-field search decision (Codex iter-2 raised)
+
+Static `access-report` filters on `${row.roleName} ${row.moduleSummary}` lowercased substring (api.ts:111-113). Backend SQL has no precedent for multi-column free-text search, and `moduleSummary` is computed (not a stored column). Three options for migration:
+
+- **(a)** Add a SQL computed column `search_blob = roleName + ' ' + COALESCE(STRING_AGG(module_label), '')` in the view; advancedFilter targets it with `contains`.
+- **(b)** Virtual adapter wrapping `/v1/roles` with the same client-side join logic moved server-side.
+- **(c)** Drop multi-field search; UX regression — search only matches `roleName`.
+
+PR-D2 (or its access slice) must record which is chosen. Recommended path (a) if dialect supports STRING_AGG; (b) otherwise.
 
 ---
 
