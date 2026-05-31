@@ -6,7 +6,8 @@
     "start": "npx kill-port 3007 || true && vite",
     "build": "vite build",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:grid-contract": "vitest run src/__tests__/grid-architecture.contract.test.ts"
   },
   "dependencies": {
     "@platform/capabilities": "file:../../packages/platform-capabilities",

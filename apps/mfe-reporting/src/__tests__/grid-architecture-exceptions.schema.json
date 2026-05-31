@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "grid-architecture-exceptions.schema.json",
+  "title": "Grid Architecture Exception Registry",
+  "description": "Documentation schema for grid-architecture-exceptions.json. The authoritative validator lives inside grid-architecture.contract.test.ts (hand-rolled, no JSON-schema runtime dependency). Codex thread 019e7f8f (cross-AI plan-time consensus, 2026-05-31).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "exceptions"],
+  "properties": {
+    "$schema": {
+      "const": "./grid-architecture-exceptions.schema.json"
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "kind", "reason", "owner", "expiresAt"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Repo-relative path of the file granted the exception. Must start with 'apps/' and end with .ts or .tsx. Wildcards forbidden.",
+            "pattern": "^apps/[^*?\\[\\]]+\\.(ts|tsx)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["direct-ag-grid", "direct-x-data-grid"],
+            "description": "Which restricted specifier the exception covers. direct-ag-grid = `from 'ag-grid-react'`; direct-x-data-grid = `from '@mfe/x-data-grid'`."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 20,
+            "description": "Free-text justification (>= 20 chars) explaining why the canonical GridShell + ColumnMeta contract is insufficient for this file."
+          },
+          "owner": {
+            "type": "string",
+            "pattern": "^@[A-Za-z0-9-]+(/[A-Za-z0-9-]+)?$",
+            "description": "GitHub @user or @org/team that owns the exception's lifecycle. Must resolve in this repo's CODEOWNERS / membership; fictional handles fail review."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO YYYY-MM-DD when the exception expires. Past dates fail the contract test — the owner must either re-justify with a new entry, migrate to the canonical contract, or remove the offending import."
+          }
+        }
+      }
+    }
+  }
+}
