@@ -30,7 +30,7 @@ The "grid contract" is not a single object. Three distinct contracts cooperate; 
 - Extend **L1** to cover badge / status / currency / boolean / bold-text variants used by the 7 static modules + per-variant config objects: `variantMap` / `labelMap` / `statusMap` / `currencyCode` / `decimals` / `suffix` / **`format`** / **`defaultVariant`** / **`filterValues`** (Codex iter-2: do not drop the last three; modules use them today).
 - Extend **L2** in lockstep — adding to L1 alone without updating `dynamic-report/types.ts` + the mapper leaves backend metadata produced-but-discarded.
 - Keep legacy `variantMap` / `labelMap` / `statusMap` shape as `Record<string, string>` for backward compat; tighten via JSON Schema constraints (badge variant enum, statusMap value `{variant, labelKey}`, numeric raw keys accepted as string). Do NOT retire the legacy maps in this chain (Codex iter-2: retiring expands D scope unnecessarily).
-- Decide explicitly whether to ALSO extend bold-text / link / actions to L1+L2 — recommendation in §3.
+- Decide explicitly whether to ALSO extend bold-text / link / actions to L1+L2 — **recommendation**: bold-text yes (used in 5 of 7 modules); link/actions explicitly out-of-scope unless a separate need arises (no migration target uses them).
 
 **Required PR-D1+ work**:
 
@@ -64,7 +64,7 @@ Each module is documented in the canonical 5-section form: **Observed current st
 - Current route: `/admin/reports/users`
 - Capabilities catalog: `webRouteSegment: 'users'`, `webModuleId: 'reports.users'`, `reportGroup: 'HR_REPORTS'`
 - Dynamic key candidate: `users-overview` (preserve SharedReportId identity)
-- Favorite / saved-filter key: TODO — verify whether favorites + saved filters use SharedReportId or route segment
+- Favorite / saved-filter key: **Resolved by §3 Identity migration plan** — favorites + saved filters key off SharedReportId (verified at `report-preferences.ts:48,56`); dynamic list item carries `sharedReportId: 'users-overview'` to preserve.
 
 **Gap / blocker**
 
@@ -250,7 +250,7 @@ Each module is documented in the canonical 5-section form: **Observed current st
 - Current route: `/admin/reports/hr-compensation`
 - Backend data key: `hr-compensation-detay`
 - **Route ≠ backend key** — current route alias is hardcoded in static module's api.ts (`DASHBOARD_KEY = 'hr-compensation'` vs `REPORT_KEY = 'hr-compensation-detay'`).
-- Saved filters / sidebar default route: TODO verify
+- Saved filters / sidebar default route: **Resolved by §3 Identity migration plan** — saved filters key off SharedReportId `hr-compensation` (verified at `report-preferences.ts:48,56`); dynamic list item carries `routeSegment: 'hr-compensation'` + `sharedReportId: 'hr-compensation'` to preserve URL + persistent state.
 
 **Gap / blocker**
 
@@ -590,7 +590,7 @@ Backend-only contract widening so PR-D1b has a stable producer to author against
 
 Frontend pieces required before any module can be migrated. Lands AFTER PR-D1a.
 
-1. Extend L2 `ReportColumnMeta`: 4 new variants + 3 new config fields (format, defaultVariant, filterValues).
+1. Extend L2 `ReportColumnMeta`: 4 new variants (badge, status, currency, boolean) + bold-text + 3 new config fields (format, defaultVariant, filterValues). `link` and `actions` variants are explicitly OUT of D-chain scope unless a future migration target needs them.
 2. Extend L2 `ReportMetadata`: add `filterDefinitions?: FilterDefinition[]`.
 3. Extend L2 `ReportListItem`: add `routeSegment?`, `sharedReportId?`.
 4. Update `metadata-cache.ts` mapper to preserve all new fields end-to-end.
