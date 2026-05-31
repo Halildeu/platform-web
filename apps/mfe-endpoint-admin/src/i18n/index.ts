@@ -669,7 +669,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.status.DECOMMISSIONED': 'Decommissioned',
   // #1154 PR-3 — server-mode grid + İndir export
   'endpointAdmin.devices.subtitle':
-    'Server-side device inventory; filter/sort and export to Excel/CSV from the İndir menu.',
+    'Server-side device inventory; filter/sort and export to Excel/CSV from the Download menu.',
   'endpointAdmin.devices.col.domain': 'Domain',
   'endpointAdmin.devices.col.memoryUsedPercent': 'Memory %',
   'endpointAdmin.devices.col.lowDisk': 'Low Disk',

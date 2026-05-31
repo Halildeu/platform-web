@@ -114,8 +114,8 @@ export const EndpointDevicesPage: React.FC = () => {
     [t],
   );
 
-  const columnDefs = React.useMemo<ColDef<DeviceGridRow>[]>(
-    () => [
+  const columnDefs = React.useMemo<ColDef<DeviceGridRow>[]>(() => {
+    const cols: ColDef<DeviceGridRow>[] = [
       {
         field: 'hostname',
         headerName: t('endpointAdmin.devices.col.hostname'),
@@ -241,9 +241,21 @@ export const EndpointDevicesPage: React.FC = () => {
         valueFormatter: (p) =>
           formatBool(p.value, t('endpointAdmin.export.val.yes'), t('endpointAdmin.export.val.no')),
       },
-    ],
-    [t, statusLabel],
-  );
+    ];
+    // Flat-only server grid: the /query datasource sends no
+    // rowGroupCols/pivot/valueCols, so grouping/pivot/aggregation MUST be
+    // disabled per-column — otherwise the toolbar QuickGroupMenu (which
+    // filters on `enableRowGroup !== false`) + the row-group panel would let
+    // the user enter SSRM grouping mode against a flat backend and break
+    // (Codex 019e7f89). Per-column false also wins over GridShell's
+    // enableRowGroup:true default.
+    return cols.map((c) => ({
+      enableRowGroup: false,
+      enablePivot: false,
+      enableValue: false,
+      ...c,
+    }));
+  }, [t, statusLabel]);
 
   const createServerSideDatasource = React.useCallback(
     (): IServerSideDatasource => ({
@@ -300,7 +312,12 @@ export const EndpointDevicesPage: React.FC = () => {
     ): Promise<void> => {
       const exportMode = params.exportMode ?? 'view';
       const isView = exportMode === 'view';
-      // VIEW exports the visible columns; RAW ships every canonical column.
+      // Export contract (Codex 019e7f89): VIEW exports the BACKEND values of
+      // the currently-visible columns (filter/sort/quick-filter applied) — the
+      // grid's combined display cells (e.g. "hostname (display_name)") are a
+      // render concern, so VIEW carries the canonical hostname/os_type values.
+      // RAW ships EVERY canonical column (incl. display_name + os_version), so
+      // those derived sub-fields are always available via the Ham veri export.
       const visibleColumns = isView
         ? (gridApiRef.current?.getColumnState() ?? [])
             .filter((c) => !c.hide && typeof c.colId === 'string')
