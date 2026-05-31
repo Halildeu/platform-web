@@ -18,11 +18,12 @@
  * `additionalProperties:false` in
  * platform-k8s-gitops/schema/endpoint-device-health-payload-v1.schema.json
  * and …/endpoint-outdated-software-payload-v1.schema.json):
- *  - device-health → summary signals ONLY: supported / probeComplete /
- *    anyLowDisk / memory.usedPercent / memory.highPressureWarning /
- *    uptime.uptimeDays / uptime.longUptimeWarning. NO per-disk rows, NO
- *    volume label / serial / filesystem / mount path (only `driveLetter`
- *    exists on the wire and even that is NOT exported).
+ *  - device-health → summary signals ONLY (flat
+ *    AdminDeviceHealthSnapshotResponse columns): supported / probeComplete
+ *    / anyLowDisk / memoryUsedPercent / memoryHighPressure / uptimeDays /
+ *    longUptimeWarning. NO per-disk rows, NO volume label / serial /
+ *    filesystem / mount path (only `driveLetter` exists on the wire and
+ *    even that is NOT exported).
  *  - outdated-software → supported / probeComplete / upgradeCount /
  *    "has upgrades" / "possibly truncated". NO per-package detail in v2
  *    (deferred to a v2.1 follow-up); the only package-level keys that
@@ -80,9 +81,11 @@ function formatTimestamp(value: string | null | undefined): string {
 /**
  * Map a boolean to a localised Evet/Hayır cell. CSV consumers (and the
  * unit tests) get a deterministic, machine-parsable string rather than a
- * check glyph.
+ * check glyph. The flat DTO booleans are nullable boxed types; a
+ * null/undefined is rendered fail-closed as "Hayır" (never silently
+ * treated as a healthy/positive value).
  */
-function yesNo(t: (key: string) => string, value: boolean): string {
+function yesNo(t: (key: string) => string, value: boolean | null | undefined): string {
   return value ? t('endpointAdmin.export.val.yes') : t('endpointAdmin.export.val.no');
 }
 
@@ -97,9 +100,12 @@ function yesNo(t: (key: string) => string, value: boolean): string {
 type EvidenceState = 'absent' | 'unsupported' | 'incomplete' | 'ok';
 
 function evidenceState(
-  snapshot: { supported: boolean; probeComplete: boolean } | undefined,
+  snapshot: { supported: boolean | null; probeComplete: boolean | null } | undefined,
 ): EvidenceState {
   if (!snapshot) return 'absent';
+  // Nullable boxed booleans on the flat DTO: a null supported /
+  // probeComplete is treated fail-closed (unsupported / incomplete) so a
+  // missing flag never serialises as a healthy/up-to-date row.
   if (!snapshot.supported) return 'unsupported';
   if (!snapshot.probeComplete) return 'incomplete';
   return 'ok';
@@ -175,33 +181,42 @@ function buildDeviceHealthColumns(
     {
       key: 'healthMemoryUsedPercent',
       header: t('endpointAdmin.export.col.health.memoryUsedPercent'),
+      // Flat DTO: memoryUsedPercent scalar column (NOT memory.usedPercent).
+      // A null column on an otherwise-ok snapshot serialises as an empty
+      // cell — the fail-closed sentinel already covers absent/unsupported/
+      // incomplete.
       value: (d) => {
         const { snapshot, state } = resolve(d);
-        return sentinelFor(t, state) ?? snapshot!.memory.usedPercent;
+        return sentinelFor(t, state) ?? snapshot!.memoryUsedPercent;
       },
     },
     {
       key: 'healthMemoryHighPressure',
       header: t('endpointAdmin.export.col.health.memoryHighPressure'),
+      // Flat DTO: memoryHighPressure scalar column (NOT
+      // memory.highPressureWarning).
       value: (d) => {
         const { snapshot, state } = resolve(d);
-        return sentinelFor(t, state) ?? yesNo(t, snapshot!.memory.highPressureWarning);
+        return sentinelFor(t, state) ?? yesNo(t, snapshot!.memoryHighPressure);
       },
     },
     {
       key: 'healthUptimeDays',
       header: t('endpointAdmin.export.col.health.uptimeDays'),
+      // Flat DTO: uptimeDays scalar column (NOT uptime.uptimeDays).
       value: (d) => {
         const { snapshot, state } = resolve(d);
-        return sentinelFor(t, state) ?? snapshot!.uptime.uptimeDays;
+        return sentinelFor(t, state) ?? snapshot!.uptimeDays;
       },
     },
     {
       key: 'healthLongUptimeWarning',
       header: t('endpointAdmin.export.col.health.longUptimeWarning'),
+      // Flat DTO: longUptimeWarning scalar column (NOT
+      // uptime.longUptimeWarning).
       value: (d) => {
         const { snapshot, state } = resolve(d);
-        return sentinelFor(t, state) ?? yesNo(t, snapshot!.uptime.longUptimeWarning);
+        return sentinelFor(t, state) ?? yesNo(t, snapshot!.longUptimeWarning);
       },
     },
   ];

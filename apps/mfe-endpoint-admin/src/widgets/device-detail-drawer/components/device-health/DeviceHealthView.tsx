@@ -243,15 +243,20 @@ interface DeviceHealthPanelProps {
 
 const DeviceHealthPanel: React.FC<DeviceHealthPanelProps> = ({ snapshot }) => {
   const { t } = useEndpointAdminI18n();
-  const { memory, uptime } = snapshot;
+  // Flat DTO (AdminDeviceHealthSnapshotResponse): read the scalar memory
+  // / uptime columns directly off the snapshot — there is NO nested
+  // `memory` / `uptime` object on the wire. The memory BYTE totals
+  // (total / available / commit) are not on the DTO (they live only in
+  // the agent-wire redacted_payload JSONB the DTO does not surface), so
+  // the panel renders ONLY the used % + high-pressure badge.
   return (
     <div data-testid="device-health-panel">
       <DeviceHealthDisksList
-        disks={snapshot.fixedDisks}
-        truncated={snapshot.fixedDisksTruncated}
-        fixedDiskCount={snapshot.fixedDiskCount}
-        maxFixedDisks={snapshot.maxFixedDisks}
-        anyLowDisk={snapshot.anyLowDisk}
+        disks={snapshot.disks ?? []}
+        truncated={snapshot.fixedDisksTruncated ?? false}
+        fixedDiskCount={snapshot.fixedDiskCount ?? 0}
+        maxFixedDisks={snapshot.maxFixedDisks ?? 0}
+        anyLowDisk={snapshot.anyLowDisk ?? false}
       />
 
       <section data-testid="device-health-memory-section" style={{ marginTop: 16 }}>
@@ -262,8 +267,8 @@ const DeviceHealthPanel: React.FC<DeviceHealthPanelProps> = ({ snapshot }) => {
         >
           <dt>{t('endpointAdmin.drawer.deviceHealth.memory.usedPercent')}</dt>
           <dd data-testid="device-health-memory-usedPercent">
-            {memory.usedPercent}%
-            {memory.highPressureWarning && (
+            {snapshot.memoryUsedPercent == null ? '—' : `${snapshot.memoryUsedPercent}%`}
+            {snapshot.memoryHighPressure && (
               <span
                 data-testid="device-health-memory-pressure-badge"
                 style={{
@@ -280,14 +285,6 @@ const DeviceHealthPanel: React.FC<DeviceHealthPanelProps> = ({ snapshot }) => {
               </span>
             )}
           </dd>
-          <dt>{t('endpointAdmin.drawer.deviceHealth.memory.total')}</dt>
-          <dd>{formatBytes(memory.totalPhysicalBytes)}</dd>
-          <dt>{t('endpointAdmin.drawer.deviceHealth.memory.available')}</dt>
-          <dd>{formatBytes(memory.availableBytes)}</dd>
-          <dt>{t('endpointAdmin.drawer.deviceHealth.memory.commit')}</dt>
-          <dd>
-            {formatBytes(memory.commitUsedBytes)} / {formatBytes(memory.commitLimitBytes)}
-          </dd>
         </dl>
       </section>
 
@@ -299,8 +296,8 @@ const DeviceHealthPanel: React.FC<DeviceHealthPanelProps> = ({ snapshot }) => {
         >
           <dt>{t('endpointAdmin.drawer.deviceHealth.uptime.days')}</dt>
           <dd data-testid="device-health-uptime-days">
-            {uptime.uptimeDays}
-            {uptime.longUptimeWarning && (
+            {snapshot.uptimeDays == null ? '—' : snapshot.uptimeDays}
+            {snapshot.longUptimeWarning && (
               <span
                 data-testid="device-health-uptime-long-badge"
                 style={{
@@ -318,7 +315,7 @@ const DeviceHealthPanel: React.FC<DeviceHealthPanelProps> = ({ snapshot }) => {
             )}
           </dd>
           <dt>{t('endpointAdmin.drawer.deviceHealth.uptime.lastBoot')}</dt>
-          <dd>{formatEpochSeconds(uptime.lastBootEpochSec)}</dd>
+          <dd>{formatEpochSeconds(snapshot.lastBootEpochSec)}</dd>
         </dl>
       </section>
 
@@ -388,7 +385,7 @@ const DeviceHealthDisksList: React.FC<DeviceHealthDisksListProps> = ({
               <tr key={disk.driveLetter} data-testid={`device-health-disk-row-${disk.driveLetter}`}>
                 <td>{disk.driveLetter}</td>
                 <td data-testid={`device-health-disk-freePercent-${disk.driveLetter}`}>
-                  {disk.freePercent}%
+                  {disk.freePercent == null ? '—' : `${disk.freePercent}%`}
                 </td>
                 <td>{formatBytes(disk.freeBytes)}</td>
                 <td>{formatBytes(disk.totalBytes)}</td>
@@ -446,9 +443,9 @@ const DeviceHealthMetaRow: React.FC<DeviceHealthMetaRowProps> = ({ snapshot }) =
       }}
     >
       <dt>{t('endpointAdmin.drawer.deviceHealth.meta.sourceUsed')}</dt>
-      <dd data-testid="device-health-meta-sourceUsed">{snapshot.sourceUsed}</dd>
+      <dd data-testid="device-health-meta-sourceUsed">{snapshot.sourceUsed ?? '—'}</dd>
       <dt>{t('endpointAdmin.drawer.deviceHealth.meta.probeDuration')}</dt>
-      <dd>{snapshot.probeDurationMs} ms</dd>
+      <dd>{snapshot.probeDurationMs == null ? '—' : `${snapshot.probeDurationMs} ms`}</dd>
     </dl>
   );
 };
