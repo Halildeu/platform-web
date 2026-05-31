@@ -143,17 +143,18 @@ export function useCatalog() {
     const dynamicReports = reportsQuery.data ?? [];
     const dashboards = dashboardsQuery.data ?? [];
 
-    const staticRoutes = new Set(staticItems.map((s) => s.route));
+    // PR-D1b.A (Codex 019e800b finding #1 absorbed): dynamic catalog
+    // REPLACES legacy static items at the same route — migration goal.
+    // Order changed: dynamic first; static filtered against dynamic
+    // route set. The dedupe key is `routeSegment ?? key` per the
+    // backend ReportListItemDto.routeSegment alias contract (PR-D1a);
+    // the `mapDynamic` mapper picks the right route field.
+    const dynamicItems = dynamicReports.map(mapDynamic);
+    const dynamicRoutes = new Set(dynamicItems.map((d) => d.route));
+    const filteredStaticItems = staticItems.filter((s) => !dynamicRoutes.has(s.route));
+    const filteredStaticRoutes = new Set(filteredStaticItems.map((s) => s.route));
 
-    // PR-D1b (Codex thread 019e800b, 2026-05-31): dedupe against
-    // `r.routeSegment ?? r.key` so a dynamic entry whose backend
-    // alias matches a legacy static module's route replaces it
-    // instead of shadowing.
-    const dynamicItems = dynamicReports
-      .filter((r) => !staticRoutes.has(r.routeSegment ?? r.key))
-      .map(mapDynamic);
-
-    const allRoutes = new Set([...staticRoutes, ...dynamicItems.map((d) => d.route)]);
+    const allRoutes = new Set([...filteredStaticRoutes, ...dynamicRoutes]);
 
     const dashboardItems = dashboards
       .filter((db) => !allRoutes.has(`dashboard-${db.key}`))
@@ -161,8 +162,8 @@ export function useCatalog() {
 
     // Extra modules registered in reportModuleMap but not in any catalog source
     const allFinalRoutes = new Set([
-      ...staticRoutes,
-      ...dynamicItems.map((d) => d.route),
+      ...filteredStaticRoutes,
+      ...dynamicRoutes,
       ...dashboardItems.map((d) => d.route),
     ]);
     const extraItems: CatalogItem[] = reportModules

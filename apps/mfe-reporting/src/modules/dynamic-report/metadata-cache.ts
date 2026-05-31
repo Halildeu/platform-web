@@ -97,13 +97,27 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
         prefix: col.prefix,
       };
     case 'date':
-      return { ...base, columnType: 'date' as const };
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): propagate format
+      // through L3. Without this, hr-demografik's hireDate column (format
+      // 'short' on backend) would render with the design-system default
+      // instead of the requested short format.
+      return { ...base, columnType: 'date' as const, format: col.format };
+    case 'bold-text':
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): bold-text was missing
+      // from the switch table; legacy backends sending the new variant
+      // would fall through to `default` → text. Now mapped to L3's
+      // dedicated bold-text variant.
+      return { ...base, columnType: 'bold-text' as const };
     case 'badge':
       // Backend ships `variantMap: Record<string, string>` (variant name as
       // string). The grid component types the field with the design-system's
       // narrower `ColumnBadgeVariant` union — same wire shape, narrower
       // domain. Double-cast to acknowledge the intent without re-validating
       // each entry (the backend column metadata is trusted).
+      //
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): propagate
+      // defaultVariant + filterValues through L3 so backend-declared
+      // badge fallback + set-filter override actually render.
       return {
         ...base,
         columnType: 'badge' as const,
@@ -112,10 +126,20 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
           import('@mfe/design-system/advanced/data-grid').ColumnBadgeVariant
         >,
         labelMap: col.labelMap,
+        defaultVariant: col.defaultVariant as unknown as
+          | import('@mfe/design-system/advanced/data-grid').ColumnBadgeVariant
+          | undefined,
+        filterValues: col.filterValues,
       };
     case 'status':
       // Same trust boundary as badge. Backend `statusMap` shape matches
       // {variant, labelKey} but typed loosely; we accept the wire shape.
+      //
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): propagate
+      // defaultVariant through L3. status `filterValues` propagation
+      // requires the L3 StatusColumnMeta widening that lands in PR-D1b.B
+      // (design-system 2-file change); leaving it dropped here until
+      // that PR closes the L3 gap.
       return {
         ...base,
         columnType: 'status' as const,
@@ -123,6 +147,9 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
           string,
           import('@mfe/design-system/advanced/data-grid').StatusMapEntry
         >,
+        defaultVariant: col.defaultVariant as unknown as
+          | import('@mfe/design-system/advanced/data-grid').ColumnBadgeVariant
+          | undefined,
       };
     case 'currency':
       return {
@@ -425,5 +452,10 @@ export function __getInflightCountForTest(): number {
 /* -------------------------------------------------------------------------- */
 
 function emptyMeta(): CachedMeta {
-  return { columns: [], capabilities: undefined };
+  // PR-D1b.A iter-2 (Codex 019e800b finding #3): include
+  // filterDefinitions: undefined so the CachedMeta contract is
+  // satisfied. Without this the TS strict typecheck fails on
+  // "Property 'filterDefinitions' is missing" when CachedMeta
+  // requires the field.
+  return { columns: [], capabilities: undefined, filterDefinitions: undefined };
 }
