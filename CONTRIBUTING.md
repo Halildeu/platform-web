@@ -90,18 +90,21 @@ Bu repo `platform-ssot` `web/` subdirectory'sinden `git filter-repo` ile migrate
 - **Doğrudan `ag-grid-react` / `AgGridReact` import etmek YASAK.** Bu
   `eslint.config.mjs` içinde `no-restricted-imports` ile zorlanır (`error`).
 
-**İstisnalar** (ESLint allowlist — yeni istisna PR'da açıkça gerekçelendirilir):
+**İstisnalar** — sadece kontratın stabil iç parçaları:
 
 - `packages/design-system/src/advanced/data-grid/**` — kontratın kendi içi
   (`GridShell` AG Grid'i burada sarmalar; tek meşru wrapper).
 - `packages/x-data-grid/**` — enterprise grid kiti (pivot / tree /
   master-detail).
-- `apps/mfe-reporting/src/modules/hr-compensation-report/CompensationDashboard.tsx`
-  — belgelenmiş kalıcı istisna: hafif salt-okunur chart-özet grid'leri,
-  toolbar/variant gerekmez.
 
-Yeni bir grid yüzeyi `AgGridReact`'i doğrudan kullanmak zorundaysa, belgelenmiş
-bir istisna gerekir: ESLint allowlist'e ekle + PR'da gerekçeyi yaz.
+**`apps/**`altında istisna yoktur.** Hafif salt-okunur chart-özet grid'leri
+dahil her grid`GridShell`(toolbar/variant gereksinimi yoksa) veya`EntityGridTemplate`(tam kontrat) üzerinden gider; column meta`ColumnMeta[]`
+
+- `buildColDefs` ile üretilir. Önceki `CompensationDashboard.tsx` kalıcı
+  istisnası PR-A grid-contract migration (2026-05-31, Codex thread 019e7f8f)
+  ile retire edildi — chart-özet mini-tabloları artık `GridShell` +
+  `buildChartGridColumnMetas(...) → buildColDefs(metas, identityTranslate)`
+  zinciri üzerinden render ediliyor.
 
 ## Referans
 

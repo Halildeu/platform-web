@@ -236,11 +236,14 @@ export default tseslint.config(
   /*  a different rule key, so the two restrictions coexist.            */
   /*                                                                    */
   /*  This rule blocks the import everywhere; the override block right  */
-  /*  below exempts the legitimate locations:                           */
+  /*  below exempts ONLY the contract's stable internals:               */
   /*   - the contract's own internals (GridShell wraps AgGridReact);     */
-  /*   - `packages/x-data-grid/**` (the enterprise grid kit);            */
-  /*   - `CompensationDashboard.tsx`, a documented permanent exception   */
-  /*     (lightweight read-only chart-summary grids — see CONTRIBUTING). */
+  /*   - `packages/x-data-grid/**` (the enterprise grid kit).            */
+  /*  Apps under `apps/**` MUST go through `GridShell`; no app-level     */
+  /*  exceptions are accepted. The previous CompensationDashboard       */
+  /*  permanent exception was retired by PR-A grid-contract migration    */
+  /*  (2026-05-31, Codex thread 019e7f8f) when the mini-table moved to   */
+  /*  the canonical `GridShell` + `buildColDefs` path.                   */
   /* ----------------------------------------------------------------- */
   {
     files: ['**/*.{ts,tsx,js,jsx}'],
@@ -274,10 +277,11 @@ export default tseslint.config(
   /*  Because the ban uses its own rule key (NOT                         */
   /*  `no-restricted-imports`), turning it off here cannot disturb the  */
   /*  PR-HTTP-3 `@mfe/shared-http` restriction — that restriction stays */
-  /*  fully intact for `CompensationDashboard.tsx` (a remote-MFE file)  */
-  /*  with no need to restate it. After AuditEventFeed + GridTabPanel   */
-  /*  were migrated to the contract, the ONLY remaining exempt app file */
-  /*  is CompensationDashboard.tsx (documented permanent exception).    */
+  /*  fully intact even though this block disables `no-restricted-      */
+  /*  syntax`. After AuditEventFeed + GridTabPanel + CompensationDashboard */
+  /*  were migrated to the contract (the last app-level exemption was   */
+  /*  retired by PR-A grid-contract migration, 2026-05-31), no app file */
+  /*  legitimately imports `ag-grid-react` directly anymore.            */
   /* ----------------------------------------------------------------- */
   {
     files: [
@@ -286,9 +290,6 @@ export default tseslint.config(
       'packages/design-system/src/advanced/data-grid/**/*.{ts,tsx}',
       // The enterprise grid kit (pivot / tree / master-detail / etc.).
       'packages/x-data-grid/**/*.{ts,tsx}',
-      // Documented permanent exception (Part 4): lightweight read-only
-      // chart-summary grids, no toolbar / variant needed.
-      'apps/mfe-reporting/src/modules/hr-compensation-report/CompensationDashboard.tsx',
     ],
     rules: {
       'no-restricted-syntax': 'off',
