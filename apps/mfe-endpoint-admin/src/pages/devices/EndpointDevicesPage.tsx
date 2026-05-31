@@ -71,9 +71,18 @@ export const EndpointDevicesPage: React.FC = () => {
   const {
     data: snapshots,
     isLoading: snapshotsLoading,
+    isFetching: snapshotsFetching,
     isError: snapshotsError,
     isSuccess: snapshotsReady,
   } = useGetLatestSnapshotsQuery(undefined, { refetchOnMountOrArgChange: true });
+  // RTK: on a re-mount with cached data, `isSuccess` can be true while a
+  // background refetch is in flight (`isFetching`) holding STALE data. Treat
+  // "ready" as settled + fresh + non-error so a stale snapshot map can never
+  // attach (which would let a newly-listed device read as a false absence),
+  // and "busy" as initial load OR background refetch (Codex 019e7db8
+  // post-impl must-fix).
+  const snapshotsSettledReady = snapshotsReady && !snapshotsFetching && !snapshotsError;
+  const snapshotsBusy = snapshotsLoading || snapshotsFetching;
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | null>(null);
 
   const rows = React.useMemo<EndpointDevice[]>(() => data ?? [], [data]);
@@ -94,17 +103,18 @@ export const EndpointDevicesPage: React.FC = () => {
   // map is attached → v1 columns only (the button is disabled while
   // loading; an error raises the explicit notice below).
   const healthByDeviceId = React.useMemo(() => {
-    if (!snapshotsReady || !snapshots || snapshots.deviceHealthTruncated) return undefined;
+    if (!snapshotsSettledReady || !snapshots || snapshots.deviceHealthTruncated) return undefined;
     // Fail-closed against an unexpected response shape: a non-array group
     // degrades to v1 columns rather than crashing the whole devices page.
     if (!Array.isArray(snapshots.deviceHealth)) return undefined;
     return new Map(snapshots.deviceHealth.map((e) => [e.deviceId, e]));
-  }, [snapshotsReady, snapshots]);
+  }, [snapshotsSettledReady, snapshots]);
   const outdatedByDeviceId = React.useMemo(() => {
-    if (!snapshotsReady || !snapshots || snapshots.outdatedSoftwareTruncated) return undefined;
+    if (!snapshotsSettledReady || !snapshots || snapshots.outdatedSoftwareTruncated)
+      return undefined;
     if (!Array.isArray(snapshots.outdatedSoftware)) return undefined;
     return new Map(snapshots.outdatedSoftware.map((e) => [e.deviceId, e]));
-  }, [snapshotsReady, snapshots]);
+  }, [snapshotsSettledReady, snapshots]);
 
   // WEB-015 v2 (#1146 wiring) — CSV export columns; the v2 device-health
   // (AG-033) + outdated-software (AG-036) summary columns are appended only
@@ -118,19 +128,24 @@ export const EndpointDevicesPage: React.FC = () => {
   // error means v1-only fallback; truncation means the over-cap group(s)
   // were dropped.
   const snapshotColumnsNotice = React.useMemo<string | null>(() => {
+    // Error wins (explicit, even if a stale success is still cached): v1
+    // export with an explicit "could not load" notice.
     if (snapshotsError) return t('endpointAdmin.export.snapshotsUnavailable');
-    if (
-      snapshotsReady &&
-      snapshots &&
-      (snapshots.deviceHealthTruncated || snapshots.outdatedSoftwareTruncated)
-    ) {
-      return t('endpointAdmin.export.snapshotsTruncated').replace(
-        '{limit}',
-        String(snapshots.limit),
-      );
+    if (snapshotsSettledReady && snapshots) {
+      const dropped: string[] = [];
+      if (snapshots.deviceHealthTruncated) dropped.push(t('endpointAdmin.export.groupHealth'));
+      if (snapshots.outdatedSoftwareTruncated)
+        dropped.push(t('endpointAdmin.export.groupOutdated'));
+      if (dropped.length > 0) {
+        // Name the dropped group(s) so the operator knows exactly which
+        // columns are missing (Codex 019e7db8 UX refinement).
+        return t('endpointAdmin.export.snapshotsTruncated')
+          .replace('{groups}', dropped.join(', '))
+          .replace('{limit}', String(snapshots.limit ?? ''));
+      }
     }
     return null;
-  }, [snapshotsError, snapshotsReady, snapshots, t]);
+  }, [snapshotsError, snapshotsSettledReady, snapshots, t]);
 
   // WEB-015 RBAC gate: there is no client-side capability list in this
   // MFE — `can_view` is enforced server-side via `@RequireModule`. We
@@ -308,7 +323,7 @@ export const EndpointDevicesPage: React.FC = () => {
             rows={rows}
             columns={exportColumns}
             fileBaseName="endpoint-inventory"
-            busy={snapshotsLoading}
+            busy={snapshotsBusy}
           />
           {canView && snapshotColumnsNotice ? (
             <span

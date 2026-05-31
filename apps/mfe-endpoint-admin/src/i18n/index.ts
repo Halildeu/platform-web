@@ -48,7 +48,9 @@ const DICT_TR = {
   'endpointAdmin.export.snapshotsUnavailable':
     'Sağlık/güncellik kolonları alınamadı; yalnızca temel envanter kolonları dışa aktarılabilir.',
   'endpointAdmin.export.snapshotsTruncated':
-    'Filo limiti ({limit}) aşıldı; sağlık/güncellik kolonları bu dışa aktarımda atlandı.',
+    'Filo limiti ({limit}) aşıldı; {groups} kolonları bu dışa aktarımda atlandı.',
+  'endpointAdmin.export.groupHealth': 'sağlık',
+  'endpointAdmin.export.groupOutdated': 'güncellik',
   // WEB-015 v2 — Device-health (AG-033) + outdated-software (AG-036)
   // summary export columns + fail-closed sentinel values.
   'endpointAdmin.export.val.yes': 'Evet',
@@ -664,7 +666,9 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.export.snapshotsUnavailable':
     'Health / outdated columns could not be loaded; only the base inventory columns are available to export.',
   'endpointAdmin.export.snapshotsTruncated':
-    'Fleet limit ({limit}) exceeded; the health / outdated columns were omitted from this export.',
+    'Fleet limit ({limit}) exceeded; the {groups} columns were omitted from this export.',
+  'endpointAdmin.export.groupHealth': 'health',
+  'endpointAdmin.export.groupOutdated': 'outdated',
   // WEB-015 v2 — Device-health (AG-033) + outdated-software (AG-036)
   // summary export columns + fail-closed sentinel values.
   'endpointAdmin.export.val.yes': 'Yes',
