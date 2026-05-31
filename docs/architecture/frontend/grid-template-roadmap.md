@@ -1,12 +1,6 @@
 # Grid Şablonu Yol Haritası
 
-> **Tarihsel doküman.** Mevcut bağlayıcı sözleşme
-> [`docs/architecture/grid-rendering.md`](./grid-rendering.md) içinde
-> yaşıyor: canonical zincir `ReportingApp → ReportPage →
-EntityGridTemplate → GridShell → AgGridReact`, `apps/` altında raw
-> `AgGridReact` YASAK, CI hard gate `pnpm --filter mfe-reporting run
-test:grid-contract`. Bu sayfa eski roadmap/dil-tercihi tartışmasını
-> korur; çelişki halinde canonical sözleşme üstün.
+> **Tarihsel doküman.** Mevcut bağlayıcı sözleşme [`docs/architecture/grid-rendering.md`](../grid-rendering.md) içinde yaşıyor: canonical zincir `ReportingApp → ReportPage → EntityGridTemplate → GridShell → AgGridReact`; `apps/` altında raw `AgGridReact` YASAK; CI hard gate `pnpm --filter mfe-reporting run test:grid-contract`. Bu sayfa eski roadmap / dil-tercihi tartışmasını korur; çelişki halinde canonical sözleşme üstün.
 
 Bu doküman, mikro-frontend (MFE) tarafındaki tüm listeleme/raporlama ekranlarında aynı grid altyapısını kullanmayı hedefleyen yaklaşımı özetler.
 

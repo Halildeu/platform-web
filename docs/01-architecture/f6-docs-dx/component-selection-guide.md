@@ -61,19 +61,9 @@ instead of code review.
 
 **Enforcement**
 
-- IDE / dev-time: ESLint `no-restricted-syntax` rule
-  (`eslint.config.mjs:220-296`) reports the import as `error`. Root lint
-  step in `ci-web-check.yml:41` swallows lint failures (`|| echo "Lint
-warnings tolerated"`), so this layer is advisory only.
-- CI hard gate: `pnpm --filter mfe-reporting run test:grid-contract`
-  (`apps/mfe-reporting/src/__tests__/grid-architecture.contract.test.ts`)
-  — Vitest source-AST scan catches static `import`, dynamic `import()`,
-  `require()`, re-export (`export ... from`), and TypeScript
-  `import = require()` forms.
-- Escape hatch: `apps/mfe-reporting/src/__tests__/grid-architecture-
-exceptions.json` — CODEOWNERS-gated, schema-validated (path, kind,
-  reason ≥ 20 chars, owner @user / @org/team, expiresAt ISO date NOT
-  in past). Empty as of 2026-05-31.
+- IDE / dev-time: ESLint `no-restricted-syntax` rule (`eslint.config.mjs:220-296`) reports the import as `error`. Root lint step in `ci-web-check.yml:41` swallows lint failures (the run line falls back to `echo "Lint warnings tolerated"`), so this layer is advisory only.
+- CI hard gate: `pnpm --filter mfe-reporting run test:grid-contract` (`apps/mfe-reporting/src/__tests__/grid-architecture.contract.test.ts`) — Vitest source-AST scan catches static `import`, dynamic `import()`, `require()`, re-export (`export ... from`), and TypeScript `import = require()` forms.
+- Escape hatch: `apps/mfe-reporting/src/__tests__/grid-architecture-exceptions.json` — CODEOWNERS-gated, schema-validated (path, kind, reason ≥ 20 chars, owner @user / @org/team, expiresAt ISO date NOT in past). Empty as of 2026-05-31.
 
 **Historical note — retired exceptions**
 

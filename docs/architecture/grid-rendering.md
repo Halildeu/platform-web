@@ -20,10 +20,7 @@ ReportingApp → ReportPage → EntityGridTemplate → GridShell → AgGridReact
 
 - Every dynamic report and every static `ReportModule` with a
   `getColumnMeta`-shaped grid follows this chain.
-- `ReportPage` is a single shared shell (`apps/mfe-reporting/src/app/
-reporting/ReportPage.tsx`); the shell's source comment line 161
-  explicitly states: _"Both dynamic and static reports use the same
-  ReportPage skeleton"_.
+- `ReportPage` is a single shared shell at `apps/mfe-reporting/src/app/reporting/ReportPage.tsx`; the shell's source comment line 161 explicitly states: _"Both dynamic and static reports use the same ReportPage skeleton"_.
 
 ### Backend dashboard catalog entry (no grid)
 
@@ -35,9 +32,7 @@ ReportingApp → DashboardPage
 - Reserved for dashboard-only catalog entries fed by the backend
   dashboard registry (KPI + chart compositions, no row data set).
 
-### Static `ReportModule` dashboard fallback (no grid OR internal
-
-GridShell)
+### Static `ReportModule` dashboard fallback (no grid or internal GridShell)
 
 ```text
 ReportingApp → ReportPage → renderDashboard()
@@ -140,8 +135,7 @@ system transformer (`type: 'rightAligned'`).
    report registry.
 2. Ensure `/api/v1/reports/{key}/metadata` returns 200 with a valid
    `ReportMetadata` payload.
-3. ReportingApp auto-routes the new key through `<DynamicReport
-reportKey={key} />` — no frontend code change.
+3. ReportingApp auto-routes the new key through the dynamic-report renderer (equivalent to `<DynamicReport reportKey={key} />`) — no frontend code change.
 
 ### Option B — static `ReportModule` (TS hand-written column meta)
 
@@ -159,6 +153,14 @@ reportKey={key} />` — no frontend code change.
    — same `EntityGridTemplate` chain as dynamic reports.
 
 In both cases, you write zero AG Grid / `AgGridReact` code.
+
+### Migrating an existing raw grid
+
+1. Replace raw `AgGridReact` with `EntityGridTemplate` for report result grids.
+2. Use `GridShell` for dashboard mini-tables that intentionally do not need toolbar / export / variant UI.
+3. Express columns as `ColumnMeta[]`, then call `buildColDefs(metas, translate)`.
+4. Run `pnpm --filter mfe-reporting run test:grid-contract` — the gate must stay green.
+5. Browser-smoke the route for grid chrome and formatter parity.
 
 ---
 
