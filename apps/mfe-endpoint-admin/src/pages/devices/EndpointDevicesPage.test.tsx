@@ -153,4 +153,112 @@ describe('EndpointDevicesPage', () => {
       // ignore
     }
   });
+
+  // ── #1146: bulk-snapshot CSV-export v2 column wiring ────────────────
+
+  /** Build a fetch mock that answers the devices list AND the
+   *  /snapshots/latest bulk route distinctly (the snapshot URL also
+   *  contains "endpoint-devices", so it must be matched FIRST). */
+  const fetchMockWithSnapshots = (snapshotResponse: () => Response) =>
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.includes('snapshots/latest')) return snapshotResponse();
+      return new Response(
+        JSON.stringify(url.includes('endpoint-devices') ? [DEVICE_FIXTURE] : []),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+  it('surfaces a snapshot-columns notice when the bulk snapshots fetch fails (#1146)', async () => {
+    globalThis.fetch = fetchMockWithSnapshots(
+      () =>
+        new Response(JSON.stringify({ error: 'boom' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('export-snapshot-columns-notice')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('export-snapshot-columns-notice').textContent).toMatch(
+      /alınamadı|could not be loaded/,
+    );
+  });
+
+  it('surfaces a truncation notice when a snapshot group exceeds the cap (#1146)', async () => {
+    globalThis.fetch = fetchMockWithSnapshots(
+      () =>
+        new Response(
+          JSON.stringify({
+            deviceHealth: [],
+            deviceHealthTruncated: true,
+            outdatedSoftware: [],
+            outdatedSoftwareTruncated: false,
+            limit: 10000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('export-snapshot-columns-notice')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('export-snapshot-columns-notice').textContent).toMatch(
+      /limit|aşıldı|exceeded/,
+    );
+  });
+
+  it('shows no notice and enables export when snapshots load cleanly (#1146)', async () => {
+    globalThis.fetch = fetchMockWithSnapshots(
+      () =>
+        new Response(
+          JSON.stringify({
+            deviceHealth: [
+              {
+                deviceId: DEVICE_FIXTURE.id,
+                supported: true,
+                probeComplete: true,
+                anyLowDisk: false,
+                memoryUsedPercent: 42,
+                memoryHighPressure: false,
+                uptimeDays: 3,
+                longUptimeWarning: false,
+                collectedAt: '2026-05-30T12:00:00Z',
+              },
+            ],
+            deviceHealthTruncated: false,
+            outdatedSoftware: [
+              {
+                deviceId: DEVICE_FIXTURE.id,
+                supported: true,
+                probeComplete: true,
+                upgradeCount: 2,
+                upgradeTruncated: false,
+                maxUpgrade: 512,
+                possiblyTruncated: false,
+                collectedAt: '2026-05-30T12:00:00Z',
+              },
+            ],
+            outdatedSoftwareTruncated: false,
+            limit: 10000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('endpoint-admin-devices-page')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('inventory-export-button')).not.toBeDisabled();
+    });
+    expect(screen.queryByTestId('export-snapshot-columns-notice')).not.toBeInTheDocument();
+  });
 });

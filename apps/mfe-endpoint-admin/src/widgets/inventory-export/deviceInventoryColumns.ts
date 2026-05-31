@@ -38,10 +38,40 @@
  * "good".
  */
 
-import type { DeviceHealthSnapshot } from '../../entities/endpoint-device-health/types';
-import type { OutdatedSoftwareSnapshot } from '../../entities/endpoint-outdated-software/types';
 import type { EndpointDevice, OsType } from '../../entities/endpoint-device/types';
 import type { CsvColumn } from '../../lib/csv-export';
+
+/**
+ * Minimal shape the device-health export columns read — the FLAT scalar
+ * summary signals only. Declared as a structural interface (rather than
+ * the full `DeviceHealthSnapshot`) so BOTH the per-device drawer snapshot
+ * AND the #1146 bulk `DeviceHealthLatestEntry` satisfy it without
+ * fabricating unused fields; the full snapshot is assignable because it is
+ * a superset. (Codex 019e7db8 must-fix: widen the accepted type, do not
+ * fabricate a full nested snapshot.)
+ */
+export interface DeviceHealthExportFields {
+  supported: boolean | null;
+  probeComplete: boolean | null;
+  anyLowDisk: boolean | null;
+  memoryUsedPercent: number | null;
+  memoryHighPressure: boolean | null;
+  uptimeDays: number | null;
+  longUptimeWarning: boolean | null;
+}
+
+/**
+ * Minimal shape the outdated-software export columns read. `upgradeCount`
+ * + `maxUpgrade` drive the fail-closed `possiblyTruncated` derivation;
+ * a source-computed `possiblyTruncated` is OR-ed in when present.
+ */
+export interface OutdatedSoftwareExportFields {
+  supported: boolean | null;
+  probeComplete: boolean | null;
+  upgradeCount: number;
+  maxUpgrade: number;
+  possiblyTruncated?: boolean | null;
+}
 
 const OS_LABEL: Record<OsType, string> = {
   WINDOWS: 'Windows',
@@ -61,9 +91,9 @@ const OS_LABEL: Record<OsType, string> = {
  */
 export interface DeviceInventoryColumnSources {
   /** AG-033 device-health latest snapshot per device id. */
-  healthByDeviceId?: ReadonlyMap<string, DeviceHealthSnapshot>;
+  healthByDeviceId?: ReadonlyMap<string, DeviceHealthExportFields>;
   /** AG-036 outdated-software latest snapshot per device id. */
-  outdatedByDeviceId?: ReadonlyMap<string, OutdatedSoftwareSnapshot>;
+  outdatedByDeviceId?: ReadonlyMap<string, OutdatedSoftwareExportFields>;
 }
 
 /**
@@ -136,7 +166,7 @@ function sentinelFor(t: (key: string) => string, state: EvidenceState): string |
  */
 function buildDeviceHealthColumns(
   t: (key: string) => string,
-  healthByDeviceId: ReadonlyMap<string, DeviceHealthSnapshot>,
+  healthByDeviceId: ReadonlyMap<string, DeviceHealthExportFields>,
 ): CsvColumn<EndpointDevice>[] {
   /** Resolve snapshot + evidence state for a device in one step. */
   const resolve = (d: EndpointDevice) => {
@@ -232,7 +262,7 @@ function buildDeviceHealthColumns(
  * count can never fail-open this hint. Mirrors `isPossiblyTruncated` in
  * OutdatedSoftwareView.
  */
-function outdatedPossiblyTruncated(snapshot: OutdatedSoftwareSnapshot): boolean {
+function outdatedPossiblyTruncated(snapshot: OutdatedSoftwareExportFields): boolean {
   return snapshot.possiblyTruncated === true || snapshot.upgradeCount >= snapshot.maxUpgrade;
 }
 
@@ -244,7 +274,7 @@ function outdatedPossiblyTruncated(snapshot: OutdatedSoftwareSnapshot): boolean 
  */
 function buildOutdatedSoftwareColumns(
   t: (key: string) => string,
-  outdatedByDeviceId: ReadonlyMap<string, OutdatedSoftwareSnapshot>,
+  outdatedByDeviceId: ReadonlyMap<string, OutdatedSoftwareExportFields>,
 ): CsvColumn<EndpointDevice>[] {
   const resolve = (d: EndpointDevice) => {
     const snapshot = outdatedByDeviceId.get(d.id);

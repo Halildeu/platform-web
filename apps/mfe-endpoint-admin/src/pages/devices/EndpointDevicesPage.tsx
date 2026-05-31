@@ -6,7 +6,10 @@ import React from 'react';
 // (Codex 019e707e iter-2 must-fix #1).
 import { EntityGridTemplate } from '@mfe/design-system/advanced/data-grid';
 import type { ColDef, GridOptions } from 'ag-grid-community';
-import { useListEndpointDevicesQuery } from '../../app/services/endpointAdminApi';
+import {
+  useGetLatestSnapshotsQuery,
+  useListEndpointDevicesQuery,
+} from '../../app/services/endpointAdminApi';
 import { useEndpointAdminI18n } from '../../i18n';
 import type { DeviceStatus, EndpointDevice, OsType } from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
@@ -62,6 +65,15 @@ const GRID_SCHEMA_VERSION = 1;
 export const EndpointDevicesPage: React.FC = () => {
   const { t } = useEndpointAdminI18n();
   const { data, isLoading, isError, error } = useListEndpointDevicesQuery();
+  // #1146 — bulk latest snapshots feed the CSV-export v2 columns in ONE
+  // round-trip (vs an N-per-row fetch storm). Refetch on (re)mount so an
+  // export reflects fresh device-health / outdated-software probe data.
+  const {
+    data: snapshots,
+    isLoading: snapshotsLoading,
+    isError: snapshotsError,
+    isSuccess: snapshotsReady,
+  } = useGetLatestSnapshotsQuery(undefined, { refetchOnMountOrArgChange: true });
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | null>(null);
 
   const rows = React.useMemo<EndpointDevice[]>(() => data ?? [], [data]);
@@ -74,12 +86,51 @@ export const EndpointDevicesPage: React.FC = () => {
     [t],
   );
 
-  // WEB-015 — CSV export columns (only already-fetched inventory fields;
-  // no v2 device-health / diagnostics columns).
+  // #1146 — per-group fail-closed: attach a group's lookup map ONLY when
+  // the bulk query succeeded AND that group is NOT truncated. A device
+  // missing from a non-truncated group is an authoritative "no snapshot";
+  // a truncated group is dropped entirely (columns omitted) so truncation
+  // can never read as a false absence. While loading / on error neither
+  // map is attached → v1 columns only (the button is disabled while
+  // loading; an error raises the explicit notice below).
+  const healthByDeviceId = React.useMemo(() => {
+    if (!snapshotsReady || !snapshots || snapshots.deviceHealthTruncated) return undefined;
+    // Fail-closed against an unexpected response shape: a non-array group
+    // degrades to v1 columns rather than crashing the whole devices page.
+    if (!Array.isArray(snapshots.deviceHealth)) return undefined;
+    return new Map(snapshots.deviceHealth.map((e) => [e.deviceId, e]));
+  }, [snapshotsReady, snapshots]);
+  const outdatedByDeviceId = React.useMemo(() => {
+    if (!snapshotsReady || !snapshots || snapshots.outdatedSoftwareTruncated) return undefined;
+    if (!Array.isArray(snapshots.outdatedSoftware)) return undefined;
+    return new Map(snapshots.outdatedSoftware.map((e) => [e.deviceId, e]));
+  }, [snapshotsReady, snapshots]);
+
+  // WEB-015 v2 (#1146 wiring) — CSV export columns; the v2 device-health
+  // (AG-033) + outdated-software (AG-036) summary columns are appended only
+  // when their lookup map is present (see above).
   const exportColumns = React.useMemo(
-    () => buildDeviceInventoryColumns(t, statusLabel),
-    [t, statusLabel],
+    () => buildDeviceInventoryColumns(t, statusLabel, { healthByDeviceId, outdatedByDeviceId }),
+    [t, statusLabel, healthByDeviceId, outdatedByDeviceId],
   );
+
+  // State (not past-tense export) notice for the snapshot columns: an
+  // error means v1-only fallback; truncation means the over-cap group(s)
+  // were dropped.
+  const snapshotColumnsNotice = React.useMemo<string | null>(() => {
+    if (snapshotsError) return t('endpointAdmin.export.snapshotsUnavailable');
+    if (
+      snapshotsReady &&
+      snapshots &&
+      (snapshots.deviceHealthTruncated || snapshots.outdatedSoftwareTruncated)
+    ) {
+      return t('endpointAdmin.export.snapshotsTruncated').replace(
+        '{limit}',
+        String(snapshots.limit),
+      );
+    }
+    return null;
+  }, [snapshotsError, snapshotsReady, snapshots, t]);
 
   // WEB-015 RBAC gate: there is no client-side capability list in this
   // MFE — `can_view` is enforced server-side via `@RequireModule`. We
@@ -248,13 +299,28 @@ export const EndpointDevicesPage: React.FC = () => {
             {t('endpointAdmin.devices.countLabel')}: {rows.length}
           </p>
         </div>
-        {/* WEB-015 — RBAC-gated CSV export of the current device inventory. */}
-        <InventoryExportButton<EndpointDevice>
-          canView={canView}
-          rows={rows}
-          columns={exportColumns}
-          fileBaseName="endpoint-inventory"
-        />
+        {/* WEB-015 — RBAC-gated CSV export of the current device inventory.
+            #1146: disabled while the v2-column snapshots load; an error /
+            truncation surfaces an explicit notice (no silent v1 degrade). */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <InventoryExportButton<EndpointDevice>
+            canView={canView}
+            rows={rows}
+            columns={exportColumns}
+            fileBaseName="endpoint-inventory"
+            busy={snapshotsLoading}
+          />
+          {canView && snapshotColumnsNotice ? (
+            <span
+              role="status"
+              aria-live="polite"
+              data-testid="export-snapshot-columns-notice"
+              style={{ fontSize: 12, color: 'var(--state-warning-text, #b54708)' }}
+            >
+              {snapshotColumnsNotice}
+            </span>
+          ) : null}
+        </div>
       </div>
       <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
         <React.Suspense fallback={<div style={{ height: 400 }} />}>
