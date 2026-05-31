@@ -6,3 +6,14 @@
 * @Halildeu
 
 # Faz 19.8 sonrası team ownership genişletmesi planlanıyor
+
+# Grid-architecture invariant (PR-B, Codex thread 019e7f8f).
+# Changes to the test, schema, or exceptions registry alter the CI
+# gate that enforces "no direct ag-grid-react / @mfe/x-data-grid in
+# apps/mfe-reporting/src/**". Owner approval is required to add or
+# update an exception — the global fallback already routes to
+# @Halildeu, but pinning these paths makes the governance intent
+# visible at file level for future team-ownership expansion.
+/apps/mfe-reporting/src/__tests__/grid-architecture.contract.test.ts @Halildeu
+/apps/mfe-reporting/src/__tests__/grid-architecture-exceptions.json @Halildeu
+/apps/mfe-reporting/src/__tests__/grid-architecture-exceptions.schema.json @Halildeu

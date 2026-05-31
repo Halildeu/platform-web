@@ -46,3 +46,13 @@ jobs:
         # compile-only; this step actually runs play() in jsdom via composeStories).
         # Fast (~1s) and scoped — does not pull in the rest of the test suite.
         run: pnpm --filter @mfe/design-system exec vitest run src/__tests__/m4-play-verify.test.tsx
+
+      - name: Grid architecture contract (PR-B, hard gate)
+        # Source-AST scan of apps/mfe-reporting/src/** asserting no direct
+        # `ag-grid-react` or `@mfe/x-data-grid` imports outside
+        # `grid-architecture-exceptions.json`. The unified-grid invariant
+        # was established by PR-A (Codex thread 019e7f8f cross-AI plan-time
+        # consensus); PR-B (this step) is the machine-enforced gate so future
+        # drift fails CI instead of code review / runtime. NO `|| echo`
+        # swallow, NO `--if-present` — exit code propagates.
+        run: pnpm --filter mfe-reporting run test:grid-contract
