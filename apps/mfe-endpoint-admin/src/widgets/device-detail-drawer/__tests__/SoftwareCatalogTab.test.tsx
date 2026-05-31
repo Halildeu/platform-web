@@ -430,6 +430,50 @@ describe('SoftwareCatalogTab — recent installs panel', () => {
     render(<SoftwareCatalogTab device={buildDevice()} active />);
     expect(screen.getByTestId('install-audit-row-a-1').textContent).toContain('—');
   });
+
+  // BE-028 — post-verification verdict badge + detected version.
+  it('postVerification SATISFIED yesil badge + detectedVersion gosterir (REGISTRY authoritative)', () => {
+    mockCatalog([]);
+    mockAudits([
+      buildAudit({ auditId: 'a-1', postVerification: 'SATISFIED', detectedVersion: '26.01.00.0' }),
+    ]);
+    render(<SoftwareCatalogTab device={buildDevice()} active />);
+    const badge = screen.getByTestId('install-audit-postverif-a-1');
+    expect(badge.className).toContain('bg-state-success-bg');
+    expect(badge.textContent).toMatch(/Doğrulandı|Satisfied/);
+    expect(screen.getByTestId('install-audit-detected-version-a-1').textContent).toBe('26.01.00.0');
+  });
+
+  it('postVerification UNSATISFIED kirmizi badge gosterir', () => {
+    mockCatalog([]);
+    mockAudits([buildAudit({ auditId: 'a-1', postVerification: 'UNSATISFIED' })]);
+    render(<SoftwareCatalogTab device={buildDevice()} active />);
+    expect(screen.getByTestId('install-audit-postverif-a-1').className).toContain(
+      'bg-state-danger-bg',
+    );
+  });
+
+  it('postVerification UNKNOWN gri badge (WINGET confirm-only) + version yoksa gizli', () => {
+    mockCatalog([]);
+    mockAudits([
+      buildAudit({ auditId: 'a-1', postVerification: 'UNKNOWN', detectedVersion: null }),
+    ]);
+    render(<SoftwareCatalogTab device={buildDevice()} active />);
+    expect(screen.getByTestId('install-audit-postverif-a-1').className).toContain(
+      'bg-surface-muted',
+    );
+    expect(screen.queryByTestId('install-audit-detected-version-a-1')).toBeNull();
+  });
+
+  it('postVerification null iken pending dash + detectedVersion gizli', () => {
+    mockCatalog([]);
+    mockAudits([buildAudit({ auditId: 'a-1', postVerification: null, detectedVersion: null })]);
+    render(<SoftwareCatalogTab device={buildDevice()} active />);
+    const badge = screen.getByTestId('install-audit-postverif-a-1');
+    expect(badge.textContent).toBe('—');
+    expect(badge.className).not.toContain('bg-state-success-bg');
+    expect(screen.queryByTestId('install-audit-detected-version-a-1')).toBeNull();
+  });
 });
 
 describe('SoftwareCatalogTab — intent reset on device change', () => {

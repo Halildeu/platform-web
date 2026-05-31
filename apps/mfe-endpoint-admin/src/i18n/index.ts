@@ -524,6 +524,9 @@ const DICT_TR = {
   'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.decision': 'Ön Kontrol',
   'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.result': 'Sonuç',
   'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.reportedAt': 'Zaman',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.verification': 'Doğrulama',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.detectedVersion':
+    'Tespit edilen sürüm: {version}',
   'endpointAdmin.drawer.softwareCatalog.riskTier.LOW': 'Düşük',
   'endpointAdmin.drawer.softwareCatalog.riskTier.MEDIUM': 'Orta',
   'endpointAdmin.drawer.softwareCatalog.riskTier.HIGH': 'Yüksek',
@@ -599,6 +602,8 @@ const DICT_TR = {
   'endpointAdmin.drawer.install.reasonCode.winget_fixed_probe_package_mismatch':
     'WinGet sabit prob paketi eşleşmedi.',
   'endpointAdmin.drawer.install.reasonCode.winget_not_ready': 'WinGet cihazda hazır değil.',
+  'endpointAdmin.drawer.install.reasonCode.winget_package_query_inconclusive':
+    'WinGet paket sorgusu kesin sonuç vermedi.',
   'endpointAdmin.drawer.install.reasonCode.winget_package_query_not_found':
     'WinGet kaynağında paket bulunamadı.',
   'endpointAdmin.drawer.install.reasonCode.winget_source_list_warning':
@@ -632,6 +637,20 @@ const DICT_TR = {
   'endpointAdmin.drawer.install.resultStatus.PARTIAL': 'Kısmen',
   'endpointAdmin.drawer.install.resultStatus.UNSUPPORTED': 'Desteklenmiyor',
   'endpointAdmin.drawer.install.resultStatus.pending': '—',
+  // Install post-verification verdict (BE-028 / platform-backend #347):
+  // REGISTRY detection is authoritative (SATISFIED); WINGET confirm-only
+  // under Session-0 stays UNKNOWN even when the command SUCCEEDED;
+  // UNSATISFIED = expected package absent after a SUCCEEDED install.
+  'endpointAdmin.drawer.install.postVerification.SATISFIED': 'Doğrulandı',
+  'endpointAdmin.drawer.install.postVerification.UNSATISFIED': 'Doğrulanamadı',
+  'endpointAdmin.drawer.install.postVerification.UNKNOWN': 'Belirsiz',
+  'endpointAdmin.drawer.install.postVerification.pending': '—',
+  'endpointAdmin.drawer.install.postVerification.SATISFIED.aria':
+    'Kurulum yetkili (registry) doğrulamasıyla teyit edildi',
+  'endpointAdmin.drawer.install.postVerification.UNSATISFIED.aria':
+    'Beklenen paket kurulum sonrası tespit edilemedi',
+  'endpointAdmin.drawer.install.postVerification.UNKNOWN.aria':
+    'Doğrulama kesin değil (yalnızca WinGet teyidi, Session-0)',
   'endpointAdmin.command.approval.NOT_REQUIRED': 'Onay gerekmez',
   'endpointAdmin.command.approval.PENDING': 'Onay bekliyor',
   'endpointAdmin.command.approval.APPROVED': 'Onaylandı',
@@ -1148,6 +1167,9 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.decision': 'Preflight',
   'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.result': 'Result',
   'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.reportedAt': 'Time',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.col.verification': 'Verification',
+  'endpointAdmin.drawer.softwareCatalog.recentInstalls.detectedVersion':
+    'Detected version: {version}',
   'endpointAdmin.drawer.softwareCatalog.riskTier.LOW': 'Low',
   'endpointAdmin.drawer.softwareCatalog.riskTier.MEDIUM': 'Medium',
   'endpointAdmin.drawer.softwareCatalog.riskTier.HIGH': 'High',
@@ -1226,6 +1248,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.install.reasonCode.winget_fixed_probe_package_mismatch':
     'WinGet fixed probe package mismatch.',
   'endpointAdmin.drawer.install.reasonCode.winget_not_ready': 'WinGet is not ready on this device.',
+  'endpointAdmin.drawer.install.reasonCode.winget_package_query_inconclusive':
+    'WinGet package query was inconclusive.',
   'endpointAdmin.drawer.install.reasonCode.winget_package_query_not_found':
     'WinGet package not found in the source.',
   'endpointAdmin.drawer.install.reasonCode.winget_source_list_warning':
@@ -1256,6 +1280,16 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.install.resultStatus.PARTIAL': 'Partial',
   'endpointAdmin.drawer.install.resultStatus.UNSUPPORTED': 'Unsupported',
   'endpointAdmin.drawer.install.resultStatus.pending': '—',
+  'endpointAdmin.drawer.install.postVerification.SATISFIED': 'Satisfied',
+  'endpointAdmin.drawer.install.postVerification.UNSATISFIED': 'Unsatisfied',
+  'endpointAdmin.drawer.install.postVerification.UNKNOWN': 'Inconclusive',
+  'endpointAdmin.drawer.install.postVerification.pending': '—',
+  'endpointAdmin.drawer.install.postVerification.SATISFIED.aria':
+    'Install confirmed by authoritative (registry) verification',
+  'endpointAdmin.drawer.install.postVerification.UNSATISFIED.aria':
+    'Expected package was not detected after install',
+  'endpointAdmin.drawer.install.postVerification.UNKNOWN.aria':
+    'Verification inconclusive (WinGet confirm-only, Session-0)',
   'endpointAdmin.command.approval.NOT_REQUIRED': 'No approval needed',
   'endpointAdmin.command.approval.PENDING': 'Awaiting approval',
   'endpointAdmin.command.approval.APPROVED': 'Approved',

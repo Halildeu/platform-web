@@ -9,6 +9,7 @@ import type { EndpointDevice } from '../../../entities/endpoint-device/types';
 import type {
   CreateInstallSuccess,
   EndpointInstallAuditDto,
+  InstallPostVerification,
   InstallPreflightDecisionRecorded,
 } from '../../../entities/endpoint-install/types';
 import { useEndpointAdminI18n } from '../../../i18n';
@@ -60,15 +61,33 @@ function formatTimestamp(value: string | null | undefined): string {
   }
 }
 
+// `-subtle` is NOT in the @theme-inline token registry (only text/border/
+// surface-subtle exist), so `bg-state-*-subtle` emits no background — the
+// app-wide convention is `bg-state-*-bg` (oklch with built-in alpha, 100+
+// usages). These were the rare broken outliers; migrated to `-bg` so the
+// badges actually render a filled pill next to the new verification badge.
 const RISK_TIER_BADGE_CLASSES: Record<AdminCatalogItemSummary['riskTier'], string> = {
-  LOW: 'bg-state-success-subtle text-state-success-text border-state-success-border',
-  MEDIUM: 'bg-state-warning-subtle text-state-warning-text border-state-warning-border',
-  HIGH: 'bg-state-danger-subtle text-state-danger-text border-state-danger-border',
+  LOW: 'bg-state-success-bg text-state-success-text border-state-success-border',
+  MEDIUM: 'bg-state-warning-bg text-state-warning-text border-state-warning-border',
+  HIGH: 'bg-state-danger-bg text-state-danger-text border-state-danger-border',
 };
 
 const DECISION_RECORDED_BADGE: Record<InstallPreflightDecisionRecorded, string> = {
-  PASS: 'bg-state-success-subtle text-state-success-text',
-  WARN: 'bg-state-warning-subtle text-state-warning-text',
+  PASS: 'bg-state-success-bg text-state-success-text',
+  WARN: 'bg-state-warning-bg text-state-warning-text',
+};
+
+// BE-028 (platform-backend #347, LIVE 2026-05-31): install audit now
+// carries a post-install verification verdict. REGISTRY detection is
+// authoritative (SATISFIED); WINGET confirm-only under Session-0 stays
+// UNKNOWN even on a SUCCEEDED command; UNSATISFIED = expected package
+// absent after a SUCCEEDED install. Surfacing the verdict lets operators
+// distinguish an authoritative install from a confirm-only one — both
+// previously rendered only "Başarılı".
+const POST_VERIFICATION_BADGE: Record<InstallPostVerification, string> = {
+  SATISFIED: 'bg-state-success-bg text-state-success-text',
+  UNSATISFIED: 'bg-state-danger-bg text-state-danger-text',
+  UNKNOWN: 'bg-surface-muted text-text-secondary',
 };
 
 interface SelectedItem {
@@ -231,7 +250,7 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
                         ? undefined
                         : t('endpointAdmin.drawer.softwareCatalog.kur.offlineHint')
                     }
-                    className="px-3 py-1 rounded-md border border-primary text-primary text-xs hover:bg-state-success-subtle"
+                    className="px-3 py-1 rounded-md border border-primary text-primary text-xs hover:bg-state-success-bg"
                   >
                     {t('endpointAdmin.drawer.softwareCatalog.kur')}
                   </button>
@@ -274,6 +293,9 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
                 {t('endpointAdmin.drawer.softwareCatalog.recentInstalls.col.result')}
               </th>
               <th className="text-left px-3 py-2">
+                {t('endpointAdmin.drawer.softwareCatalog.recentInstalls.col.verification')}
+              </th>
+              <th className="text-left px-3 py-2">
                 {t('endpointAdmin.drawer.softwareCatalog.recentInstalls.col.reportedAt')}
               </th>
             </tr>
@@ -298,6 +320,39 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
                     ? t(`endpointAdmin.drawer.install.resultStatus.${row.resultStatus}`)
                     : t('endpointAdmin.drawer.install.resultStatus.pending')}
                 </td>
+                <td className="px-3 py-2">
+                  <div className="flex flex-col gap-0.5">
+                    {row.postVerification ? (
+                      <span
+                        data-testid={`install-audit-postverif-${row.auditId}`}
+                        className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs ${POST_VERIFICATION_BADGE[row.postVerification]}`}
+                        title={t(
+                          `endpointAdmin.drawer.install.postVerification.${row.postVerification}.aria`,
+                        )}
+                      >
+                        {t(`endpointAdmin.drawer.install.postVerification.${row.postVerification}`)}
+                      </span>
+                    ) : (
+                      <span
+                        data-testid={`install-audit-postverif-${row.auditId}`}
+                        className="text-xs text-text-secondary"
+                      >
+                        {t('endpointAdmin.drawer.install.postVerification.pending')}
+                      </span>
+                    )}
+                    {row.detectedVersion && (
+                      <span
+                        data-testid={`install-audit-detected-version-${row.auditId}`}
+                        className="font-mono text-xs text-text-secondary"
+                        title={t(
+                          'endpointAdmin.drawer.softwareCatalog.recentInstalls.detectedVersion',
+                        ).replace('{version}', row.detectedVersion)}
+                      >
+                        {row.detectedVersion}
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className="px-3 py-2 text-xs text-text-secondary">
                   {formatTimestamp(row.reportedAt)}
                 </td>
@@ -317,8 +372,8 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
           data-testid="software-catalog-toast"
           className={`rounded-md border px-4 py-2 text-sm ${
             toast.kind === 'success'
-              ? 'border-state-success-border bg-state-success-subtle text-state-success-text'
-              : 'border-state-danger-border bg-state-danger-subtle text-state-danger-text'
+              ? 'border-state-success-border bg-state-success-bg text-state-success-text'
+              : 'border-state-danger-border bg-state-danger-bg text-state-danger-text'
           }`}
         >
           {toast.message}
