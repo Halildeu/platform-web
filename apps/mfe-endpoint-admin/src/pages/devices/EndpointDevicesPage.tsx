@@ -20,6 +20,7 @@ import {
 } from '../../app/services/endpointAdminApi';
 import {
   DeviceGridExportError,
+  exportViewColumns,
   type DeviceGridExportArgs,
   type DeviceGridRow,
 } from '../../entities/endpoint-device-grid/types';
@@ -318,10 +319,12 @@ export const EndpointDevicesPage: React.FC = () => {
       // render concern, so VIEW carries the canonical hostname/os_type values.
       // RAW ships EVERY canonical column (incl. display_name + os_version), so
       // those derived sub-fields are always available via the Ham veri export.
+      // VIEW exports the visible backend columns; exportViewColumns drops AG
+      // Grid's internal columns (selection/auto-group) which the server would
+      // otherwise reject with INVALID_GRID_FILTER (the live 400 the PR-4
+      // browser smoke caught). RAW ships every canonical column.
       const visibleColumns = isView
-        ? (gridApiRef.current?.getColumnState() ?? [])
-            .filter((c) => !c.hide && typeof c.colId === 'string')
-            .map((c) => c.colId as string)
+        ? exportViewColumns(gridApiRef.current?.getColumnState() ?? [])
         : undefined;
       const args: DeviceGridExportArgs = {
         format: format === 'excel' ? 'xlsx' : 'csv',

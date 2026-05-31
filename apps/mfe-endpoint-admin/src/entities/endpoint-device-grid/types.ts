@@ -84,3 +84,27 @@ export class DeviceGridExportError extends Error {
     this.limit = body.limit;
   }
 }
+
+/** Minimal shape of an AG Grid column-state entry we care about for export. */
+export interface GridColumnStateLike {
+  colId?: string | null;
+  hide?: boolean | null;
+}
+
+/**
+ * Resolve the VIEW-export column id list from an AG Grid column state.
+ *
+ * Keeps only currently-VISIBLE, real backend columns: AG Grid's internal
+ * columns (the selection checkbox {@code ag-Grid-SelectionColumn}, the
+ * auto-group {@code ag-Grid-AutoColumn}) are grid chrome, NOT backend colIds
+ * — sending them makes the server reject the whole export with
+ * {@code INVALID_GRID_FILTER} (400). This is the live view-export 400 the
+ * PR-4 browser smoke caught (#1154 fast-follow).
+ */
+export function exportViewColumns(columnState: GridColumnStateLike[]): string[] {
+  return columnState
+    .filter(
+      (c) => !c.hide && typeof c.colId === 'string' && !(c.colId as string).startsWith('ag-Grid'),
+    )
+    .map((c) => c.colId as string);
+}

@@ -1,6 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exportDevices, queryDevices } from '../../../app/services/endpointAdminApi';
-import { DeviceGridExportError } from '../types';
+import { DeviceGridExportError, exportViewColumns } from '../types';
+
+describe('exportViewColumns', () => {
+  it('keeps visible backend colIds, drops AG Grid internal + hidden columns', () => {
+    // #1154 PR-4 fast-follow: the live view export 400'd because the column
+    // state includes ag-Grid-SelectionColumn (the checkbox) which the server
+    // allowlist rejects. Only real, visible backend colIds must be sent.
+    const state = [
+      { colId: 'ag-Grid-SelectionColumn', hide: false },
+      { colId: 'hostname', hide: false },
+      { colId: 'os_type', hide: false },
+      { colId: 'agent_version', hide: true }, // hidden → dropped
+      { colId: 'ag-Grid-AutoColumn', hide: false },
+      { colId: 'health_memory_used_percent', hide: false },
+      { colId: null, hide: false }, // malformed → dropped
+    ];
+    expect(exportViewColumns(state)).toEqual(['hostname', 'os_type', 'health_memory_used_percent']);
+  });
+});
 
 /**
  * #1154 PR-3 — contract tests for the server-mode device grid fetchers.
