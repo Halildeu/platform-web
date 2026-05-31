@@ -44,6 +44,7 @@ import type {
   OutdatedSoftwareHistoryPage,
   OutdatedSoftwareSnapshot,
 } from '../../entities/endpoint-outdated-software/types';
+import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import type {
   CompliancePolicyItem,
   CompliancePolicyItemRequest,
@@ -493,6 +494,34 @@ export const endpointAdminApi = createApi({
       },
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointOutdatedSoftware' as const, id: `${deviceId}::history` },
+      ],
+    }),
+    /**
+     * #1146 — fleet-wide bulk latest device-health + outdated-software
+     * snapshots for the device-inventory CSV-export v2 columns (ONE
+     * round-trip instead of an N-per-row client fetch storm).
+     *
+     * Backend: `AdminEndpointSnapshotsController.getLatestSnapshots` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/snapshots/latest
+     *   → service /api/v1/admin/endpoint-devices/snapshots/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns {@link EndpointLatestSnapshots}: the latest snapshot per
+     * device for the caller's tenant, each group capped with a per-group
+     * `*Truncated` flag (over-cap ⇒ EMPTY list + flag true, so the page
+     * drops that group's columns rather than reading a partial map as a
+     * false absence). Tagged so an ingest mutation could invalidate
+     * `bulk-latest`; the page uses `refetchOnMountOrArgChange` for
+     * freshness on (re)visit.
+     */
+    getLatestSnapshots: builder.query<EndpointLatestSnapshots, void>({
+      query: () => ({
+        url: '/endpoint-admin/endpoint-devices/snapshots/latest',
+        method: 'GET',
+      }),
+      providesTags: [
+        { type: 'EndpointDeviceHealth' as const, id: 'bulk-latest' },
+        { type: 'EndpointOutdatedSoftware' as const, id: 'bulk-latest' },
       ],
     }),
     /**
@@ -1010,4 +1039,5 @@ export const {
   useGetInstallAuditQuery,
   useGetOutdatedSoftwareLatestQuery,
   useGetOutdatedSoftwareHistoryQuery,
+  useGetLatestSnapshotsQuery,
 } = endpointAdminApi;

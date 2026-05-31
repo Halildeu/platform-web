@@ -47,6 +47,13 @@ export interface InventoryExportButtonProps<Row> {
   rowCap?: number;
   /** Optional test/override hook for the download side-effect. */
   onDownload?: (content: string, filename: string) => boolean;
+  /**
+   * When true the export is disabled with a "preparing" hint — used while
+   * the #1146 bulk latest-snapshots query (which feeds the v2 device-health
+   * / outdated-software columns) is still loading, so the operator never
+   * exports a v1-only file believing it carries the v2 columns.
+   */
+  busy?: boolean;
   /** data-testid root. Defaults to `inventory-export`. */
   testId?: string;
 }
@@ -58,6 +65,7 @@ export function InventoryExportButton<Row>({
   fileBaseName,
   rowCap = DEFAULT_ROW_CAP,
   onDownload = triggerCsvDownload,
+  busy = false,
   testId = 'inventory-export',
 }: InventoryExportButtonProps<Row>): React.ReactElement | null {
   const { t } = useEndpointAdminI18n();
@@ -66,7 +74,10 @@ export function InventoryExportButton<Row>({
   // RBAC gate: hidden when the operator cannot view the data.
   if (!canView) return null;
 
-  const disabled = rows.length === 0;
+  // Disabled while the v2-column data is loading (busy) or there is
+  // nothing to export — never let the operator download a v1-only file
+  // mistaking it for the v2 export.
+  const disabled = busy || rows.length === 0;
 
   const handleExport = () => {
     const result = buildCsv(columns, rows, { rowCap });
@@ -93,7 +104,13 @@ export function InventoryExportButton<Row>({
         disabled={disabled}
         data-testid={`${testId}-button`}
         aria-label={t('endpointAdmin.export.csvAria')}
-        title={disabled ? t('endpointAdmin.export.emptyHint') : t('endpointAdmin.export.csvAria')}
+        title={
+          busy
+            ? t('endpointAdmin.export.snapshotsLoading')
+            : disabled
+              ? t('endpointAdmin.export.emptyHint')
+              : t('endpointAdmin.export.csvAria')
+        }
         style={{
           height: 32,
           padding: '0 12px',
@@ -117,6 +134,16 @@ export function InventoryExportButton<Row>({
           style={{ fontSize: 12, color: 'var(--state-warning-text, #b54708)' }}
         >
           {notice}
+        </span>
+      ) : null}
+      {busy ? (
+        <span
+          role="status"
+          aria-live="polite"
+          data-testid={`${testId}-busy`}
+          style={{ fontSize: 12, color: 'var(--text-secondary, #475467)' }}
+        >
+          {t('endpointAdmin.export.snapshotsLoading')}
         </span>
       ) : null}
     </span>

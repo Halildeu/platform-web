@@ -3,12 +3,17 @@ import { describe, it, expect } from 'vitest';
 import {
   buildDeviceInventoryColumns,
   type DeviceInventoryColumnSources,
+  type OutdatedSoftwareExportFields,
 } from '../deviceInventoryColumns';
 import { buildCsv } from '../../../lib/csv-export';
 import { createEndpointAdminT } from '../../../i18n';
 import type { EndpointDevice, DeviceStatus } from '../../../entities/endpoint-device/types';
 import type { DeviceHealthSnapshot } from '../../../entities/endpoint-device-health/types';
 import type { OutdatedSoftwareSnapshot } from '../../../entities/endpoint-outdated-software/types';
+import type {
+  DeviceHealthLatestEntry,
+  OutdatedSoftwareLatestEntry,
+} from '../../../entities/endpoint-latest-snapshots/types';
 
 /**
  * WEB-015 v2 — device-health (AG-033) + outdated-software (AG-036)
@@ -579,4 +584,91 @@ describe('i18n — v2 header + sentinel keys resolve in both locales', () => {
       }
     },
   );
+});
+
+// ── #1146: the FLAT bulk-entry shape (widened source type) ───────────
+
+describe('buildDeviceInventoryColumns — accepts the #1146 flat bulk-entry shape', () => {
+  // The bulk snapshots endpoint returns FLAT entries (DeviceHealthLatestEntry
+  // / OutdatedSoftwareLatestEntry) — ONLY the export fields, NOT a full
+  // snapshot (no disks[]/packages[]/schemaVersion/sourceUsed). Widening the
+  // source map value type to the minimal interface must accept these so the
+  // page can feed bulk data straight into the column builder. This is the
+  // Codex 019e7db8 must-fix: cover BOTH a full snapshot (above) AND a flat
+  // bulk entry (here).
+  it('builds correct v2 cells from minimal flat entries (no full-snapshot fields)', () => {
+    const device = mkDevice('bulk-1');
+    const healthByDeviceId = new Map<string, DeviceHealthLatestEntry>([
+      [
+        'bulk-1',
+        {
+          deviceId: 'bulk-1',
+          supported: true,
+          probeComplete: true,
+          anyLowDisk: true,
+          memoryUsedPercent: 88,
+          memoryHighPressure: true,
+          uptimeDays: 33,
+          longUptimeWarning: true,
+          collectedAt: '2026-05-30T12:00:00Z',
+        },
+      ],
+    ]);
+    const outdatedByDeviceId = new Map<string, OutdatedSoftwareLatestEntry>([
+      [
+        'bulk-1',
+        {
+          deviceId: 'bulk-1',
+          supported: true,
+          probeComplete: true,
+          upgradeCount: 512,
+          upgradeTruncated: false,
+          maxUpgrade: 512,
+          possiblyTruncated: true,
+          collectedAt: '2026-05-30T12:00:00Z',
+        },
+      ],
+    ]);
+
+    const cells = cellsFor(device, { healthByDeviceId, outdatedByDeviceId });
+
+    expect(cells.healthSupported).toBe(t('endpointAdmin.export.val.yes'));
+    expect(cells.healthAnyLowDisk).toBe(t('endpointAdmin.export.val.yes'));
+    expect(cells.healthMemoryUsedPercent).toBe('88');
+    expect(cells.healthMemoryHighPressure).toBe(t('endpointAdmin.export.val.yes'));
+    expect(cells.healthUptimeDays).toBe('33');
+    expect(cells.healthLongUptimeWarning).toBe(t('endpointAdmin.export.val.yes'));
+    expect(cells.outdatedUpgradeCount).toBe('512');
+    expect(cells.outdatedHasUpgrades).toBe(t('endpointAdmin.export.val.yes'));
+    expect(cells.outdatedPossiblyTruncated).toBe(t('endpointAdmin.export.val.yes'));
+  });
+
+  it('derives outdated possiblyTruncated from upgradeCount>=maxUpgrade with the flag absent', () => {
+    // possiblyTruncated is optional on the interface; the derivation must
+    // hold from upgradeCount alone (fail-closed for a source that omits it).
+    const device = mkDevice('bulk-2');
+    const outdatedByDeviceId = new Map<string, OutdatedSoftwareExportFields>([
+      ['bulk-2', { supported: true, probeComplete: true, upgradeCount: 512, maxUpgrade: 512 }],
+    ]);
+
+    const cells = cellsFor(device, { outdatedByDeviceId });
+
+    expect(cells.outdatedPossiblyTruncated).toBe(t('endpointAdmin.export.val.yes'));
+    expect(cells.outdatedUpgradeCount).toBe('512');
+  });
+
+  it('absent device in a flat-entry map yields fail-closed empty/sentinel cells', () => {
+    // Device not in the map = authoritative "no snapshot" (non-truncated
+    // group) → empty supported cell, never a misleading "healthy"/"0".
+    const device = mkDevice('bulk-missing');
+    const healthByDeviceId = new Map<string, DeviceHealthLatestEntry>();
+    const outdatedByDeviceId = new Map<string, OutdatedSoftwareLatestEntry>();
+
+    const cells = cellsFor(device, { healthByDeviceId, outdatedByDeviceId });
+
+    expect(cells.healthSupported).toBe('');
+    expect(cells.healthAnyLowDisk).toBe('');
+    expect(cells.outdatedUpgradeCount).toBe('');
+    expect(cells.outdatedHasUpgrades).toBe('');
+  });
 });
