@@ -182,7 +182,12 @@ export function useCatalog() {
         source: 'static' as const,
       }));
 
-    return [...staticItems, ...dynamicItems, ...dashboardItems, ...extraItems];
+    // PR-D1b.A iter-3 (Codex 019e8066 BLOCKER absorbed): the merged list
+    // MUST use `filteredStaticItems` (the route-deduped projection), not
+    // the original `staticItems` set. Returning the unfiltered set put
+    // both the legacy static catalog item AND its dynamic replacement
+    // side-by-side in the hub, defeating the migration goal.
+    return [...filteredStaticItems, ...dynamicItems, ...dashboardItems, ...extraItems];
   }, [staticItems, reportsQuery.data, dashboardsQuery.data]);
 
   const isLoading = reportsQuery.isLoading || dashboardsQuery.isLoading;

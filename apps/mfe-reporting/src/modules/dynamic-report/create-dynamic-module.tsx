@@ -9,6 +9,10 @@ import {
   fetchMeta as fetchMetaFromCache,
   getCachedCapabilities,
   getCachedColumns,
+  // PR-D1b iter-3 (Codex 019e8066): factory-internal cache reader. NEVER
+  // import this from outside `modules/dynamic-report/` — ReportPage and
+  // other consumers must read via `module.getFilterDefinitions?.()`.
+  getCachedFilterDefinitions,
 } from './metadata-cache';
 
 /* ------------------------------------------------------------------ */
@@ -143,6 +147,15 @@ export const createDynamicReportModule = (
      * undefined permanently and ReportPage maps that to all-false.
      */
     getCapabilities: () => getCachedCapabilities(report.key),
+    /*
+     * PR-D1b iter-3 (Codex 019e8066): contract surface for
+     * backend-supplied filter definitions. ReportPage (PR-D1b.B)
+     * reads this — NOT the cache module directly — to drive the
+     * per-kind widget renderer dispatcher. Returns undefined when
+     * metadata hasn't resolved OR backend response lacks
+     * filterDefinitions (legacy reports).
+     */
+    getFilterDefinitions: () => getCachedFilterDefinitions(report.key),
     getColumns: () => [],
     fetchRows: (filters, request) => fetchReportData(report.key, filters, request),
     // PR-0.5b (Codex thread 019e2cd7): forward the optional grid-state

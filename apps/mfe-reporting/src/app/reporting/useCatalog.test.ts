@@ -20,8 +20,9 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Mock module sources BEFORE importing the hook under test.
+const sharedReportFixture: Array<Record<string, unknown>> = [];
 vi.mock('@platform/capabilities', () => ({
-  listSharedReportsForChannel: vi.fn(() => []),
+  listSharedReportsForChannel: vi.fn(() => sharedReportFixture),
 }));
 vi.mock('../../modules/dynamic-report', () => ({
   fetchReportList: vi.fn(),
@@ -120,6 +121,59 @@ describe('useCatalog (R15 hotfix regression guard)', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.items.some((it) => it.id === 'dynamic-late-report')).toBe(true);
     expect(result.current.items.some((it) => it.id === 'dashboard-late-dash')).toBe(true);
+  });
+
+  /**
+   * PR-D1b.A iter-3 (Codex 019e8066 BLOCKER absorption regression guard).
+   *
+   * Migration semantic: a dynamic catalog entry whose route collides with
+   * a static module's route REPLACES the static module — the hub MUST
+   * NOT render both side-by-side. Codex iter-3 caught a one-line bug
+   * where the catalog still returned the unfiltered `staticItems` set
+   * after computing `filteredStaticItems`. This test pins the correct
+   * dedupe direction.
+   *
+   * Setup: static fixture has `users-report`; backend dynamic catalog
+   * ships `{ key: 'users-report-dynamic', routeSegment: 'users-report' }`.
+   * Expected: only the dynamic item survives for `route === 'users-report'`.
+   */
+  it('replaces static module when dynamic shares the same routeSegment', async () => {
+    sharedReportFixture.length = 0;
+    sharedReportFixture.push({
+      id: 'shared-users-report',
+      title: 'Users Report (static)',
+      description: 'legacy',
+      category: 'Security',
+      icon: '👤',
+      type: 'grid',
+      webRouteSegment: 'users-report',
+      reportGroup: 'SECURITY_REPORTS',
+    });
+
+    (fetchReportList as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        key: 'users-report-dynamic',
+        title: 'Users Report (dynamic)',
+        description: 'replacement',
+        category: 'Security',
+        routeSegment: 'users-report',
+        sharedReportId: 'shared-users-report',
+        reportGroup: 'SECURITY_REPORTS',
+      },
+    ]);
+    (fetchDashboardList as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const { result } = renderHook(() => useCatalog(), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const usersReportItems = result.current.items.filter((it) => it.route === 'users-report');
+    expect(usersReportItems).toHaveLength(1);
+    expect(usersReportItems[0]?.source).toBe('dynamic');
+    expect(usersReportItems[0]?.title).toBe('Users Report (dynamic)');
+
+    // Cleanup fixture so it does not leak into other test cases.
+    sharedReportFixture.length = 0;
   });
 
   it('does not crash when both async sources reject (error fallback)', async () => {

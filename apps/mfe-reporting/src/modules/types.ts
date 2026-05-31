@@ -8,7 +8,7 @@ import type {
   GridResponse,
 } from '../grid';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
-import type { ReportCapabilities } from './dynamic-report/types';
+import type { FilterDefinition, ReportCapabilities } from './dynamic-report/types';
 
 export type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 
@@ -114,6 +114,23 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
    * leaking module-internal cache plumbing.
    */
   hasMetadataDrivenFilters?: boolean;
+
+  /**
+   * PR-D1b (Codex thread 019e800b → 019e8066, 2026-05-31) — contract
+   * surface for backend-supplied {@code FilterDefinition[]}. ReportPage
+   * (consumed in PR-D1b.B) reads this to drive the per-kind widget
+   * renderer dispatcher + cold-deeplink rehydration of definition-driven
+   * filter state. Returns {@code undefined} when the module's metadata
+   * has not yet resolved OR when the backend response carried no
+   * {@code filterDefinitions} array (legacy reports).
+   *
+   * <p>This method exists so ReportPage NEVER needs to import a dynamic-
+   * factory-internal cache reader (e.g. {@code getCachedFilterDefinitions})
+   * — the contract surface is the only door. See
+   * {@link hasMetadataDrivenFilters} for the matching opt-in flag and the
+   * boundary intent statement.
+   */
+  getFilterDefinitions?: () => FilterDefinition[] | undefined;
 
   /** Database tables this report reads from — enables schema lineage, related reports, FK lookup */
   sourceTables?: string[];
