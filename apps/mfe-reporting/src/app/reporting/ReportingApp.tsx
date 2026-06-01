@@ -2,16 +2,13 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { reportModules } from '../../modules';
 import { ReportPage } from './ReportPage';
-import { useReportingI18n } from '../../i18n/useReportingI18n';
-import {
-  createDynamicReportModule,
-  fetchReportList,
-} from '../../modules/dynamic-report';
+import { createDynamicReportModule, fetchReportList } from '../../modules/dynamic-report';
 import { DashboardPage, fetchDashboardList } from '../../modules/dashboard';
 import type { DashboardListItem } from '../../modules/dashboard';
 import type { ReportListItem } from '../../modules/dynamic-report';
 import type { ReportModule } from '../../modules/types';
 
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type AnyModule = ReportModule<any, any>;
 
 type MergedModule = {
@@ -43,8 +40,6 @@ const getActiveRoute = (pathname: string, basePath: string): string => {
 
 const ReportingApp: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { t } = useReportingI18n();
   const basePath = resolveBasePath(location.pathname);
 
   const [dynamicReports, setDynamicReports] = React.useState<ReportListItem[]>([]);
@@ -83,6 +78,7 @@ const ReportingApp: React.FC = () => {
     const dashboardEntries: MergedModule[] = dashboards.map((db) => ({
       module: {
         id: `dashboard-${db.key}`,
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
         sharedReportId: db.key as any,
         route: `dashboard-${db.key}`,
         titleKey: db.title,
@@ -100,20 +96,24 @@ const ReportingApp: React.FC = () => {
       category: db.category,
     }));
 
-    const staticEntries: MergedModule[] = reportModules.map((mod) => ({
-      module: mod as AnyModule,
-      isDynamic: false,
+    // PR-D1b.A (Codex 019e800b finding #1 absorbed): dynamic catalog
+    // REPLACES legacy static modules at the same route — migration goal.
+    // Order: build dynamic entries first; static entries filtered against
+    // dynamic route set. Dedupe key is `routeSegment ?? key` per the
+    // backend ReportListItemDto.routeSegment alias contract (PR-D1a).
+    const dynamicEntries: MergedModule[] = dynamicReports.map((report) => ({
+      module: createDynamicReportModule(report) as AnyModule,
+      isDynamic: true,
+      reportKey: report.key,
+      category: report.category,
     }));
+    const dynamicRoutes = new Set(dynamicEntries.map((e) => e.module.route));
 
-    const staticRoutes = new Set(reportModules.map((m) => (m as AnyModule).route));
-    const allRoutes = new Set([...staticRoutes, ...dashboardEntries.map((e) => e.module.route)]);
-    const dynamicEntries: MergedModule[] = dynamicReports
-      .filter((report) => !allRoutes.has(report.key))
-      .map((report) => ({
-        module: createDynamicReportModule(report) as AnyModule,
-        isDynamic: true,
-        reportKey: report.key,
-        category: report.category,
+    const staticEntries: MergedModule[] = reportModules
+      .filter((mod) => !dynamicRoutes.has((mod as AnyModule).route))
+      .map((mod) => ({
+        module: mod as AnyModule,
+        isDynamic: false,
       }));
 
     return [...dashboardEntries, ...staticEntries, ...dynamicEntries];

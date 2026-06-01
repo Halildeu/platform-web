@@ -61,7 +61,11 @@ function mapDynamic(report: ReportListItem): CatalogItem {
     icon: '📊',
     tags: [],
     badge: { label: 'Grid', tone: 'primary' },
-    route: report.key,
+    // PR-D1b (Codex thread 019e800b, 2026-05-31): prefer backend-
+    // supplied `routeSegment` alias when present (e.g. backend key
+    // `hr-compensation-detay` aliased to route `hr-compensation`)
+    // so the URL stays the legacy module's URL.
+    route: report.routeSegment ?? report.key,
     type: 'grid',
     category: report.category || 'Diger',
     source: 'dynamic',
@@ -139,11 +143,18 @@ export function useCatalog() {
     const dynamicReports = reportsQuery.data ?? [];
     const dashboards = dashboardsQuery.data ?? [];
 
-    const staticRoutes = new Set(staticItems.map((s) => s.route));
+    // PR-D1b.A (Codex 019e800b finding #1 absorbed): dynamic catalog
+    // REPLACES legacy static items at the same route — migration goal.
+    // Order changed: dynamic first; static filtered against dynamic
+    // route set. The dedupe key is `routeSegment ?? key` per the
+    // backend ReportListItemDto.routeSegment alias contract (PR-D1a);
+    // the `mapDynamic` mapper picks the right route field.
+    const dynamicItems = dynamicReports.map(mapDynamic);
+    const dynamicRoutes = new Set(dynamicItems.map((d) => d.route));
+    const filteredStaticItems = staticItems.filter((s) => !dynamicRoutes.has(s.route));
+    const filteredStaticRoutes = new Set(filteredStaticItems.map((s) => s.route));
 
-    const dynamicItems = dynamicReports.filter((r) => !staticRoutes.has(r.key)).map(mapDynamic);
-
-    const allRoutes = new Set([...staticRoutes, ...dynamicItems.map((d) => d.route)]);
+    const allRoutes = new Set([...filteredStaticRoutes, ...dynamicRoutes]);
 
     const dashboardItems = dashboards
       .filter((db) => !allRoutes.has(`dashboard-${db.key}`))
@@ -151,8 +162,8 @@ export function useCatalog() {
 
     // Extra modules registered in reportModuleMap but not in any catalog source
     const allFinalRoutes = new Set([
-      ...staticRoutes,
-      ...dynamicItems.map((d) => d.route),
+      ...filteredStaticRoutes,
+      ...dynamicRoutes,
       ...dashboardItems.map((d) => d.route),
     ]);
     const extraItems: CatalogItem[] = reportModules
@@ -171,7 +182,12 @@ export function useCatalog() {
         source: 'static' as const,
       }));
 
-    return [...staticItems, ...dynamicItems, ...dashboardItems, ...extraItems];
+    // PR-D1b.A iter-3 (Codex 019e8066 BLOCKER absorbed): the merged list
+    // MUST use `filteredStaticItems` (the route-deduped projection), not
+    // the original `staticItems` set. Returning the unfiltered set put
+    // both the legacy static catalog item AND its dynamic replacement
+    // side-by-side in the hub, defeating the migration goal.
+    return [...filteredStaticItems, ...dynamicItems, ...dashboardItems, ...extraItems];
   }, [staticItems, reportsQuery.data, dashboardsQuery.data]);
 
   const isLoading = reportsQuery.isLoading || dashboardsQuery.isLoading;

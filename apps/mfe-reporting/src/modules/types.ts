@@ -8,7 +8,7 @@ import type {
   GridResponse,
 } from '../grid';
 import type { ColumnMeta } from '@mfe/design-system/advanced/data-grid';
-import type { ReportCapabilities } from './dynamic-report/types';
+import type { FilterDefinition, ReportCapabilities } from './dynamic-report/types';
 
 export type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 
@@ -96,6 +96,41 @@ export interface ReportModule<TFilters extends Record<string, unknown>, TRow> {
    * warning badge on the toolbar trigger.
    */
   requiredFilterFields?: ReadonlyArray<string>;
+
+  /**
+   * PR-D1b (Codex thread 019e800b, 2026-05-31) — indicates this module's
+   * filter UI is driven by backend {@code ReportMetadata.filterDefinitions}
+   * (resolved AFTER {@link ensureColumnMeta} promise settles), NOT a
+   * synchronous {@code renderFilters} declaration. When true, ReportPage
+   * re-hydrates {@link createInitialFilters} after metadata resolves so a
+   * cold deep-link URL (e.g. {@code ?department=X}) can populate
+   * definition-driven filters that did not exist at mount time. The
+   * re-hydration is guarded so it cannot clobber user edits performed
+   * between mount and metadata resolution.
+   *
+   * <p>Module boundary intent: ReportPage MUST NOT import the dynamic
+   * factory's metadata cache directly to detect "is this dynamic" —
+   * this flag is the contract surface for the same intent without
+   * leaking module-internal cache plumbing.
+   */
+  hasMetadataDrivenFilters?: boolean;
+
+  /**
+   * PR-D1b (Codex thread 019e800b → 019e8066, 2026-05-31) — contract
+   * surface for backend-supplied {@code FilterDefinition[]}. ReportPage
+   * (consumed in PR-D1b.B) reads this to drive the per-kind widget
+   * renderer dispatcher + cold-deeplink rehydration of definition-driven
+   * filter state. Returns {@code undefined} when the module's metadata
+   * has not yet resolved OR when the backend response carried no
+   * {@code filterDefinitions} array (legacy reports).
+   *
+   * <p>This method exists so ReportPage NEVER needs to import a dynamic-
+   * factory-internal cache reader (e.g. {@code getCachedFilterDefinitions})
+   * — the contract surface is the only door. See
+   * {@link hasMetadataDrivenFilters} for the matching opt-in flag and the
+   * boundary intent statement.
+   */
+  getFilterDefinitions?: () => FilterDefinition[] | undefined;
 
   /** Database tables this report reads from — enables schema lineage, related reports, FK lookup */
   sourceTables?: string[];

@@ -44,6 +44,15 @@ import { getShellServices } from '../../app/services/shell-services';
 export interface CachedMeta {
   columns: ColumnMeta[];
   capabilities: ReportCapabilities | undefined;
+  /**
+   * PR-D1b (Codex thread 019e800b, 2026-05-31): metadata-driven sidebar
+   * filter widget contract returned by the backend
+   * {@code ReportMetadataDto.filterDefinitions} field. When present, the
+   * dynamic factory renders these widgets in place of the legacy
+   * CompanyPicker + search pair. Absent (undefined) → factory falls back
+   * to the legacy filter pair.
+   */
+  filterDefinitions: import('./types').FilterDefinition[] | undefined;
 }
 
 /** Default concurrency cap. Picked to keep dashboards smooth without bursting. */
@@ -88,13 +97,27 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
         prefix: col.prefix,
       };
     case 'date':
-      return { ...base, columnType: 'date' as const };
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): propagate format
+      // through L3. Without this, hr-demografik's hireDate column (format
+      // 'short' on backend) would render with the design-system default
+      // instead of the requested short format.
+      return { ...base, columnType: 'date' as const, format: col.format };
+    case 'bold-text':
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): bold-text was missing
+      // from the switch table; legacy backends sending the new variant
+      // would fall through to `default` → text. Now mapped to L3's
+      // dedicated bold-text variant.
+      return { ...base, columnType: 'bold-text' as const };
     case 'badge':
       // Backend ships `variantMap: Record<string, string>` (variant name as
       // string). The grid component types the field with the design-system's
       // narrower `ColumnBadgeVariant` union — same wire shape, narrower
       // domain. Double-cast to acknowledge the intent without re-validating
       // each entry (the backend column metadata is trusted).
+      //
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): propagate
+      // defaultVariant + filterValues through L3 so backend-declared
+      // badge fallback + set-filter override actually render.
       return {
         ...base,
         columnType: 'badge' as const,
@@ -103,10 +126,20 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
           import('@mfe/design-system/advanced/data-grid').ColumnBadgeVariant
         >,
         labelMap: col.labelMap,
+        defaultVariant: col.defaultVariant as unknown as
+          | import('@mfe/design-system/advanced/data-grid').ColumnBadgeVariant
+          | undefined,
+        filterValues: col.filterValues,
       };
     case 'status':
       // Same trust boundary as badge. Backend `statusMap` shape matches
       // {variant, labelKey} but typed loosely; we accept the wire shape.
+      //
+      // PR-D1b.A iter-2 (Codex 019e800b finding #2): propagate
+      // defaultVariant through L3. status `filterValues` propagation
+      // requires the L3 StatusColumnMeta widening that lands in PR-D1b.B
+      // (design-system 2-file change); leaving it dropped here until
+      // that PR closes the L3 gap.
       return {
         ...base,
         columnType: 'status' as const,
@@ -114,6 +147,9 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
           string,
           import('@mfe/design-system/advanced/data-grid').StatusMapEntry
         >,
+        defaultVariant: col.defaultVariant as unknown as
+          | import('@mfe/design-system/advanced/data-grid').ColumnBadgeVariant
+          | undefined,
       };
     case 'currency':
       return {
@@ -293,6 +329,13 @@ export function fetchMeta(reportKey: string): Promise<CachedMeta> {
       const result: CachedMeta = {
         columns: meta.columns.map(mapBackendColumnMeta),
         capabilities: meta.capabilities,
+        // PR-D1b (Codex 019e800b): preserve filter definitions
+        // end-to-end so the dynamic factory can expose them via the
+        // {@code ReportModule.getFilterDefinitions?()} contract surface
+        // (see ./create-dynamic-module.tsx). ReportPage MUST consume the
+        // contract method, NOT this internal cache reader directly —
+        // see {@link getCachedFilterDefinitions} JSDoc for the boundary.
+        filterDefinitions: meta.filterDefinitions,
       };
       // Identity + epoch fence: only commit to the cache if WE are still
       // the registered inflight promise AND the epoch hasn't advanced.
@@ -363,6 +406,37 @@ export function getCachedCapabilities(reportKey: string): ReportCapabilities | u
   return state.success.get(reportKey)?.capabilities;
 }
 
+/**
+ * PR-D1b (Codex thread 019e800b → 019e8066, 2026-05-31) — synchronous
+ * read of cached filter definitions. Returns {@code undefined} when no
+ * successful fetch has resolved yet for the key, OR when the backend
+ * ReportMetadataDto lacks the {@code filterDefinitions} field (legacy
+ * reports). The dynamic factory falls back to the legacy CompanyPicker
+ * + search pair in either case.
+ *
+ * <p><strong>Module boundary (Codex 019e8066 iter-3 strong rec).</strong>
+ * This reader is the dynamic factory's INTERNAL door into the cache and
+ * MUST NOT be imported from outside {@code modules/dynamic-report/}.
+ * The factory exposes the same data to ReportPage via the
+ * {@code ReportModule.getFilterDefinitions?()} contract method (see
+ * {@code create-dynamic-module.tsx} + {@code modules/types.ts}). Reading
+ * the contract method keeps ReportPage decoupled from this module's
+ * cache plumbing — see the boundary intent comment on
+ * {@code ReportModule.hasMetadataDrivenFilters} for the same intent
+ * stated from the other side.
+ *
+ * <p>Same epoch invalidation pattern as {@link getCachedColumns}.
+ *
+ * @internal Dynamic-factory-internal reader. Cross-module callers should
+ *           use {@code module.getFilterDefinitions?.()} instead.
+ */
+export function getCachedFilterDefinitions(
+  reportKey: string,
+): import('./types').FilterDefinition[] | undefined {
+  ensureFreshEpoch();
+  return state.success.get(reportKey)?.filterDefinitions;
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Test helpers                                                               */
 /* -------------------------------------------------------------------------- */
@@ -395,5 +469,10 @@ export function __getInflightCountForTest(): number {
 /* -------------------------------------------------------------------------- */
 
 function emptyMeta(): CachedMeta {
-  return { columns: [], capabilities: undefined };
+  // PR-D1b.A iter-2 (Codex 019e800b finding #3): include
+  // filterDefinitions: undefined so the CachedMeta contract is
+  // satisfied. Without this the TS strict typecheck fails on
+  // "Property 'filterDefinitions' is missing" when CachedMeta
+  // requires the field.
+  return { columns: [], capabilities: undefined, filterDefinitions: undefined };
 }
