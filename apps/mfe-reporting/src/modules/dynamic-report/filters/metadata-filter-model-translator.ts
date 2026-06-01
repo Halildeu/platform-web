@@ -280,12 +280,39 @@ function parseDateRangeValue(raw: unknown): DateRangeValue | null {
   if (raw == null) return null;
   if (typeof raw === 'object' && raw !== null) {
     const { from, to } = raw as { from?: unknown; to?: unknown };
+    // PR-D1b.B.1 iter-4 (Codex 019e8074 finding #4): validate YYYY-MM-DD
+    // strictly. Without this guard a junk URL deep-link
+    // `?from=not-a-date` would propagate to the backend as a real query
+    // filter. Strings that fail validation are dropped (treated as
+    // absent), letting the per-operator logic decide whether the
+    // resulting partial range is still valid.
     return {
-      from: typeof from === 'string' && from ? from : undefined,
-      to: typeof to === 'string' && to ? to : undefined,
+      from: isIsoDate(from) ? from : undefined,
+      to: isIsoDate(to) ? to : undefined,
     };
   }
   return null;
+}
+
+/**
+ * PR-D1b.B.1 iter-4 — strict ISO `YYYY-MM-DD` validator for the
+ * date-range widget. Rejects arbitrary strings like "not-a-date" that
+ * would otherwise leak into the backend filter payload.
+ */
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  // Also reject impossible calendar dates (e.g. 2026-02-30).
+  const [yearStr, monthStr, dayStr] = value.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  // JS Date rolls over invalid combos (Feb 30 → Mar 2). Verify the round
+  // trip matches.
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month && d.getUTCDate() === day;
 }
 
 interface NumberRangeValue {

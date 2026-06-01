@@ -287,4 +287,143 @@ describe('resolveFilterOptions', () => {
 
     expect(result).toEqual([]);
   });
+
+  /* --------------------------------------------------------------------- */
+  /*  Iter-4 normalization fixes (Codex 019e8074 findings #2 + #3)         */
+  /* --------------------------------------------------------------------- */
+
+  it('endpoint List<String> shape (DashboardController.filter-options) → normalized to {value}', async () => {
+    // Backend signature: ResponseEntity<List<String>>
+    // e.g. /v1/dashboards/hr-compensation/filter-options/department → ['Sales','HR']
+    const get = vi.fn().mockResolvedValue({ data: ['Sales', 'HR', 'Engineering'] });
+    mockResolveHttpClient.mockReturnValue({ get });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'DEPT',
+        optionsSource: {
+          type: 'endpoint',
+          endpoint: '/v1/dashboards/hr-compensation/filter-options/department',
+        },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([{ value: 'Sales' }, { value: 'HR' }, { value: 'Engineering' }]);
+  });
+
+  it('endpoint primitive array stringifies numbers and booleans', async () => {
+    const get = vi.fn().mockResolvedValue({ data: [42, true, 'Sales'] });
+    mockResolveHttpClient.mockReturnValue({ get });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'COL',
+        optionsSource: { type: 'endpoint', endpoint: '/x' },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([{ value: '42' }, { value: 'true' }, { value: 'Sales' }]);
+  });
+
+  it('endpoint payload drops nulls + invalid entries', async () => {
+    const get = vi.fn().mockResolvedValue({ data: ['A', null, undefined, { notValue: 'x' }, 'B'] });
+    mockResolveHttpClient.mockReturnValue({ get });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'COL',
+        optionsSource: { type: 'endpoint', endpoint: '/x' },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([{ value: 'A' }, { value: 'B' }]);
+  });
+
+  it('endpoint typed object array passes through with label/labelKey preserved', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: [
+        { value: 'A', label: 'Alpha' },
+        { value: 'B', labelKey: 'options.b' },
+      ],
+    });
+    mockResolveHttpClient.mockReturnValue({ get });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'COL',
+        optionsSource: { type: 'endpoint', endpoint: '/x' },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([
+      { value: 'A', label: 'Alpha', labelKey: undefined },
+      { value: 'B', label: undefined, labelKey: 'options.b' },
+    ]);
+  });
+
+  it('endpoint object with numeric value field → stringified', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: [{ value: 7, label: 'Seven' }],
+    });
+    mockResolveHttpClient.mockReturnValue({ get });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'COL',
+        optionsSource: { type: 'endpoint', endpoint: '/x' },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([{ value: '7', label: 'Seven', labelKey: undefined }]);
+  });
+
+  it('endpoint envelope {items: [...]} primitive array normalizes', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: { items: ['Active', 'Inactive'] },
+    });
+    mockResolveHttpClient.mockReturnValue({ get });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'COL',
+        optionsSource: { type: 'endpoint', endpoint: '/x' },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([{ value: 'Active' }, { value: 'Inactive' }]);
+  });
+
+  it('filter-values mode normalizes raw mixed values (drops nulls, stringifies primitives)', async () => {
+    // Backend FilterValuesResult.values = Array<string|number|boolean|null>
+    mockFetchFilterValues.mockResolvedValueOnce({
+      values: ['Active', 42, true, null, 'Inactive'],
+    });
+
+    const result = await resolveFilterOptions(
+      def({
+        key: 'STATUS',
+        optionsSource: { type: 'filter-values', column: 'STATUS_COL' },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([
+      { value: 'Active' },
+      { value: '42' },
+      { value: 'true' },
+      // null dropped
+      { value: 'Inactive' },
+    ]);
+  });
+
+  it('filter-values mode handles empty backend payload', async () => {
+    mockFetchFilterValues.mockResolvedValueOnce({ values: [] });
+    const result = await resolveFilterOptions(
+      def({
+        key: 'STATUS',
+        optionsSource: { type: 'filter-values', column: 'STATUS_COL' },
+      }),
+      'report-key',
+    );
+    expect(result).toEqual([]);
+  });
 });

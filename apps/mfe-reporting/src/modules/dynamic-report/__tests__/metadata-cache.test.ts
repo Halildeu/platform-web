@@ -332,6 +332,28 @@ describe('metadata-cache', () => {
       columnType: 'status',
       statusMap: { active: { variant: 'success', labelKey: 'common.active' } },
     });
+
+    // PR-D1b.B.1 iter-4 (Codex 019e8074 finding #1): status `filterValues`
+    // must reach L3. Without this propagation the design-system override
+    // is unreachable from any dynamic report's runtime metadata.
+    expect(
+      mapBackendColumnMeta({
+        field: 'd',
+        headerName: 'D',
+        type: 'status',
+        ...baseCol,
+        statusMap: {
+          ACTIVE: { variant: 'success', labelKey: 'common.active' },
+          INACTIVE: { variant: 'muted', labelKey: 'common.inactive' },
+          PENDING: { variant: 'warning', labelKey: 'common.pending' },
+          DELETED: { variant: 'danger', labelKey: 'common.deleted' },
+        },
+        filterValues: ['ACTIVE', 'INACTIVE'], // curated subset
+      }),
+    ).toMatchObject({
+      columnType: 'status',
+      filterValues: ['ACTIVE', 'INACTIVE'],
+    });
     expect(
       mapBackendColumnMeta({
         field: 'e',

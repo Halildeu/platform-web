@@ -187,23 +187,93 @@ async function loadFromFilterValues(
   column: string,
 ): Promise<FilterOptionEntry[]> {
   const result = await fetchFilterValues(reportKey, column);
-  // `fetchFilterValues` returns `{ values: string[] }`. Map to FilterOptionEntry.
+  // `fetchFilterValues` returns `{ values: Array<string|number|boolean|null> }`
+  // per `grid/index.ts:FilterValuesResult` (the backend preserves nulls in
+  // `FilterValuesResponseDto`). PR-D1b.B.1 iter-4 (Codex 019e8074 finding
+  // #3): `FilterOptionEntry.value` is typed `string`; drop nulls and
+  // stringify primitives so the enum-select widget gets a well-typed
+  // option list. Strings pass through unchanged.
   const values = result?.values ?? [];
-  return values.map((value) => ({ value }));
+  return values.flatMap(normalizePrimitiveAsOption);
 }
 
 async function loadFromEndpoint(endpoint: string): Promise<FilterOptionEntry[]> {
   const client = resolveHttpClient();
-  const { data } = await client.get<FilterOptionEntry[] | { items?: FilterOptionEntry[] }>(
-    endpoint,
-    { headers: buildCompanyHeaders() },
+  const { data } = await client.get<unknown>(endpoint, {
+    headers: buildCompanyHeaders(),
+  });
+  return normalizeEndpointPayload(data);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Value normalization                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * PR-D1b.B.1 iter-4 (Codex 019e8074 finding #2): backend endpoint shapes
+ * vary — `DashboardController.filter-options/{column}` returns
+ * `List<String>`, other lookups return `List<{value, labelKey}>`, and
+ * some are wrapped in `{items: [...]}` envelopes. Normalize each
+ * primitive into `{value}` and pass typed objects through.
+ *
+ *  - `'Sales'`               → `{value:'Sales'}`
+ *  - `42`                    → `{value:'42'}` (stringified per FilterOptionEntry.value:string)
+ *  - `true`                  → `{value:'true'}`
+ *  - `null` / `undefined`    → dropped
+ *  - `{value:'A', label:'Alpha'}` → pass-through
+ *  - `{value:7, ...}`        → `{value:'7', ...}` (stringify value field; preserve other props)
+ *  - invalid entry           → dropped
+ */
+function normalizeEndpointPayload(payload: unknown): FilterOptionEntry[] {
+  const raw = Array.isArray(payload) ? payload : isItemsEnvelope(payload) ? payload.items : [];
+  return raw.flatMap(normalizeOptionEntry);
+}
+
+function isItemsEnvelope(payload: unknown): payload is { items: unknown[] } {
+  return (
+    payload !== null &&
+    typeof payload === 'object' &&
+    Array.isArray((payload as { items?: unknown }).items)
   );
-  if (Array.isArray(data)) return data;
-  // Defensive: backends may wrap in {items: [...]} envelope.
-  if (data && typeof data === 'object' && Array.isArray(data.items)) {
-    return data.items;
+}
+
+function normalizeOptionEntry(entry: unknown): FilterOptionEntry[] {
+  if (entry == null) return [];
+  if (typeof entry === 'string') return [{ value: entry }];
+  if (typeof entry === 'number' || typeof entry === 'boolean') {
+    return [{ value: String(entry) }];
+  }
+  if (typeof entry === 'object') {
+    const e = entry as Record<string, unknown>;
+    const rawValue = e.value;
+    // Object with a usable `value` field; coerce non-string primitives.
+    if (typeof rawValue === 'string' && rawValue.length > 0) {
+      return [
+        {
+          value: rawValue,
+          label: typeof e.label === 'string' ? e.label : undefined,
+          labelKey: typeof e.labelKey === 'string' ? e.labelKey : undefined,
+        },
+      ];
+    }
+    if (typeof rawValue === 'number' || typeof rawValue === 'boolean') {
+      return [
+        {
+          value: String(rawValue),
+          label: typeof e.label === 'string' ? e.label : undefined,
+          labelKey: typeof e.labelKey === 'string' ? e.labelKey : undefined,
+        },
+      ];
+    }
+    // Otherwise drop.
   }
   return [];
+}
+
+function normalizePrimitiveAsOption(raw: string | number | boolean | null): FilterOptionEntry[] {
+  if (raw === null || raw === undefined) return [];
+  if (typeof raw === 'string') return [{ value: raw }];
+  return [{ value: String(raw) }];
 }
 
 /* -------------------------------------------------------------------------- */

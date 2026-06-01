@@ -157,6 +157,38 @@ describe('translateMetadataFilters', () => {
     expect(result).toBe(null);
   });
 
+  // PR-D1b.B.1 iter-4 (Codex 019e8074 finding #4): YYYY-MM-DD strict validation
+  it('date-range drops invalid YYYY-MM-DD format strings', () => {
+    const result = translateMetadataFilters([def({ key: 'CREATED_AT', kind: 'date-range' })], {
+      CREATED_AT: { from: 'not-a-date', to: 'also-bad' },
+    });
+    expect(result).toBe(null);
+  });
+
+  it('date-range drops impossible calendar dates (Feb 30)', () => {
+    const result = translateMetadataFilters([def({ key: 'CREATED_AT', kind: 'date-range' })], {
+      CREATED_AT: { from: '2026-02-30', to: '2026-12-99' },
+    });
+    expect(result).toBe(null);
+  });
+
+  it('date-range drops single-valid + single-invalid bound', () => {
+    // from is valid date, to is bogus → partial range drops because
+    // default 'between' operator needs both bounds
+    const result = translateMetadataFilters([def({ key: 'CREATED_AT', kind: 'date-range' })], {
+      CREATED_AT: { from: '2026-05-01', to: 'bogus' },
+    });
+    expect(result).toBe(null);
+  });
+
+  it('date-range gte with invalid string → drops (not just empty)', () => {
+    const result = translateMetadataFilters(
+      [def({ key: 'CREATED_AT', kind: 'date-range', operator: 'gte' })],
+      { CREATED_AT: { from: 'bogus' } },
+    );
+    expect(result).toBe(null);
+  });
+
   /* --------------------------------------------------------------------- */
   /*  number-range                                                         */
   /* --------------------------------------------------------------------- */

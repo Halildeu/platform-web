@@ -136,10 +136,12 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
       // {variant, labelKey} but typed loosely; we accept the wire shape.
       //
       // PR-D1b.A iter-2 (Codex 019e800b finding #2): propagate
-      // defaultVariant through L3. status `filterValues` propagation
-      // requires the L3 StatusColumnMeta widening that lands in PR-D1b.B
-      // (design-system 2-file change); leaving it dropped here until
-      // that PR closes the L3 gap.
+      // defaultVariant through L3.
+      // PR-D1b.B.1 iter-4 (Codex 019e8074 finding #1): also propagate
+      // `filterValues` now that the L3 StatusColumnMeta widening landed
+      // in this same PR. Without this mapper line, the design-system
+      // override would be reachable from contract code but never from
+      // any dynamic report's runtime metadata.
       return {
         ...base,
         columnType: 'status' as const,
@@ -150,6 +152,7 @@ export function mapBackendColumnMeta(col: ReportColumnMeta): ColumnMeta {
         defaultVariant: col.defaultVariant as unknown as
           | import('@mfe/design-system/advanced/data-grid').ColumnBadgeVariant
           | undefined,
+        filterValues: col.filterValues,
       };
     case 'currency':
       return {
