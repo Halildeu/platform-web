@@ -1185,5 +1185,8 @@ export const {
   useGetInstallAuditQuery,
   useGetOutdatedSoftwareLatestQuery,
   useGetOutdatedSoftwareHistoryQuery,
+  // AG-037 hotfix posture (WEB-014G).
+  useGetHotfixPostureLatestQuery,
+  useGetHotfixPostureHistoryQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;
