@@ -113,6 +113,7 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.services': 'Hizmetler',
   'endpointAdmin.drawer.tab.startupExposure': 'Başlangıç + Maruziyet',
   'endpointAdmin.drawer.tab.appControl': 'Uygulama Kontrolü',
+  'endpointAdmin.drawer.tab.softwareDiff': 'Yazılım Değişimleri',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
@@ -507,6 +508,30 @@ const DICT_TR = {
   'endpointAdmin.drawer.appControl.probeErrors.col.code': 'Kod',
   'endpointAdmin.drawer.appControl.probeErrors.col.source': 'Kaynak',
   'endpointAdmin.drawer.appControl.probeErrors.col.summary': 'Özet',
+  // BE-024 — Software-Inventory Diff tab (Faz 22.5 P2-A)
+  'endpointAdmin.drawer.softwareDiff.loading': 'Yazılım değişim bilgisi yükleniyor…',
+  'endpointAdmin.drawer.softwareDiff.error': 'Yazılım değişim bilgisi alınamadı.',
+  'endpointAdmin.drawer.softwareDiff.forbidden': 'Yazılım değişimleri için yetkiniz yok.',
+  'endpointAdmin.drawer.softwareDiff.staleWarning':
+    'Görüntülenen değişim bilgisi başka bir cihaza ait — kapatıp tekrar açın.',
+  'endpointAdmin.drawer.softwareDiff.status.OK': 'Karşılaştırma yapıldı',
+  'endpointAdmin.drawer.softwareDiff.status.NO_CHANGE': 'Değişiklik yok',
+  'endpointAdmin.drawer.softwareDiff.status.INSUFFICIENT_HISTORY':
+    'Henüz yalnızca tek bir snapshot var (karşılaştırma için yetersiz)',
+  'endpointAdmin.drawer.softwareDiff.status.NO_HISTORY':
+    'Bu cihazda yazılım envanteri snapshot kaydı yok',
+  'endpointAdmin.drawer.softwareDiff.window.from': 'Önceki snapshot',
+  'endpointAdmin.drawer.softwareDiff.window.to': 'Son snapshot',
+  'endpointAdmin.drawer.softwareDiff.counts.added': 'Eklenen',
+  'endpointAdmin.drawer.softwareDiff.counts.removed': 'Kaldırılan',
+  'endpointAdmin.drawer.softwareDiff.counts.versionChanged': 'Sürüm değişen',
+  'endpointAdmin.drawer.softwareDiff.added.title': 'Yeni Eklenen Yazılımlar',
+  'endpointAdmin.drawer.softwareDiff.removed.title': 'Kaldırılan Yazılımlar',
+  'endpointAdmin.drawer.softwareDiff.versionChanged.title': 'Sürüm Değişiklikleri',
+  'endpointAdmin.drawer.softwareDiff.col.displayName': 'Ad',
+  'endpointAdmin.drawer.softwareDiff.col.publisher': 'Yayıncı',
+  'endpointAdmin.drawer.softwareDiff.col.fromVersion': 'Eski Sürüm',
+  'endpointAdmin.drawer.softwareDiff.col.toVersion': 'Yeni Sürüm',
   // Detay tab
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Görünen Ad',
