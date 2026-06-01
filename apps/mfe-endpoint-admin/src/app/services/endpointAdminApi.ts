@@ -51,6 +51,7 @@ import type {
   HotfixPostureSnapshot,
 } from '../../entities/endpoint-hotfix-posture/types';
 import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnostics/types';
+import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
   DeviceGridExportError,
@@ -99,6 +100,14 @@ import type {
  * other endpoint-local args that need no global re-export.
  */
 export interface GetDiagnosticsLatestArgs {
+  deviceId: string;
+}
+
+/**
+ * AG-039 — endpoint-local args interface for the services-latest query.
+ * Same pattern as GetDiagnosticsLatestArgs.
+ */
+export interface GetServicesLatestArgs {
   deviceId: string;
 }
 
@@ -324,6 +333,7 @@ export const endpointAdminApi = createApi({
     'EndpointOutdatedSoftware',
     'EndpointHotfixPosture',
     'EndpointAgentDiagnostics',
+    'EndpointServices',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -688,6 +698,40 @@ export const endpointAdminApi = createApi({
       }),
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointAgentDiagnostics' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * AG-039 — critical services inventory snapshot (latest).
+     *
+     * Backend: `AdminEndpointServicesController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/services/latest
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/services/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the latest {@link ServicesSnapshot}: supported /
+     * probeComplete / per-service `{name, present, state, startupMode}`
+     * for the 6-service canonical allowlist (WinDefend / wuauserv /
+     * BITS / EventLog / EndpointAgent / MpsSvc) + bounded probeErrors[]
+     * (each `{rowOrdinal, code, serviceName?, summary?}`). Backend
+     * lookup is tenant-scoped: cross-tenant returns 404 (no device-
+     * existence leak). The view maps 404 → empty state with the
+     * operator-action hint ("COLLECT_INVENTORY includeServices:true"
+     * — the actual agent payload bit per
+     * platform-agent internal/commands/executor.go).
+     *
+     * Cache: NO `keepUnusedDataFor: 0` override (deliberate freshness
+     * divergence from install-preflight modal); tag id
+     * `${deviceId}::latest` matches the AG-037/AG-038 convention. The
+     * view defends against cross-arg leak via `currentData` +
+     * `isServicesForDevice`.
+     */
+    getServicesLatest: builder.query<ServicesSnapshot, GetServicesLatestArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/services/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointServices' as const, id: `${deviceId}::latest` },
       ],
     }),
     /**
@@ -1237,5 +1281,6 @@ export const {
   useGetHotfixPostureLatestQuery,
   useGetHotfixPostureHistoryQuery,
   useGetDiagnosticsLatestQuery,
+  useGetServicesLatestQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;
