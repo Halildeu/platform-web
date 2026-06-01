@@ -34,7 +34,7 @@ export type InstallPreflightDecisionRecorded = 'PASS' | 'WARN';
 export type InstallPostVerification = 'SATISFIED' | 'UNSATISFIED' | 'UNKNOWN';
 
 /**
- * Mirror of `EndpointInstallPreflightService$ReasonCode` (20 codes,
+ * Mirror of `EndpointInstallPreflightService$ReasonCode` (21 codes,
  * stable wire vocabulary). Unknown codes from a future backend roll-out
  * fall through to the raw string in the UI — the i18n `t()` resolver
  * already returns the key on miss.
@@ -58,6 +58,7 @@ export type InstallPreflightReasonCode =
   | 'winget_egress_unsupported'
   | 'winget_fixed_probe_package_mismatch'
   | 'winget_not_ready'
+  | 'winget_package_query_inconclusive'
   | 'winget_package_query_not_found'
   | 'winget_source_list_warning';
 
