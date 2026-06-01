@@ -72,6 +72,15 @@ const OutdatedSoftwareTab = React.lazy(() =>
     default: m.OutdatedSoftwareView,
   })),
 );
+// AG-037 hotfix posture — Faz 22.5 Track C (WEB-014G). Lazy for the
+// same WEB-014D perf reason as outdated-software: the installed/pending
+// tables, pendingByCategory rollup, agent-health panel, and history
+// accordion never render until the operator selects this tab.
+const HotfixPostureTab = React.lazy(() =>
+  import('./components/hotfix-posture/HotfixPostureView').then((m) => ({
+    default: m.HotfixPostureView,
+  })),
+);
 
 const TabFallback: React.FC = () => (
   <div
@@ -92,6 +101,7 @@ export type DeviceDetailDrawerTabKey =
   | 'hardware'
   | 'health'
   | 'outdated-software'
+  | 'hotfix-posture'
   | 'software-catalog'
   | 'compliance';
 
@@ -271,6 +281,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <OutdatedSoftwareTab deviceId={device.id} active={activeTab === 'outdated-software'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'hotfix-posture' as const,
+        label: t('endpointAdmin.drawer.tab.hotfixPosture'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <HotfixPostureTab deviceId={device.id} active={activeTab === 'hotfix-posture'} />
           </React.Suspense>
         ),
       },
