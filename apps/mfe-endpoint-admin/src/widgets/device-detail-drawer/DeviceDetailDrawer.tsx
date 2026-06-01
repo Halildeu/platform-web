@@ -124,6 +124,16 @@ const AppControlTab = React.lazy(() =>
   })),
 );
 
+// BE-024 Software-Inventory Diff (Faz 22.5 P2-A). Same lazy-mount
+// pattern; the 4-status badge + counts + 3 tables (added/removed/
+// versionChanged) never render until the operator selects the
+// "Yazılım Değişimleri" tab.
+const SoftwareDiffTab = React.lazy(() =>
+  import('./components/software-diff/SoftwareDiffView').then((m) => ({
+    default: m.SoftwareDiffView,
+  })),
+);
+
 const TabFallback: React.FC = () => (
   <div
     role="status"
@@ -148,6 +158,7 @@ export type DeviceDetailDrawerTabKey =
   | 'services'
   | 'startup-exposure'
   | 'app-control'
+  | 'software-diff'
   | 'software-catalog'
   | 'compliance';
 
@@ -372,6 +383,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <AppControlTab deviceId={device.id} active={activeTab === 'app-control'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'software-diff' as const,
+        label: t('endpointAdmin.drawer.tab.softwareDiff'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <SoftwareDiffTab deviceId={device.id} active={activeTab === 'software-diff'} />
           </React.Suspense>
         ),
       },
