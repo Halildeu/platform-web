@@ -50,6 +50,7 @@ import type {
   HotfixPostureHistoryPage,
   HotfixPostureSnapshot,
 } from '../../entities/endpoint-hotfix-posture/types';
+import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnostics/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
   DeviceGridExportError,
@@ -91,6 +92,15 @@ import type {
   CreateEndpointEnrollmentResponse,
   EndpointEnrollment,
 } from '../../entities/endpoint-enrollment/types';
+
+/**
+ * AG-038 — endpoint-local args interface for the diagnostics-latest
+ * query. Kept here (not in the entity types module) for symmetry with
+ * other endpoint-local args that need no global re-export.
+ */
+export interface GetDiagnosticsLatestArgs {
+  deviceId: string;
+}
 
 /**
  * RTK Query slice for the endpoint-admin backend.
@@ -313,6 +323,7 @@ export const endpointAdminApi = createApi({
     'EndpointDeviceHealth',
     'EndpointOutdatedSoftware',
     'EndpointHotfixPosture',
+    'EndpointAgentDiagnostics',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -640,6 +651,43 @@ export const endpointAdminApi = createApi({
       },
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointHotfixPosture' as const, id: `${deviceId}::history` },
+      ],
+    }),
+    /**
+     * AG-038 — agent self-diagnostics snapshot (latest).
+     *
+     * Backend: `AdminEndpointDiagnosticsController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/diagnostics/latest
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/diagnostics/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the latest {@link DiagnosticsSnapshot} (the validated wire
+     * block + persistence envelope folded): supported / probeComplete /
+     * agent version / config hash / last poll latency / backend DNS+TLS
+     * tri-state / nullable lastError triad / bounded probeErrors[].
+     * Backend lookup is tenant-scoped: cross-tenant returns 404 (no
+     * device-existence leak). The view maps 404 → empty state with the
+     * operator-action hint ("COLLECT_INVENTORY includeDiagnostics:true
+     * gerekli; İşlemler tab'ı") — note: the wire payload bit is
+     * `includeDiagnostics`, NOT `includeAgentDiagnostics` (Codex
+     * 019e833d must_fix #3 — agent reads it in
+     * `internal/commands/executor.go`).
+     *
+     * Cache: NO `keepUnusedDataFor: 0` override here (a deliberate
+     * divergence from the install-preflight modal). Diagnostics is a
+     * read-only inspection surface and the RTK tag
+     * `EndpointAgentDiagnostics:${deviceId}::latest` lets a future
+     * post-ingest mutation invalidate it; manual refetch via tab toggle
+     * is the freshness contract. The view itself defends against
+     * cross-arg leak via `currentData` + `isDiagnosticsForDevice`.
+     */
+    getDiagnosticsLatest: builder.query<DiagnosticsSnapshot, GetDiagnosticsLatestArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/diagnostics/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointAgentDiagnostics' as const, id: `${deviceId}::latest` },
       ],
     }),
     /**
@@ -1188,5 +1236,6 @@ export const {
   // AG-037 hotfix posture (WEB-014G).
   useGetHotfixPostureLatestQuery,
   useGetHotfixPostureHistoryQuery,
+  useGetDiagnosticsLatestQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;
