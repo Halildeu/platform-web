@@ -134,6 +134,16 @@ const SoftwareDiffTab = React.lazy(() =>
   })),
 );
 
+// BE-025 Prohibited-Software finding view (Faz 22.5 P2-A slice-2).
+// Same lazy-mount pattern; the 2-status badge + decision badge +
+// findings table never render until the operator selects the
+// "Yasaklı Yazılım" tab.
+const ProhibitedSoftwareTab = React.lazy(() =>
+  import('./components/prohibited-software/ProhibitedSoftwareView').then((m) => ({
+    default: m.ProhibitedSoftwareView,
+  })),
+);
+
 const TabFallback: React.FC = () => (
   <div
     role="status"
@@ -159,6 +169,7 @@ export type DeviceDetailDrawerTabKey =
   | 'startup-exposure'
   | 'app-control'
   | 'software-diff'
+  | 'prohibited-software'
   | 'software-catalog'
   | 'compliance';
 
@@ -392,6 +403,18 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <SoftwareDiffTab deviceId={device.id} active={activeTab === 'software-diff'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'prohibited-software' as const,
+        label: t('endpointAdmin.drawer.tab.prohibitedSoftware'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <ProhibitedSoftwareTab
+              deviceId={device.id}
+              active={activeTab === 'prohibited-software'}
+            />
           </React.Suspense>
         ),
       },

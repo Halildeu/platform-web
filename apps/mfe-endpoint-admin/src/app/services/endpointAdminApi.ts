@@ -55,6 +55,7 @@ import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
 import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
 import type { AppControlSnapshot } from '../../entities/endpoint-app-control/types';
 import type { SoftwareInventoryDiffSnapshot } from '../../entities/endpoint-software-inventory-diff/types';
+import type { DeviceProhibitedSoftwareSnapshot } from '../../entities/endpoint-prohibited-software/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
   DeviceGridExportError,
@@ -135,6 +136,15 @@ export interface GetAppControlLatestArgs {
  * (latest-vs-previous capture) query. Faz 22.5 P2-A.
  */
 export interface GetSoftwareInventoryDiffArgs {
+  deviceId: string;
+}
+
+/**
+ * BE-025 — endpoint-local args for the per-device prohibited-software
+ * findings query (Faz 22.5 P2-A slice-2). Reads the last persisted
+ * compliance evaluation projection (no GET recompute).
+ */
+export interface GetProhibitedSoftwareArgs {
   deviceId: string;
 }
 
@@ -364,6 +374,7 @@ export const endpointAdminApi = createApi({
     'EndpointStartupExposure',
     'EndpointAppControl',
     'EndpointSoftwareInventoryDiff',
+    'EndpointProhibitedSoftware',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -845,6 +856,31 @@ export const endpointAdminApi = createApi({
       }),
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointSoftwareInventoryDiff' as const, id: `${deviceId}::diff-latest` },
+      ],
+    }),
+    /**
+     * BE-025 — Per-device prohibited-software findings read. Faz 22.5
+     * P2-A slice-2.
+     *
+     * Gateway-fronted: `GET /api/v1/endpoint-admin/endpoint-devices/
+     * {deviceId}/prohibited-software` → service
+     * `AdminProhibitedSoftwareController.getDeviceProhibitedSoftware`
+     * (RequireModule VIEWER). Always 200 (no-existence-leak); 2-status
+     * enum (OK / NO_EVALUATION) encodes whether an evaluation has
+     * persisted findings for this device.
+     *
+     * Cache: tag id `${deviceId}::prohibited-latest`.
+     */
+    getProhibitedSoftware: builder.query<
+      DeviceProhibitedSoftwareSnapshot,
+      GetProhibitedSoftwareArgs
+    >({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/prohibited-software`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointProhibitedSoftware' as const, id: `${deviceId}::prohibited-latest` },
       ],
     }),
     /**
@@ -1398,5 +1434,6 @@ export const {
   useGetStartupExposureLatestQuery,
   useGetAppControlLatestQuery,
   useGetSoftwareInventoryDiffQuery,
+  useGetProhibitedSoftwareQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;
