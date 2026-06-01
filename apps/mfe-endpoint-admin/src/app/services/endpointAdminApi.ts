@@ -54,6 +54,7 @@ import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnost
 import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
 import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
 import type { AppControlSnapshot } from '../../entities/endpoint-app-control/types';
+import type { SoftwareInventoryDiffSnapshot } from '../../entities/endpoint-software-inventory-diff/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
   DeviceGridExportError,
@@ -126,6 +127,14 @@ export interface GetStartupExposureLatestArgs {
  * query.
  */
 export interface GetAppControlLatestArgs {
+  deviceId: string;
+}
+
+/**
+ * BE-024 — endpoint-local args for the software-inventory diff
+ * (latest-vs-previous capture) query. Faz 22.5 P2-A.
+ */
+export interface GetSoftwareInventoryDiffArgs {
   deviceId: string;
 }
 
@@ -354,6 +363,7 @@ export const endpointAdminApi = createApi({
     'EndpointServices',
     'EndpointStartupExposure',
     'EndpointAppControl',
+    'EndpointSoftwareInventoryDiff',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -809,6 +819,32 @@ export const endpointAdminApi = createApi({
       }),
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointAppControl' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * BE-024 — Software-inventory diff (latest-vs-previous capture)
+     * read. Faz 22.5 P2-A.
+     *
+     * Gateway-fronted: `GET /api/v1/endpoint-admin/endpoint-devices/
+     * {deviceId}/software-inventory/diff` → service
+     * `AdminEndpointSoftwareInventoryController.getDeviceSoftwareDiff`
+     * (RequireModule VIEWER). Always 200 (no-existence-leak); 4-status
+     * enum encodes the rendering branch (OK / NO_CHANGE /
+     * INSUFFICIENT_HISTORY / NO_HISTORY).
+     *
+     * Cache: NO `keepUnusedDataFor: 0`; tag id `${deviceId}::diff-latest`
+     * matches the AG-037..AG-041 convention.
+     */
+    getSoftwareInventoryDiff: builder.query<
+      SoftwareInventoryDiffSnapshot,
+      GetSoftwareInventoryDiffArgs
+    >({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/software-inventory/diff`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointSoftwareInventoryDiff' as const, id: `${deviceId}::diff-latest` },
       ],
     }),
     /**
@@ -1361,5 +1397,6 @@ export const {
   useGetServicesLatestQuery,
   useGetStartupExposureLatestQuery,
   useGetAppControlLatestQuery,
+  useGetSoftwareInventoryDiffQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;

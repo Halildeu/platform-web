@@ -113,6 +113,7 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.services': 'Hizmetler',
   'endpointAdmin.drawer.tab.startupExposure': 'Başlangıç + Maruziyet',
   'endpointAdmin.drawer.tab.appControl': 'Uygulama Kontrolü',
+  'endpointAdmin.drawer.tab.softwareDiff': 'Yazılım Değişimleri',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
@@ -507,6 +508,30 @@ const DICT_TR = {
   'endpointAdmin.drawer.appControl.probeErrors.col.code': 'Kod',
   'endpointAdmin.drawer.appControl.probeErrors.col.source': 'Kaynak',
   'endpointAdmin.drawer.appControl.probeErrors.col.summary': 'Özet',
+  // BE-024 — Software-Inventory Diff tab (Faz 22.5 P2-A)
+  'endpointAdmin.drawer.softwareDiff.loading': 'Yazılım değişim bilgisi yükleniyor…',
+  'endpointAdmin.drawer.softwareDiff.error': 'Yazılım değişim bilgisi alınamadı.',
+  'endpointAdmin.drawer.softwareDiff.forbidden': 'Yazılım değişimleri için yetkiniz yok.',
+  'endpointAdmin.drawer.softwareDiff.staleWarning':
+    'Görüntülenen değişim bilgisi başka bir cihaza ait — kapatıp tekrar açın.',
+  'endpointAdmin.drawer.softwareDiff.status.OK': 'Karşılaştırma yapıldı',
+  'endpointAdmin.drawer.softwareDiff.status.NO_CHANGE': 'Değişiklik yok',
+  'endpointAdmin.drawer.softwareDiff.status.INSUFFICIENT_HISTORY':
+    'Henüz yalnızca tek bir snapshot var (karşılaştırma için yetersiz)',
+  'endpointAdmin.drawer.softwareDiff.status.NO_HISTORY':
+    'Bu cihazda yazılım envanteri snapshot kaydı yok',
+  'endpointAdmin.drawer.softwareDiff.window.from': 'Önceki snapshot',
+  'endpointAdmin.drawer.softwareDiff.window.to': 'Son snapshot',
+  'endpointAdmin.drawer.softwareDiff.counts.added': 'Eklenen',
+  'endpointAdmin.drawer.softwareDiff.counts.removed': 'Kaldırılan',
+  'endpointAdmin.drawer.softwareDiff.counts.versionChanged': 'Sürüm değişen',
+  'endpointAdmin.drawer.softwareDiff.added.title': 'Yeni Eklenen Yazılımlar',
+  'endpointAdmin.drawer.softwareDiff.removed.title': 'Kaldırılan Yazılımlar',
+  'endpointAdmin.drawer.softwareDiff.versionChanged.title': 'Sürüm Değişiklikleri',
+  'endpointAdmin.drawer.softwareDiff.col.displayName': 'Ad',
+  'endpointAdmin.drawer.softwareDiff.col.publisher': 'Yayıncı',
+  'endpointAdmin.drawer.softwareDiff.col.fromVersion': 'Eski Sürüm',
+  'endpointAdmin.drawer.softwareDiff.col.toVersion': 'Yeni Sürüm',
   // Detay tab
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Görünen Ad',
@@ -993,6 +1018,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.tab.services': 'Services',
   'endpointAdmin.drawer.tab.startupExposure': 'Startup + Exposure',
   'endpointAdmin.drawer.tab.appControl': 'Application Control',
+  'endpointAdmin.drawer.tab.softwareDiff': 'Software Changes',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Software Catalog',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Device Enrollment Management',
@@ -1385,6 +1411,31 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.appControl.probeErrors.col.code': 'Code',
   'endpointAdmin.drawer.appControl.probeErrors.col.source': 'Source',
   'endpointAdmin.drawer.appControl.probeErrors.col.summary': 'Summary',
+  // BE-024 — Software-Inventory Diff tab (Faz 22.5 P2-A)
+  'endpointAdmin.drawer.softwareDiff.loading': 'Loading software change evidence…',
+  'endpointAdmin.drawer.softwareDiff.error': 'Could not load software change evidence.',
+  'endpointAdmin.drawer.softwareDiff.forbidden':
+    'You do not have permission to view software changes.',
+  'endpointAdmin.drawer.softwareDiff.staleWarning':
+    'Displayed change set belongs to a different device — close and reopen the drawer.',
+  'endpointAdmin.drawer.softwareDiff.status.OK': 'Two captures compared',
+  'endpointAdmin.drawer.softwareDiff.status.NO_CHANGE': 'No change since previous capture',
+  'endpointAdmin.drawer.softwareDiff.status.INSUFFICIENT_HISTORY':
+    'Only one capture so far (need two to compare)',
+  'endpointAdmin.drawer.softwareDiff.status.NO_HISTORY':
+    'No software-inventory captures on file for this device',
+  'endpointAdmin.drawer.softwareDiff.window.from': 'Previous snapshot',
+  'endpointAdmin.drawer.softwareDiff.window.to': 'Latest snapshot',
+  'endpointAdmin.drawer.softwareDiff.counts.added': 'Added',
+  'endpointAdmin.drawer.softwareDiff.counts.removed': 'Removed',
+  'endpointAdmin.drawer.softwareDiff.counts.versionChanged': 'Version-changed',
+  'endpointAdmin.drawer.softwareDiff.added.title': 'Newly Added Software',
+  'endpointAdmin.drawer.softwareDiff.removed.title': 'Removed Software',
+  'endpointAdmin.drawer.softwareDiff.versionChanged.title': 'Version Changes',
+  'endpointAdmin.drawer.softwareDiff.col.displayName': 'Display Name',
+  'endpointAdmin.drawer.softwareDiff.col.publisher': 'Publisher',
+  'endpointAdmin.drawer.softwareDiff.col.fromVersion': 'From Version',
+  'endpointAdmin.drawer.softwareDiff.col.toVersion': 'To Version',
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Display Name',
   'endpointAdmin.drawer.detay.osType': 'Operating System',
