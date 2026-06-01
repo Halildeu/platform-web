@@ -219,7 +219,11 @@ describe('AppControlView happy path', () => {
     expect(screen.getByTestId('app-control-view-wdac-cip-count').textContent).toBe('—');
   });
 
-  it('renders AppIDSvc startup AUTO_DELAYED via 5-value enum', async () => {
+  it('renders AppIDSvc startup AUTO_DELAYED via 5-value enum + correct i18n namespace', async () => {
+    // Codex 019e8430 iter-1 P1 absorb: assert that the i18n label is
+    // looked up under the FULL `endpointAdmin.drawer.appControl.*`
+    // namespace (NOT the short `drawer.appControl.*` form). The mock
+    // returns the key verbatim, so the test catches namespace drift.
     const withDelayed: AppControlSnapshot = {
       ...GOLDEN_SNAPSHOT,
       appLockerAppIdSvcStartup: 'AUTO_DELAYED',
@@ -233,6 +237,26 @@ describe('AppControlView happy path', () => {
     render(<AppControlView deviceId={DEVICE_A} active={true} />);
     const node = screen.getByTestId('app-control-view-appid-startup');
     expect(node.querySelector('[data-startup="AUTO_DELAYED"]')).not.toBeNull();
+    // i18n namespace drift detector — Codex iter-1 P1.
+    expect(node.textContent).toContain(
+      'endpointAdmin.drawer.appControl.appLocker.appIdSvc.startupValue.AUTO_DELAYED',
+    );
+  });
+
+  it('renders AppIDSvc state STOPPED via correct i18n namespace', async () => {
+    // Codex 019e8430 iter-1 P1 absorb: parallel state-side coverage so
+    // both lookups exercise the fully-qualified key path.
+    useGetAppControlLatestQueryMock.mockReturnValue({
+      currentData: GOLDEN_SNAPSHOT,
+      isLoading: false,
+      error: undefined,
+    });
+    const { AppControlView } = await importAppControlView();
+    render(<AppControlView deviceId={DEVICE_A} active={true} />);
+    const node = screen.getByTestId('app-control-view-appid-state');
+    expect(node.textContent).toContain(
+      'endpointAdmin.drawer.appControl.appLocker.appIdSvc.stateValue.STOPPED',
+    );
   });
 });
 

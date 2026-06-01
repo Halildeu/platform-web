@@ -318,7 +318,7 @@ export const AppControlView: React.FC<AppControlViewProps> = ({ deviceId, active
                   data-state={snapshot.appLockerAppIdSvcState ?? 'UNKNOWN'}
                 >
                   {t(
-                    `drawer.appControl.appLocker.appIdSvc.stateValue.${snapshot.appLockerAppIdSvcState ?? 'UNKNOWN'}`,
+                    `endpointAdmin.drawer.appControl.appLocker.appIdSvc.stateValue.${snapshot.appLockerAppIdSvcState ?? 'UNKNOWN'}`,
                   )}
                 </span>
               </dd>
@@ -329,7 +329,7 @@ export const AppControlView: React.FC<AppControlViewProps> = ({ deviceId, active
                   data-startup={snapshot.appLockerAppIdSvcStartup ?? 'UNKNOWN'}
                 >
                   {t(
-                    `drawer.appControl.appLocker.appIdSvc.startupValue.${snapshot.appLockerAppIdSvcStartup ?? 'UNKNOWN'}`,
+                    `endpointAdmin.drawer.appControl.appLocker.appIdSvc.startupValue.${snapshot.appLockerAppIdSvcStartup ?? 'UNKNOWN'}`,
                   )}
                 </span>
               </dd>
