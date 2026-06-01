@@ -21,6 +21,7 @@ import type {
   IServerSideGetRowsParams,
 } from 'ag-grid-community';
 import { useReportingI18n } from '../../i18n/useReportingI18n';
+import { decideRehydration } from './report-page-rehydration';
 import type { ReportModule } from '../../modules/types';
 import type { ReportCapabilities } from '../../modules/dynamic-report/types';
 import {
@@ -157,6 +158,29 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
   const [dataSourceMode, setDataSourceMode] = React.useState<'server' | 'client'>('server');
   const [clientRows, setClientRows] = React.useState<TRow[]>([]);
   const initialFilterSyncRef = React.useRef(true);
+  /*
+   * PR-D1b.B.3 (Codex thread 019e8074 step 6, 2026-06-01) — guarded cold-
+   * cache rehydration for metadata-driven dynamic reports.
+   *
+   * `isInitialFilterStateRef` tracks "user has not edited filters since
+   * mount". It starts true and flips false on the first user-driven
+   * `setFieldValue` call (see the FilterDrawer wiring at the bottom of
+   * this component). The rehydration effect at the bottom of this hook
+   * block consumes it.
+   *
+   * `lastRehydratedSignatureRef` makes the rehydration idempotent: a
+   * second metadata resolve (cache invalidation / re-login) for the
+   * same set of filter definitions must NOT re-clobber user-visible
+   * state. We snapshot the FilterDefinition array identity (the cache
+   * returns the same reference until a fresh fetch lands) on every
+   * rehydration; a repeat resolve with the same reference is a no-op.
+   *
+   * The "wrap setFieldValue" guardrail Codex iter-3 flagged is enforced
+   * by `setFieldValueRef.current` below — the wrapper flips the
+   * isInitialFilterStateRef and the rehydration setter does NOT.
+   */
+  const isInitialFilterStateRef = React.useRef(true);
+  const lastRehydratedSignatureRef = React.useRef<unknown>(undefined);
   const permissions = React.useMemo(
     () => readCurrentPermissions(),
     [location.key, location.pathname],
@@ -488,6 +512,46 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       cancelled = true;
     };
   }, [module]);
+
+  /*
+   * PR-D1b.B.3 (Codex thread 019e8074 step 6, 2026-06-01) — guarded
+   * cold-cache rehydration for metadata-driven dynamic reports.
+   *
+   * <p>The dynamic factory's `createInitialFilters` reads from the
+   * shared metadata cache (`getCachedFilterDefinitions(key)`). On a
+   * cold mount the cache is empty, so a deep-link URL like
+   * `?status=ACTIVE` cannot seed the corresponding widget — the
+   * definition doesn't exist yet. After `ensureColumnMeta` resolves
+   * the definitions ARE in the cache, but `filters` state has already
+   * settled with the pre-cache fallback. Without this effect the user
+   * loses their URL filter on every cold mount.
+   *
+   * Guardrails (Codex iter-3):
+   *   - Only fires when `module.hasMetadataDrivenFilters === true`
+   *     (legacy + dashboard modules untouched).
+   *   - Only fires when `isInitialFilterStateRef.current === true`
+   *     (user hasn't edited between mount and resolve — rehydration
+   *     MUST NOT clobber user edits).
+   *   - Idempotent against repeat metadata resolves: a stable
+   *     definition array reference (the cache returns the same array
+   *     until a fresh fetch lands) compared to
+   *     `lastRehydratedSignatureRef` short-circuits on the second pass.
+   *   - Uses `setFilters(...)` directly, NOT the user-facing wrapper —
+   *     so isInitialFilterStateRef stays true after rehydration and
+   *     a subsequent metadata invalidation could rehydrate again.
+   */
+  React.useEffect(() => {
+    const decision = decideRehydration(
+      module,
+      isInitialFilterStateRef.current,
+      lastRehydratedSignatureRef.current,
+    );
+    if (!decision.rehydrate) return;
+
+    lastRehydratedSignatureRef.current = decision.definitions;
+    setFilters(module.createInitialFilters({ searchParams }));
+    setReloadSignal((value) => value + 1);
+  }, [module, columnMetaVersion, searchParams]);
 
   /* ---- Column definitions — metadata-first, fallback to legacy ---- */
   const columns = React.useMemo<ColumnDef<TRow>[]>(() => {
@@ -1321,8 +1385,17 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
            */
           filterBuilderPrefix={module.renderFilters?.({
             values: filters,
-            setFieldValue: (key, value) =>
-              setFilters((prev) => ({ ...prev, [key]: value }) as TFilters),
+            setFieldValue: (key, value) => {
+              // PR-D1b.B.3 (Codex thread 019e8074 step 6, 2026-06-01):
+              // user-edit detection. The rehydration effect at the top
+              // of this hook block consults isInitialFilterStateRef
+              // before re-running createInitialFilters; flipping the
+              // ref here ensures a user edit performed between mount
+              // and metadata resolve is preserved (not clobbered by
+              // the post-resolve rehydration).
+              isInitialFilterStateRef.current = false;
+              setFilters((prev) => ({ ...prev, [key]: value }) as TFilters);
+            },
             t,
             requiredFields: module.requiredFilterFields,
           })}
