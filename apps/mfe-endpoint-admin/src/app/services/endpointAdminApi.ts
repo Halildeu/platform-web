@@ -44,6 +44,12 @@ import type {
   OutdatedSoftwareHistoryPage,
   OutdatedSoftwareSnapshot,
 } from '../../entities/endpoint-outdated-software/types';
+import type {
+  GetHotfixPostureHistoryArgs,
+  GetHotfixPostureLatestArgs,
+  HotfixPostureHistoryPage,
+  HotfixPostureSnapshot,
+} from '../../entities/endpoint-hotfix-posture/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
   DeviceGridExportError,
@@ -306,6 +312,7 @@ export const endpointAdminApi = createApi({
     'EndpointHardwareInventory',
     'EndpointDeviceHealth',
     'EndpointOutdatedSoftware',
+    'EndpointHotfixPosture',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -575,6 +582,64 @@ export const endpointAdminApi = createApi({
       },
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointOutdatedSoftware' as const, id: `${deviceId}::history` },
+      ],
+    }),
+    /**
+     * AG-037 hotfix-posture latest — Faz 22.5 Track C (WEB-014G).
+     *
+     * Backend: `AdminEndpointHotfixPostureController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/hotfix-posture/latest
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/hotfix-posture/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the most-recent {@link HotfixPostureSnapshot} (the
+     * validated wire block + persistence envelope folded) with the
+     * installed + pending + pendingByCategory + flat agentHealth
+     * children. Backend lookup is tenant-scoped: a cross-tenant request
+     * returns 404 (no device-existence leak). The view maps 404 → empty
+     * state with the operator-action hint
+     * ("COLLECT_INVENTORY includeHotfixPosture:true gerekli").
+     */
+    getHotfixPostureLatest: builder.query<HotfixPostureSnapshot, GetHotfixPostureLatestArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+          deviceId,
+        )}/hotfix-posture/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointHotfixPosture' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * AG-037 hotfix-posture history (paged summary).
+     *
+     * Backend: `AdminEndpointHotfixPostureController.getHistory` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/hotfix-posture/history?page=0&size=20
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/hotfix-posture/history
+     *
+     * Returns a Spring Page envelope of
+     * {@link HotfixPostureSnapshotSummary} (no child arrays, no
+     * agentHealth — surfaces installedCount + pendingTotalCount +
+     * truncation hints + child counts). Backend clamps {@code size}
+     * into [1, 50] silently per the AG-036 outdated-software history
+     * precedent.
+     */
+    getHotfixPostureHistory: builder.query<HotfixPostureHistoryPage, GetHotfixPostureHistoryArgs>({
+      query: ({ deviceId, page, size }) => {
+        const params: Record<string, string> = {};
+        if (typeof page === 'number') params.page = String(page);
+        if (typeof size === 'number') params.size = String(size);
+        return {
+          url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+            deviceId,
+          )}/hotfix-posture/history`,
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointHotfixPosture' as const, id: `${deviceId}::history` },
       ],
     }),
     /**
