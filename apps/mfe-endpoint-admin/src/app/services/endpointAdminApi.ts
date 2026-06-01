@@ -52,6 +52,7 @@ import type {
 } from '../../entities/endpoint-hotfix-posture/types';
 import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnostics/types';
 import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
+import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
   DeviceGridExportError,
@@ -108,6 +109,14 @@ export interface GetDiagnosticsLatestArgs {
  * Same pattern as GetDiagnosticsLatestArgs.
  */
 export interface GetServicesLatestArgs {
+  deviceId: string;
+}
+
+/**
+ * AG-040 — endpoint-local args interface for the startup-exposure-latest
+ * query.
+ */
+export interface GetStartupExposureLatestArgs {
   deviceId: string;
 }
 
@@ -334,6 +343,7 @@ export const endpointAdminApi = createApi({
     'EndpointHotfixPosture',
     'EndpointAgentDiagnostics',
     'EndpointServices',
+    'EndpointStartupExposure',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -732,6 +742,36 @@ export const endpointAdminApi = createApi({
       }),
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointServices' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * AG-040 — startup-exposure snapshot (latest).
+     *
+     * Backend: `AdminEndpointStartupExposureController.getLatest` —
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/startup-exposure/latest
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/startup-exposure/latest
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns the latest {@link StartupExposureSnapshot}: supported /
+     * probeComplete + 2 exposure scalars (rdpEnabled +
+     * windowsFirewallEventLogEnabled) + per-startup-app
+     * `{name, location, enabled, probeOrigin}` over the 10-slot
+     * autorun-anchor allowlist + bounded probeErrors[]. Tenant-scoped;
+     * cross-tenant returns 404. View maps 404 → empty state with the
+     * operator hint `COLLECT_INVENTORY includeStartupExposure:true`
+     * (matches the agent payload bit per
+     * platform-agent internal/commands/executor.go).
+     *
+     * Cache: NO `keepUnusedDataFor: 0`; tag id `${deviceId}::latest`
+     * matches the AG-037/AG-038/AG-039 convention.
+     */
+    getStartupExposureLatest: builder.query<StartupExposureSnapshot, GetStartupExposureLatestArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/startup-exposure/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointStartupExposure' as const, id: `${deviceId}::latest` },
       ],
     }),
     /**
@@ -1282,5 +1322,6 @@ export const {
   useGetHotfixPostureHistoryQuery,
   useGetDiagnosticsLatestQuery,
   useGetServicesLatestQuery,
+  useGetStartupExposureLatestQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;

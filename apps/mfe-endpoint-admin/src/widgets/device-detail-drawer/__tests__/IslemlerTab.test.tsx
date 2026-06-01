@@ -89,6 +89,7 @@ describe('IslemlerTab — non-destructive flow', () => {
         includeHotfixPosture: true,
         includeDiagnostics: true,
         includeServices: true,
+        includeStartupExposure: true,
       },
     });
   });
