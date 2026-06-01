@@ -103,6 +103,7 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
           includeHotfixPosture: true,
           includeDiagnostics: true,
           includeServices: true,
+          includeStartupExposure: true,
         },
       });
       return;

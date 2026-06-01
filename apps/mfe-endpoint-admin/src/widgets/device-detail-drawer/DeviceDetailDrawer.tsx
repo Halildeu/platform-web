@@ -103,6 +103,16 @@ const ServicesTab = React.lazy(() =>
   })),
 );
 
+// AG-040 startup-apps + exposure summary — Faz 22.5. Same lazy-mount
+// pattern; the meta panel, exposure-summary tri-state badges, 10-slot
+// startup-apps table, and probeErrors list never render until the
+// operator selects the "Başlangıç + Maruziyet" tab.
+const StartupExposureTab = React.lazy(() =>
+  import('./components/startup-exposure/StartupExposureView').then((m) => ({
+    default: m.StartupExposureView,
+  })),
+);
+
 const TabFallback: React.FC = () => (
   <div
     role="status"
@@ -125,6 +135,7 @@ export type DeviceDetailDrawerTabKey =
   | 'hotfix-posture'
   | 'diagnostics'
   | 'services'
+  | 'startup-exposure'
   | 'software-catalog'
   | 'compliance';
 
@@ -331,6 +342,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <ServicesTab deviceId={device.id} active={activeTab === 'services'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'startup-exposure' as const,
+        label: t('endpointAdmin.drawer.tab.startupExposure'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <StartupExposureTab deviceId={device.id} active={activeTab === 'startup-exposure'} />
           </React.Suspense>
         ),
       },
