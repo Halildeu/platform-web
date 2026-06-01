@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { reportModules } from '../../modules';
 import { ReportPage } from './ReportPage';
 import { createDynamicReportModule, fetchReportList } from '../../modules/dynamic-report';
+import { createHybridReportModule } from '../../modules/dynamic-report/create-hybrid-module';
 import { DashboardPage, fetchDashboardList } from '../../modules/dashboard';
 import type { DashboardListItem } from '../../modules/dashboard';
 import type { ReportListItem } from '../../modules/dynamic-report';
@@ -101,22 +102,63 @@ const ReportingApp: React.FC = () => {
     // Order: build dynamic entries first; static entries filtered against
     // dynamic route set. Dedupe key is `routeSegment ?? key` per the
     // backend ReportListItemDto.routeSegment alias contract (PR-D1a).
-    const dynamicEntries: MergedModule[] = dynamicReports.map((report) => ({
-      module: createDynamicReportModule(report) as AnyModule,
-      isDynamic: true,
-      reportKey: report.key,
-      category: report.category,
-    }));
+    //
+    // PR-D2b (Codex 019e8269, 2026-06-01): karma-aware composition.
+    // When a static module at the same route exposes `renderDashboard`,
+    // the dynamic entry does NOT shadow it — instead they fuse into a
+    // hybrid module (dynamic grid surface + static dashboard surface).
+    // See `create-hybrid-module.ts` for the field-by-field precedence.
+    const dynamicByRoute = new Map(
+      dynamicReports.map((report) => {
+        const dynamicModule = createDynamicReportModule(report) as AnyModule;
+        return [
+          dynamicModule.route,
+          { module: dynamicModule, reportKey: report.key, category: report.category },
+        ];
+      }),
+    );
+
+    const hybridEntries: MergedModule[] = [];
+    const staticRoutesConsumedByHybrid = new Set<string>();
+    const dynamicRoutesConsumedByHybrid = new Set<string>();
+
+    for (const mod of reportModules) {
+      const candidate = dynamicByRoute.get((mod as AnyModule).route);
+      if (candidate && (mod as AnyModule).renderDashboard !== undefined) {
+        // Karma collision — fuse instead of shadow.
+        hybridEntries.push({
+          module: createHybridReportModule(mod as AnyModule, candidate.module) as AnyModule,
+          isDynamic: true, // hybrid carries the dynamic operational surface
+          reportKey: candidate.reportKey,
+          category: candidate.category,
+        });
+        staticRoutesConsumedByHybrid.add((mod as AnyModule).route);
+        dynamicRoutesConsumedByHybrid.add((mod as AnyModule).route);
+      }
+    }
+
+    const dynamicEntries: MergedModule[] = [...dynamicByRoute.entries()]
+      .filter(([route]) => !dynamicRoutesConsumedByHybrid.has(route))
+      .map(([, entry]) => ({
+        module: entry.module,
+        isDynamic: true,
+        reportKey: entry.reportKey,
+        category: entry.category,
+      }));
+
     const dynamicRoutes = new Set(dynamicEntries.map((e) => e.module.route));
 
     const staticEntries: MergedModule[] = reportModules
-      .filter((mod) => !dynamicRoutes.has((mod as AnyModule).route))
+      .filter((mod) => {
+        const route = (mod as AnyModule).route;
+        return !dynamicRoutes.has(route) && !staticRoutesConsumedByHybrid.has(route);
+      })
       .map((mod) => ({
         module: mod as AnyModule,
         isDynamic: false,
       }));
 
-    return [...dashboardEntries, ...staticEntries, ...dynamicEntries];
+    return [...dashboardEntries, ...staticEntries, ...dynamicEntries, ...hybridEntries];
   }, [dynamicReports, dashboards]);
 
   const activeKey = getActiveRoute(location.pathname, basePath);
