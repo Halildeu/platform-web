@@ -14,6 +14,12 @@ import {
   // other consumers must read via `module.getFilterDefinitions?.()`.
   getCachedFilterDefinitions,
 } from './metadata-cache';
+// PR-D1b.B.2 step 5 (Codex thread 019e8074): metadata-driven widget
+// dispatcher + translator. Both are factory-internal — the dispatcher
+// renders inside `renderFilters` and the translator runs inside the
+// fetch/export closures.
+import { FilterRenderer } from './filters/widgets';
+import { translateMetadataFilters } from './filters/metadata-filter-model-translator';
 
 /* ------------------------------------------------------------------ */
 /*  Dynamic report module factory                                      */
@@ -72,20 +78,73 @@ export const createDynamicReportModule = (
     titleKey: report.title,
     descriptionKey: report.description,
     breadcrumbKeys: [{ key: 'reports.breadcrumb.root', to: '/reports' }, { key: report.title }],
-    createInitialFilters: (context) => ({
-      search: context?.searchParams?.get('search')?.trim() ?? '',
-    }),
+    createInitialFilters: (context) => {
+      // PR-D1b.B.2 step 5 (Codex thread 019e8074): URL deep-link
+      // rehydration. Read filterDefinitions from the cache (may be
+      // undefined on cold mount; ReportPage will re-run this hook AFTER
+      // ensureColumnMeta resolves when hasMetadataDrivenFilters=true).
+      // Precedence per Codex iter-2:
+      //   1. legacy `search` slot always reads searchParams.search
+      //   2. for each definition: defaultValue (when present)
+      //   3.   then searchParams.get(urlParam) overrides
+      const search = context?.searchParams?.get('search')?.trim() ?? '';
+      const definitions = getCachedFilterDefinitions(report.key);
+      const seeded: Record<string, unknown> = { search };
+      if (definitions) {
+        for (const def of definitions) {
+          if (def.defaultValue !== undefined) {
+            seeded[def.key] = def.defaultValue;
+          }
+          const urlParam = def.urlParam ?? def.key;
+          const urlValue = context?.searchParams?.get(urlParam);
+          if (urlValue !== null && urlValue !== undefined) {
+            seeded[def.key] = urlValue;
+          }
+        }
+      }
+      return seeded as DynamicReportFilters;
+    },
     renderFilters: ({ values, setFieldValue, requiredFields }) => {
       const isRequired = (key: string) => (requiredFields ?? []).includes(key);
+      // PR-D1b.B.2 step 5 (Codex thread 019e8074): metadata-driven
+      // render path. Three states distinguished:
+      //   - filterDefinitions === undefined → metadata not yet resolved
+      //     OR backend predates filterDefinitions; render legacy
+      //     CompanyPicker + search pair (byte-for-byte same as
+      //     pre-D1b.B behavior).
+      //   - filterDefinitions === []        → backend explicitly said
+      //     "no filters"; render empty prefix.
+      //   - filterDefinitions.length > 0    → loop FilterRenderer per
+      //     definition. Translator runs in fetchRows/exportRows.
+      const definitions = getCachedFilterDefinitions(report.key);
+
+      if (definitions !== undefined) {
+        if (definitions.length === 0) return null;
+        return (
+          <>
+            {definitions.map((def) => (
+              <FilterRenderer
+                key={def.key}
+                definition={def}
+                value={values[def.key]}
+                onChange={(next) =>
+                  setFieldValue(
+                    def.key as keyof typeof values,
+                    next as DynamicReportFilters[keyof DynamicReportFilters],
+                  )
+                }
+                required={isRequired(def.key)}
+                reportKey={report.key}
+              />
+            ))}
+          </>
+        );
+      }
+
+      // Legacy fallback (filterDefinitions undefined): preserve pre-D1b.B
+      // CompanyPicker + search pair byte-for-byte.
       return (
         <>
-          {/* CompanyPicker: AG Grid filter-row mantığında üç segment
-              ([Şirket | Eşittir | <değer>]). Sütun ve operator kilit, sadece
-              değer dropdown editable. Storage key 'reporting:currentCompanyId'
-              shellServices.getCurrentCompanyId() ile dynamic-report/api.ts
-              içindeki resolveCompanyId tarafından okunur.
-              V1: hardcoded 1-43; V2 dynamic list (/api/v1/companies →
-              OUR_COMPANY). */}
           <CompanyPicker required={isRequired('companyId')} />
           <div className="flex items-center gap-2" role="group" aria-label="Genel arama filtresi">
             <span
@@ -157,12 +216,36 @@ export const createDynamicReportModule = (
      */
     getFilterDefinitions: () => getCachedFilterDefinitions(report.key),
     getColumns: () => [],
-    fetchRows: (filters, request) => fetchReportData(report.key, filters, request),
+    fetchRows: (filters, request) => {
+      // PR-D1b.B.2 step 7 (Codex thread 019e8074): translate the user's
+      // metadata-driven filter state into the column-keyed simple filter
+      // model the backend FilterTranslator expects. api.ts:
+      // planAdvancedFilterPayload then merges it with grid filterModel
+      // (grid wins) or honors an explicit advancedFilter pass-through.
+      const definitions = getCachedFilterDefinitions(report.key);
+      const metadataFilterModel = definitions
+        ? translateMetadataFilters(definitions, filters as Record<string, unknown>)
+        : null;
+      return fetchReportData(
+        report.key,
+        filters,
+        request,
+        undefined,
+        undefined,
+        metadataFilterModel,
+      );
+    },
     // PR-0.5b (Codex thread 019e2cd7): forward the optional grid-state
     // snapshot so grouped/pivot exports match the user's on-screen view.
     // PR-0.5b2 (Codex thread 019e2d85): forward the raw/view mode.
-    exportRows: (filters, format, gridState, mode) =>
-      exportReportData(report.key, filters, format, gridState, mode),
+    // PR-D1b.B.2 step 7 (Codex 019e8074): forward translator output.
+    exportRows: (filters, format, gridState, mode) => {
+      const definitions = getCachedFilterDefinitions(report.key);
+      const metadataFilterModel = definitions
+        ? translateMetadataFilters(definitions, filters as Record<string, unknown>)
+        : null;
+      return exportReportData(report.key, filters, format, gridState, mode, metadataFilterModel);
+    },
     // PR-0.5c (Codex thread 019e2d54): set filter distinct values.
     fetchFilterValues: (column, search) => fetchFilterValues(report.key, column, search),
   };

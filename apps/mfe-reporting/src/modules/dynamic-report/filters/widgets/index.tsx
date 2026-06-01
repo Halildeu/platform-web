@@ -93,16 +93,23 @@ export const TextSearchFilter: React.FC<FilterWidgetProps> = ({
 }) => {
   const [draft, setDraft] = React.useState<string>(typeof value === 'string' ? value : '');
   const didMountRef = React.useRef(false);
+  // Track the last parent value we saw to detect TRUE parent-state
+  // changes (URL rehydration, cache invalidation reset) vs the lag
+  // between a user edit and the debounced onChange round-trip.
+  const lastParentValueRef = React.useRef<string>(typeof value === 'string' ? value : '');
 
-  // Keep the local draft in sync when the parent state changes from a
-  // non-edit source (URL rehydration, cache invalidation reset).
-  // `draft` intentionally omitted: this effect is a one-way push from
-  // parent state to local draft, NOT a circular sync.
   React.useEffect(() => {
-    if (typeof value === 'string' && value !== draft) {
-      setDraft(value);
+    const v = typeof value === 'string' ? value : '';
+    // Only sync draft from parent if the parent value REALLY changed
+    // (rehydration / external reset) — not just because our own debounced
+    // onChange echoed back. The lastParentValueRef tracks the previous
+    // parent emit so a stale `value === draft` check (which would fight
+    // the user mid-type) is avoided.
+    if (v !== lastParentValueRef.current) {
+      lastParentValueRef.current = v;
+      setDraft(v);
     }
-  }, [value, draft]);
+  }, [value]);
 
   React.useEffect(() => {
     if (!didMountRef.current) {
@@ -441,7 +448,6 @@ export const FilterRenderer: React.FC<FilterWidgetProps> = (props) => {
       return <CompanyPickerFilter {...props} />;
     default: {
       if (typeof console !== 'undefined') {
-         
         console.warn(
           `[mfe-reporting] FilterRenderer: unknown kind '${(props.definition as { kind: string }).kind}' for key '${props.definition.key}'; falling back to disabled text input`,
         );

@@ -345,10 +345,85 @@ const buildSortParam = (request: GridRequest, defaultSort?: string, defaultDirec
 const buildAdvancedFilter = (
   filters: DynamicReportFilters,
   gridFilterModel?: Record<string, unknown> | null,
+  /**
+   * PR-D1b.B.2 step 7 (Codex thread 019e8074, 2026-06-01): metadata-
+   * driven filter model produced by `translateMetadataFilters` when the
+   * caller supplied `filterDefinitions`. Spread FIRST so that the AG
+   * Grid column filterModel (`gridFilterModel`) wins on a same-column
+   * collision — user's active grid filter overrides metadata defaults.
+   * Pass `null`/`undefined` for legacy callers that don't drive
+   * metadata-driven filters; behavior stays byte-for-byte unchanged.
+   */
+  metadataModel?: Record<string, unknown> | null,
 ): Record<string, unknown> => {
-  const merged: Record<string, unknown> = { ...(gridFilterModel ?? {}) };
+  const merged: Record<string, unknown> = {
+    ...(metadataModel ?? {}),
+    ...(gridFilterModel ?? {}),
+  };
   return merged;
 };
+
+/**
+ * PR-D1b.B.2 step 7 (Codex thread 019e8074, 2026-06-01) — three-way
+ * advanced-filter payload planner.
+ *
+ * Codex iter-2 fix: the merge must honor an explicit, opaque advanced
+ * filter string handed in by the caller (dashboard drill-through,
+ * widget-supplied JSON). The decision tree:
+ *
+ *  1. No explicit `advancedFilter` → return `{merged: buildAdvancedFilter(
+ *     filters, gridFilterModel, metadataModel)}`. Caller stringifies as
+ *     a query param or body field.
+ *  2. Explicit `advancedFilter` that is a JSON-parseable string AND
+ *     decodes to a plain object → merge with `metadataModel` (grid wins),
+ *     return `{merged}`.
+ *  3. Explicit `advancedFilter` that is NOT JSON-parseable → preserve
+ *     the legacy pass-through, return `{passThroughString}`. Metadata
+ *     is silently skipped because the caller's opaque payload may not
+ *     be a column-keyed shape (e.g. encoded blob, future extension).
+ *
+ * Returns one of `{merged}` or `{passThroughString}` — never both.
+ */
+function planAdvancedFilterPayload(
+  filters: DynamicReportFilters,
+  request: GridRequest,
+  metadataModel: Record<string, unknown> | null | undefined,
+): { merged: Record<string, unknown> } | { passThroughString: string } {
+  if (!request.advancedFilter) {
+    return {
+      merged: buildAdvancedFilter(filters, request.filterModel, metadataModel),
+    };
+  }
+
+  const rawString =
+    typeof request.advancedFilter === 'string'
+      ? request.advancedFilter
+      : JSON.stringify(request.advancedFilter);
+
+  // Try to parse the explicit string as a column-keyed model.
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    const decoded = JSON.parse(rawString) as unknown;
+    if (decoded !== null && typeof decoded === 'object' && !Array.isArray(decoded)) {
+      parsed = decoded as Record<string, unknown>;
+    }
+  } catch {
+    parsed = null;
+  }
+
+  if (parsed === null) {
+    // Opaque payload — preserve legacy pass-through; metadata skipped.
+    return { passThroughString: rawString };
+  }
+
+  // Parseable explicit + metadata → merge with grid (parsed) winning.
+  return {
+    merged: {
+      ...(metadataModel ?? {}),
+      ...parsed,
+    },
+  };
+}
 
 /**
  * AG Grid SSRM-compatible request body for the backend
@@ -508,6 +583,14 @@ export const fetchReportData = async (
   request: GridRequest,
   defaultSort?: string,
   defaultDirection?: string,
+  /**
+   * PR-D1b.B.2 step 7 (Codex thread 019e8074): metadata-driven filter
+   * model produced by the dynamic factory's translator. When supplied,
+   * the planner merges it with the AG Grid column filterModel before
+   * emitting the request. Legacy callers leave this undefined; behavior
+   * is byte-for-byte unchanged.
+   */
+  metadataFilterModel?: Record<string, unknown> | null,
 ): Promise<GridResponse<DynamicReportRow>> => {
   /*
    * Auth-ready gate (Codex thread 019e3ab8) — covers BOTH the flat
@@ -547,24 +630,15 @@ export const fetchReportData = async (
     params.set('sort', sort);
   }
 
-  // Merge AG Grid column-level filterModel + sidebar filters into one
-  // advancedFilter payload. If the caller already provided an explicit
-  // advancedFilter (e.g. dashboard drill-through), prefer that.
-  //
-  // GridRequest.advancedFilter is typed as `string` and DashboardPage hands us
-  // an already-JSON-stringified payload. Pass-through if it's a string; only
-  // stringify when a caller mistakenly hands us a raw object (defensive).
-  if (request.advancedFilter) {
-    const advFilterStr =
-      typeof request.advancedFilter === 'string'
-        ? request.advancedFilter
-        : JSON.stringify(request.advancedFilter);
-    params.set('advancedFilter', advFilterStr);
-  } else {
-    const advFilter = buildAdvancedFilter(filters, request.filterModel);
-    if (Object.keys(advFilter).length > 0) {
-      params.set('advancedFilter', JSON.stringify(advFilter));
-    }
+  // PR-D1b.B.2 step 7 (Codex 019e8074): three-way merge planner —
+  //   no advancedFilter → merge metadata + grid filterModel
+  //   parseable explicit → merge with metadata, grid wins
+  //   opaque explicit    → preserve legacy pass-through (metadata skipped)
+  const plan = planAdvancedFilterPayload(filters, request, metadataFilterModel);
+  if ('passThroughString' in plan) {
+    params.set('advancedFilter', plan.passThroughString);
+  } else if (Object.keys(plan.merged).length > 0) {
+    params.set('advancedFilter', JSON.stringify(plan.merged));
   }
 
   try {
@@ -622,6 +696,13 @@ export const exportReportData = async (
    *                  pre-PR-0.5b2 behaviour (filename has no suffix).
    */
   mode?: 'raw' | 'view',
+  /**
+   * PR-D1b.B.2 step 7 (Codex thread 019e8074): metadata-driven filter
+   * model produced by the dynamic factory's translator. Forwarded to
+   * both raw and view export paths so server-side exports honor the
+   * same sidebar filter state the grid does.
+   */
+  metadataFilterModel?: Record<string, unknown> | null,
 ): Promise<{ blob: Blob; filename: string }> => {
   /*
    * Auth-ready gate (Codex thread 019e3ab8). Export is a user action;
@@ -660,8 +741,14 @@ export const exportReportData = async (
       params.set('search', search);
     }
     params.set('format', wireFormat);
-    if (gridState?.filterModel && Object.keys(gridState.filterModel).length > 0) {
-      params.set('advancedFilter', JSON.stringify(gridState.filterModel));
+    // PR-D1b.B.2 step 7: merge grid filterModel + metadata-driven model
+    // so the server-side raw export honors the sidebar filter state.
+    const rawFilterMerged: Record<string, unknown> = {
+      ...(metadataFilterModel ?? {}),
+      ...(gridState?.filterModel ?? {}),
+    };
+    if (Object.keys(rawFilterMerged).length > 0) {
+      params.set('advancedFilter', JSON.stringify(rawFilterMerged));
     }
     if (gridState?.sortModel && gridState.sortModel.length > 0) {
       params.set('sort', JSON.stringify(gridState.sortModel));
