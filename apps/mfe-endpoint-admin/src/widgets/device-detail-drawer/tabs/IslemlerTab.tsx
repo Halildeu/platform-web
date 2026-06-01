@@ -104,6 +104,12 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
           includeDiagnostics: true,
           includeServices: true,
           includeStartupExposure: true,
+          // AG-041 — Application Control (WDAC + AppLocker) snapshot.
+          // Without this bit the AppControlView would only ever render
+          // the 404 empty state because no operator command flips the
+          // payload toggle (mirrors AG-039/AG-040 pattern; agent stub
+          // returns supported=false + NO_EVIDENCE on non-Windows).
+          includeAppControl: true,
         },
       });
       return;

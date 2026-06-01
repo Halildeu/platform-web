@@ -90,6 +90,7 @@ describe('IslemlerTab — non-destructive flow', () => {
         includeDiagnostics: true,
         includeServices: true,
         includeStartupExposure: true,
+        includeAppControl: true,
       },
     });
   });

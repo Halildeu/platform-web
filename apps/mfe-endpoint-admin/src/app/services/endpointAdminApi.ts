@@ -53,6 +53,7 @@ import type {
 import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnostics/types';
 import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
 import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
+import type { AppControlSnapshot } from '../../entities/endpoint-app-control/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
   DeviceGridExportError,
@@ -117,6 +118,14 @@ export interface GetServicesLatestArgs {
  * query.
  */
 export interface GetStartupExposureLatestArgs {
+  deviceId: string;
+}
+
+/**
+ * AG-041 — endpoint-local args interface for the app-control-latest
+ * query.
+ */
+export interface GetAppControlLatestArgs {
   deviceId: string;
 }
 
@@ -344,6 +353,7 @@ export const endpointAdminApi = createApi({
     'EndpointAgentDiagnostics',
     'EndpointServices',
     'EndpointStartupExposure',
+    'EndpointAppControl',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
@@ -772,6 +782,33 @@ export const endpointAdminApi = createApi({
       }),
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointStartupExposure' as const, id: `${deviceId}::latest` },
+      ],
+    }),
+    /**
+     * AG-041 — Application Control (WDAC + AppLocker) snapshot read.
+     *
+     * Gateway-fronted: `GET /api/v1/endpoint-admin/endpoint-devices/{
+     * deviceId}/app-control/latest` → service
+     * `AdminEndpointAppControlController.getLatest` (RequireModule
+     * VIEWER). Returns the latest {@link AppControlSnapshot}: WDAC
+     * mode + 4 bounded WDAC evidence bits + 5 AppLocker per-collection
+     * enforcement modes + AppIDSvc state/startup/present + 8-code
+     * probe-errors list. Tenant comes from cookie session; deviceId
+     * cross-tenant returns 404. View maps 404 → empty state with the
+     * operator hint `COLLECT_INVENTORY includeAppControl:true`
+     * (matches the agent payload bit per platform-agent
+     * internal/commands/executor.go).
+     *
+     * Cache: NO `keepUnusedDataFor: 0`; tag id `${deviceId}::latest`
+     * matches the AG-037/AG-038/AG-039/AG-040 convention.
+     */
+    getAppControlLatest: builder.query<AppControlSnapshot, GetAppControlLatestArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/app-control/latest`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointAppControl' as const, id: `${deviceId}::latest` },
       ],
     }),
     /**
@@ -1323,5 +1360,6 @@ export const {
   useGetDiagnosticsLatestQuery,
   useGetServicesLatestQuery,
   useGetStartupExposureLatestQuery,
+  useGetAppControlLatestQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;

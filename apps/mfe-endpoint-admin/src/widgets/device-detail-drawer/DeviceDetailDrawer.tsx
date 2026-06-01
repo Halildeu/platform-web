@@ -113,6 +113,17 @@ const StartupExposureTab = React.lazy(() =>
   })),
 );
 
+// AG-041 Application Control (WDAC + AppLocker) — Faz 22.5. Same
+// lazy-mount pattern; the meta panel, WDAC mode badge + 4 evidence
+// rows, 5 AppLocker per-collection chips, AppIDSvc state/startup/
+// present row, and probeErrors list never render until the operator
+// selects the "Uygulama Kontrolü" tab.
+const AppControlTab = React.lazy(() =>
+  import('./components/app-control/AppControlView').then((m) => ({
+    default: m.AppControlView,
+  })),
+);
+
 const TabFallback: React.FC = () => (
   <div
     role="status"
@@ -136,6 +147,7 @@ export type DeviceDetailDrawerTabKey =
   | 'diagnostics'
   | 'services'
   | 'startup-exposure'
+  | 'app-control'
   | 'software-catalog'
   | 'compliance';
 
@@ -351,6 +363,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <StartupExposureTab deviceId={device.id} active={activeTab === 'startup-exposure'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'app-control' as const,
+        label: t('endpointAdmin.drawer.tab.appControl'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <AppControlTab deviceId={device.id} active={activeTab === 'app-control'} />
           </React.Suspense>
         ),
       },
