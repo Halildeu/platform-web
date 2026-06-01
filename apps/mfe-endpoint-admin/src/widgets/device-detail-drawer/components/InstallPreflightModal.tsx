@@ -319,16 +319,17 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
   // double-fetch is removed; the safety contract (every modal open
   // sees a fresh evaluate) is preserved by the endpoint-level setting.
   //
-  // WEB-014D-followup (Codex 019e830b REVISE must_fix #2): destructure
-  // BOTH `data` (last successful response, may be stale across arg
-  // changes) AND `currentData` (response for the CURRENT args, undefined
-  // during refetch). The submit gate must use `currentData`-derived
-  // preflight to avoid race: removing the `preflightFetching` gate
-  // (must_fix #4) means a leftover `data` from a prior catalog row
-  // could otherwise drive a submit on the wrong intent. We keep
-  // `data` for backward-compat with error-path logic (`preflightError &&
-  // !effectivePreflight`) but switch `effectivePreflight` to use
-  // `currentData` for live-correctness on the active intent.
+  // WEB-014D-followup (Codex 019e830b REVISE must_fix #2): use RTK
+  // Query's `currentData` instead of `data` so the submit gate is
+  // anchored to the active intent. `data` is the LAST SUCCESSFUL
+  // response (may be stale across arg changes), while `currentData`
+  // is the response for the CURRENT args (undefined during refetch
+  // on arg change). With the `preflightFetching` gate removed
+  // (must_fix #4), `currentData` is what stops a leftover PASS from
+  // a prior catalog row from authorising a submit on the active row.
+  // The error-path logic (`preflightError && !effectivePreflight`)
+  // works off `effectivePreflight` itself, so the `data` destructure
+  // is no longer needed here.
   const {
     currentData: currentServerPreflight,
     error: preflightError,
@@ -529,10 +530,11 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
   //    is belt-and-suspenders that locks the UI even when no recompute
   //    is happening, producing the "silik" (visually-muted) regression
   //    operators reported 2026-06-01.
-  //  - `idempotencyKey` lazy `useState(() => generateIdempotencyKey())`
-  //    closes the first-paint empty-key race (now `!idempotencyKey` is
-  //    only true if the per-intent effect set it back to '' on modal
-  //    close — never on open).
+  //  - `idempotencyKey` per-intent reset is now `useLayoutEffect` so
+  //    the key is set BEFORE the browser paints. `!idempotencyKey` can
+  //    no longer fire as a visible disabled-reason on a modal that's
+  //    actually open with PASS data — the layout effect runs after
+  //    commit and before paint, populating the key in the same frame.
   //  - `effectivePreflight` now uses `currentServerPreflight` so the
   //    decision driving this gate is anchored to the CURRENT intent,
   //    not a leftover `data` from a prior catalog row.

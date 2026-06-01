@@ -605,12 +605,15 @@ describe('InstallPreflightModal — WEB-014D-followup confirm gate (Codex 019e83
     ).toBe('in-flight');
   });
 
-  it('idempotencyKey ilk render itibariyle dolu olur (lazy init)', async () => {
-    // Lazy `useState(() => generateIdempotencyKey())` initialiser
-    // ensures the FIRST render — not just the post-effect render —
-    // has a key. Click-as-first-paint produces a valid POST without
-    // depending on a re-render to populate the key. This catches the
-    // operator-visible "silik" frame regression from 2026-06-01.
+  it('idempotencyKey ilk paint öncesi dolu olur (useLayoutEffect)', async () => {
+    // The per-intent reset effect runs as `useLayoutEffect`, which
+    // executes AFTER React commits the mount but BEFORE the browser
+    // paints. So the FIRST visible paint already has a non-empty key
+    // and the `!idempotencyKey` confirm gate cannot fire as a visible
+    // disabled-reason. Click-as-first-paint produces a valid POST
+    // without depending on a post-paint re-render to populate the key.
+    // This catches the operator-visible "silik" frame regression from
+    // 2026-06-01 (HALILKOOLUB735 Faz 22.5.4 supplemental smoke).
     mockPreflight({ data: buildPreflight('PASS') });
     const trigger = vi.fn(() => ({ unwrap: () => Promise.resolve(buildCommand()) }));
     mockInstall(trigger);
