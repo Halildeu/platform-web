@@ -41,12 +41,15 @@ export interface DiagnosticsLastError {
 
 /**
  * Per-probe error row. `rowOrdinal` is backend-derived for stable
- * ordering across queries.
+ * ordering across queries. `summary` is nullable: the backend column is
+ * nullable and the policy accepts probe errors with only `code` set
+ * (Codex 019e833d iter-2 must_fix #3 — `EndpointDiagnosticsProbeError`
+ * + `DiagnosticsPayloadPolicyTest.summaryNotMandatory`).
  */
 export interface DiagnosticsProbeError {
   rowOrdinal: number;
   code: string;
-  summary: string;
+  summary?: string | null;
 }
 
 /**

@@ -304,7 +304,7 @@ const ProbeErrorsPanel: React.FC<ProbeErrorsPanelProps> = ({ snapshot, t }) => {
                 <td className="px-3 py-2 font-mono text-xs">{err.rowOrdinal}</td>
                 {/* Plain text only — see lastError-summary note above. */}
                 <td className="px-3 py-2 font-mono text-xs">{err.code}</td>
-                <td className="px-3 py-2 whitespace-pre-wrap">{err.summary}</td>
+                <td className="px-3 py-2 whitespace-pre-wrap">{err.summary ?? '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -363,7 +363,14 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ deviceId, acti
     );
   }
 
-  if (error && !snapshot) {
+  if (error) {
+    // Codex 019e833d iter-2 must_fix #2: cut on `error` BEFORE checking
+    // `!snapshot`. Otherwise a transient 5xx during a refetch (where
+    // `currentData` still holds a stale snapshot) would render the
+    // stale snapshot as if it were live. Mirrors the AG-037 hotfix-
+    // posture precedent which also cuts the error class above any
+    // snapshot fall-through. The 403/404 specialisations above already
+    // returned; everything else funnels into the generic error path.
     return (
       <div className="px-6 py-4" data-testid="diagnostics-error">
         <p className="text-sm text-state-danger-text">

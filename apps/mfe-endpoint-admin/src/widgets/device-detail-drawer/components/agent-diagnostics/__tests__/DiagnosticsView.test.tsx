@@ -129,6 +129,21 @@ describe('DiagnosticsView — render gates', () => {
     expect(screen.getByTestId('diagnostics-error')).toBeInTheDocument();
   });
 
+  it('5xx + currentData mevcut iken error precedence kazanir (must_fix #2): stale snapshot render edilmez', () => {
+    // Codex 019e833d iter-2 must_fix #2: under a transient refetch
+    // failure where the cache still holds last-successful data, the
+    // view MUST surface the error class, not the stale snapshot. This
+    // is the explicit regression case the iter-1 absorb missed.
+    mockQuery({
+      error: { status: 502 },
+      currentData: buildSnapshot(),
+    });
+    render(<DiagnosticsView deviceId={DEVICE_A} active />);
+    expect(screen.getByTestId('diagnostics-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('diagnostics-view')).toBeNull();
+    expect(screen.queryByTestId('diagnostics-agent-meta')).toBeNull();
+  });
+
   it('snapshot ile data var ama deviceId baska cihaza ait iken stale-arg gosterir (must_fix #5)', () => {
     mockQuery({ currentData: buildSnapshot({ deviceId: DEVICE_B }) });
     render(<DiagnosticsView deviceId={DEVICE_A} active />);
@@ -306,6 +321,22 @@ describe('DiagnosticsView — probeErrors list', () => {
     expect(screen.getByTestId('diagnostics-probe-error-row-1').textContent).toMatch(
       /DNS_TIMEOUT.*no upstream/s,
     );
+  });
+
+  it('probeErrors[].summary null gelirse "—" render eder (must_fix iter-2 #3)', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        probeErrors: [
+          { rowOrdinal: 0, code: 'TLS_HANDSHAKE_FAIL', summary: null },
+          { rowOrdinal: 1, code: 'DNS_TIMEOUT' /* summary omitted */ },
+        ],
+      }),
+    });
+    render(<DiagnosticsView deviceId={DEVICE_A} active />);
+    const row0 = screen.getByTestId('diagnostics-probe-error-row-0');
+    expect(row0.textContent).toMatch(/TLS_HANDSHAKE_FAIL.*—/s);
+    const row1 = screen.getByTestId('diagnostics-probe-error-row-1');
+    expect(row1.textContent).toMatch(/DNS_TIMEOUT.*—/s);
   });
 
   it('probeErrors[].summary HTML-like input plain text olarak render edilir (no XSS, must_fix #2)', () => {
