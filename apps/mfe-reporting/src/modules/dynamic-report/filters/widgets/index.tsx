@@ -51,23 +51,25 @@ const requiredMarker = (required?: boolean): React.ReactNode =>
   ) : null;
 
 const resolveLabel = (definition: FilterDefinition, t: TranslateFn | undefined): string => {
-  const i18nKey = definition.i18nLabelKey;
-  if (i18nKey && t) {
-    const translated = t(i18nKey);
-    if (translated && translated !== i18nKey) return translated;
+  // gitleaks:allow — false-positive on i18n string identifiers
+  const i18nLabelToken = definition.i18nLabelKey;
+  if (i18nLabelToken && t) {
+    const translated = t(i18nLabelToken);
+    if (translated && translated !== i18nLabelToken) return translated;
   }
-  return i18nKey ?? definition.key;
+  return i18nLabelToken ?? definition.key;
 };
 
 const resolvePlaceholder = (
   definition: FilterDefinition,
   t: TranslateFn | undefined,
 ): string | undefined => {
-  const i18nKey = definition.i18nPlaceholderKey;
-  if (!i18nKey) return undefined;
+  // gitleaks:allow — false-positive on i18n string identifiers
+  const i18nPlaceholderToken = definition.i18nPlaceholderKey;
+  if (!i18nPlaceholderToken) return undefined;
   if (t) {
-    const translated = t(i18nKey);
-    if (translated && translated !== i18nKey) return translated;
+    const translated = t(i18nPlaceholderToken);
+    if (translated && translated !== i18nPlaceholderToken) return translated;
   }
   return undefined;
 };
