@@ -9,6 +9,8 @@ import type {
   StartupProbeOrigin,
 } from '../../../../entities/endpoint-startup-exposure/types';
 import {
+  getEffectiveFirewallEventLogEnabled,
+  getEffectiveRdpEnabled,
   isStartupExposureForDevice,
   isStartupExposureFullyEvaluable,
 } from '../../../../entities/endpoint-startup-exposure/types';
@@ -80,37 +82,56 @@ function formatMillis(value: number | null | undefined): string {
   return `${value} ms`;
 }
 
-interface BoolBadgeProps {
+// Codex 019e83a6 iter-2 must_fix #2 absorb: the two exposure scalars
+// have DIFFERENT operator semantics for the same boolean value, so they
+// need different tone policies — one shared BoolBadge would either flip
+// firewall logging to a warning when it's on (wrong) or flip RDP to a
+// success when it's on (also wrong). We split into two tone vectors.
+type ExposureTonePolarity = 'rdp' | 'firewall-event-log';
+
+interface ExposureBadgeProps {
   value: boolean | null;
+  polarity: ExposureTonePolarity;
   trueLabel: string;
   falseLabel: string;
   unknownLabel: string;
   testId: string;
 }
 
-const BoolBadge: React.FC<BoolBadgeProps> = ({
+const ExposureBadge: React.FC<ExposureBadgeProps> = ({
   value,
+  polarity,
   trueLabel,
   falseLabel,
   unknownLabel,
   testId,
 }) => {
-  // Tri-state badge — null is "probe inconclusive", distinct from
-  // explicit true/false. `enabled` rendered as warning (RDP/firewall
-  // enabled is the higher-risk operator signal, NOT success).
   let label = unknownLabel;
   let toneClass = 'bg-surface-default text-text-secondary border-border-default';
   if (value === true) {
     label = trueLabel;
-    toneClass = 'bg-state-warning-subtle text-state-warning-text border-state-warning-border';
+    if (polarity === 'rdp') {
+      // RDP enabled → higher exposure → warning
+      toneClass = 'bg-state-warning-subtle text-state-warning-text border-state-warning-border';
+    } else {
+      // Firewall event-log enabled → audit/visibility is healthy → success
+      toneClass = 'bg-state-success-subtle text-state-success-text border-state-success-border';
+    }
   } else if (value === false) {
     label = falseLabel;
-    toneClass = 'bg-state-success-subtle text-state-success-text border-state-success-border';
+    if (polarity === 'rdp') {
+      // RDP disabled → lower exposure → success
+      toneClass = 'bg-state-success-subtle text-state-success-text border-state-success-border';
+    } else {
+      // Firewall event-log disabled → operator should notice → warning
+      toneClass = 'bg-state-warning-subtle text-state-warning-text border-state-warning-border';
+    }
   }
   return (
     <span
       data-testid={testId}
       data-value={value === null ? 'null' : String(value)}
+      data-polarity={polarity}
       className={`inline-flex items-center rounded-full border px-3 py-0.5 text-xs ${toneClass}`}
     >
       {label}
@@ -150,43 +171,54 @@ interface ExposurePanelProps {
   t: (key: string) => string;
 }
 
-const ExposurePanel: React.FC<ExposurePanelProps> = ({ snapshot, t }) => (
-  <section className="space-y-2" data-testid="startup-exposure-summary">
-    <h4 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-      {t('endpointAdmin.drawer.startupExposure.exposure.heading')}
-    </h4>
-    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
-      <div>
-        <dt className="text-text-secondary text-xs">
-          {t('endpointAdmin.drawer.startupExposure.exposure.rdp')}
-        </dt>
-        <dd>
-          <BoolBadge
-            value={snapshot.rdpEnabled}
-            trueLabel={t('endpointAdmin.drawer.startupExposure.badge.enabled')}
-            falseLabel={t('endpointAdmin.drawer.startupExposure.badge.disabled')}
-            unknownLabel={t('endpointAdmin.drawer.startupExposure.badge.unknown')}
-            testId="startup-exposure-rdp-badge"
-          />
-        </dd>
-      </div>
-      <div>
-        <dt className="text-text-secondary text-xs">
-          {t('endpointAdmin.drawer.startupExposure.exposure.firewallEventLog')}
-        </dt>
-        <dd>
-          <BoolBadge
-            value={snapshot.windowsFirewallEventLogEnabled}
-            trueLabel={t('endpointAdmin.drawer.startupExposure.badge.enabled')}
-            falseLabel={t('endpointAdmin.drawer.startupExposure.badge.disabled')}
-            unknownLabel={t('endpointAdmin.drawer.startupExposure.badge.unknown')}
-            testId="startup-exposure-firewall-badge"
-          />
-        </dd>
-      </div>
-    </dl>
-  </section>
-);
+const ExposurePanel: React.FC<ExposurePanelProps> = ({ snapshot, t }) => {
+  // Codex 019e83a6 iter-2 must_fix #1: derive trustworthy values via
+  // the per-scalar effective getters. supported=false / RDP_PROBE_FAILED
+  // / FIREWALL_PROBE_FAILED / NO_EVIDENCE all flip the relevant scalar
+  // to "unknown" so the badge never renders a confident success-tone
+  // "Kapalı" on fail-closed evidence.
+  const effectiveRdp = getEffectiveRdpEnabled(snapshot);
+  const effectiveFirewall = getEffectiveFirewallEventLogEnabled(snapshot);
+  return (
+    <section className="space-y-2" data-testid="startup-exposure-summary">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+        {t('endpointAdmin.drawer.startupExposure.exposure.heading')}
+      </h4>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        <div>
+          <dt className="text-text-secondary text-xs">
+            {t('endpointAdmin.drawer.startupExposure.exposure.rdp')}
+          </dt>
+          <dd>
+            <ExposureBadge
+              value={effectiveRdp}
+              polarity="rdp"
+              trueLabel={t('endpointAdmin.drawer.startupExposure.badge.enabled')}
+              falseLabel={t('endpointAdmin.drawer.startupExposure.badge.disabled')}
+              unknownLabel={t('endpointAdmin.drawer.startupExposure.badge.unknown')}
+              testId="startup-exposure-rdp-badge"
+            />
+          </dd>
+        </div>
+        <div>
+          <dt className="text-text-secondary text-xs">
+            {t('endpointAdmin.drawer.startupExposure.exposure.firewallEventLog')}
+          </dt>
+          <dd>
+            <ExposureBadge
+              value={effectiveFirewall}
+              polarity="firewall-event-log"
+              trueLabel={t('endpointAdmin.drawer.startupExposure.badge.enabled')}
+              falseLabel={t('endpointAdmin.drawer.startupExposure.badge.disabled')}
+              unknownLabel={t('endpointAdmin.drawer.startupExposure.badge.unknown')}
+              testId="startup-exposure-firewall-badge"
+            />
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+};
 
 const LOCATION_BADGE_CLASS: Record<StartupAppLocation, string> = {
   HKLM_RUN: 'bg-surface-muted text-text-primary border-border-default',
@@ -351,7 +383,16 @@ const ProbeErrorsPanel: React.FC<ProbeErrorsPanelProps> = ({ probeErrors, t }) =
               >
                 <td className="px-3 py-2 font-mono text-xs">{err.rowOrdinal}</td>
                 <td className="px-3 py-2 font-mono text-xs">{err.code}</td>
-                <td className="px-3 py-2 font-mono text-xs">{err.source ?? '—'}</td>
+                {/* Codex 019e83a6 iter-2 P2 absorb: source is the
+                    autorun-anchor enum (StartupAppLocation) when set —
+                    render via the existing location i18n label so
+                    known values display the same as table location
+                    chips. Null/absent fallback "—". */}
+                <td className="px-3 py-2 font-mono text-xs">
+                  {err.source
+                    ? t(`endpointAdmin.drawer.startupExposure.location.${err.source}`)
+                    : '—'}
+                </td>
                 <td className="px-3 py-2 whitespace-pre-wrap">{err.summary ?? '—'}</td>
               </tr>
             ))}

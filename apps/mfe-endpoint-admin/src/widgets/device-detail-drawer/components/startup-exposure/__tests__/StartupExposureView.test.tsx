@@ -206,20 +206,107 @@ describe('StartupExposureView — supported / probeComplete (AG-039 P1 precedent
   });
 });
 
-describe('StartupExposureView — exposure tri-state badges', () => {
-  it('rdpEnabled=true → warning toned badge (data-value=true)', () => {
+describe('StartupExposureView — exposure tri-state badges (Codex iter-2 must_fix #1+#2)', () => {
+  it('rdpEnabled=true → data-polarity=rdp + warning toned', () => {
     mockQuery({ currentData: buildSnapshot({ rdpEnabled: true }) });
     render(<StartupExposureView deviceId={DEVICE_A} active />);
+    const rdp = screen.getByTestId('startup-exposure-rdp-badge');
+    expect(rdp.getAttribute('data-value')).toBe('true');
+    expect(rdp.getAttribute('data-polarity')).toBe('rdp');
+    expect(rdp.className).toMatch(/state-warning/);
+  });
+
+  it('rdpEnabled=false → success toned (RDP disabled = safe)', () => {
+    mockQuery({ currentData: buildSnapshot({ rdpEnabled: false }) });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    const rdp = screen.getByTestId('startup-exposure-rdp-badge');
+    expect(rdp.getAttribute('data-value')).toBe('false');
+    expect(rdp.className).toMatch(/state-success/);
+  });
+
+  it('firewallEventLog=true → SUCCESS toned (logging is good audit signal)', () => {
+    mockQuery({ currentData: buildSnapshot({ windowsFirewallEventLogEnabled: true }) });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    const fw = screen.getByTestId('startup-exposure-firewall-badge');
+    expect(fw.getAttribute('data-value')).toBe('true');
+    expect(fw.getAttribute('data-polarity')).toBe('firewall-event-log');
+    expect(fw.className).toMatch(/state-success/);
+  });
+
+  it('firewallEventLog=false → WARNING toned (operator should notice missing audit)', () => {
+    mockQuery({ currentData: buildSnapshot({ windowsFirewallEventLogEnabled: false }) });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    const fw = screen.getByTestId('startup-exposure-firewall-badge');
+    expect(fw.getAttribute('data-value')).toBe('false');
+    expect(fw.className).toMatch(/state-warning/);
+  });
+
+  it('RDP_PROBE_FAILED → RDP badge unknown even though rdpEnabled=false (fail-closed)', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        rdpEnabled: false,
+        windowsFirewallEventLogEnabled: true,
+        probeErrors: [{ rowOrdinal: 0, code: 'RDP_PROBE_FAILED', summary: 'access denied' }],
+      }),
+    });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    expect(screen.getByTestId('startup-exposure-rdp-badge').getAttribute('data-value')).toBe(
+      'null',
+    );
+    expect(screen.getByTestId('startup-exposure-firewall-badge').getAttribute('data-value')).toBe(
+      'true',
+    );
+  });
+
+  it('FIREWALL_PROBE_FAILED → firewall badge unknown only', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        rdpEnabled: true,
+        windowsFirewallEventLogEnabled: true,
+        probeErrors: [{ rowOrdinal: 0, code: 'FIREWALL_PROBE_FAILED', summary: 'reg denied' }],
+      }),
+    });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    expect(screen.getByTestId('startup-exposure-firewall-badge').getAttribute('data-value')).toBe(
+      'null',
+    );
     expect(screen.getByTestId('startup-exposure-rdp-badge').getAttribute('data-value')).toBe(
       'true',
     );
   });
 
-  it('rdpEnabled=false → success toned badge', () => {
-    mockQuery({ currentData: buildSnapshot({ rdpEnabled: false }) });
+  it('NO_EVIDENCE → BOTH badges unknown', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        rdpEnabled: false,
+        windowsFirewallEventLogEnabled: false,
+        probeErrors: [{ rowOrdinal: 0, code: 'NO_EVIDENCE', summary: 'overall timeout' }],
+      }),
+    });
     render(<StartupExposureView deviceId={DEVICE_A} active />);
     expect(screen.getByTestId('startup-exposure-rdp-badge').getAttribute('data-value')).toBe(
-      'false',
+      'null',
+    );
+    expect(screen.getByTestId('startup-exposure-firewall-badge').getAttribute('data-value')).toBe(
+      'null',
+    );
+  });
+
+  it('supported=false → BOTH badges unknown (non-Windows stub guard)', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        supported: false,
+        probeComplete: null,
+        rdpEnabled: false,
+        windowsFirewallEventLogEnabled: false,
+      }),
+    });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    expect(screen.getByTestId('startup-exposure-rdp-badge').getAttribute('data-value')).toBe(
+      'null',
+    );
+    expect(screen.getByTestId('startup-exposure-firewall-badge').getAttribute('data-value')).toBe(
+      'null',
     );
   });
 
@@ -329,6 +416,29 @@ describe('StartupExposureView — probeErrors', () => {
     render(<StartupExposureView deviceId={DEVICE_A} active />);
     expect(screen.getByTestId('startup-exposure-probe-errors-empty')).toBeInTheDocument();
     expect(screen.queryByTestId('startup-exposure-probe-errors')).toBeNull();
+  });
+
+  it('probeErrors.source = StartupAppLocation enum renders via location i18n key (must_fix #2/P2)', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        probeErrors: [
+          { rowOrdinal: 0, code: 'NAME_VALUE_REDACTED', source: 'HKLM_RUN', summary: 'bounded' },
+          {
+            rowOrdinal: 1,
+            code: 'STARTUP_FOLDER_UNREADABLE',
+            source: 'STARTUP_FOLDER_USER',
+            summary: 'access denied',
+          },
+        ],
+      }),
+    });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    expect(screen.getByTestId('startup-exposure-probe-error-row-0').textContent).toMatch(
+      /location\.HKLM_RUN/,
+    );
+    expect(screen.getByTestId('startup-exposure-probe-error-row-1').textContent).toMatch(
+      /location\.STARTUP_FOLDER_USER/,
+    );
   });
 
   it('probeErrors source + summary null+absent → "—" fallback', () => {

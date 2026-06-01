@@ -65,17 +65,84 @@ export interface StartupApp {
 }
 
 /**
- * Per-probe error row. Both `source` and `summary` are nullable: the
- * backend column + policy allow probe errors with just a code.
- * `source` when set is one of the facet-source enum keys (e.g.
- * "registry", "scheduledTask", "firewallEventLog", "rdp") — bounded
- * string, NOT freeform.
+ * Per-probe error row. Both `source` and `summary` are nullable.
+ *
+ * Codex 019e83a6 iter-2 P2 absorb: `source` is the autorun-anchor enum
+ * (StartupAppLocation), NOT a freeform facet name. The backend policy
+ * (`StartupExposurePayloadPolicy`) enforces source against the same
+ * canonical allowlist as `StartupApp.location`. When the probe error
+ * concerns the RDP / firewall scalars (not an autorun anchor), the
+ * agent emits `source` as `null` and the `code` carries the semantic
+ * (e.g. `RDP_PROBE_FAILED`, `FIREWALL_PROBE_FAILED`, `NO_EVIDENCE`).
  */
 export interface StartupExposureProbeError {
   rowOrdinal: number;
   code: string;
-  source?: string | null;
+  source?: StartupAppLocation | null;
   summary?: string | null;
+}
+
+/**
+ * Codex 019e83a6 iter-2 P1 absorb — exposure-scalar evidence enum.
+ *
+ * The agent emits typed probe-error codes that flag the
+ * top-level scalars as untrustworthy:
+ * - `RDP_PROBE_FAILED` — `rdpEnabled` is untrustworthy
+ * - `FIREWALL_PROBE_FAILED` — `windowsFirewallEventLogEnabled` is
+ *   untrustworthy
+ * - `NO_EVIDENCE` — the whole probe failed; BOTH scalars are
+ *   untrustworthy
+ *
+ * The non-Windows stub also returns `supported=false` + `false/false`
+ * scalars; the view MUST NOT show a "Kapalı (success)" badge on
+ * unsupported runtime or on a scalar whose corresponding probe error
+ * is present — that would turn fail-closed evidence into a positive
+ * operator signal. Use these helpers to derive the display value:
+ * `null` (unknown) suppresses the badge tone instead of rendering a
+ * false-confidence "closed" state.
+ */
+export const PROBE_ERROR_CODE_RDP_FAILED = 'RDP_PROBE_FAILED';
+export const PROBE_ERROR_CODE_FIREWALL_FAILED = 'FIREWALL_PROBE_FAILED';
+export const PROBE_ERROR_CODE_NO_EVIDENCE = 'NO_EVIDENCE';
+
+/**
+ * Returns the trustworthy effective value of `rdpEnabled`, or `null`
+ * when the agent evidence says the scalar is untrustworthy. Codex
+ * 019e83a6 iter-2 P1 absorb.
+ */
+export function getEffectiveRdpEnabled(
+  snapshot: StartupExposureSnapshot | null | undefined,
+): boolean | null {
+  if (!snapshot) return null;
+  if (snapshot.supported !== true) return null;
+  if (
+    snapshot.probeErrors?.some(
+      (e) => e.code === PROBE_ERROR_CODE_RDP_FAILED || e.code === PROBE_ERROR_CODE_NO_EVIDENCE,
+    )
+  ) {
+    return null;
+  }
+  return snapshot.rdpEnabled;
+}
+
+/**
+ * Returns the trustworthy effective value of
+ * `windowsFirewallEventLogEnabled`, or `null` when untrustworthy.
+ * Codex 019e83a6 iter-2 P1 absorb.
+ */
+export function getEffectiveFirewallEventLogEnabled(
+  snapshot: StartupExposureSnapshot | null | undefined,
+): boolean | null {
+  if (!snapshot) return null;
+  if (snapshot.supported !== true) return null;
+  if (
+    snapshot.probeErrors?.some(
+      (e) => e.code === PROBE_ERROR_CODE_FIREWALL_FAILED || e.code === PROBE_ERROR_CODE_NO_EVIDENCE,
+    )
+  ) {
+    return null;
+  }
+  return snapshot.windowsFirewallEventLogEnabled;
 }
 
 /**
