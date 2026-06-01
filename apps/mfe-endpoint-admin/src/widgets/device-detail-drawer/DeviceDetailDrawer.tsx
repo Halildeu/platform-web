@@ -82,6 +82,18 @@ const HotfixPostureTab = React.lazy(() =>
   })),
 );
 
+// AG-038 agent self-diagnostics — Faz 22.5. Same lazy-mount pattern as
+// hotfix-posture / outdated-software: the agent-meta panel, connectivity
+// badges, lastError facet, and probeErrors list never render until the
+// operator selects the "Agent Tanılaması" tab. Direct lazy-import of
+// the view (no thin Tab wrapper — Codex 019e833d must_fix #7 follows the
+// HotfixPosture / DeviceHealth precedent).
+const DiagnosticsTab = React.lazy(() =>
+  import('./components/agent-diagnostics/DiagnosticsView').then((m) => ({
+    default: m.DiagnosticsView,
+  })),
+);
+
 const TabFallback: React.FC = () => (
   <div
     role="status"
@@ -102,6 +114,7 @@ export type DeviceDetailDrawerTabKey =
   | 'health'
   | 'outdated-software'
   | 'hotfix-posture'
+  | 'diagnostics'
   | 'software-catalog'
   | 'compliance';
 
@@ -290,6 +303,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <HotfixPostureTab deviceId={device.id} active={activeTab === 'hotfix-posture'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'diagnostics' as const,
+        label: t('endpointAdmin.drawer.tab.diagnostics'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <DiagnosticsTab deviceId={device.id} active={activeTab === 'diagnostics'} />
           </React.Suspense>
         ),
       },

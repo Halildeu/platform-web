@@ -109,6 +109,7 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.health': 'Sağlık',
   'endpointAdmin.drawer.tab.outdatedSoftware': 'Güncel Olmayan Yazılım',
   'endpointAdmin.drawer.tab.hotfixPosture': 'Hotfix Duruşu',
+  'endpointAdmin.drawer.tab.diagnostics': 'Agent Tanılaması',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
@@ -320,6 +321,46 @@ const DICT_TR = {
     'kurulu listesi kısaltılmış',
   'endpointAdmin.drawer.hotfixPosture.history.flag.truncatedPending':
     'bekleyen listesi kısaltılmış',
+  // AG-038 Agent Tanılaması tab — read-only diagnostics snapshot
+  'endpointAdmin.drawer.diagnostics.title': 'Agent Tanılaması',
+  'endpointAdmin.drawer.diagnostics.subtitle':
+    'Ajanın en son self-diagnostics anlık durumu (yalnızca okuma).',
+  'endpointAdmin.drawer.diagnostics.loading': 'Tanılama bilgisi yükleniyor…',
+  'endpointAdmin.drawer.diagnostics.error': 'Tanılama bilgisi alınamadı.',
+  'endpointAdmin.drawer.diagnostics.forbidden':
+    'Tanılama bilgisini görüntüleme yetkiniz yok (endpoint-admin / can_view).',
+  'endpointAdmin.drawer.diagnostics.empty':
+    'Bu cihaz için tanılama anlık görünümü henüz yok. Ajanı tetiklemek için İşlemler tab → "Envanteri Şimdi Topla" (`includeDiagnostics:true` payload bit\'i ile) komutu gönderin.',
+  'endpointAdmin.drawer.diagnostics.unsupported':
+    'Agent self-diagnostics bu çalışma zamanında desteklenmiyor (Windows dışı runtime).',
+  'endpointAdmin.drawer.diagnostics.incomplete':
+    'Ajan kanıtı eksik — self-diagnostics probe tamamlanamadı. Bağlantı sinyalleri güvenilir değildir; aşağıdaki probe hataları nedeni gösterir.',
+  'endpointAdmin.drawer.diagnostics.staleArg':
+    'Bu görünüm farklı bir cihaza ait önceki sonuçtan kalmış. Lütfen yeniden açın.',
+  'endpointAdmin.drawer.diagnostics.meta.heading': 'Ajan Üst Verisi',
+  'endpointAdmin.drawer.diagnostics.meta.agentVersion': 'Ajan Sürümü',
+  'endpointAdmin.drawer.diagnostics.meta.configHash': 'Yapılandırma Özeti',
+  'endpointAdmin.drawer.diagnostics.meta.collectedAt': 'Toplama Zamanı',
+  'endpointAdmin.drawer.diagnostics.meta.probeDuration': 'Probe Süresi',
+  'endpointAdmin.drawer.diagnostics.connectivity.heading': 'Bağlantı Sinyalleri',
+  'endpointAdmin.drawer.diagnostics.connectivity.lastPollLatency': 'Son Poll Gecikmesi',
+  'endpointAdmin.drawer.diagnostics.connectivity.lastPollLatencyUnit': 'ms',
+  'endpointAdmin.drawer.diagnostics.connectivity.dns': 'Backend DNS',
+  'endpointAdmin.drawer.diagnostics.connectivity.tls': 'Backend TLS',
+  'endpointAdmin.drawer.diagnostics.badge.reachable': 'Erişilebilir',
+  'endpointAdmin.drawer.diagnostics.badge.unreachable': 'Erişilemiyor',
+  'endpointAdmin.drawer.diagnostics.badge.valid': 'Geçerli',
+  'endpointAdmin.drawer.diagnostics.badge.invalid': 'Geçersiz',
+  'endpointAdmin.drawer.diagnostics.badge.unknown': 'Bilinmiyor',
+  'endpointAdmin.drawer.diagnostics.lastError.heading': 'Son Hata',
+  'endpointAdmin.drawer.diagnostics.lastError.occurredAt': 'Hata Zamanı',
+  'endpointAdmin.drawer.diagnostics.lastError.code': 'Hata Kodu',
+  'endpointAdmin.drawer.diagnostics.lastError.summary': 'Özet',
+  'endpointAdmin.drawer.diagnostics.probeErrors.heading': 'Probe Hataları',
+  'endpointAdmin.drawer.diagnostics.probeErrors.empty': 'Probe sırasında hata kaydedilmedi.',
+  'endpointAdmin.drawer.diagnostics.probeErrors.col.rowOrdinal': '#',
+  'endpointAdmin.drawer.diagnostics.probeErrors.col.code': 'Kod',
+  'endpointAdmin.drawer.diagnostics.probeErrors.col.summary': 'Özet',
   // Detay tab
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Görünen Ad',
