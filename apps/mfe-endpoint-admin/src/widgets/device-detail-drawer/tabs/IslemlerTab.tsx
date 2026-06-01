@@ -69,17 +69,28 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
     // opt-in flag and runs the AG-025H lightweight contract (host / os /
     // identity only). That meant the WEB-013 Donanım drawer tab could
     // never get hardware evidence because AG-035's
-    // CollectOptions.IncludeHardware was always false. We now set all
-    // three opt-in bits when the operator triggers "Envanteri Şimdi
-    // Topla" — software inventory + WinGet egress preflight + hardware
-    // probe — so a single click produces the full snapshot the
-    // Envanter / Donanım tabs render.
+    // CollectOptions.IncludeHardware was always false. We now set ALL
+    // opt-in bits when the operator triggers "Envanteri Şimdi Topla" —
+    // software inventory + WinGet egress preflight + hardware probe +
+    // device-health + outdated software + hotfix posture + agent
+    // diagnostics + critical services — so a single click produces the
+    // full snapshot every drawer tab renders.
     //
     // The field name is `payload` to match the backend
     // CreateEndpointCommandRequest record (Map<String, Object> payload).
     // The agent's COLLECT_INVENTORY executor reads
     // `boolPayload(command.Payload, "includeHardware")` etc. directly
-    // from this map.
+    // from this map; see
+    // platform-agent internal/commands/executor.go normaliseCollectOptions
+    // for the canonical bit-name list.
+    //
+    // Codex 019e8389 must_fix #1 absorb: includeServices:true added for
+    // AG-039 critical-services Hizmetler tab. Without this, the new tab
+    // would only ever render the 404 empty state because no operator
+    // command ever flips the payload bit (the empty-state copy gives
+    // operators the literal command but having to type it by hand is
+    // friction — the canonical "trigger every probe" button must just
+    // work).
     if (type === 'COLLECT_INVENTORY') {
       onIssueCommand({
         type,
@@ -87,6 +98,11 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
           includeSoftware: true,
           includeWinGetEgress: true,
           includeHardware: true,
+          includeDeviceHealth: true,
+          includeOutdatedSoftware: true,
+          includeHotfixPosture: true,
+          includeDiagnostics: true,
+          includeServices: true,
         },
       });
       return;

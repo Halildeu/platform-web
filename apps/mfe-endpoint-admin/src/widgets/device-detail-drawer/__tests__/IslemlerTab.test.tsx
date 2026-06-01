@@ -61,14 +61,20 @@ describe('IslemlerTab — offline guard', () => {
 });
 
 describe('IslemlerTab — non-destructive flow', () => {
-  it('COLLECT_INVENTORY click onIssueCommand tetikler (WEB-018: 3 opt-in bit payload)', () => {
-    // WEB-018 (Faz 22.5.x) — "Envanteri Şimdi Topla" artık 3 opt-in
-    // bit set ediyor (includeSoftware + includeWinGetEgress +
-    // includeHardware). Tek tıklama ile agent AG-025H lightweight
-    // contract'tan çıkıp software inventory + WinGet egress preflight
-    // + AG-035 hardware probe çalıştırır. Field name `payload` çünkü
-    // backend CreateEndpointCommandRequest record Map<String, Object>
-    // payload alır (details DEĞİL).
+  it('COLLECT_INVENTORY click onIssueCommand tetikler (full 8 opt-in bit payload)', () => {
+    // WEB-018 (Faz 22.5.x) — "Envanteri Şimdi Topla" originally set 3
+    // opt-in bits (includeSoftware + includeWinGetEgress +
+    // includeHardware). Codex 019e8389 AG-039 must_fix #1 absorb:
+    // every drawer tab that consumes a separate probe-output snapshot
+    // must have its corresponding opt-in bit set here, or the
+    // canonical "trigger every probe" button degenerates into "trigger
+    // some probes". Now ships 8 bits — software + winget-egress +
+    // hardware + device-health (AG-033) + outdated software (AG-036) +
+    // hotfix posture (AG-037) + agent diagnostics (AG-038) + critical
+    // services (AG-039). Backend ingests whichever blocks the agent
+    // emits; missing bits just leave those tabs at the 404 empty state.
+    // Field name `payload` matches the backend
+    // CreateEndpointCommandRequest record (Map<String, Object>).
     const onIssueCommand = vi.fn();
     render(<IslemlerTab {...defaults} device={baseDevice} onIssueCommand={onIssueCommand} />);
     fireEvent.click(screen.getByTestId('command-button-COLLECT_INVENTORY'));
@@ -78,6 +84,11 @@ describe('IslemlerTab — non-destructive flow', () => {
         includeSoftware: true,
         includeWinGetEgress: true,
         includeHardware: true,
+        includeDeviceHealth: true,
+        includeOutdatedSoftware: true,
+        includeHotfixPosture: true,
+        includeDiagnostics: true,
+        includeServices: true,
       },
     });
   });

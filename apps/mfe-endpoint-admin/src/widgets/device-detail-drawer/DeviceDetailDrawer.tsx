@@ -94,6 +94,15 @@ const DiagnosticsTab = React.lazy(() =>
   })),
 );
 
+// AG-039 critical services inventory — Faz 22.5. Same lazy-mount pattern;
+// the 6-service table, state/startup badges, and probeErrors list never
+// render until the operator selects the "Hizmetler" tab.
+const ServicesTab = React.lazy(() =>
+  import('./components/services/ServicesView').then((m) => ({
+    default: m.ServicesView,
+  })),
+);
+
 const TabFallback: React.FC = () => (
   <div
     role="status"
@@ -115,6 +124,7 @@ export type DeviceDetailDrawerTabKey =
   | 'outdated-software'
   | 'hotfix-posture'
   | 'diagnostics'
+  | 'services'
   | 'software-catalog'
   | 'compliance';
 
@@ -312,6 +322,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <DiagnosticsTab deviceId={device.id} active={activeTab === 'diagnostics'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'services' as const,
+        label: t('endpointAdmin.drawer.tab.services'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <ServicesTab deviceId={device.id} active={activeTab === 'services'} />
           </React.Suspense>
         ),
       },
