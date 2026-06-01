@@ -162,6 +162,21 @@ export interface StatusColumnMeta extends BaseColumnMeta {
   statusMap: Record<string, StatusMapEntry>;
   /** Fallback variant */
   defaultVariant?: BadgeVariant;
+  /**
+   * PR-D1b.B (Codex thread `019e8074`, 2026-06-01) — explicit set-filter
+   * dropdown override. When defined, the AG Grid set filter uses these
+   * values verbatim instead of falling back to `Object.keys(statusMap)`.
+   * Mirrors the existing {@link BadgeColumnMeta.filterValues} surface so
+   * status columns can also pin their filter dropdown to a curated
+   * subset (e.g. only render the 3 most-common statuses; hide rare
+   * synthetic statuses that exist in the data but should not be
+   * user-selectable).
+   *
+   * Backend touchpoint: this mirrors `ColumnDefinition.filterValues`
+   * on the report-service side (PR-D1a). The dynamic factory maps
+   * `meta.filterValues` from the L2 transport DTO onto this field.
+   */
+  filterValues?: string[];
 }
 
 /* ------------------------------------------------------------------ */

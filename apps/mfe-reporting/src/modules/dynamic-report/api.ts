@@ -123,7 +123,15 @@ const REPORTS_BASE = '/v1/reports';
 const COMPANY_ID_STORAGE_KEY = 'reporting:currentCompanyId';
 const COMPANY_HEADER = 'X-Company-Id';
 
-const resolveHttpClient = (): ApiInstance => {
+/**
+ * PR-D1b.B (Codex thread 019e8074, 2026-06-01) — exported for
+ * `filters/options-source-cache.ts` consumption only. Treat as
+ * **dynamic-report internal** API surface: callers outside
+ * `modules/dynamic-report/` MUST NOT import this. Cross-module HTTP usage
+ * should go through `getShellServices().http` directly to keep the
+ * shell-host auth wiring single-sourced.
+ */
+export const resolveHttpClient = (): ApiInstance => {
   try {
     return getShellServices().http;
   } catch {
@@ -167,7 +175,12 @@ const isReportAuthReady = async (): Promise<boolean> => {
  * authoritative selector for the active company schema. Single-company users
  * are auto-selected server-side, so the header is optional in that case.
  */
-const resolveCompanyId = (): string | undefined => {
+/**
+ * PR-D1b.B (Codex thread 019e8074, 2026-06-01) — exported for
+ * `filters/options-source-cache.ts` companyId-scoped cache key only.
+ * Treat as **dynamic-report internal**.
+ */
+export const resolveCompanyId = (): string | undefined => {
   try {
     const services = getShellServices();
     const fromShell = (
@@ -190,7 +203,16 @@ const resolveCompanyId = (): string | undefined => {
   return undefined;
 };
 
-const buildCompanyHeaders = (): Record<string, string> => {
+/**
+ * PR-D1b.B (Codex thread 019e8074, 2026-06-01) — exported for
+ * `filters/options-source-cache.ts` consumption only. Treat as
+ * **dynamic-report internal** API surface; callers outside
+ * `modules/dynamic-report/` must not import this. The header value
+ * follows the active company id resolved via {@link resolveCompanyId},
+ * which itself reads from shell-services first and `localStorage` as
+ * fallback.
+ */
+export const buildCompanyHeaders = (): Record<string, string> => {
   const companyId = resolveCompanyId();
   return companyId ? { [COMPANY_HEADER]: companyId } : {};
 };

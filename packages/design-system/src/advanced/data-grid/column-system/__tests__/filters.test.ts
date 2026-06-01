@@ -15,7 +15,9 @@ describe('buildFilterConfig', () => {
 
   it('badge → agSetColumnFilter with variantMap keys', () => {
     const meta: ColumnMeta = {
-      field: 'role', headerNameKey: 'r', columnType: 'badge',
+      field: 'role',
+      headerNameKey: 'r',
+      columnType: 'badge',
       variantMap: { ADMIN: 'danger', USER: 'info' },
     };
     const cfg = buildFilterConfig(meta);
@@ -28,7 +30,9 @@ describe('buildFilterConfig', () => {
 
   it('badge filterValues override → filterValues kullanılır', () => {
     const meta: ColumnMeta = {
-      field: 'role', headerNameKey: 'r', columnType: 'badge',
+      field: 'role',
+      headerNameKey: 'r',
+      columnType: 'badge',
       variantMap: { ADMIN: 'danger', USER: 'info', EDITOR: 'warning' },
       filterValues: ['ADMIN', 'USER'],
     };
@@ -41,7 +45,9 @@ describe('buildFilterConfig', () => {
 
   it('status → agSetColumnFilter with statusMap keys', () => {
     const meta: ColumnMeta = {
-      field: 'status', headerNameKey: 's', columnType: 'status',
+      field: 'status',
+      headerNameKey: 's',
+      columnType: 'status',
       statusMap: {
         ACTIVE: { variant: 'success', labelKey: 'active' },
         INACTIVE: { variant: 'muted', labelKey: 'inactive' },
@@ -49,6 +55,46 @@ describe('buildFilterConfig', () => {
     };
     const cfg = buildFilterConfig(meta);
     expect(cfg?.filter).toBe('agSetColumnFilter');
+    expect(cfg?.filterParams).toEqual({
+      values: ['ACTIVE', 'INACTIVE'],
+      suppressSyncValuesAfterDataChange: true,
+    });
+  });
+
+  // PR-D1b.B (Codex thread 019e8074, 2026-06-01) — status filterValues override
+  it('status → uses explicit filterValues when defined (overrides statusMap keys)', () => {
+    const meta: ColumnMeta = {
+      field: 'status',
+      headerNameKey: 's',
+      columnType: 'status',
+      statusMap: {
+        ACTIVE: { variant: 'success', labelKey: 'active' },
+        INACTIVE: { variant: 'muted', labelKey: 'inactive' },
+        PENDING: { variant: 'warning', labelKey: 'pending' },
+        DELETED: { variant: 'danger', labelKey: 'deleted' },
+      },
+      filterValues: ['ACTIVE', 'INACTIVE'], // curated subset; PENDING + DELETED hidden from dropdown
+    };
+    const cfg = buildFilterConfig(meta);
+    expect(cfg?.filter).toBe('agSetColumnFilter');
+    expect(cfg?.filterParams).toEqual({
+      values: ['ACTIVE', 'INACTIVE'],
+      suppressSyncValuesAfterDataChange: true,
+    });
+  });
+
+  it('status → falls back to statusMap keys when filterValues undefined (regression guard)', () => {
+    const meta: ColumnMeta = {
+      field: 'status',
+      headerNameKey: 's',
+      columnType: 'status',
+      statusMap: {
+        ACTIVE: { variant: 'success', labelKey: 'active' },
+        INACTIVE: { variant: 'muted', labelKey: 'inactive' },
+      },
+      // filterValues intentionally omitted
+    };
+    const cfg = buildFilterConfig(meta);
     expect(cfg?.filterParams).toEqual({
       values: ['ACTIVE', 'INACTIVE'],
       suppressSyncValuesAfterDataChange: true,
@@ -87,7 +133,9 @@ describe('buildFilterConfig', () => {
 
   it('enum → agSetColumnFilter with labelMap keys', () => {
     const meta: ColumnMeta = {
-      field: 'e', headerNameKey: 'e', columnType: 'enum',
+      field: 'e',
+      headerNameKey: 'e',
+      columnType: 'enum',
       labelMap: { A: 'Seçenek A', B: 'Seçenek B' },
     };
     const cfg = buildFilterConfig(meta);
@@ -106,7 +154,12 @@ describe('buildFilterConfig', () => {
   });
 
   it('filterable: false → filter false', () => {
-    const meta: ColumnMeta = { field: 'x', headerNameKey: 'x', columnType: 'text', filterable: false };
+    const meta: ColumnMeta = {
+      field: 'x',
+      headerNameKey: 'x',
+      columnType: 'text',
+      filterable: false,
+    };
     const cfg = buildFilterConfig(meta);
     expect(cfg?.filter).toBe(false);
   });

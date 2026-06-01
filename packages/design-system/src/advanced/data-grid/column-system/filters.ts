@@ -4,7 +4,14 @@
  * Automatically selects the right filter type and params based on columnType.
  */
 
-import type { ColumnMeta, TranslateFn, BadgeColumnMeta, StatusColumnMeta, EnumColumnMeta, BooleanColumnMeta } from './types';
+import type {
+  ColumnMeta,
+  TranslateFn,
+  BadgeColumnMeta,
+  StatusColumnMeta,
+  EnumColumnMeta,
+  BooleanColumnMeta,
+} from './types';
 
 /* ------------------------------------------------------------------ */
 /*  Filter type mapping                                                */
@@ -54,7 +61,10 @@ export function buildFilterConfig(meta: ColumnMeta, t?: TranslateFn): FilterConf
       return {
         filter: 'agSetColumnFilter',
         filterParams: createSetFilterParams(
-          Object.keys(meta.statusMap),
+          // PR-D1b.B (Codex thread 019e8074, 2026-06-01): allow explicit
+          // filter-values override; falls back to statusMap keys (legacy
+          // behavior preserved for callers without filterValues set).
+          meta.filterValues ?? Object.keys(meta.statusMap),
           t ? createStatusValueFormatter(meta, t) : undefined,
         ),
       };
@@ -150,7 +160,7 @@ function createEnumValueFormatter(meta: EnumColumnMeta, t: TranslateFn): ValueFo
     if (typeof value !== 'string') return String(value ?? '');
     const mapped = meta.labelMap[value] ?? meta.labelMap[value.toUpperCase()];
     if (!mapped) return value;
-    return meta.labelsAreKeys ? (t(mapped) || mapped) : mapped;
+    return meta.labelsAreKeys ? t(mapped) || mapped : mapped;
   };
 }
 
