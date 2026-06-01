@@ -210,10 +210,19 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
   // Codex 019e6fd1 must-fix #6: stable per-intent idempotency key.
   // A retry of the same submit (modal open, same catalog item) reuses
   // the key so the backend deduplicates; a brand-new intent (reopen,
-  // different catalog) regenerates. Initialised empty and assigned
-  // by the per-intent reset effect below — the Confirm button stays
-  // disabled until the preflight resolves, by which time the effect
-  // has populated the key.
+  // different catalog) regenerates.
+  //
+  // WEB-014D-followup (Codex 019e830b REVISE must_fix #3): the per-
+  // intent reset effect below runs as a `useLayoutEffect` so the key
+  // is set BEFORE the browser paints. Previously the effect was a
+  // post-paint `useEffect`, meaning the first paint observed
+  // `idempotencyKey=''` and the confirm button was disabled via the
+  // `!idempotencyKey` gate — visible as a "silik" (muted) frame to
+  // operators when the lazy `React.Suspense` parent delayed the
+  // effect long enough. The empty initial state is preserved (not a
+  // lazy `useState` initialiser) to keep the per-intent counter
+  // single-source-of-truth in the layout effect — the layout effect
+  // generates one key per intent and the existing tests pass.
   const [idempotencyKey, setIdempotencyKey] = React.useState<string>('');
   const [reason, setReason] = React.useState('');
   const [localBlock, setLocalBlock] = React.useState<InstallPreflightResponse | null>(null);
@@ -277,7 +286,13 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
   // Must-fix #5: per-intent state reset. Keyed on (open, deviceId,
   // catalogItemId) so reopening the modal for the same catalog item
   // also issues a fresh idempotency key (treated as a new intent).
-  React.useEffect(() => {
+  //
+  // WEB-014D-followup (Codex 019e830b REVISE must_fix #3): runs as
+  // `useLayoutEffect` so the key is set synchronously AFTER React
+  // commits the mount but BEFORE the browser paints. Operators no
+  // longer see a "silik" (visually-muted) first frame where the
+  // confirm button is disabled because `idempotencyKey === ''`.
+  React.useLayoutEffect(() => {
     if (open) {
       const nextKey = generateIdempotencyKey();
       setIdempotencyKey(nextKey);
@@ -303,8 +318,20 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
   // modal open) without any additional freshness guarantee. The
   // double-fetch is removed; the safety contract (every modal open
   // sees a fresh evaluate) is preserved by the endpoint-level setting.
+  //
+  // WEB-014D-followup (Codex 019e830b REVISE must_fix #2): use RTK
+  // Query's `currentData` instead of `data` so the submit gate is
+  // anchored to the active intent. `data` is the LAST SUCCESSFUL
+  // response (may be stale across arg changes), while `currentData`
+  // is the response for the CURRENT args (undefined during refetch
+  // on arg change). With the `preflightFetching` gate removed
+  // (must_fix #4), `currentData` is what stops a leftover PASS from
+  // a prior catalog row from authorising a submit on the active row.
+  // The error-path logic (`preflightError && !effectivePreflight`)
+  // works off `effectivePreflight` itself, so the `data` destructure
+  // is no longer needed here.
   const {
-    data: serverPreflight,
+    currentData: currentServerPreflight,
     error: preflightError,
     isLoading: preflightLoading,
     isFetching: preflightFetching,
@@ -325,7 +352,16 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
   // Must-fix #4 + #C answer: local BLOCK override has priority over
   // any server preflight render. A 409 BLOCK recompute mutates only
   // localBlock; the underlying query data is not invalidated.
-  const effectivePreflight: InstallPreflightResponse | null = localBlock ?? serverPreflight ?? null;
+  //
+  // WEB-014D-followup (Codex 019e830b REVISE must_fix #2): prefer
+  // `currentServerPreflight` (arg-anchored to the live intent) over
+  // `serverPreflight` (last-successful-data, may be a previous catalog
+  // row's PASS hanging around during arg change). With the
+  // `preflightFetching` gate removed, this distinction is what keeps
+  // the submit honest — the operator can never click Confirm on a
+  // PASS that was computed for a *different* catalog row.
+  const effectivePreflight: InstallPreflightResponse | null =
+    localBlock ?? currentServerPreflight ?? null;
 
   if (!open) return null;
 
@@ -384,7 +420,18 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
   };
 
   const renderPreflightBody = () => {
-    if (preflightLoading || preflightFetching) {
+    // WEB-014D-followup (Codex 019e830b REVISE must_fix #1): render
+    // and gate semantics must agree. Previously this branch returned
+    // a loading placeholder whenever `preflightFetching` was true,
+    // which collapsed the body during background refetches — but the
+    // confirm gate also locked on `preflightFetching`, so render and
+    // submit stayed consistent at the cost of UX (the operator saw
+    // the PASS body disappear during recompute). With the fetching
+    // gate removed from `confirmDisabled`, we keep the existing PASS
+    // body rendered during a background refetch when we still have a
+    // last-successful-data snapshot; the initial-load placeholder
+    // only renders when we have NOTHING to show yet.
+    if (preflightLoading && !effectivePreflight) {
       return (
         <p className="text-sm text-text-secondary py-4" data-testid="install-modal-loading">
           {t('endpointAdmin.drawer.install.modal.loading')}
@@ -463,19 +510,47 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
     );
   };
 
-  // Codex 019e6fe4 must-fix #2: confirm gate guards against (a) RTK
-  // Query refetch frames where stale data sits next to a fresh
-  // `isFetching: true` (would otherwise let the user submit on the
-  // stale PASS while a recompute is in flight), and (b) the brief
-  // mount tick before the per-intent effect populates the idempotency
-  // key (would otherwise send an empty key).
-  const confirmDisabled =
-    !effectivePreflight ||
-    effectivePreflight.decision === 'BLOCK' ||
-    createState.isLoading ||
-    preflightLoading ||
-    preflightFetching ||
-    !idempotencyKey;
+  // WEB-014D-followup (Codex 019e830b REVISE must_fix #4 + #5):
+  // single source-of-truth for "why is the confirm button disabled" —
+  // a `confirmDisabledReason` string that drives BOTH the `disabled`
+  // attribute AND a production-visible `data-confirm-disabled-reason`
+  // DOM attribute so operators can DOM-inspect a regression instead
+  // of guessing. `'ok'` means clickable.
+  //
+  // History:
+  //  - Codex 019e6fe4 must-fix #2 originally added (a) `preflightFetching`
+  //    to guard against submit-on-stale-PASS during recompute, and
+  //    (b) `preflightLoading` + `!idempotencyKey` for initial-render
+  //    race.
+  //  - 019e830b REVISE removes the `preflightFetching` gate: the
+  //    backend POST `/installs` always recomputes preflight server-side
+  //    and returns 409 with a fresh BLOCK payload if the decision
+  //    flipped during refetch; the modal already handles that path via
+  //    `tryReadBlockRecompute(error.data)` + `setLocalBlock`. The gate
+  //    is belt-and-suspenders that locks the UI even when no recompute
+  //    is happening, producing the "silik" (visually-muted) regression
+  //    operators reported 2026-06-01.
+  //  - `idempotencyKey` per-intent reset is now `useLayoutEffect` so
+  //    the key is set BEFORE the browser paints. `!idempotencyKey` can
+  //    no longer fire as a visible disabled-reason on a modal that's
+  //    actually open with PASS data — the layout effect runs after
+  //    commit and before paint, populating the key in the same frame.
+  //  - `effectivePreflight` now uses `currentServerPreflight` so the
+  //    decision driving this gate is anchored to the CURRENT intent,
+  //    not a leftover `data` from a prior catalog row.
+  const confirmDisabledReason: 'no-data' | 'block' | 'in-flight' | 'loading' | 'no-key' | 'ok' =
+    !effectivePreflight
+      ? preflightLoading
+        ? 'loading'
+        : 'no-data'
+      : effectivePreflight.decision === 'BLOCK'
+        ? 'block'
+        : createState.isLoading
+          ? 'in-flight'
+          : !idempotencyKey
+            ? 'no-key'
+            : 'ok';
+  const confirmDisabled = confirmDisabledReason !== 'ok';
 
   const title = t('endpointAdmin.drawer.install.modal.title').replace('{name}', catalogDisplayName);
 
@@ -546,6 +621,8 @@ export const InstallPreflightModal: React.FC<InstallPreflightModalProps> = ({
             onClick={handleSubmit}
             disabled={confirmDisabled}
             data-testid="install-modal-confirm"
+            data-confirm-disabled-reason={confirmDisabledReason}
+            data-preflight-fetching={preflightFetching ? 'true' : undefined}
             className="px-4 py-2 rounded-md bg-primary text-white text-sm font-medium disabled:opacity-50"
           >
             {t('endpointAdmin.drawer.install.confirm')}

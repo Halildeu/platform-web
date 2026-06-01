@@ -119,17 +119,33 @@ function buildCommand(): EndpointCommand {
 
 interface PreflightQueryStub {
   data?: InstallPreflightResponse;
+  // WEB-014D-followup (Codex 019e830b REVISE must_fix #2): RTK Query
+  // exposes BOTH `data` (last successful result; can be stale across
+  // arg changes) and `currentData` (response for the CURRENT args;
+  // undefined during background refetch on arg change). The modal's
+  // `effectivePreflight` now uses `currentData` so the submit gate
+  // never authorises a PASS computed for a *different* catalog row.
+  // The default behaviour here mirrors `data` to keep older test
+  // expectations passing (most tests set only `data` and assume both
+  // are populated). Stale-arg simulation tests override `currentData`
+  // explicitly to `undefined`.
+  currentData?: InstallPreflightResponse;
   error?: { status: number };
   isLoading?: boolean;
   isFetching?: boolean;
 }
 function mockPreflight(stub: PreflightQueryStub) {
+  // Resolve currentData: explicit `currentData` key wins; otherwise
+  // default to `data` so existing tests stay green.
+  const hasExplicitCurrentData = Object.prototype.hasOwnProperty.call(stub, 'currentData');
+  const resolvedCurrentData = hasExplicitCurrentData ? stub.currentData : stub.data;
   useGetInstallPreflightQueryMock.mockReturnValue({
     data: undefined,
     error: undefined,
     isLoading: false,
     isFetching: false,
     ...stub,
+    currentData: resolvedCurrentData,
   });
 }
 
@@ -480,17 +496,134 @@ describe('InstallPreflightModal — cancel + ESC', () => {
   });
 });
 
-describe('InstallPreflightModal — isFetching gate (Codex 019e6fe4 must-fix #2)', () => {
-  it('isFetching=true iken loading placeholder + confirm disabled', () => {
-    // Stale data sits next to a fresh `isFetching: true` while RTK
-    // Query recomputes; the modal must NOT show the stale PASS body
-    // (loading placeholder takes over) AND Confirm must stay disabled.
+describe('InstallPreflightModal — WEB-014D-followup confirm gate (Codex 019e830b REVISE)', () => {
+  // Codex 019e830b REVISE supersedes the original 019e6fe4 must-fix #2
+  // behaviour. The change: `preflightFetching` is NO LONGER a confirm
+  // gate, AND the body keeps rendering the last-known PASS during a
+  // background refetch instead of collapsing to a loading placeholder.
+  // Anti-stale-PASS safety is delegated to (a) `currentData`-anchored
+  // `effectivePreflight` (no PASS from a previous catalog row leaks
+  // into the active intent) and (b) the existing backend POST 409
+  // BLOCK recompute path that flips the modal to local BLOCK if the
+  // decision changes server-side.
+
+  it('isFetching=true + currentData=PASS iken PASS gövdesi RENDER + confirm ENABLED (no UX lock during refetch)', () => {
+    // Background refetch should not collapse the body to loading,
+    // and should not block the operator. This is the regression the
+    // followup explicitly fixes.
     mockPreflight({ data: buildPreflight('PASS'), isFetching: true });
     mockInstall(vi.fn());
     render(<InstallPreflightModal {...baseProps} />);
+    expect(screen.queryByTestId('install-modal-loading')).toBeNull();
+    expect(screen.getByTestId('install-modal-decision-PASS')).toBeInTheDocument();
+    expect(screen.getByTestId('install-modal-confirm')).not.toBeDisabled();
+    // The fetching state must still be DISCOVERABLE via DOM so an
+    // operator inspecting a regression can see it without console
+    // access. Reason stays 'ok' (the button works); a separate data
+    // attribute exposes the orthogonal background-refetch signal.
+    const confirmBtn = screen.getByTestId('install-modal-confirm');
+    expect(confirmBtn.getAttribute('data-confirm-disabled-reason')).toBe('ok');
+    expect(confirmBtn.getAttribute('data-preflight-fetching')).toBe('true');
+  });
+
+  it('isLoading=true + no data iken loading placeholder + confirm disabled (initial-load only)', () => {
+    // First-time load (no last-successful-data) must still show the
+    // placeholder. The gate fires under `loading` reason — distinct
+    // from `no-data` (data field absent but not currently fetching).
+    mockPreflight({ isLoading: true });
+    mockInstall(vi.fn());
+    render(<InstallPreflightModal {...baseProps} />);
     expect(screen.getByTestId('install-modal-loading')).toBeInTheDocument();
+    expect(screen.getByTestId('install-modal-confirm')).toBeDisabled();
+    expect(
+      screen.getByTestId('install-modal-confirm').getAttribute('data-confirm-disabled-reason'),
+    ).toBe('loading');
+  });
+
+  it('decision=PASS + installedState=INSTALLED iken confirm ENABLED (not implicitly blocked by installed-state)', () => {
+    // Operator-reported regression vector 2026-06-01: catalog row with
+    // `installedState=INSTALLED` was perceived as forcing the confirm
+    // button into a disabled state. Backend returns PASS for this
+    // (re-install allowed); UI must follow.
+    mockPreflight({
+      data: buildPreflight('PASS', { installedState: 'INSTALLED' }),
+    });
+    mockInstall(vi.fn());
+    render(<InstallPreflightModal {...baseProps} />);
+    expect(screen.getByTestId('install-modal-decision-PASS')).toBeInTheDocument();
+    expect(screen.getByTestId('install-modal-installed-state-INSTALLED')).toBeInTheDocument();
+    expect(screen.getByTestId('install-modal-confirm')).not.toBeDisabled();
+    expect(
+      screen.getByTestId('install-modal-confirm').getAttribute('data-confirm-disabled-reason'),
+    ).toBe('ok');
+  });
+
+  it('arg değişiminde stale `data` confirm-enabled etmez (currentData kontrolü)', () => {
+    // RTK Query keeps `data` (last successful response) populated
+    // when args change, but `currentData` becomes undefined until
+    // the new args resolve. The modal must NOT authorise a submit on
+    // the stale PASS — it must show the existing data is no longer
+    // current. With `currentData` explicitly undefined, the body
+    // collapses to "no current data" and the gate fires under the
+    // `no-data` reason (not `loading` — because nothing is in flight
+    // here per the mock).
+    mockPreflight({
+      data: buildPreflight('PASS'),
+      currentData: undefined,
+    });
+    mockInstall(vi.fn());
+    render(<InstallPreflightModal {...baseProps} />);
     expect(screen.queryByTestId('install-modal-decision-PASS')).toBeNull();
     expect(screen.getByTestId('install-modal-confirm')).toBeDisabled();
+    expect(
+      screen.getByTestId('install-modal-confirm').getAttribute('data-confirm-disabled-reason'),
+    ).toBe('no-data');
+  });
+
+  it('BLOCK + confirm disabled + reason=block (DOM-inspectable)', () => {
+    mockPreflight({
+      data: buildPreflight('BLOCK', {
+        blockingReasons: ['catalog_item_draft'],
+        reasons: ['catalog_item_draft'],
+      }),
+    });
+    mockInstall(vi.fn());
+    render(<InstallPreflightModal {...baseProps} />);
+    expect(screen.getByTestId('install-modal-confirm')).toBeDisabled();
+    expect(
+      screen.getByTestId('install-modal-confirm').getAttribute('data-confirm-disabled-reason'),
+    ).toBe('block');
+  });
+
+  it('createState.isLoading=true iken in-flight reason + confirm disabled', () => {
+    mockPreflight({ data: buildPreflight('PASS') });
+    useCreateInstallMutationMock.mockReturnValue([vi.fn(), { isLoading: true }]);
+    render(<InstallPreflightModal {...baseProps} />);
+    expect(screen.getByTestId('install-modal-confirm')).toBeDisabled();
+    expect(
+      screen.getByTestId('install-modal-confirm').getAttribute('data-confirm-disabled-reason'),
+    ).toBe('in-flight');
+  });
+
+  it('idempotencyKey ilk paint öncesi dolu olur (useLayoutEffect)', async () => {
+    // The per-intent reset effect runs as `useLayoutEffect`, which
+    // executes AFTER React commits the mount but BEFORE the browser
+    // paints. So the FIRST visible paint already has a non-empty key
+    // and the `!idempotencyKey` confirm gate cannot fire as a visible
+    // disabled-reason. Click-as-first-paint produces a valid POST
+    // without depending on a post-paint re-render to populate the key.
+    // This catches the operator-visible "silik" frame regression from
+    // 2026-06-01 (HALILKOOLUB735 Faz 22.5.4 supplemental smoke).
+    mockPreflight({ data: buildPreflight('PASS') });
+    const trigger = vi.fn(() => ({ unwrap: () => Promise.resolve(buildCommand()) }));
+    mockInstall(trigger);
+    render(<InstallPreflightModal {...baseProps} />);
+    // No rerender, no effect race window — click immediately.
+    fireEvent.click(screen.getByTestId('install-modal-confirm'));
+    await waitFor(() => expect(trigger).toHaveBeenCalled());
+    const submittedKey = trigger.mock.calls.at(-1)?.[0].body.idempotencyKey;
+    expect(submittedKey).toBeTruthy();
+    expect(submittedKey).toMatch(/^00000000-0000-4000-8000-/);
   });
 });
 
