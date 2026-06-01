@@ -486,6 +486,14 @@ export class ReportQueryError extends Error {
 const fetchReportDataGrouped = async (
   reportKey: string,
   request: GridRequest,
+  // PR-D1b.B.2 step 7 iter-2 (Codex 019e8074 finding P1#1): grouped
+  // path was the major regression — `fetchReportData` would return
+  // `fetchReportDataGrouped(reportKey, request)` BEFORE the planner
+  // ran, so the metadata-driven sidebar filter never reached the
+  // grouped `/query` body. Forward the merged model into
+  // `body.filterModel` so grouped/pivot reports honor the same filter
+  // contract as the flat path.
+  metadataFilterModel?: Record<string, unknown> | null,
 ): Promise<GridResponse<DynamicReportRow>> => {
   const blockSize = Math.max(1, request.pageSize ?? 50);
   const computedStart = ((request.page ?? 1) - 1) * blockSize;
@@ -494,6 +502,12 @@ const fetchReportDataGrouped = async (
   // backend NON_ALIGNED_ROW_WINDOW guard deterministic for hand-crafted
   // test/mock payloads (Codex iter-1 absorb on PR #273).
   const resolvedStart = request.startRow ?? computedStart;
+  // Grid filterModel wins on same-column collision (user's active grid
+  // filter overrides metadata default).
+  const mergedFilterModel: Record<string, unknown> = {
+    ...(metadataFilterModel ?? {}),
+    ...(request.filterModel ?? {}),
+  };
   const body: ReportQueryRequestBody = {
     startRow: resolvedStart,
     endRow: request.endRow ?? resolvedStart + blockSize,
@@ -502,7 +516,7 @@ const fetchReportDataGrouped = async (
     pivotCols: request.pivotCols ?? [],
     pivotMode: request.pivotMode ?? false,
     groupKeys: request.groupKeys ?? [],
-    filterModel: request.filterModel ?? {},
+    filterModel: mergedFilterModel,
     sortModel: request.sortModel ?? [],
   };
 
@@ -612,7 +626,9 @@ export const fetchReportData = async (
   // the legacy GET /data path so non-grouping callers (dashboards,
   // exports) keep working unchanged.
   if (requestsGrouping(request)) {
-    return fetchReportDataGrouped(reportKey, request);
+    // PR-D1b.B.2 iter-2 (Codex 019e8074 P1#1 absorb): forward metadata
+    // filter model so grouped/pivot reports merge it into the POST body.
+    return fetchReportDataGrouped(reportKey, request, metadataFilterModel);
   }
 
   const params = new URLSearchParams();
@@ -788,13 +804,21 @@ export const exportReportData = async (
     });
 
     if (requestsGrouping(normalised)) {
+      // PR-D1b.B.2 step 7 iter-2 (Codex 019e8074 P1#2 absorb): merge
+      // metadata filter model into grouped view export body so the
+      // server-side grouped export honors the sidebar filter state.
+      // Grid wins on same-column collision.
+      const exportFilterMerged: Record<string, unknown> = {
+        ...(metadataFilterModel ?? {}),
+        ...(normalised.filterModel ?? {}),
+      };
       const body = {
         format: wireFormat,
         rowGroupCols: normalised.rowGroupCols ?? [],
         valueCols: normalised.valueCols ?? [],
         pivotCols: normalised.pivotCols ?? [],
         pivotMode: normalised.pivotMode ?? false,
-        filterModel: normalised.filterModel ?? {},
+        filterModel: exportFilterMerged,
         sortModel: normalised.sortModel ?? [],
       };
 
@@ -862,8 +886,18 @@ export const exportReportData = async (
   params.set('format', wireFormat);
   // PR-0.5b2: a 'view' export whose grid is flat still wants the
   // on-screen filter/sort forwarded.
-  if (mode === 'view' && gridState?.filterModel && Object.keys(gridState.filterModel).length > 0) {
-    params.set('advancedFilter', JSON.stringify(gridState.filterModel));
+  // PR-D1b.B.2 step 7 iter-2 (Codex 019e8074 P1#2 absorb): merge
+  // metadata filter model + gridState.filterModel for the flat view
+  // export GET path. Without this merge, metadata-only state (no AG
+  // Grid column filter set) would drop the sidebar filter on export.
+  if (mode === 'view') {
+    const viewFlatFilter: Record<string, unknown> = {
+      ...(metadataFilterModel ?? {}),
+      ...(gridState?.filterModel ?? {}),
+    };
+    if (Object.keys(viewFlatFilter).length > 0) {
+      params.set('advancedFilter', JSON.stringify(viewFlatFilter));
+    }
   }
   if (mode === 'view' && gridState?.sortModel && gridState.sortModel.length > 0) {
     params.set('sort', JSON.stringify(gridState.sortModel));

@@ -104,7 +104,7 @@ export const createDynamicReportModule = (
       }
       return seeded as DynamicReportFilters;
     },
-    renderFilters: ({ values, setFieldValue, requiredFields }) => {
+    renderFilters: ({ values, setFieldValue, requiredFields, t }) => {
       const isRequired = (key: string) => (requiredFields ?? []).includes(key);
       // PR-D1b.B.2 step 5 (Codex thread 019e8074): metadata-driven
       // render path. Three states distinguished:
@@ -135,6 +135,9 @@ export const createDynamicReportModule = (
                 }
                 required={isRequired(def.key)}
                 reportKey={report.key}
+                // PR-D1b.B.2 iter-2 (Codex 019e8074 P2#3 absorb): forward
+                // translate fn so widgets resolve i18nLabelKey + placeholders.
+                t={t}
               />
             ))}
           </>

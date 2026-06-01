@@ -51,23 +51,23 @@ const requiredMarker = (required?: boolean): React.ReactNode =>
   ) : null;
 
 const resolveLabel = (definition: FilterDefinition, t: TranslateFn | undefined): string => {
-  const key = definition.i18nLabelKey;
-  if (key && t) {
-    const translated = t(key);
-    if (translated && translated !== key) return translated;
+  const i18nKey = definition.i18nLabelKey;
+  if (i18nKey && t) {
+    const translated = t(i18nKey);
+    if (translated && translated !== i18nKey) return translated;
   }
-  return key ?? definition.key;
+  return i18nKey ?? definition.key;
 };
 
 const resolvePlaceholder = (
   definition: FilterDefinition,
   t: TranslateFn | undefined,
 ): string | undefined => {
-  const key = definition.i18nPlaceholderKey;
-  if (!key) return undefined;
+  const i18nKey = definition.i18nPlaceholderKey;
+  if (!i18nKey) return undefined;
   if (t) {
-    const translated = t(key);
-    if (translated && translated !== key) return translated;
+    const translated = t(i18nKey);
+    if (translated && translated !== i18nKey) return translated;
   }
   return undefined;
 };
