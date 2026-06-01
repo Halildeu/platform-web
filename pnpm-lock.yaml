@@ -34,11 +34,11 @@ importers:
         specifier: ^10.52.0
         version: 10.52.0(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       '@tanstack/react-query-devtools':
         specifier: ^5.99.0
-        version: 5.99.0(@tanstack/react-query@5.100.11(react@18.2.0))(react@18.2.0)
+        version: 5.99.0(@tanstack/react-query@5.100.14(react@18.2.0))(react@18.2.0)
       axios:
         specifier: '>=1.15.0'
         version: 1.16.1
@@ -257,8 +257,8 @@ importers:
         specifier: '*'
         version: link:../../packages/shared-types
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -289,7 +289,7 @@ importers:
         version: link:../../packages/i18n-dicts
       '@tanstack/react-query-devtools':
         specifier: ^5.99.0
-        version: 5.99.0(@tanstack/react-query@5.100.11(react@18.2.0))(react@18.2.0)
+        version: 5.99.0(@tanstack/react-query@5.100.14(react@18.2.0))(react@18.2.0)
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1
@@ -324,8 +324,8 @@ importers:
         specifier: '*'
         version: link:../../packages/shared-types
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -397,8 +397,8 @@ importers:
         specifier: ^2.8.2
         version: 2.11.2(react-redux@9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1))(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -543,8 +543,8 @@ importers:
         specifier: file:../../packages/platform-capabilities
         version: link:../../packages/platform-capabilities
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -607,8 +607,8 @@ importers:
         specifier: '*'
         version: link:../../packages/shared-types
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       axios:
         specifier: '>=1.15.0'
         version: 1.16.1
@@ -698,11 +698,11 @@ importers:
         specifier: ^10.52.0
         version: 10.52.0(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       '@tanstack/react-query-devtools':
         specifier: ^5.99.0
-        version: 5.99.0(@tanstack/react-query@5.100.11(react@18.2.0))(react@18.2.0)
+        version: 5.99.0(@tanstack/react-query@5.100.14(react@18.2.0))(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -838,8 +838,8 @@ importers:
         specifier: ^2.8.2
         version: 2.11.2(react-redux@9.2.0(@types/react@18.3.28)(react@18.2.0)(redux@5.0.1))(react@18.2.0)
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       ag-grid-community:
         specifier: 34.3.1
         version: 34.3.1
@@ -955,8 +955,8 @@ importers:
         specifier: workspace:*
         version: link:../x-charts
       '@tanstack/react-query':
-        specifier: ^5.100.11
-        version: 5.100.11(react@18.2.0)
+        specifier: ^5.100.14
+        version: 5.100.14(react@18.2.0)
       ag-charts-community:
         specifier: 12.3.1
         version: 12.3.1
@@ -1113,8 +1113,8 @@ importers:
         specifier: ^3.3.1
         version: 3.5.0
       zustand:
-        specifier: ^5.0.13
-        version: 5.0.13(@types/react@18.3.28)(immer@11.1.4)(react@18.2.0)(use-sync-external-store@1.6.0(react@18.2.0))
+        specifier: ^5.0.14
+        version: 5.0.14(@types/react@18.3.28)(immer@11.1.4)(react@18.2.0)(use-sync-external-store@1.6.0(react@18.2.0))
     devDependencies:
       '@stryker-mutator/core':
         specifier: ^9.6.1
@@ -3810,8 +3810,8 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
 
-  '@tanstack/query-core@5.100.11':
-    resolution: {integrity: sha512-lmE0994apShXPj8CUxgx4ch5yUJhE9k/+tVwihBvPOyerACWdBocfFg24t8+0RhtlTd7tEgchDkhlCxNssvDxw==}
+  '@tanstack/query-core@5.100.14':
+    resolution: {integrity: sha512-5X41dGpxgeaHISCRW2oYwcSycZeULZzAunaudXT9ov1KOTj9xwt0CH6hbwqP1/z74ZWF7rYFnDpyYH07XFcZew==}
 
   '@tanstack/query-devtools@5.99.0':
     resolution: {integrity: sha512-m4ufXaJ8FjWXw7xDtyzE/6fkZAyQFg9WrbMrUpt8ZecRJx58jiFOZ2lxZMphZdIpAnIeto/S8stbwLKLusyckQ==}
@@ -3822,8 +3822,8 @@ packages:
       '@tanstack/react-query': ^5.99.0
       react: ^18 || ^19
 
-  '@tanstack/react-query@5.100.11':
-    resolution: {integrity: sha512-J0f9s5x3LE1450nNNfYx+e/n0DMa0uOBdFJUy5r0RvmsXd4nB/n0rbHtHI1vYXhikNFan+wf51p6Tmp4c8ucrg==}
+  '@tanstack/react-query@5.100.14':
+    resolution: {integrity: sha512-oOr6aRdSFEwWhzxEkD/9ZcItM3+LjBSkeVmadWKwUssAHTsqd/7bOjWrX4AbvEkoEhgAxzN0Xk6H/aYzXiYBAw==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -9894,8 +9894,8 @@ packages:
   zrender@5.6.1:
     resolution: {integrity: sha512-OFXkDJKcrlx5su2XbzJvj/34Q3m6PvyCZkVPHGYpcCJ52ek4U/ymZyfuV1nKE23AyBJ51E/6Yr0mhZ7xGTO4ag==}
 
-  zustand@5.0.13:
-    resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
+  zustand@5.0.14:
+    resolution: {integrity: sha512-/8tAspM5LMPr28b3fwLYrtdj77ECpfZviaP75CMTnwO8ISyaE4GDIG/9rDDYq/cH9D2Xw2A2RXglLInmVBQB/g==}
     engines: {node: '>=12.20.0'}
     peerDependencies:
       '@types/react': ^18.2.0
@@ -12389,19 +12389,19 @@ snapshots:
       tailwindcss: 4.2.4
       vite: 8.0.14(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(terser@5.48.0)(tsx@4.21.0)(yaml@2.8.3)
 
-  '@tanstack/query-core@5.100.11': {}
+  '@tanstack/query-core@5.100.14': {}
 
   '@tanstack/query-devtools@5.99.0': {}
 
-  '@tanstack/react-query-devtools@5.99.0(@tanstack/react-query@5.100.11(react@18.2.0))(react@18.2.0)':
+  '@tanstack/react-query-devtools@5.99.0(@tanstack/react-query@5.100.14(react@18.2.0))(react@18.2.0)':
     dependencies:
       '@tanstack/query-devtools': 5.99.0
-      '@tanstack/react-query': 5.100.11(react@18.2.0)
+      '@tanstack/react-query': 5.100.14(react@18.2.0)
       react: 18.2.0
 
-  '@tanstack/react-query@5.100.11(react@18.2.0)':
+  '@tanstack/react-query@5.100.14(react@18.2.0)':
     dependencies:
-      '@tanstack/query-core': 5.100.11
+      '@tanstack/query-core': 5.100.14
       react: 18.2.0
 
   '@tanstack/react-virtual@3.13.23(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
@@ -19765,7 +19765,7 @@ snapshots:
     dependencies:
       tslib: 2.3.0
 
-  zustand@5.0.13(@types/react@18.3.28)(immer@11.1.4)(react@18.2.0)(use-sync-external-store@1.6.0(react@18.2.0)):
+  zustand@5.0.14(@types/react@18.3.28)(immer@11.1.4)(react@18.2.0)(use-sync-external-store@1.6.0(react@18.2.0)):
     optionalDependencies:
       '@types/react': 18.3.28
       immer: 11.1.4
