@@ -196,6 +196,20 @@ export function ReportPage<TFilters extends Record<string, unknown>, TRow>({
       initialFilterSyncRef.current = false;
       return;
     }
+    // PR-D1b.B.3 iter-1 absorb (Codex 019e81eb finding #1): ReportPage
+    // is reused across report routes (ReportingApp renders it without
+    // a `key`, so React preserves refs when `module` prop changes).
+    // A user edit on report A flips `isInitialFilterStateRef` to false;
+    // navigating to report B with a cold deep-link URL would then see
+    // the false ref and skip rehydration, losing the URL filter.
+    //
+    // Reset BOTH rehydration guards when the logical initial-filter
+    // source changes (module swap or URL query change — both flow
+    // through `initialFiltersFromSearch` identity). The rehydration
+    // effect downstream will then make a fresh decision for the new
+    // logical mount.
+    isInitialFilterStateRef.current = true;
+    lastRehydratedSignatureRef.current = undefined;
     setFilters(initialFiltersFromSearch);
     setReloadSignal((value) => value + 1);
   }, [initialFiltersFromSearch]);
