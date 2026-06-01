@@ -114,6 +114,7 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.startupExposure': 'Başlangıç + Maruziyet',
   'endpointAdmin.drawer.tab.appControl': 'Uygulama Kontrolü',
   'endpointAdmin.drawer.tab.softwareDiff': 'Yazılım Değişimleri',
+  'endpointAdmin.drawer.tab.prohibitedSoftware': 'Yasaklı Yazılım',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Cihaz Kayıt Yönetimi',
@@ -532,6 +533,28 @@ const DICT_TR = {
   'endpointAdmin.drawer.softwareDiff.col.publisher': 'Yayıncı',
   'endpointAdmin.drawer.softwareDiff.col.fromVersion': 'Eski Sürüm',
   'endpointAdmin.drawer.softwareDiff.col.toVersion': 'Yeni Sürüm',
+  // BE-025 — Prohibited-Software finding tab (Faz 22.5 P2-A slice-2)
+  'endpointAdmin.drawer.prohibitedSoftware.loading': 'Yasaklı yazılım bilgisi yükleniyor…',
+  'endpointAdmin.drawer.prohibitedSoftware.error': 'Yasaklı yazılım bilgisi alınamadı.',
+  'endpointAdmin.drawer.prohibitedSoftware.forbidden': 'Yasaklı yazılım için yetkiniz yok.',
+  'endpointAdmin.drawer.prohibitedSoftware.staleWarning':
+    'Görüntülenen bulgu seti başka bir cihaza ait — kapatıp tekrar açın.',
+  'endpointAdmin.drawer.prohibitedSoftware.status.OK': 'Değerlendirme yapıldı',
+  'endpointAdmin.drawer.prohibitedSoftware.status.NO_EVALUATION':
+    'Bu cihazda henüz uygunluk değerlendirmesi yok',
+  'endpointAdmin.drawer.prohibitedSoftware.noEvaluation.notice':
+    'Cihaz için henüz uygunluk (compliance) değerlendirmesi koşulmadı veya cihaz bu kiracıya ait değil.',
+  'endpointAdmin.drawer.prohibitedSoftware.noFindings.notice':
+    'Değerlendirme yapıldı, eşleşen yasaklı yazılım bulgusu yok.',
+  'endpointAdmin.drawer.prohibitedSoftware.meta.evaluatedAt': 'Değerlendirme Zamanı',
+  'endpointAdmin.drawer.prohibitedSoftware.meta.inventorySnapshotId': 'Envanter Snapshot ID',
+  'endpointAdmin.drawer.prohibitedSoftware.findings.title': 'Tespit Edilen Yasaklı Yazılımlar',
+  'endpointAdmin.drawer.prohibitedSoftware.col.ruleId': 'Kural ID',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchType': 'Eşleşme Tipi',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchMode': 'Eşleşme Modu',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchedName': 'Ad',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchedPublisher': 'Yayıncı',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchedVersion': 'Sürüm',
   // Detay tab
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Görünen Ad',
@@ -1019,6 +1042,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.tab.startupExposure': 'Startup + Exposure',
   'endpointAdmin.drawer.tab.appControl': 'Application Control',
   'endpointAdmin.drawer.tab.softwareDiff': 'Software Changes',
+  'endpointAdmin.drawer.tab.prohibitedSoftware': 'Prohibited Software',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Software Catalog',
   // WEB-017 — Enrollment management (Faz 22.5.x)
   'endpointAdmin.enrollments.page.title': 'Device Enrollment Management',
@@ -1436,6 +1460,29 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.softwareDiff.col.publisher': 'Publisher',
   'endpointAdmin.drawer.softwareDiff.col.fromVersion': 'From Version',
   'endpointAdmin.drawer.softwareDiff.col.toVersion': 'To Version',
+  // BE-025 — Prohibited-Software finding tab (Faz 22.5 P2-A slice-2)
+  'endpointAdmin.drawer.prohibitedSoftware.loading': 'Loading prohibited-software evidence…',
+  'endpointAdmin.drawer.prohibitedSoftware.error': 'Could not load prohibited-software evidence.',
+  'endpointAdmin.drawer.prohibitedSoftware.forbidden':
+    'You do not have permission to view prohibited-software findings.',
+  'endpointAdmin.drawer.prohibitedSoftware.staleWarning':
+    'Displayed finding set belongs to a different device — close and reopen the drawer.',
+  'endpointAdmin.drawer.prohibitedSoftware.status.OK': 'Evaluation persisted',
+  'endpointAdmin.drawer.prohibitedSoftware.status.NO_EVALUATION':
+    'No compliance evaluation persisted for this device yet',
+  'endpointAdmin.drawer.prohibitedSoftware.noEvaluation.notice':
+    'No compliance evaluation has run for this device, or the device does not belong to this tenant.',
+  'endpointAdmin.drawer.prohibitedSoftware.noFindings.notice':
+    'Evaluation ran, no denylist matches detected.',
+  'endpointAdmin.drawer.prohibitedSoftware.meta.evaluatedAt': 'Evaluated At',
+  'endpointAdmin.drawer.prohibitedSoftware.meta.inventorySnapshotId': 'Inventory Snapshot ID',
+  'endpointAdmin.drawer.prohibitedSoftware.findings.title': 'Detected Prohibited Software',
+  'endpointAdmin.drawer.prohibitedSoftware.col.ruleId': 'Rule ID',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchType': 'Match Type',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchMode': 'Match Mode',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchedName': 'Name',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchedPublisher': 'Publisher',
+  'endpointAdmin.drawer.prohibitedSoftware.col.matchedVersion': 'Version',
   'endpointAdmin.drawer.detay.hostname': 'Hostname',
   'endpointAdmin.drawer.detay.displayName': 'Display Name',
   'endpointAdmin.drawer.detay.osType': 'Operating System',
