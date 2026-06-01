@@ -332,21 +332,16 @@ export const ServicesView: React.FC<ServicesViewProps> = ({ deviceId, active }) 
     );
   }
 
-  if (snapshot.supported === false) {
-    return (
-      <div className="px-6 py-4 space-y-4" data-testid="services-unsupported">
-        <p className="text-sm text-text-secondary">
-          {t('endpointAdmin.drawer.services.unsupported')}
-        </p>
-        {/* Even when unsupported, render scan meta + probeErrors so the
-            operator can see WHICH agent reported "not supported". */}
-        <MetaPanel snapshot={snapshot} t={t} />
-        <ProbeErrorsPanel probeErrors={snapshot.probeErrors} t={t} />
-      </div>
-    );
-  }
-
+  // Codex 019e8389 iter-2 P1: `supported=false` is a fail-closed
+  // branch that MUST live inside the same `services-view` container as
+  // `probeComplete=false`. Earlier iter had `supported=false` as an
+  // early-return cousin which left `data-fully-evaluable` unset and
+  // broke the must_fix #2 contract ("fail-closed branches keep meta +
+  // probeErrors visible inside services-view") for half the failures.
+  // Both flavours of fail-closed now route through the same DOM
+  // contract; the inline notice distinguishes which one fired.
   const fullyEvaluable = isServicesFullyEvaluable(snapshot);
+  const isUnsupported = snapshot.supported === false;
 
   return (
     <div
@@ -363,12 +358,22 @@ export const ServicesView: React.FC<ServicesViewProps> = ({ deviceId, active }) 
 
       <MetaPanel snapshot={snapshot} t={t} />
 
-      {/* Codex 019e8389 must_fix #2: fail-closed branches keep meta +
-          probeErrors visible inside the services-view container so the
-          operator can diagnose WHY the probe failed. Only the services
-          TABLE is hidden when not fully-evaluable. */}
+      {/* Codex 019e8389 must_fix #2 + iter-2 P1: fail-closed branches
+          keep meta + probeErrors visible inside the services-view
+          container so the operator can diagnose WHY the probe failed.
+          Only the services TABLE is hidden when not fully-evaluable.
+          The notice testid distinguishes the failure mode:
+            - services-unsupported  (supported=false, non-Windows)
+            - services-incomplete   (supported=true, probeComplete=false) */}
       {fullyEvaluable ? (
         <ServicesTable services={snapshot.services} t={t} />
+      ) : isUnsupported ? (
+        <p
+          className="text-sm text-text-secondary border-l-4 border-border-default pl-3 py-1"
+          data-testid="services-unsupported"
+        >
+          {t('endpointAdmin.drawer.services.unsupported')}
+        </p>
       ) : (
         <p
           className="text-sm text-state-warning-text border-l-4 border-state-warning-border pl-3 py-1"

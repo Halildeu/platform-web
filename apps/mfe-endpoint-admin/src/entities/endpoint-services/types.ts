@@ -49,6 +49,15 @@ export type StartupMode = 'AUTO' | 'AUTO_DELAYED' | 'MANUAL' | 'DISABLED' | 'UNK
 /**
  * Per-service entry. `rowOrdinal` is backend-derived for stable
  * ordering across queries (matches the canonical allowlist index).
+ *
+ * Codex 019e8389 iter-2 P2: `present` is typed `boolean | null` as a
+ * defensive null-guard for the wire-shape consumer. The BACKEND
+ * contract is non-null — `V24__endpoint_services.sql` declares
+ * `present BOOLEAN NOT NULL` and `ServicesPayloadPolicy.asBool` rejects
+ * null/non-bool payloads at the ingest layer. The `| null` here is
+ * "future-proofing in case the ingest contract is ever softened",
+ * NOT a representation of any runtime wire shape we expect. View
+ * code MUST treat `null` as "fallback to —" (already implemented).
  */
 export interface ServiceEntry {
   rowOrdinal: number;

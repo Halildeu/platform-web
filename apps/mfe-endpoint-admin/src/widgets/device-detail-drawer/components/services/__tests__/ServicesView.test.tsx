@@ -147,7 +147,11 @@ describe('ServicesView — render gates', () => {
 });
 
 describe('ServicesView — supported / probeComplete branches', () => {
-  it('supported=false iken unsupported + meta + probeErrors render (table HIDDEN, must_fix #2)', () => {
+  it('supported=false iken unsupported + meta + probeErrors render INSIDE services-view container (Codex iter-2 P1 + must_fix #2)', () => {
+    // Iter-2 P1 absorb: supported=false must live inside the
+    // services-view DOM contract with data-fully-evaluable="false",
+    // same as probeComplete=false. Earlier impl had it as an early-
+    // return cousin which left the contract half-implemented.
     mockQuery({
       currentData: buildSnapshot({
         supported: false,
@@ -156,10 +160,14 @@ describe('ServicesView — supported / probeComplete branches', () => {
       }),
     });
     render(<ServicesView deviceId={DEVICE_A} active />);
+    const view = screen.getByTestId('services-view');
+    expect(view).toBeInTheDocument();
+    expect(view.getAttribute('data-fully-evaluable')).toBe('false');
     expect(screen.getByTestId('services-unsupported')).toBeInTheDocument();
     expect(screen.getByTestId('services-meta')).toBeInTheDocument();
     expect(screen.getByTestId('services-probe-errors')).toBeInTheDocument();
     expect(screen.queryByTestId('services-table')).toBeNull();
+    expect(screen.queryByTestId('services-incomplete')).toBeNull();
   });
 
   it('probeComplete=false iken incomplete + meta + probeErrors VISIBLE; table HIDDEN (must_fix #2)', () => {
