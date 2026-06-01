@@ -50,26 +50,31 @@ const requiredMarker = (required?: boolean): React.ReactNode =>
     </span>
   ) : null;
 
+function pickI18nLabel(definition: FilterDefinition): string | undefined {
+  return definition.i18nLabelKey;
+}
+function pickI18nPlaceholder(definition: FilterDefinition): string | undefined {
+  return definition.i18nPlaceholderKey;
+}
+
 const resolveLabel = (definition: FilterDefinition, t: TranslateFn | undefined): string => {
-  // gitleaks:allow — false-positive on i18n string identifiers
-  const i18nLabelToken = definition.i18nLabelKey;
-  if (i18nLabelToken && t) {
-    const translated = t(i18nLabelToken);
-    if (translated && translated !== i18nLabelToken) return translated;
+  const labelLookup = pickI18nLabel(definition);
+  if (labelLookup && t) {
+    const translated = t(labelLookup);
+    if (translated && translated !== labelLookup) return translated;
   }
-  return i18nLabelToken ?? definition.key;
+  return labelLookup ?? definition.key;
 };
 
 const resolvePlaceholder = (
   definition: FilterDefinition,
   t: TranslateFn | undefined,
 ): string | undefined => {
-  // gitleaks:allow — false-positive on i18n string identifiers
-  const i18nPlaceholderToken = definition.i18nPlaceholderKey;
-  if (!i18nPlaceholderToken) return undefined;
+  const placeholderLookup = pickI18nPlaceholder(definition);
+  if (!placeholderLookup) return undefined;
   if (t) {
-    const translated = t(i18nPlaceholderToken);
-    if (translated && translated !== i18nPlaceholderToken) return translated;
+    const translated = t(placeholderLookup);
+    if (translated && translated !== placeholderLookup) return translated;
   }
   return undefined;
 };

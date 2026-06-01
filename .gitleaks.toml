@@ -1,0 +1,24 @@
+# Gitleaks configuration — false-positive allowlist.
+# PR-D1b.B.2 (Codex thread 019e8074, 2026-06-01).
+#
+# Extends the default gitleaks rule set and adds path-scoped allowlist
+# entries for known false-positives. Without `extend.useDefault = true`
+# this file would REPLACE (not extend) the bundled rules, leaving the
+# scan with zero detection coverage.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project-level false-positives"
+
+# `apps/mfe-reporting/src/modules/dynamic-report/filters/widgets/index.tsx`:
+# the widget helpers reference `definition.i18nLabelKey` and
+# `definition.i18nPlaceholderKey` for i18n string identifiers. The
+# generic-api-key rule flags the JS local var assignments because the
+# right-hand-side identifier pattern (`...Key`) coupled with the
+# variable name happens to score high entropy. These are i18n keys,
+# not credentials; allowlist the file.
+paths = [
+  '''apps/mfe-reporting/src/modules/dynamic-report/filters/widgets/index\.tsx''',
+]
