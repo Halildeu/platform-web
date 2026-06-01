@@ -52,10 +52,6 @@ import type {
 } from '../../entities/endpoint-hotfix-posture/types';
 import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnostics/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
-
-export interface GetDiagnosticsLatestArgs {
-  deviceId: string;
-}
 import {
   DeviceGridExportError,
   type DeviceGridErrorBody,
@@ -96,6 +92,15 @@ import type {
   CreateEndpointEnrollmentResponse,
   EndpointEnrollment,
 } from '../../entities/endpoint-enrollment/types';
+
+/**
+ * AG-038 — endpoint-local args interface for the diagnostics-latest
+ * query. Kept here (not in the entity types module) for symmetry with
+ * other endpoint-local args that need no global re-export.
+ */
+export interface GetDiagnosticsLatestArgs {
+  deviceId: string;
+}
 
 /**
  * RTK Query slice for the endpoint-admin backend.

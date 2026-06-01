@@ -76,7 +76,7 @@ export interface DiagnosticsSnapshot {
   lastPollLatencyMs: number | null;
   backendDnsReachable: boolean | null;
   backendTlsValid: boolean | null;
-  lastError: DiagnosticsLastError | null;
+  lastError?: DiagnosticsLastError | null;
   probeDurationMs: number | null;
   payloadHashSha256: string | null;
   collectedAt: string; // ISO-8601, NOT NULL per backend V23
