@@ -422,7 +422,7 @@ const HotfixPendingTable: React.FC<PendingTableProps> = ({
               <td>
                 <span
                   data-testid={`hotfix-posture-pending-category-${idx}`}
-                  className="hotfix-posture-category-chip"
+                  className={CATEGORY_BADGE_CLASS}
                 >
                   {row.primaryCategory}
                 </span>
@@ -430,7 +430,7 @@ const HotfixPendingTable: React.FC<PendingTableProps> = ({
               <td>
                 <span
                   data-testid={`hotfix-posture-pending-severity-${idx}`}
-                  className={`hotfix-posture-severity-chip hotfix-posture-severity-${row.severity.toLowerCase()}`}
+                  className={SEVERITY_CLASS[row.severity]}
                 >
                   {row.severity}
                 </span>
@@ -442,6 +442,31 @@ const HotfixPendingTable: React.FC<PendingTableProps> = ({
     )}
   </section>
 );
+
+/**
+ * Severity design-system token map (Codex 019e8245 iter-2 P2). Static
+ * tone classes (NO animate/pulse/flash). CRITICAL/IMPORTANT/MODERATE
+ * use danger+warning tones; LOW + UNSPECIFIED render as muted neutral.
+ */
+const CHIP_BASE = 'inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold';
+const SEVERITY_CLASS: Record<HotfixSeverity, string> = {
+  CRITICAL: `${CHIP_BASE} bg-state-danger-subtle text-state-danger-text border-state-danger-border`,
+  IMPORTANT: `${CHIP_BASE} bg-state-warning-subtle text-state-warning-text border-state-warning-border`,
+  MODERATE: `${CHIP_BASE} bg-state-warning-subtle text-state-warning-text border-state-warning-border`,
+  LOW: `${CHIP_BASE} bg-surface-muted text-text-secondary border-border-default`,
+  UNSPECIFIED: `${CHIP_BASE} bg-surface-default text-text-secondary border-border-default`,
+};
+
+/** Category chip — neutral muted tone (categories are classifiers, not
+ *  severity signals; UX should not draw the eye away from severity). */
+const CATEGORY_BADGE_CLASS = `${CHIP_BASE} bg-surface-default text-text-primary border-border-default`;
+
+/** Tri-state AU bool design-system token map (Codex 019e8245 iter-2 P2).
+ *  TRUE → success (green check); FALSE → danger (red); NULL → muted. */
+const TRI_STATE_BADGE = 'inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold';
+const TRI_STATE_TRUE_CLASS = `${TRI_STATE_BADGE} bg-state-success-subtle text-state-success-text border-state-success-border`;
+const TRI_STATE_FALSE_CLASS = `${TRI_STATE_BADGE} bg-state-danger-subtle text-state-danger-text border-state-danger-border`;
+const TRI_STATE_UNKNOWN_CLASS = `${TRI_STATE_BADGE} bg-surface-muted text-text-secondary border-border-default`;
 
 const HotfixPendingByCategoryList: React.FC<{
   categories: HotfixPendingByCategory[];
@@ -472,11 +497,19 @@ const AU_OPTIONS_LABELS: Record<string, string> = {
   '4': 'endpointAdmin.drawer.hotfixPosture.health.auOptions.4',
 };
 
+/**
+ * Service-state design-system token map (Codex 019e8245 iter-2 P2).
+ * RUNNING = success (green); STOPPED = danger (red); DISABLED = warning
+ * (orange); UNKNOWN = muted (default secondary text). Bespoke class names
+ * replaced with repo design-system tokens so colour-coding actually
+ * renders.
+ */
+const SERVICE_STATE_BADGE = 'inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold';
 const SERVICE_STATE_CLASS: Record<HotfixServiceState, string> = {
-  RUNNING: 'hotfix-posture-service-running',
-  STOPPED: 'hotfix-posture-service-stopped',
-  DISABLED: 'hotfix-posture-service-disabled',
-  UNKNOWN: 'hotfix-posture-service-unknown',
+  RUNNING: `${SERVICE_STATE_BADGE} bg-state-success-subtle text-state-success-text border-state-success-border`,
+  STOPPED: `${SERVICE_STATE_BADGE} bg-state-danger-subtle text-state-danger-text border-state-danger-border`,
+  DISABLED: `${SERVICE_STATE_BADGE} bg-state-warning-subtle text-state-warning-text border-state-warning-border`,
+  UNKNOWN: `${SERVICE_STATE_BADGE} bg-surface-muted text-text-secondary border-border-default`,
 };
 
 const HotfixAgentHealthPanel: React.FC<{
@@ -535,10 +568,26 @@ const HotfixAgentHealthPanel: React.FC<{
   );
 };
 
-function renderTriStateBool(value: boolean | null, t: (k: string) => string): string {
-  if (value === true) return t('endpointAdmin.drawer.hotfixPosture.health.enabled');
-  if (value === false) return t('endpointAdmin.drawer.hotfixPosture.health.disabled');
-  return t('endpointAdmin.drawer.hotfixPosture.health.unknown');
+function renderTriStateBool(value: boolean | null, t: (k: string) => string): React.ReactNode {
+  if (value === true) {
+    return (
+      <span className={TRI_STATE_TRUE_CLASS}>
+        {t('endpointAdmin.drawer.hotfixPosture.health.enabled')}
+      </span>
+    );
+  }
+  if (value === false) {
+    return (
+      <span className={TRI_STATE_FALSE_CLASS}>
+        {t('endpointAdmin.drawer.hotfixPosture.health.disabled')}
+      </span>
+    );
+  }
+  return (
+    <span className={TRI_STATE_UNKNOWN_CLASS}>
+      {t('endpointAdmin.drawer.hotfixPosture.health.unknown')}
+    </span>
+  );
 }
 
 /**
