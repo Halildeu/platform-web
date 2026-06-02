@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { DeviceGridRow } from '../types';
 
 /**
@@ -19,6 +19,19 @@ import type { DeviceGridRow } from '../types';
  * NOT a synthetic UNKNOWN — Codex 019e87aa guardrail #3).
  */
 describe('DeviceGridRow v3 shape (WEB-015 v2-a)', () => {
+  // Codex 019e87aa iter-2 P2 must_fix: the row interface has an index
+  // signature `[key: string]: unknown`, so deleting an explicit v3 field
+  // would silently degrade its type to `unknown` and the value-level
+  // assignments below would still compile. Pin the EXACT property types
+  // here so an accidental removal fails compilation immediately.
+  it('pins the exact property types of every v3 field (defeats index-signature drift)', () => {
+    expectTypeOf<DeviceGridRow['prohibited_status']>().toEqualTypeOf<string | null>();
+    expectTypeOf<DeviceGridRow['prohibited_decision']>().toEqualTypeOf<string | null>();
+    expectTypeOf<DeviceGridRow['prohibited_findings_count']>().toEqualTypeOf<number | null>();
+    expectTypeOf<DeviceGridRow['app_control_wdac_mode']>().toEqualTypeOf<string | null>();
+    expectTypeOf<DeviceGridRow['app_control_app_id_svc_state']>().toEqualTypeOf<string | null>();
+  });
+
   it('compiles with all 5 new fields populated', () => {
     const row: DeviceGridRow = {
       device_id: 'd1',

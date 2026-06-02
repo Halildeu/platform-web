@@ -86,8 +86,14 @@ const PROHIBITED_DECISION_VALUES = ['COMPLIANT', 'UNAUTHORIZED', 'INSUFFICIENT_D
 const WDAC_MODE_VALUES = ['OFF', 'AUDIT', 'ENFORCE', 'UNKNOWN'] as const;
 const APP_ID_SVC_STATE_VALUES = ['RUNNING', 'STOPPED', 'DISABLED', 'UNKNOWN'] as const;
 
+// Codex 019e87aa iter-2 P1 must_fix: `prohibited_status.OK` means
+// "an evaluation row exists" (pe.id IS NOT NULL) — NOT compliance success.
+// Real compliance verdict lives in `prohibited_decision` (which can be
+// UNAUTHORIZED). Using success-green on OK would render contradictory
+// rows ("Yasaklı Yazılım Durumu = Uygun" while decision = Yetkisiz).
+// Both states are neutral/info: presence-only signal, not a verdict.
 const PROHIBITED_STATUS_COLOR: Record<string, string> = {
-  OK: 'var(--state-success-text)',
+  OK: 'var(--text-primary, var(--text-secondary))',
   NO_EVALUATION: 'var(--text-secondary)',
 };
 

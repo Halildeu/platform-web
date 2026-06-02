@@ -69,6 +69,18 @@ describe('WEB-015 v2-a DeviceGrid i18n — TR locale', () => {
     expect(ok).not.toBe(explicit);
   });
 
+  it('OK is "Değerlendirildi" — NOT "Uygun" (Codex 019e87aa iter-2 P1 semantic fix)', () => {
+    // `prohibited_status = OK` means an evaluation row EXISTS — NOT
+    // compliance success. Real compliance verdict lives in
+    // `prohibited_decision` (which can be UNAUTHORIZED). The label must
+    // be a neutral presence signal, not a success verdict.
+    const ok = t('endpointAdmin.devices.prohibitedStatus.OK');
+    expect(ok).toBe('Değerlendirildi');
+    expect(ok).not.toBe('Uygun');
+    // Decision-level COMPLIANT is the right place for the success copy.
+    expect(t('endpointAdmin.devices.prohibitedDecision.COMPLIANT')).toBe('Uyumlu');
+  });
+
   it('3-decision enum copy is distinct (NEVER collapsed)', () => {
     const c = t('endpointAdmin.devices.prohibitedDecision.COMPLIANT');
     const u = t('endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED');
@@ -104,6 +116,11 @@ describe('WEB-015 v2-a DeviceGrid i18n — EN locale', () => {
 
   it('NO_EVALUATION renders as explicit "Not Evaluated" — NOT a tire (Codex guardrail #3)', () => {
     expect(t('endpointAdmin.devices.prohibitedStatus.NO_EVALUATION')).toBe('Not Evaluated');
+  });
+
+  it('OK is "Evaluated" — NOT "Compliant" (Codex 019e87aa iter-2 P1)', () => {
+    expect(t('endpointAdmin.devices.prohibitedStatus.OK')).toBe('Evaluated');
+    expect(t('endpointAdmin.devices.prohibitedStatus.OK')).not.toBe('Compliant');
   });
 
   it('4-mode WDAC enum copy is distinct (DICT_EN parity)', () => {

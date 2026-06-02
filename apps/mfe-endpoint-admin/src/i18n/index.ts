@@ -53,8 +53,14 @@ const DICT_TR = {
   'endpointAdmin.devices.col.wdacMode': 'WDAC Modu',
   'endpointAdmin.devices.col.appIdSvcState': 'AppIDSvc Durumu',
   // Cell + Set Filter value labels (raw enum domain → i18n label; raw codes stay backend-canonical)
+  // Codex 019e87aa iter-2 P1 must_fix: backend `prohibited_status = OK` means
+  // `pe.id IS NOT NULL` (an evaluation row exists) — NOT compliance success.
+  // The actual compliance verdict lives in `prohibited_decision`. Labelling
+  // OK as "Uygun" / "Compliant" with success-green would render a
+  // contradictory row when decision = UNAUTHORIZED. So OK ⇒ "Değerlendirildi"
+  // (neutral/info tone); COMPLIANT semantics stays on `prohibited_decision`.
   'endpointAdmin.devices.prohibitedStatus.NO_EVALUATION': 'Değerlendirilmedi',
-  'endpointAdmin.devices.prohibitedStatus.OK': 'Uygun',
+  'endpointAdmin.devices.prohibitedStatus.OK': 'Değerlendirildi',
   'endpointAdmin.devices.prohibitedDecision.COMPLIANT': 'Uyumlu',
   'endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED': 'Yetkisiz',
   'endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA': 'Yetersiz veri',
@@ -1038,8 +1044,10 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.col.prohibitedFindingsCount': 'Prohibited Findings',
   'endpointAdmin.devices.col.wdacMode': 'WDAC Mode',
   'endpointAdmin.devices.col.appIdSvcState': 'AppIDSvc State',
+  // Codex 019e87aa iter-2 P1: OK ⇒ "Evaluated" (presence of pe row),
+  // NOT "Compliant". COMPLIANT semantics stays on prohibited_decision.
   'endpointAdmin.devices.prohibitedStatus.NO_EVALUATION': 'Not Evaluated',
-  'endpointAdmin.devices.prohibitedStatus.OK': 'Compliant',
+  'endpointAdmin.devices.prohibitedStatus.OK': 'Evaluated',
   'endpointAdmin.devices.prohibitedDecision.COMPLIANT': 'Compliant',
   'endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED': 'Unauthorized',
   'endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA': 'Insufficient Data',
