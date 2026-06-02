@@ -104,10 +104,11 @@ describe('EndpointDevicesPage v2-a column registry (WEB-015 v2-a)', () => {
     }
   });
 
-  it('GRID_SCHEMA_VERSION is bumped to 3 (invalidates persisted v2 column state)', () => {
-    expect(source).toMatch(/const GRID_SCHEMA_VERSION = 3;/);
-    // A literal "= 2" survival would silently revert state invalidation.
+  it('GRID_SCHEMA_VERSION is bumped to 4 (WEB-015 v2-b invalidates persisted v3 column state)', () => {
+    expect(source).toMatch(/const GRID_SCHEMA_VERSION = 4;/);
+    // Negative drift detectors — neither v2 nor v3 literal may survive.
     expect(source).not.toMatch(/const GRID_SCHEMA_VERSION = 2;/);
+    expect(source).not.toMatch(/const GRID_SCHEMA_VERSION = 3;/);
   });
 
   it('5 new DeviceGrid colIds appear in the source (raw export sequence parity with backend)', () => {
@@ -197,6 +198,90 @@ describe('EndpointDevicesPage v2-a column registry (WEB-015 v2-a)', () => {
       const fIdx = source.indexOf(`field: '${colId}'`);
       const fBlock = source.slice(fIdx, fIdx + 800);
       expect(fBlock).toContain('valueFormatter');
+    }
+  });
+});
+
+/**
+ * WEB-015 v2-b (Codex 019e87bc iter-3 AGREE) — schema v4 column
+ * registry pins for the 6 new DeviceGrid columns. Same source-text
+ * pattern as the v2-a test block above (AG Grid bootstrap is too slow
+ * for per-column smoke; behaviour itself is covered by the page mount
+ * test).
+ */
+describe('EndpointDevicesPage v2-b column registry (WEB-015 v2-b)', () => {
+  let source = '';
+  beforeEach(async () => {
+    if (!source) {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const here = path.dirname(new URL(import.meta.url).pathname);
+      source = await fs.readFile(path.join(here, 'EndpointDevicesPage.tsx'), 'utf8');
+    }
+  });
+
+  it('6 new v2-b colIds appear in the source (raw export sequence parity with backend)', () => {
+    const expectedColIds = [
+      'diagnostics_last_poll_latency_ms',
+      'diagnostics_last_error_code',
+      'diagnostics_last_error_at',
+      'startup_rdp_enabled',
+      'startup_windows_firewall_event_log_enabled',
+      'services_critical_stopped_count',
+    ];
+    for (const colId of expectedColIds) {
+      expect(source).toContain(`field: '${colId}'`);
+    }
+  });
+
+  it('6 new v2-b i18n header keys are wired through the t() resolver', () => {
+    const expectedKeys = [
+      'endpointAdmin.devices.col.diagnosticsLatency',
+      'endpointAdmin.devices.col.diagnosticsLastErrorCode',
+      'endpointAdmin.devices.col.diagnosticsLastErrorAt',
+      'endpointAdmin.devices.col.startupRdpEnabled',
+      'endpointAdmin.devices.col.startupFirewallEventLog',
+      'endpointAdmin.devices.col.servicesCriticalStopped',
+    ];
+    for (const key of expectedKeys) {
+      expect(source).toContain(key);
+    }
+  });
+
+  it('all 6 v2-b columns default to hide:true (toggleable surfacing)', () => {
+    const colIds = [
+      'diagnostics_last_poll_latency_ms',
+      'diagnostics_last_error_code',
+      'diagnostics_last_error_at',
+      'startup_rdp_enabled',
+      'startup_windows_firewall_event_log_enabled',
+      'services_critical_stopped_count',
+    ];
+    for (const colId of colIds) {
+      const idx = source.indexOf(`field: '${colId}'`);
+      expect(idx).toBeGreaterThan(0);
+      const block = source.slice(idx, idx + 600);
+      expect(block).toContain('hide: true');
+    }
+  });
+
+  it('last_error_code uses agTextColumnFilter (NOT a closed set tuple — Codex iter-1 #2)', () => {
+    const idx = source.indexOf("field: 'diagnostics_last_error_code'");
+    expect(idx).toBeGreaterThan(0);
+    const block = source.slice(idx, idx + 700);
+    expect(block).toContain("filter: 'agTextColumnFilter'");
+    // Negative: must NOT use a closed Set Filter (would drop unmodelled codes).
+    expect(block).not.toContain("filter: 'agSetColumnFilter'");
+  });
+
+  it('numeric sentinels use agNumberColumnFilter and preserve null vs 0 in the formatter', () => {
+    for (const colId of ['diagnostics_last_poll_latency_ms', 'services_critical_stopped_count']) {
+      const idx = source.indexOf(`field: '${colId}'`);
+      expect(idx).toBeGreaterThan(0);
+      const block = source.slice(idx, idx + 700);
+      expect(block).toContain("filter: 'agNumberColumnFilter'");
+      // null ⇒ '—' (the Codex iter-1 #4 / iter-1 #5 not-measurable-yet branch).
+      expect(block).toContain("p.value == null ? '—'");
     }
   });
 });
