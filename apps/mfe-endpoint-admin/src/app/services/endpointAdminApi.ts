@@ -80,6 +80,10 @@ import type {
   UpdateCompliancePolicyItemArgs,
 } from '../../entities/endpoint-device-compliance/types';
 import type {
+  ComplianceGapResponse,
+  GetComplianceGapArgs,
+} from '../../entities/endpoint-compliance-gap/types';
+import type {
   AdminCatalogItemSummary,
   ListCatalogItemsArgs,
   SpringPage,
@@ -386,6 +390,7 @@ export const endpointAdminApi = createApi({
     'EndpointOutdatedSoftwareDiff',
     'EndpointProhibitedSoftware',
     'EndpointDeviceCompliance',
+    'EndpointComplianceGap',
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
     'EndpointInstallAudit',
@@ -1129,6 +1134,55 @@ export const endpointAdminApi = createApi({
       ],
     }),
     /**
+     * Faz 22.7 D3 — Compliance Gap Mart explorer.
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/compliance-gap
+     *           ?gapTypes=&freshnessWindow=&page=&pageSize=
+     *   → service /api/v1/admin/endpoint-devices/compliance-gap
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Cross-snapshot aggregation: DB-side DISTINCT ON CTE over
+     * endpoint_startup_exposure_snapshots + endpoint_hotfix_posture_snapshots
+     * joined LEFT on endpoint_devices, then filtered by gap types.
+     *
+     * D2 MVP gap types: `rdp_enabled`, `pending_security_updates`.
+     *
+     * Backend bounds: MAX_PAGE_SIZE=200, MAX_FRESHNESS_WINDOW=P366D
+     * (Codex risk mitigations against unbounded full-table aggregation +
+     * sample/fleet confusion). gapStrength="strong" MVP — all rows are
+     * DB-filtered by freshness window.
+     *
+     * Backend uses 1-based pagination (page>=1). filterEcho echoes the
+     * validated/sanitized request with sorted gapTypes for deterministic
+     * JSON output (operator MUST read filterEcho to understand the
+     * "observed devices only" sample boundary).
+     *
+     * HARD RULE No Fake Work: all aggregation is server-side (no client
+     * reduce). HARD RULE Uzun Vadeli Kalıcı Çözüm: schema-qualified tables
+     * + deterministic DISTINCT ON tiebreaker absorbed via Codex
+     * 019e88b0-7d47-7fb1-b307-c8c13d350942 P1/P2/P2-low.
+     */
+    getComplianceGap: builder.query<ComplianceGapResponse, GetComplianceGapArgs>({
+      query: ({ gapTypes, freshnessWindow, page = 1, pageSize = 50 }) => {
+        const params: Record<string, string> = {
+          page: String(page),
+          pageSize: String(pageSize),
+        };
+        if (gapTypes && gapTypes.length > 0) {
+          // Sorted for deterministic cache key (matches backend filterEcho).
+          params.gapTypes = [...gapTypes].sort().join(',');
+        }
+        if (freshnessWindow) {
+          params.freshnessWindow = freshnessWindow;
+        }
+        return {
+          url: '/endpoint-admin/endpoint-devices/compliance-gap',
+          method: 'GET',
+          params,
+        };
+      },
+      providesTags: (_result) => [{ type: 'EndpointComplianceGap' as const, id: 'LIST' }],
+    }),
+    /**
      * WEB-014B — Per-device evaluation history.
      *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{id}/compliance/evaluations
      *           ?page=&size=
@@ -1447,6 +1501,7 @@ export const {
   useGetDeviceComplianceQuery,
   useForceEvaluateDeviceComplianceMutation,
   useGetComplianceDeviceListQuery,
+  useGetComplianceGapQuery,
   useGetDeviceComplianceEvaluationsQuery,
   useListCompliancePolicyItemsQuery,
   useGetCompliancePolicyItemQuery,

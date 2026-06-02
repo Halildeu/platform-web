@@ -802,6 +802,41 @@ const DICT_TR = {
   'endpointAdmin.compliance.list.next': 'Sonraki',
   'endpointAdmin.compliance.list.pageIndicator':
     '{page} / {totalPages} sayfa · {totalElements} cihaz',
+  // Faz 22.7 D3 — Compliance Gap Mart explorer
+  'endpointAdmin.complianceGap.title': 'Uyum Boşlukları',
+  'endpointAdmin.complianceGap.subtitle':
+    'Snapshot çeşitleri üzerinden cross-snapshot boşluk haritası — RDP açık ve bekleyen güvenlik güncellemeleri.',
+  'endpointAdmin.complianceGap.filter.gapTypes': 'Boşluk türleri:',
+  'endpointAdmin.complianceGap.filter.gapType.rdp_enabled': 'RDP açık',
+  'endpointAdmin.complianceGap.filter.gapType.pending_security_updates':
+    'Bekleyen güvenlik güncellemeleri',
+  'endpointAdmin.complianceGap.filter.freshnessWindow': 'Tazelik penceresi:',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.7d': '7 gün',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.30d': '30 gün',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.90d': '90 gün',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.366d': '1 yıl (maks.)',
+  'endpointAdmin.complianceGap.col.hostname': 'Hostname',
+  'endpointAdmin.complianceGap.col.gapCount': 'Boşluk sayısı',
+  'endpointAdmin.complianceGap.col.gaps': 'Boşluk türleri',
+  'endpointAdmin.complianceGap.col.gapStrength': 'Güven',
+  'endpointAdmin.complianceGap.col.lastSeen': 'Son görülme',
+  'endpointAdmin.complianceGap.strength.strong': 'Güçlü (taze)',
+  'endpointAdmin.complianceGap.strength.weak': 'Zayıf (eski snapshot)',
+  'endpointAdmin.complianceGap.empty':
+    'Bu filtrelerle hiçbir cihazda boşluk yok. "Yalnız gözlenen cihazlar" — tazelik penceresinde snapshot yoksa cihaz görüntülenmez.',
+  'endpointAdmin.complianceGap.loading': 'Boşluk haritası yükleniyor…',
+  'endpointAdmin.complianceGap.forbidden':
+    'Uyum boşlukları için yönetici (VIEWER) yetkisi gerekiyor.',
+  'endpointAdmin.complianceGap.error':
+    'Boşluk haritası yüklenemedi. Sayfayı yenileyip tekrar deneyin.',
+  'endpointAdmin.complianceGap.filterEcho.computedAt': 'Hesaplanma:',
+  'endpointAdmin.complianceGap.filterEcho.window': 'Tazelik:',
+  'endpointAdmin.complianceGap.filterEcho.gapTypes': 'Aranan boşluklar:',
+  'endpointAdmin.complianceGap.rowAria': '{hostname} için detayları aç',
+  'endpointAdmin.complianceGap.paginationAria': 'Boşluk listesi sayfalama',
+  'endpointAdmin.complianceGap.prev': 'Önceki',
+  'endpointAdmin.complianceGap.next': 'Sonraki',
+  'endpointAdmin.complianceGap.pageIndicator': '{page} / {totalPages} sayfa · {total} cihaz',
   // WEB-014C — Compliance policy CRUD
   'endpointAdmin.compliance.policies.title': 'Uyum Politikaları',
   'endpointAdmin.compliance.policies.subtitle':

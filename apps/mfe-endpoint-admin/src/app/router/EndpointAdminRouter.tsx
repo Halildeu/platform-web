@@ -45,6 +45,10 @@ const EndpointCompliancePage = React.lazy(
 const EndpointCompliancePoliciesPage = React.lazy(
   () => import('../../pages/compliance-policies/EndpointCompliancePoliciesPage'),
 );
+// Faz 22.7 D3 — Compliance Gap Mart explorer lazy route.
+const EndpointComplianceGapPage = React.lazy(
+  () => import('../../pages/compliance-gap/EndpointComplianceGapPage'),
+);
 const ApprovalInboxPage = React.lazy(() => import('../../pages/approval/ApprovalInboxPage'));
 const ApprovalCasePage = React.lazy(() => import('../../pages/approval/ApprovalCasePage'));
 const ApprovalProposeForm = React.lazy(() => import('../../pages/approval/ApprovalProposeForm'));
@@ -71,6 +75,7 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="audit" element={<EndpointAuditPage />} />
         <Route path="compliance" element={<EndpointCompliancePage />} />
         <Route path="compliance/policies" element={<EndpointCompliancePoliciesPage />} />
+        <Route path="compliance/gaps" element={<EndpointComplianceGapPage />} />
         <Route path="approvals" element={<ApprovalInboxPage />} />
         <Route path="approvals/:requestId" element={<ApprovalCasePage />} />
         <Route path="policies/:policyId/approval/new" element={<ApprovalProposeForm />} />
