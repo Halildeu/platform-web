@@ -51,6 +51,38 @@ export interface DeviceGridRow {
   app_control_wdac_mode: string | null;
   /** AppLocker AppIDSvc state: 'RUNNING' | 'STOPPED' | 'DISABLED' | 'UNKNOWN' | null. */
   app_control_app_id_svc_state: string | null;
+  // ── WEB-015 v2-b (backend DeviceGridColumns SCHEMA_VERSION = 4) ──
+  // AG-038 latest diagnostics snapshot (LEFT JOIN LATERAL dx). LEFT JOIN
+  // ⇒ no snapshot supplies SQL NULL for the three diagnostics columns.
+  /** Last poll latency milliseconds. */
+  diagnostics_last_poll_latency_ms: number | null;
+  /**
+   * Last error code (TEXT — backend DiagnosticsPayloadPolicy.CODE_RE is
+   * `^[A-Z][A-Z0-9_]{2,64}$`, NOT a closed enum; the agent emits codes
+   * like NEXT_COMMAND_TIMEOUT / DNS_TIMEOUT / UNSUPPORTED_PLATFORM that
+   * a Set Filter tuple would silently drop — Codex 019e87bc iter-1 #2).
+   */
+  diagnostics_last_error_code: string | null;
+  /**
+   * Last error occurred-at timestamp (UI surface "last_error_at" but
+   * the SQL source is the V23 canonical column `last_error_occurred_at`
+   * — Codex 019e87bc iter-1 #3).
+   */
+  diagnostics_last_error_at: string | null;
+  // AG-040 latest startup-exposure snapshot (LEFT JOIN LATERAL sx). The
+  // backend projects NULL when sx.id IS NULL OR sx.supported = false OR
+  // sx.probe_complete = false (CASE-guarded; Codex 019e87bc iter-1 #4) —
+  // the V25 boolean columns are NOT NULL on the row, so the guard is
+  // what carries "not measurable yet" semantics here.
+  startup_rdp_enabled: boolean | null;
+  startup_windows_firewall_event_log_enabled: boolean | null;
+  // AG-039 latest services snapshot (LEFT JOIN LATERAL se). Single
+  // operational sentinel: how many of the canonical 6 critical services
+  // (WinDefend / wuauserv / BITS / EventLog / EndpointAgent / MpsSvc)
+  // are persisted with `present=true AND state='STOPPED'` on the
+  // latest snapshot. NULL when se.id IS NULL OR se.supported = false OR
+  // se.probe_complete = false (Codex 019e87bc iter-1 #5).
+  services_critical_stopped_count: number | null;
   // Index signature so the row satisfies AG Grid's
   // `RowData extends Record<string, unknown>` constraint.
   [key: string]: unknown;

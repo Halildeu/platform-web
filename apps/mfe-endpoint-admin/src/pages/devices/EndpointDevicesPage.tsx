@@ -68,13 +68,16 @@ const OS_LABEL: Record<OsType, string> = {
 };
 
 const GRID_ID = 'endpoint-admin-devices';
-// WEB-015 v2-a (backend DeviceGridColumns SCHEMA_VERSION = 3) — bump from 2
-// invalidates persisted column state from v2 grids: 5 new colIds
-// (prohibited_status, prohibited_decision, prohibited_findings_count,
-// app_control_wdac_mode, app_control_app_id_svc_state) are appended to the
-// raw-export registry and ANY persisted state from v2 must NOT silently
-// reuse — EntityGridTemplate gates persisted state on this version.
-const GRID_SCHEMA_VERSION = 3;
+// Tracks the backend `DeviceGridColumns.SCHEMA_VERSION`:
+//   v2 — health (AG-033) + outdated (AG-036) LATERAL summary
+//   v3 — WEB-015 v2-a: prohibited + app-control LATERAL summary
+//   v4 — WEB-015 v2-b: AG-038 diagnostics + AG-040 startup sentinels +
+//        AG-039 services critical-stopped count (6 new colIds appended
+//        to raw export sequence; Codex 019e87bc iter-3 AGREE).
+// Each bump invalidates persisted column state from prior versions on
+// EntityGridTemplate, so a user upgrading from v3 → v4 gets the v2-b
+// columns hidden at default position (registry order, not stale layout).
+const GRID_SCHEMA_VERSION = 4;
 
 // v2-a domain enums kept verbatim from backend (DeviceGridColumns SQL).
 // Raw codes stay backend-canonical; UI labels are i18n. `null` ⇒ no
@@ -371,6 +374,75 @@ export const EndpointDevicesPage: React.FC = () => {
         },
         valueFormatter: (p) =>
           p.value == null ? '—' : t(`endpointAdmin.devices.appIdSvcState.${String(p.value)}`),
+      },
+      // ── WEB-015 v2-b (DeviceGridColumns SCHEMA_VERSION = 4) ──
+      // AG-038 diagnostics + AG-040 startup-exposure + AG-039 services
+      // sentinels. All 6 hide:true default (toggleable from the column
+      // tool panel — mirrors v2-a discipline; not every operator surfaces
+      // diagnostics latency by default).
+      {
+        field: 'diagnostics_last_poll_latency_ms',
+        headerName: t('endpointAdmin.devices.col.diagnosticsLatency'),
+        minWidth: 150,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        // Distinguish null (no diagnostics snapshot) from 0 (theoretically
+        // valid but operationally suspicious) the same way v2-a kept 0 vs
+        // null distinct for prohibited_findings_count.
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      {
+        field: 'diagnostics_last_error_code',
+        headerName: t('endpointAdmin.devices.col.diagnosticsLastErrorCode'),
+        minWidth: 200,
+        // TEXT filter — backend DiagnosticsPayloadPolicy.CODE_RE is
+        // `^[A-Z][A-Z0-9_]{2,64}$`, NOT a closed enum. The agent emits
+        // codes like NEXT_COMMAND_TIMEOUT / DNS_TIMEOUT /
+        // UNSUPPORTED_PLATFORM that a Set Filter tuple would silently
+        // drop (Codex 019e87bc iter-1 #2).
+        filter: 'agTextColumnFilter',
+        hide: true,
+        cellStyle: { fontFamily: 'monospace' },
+        valueFormatter: (p) => (p.value == null ? '—' : String(p.value)),
+      },
+      {
+        field: 'diagnostics_last_error_at',
+        headerName: t('endpointAdmin.devices.col.diagnosticsLastErrorAt'),
+        minWidth: 180,
+        filter: false,
+        hide: true,
+        valueFormatter: (p) => formatTimestamp(p.value),
+      },
+      {
+        field: 'startup_rdp_enabled',
+        headerName: t('endpointAdmin.devices.col.startupRdpEnabled'),
+        minWidth: 150,
+        filter: false,
+        hide: true,
+        // The backend CASE guard projects NULL when no snapshot /
+        // unsupported / probe-incomplete — false here means the actual
+        // measured "RDP off" reading (Codex 019e87bc iter-1 #4).
+        valueFormatter: (p) =>
+          formatBool(p.value, t('endpointAdmin.export.val.yes'), t('endpointAdmin.export.val.no')),
+      },
+      {
+        field: 'startup_windows_firewall_event_log_enabled',
+        headerName: t('endpointAdmin.devices.col.startupFirewallEventLog'),
+        minWidth: 220,
+        filter: false,
+        hide: true,
+        valueFormatter: (p) =>
+          formatBool(p.value, t('endpointAdmin.export.val.yes'), t('endpointAdmin.export.val.no')),
+      },
+      {
+        field: 'services_critical_stopped_count',
+        headerName: t('endpointAdmin.devices.col.servicesCriticalStopped'),
+        minWidth: 200,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        // 0 !== null preserved: 0 = "all 6 canonical critical services
+        // running"; null = "not measurable yet" (Codex 019e87bc iter-1 #4).
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
       },
     ];
     // Flat-only server grid: the /query datasource sends no

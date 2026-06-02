@@ -32,6 +32,21 @@ describe('DeviceGridRow v3 shape (WEB-015 v2-a)', () => {
     expectTypeOf<DeviceGridRow['app_control_app_id_svc_state']>().toEqualTypeOf<string | null>();
   });
 
+  it('pins the exact property types of every v4 (v2-b) field', () => {
+    // WEB-015 v2-b (Codex 019e87bc iter-3 AGREE) — same index-signature
+    // defeat pattern, now for the 6 SCHEMA v4 columns.
+    expectTypeOf<DeviceGridRow['diagnostics_last_poll_latency_ms']>().toEqualTypeOf<
+      number | null
+    >();
+    expectTypeOf<DeviceGridRow['diagnostics_last_error_code']>().toEqualTypeOf<string | null>();
+    expectTypeOf<DeviceGridRow['diagnostics_last_error_at']>().toEqualTypeOf<string | null>();
+    expectTypeOf<DeviceGridRow['startup_rdp_enabled']>().toEqualTypeOf<boolean | null>();
+    expectTypeOf<DeviceGridRow['startup_windows_firewall_event_log_enabled']>().toEqualTypeOf<
+      boolean | null
+    >();
+    expectTypeOf<DeviceGridRow['services_critical_stopped_count']>().toEqualTypeOf<number | null>();
+  });
+
   it('compiles with all 5 new fields populated', () => {
     const row: DeviceGridRow = {
       device_id: 'd1',

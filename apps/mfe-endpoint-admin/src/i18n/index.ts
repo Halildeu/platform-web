@@ -79,6 +79,13 @@ const DICT_TR = {
   'endpointAdmin.devices.appIdSvcState.STOPPED': 'Durduruldu',
   'endpointAdmin.devices.appIdSvcState.DISABLED': 'Devre Dışı',
   'endpointAdmin.devices.appIdSvcState.UNKNOWN': 'Bilinmiyor',
+  // WEB-015 v2-b (DeviceGridColumns SCHEMA_VERSION = 4): AG-038 diagnostics + AG-040 startup + AG-039 services sentinels
+  'endpointAdmin.devices.col.diagnosticsLatency': 'Ajan Son Poll Gecikmesi (ms)',
+  'endpointAdmin.devices.col.diagnosticsLastErrorCode': 'Ajan Son Hata Kodu',
+  'endpointAdmin.devices.col.diagnosticsLastErrorAt': 'Ajan Son Hata Zamanı',
+  'endpointAdmin.devices.col.startupRdpEnabled': 'Başlangıç RDP Etkin',
+  'endpointAdmin.devices.col.startupFirewallEventLog': 'Başlangıç Firewall Olay Günlüğü',
+  'endpointAdmin.devices.col.servicesCriticalStopped': 'Kritik Durdurulmuş Servis Sayısı',
   'endpointAdmin.export.rowLimitExceeded':
     'Dışa aktarma {limit} satır sınırını aşıyor; görünümü (filtre) daraltıp tekrar deneyin.',
   'endpointAdmin.export.failed': 'Dışa aktarma başlatılamadı.',
@@ -1090,6 +1097,13 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.appIdSvcState.STOPPED': 'Stopped',
   'endpointAdmin.devices.appIdSvcState.DISABLED': 'Disabled',
   'endpointAdmin.devices.appIdSvcState.UNKNOWN': 'Unknown',
+  // WEB-015 v2-b: diagnostics + startup + services sentinels
+  'endpointAdmin.devices.col.diagnosticsLatency': 'Agent Last Poll Latency (ms)',
+  'endpointAdmin.devices.col.diagnosticsLastErrorCode': 'Agent Last Error Code',
+  'endpointAdmin.devices.col.diagnosticsLastErrorAt': 'Agent Last Error At',
+  'endpointAdmin.devices.col.startupRdpEnabled': 'Startup RDP Enabled',
+  'endpointAdmin.devices.col.startupFirewallEventLog': 'Startup Firewall Event Log',
+  'endpointAdmin.devices.col.servicesCriticalStopped': 'Critical Stopped Services',
   'endpointAdmin.export.rowLimitExceeded':
     'Export exceeds the {limit}-row limit; narrow the view (filter) and retry.',
   'endpointAdmin.export.failed': 'Could not start the export.',
