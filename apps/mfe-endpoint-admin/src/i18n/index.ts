@@ -86,6 +86,17 @@ const DICT_TR = {
   'endpointAdmin.devices.col.startupRdpEnabled': 'Başlangıç RDP Etkin',
   'endpointAdmin.devices.col.startupFirewallEventLog': 'Başlangıç Firewall Olay Günlüğü',
   'endpointAdmin.devices.col.servicesCriticalStopped': 'Kritik Durdurulmuş Servis Sayısı',
+  // WEB-015 v2-d (backend SCHEMA_VERSION = 5): BE-024c DiffCache labels.
+  'endpointAdmin.devices.col.softwareDiffStatus': 'Yazılım Diff Durumu',
+  'endpointAdmin.devices.col.softwareDiffAdded': 'Yazılım Eklenen',
+  'endpointAdmin.devices.col.softwareDiffRemoved': 'Yazılım Kaldırılan',
+  'endpointAdmin.devices.col.softwareDiffVersionChanged': 'Yazılım Sürüm Değişen',
+  'endpointAdmin.devices.col.outdatedDiffStatus': 'Güncel Olmayan Diff Durumu',
+  'endpointAdmin.devices.col.outdatedDiffAdded': 'Güncel Olmayan Eklenen',
+  'endpointAdmin.devices.col.outdatedDiffRemoved': 'Güncel Olmayan Kaldırılan',
+  'endpointAdmin.devices.col.outdatedDiffVersionChanged': 'Güncel Olmayan Sürüm Değişen',
+  'endpointAdmin.devices.col.outdatedDiffAvailableBumped':
+    'Güncel Olmayan Erişilebilir Sürüm Değişen',
   'endpointAdmin.export.rowLimitExceeded':
     'Dışa aktarma {limit} satır sınırını aşıyor; görünümü (filtre) daraltıp tekrar deneyin.',
   'endpointAdmin.export.failed': 'Dışa aktarma başlatılamadı.',
@@ -1220,6 +1231,16 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.col.startupRdpEnabled': 'Startup RDP Enabled',
   'endpointAdmin.devices.col.startupFirewallEventLog': 'Startup Firewall Event Log',
   'endpointAdmin.devices.col.servicesCriticalStopped': 'Critical Stopped Services',
+  // WEB-015 v2-d (backend SCHEMA_VERSION = 5): BE-024c DiffCache labels.
+  'endpointAdmin.devices.col.softwareDiffStatus': 'Software Diff Status',
+  'endpointAdmin.devices.col.softwareDiffAdded': 'Software Added',
+  'endpointAdmin.devices.col.softwareDiffRemoved': 'Software Removed',
+  'endpointAdmin.devices.col.softwareDiffVersionChanged': 'Software Version Changed',
+  'endpointAdmin.devices.col.outdatedDiffStatus': 'Outdated Diff Status',
+  'endpointAdmin.devices.col.outdatedDiffAdded': 'Outdated Added',
+  'endpointAdmin.devices.col.outdatedDiffRemoved': 'Outdated Removed',
+  'endpointAdmin.devices.col.outdatedDiffVersionChanged': 'Outdated Version Changed',
+  'endpointAdmin.devices.col.outdatedDiffAvailableBumped': 'Outdated Available Version Bumped',
   'endpointAdmin.export.rowLimitExceeded':
     'Export exceeds the {limit}-row limit; narrow the view (filter) and retry.',
   'endpointAdmin.export.failed': 'Could not start the export.',

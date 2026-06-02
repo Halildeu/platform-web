@@ -104,11 +104,31 @@ describe('EndpointDevicesPage v2-a column registry (WEB-015 v2-a)', () => {
     }
   });
 
-  it('GRID_SCHEMA_VERSION is bumped to 4 (WEB-015 v2-b invalidates persisted v3 column state)', () => {
-    expect(source).toMatch(/const GRID_SCHEMA_VERSION = 4;/);
-    // Negative drift detectors — neither v2 nor v3 literal may survive.
+  it('GRID_SCHEMA_VERSION is bumped to 5 (WEB-015 v2-d invalidates persisted v4 column state)', () => {
+    expect(source).toMatch(/const GRID_SCHEMA_VERSION = 5;/);
+    // Negative drift detectors — v2/v3/v4 literals may NOT survive.
     expect(source).not.toMatch(/const GRID_SCHEMA_VERSION = 2;/);
     expect(source).not.toMatch(/const GRID_SCHEMA_VERSION = 3;/);
+    expect(source).not.toMatch(/const GRID_SCHEMA_VERSION = 4;/);
+  });
+
+  it('9 new v2-d cache colIds appear in the source (raw export sequence parity with backend SCHEMA_VERSION=5)', () => {
+    // Codex 019e8a39 iter-1 web acceptance: backend appended 9 cache-fed
+    // colIds after services_critical_stopped_count. Mirror them here.
+    const expectedV2dColIds = [
+      'software_diff_status',
+      'software_diff_added_count',
+      'software_diff_removed_count',
+      'software_diff_version_changed_count',
+      'outdated_diff_status',
+      'outdated_diff_added_count',
+      'outdated_diff_removed_count',
+      'outdated_diff_version_changed_count',
+      'outdated_diff_available_version_bumped_count',
+    ];
+    for (const colId of expectedV2dColIds) {
+      expect(source).toContain(`field: '${colId}'`);
+    }
   });
 
   it('5 new DeviceGrid colIds appear in the source (raw export sequence parity with backend)', () => {

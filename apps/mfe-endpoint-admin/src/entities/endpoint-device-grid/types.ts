@@ -83,6 +83,39 @@ export interface DeviceGridRow {
   // latest snapshot. NULL when se.id IS NULL OR se.supported = false OR
   // se.probe_complete = false (Codex 019e87bc iter-1 #5).
   services_critical_stopped_count: number | null;
+  // ── WEB-015 v2-d (backend DeviceGridColumns SCHEMA_VERSION = 5) ──
+  // BE-024c DiffCache cache-fed summary columns: backend LEFT JOINs the
+  // two diff cache tables (endpoint_software_diff_cache sdc +
+  // endpoint_outdated_software_diff_cache odc) via UNIQUE(tenant_id,
+  // device_id). Cache-absent device → all 9 columns return NULL (read-
+  // model "not yet computed"; distinct from 'NO_HISTORY' which is a real
+  // cache row state meaning "device has 0 history rows"). Grid stays
+  // read-only — the canonical drawer endpoint is the live truth; the
+  // backend AFTER_COMMIT listener + 10-min DiffCacheBackfillWorker close
+  // the catch-up lag.
+  /**
+   * Software diff status enum:
+   * 'OK' (real diff between two history rows) |
+   * 'NO_CHANGE' (two captures, identical digest) |
+   * 'INSUFFICIENT_HISTORY' (only one capture) |
+   * 'NO_HISTORY' (cache row exists with zero captures) |
+   * null (cache row absent — listener / worker has not yet computed).
+   */
+  software_diff_status: string | null;
+  software_diff_added_count: number | null;
+  software_diff_removed_count: number | null;
+  software_diff_version_changed_count: number | null;
+  /** Outdated diff status enum (mirror of software_diff_status). */
+  outdated_diff_status: string | null;
+  outdated_diff_added_count: number | null;
+  outdated_diff_removed_count: number | null;
+  outdated_diff_version_changed_count: number | null;
+  /**
+   * Available-version-bumped count: canonical packageId same,
+   * installedVersion unchanged, availableVersion changed (4th outdated
+   * count, distinct from added/removed/version_changed).
+   */
+  outdated_diff_available_version_bumped_count: number | null;
   // Index signature so the row satisfies AG Grid's
   // `RowData extends Record<string, unknown>` constraint.
   [key: string]: unknown;
