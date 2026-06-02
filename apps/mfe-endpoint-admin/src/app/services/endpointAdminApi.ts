@@ -84,6 +84,8 @@ import type {
   GetComplianceGapArgs,
 } from '../../entities/endpoint-compliance-gap/types';
 import type {
+  AdminCatalogItemRequest,
+  AdminCatalogItemResponse,
   AdminCatalogItemSummary,
   ListCatalogItemsArgs,
   SpringPage,
@@ -1351,6 +1353,71 @@ export const endpointAdminApi = createApi({
       providesTags: [{ type: 'EndpointSoftwareCatalog' as const, id: 'LIST' }],
     }),
     /**
+     * Path C3 — Get a single catalog item (full DTO with detection rule).
+     *   gateway GET /api/v1/endpoint-admin/endpoint-software-catalog/{catalogItemId}
+     *   → service /api/v1/admin/endpoint-software-catalog/{catalogItemId}
+     *
+     * Used by the authoring drawer's Edit mode entry. The response
+     * carries the raw `detectionRule` map; callers MUST run it through
+     * {@code normalizeDetectionRule(...)} before binding to the typed
+     * editor (unknown shapes fall back to read-only summary + Save
+     * disabled per Codex iter-2 absorb).
+     */
+    getCatalogItem: builder.query<AdminCatalogItemResponse, string>({
+      query: (catalogItemId) => ({
+        url: `/endpoint-admin/endpoint-software-catalog/${encodeURIComponent(catalogItemId)}`,
+        method: 'GET',
+      }),
+      providesTags: (_res, _err, catalogItemId) => [
+        { type: 'EndpointSoftwareCatalog' as const, id: catalogItemId },
+      ],
+    }),
+    /**
+     * Path C3 — Create catalog item with detection rule.
+     *   gateway POST /api/v1/endpoint-admin/endpoint-software-catalog
+     *
+     * HTTP semantics:
+     *  - 201 → AdminCatalogItemResponse
+     *  - 400 → field validation failure (catalogItemId duplicate, etc.)
+     *  - 422 → DetectionRuleValidator rejection (path safety, SHA shape,
+     *          predicate shape, maxHashBytes cap). The frontend surfaces
+     *          the body's `errors` array per field with i18n reason
+     *          codes.
+     *  - 403 → caller lacks `endpoint:catalog:write`.
+     *
+     * Invalidates the catalog LIST so the new item appears immediately.
+     */
+    createCatalogItem: builder.mutation<AdminCatalogItemResponse, AdminCatalogItemRequest>({
+      query: (body) => ({
+        url: '/endpoint-admin/endpoint-software-catalog',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'EndpointSoftwareCatalog' as const, id: 'LIST' }],
+    }),
+    /**
+     * Path C3 — Update catalog item (detection rule + metadata).
+     *   gateway PUT /api/v1/endpoint-admin/endpoint-software-catalog/{catalogItemId}
+     *
+     * Same semantics as create except `catalogItemId` in the path is
+     * the canonical identifier and the body MUST match it (backend
+     * 400s on mismatch). Invalidates the single-item cache + LIST.
+     */
+    updateCatalogItem: builder.mutation<
+      AdminCatalogItemResponse,
+      { catalogItemId: string; body: AdminCatalogItemRequest }
+    >({
+      query: ({ catalogItemId, body }) => ({
+        url: `/endpoint-admin/endpoint-software-catalog/${encodeURIComponent(catalogItemId)}`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { catalogItemId }) => [
+        { type: 'EndpointSoftwareCatalog' as const, id: catalogItemId },
+        { type: 'EndpointSoftwareCatalog' as const, id: 'LIST' },
+      ],
+    }),
+    /**
      * WEB-014D — Install preflight (BE-021A read-only decision).
      *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/install-preflight
      *           ?catalogItemId={slug}
@@ -1509,6 +1576,9 @@ export const {
   useUpdateCompliancePolicyItemMutation,
   useDeleteCompliancePolicyItemMutation,
   useListCatalogItemsQuery,
+  useGetCatalogItemQuery,
+  useCreateCatalogItemMutation,
+  useUpdateCatalogItemMutation,
   useGetInstallPreflightQuery,
   useCreateInstallMutation,
   useListInstallAuditsQuery,
