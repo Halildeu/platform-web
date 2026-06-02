@@ -8,7 +8,7 @@ import type { DeviceGridRow } from '../types';
  * with 5 new colIds appended to raw-export order:
  * <ul>
  *   <li>prohibited_status (NO_EVALUATION | OK)</li>
- *   <li>prohibited_decision (COMPLIANT | UNAUTHORIZED | INSUFFICIENT_DATA | null)</li>
+ *   <li>prohibited_decision (COMPLIANT | NON_COMPLIANT | UNAUTHORIZED | UNKNOWN | null)</li>
  *   <li>prohibited_findings_count (number | null; <strong>0 !== null</strong>)</li>
  *   <li>app_control_wdac_mode (OFF | AUDIT | ENFORCE | UNKNOWN | null)</li>
  *   <li>app_control_app_id_svc_state (RUNNING | STOPPED | DISABLED | UNKNOWN | null)</li>
