@@ -77,7 +77,7 @@ const GRID_ID = 'endpoint-admin-devices';
 // Each bump invalidates persisted column state from prior versions on
 // EntityGridTemplate, so a user upgrading from v3 → v4 gets the v2-b
 // columns hidden at default position (registry order, not stale layout).
-const GRID_SCHEMA_VERSION = 4;
+const GRID_SCHEMA_VERSION = 5;
 
 // v2-a domain enums kept verbatim from backend (DeviceGridColumns SQL).
 // Raw codes stay backend-canonical; UI labels are i18n. `null` ⇒ no
@@ -442,6 +442,84 @@ export const EndpointDevicesPage: React.FC = () => {
         hide: true,
         // 0 !== null preserved: 0 = "all 6 canonical critical services
         // running"; null = "not measurable yet" (Codex 019e87bc iter-1 #4).
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      // ── WEB-015 v2-d (backend DeviceGridColumns SCHEMA_VERSION = 5) ──
+      // BE-024c DiffCache 9 cache-fed columns. All hidden by default — the
+      // operator opts in via the column toolbar. null = "cache row absent /
+      // not yet computed by listener or worker"; 'NO_HISTORY' status =
+      // "cache row exists but device has 0 captures yet"; counts in
+      // 'NO_HISTORY' state = 0 (per backend writer contract).
+      {
+        field: 'software_diff_status',
+        headerName: t('endpointAdmin.devices.col.softwareDiffStatus'),
+        minWidth: 200,
+        filter: 'agSetColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : String(p.value)),
+      },
+      {
+        field: 'software_diff_added_count',
+        headerName: t('endpointAdmin.devices.col.softwareDiffAdded'),
+        minWidth: 160,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      {
+        field: 'software_diff_removed_count',
+        headerName: t('endpointAdmin.devices.col.softwareDiffRemoved'),
+        minWidth: 160,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      {
+        field: 'software_diff_version_changed_count',
+        headerName: t('endpointAdmin.devices.col.softwareDiffVersionChanged'),
+        minWidth: 200,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      {
+        field: 'outdated_diff_status',
+        headerName: t('endpointAdmin.devices.col.outdatedDiffStatus'),
+        minWidth: 200,
+        filter: 'agSetColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : String(p.value)),
+      },
+      {
+        field: 'outdated_diff_added_count',
+        headerName: t('endpointAdmin.devices.col.outdatedDiffAdded'),
+        minWidth: 160,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      {
+        field: 'outdated_diff_removed_count',
+        headerName: t('endpointAdmin.devices.col.outdatedDiffRemoved'),
+        minWidth: 160,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      {
+        field: 'outdated_diff_version_changed_count',
+        headerName: t('endpointAdmin.devices.col.outdatedDiffVersionChanged'),
+        minWidth: 200,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
+      },
+      {
+        field: 'outdated_diff_available_version_bumped_count',
+        headerName: t('endpointAdmin.devices.col.outdatedDiffAvailableBumped'),
+        minWidth: 220,
+        filter: 'agNumberColumnFilter',
+        hide: true,
         valueFormatter: (p) => (p.value == null ? '—' : `${p.value}`),
       },
     ];
