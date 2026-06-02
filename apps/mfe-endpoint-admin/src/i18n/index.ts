@@ -61,9 +61,16 @@ const DICT_TR = {
   // (neutral/info tone); COMPLIANT semantics stays on `prohibited_decision`.
   'endpointAdmin.devices.prohibitedStatus.NO_EVALUATION': 'Değerlendirilmedi',
   'endpointAdmin.devices.prohibitedStatus.OK': 'Değerlendirildi',
+  // Backend `ComplianceDecision` enum: COMPLIANT, NON_COMPLIANT, UNAUTHORIZED,
+  // UNKNOWN. LIVE WEB-015 v2-a smoke surfaced `decision=UNKNOWN`; the v0
+  // tuple's `INSUFFICIENT_DATA` was a draft-time guess the backend never
+  // emits, replaced here with the two ladder tiers it actually produces
+  // (NON_COMPLIANT for REQUIRED-policy misses, UNKNOWN for telemetry-
+  // insufficient paths).
   'endpointAdmin.devices.prohibitedDecision.COMPLIANT': 'Uyumlu',
+  'endpointAdmin.devices.prohibitedDecision.NON_COMPLIANT': 'Uyumsuz',
   'endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED': 'Yetkisiz',
-  'endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA': 'Yetersiz veri',
+  'endpointAdmin.devices.prohibitedDecision.UNKNOWN': 'Bilinmiyor',
   'endpointAdmin.devices.wdacMode.OFF': 'Kapalı',
   'endpointAdmin.devices.wdacMode.AUDIT': 'Denetim',
   'endpointAdmin.devices.wdacMode.ENFORCE': 'Zorunlu',
@@ -1067,9 +1074,14 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   // NOT "Compliant". COMPLIANT semantics stays on prohibited_decision.
   'endpointAdmin.devices.prohibitedStatus.NO_EVALUATION': 'Not Evaluated',
   'endpointAdmin.devices.prohibitedStatus.OK': 'Evaluated',
+  // Backend `ComplianceDecision` enum: COMPLIANT, NON_COMPLIANT,
+  // UNAUTHORIZED, UNKNOWN. v0 `INSUFFICIENT_DATA` was a draft-time guess
+  // the backend never emits — replaced by the two ladder tiers it
+  // actually produces.
   'endpointAdmin.devices.prohibitedDecision.COMPLIANT': 'Compliant',
+  'endpointAdmin.devices.prohibitedDecision.NON_COMPLIANT': 'Non-Compliant',
   'endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED': 'Unauthorized',
-  'endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA': 'Insufficient Data',
+  'endpointAdmin.devices.prohibitedDecision.UNKNOWN': 'Unknown',
   'endpointAdmin.devices.wdacMode.OFF': 'Off',
   'endpointAdmin.devices.wdacMode.AUDIT': 'Audit',
   'endpointAdmin.devices.wdacMode.ENFORCE': 'Enforce',

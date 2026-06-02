@@ -37,7 +37,12 @@ export interface DeviceGridRow {
   // pe.id IS NULL ⇒ status = 'NO_EVALUATION', decision = null, count = null.
   /** 'NO_EVALUATION' (no compliance evaluation row) | 'OK' (row present). */
   prohibited_status: string | null;
-  /** Latest evaluation decision: 'COMPLIANT' | 'UNAUTHORIZED' | 'INSUFFICIENT_DATA' | null. */
+  /**
+   * Latest evaluation decision projected as `pe.decision`
+   * (backend `ComplianceDecision` enum):
+   * 'COMPLIANT' | 'NON_COMPLIANT' | 'UNAUTHORIZED' | 'UNKNOWN' | null
+   * (null only on LEFT JOIN no-snapshot path).
+   */
   prohibited_decision: string | null;
   /** JSONB defensive array length over evidence.matchedItems.prohibitedInstalled. */
   prohibited_findings_count: number | null;

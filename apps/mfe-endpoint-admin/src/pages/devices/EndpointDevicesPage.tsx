@@ -82,7 +82,23 @@ const GRID_SCHEMA_VERSION = 3;
 // explicit domain value 'NO_EVALUATION' (compliance evaluation absent
 // per server contract).
 const PROHIBITED_STATUS_VALUES = ['NO_EVALUATION', 'OK'] as const;
-const PROHIBITED_DECISION_VALUES = ['COMPLIANT', 'UNAUTHORIZED', 'INSUFFICIENT_DATA'] as const;
+// Domain backed by backend `ComplianceDecision` enum
+// (com.example.endpointadmin.model.ComplianceDecision) + the persisted
+// `prohibited_decision` column projected by DeviceGridColumns
+// (`pe.decision`). The ladder is UNAUTHORIZED > UNKNOWN > NON_COMPLIANT >
+// COMPLIANT; the LIVE WEB-015 v2-a smoke surfaced a row with
+// `decision=UNKNOWN` (telemetry-insufficient legitimate path: snapshot
+// missing / apps unavailable / hard-stale / catalog gap / egress
+// unsupported — `EndpointComplianceService.decide`) which the v0 tuple
+// hid from the Set Filter. The original v0 tuple's `INSUFFICIENT_DATA`
+// was a draft-time guess that the backend never emits — replaced here
+// by the two backend-canonical codes the ladder can actually produce.
+const PROHIBITED_DECISION_VALUES = [
+  'COMPLIANT',
+  'NON_COMPLIANT',
+  'UNAUTHORIZED',
+  'UNKNOWN',
+] as const;
 const WDAC_MODE_VALUES = ['OFF', 'AUDIT', 'ENFORCE', 'UNKNOWN'] as const;
 const APP_ID_SVC_STATE_VALUES = ['RUNNING', 'STOPPED', 'DISABLED', 'UNKNOWN'] as const;
 

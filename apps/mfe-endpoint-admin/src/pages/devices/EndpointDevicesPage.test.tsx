@@ -141,8 +141,15 @@ describe('EndpointDevicesPage v2-a column registry (WEB-015 v2-a)', () => {
     // for display only); the raw tuples must match DeviceGridColumns
     // SQL CASE/JOIN domains exactly.
     expect(source).toMatch(/PROHIBITED_STATUS_VALUES = \['NO_EVALUATION', 'OK'\]/);
+    // WEB-015 v2-a fast-follow (LIVE finding): tuple normalized to the
+    // backend `ComplianceDecision` enum (COMPLIANT, NON_COMPLIANT,
+    // UNAUTHORIZED, UNKNOWN). The v0 draft `INSUFFICIENT_DATA` was never
+    // emitted by `EndpointComplianceService.decide()`.
+    // Tuple may be prettier-wrapped onto multiple lines once it crosses the
+    // 100-col print width — match either form by tolerating whitespace +
+    // optional trailing comma.
     expect(source).toMatch(
-      /PROHIBITED_DECISION_VALUES = \['COMPLIANT', 'UNAUTHORIZED', 'INSUFFICIENT_DATA'\]/,
+      /PROHIBITED_DECISION_VALUES = \[\s*'COMPLIANT',\s*'NON_COMPLIANT',\s*'UNAUTHORIZED',\s*'UNKNOWN',?\s*\]/,
     );
     expect(source).toMatch(/WDAC_MODE_VALUES = \['OFF', 'AUDIT', 'ENFORCE', 'UNKNOWN'\]/);
     expect(source).toMatch(

@@ -26,8 +26,9 @@ const REQUIRED_KEYS = [
   'endpointAdmin.devices.prohibitedStatus.NO_EVALUATION',
   'endpointAdmin.devices.prohibitedStatus.OK',
   'endpointAdmin.devices.prohibitedDecision.COMPLIANT',
+  'endpointAdmin.devices.prohibitedDecision.NON_COMPLIANT',
   'endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED',
-  'endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA',
+  'endpointAdmin.devices.prohibitedDecision.UNKNOWN',
   'endpointAdmin.devices.wdacMode.OFF',
   'endpointAdmin.devices.wdacMode.AUDIT',
   'endpointAdmin.devices.wdacMode.ENFORCE',
@@ -81,11 +82,18 @@ describe('WEB-015 v2-a DeviceGrid i18n — TR locale', () => {
     expect(t('endpointAdmin.devices.prohibitedDecision.COMPLIANT')).toBe('Uyumlu');
   });
 
-  it('3-decision enum copy is distinct (NEVER collapsed)', () => {
-    const c = t('endpointAdmin.devices.prohibitedDecision.COMPLIANT');
-    const u = t('endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED');
-    const i = t('endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA');
-    expect(new Set([c, u, i]).size).toBe(3);
+  it('4-decision enum copy is distinct (NEVER collapsed) — WEB-015 v2-a LIVE finding', () => {
+    // Backend `ComplianceDecision` enum: COMPLIANT, NON_COMPLIANT,
+    // UNAUTHORIZED, UNKNOWN (ladder: UNAUTHORIZED > UNKNOWN > NON_COMPLIANT
+    // > COMPLIANT). The WEB-015 v2-a LIVE smoke surfaced a row with
+    // `decision=UNKNOWN`; the original v0 tuple's INSUFFICIENT_DATA was a
+    // draft-time guess the backend never emits and is removed here.
+    const labels = new Set(
+      ['COMPLIANT', 'NON_COMPLIANT', 'UNAUTHORIZED', 'UNKNOWN'].map((v) =>
+        t(`endpointAdmin.devices.prohibitedDecision.${v}`),
+      ),
+    );
+    expect(labels.size).toBe(4);
   });
 
   it('4-mode WDAC enum copy is distinct (Codex guardrail #4 — Set Filter label parity)', () => {
@@ -121,6 +129,15 @@ describe('WEB-015 v2-a DeviceGrid i18n — EN locale', () => {
   it('OK is "Evaluated" — NOT "Compliant" (Codex 019e87aa iter-2 P1)', () => {
     expect(t('endpointAdmin.devices.prohibitedStatus.OK')).toBe('Evaluated');
     expect(t('endpointAdmin.devices.prohibitedStatus.OK')).not.toBe('Compliant');
+  });
+
+  it('4-decision enum copy is distinct (DICT_EN parity) — WEB-015 v2-a LIVE finding', () => {
+    const labels = new Set(
+      ['COMPLIANT', 'NON_COMPLIANT', 'UNAUTHORIZED', 'UNKNOWN'].map((v) =>
+        t(`endpointAdmin.devices.prohibitedDecision.${v}`),
+      ),
+    );
+    expect(labels.size).toBe(4);
   });
 
   it('4-mode WDAC enum copy is distinct (DICT_EN parity)', () => {
