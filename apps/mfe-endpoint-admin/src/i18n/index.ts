@@ -114,6 +114,7 @@ const DICT_TR = {
   'endpointAdmin.drawer.tab.startupExposure': 'Başlangıç + Maruziyet',
   'endpointAdmin.drawer.tab.appControl': 'Uygulama Kontrolü',
   'endpointAdmin.drawer.tab.softwareDiff': 'Yazılım Değişimleri',
+  'endpointAdmin.drawer.tab.outdatedSoftwareDiff': 'Güncel Olmayan Değişimler',
   'endpointAdmin.drawer.tab.prohibitedSoftware': 'Yasaklı Yazılım',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Yazılım Kataloğu',
   // WEB-017 — Enrollment management (Faz 22.5.x)
@@ -533,6 +534,42 @@ const DICT_TR = {
   'endpointAdmin.drawer.softwareDiff.col.publisher': 'Yayıncı',
   'endpointAdmin.drawer.softwareDiff.col.fromVersion': 'Eski Sürüm',
   'endpointAdmin.drawer.softwareDiff.col.toVersion': 'Yeni Sürüm',
+  // BE-024b — Outdated-Software Diff tab (Faz 22.5 P2-A slice-3b)
+  'endpointAdmin.drawer.outdatedSoftwareDiff.loading':
+    'Güncel olmayan yazılım değişim bilgisi yükleniyor…',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.error':
+    'Güncel olmayan yazılım değişim bilgisi alınamadı.',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.forbidden':
+    'Güncel olmayan yazılım değişimleri için yetkiniz yok.',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.staleWarning':
+    'Görüntülenen değişim bilgisi başka bir cihaza ait — kapatıp tekrar açın.',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.OK': 'Karşılaştırma yapıldı',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.NO_CHANGE': 'Paket düzeyinde değişiklik yok',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.INSUFFICIENT_HISTORY':
+    'Henüz yalnızca tek bir snapshot var (karşılaştırma için yetersiz)',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.NO_HISTORY':
+    'Bu cihazda güncel olmayan yazılım snapshot kaydı yok',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.window.from': 'Önceki snapshot',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.window.to': 'Son snapshot',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.truncation.notice':
+    '* Snapshot olası kesilme ile alınmıştır (paket listesi tam olmayabilir).',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.added': 'Eklenen',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.removed': 'Kaldırılan',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.versionChanged': 'Yüklenmiş sürüm değişen',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.availableVersionBumped':
+    'Yeni sürüm yayınlanan',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.added.title': 'Yeni Güncel Olmayan Paketler',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.removed.title':
+    'Artık Güncel Olmayan Listeden Çıkanlar',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.versionChanged.title': 'Yüklü Sürüm Değişiklikleri',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.availableVersionBumped.title':
+    'Yeni Sürüm Yayınlanan Paketler',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.packageId': 'Paket ID',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.installed': 'Yüklü Sürüm',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.fromInstalled': 'Eski Yüklü Sürüm',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.toInstalled': 'Yeni Yüklü Sürüm',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.fromAvailable': 'Eski Mevcut Sürüm',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.toAvailable': 'Yeni Mevcut Sürüm',
   // BE-025 — Prohibited-Software finding tab (Faz 22.5 P2-A slice-2)
   'endpointAdmin.drawer.prohibitedSoftware.loading': 'Yasaklı yazılım bilgisi yükleniyor…',
   'endpointAdmin.drawer.prohibitedSoftware.error': 'Yasaklı yazılım bilgisi alınamadı.',
@@ -1042,6 +1079,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.tab.startupExposure': 'Startup + Exposure',
   'endpointAdmin.drawer.tab.appControl': 'Application Control',
   'endpointAdmin.drawer.tab.softwareDiff': 'Software Changes',
+  'endpointAdmin.drawer.tab.outdatedSoftwareDiff': 'Outdated-Software Changes',
   'endpointAdmin.drawer.tab.prohibitedSoftware': 'Prohibited Software',
   'endpointAdmin.drawer.tab.softwareCatalog': 'Software Catalog',
   // WEB-017 — Enrollment management (Faz 22.5.x)
@@ -1460,6 +1498,42 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.softwareDiff.col.publisher': 'Publisher',
   'endpointAdmin.drawer.softwareDiff.col.fromVersion': 'From Version',
   'endpointAdmin.drawer.softwareDiff.col.toVersion': 'To Version',
+  // BE-024b — Outdated-Software Diff tab (Faz 22.5 P2-A slice-3b)
+  'endpointAdmin.drawer.outdatedSoftwareDiff.loading': 'Loading outdated-software change evidence…',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.error':
+    'Could not load outdated-software change evidence.',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.forbidden':
+    'You do not have permission to view outdated-software changes.',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.staleWarning':
+    'Displayed change set belongs to a different device — close and reopen the drawer.',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.OK': 'Two snapshots compared',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.NO_CHANGE':
+    'No package-level change since previous snapshot',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.INSUFFICIENT_HISTORY':
+    'Only one snapshot so far (need two to compare)',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.status.NO_HISTORY':
+    'No outdated-software snapshots on file for this device',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.window.from': 'Previous snapshot',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.window.to': 'Latest snapshot',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.truncation.notice':
+    '* Snapshot may have been truncated at capture (package list may be incomplete).',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.added': 'Added',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.removed': 'Removed',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.versionChanged': 'Installed-version changed',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.counts.availableVersionBumped':
+    'New upstream version available',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.added.title': 'Newly Outdated Packages',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.removed.title':
+    'No Longer Outdated (removed from list)',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.versionChanged.title': 'Installed Version Changes',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.availableVersionBumped.title':
+    'New Upstream Versions Advertised',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.packageId': 'Package ID',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.installed': 'Installed',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.fromInstalled': 'From Installed',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.toInstalled': 'To Installed',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.fromAvailable': 'From Available',
+  'endpointAdmin.drawer.outdatedSoftwareDiff.col.toAvailable': 'To Available',
   // BE-025 — Prohibited-Software finding tab (Faz 22.5 P2-A slice-2)
   'endpointAdmin.drawer.prohibitedSoftware.loading': 'Loading prohibited-software evidence…',
   'endpointAdmin.drawer.prohibitedSoftware.error': 'Could not load prohibited-software evidence.',

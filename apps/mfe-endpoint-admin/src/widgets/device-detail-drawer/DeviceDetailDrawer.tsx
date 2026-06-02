@@ -134,6 +134,16 @@ const SoftwareDiffTab = React.lazy(() =>
   })),
 );
 
+// BE-024b Outdated-Software Diff (Faz 22.5 P2-A slice-3b). Same lazy-
+// mount pattern; the 4-status badge + counts + 4 tables (added /
+// removed / versionChanged / availableVersionBumped) never render
+// until the operator selects the "Güncel Olmayan Değişimler" tab.
+const OutdatedSoftwareDiffTab = React.lazy(() =>
+  import('./components/outdated-software-diff/OutdatedSoftwareDiffView').then((m) => ({
+    default: m.OutdatedSoftwareDiffView,
+  })),
+);
+
 // BE-025 Prohibited-Software finding view (Faz 22.5 P2-A slice-2).
 // Same lazy-mount pattern; the 2-status badge + decision badge +
 // findings table never render until the operator selects the
@@ -169,6 +179,7 @@ export type DeviceDetailDrawerTabKey =
   | 'startup-exposure'
   | 'app-control'
   | 'software-diff'
+  | 'outdated-software-diff'
   | 'prohibited-software'
   | 'software-catalog'
   | 'compliance';
@@ -403,6 +414,18 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <SoftwareDiffTab deviceId={device.id} active={activeTab === 'software-diff'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'outdated-software-diff' as const,
+        label: t('endpointAdmin.drawer.tab.outdatedSoftwareDiff'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <OutdatedSoftwareDiffTab
+              deviceId={device.id}
+              active={activeTab === 'outdated-software-diff'}
+            />
           </React.Suspense>
         ),
       },

@@ -55,6 +55,7 @@ import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
 import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
 import type { AppControlSnapshot } from '../../entities/endpoint-app-control/types';
 import type { SoftwareInventoryDiffSnapshot } from '../../entities/endpoint-software-inventory-diff/types';
+import type { OutdatedSoftwareDiffSnapshot } from '../../entities/endpoint-outdated-software-diff/types';
 import type { DeviceProhibitedSoftwareSnapshot } from '../../entities/endpoint-prohibited-software/types';
 import type { EndpointLatestSnapshots } from '../../entities/endpoint-latest-snapshots/types';
 import {
@@ -136,6 +137,14 @@ export interface GetAppControlLatestArgs {
  * (latest-vs-previous capture) query. Faz 22.5 P2-A.
  */
 export interface GetSoftwareInventoryDiffArgs {
+  deviceId: string;
+}
+
+/**
+ * BE-024b — endpoint-local args for the outdated-software diff
+ * (latest-vs-previous capture) query. Faz 22.5 P2-A slice-3b.
+ */
+export interface GetOutdatedSoftwareDiffArgs {
   deviceId: string;
 }
 
@@ -374,6 +383,7 @@ export const endpointAdminApi = createApi({
     'EndpointStartupExposure',
     'EndpointAppControl',
     'EndpointSoftwareInventoryDiff',
+    'EndpointOutdatedSoftwareDiff',
     'EndpointProhibitedSoftware',
     'EndpointDeviceCompliance',
     'CompliancePolicyItem',
@@ -856,6 +866,30 @@ export const endpointAdminApi = createApi({
       }),
       providesTags: (_result, _error, { deviceId }) => [
         { type: 'EndpointSoftwareInventoryDiff' as const, id: `${deviceId}::diff-latest` },
+      ],
+    }),
+    /**
+     * BE-024b — Outdated-software diff (latest-vs-previous capture)
+     * read. Faz 22.5 P2-A slice-3b.
+     *
+     * Gateway-fronted: `GET /api/v1/endpoint-admin/endpoint-devices/
+     * {deviceId}/outdated-software/diff` → service
+     * `AdminEndpointOutdatedSoftwareController.getDeviceOutdatedSoftwareDiff`
+     * (RequireModule VIEWER). Always 200 (no-existence-leak); 4-status
+     * enum (OK / NO_CHANGE / INSUFFICIENT_HISTORY / NO_HISTORY).
+     *
+     * Cache: tag id `${deviceId}::outdated-diff-latest`.
+     */
+    getOutdatedSoftwareDiff: builder.query<
+      OutdatedSoftwareDiffSnapshot,
+      GetOutdatedSoftwareDiffArgs
+    >({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/outdated-software/diff`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, { deviceId }) => [
+        { type: 'EndpointOutdatedSoftwareDiff' as const, id: `${deviceId}::outdated-diff-latest` },
       ],
     }),
     /**
@@ -1434,6 +1468,7 @@ export const {
   useGetStartupExposureLatestQuery,
   useGetAppControlLatestQuery,
   useGetSoftwareInventoryDiffQuery,
+  useGetOutdatedSoftwareDiffQuery,
   useGetProhibitedSoftwareQuery,
   useGetLatestSnapshotsQuery,
 } = endpointAdminApi;
