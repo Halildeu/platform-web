@@ -46,6 +46,32 @@ const DICT_TR = {
   'endpointAdmin.devices.col.longUptime': 'Uzun Çalışma Uyarısı',
   'endpointAdmin.devices.col.upgradeCount': 'Güncellenebilir Yazılım',
   'endpointAdmin.devices.col.upgradeTruncated': 'Güncellik Liste Kırpıldı',
+  // WEB-015 v2-a (DeviceGridColumns SCHEMA_VERSION = 3): prohibited-software + app-control kolonları
+  'endpointAdmin.devices.col.prohibitedStatus': 'Yasaklı Yazılım Durumu',
+  'endpointAdmin.devices.col.prohibitedDecision': 'Uygunluk Kararı',
+  'endpointAdmin.devices.col.prohibitedFindingsCount': 'Yasaklı Yazılım Bulgu Sayısı',
+  'endpointAdmin.devices.col.wdacMode': 'WDAC Modu',
+  'endpointAdmin.devices.col.appIdSvcState': 'AppIDSvc Durumu',
+  // Cell + Set Filter value labels (raw enum domain → i18n label; raw codes stay backend-canonical)
+  // Codex 019e87aa iter-2 P1 must_fix: backend `prohibited_status = OK` means
+  // `pe.id IS NOT NULL` (an evaluation row exists) — NOT compliance success.
+  // The actual compliance verdict lives in `prohibited_decision`. Labelling
+  // OK as "Uygun" / "Compliant" with success-green would render a
+  // contradictory row when decision = UNAUTHORIZED. So OK ⇒ "Değerlendirildi"
+  // (neutral/info tone); COMPLIANT semantics stays on `prohibited_decision`.
+  'endpointAdmin.devices.prohibitedStatus.NO_EVALUATION': 'Değerlendirilmedi',
+  'endpointAdmin.devices.prohibitedStatus.OK': 'Değerlendirildi',
+  'endpointAdmin.devices.prohibitedDecision.COMPLIANT': 'Uyumlu',
+  'endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED': 'Yetkisiz',
+  'endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA': 'Yetersiz veri',
+  'endpointAdmin.devices.wdacMode.OFF': 'Kapalı',
+  'endpointAdmin.devices.wdacMode.AUDIT': 'Denetim',
+  'endpointAdmin.devices.wdacMode.ENFORCE': 'Zorunlu',
+  'endpointAdmin.devices.wdacMode.UNKNOWN': 'Bilinmiyor',
+  'endpointAdmin.devices.appIdSvcState.RUNNING': 'Çalışıyor',
+  'endpointAdmin.devices.appIdSvcState.STOPPED': 'Durduruldu',
+  'endpointAdmin.devices.appIdSvcState.DISABLED': 'Devre Dışı',
+  'endpointAdmin.devices.appIdSvcState.UNKNOWN': 'Bilinmiyor',
   'endpointAdmin.export.rowLimitExceeded':
     'Dışa aktarma {limit} satır sınırını aşıyor; görünümü (filtre) daraltıp tekrar deneyin.',
   'endpointAdmin.export.failed': 'Dışa aktarma başlatılamadı.',
@@ -1012,6 +1038,27 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.col.longUptime': 'Long Uptime Warning',
   'endpointAdmin.devices.col.upgradeCount': 'Upgradable Software',
   'endpointAdmin.devices.col.upgradeTruncated': 'Upgrade List Truncated',
+  // WEB-015 v2-a (DeviceGridColumns SCHEMA_VERSION = 3): prohibited-software + app-control
+  'endpointAdmin.devices.col.prohibitedStatus': 'Prohibited Status',
+  'endpointAdmin.devices.col.prohibitedDecision': 'Compliance Decision',
+  'endpointAdmin.devices.col.prohibitedFindingsCount': 'Prohibited Findings',
+  'endpointAdmin.devices.col.wdacMode': 'WDAC Mode',
+  'endpointAdmin.devices.col.appIdSvcState': 'AppIDSvc State',
+  // Codex 019e87aa iter-2 P1: OK ⇒ "Evaluated" (presence of pe row),
+  // NOT "Compliant". COMPLIANT semantics stays on prohibited_decision.
+  'endpointAdmin.devices.prohibitedStatus.NO_EVALUATION': 'Not Evaluated',
+  'endpointAdmin.devices.prohibitedStatus.OK': 'Evaluated',
+  'endpointAdmin.devices.prohibitedDecision.COMPLIANT': 'Compliant',
+  'endpointAdmin.devices.prohibitedDecision.UNAUTHORIZED': 'Unauthorized',
+  'endpointAdmin.devices.prohibitedDecision.INSUFFICIENT_DATA': 'Insufficient Data',
+  'endpointAdmin.devices.wdacMode.OFF': 'Off',
+  'endpointAdmin.devices.wdacMode.AUDIT': 'Audit',
+  'endpointAdmin.devices.wdacMode.ENFORCE': 'Enforce',
+  'endpointAdmin.devices.wdacMode.UNKNOWN': 'Unknown',
+  'endpointAdmin.devices.appIdSvcState.RUNNING': 'Running',
+  'endpointAdmin.devices.appIdSvcState.STOPPED': 'Stopped',
+  'endpointAdmin.devices.appIdSvcState.DISABLED': 'Disabled',
+  'endpointAdmin.devices.appIdSvcState.UNKNOWN': 'Unknown',
   'endpointAdmin.export.rowLimitExceeded':
     'Export exceeds the {limit}-row limit; narrow the view (filter) and retry.',
   'endpointAdmin.export.failed': 'Could not start the export.',

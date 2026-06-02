@@ -32,6 +32,20 @@ export interface DeviceGridRow {
   outdated_upgrade_count: number | null;
   outdated_upgrade_truncated: boolean | null;
   outdated_collected_at: string | null;
+  // ── WEB-015 v2-a (backend DeviceGridColumns SCHEMA_VERSION = 3) ──
+  // BE-025 prohibited-software latest evaluation (LEFT JOIN LATERAL pe);
+  // pe.id IS NULL ⇒ status = 'NO_EVALUATION', decision = null, count = null.
+  /** 'NO_EVALUATION' (no compliance evaluation row) | 'OK' (row present). */
+  prohibited_status: string | null;
+  /** Latest evaluation decision: 'COMPLIANT' | 'UNAUTHORIZED' | 'INSUFFICIENT_DATA' | null. */
+  prohibited_decision: string | null;
+  /** JSONB defensive array length over evidence.matchedItems.prohibitedInstalled. */
+  prohibited_findings_count: number | null;
+  // AG-041 latest app-control snapshot (LEFT JOIN LATERAL ac); ac.id IS NULL ⇒ null.
+  /** WDAC mode: 'OFF' | 'AUDIT' | 'ENFORCE' | 'UNKNOWN' | null (no snapshot). */
+  app_control_wdac_mode: string | null;
+  /** AppLocker AppIDSvc state: 'RUNNING' | 'STOPPED' | 'DISABLED' | 'UNKNOWN' | null. */
+  app_control_app_id_svc_state: string | null;
   // Index signature so the row satisfies AG Grid's
   // `RowData extends Record<string, unknown>` constraint.
   [key: string]: unknown;
