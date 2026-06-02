@@ -34,6 +34,11 @@ describe('checkWindowsPathSafety', () => {
     { input: 'C:\\Program Files\\..\\Windows\\System32\\cmd.exe', expected: 'parentTraversal' },
     { input: 'C:\\Program Files\\.\\App\\app.exe', expected: 'dotSegment' },
     { input: 'C:\\PROGRA~1\\7-Zip\\7z.exe', expected: 'shortName83' },
+    // Codex 019e8982 post-impl P1: anywhere-in-segment 8.3 mirror.
+    { input: 'C:\\Program Files\\MYAPP~1.EXE', expected: 'shortName83' },
+    { input: 'C:\\Program Files\\FOO~1.TMP', expected: 'shortName83' },
+    // Codex 019e8982 post-impl P1 should-fix: env var anywhere.
+    { input: 'C:\\Program Files\\%APP%\\x.exe', expected: 'envVar' },
     { input: 'C:\\Program Files\\App\\app.exe:Zone.Identifier', expected: 'ads' },
     { input: 'C:\\Program Files\\App\\bad.exe', expected: 'controlChar' },
     { input: 'relative\\app.exe', expected: 'notAbsolute' },
@@ -215,6 +220,23 @@ describe('normalizeDetectionRule', () => {
         maxInclusive: false,
       });
       expect(result.rule.fileVersionField).toBe('PRODUCT_VERSION');
+    }
+  });
+
+  it('fails closed on FILE_VERSION RANGE missing inclusivity (Codex P1)', () => {
+    const result = normalizeDetectionRule({
+      type: 'FILE_VERSION',
+      absolutePath: 'C:\\Program Files\\App\\bin\\app.exe',
+      versionPredicate: {
+        kind: 'RANGE',
+        min: '1.0',
+        max: '2.0',
+        // minInclusive + maxInclusive missing -> reject
+      },
+    });
+    expect(result.kind).toBe('unknown');
+    if (result.kind === 'unknown') {
+      expect(result.reason).toContain('predicateRangeInclusivityRequired');
     }
   });
 

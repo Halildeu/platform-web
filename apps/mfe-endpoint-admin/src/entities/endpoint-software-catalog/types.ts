@@ -232,10 +232,18 @@ const ALLOWED_PREFIXES = [
   'C:\\Windows\\',
 ];
 
-const SHORT_NAME_RE = /~\d+(?=\\|$)/;
+// Codex 019e8982 post-impl P1: anywhere-in-path 8.3 short-name detection
+// (drop the trailing lookahead so `MYAPP~1.EXE` segment is caught too).
+// Backend `WindowsPathSafetyValidator` matches `~\d+` anywhere in the
+// path string; client mirror tracks that semantic.
+const SHORT_NAME_RE = /~\d+/;
 // eslint-disable-next-line no-control-regex -- semantic mirror of backend WindowsPathSafetyValidator: ASCII control + DEL byte rejection
 const CONTROL_CHAR_RE = /[\x00-\x1F\x7F]/;
 const DRIVE_RE = /^[A-Za-z]:\\/;
+// Codex 019e8982 post-impl P1 should-fix: env var anywhere in path
+// (not just startsWith '%'); backend rejects any `%` segment per
+// WindowsPathSafetyValidator semantics.
+const ENV_VAR_RE = /%/;
 
 /**
  * Returns null on accept, or a reject reason code on reject. Mirrors
@@ -248,7 +256,7 @@ export function checkWindowsPathSafety(input: string | null | undefined): PathRe
   const trimmed = input.trim();
   if (trimmed.length === 0) return 'pathRequired';
   if (trimmed.startsWith('\\\\')) return 'unc';
-  if (trimmed.startsWith('%')) return 'envVar';
+  if (ENV_VAR_RE.test(trimmed)) return 'envVar';
   if (trimmed.includes('/')) return 'forwardSlash';
   if (CONTROL_CHAR_RE.test(trimmed)) return 'controlChar';
   // ADS check: a single colon at index 1 is the drive separator. Any
@@ -298,12 +306,21 @@ function asVersionPredicate(raw: unknown): VersionPredicate | string {
   }
   if (kind === 'RANGE') {
     if (!isString(obj.min) || !isString(obj.max)) return 'predicateRangeRequired';
+    // Codex 019e8982 post-impl P1 must-fix: fail-closed when inclusivity
+    // booleans are missing — defaulting to false silently could flip
+    // semantics if the backend ever emits a RANGE without explicit
+    // inclusivity. Backend currently always sends both booleans; UI
+    // refuses to hydrate (so the drawer shows the unknown-rule branch
+    // and Save is disabled) if either is missing.
+    if (typeof obj.minInclusive !== 'boolean' || typeof obj.maxInclusive !== 'boolean') {
+      return 'predicateRangeInclusivityRequired';
+    }
     return {
       kind: 'RANGE',
       min: obj.min,
       max: obj.max,
-      minInclusive: obj.minInclusive === true,
-      maxInclusive: obj.maxInclusive === true,
+      minInclusive: obj.minInclusive,
+      maxInclusive: obj.maxInclusive,
     };
   }
   return 'predicateKindUnknown';
