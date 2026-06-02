@@ -802,6 +802,41 @@ const DICT_TR = {
   'endpointAdmin.compliance.list.next': 'Sonraki',
   'endpointAdmin.compliance.list.pageIndicator':
     '{page} / {totalPages} sayfa · {totalElements} cihaz',
+  // Faz 22.7 D3 — Compliance Gap Mart explorer
+  'endpointAdmin.complianceGap.title': 'Uyum Boşlukları',
+  'endpointAdmin.complianceGap.subtitle':
+    'Snapshot çeşitleri üzerinden cross-snapshot boşluk haritası — RDP açık ve bekleyen güvenlik güncellemeleri.',
+  'endpointAdmin.complianceGap.filter.gapTypes': 'Boşluk türleri:',
+  'endpointAdmin.complianceGap.filter.gapType.rdp_enabled': 'RDP açık',
+  'endpointAdmin.complianceGap.filter.gapType.pending_security_updates':
+    'Bekleyen güvenlik güncellemeleri',
+  'endpointAdmin.complianceGap.filter.freshnessWindow': 'Tazelik penceresi:',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.7d': '7 gün',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.30d': '30 gün',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.90d': '90 gün',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.366d': '1 yıl (maks.)',
+  'endpointAdmin.complianceGap.col.hostname': 'Hostname',
+  'endpointAdmin.complianceGap.col.gapCount': 'Boşluk sayısı',
+  'endpointAdmin.complianceGap.col.gaps': 'Boşluk türleri',
+  'endpointAdmin.complianceGap.col.gapStrength': 'Güven',
+  'endpointAdmin.complianceGap.col.lastSeen': 'Son görülme',
+  'endpointAdmin.complianceGap.strength.strong': 'Güçlü (taze)',
+  'endpointAdmin.complianceGap.strength.weak': 'Zayıf (eski snapshot)',
+  'endpointAdmin.complianceGap.empty':
+    'Bu filtrelerle hiçbir cihazda boşluk yok. "Yalnız gözlenen cihazlar" — tazelik penceresinde snapshot yoksa cihaz görüntülenmez.',
+  'endpointAdmin.complianceGap.loading': 'Boşluk haritası yükleniyor…',
+  'endpointAdmin.complianceGap.forbidden':
+    'Uyum boşlukları için yönetici (VIEWER) yetkisi gerekiyor.',
+  'endpointAdmin.complianceGap.error':
+    'Boşluk haritası yüklenemedi. Sayfayı yenileyip tekrar deneyin.',
+  'endpointAdmin.complianceGap.filterEcho.computedAt': 'Hesaplanma:',
+  'endpointAdmin.complianceGap.filterEcho.window': 'Tazelik:',
+  'endpointAdmin.complianceGap.filterEcho.gapTypes': 'Aranan boşluklar:',
+  'endpointAdmin.complianceGap.rowAria': '{hostname} için detayları aç',
+  'endpointAdmin.complianceGap.paginationAria': 'Boşluk listesi sayfalama',
+  'endpointAdmin.complianceGap.prev': 'Önceki',
+  'endpointAdmin.complianceGap.next': 'Sonraki',
+  'endpointAdmin.complianceGap.pageIndicator': '{page} / {totalPages} sayfa · {total} cihaz',
   // WEB-014C — Compliance policy CRUD
   'endpointAdmin.compliance.policies.title': 'Uyum Politikaları',
   'endpointAdmin.compliance.policies.subtitle':
@@ -1819,6 +1854,39 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.compliance.list.next': 'Next',
   'endpointAdmin.compliance.list.pageIndicator':
     'Page {page} of {totalPages} · {totalElements} devices',
+  // Faz 22.7 D3 — Compliance Gap Mart explorer (DICT_EN parity)
+  'endpointAdmin.complianceGap.title': 'Compliance Gaps',
+  'endpointAdmin.complianceGap.subtitle':
+    'Cross-snapshot gap map across snapshot streams — RDP enabled and pending security updates.',
+  'endpointAdmin.complianceGap.filter.gapTypes': 'Gap types:',
+  'endpointAdmin.complianceGap.filter.gapType.rdp_enabled': 'RDP enabled',
+  'endpointAdmin.complianceGap.filter.gapType.pending_security_updates': 'Pending security updates',
+  'endpointAdmin.complianceGap.filter.freshnessWindow': 'Freshness window:',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.7d': '7 days',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.30d': '30 days',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.90d': '90 days',
+  'endpointAdmin.complianceGap.filter.freshnessWindow.366d': '1 year (max)',
+  'endpointAdmin.complianceGap.col.hostname': 'Hostname',
+  'endpointAdmin.complianceGap.col.gapCount': 'Gap count',
+  'endpointAdmin.complianceGap.col.gaps': 'Gap types',
+  'endpointAdmin.complianceGap.col.gapStrength': 'Confidence',
+  'endpointAdmin.complianceGap.col.lastSeen': 'Last seen',
+  'endpointAdmin.complianceGap.strength.strong': 'Strong (fresh)',
+  'endpointAdmin.complianceGap.strength.weak': 'Weak (stale snapshot)',
+  'endpointAdmin.complianceGap.empty':
+    'No devices have gaps with these filters. "Observed devices only" — devices without snapshots in the freshness window are silently out of scope.',
+  'endpointAdmin.complianceGap.loading': 'Loading gap map…',
+  'endpointAdmin.complianceGap.forbidden':
+    'Admin (VIEWER) permission required to view compliance gaps.',
+  'endpointAdmin.complianceGap.error': 'Failed to load gap map. Refresh and try again.',
+  'endpointAdmin.complianceGap.filterEcho.computedAt': 'Computed:',
+  'endpointAdmin.complianceGap.filterEcho.window': 'Window:',
+  'endpointAdmin.complianceGap.filterEcho.gapTypes': 'Requested gaps:',
+  'endpointAdmin.complianceGap.rowAria': 'Open details for {hostname}',
+  'endpointAdmin.complianceGap.paginationAria': 'Gap list pagination',
+  'endpointAdmin.complianceGap.prev': 'Previous',
+  'endpointAdmin.complianceGap.next': 'Next',
+  'endpointAdmin.complianceGap.pageIndicator': 'Page {page} of {totalPages} · {total} devices',
   // WEB-014C — Compliance policy CRUD
   'endpointAdmin.compliance.policies.title': 'Compliance Policies',
   'endpointAdmin.compliance.policies.subtitle':
