@@ -179,4 +179,32 @@ describe('EndpointComplianceGapPage', () => {
     const prev = screen.getByTestId('compliance-gap-prev') as HTMLButtonElement;
     expect(prev.disabled).toBe(true);
   });
+
+  it('Codex 019e88db P1: refuses to unselect the last gap-type checkbox', () => {
+    // Two checkboxes, both selected by default. Unselect rdp_enabled first,
+    // then try to unselect pending_security_updates — refused.
+    mockGap({ data: buildResponse([buildDeviceGap()]) });
+    render(<EndpointComplianceGapPage />);
+    // After first toggle: only pending_security_updates remains.
+    fireEvent.click(screen.getByTestId('compliance-gap-filter-rdp_enabled'));
+    let last = useGetComplianceGapQueryMock.mock.calls.at(-1)?.[0];
+    expect(last.gapTypes).toEqual(['pending_security_updates']);
+    // Attempt to also unselect the remaining one — guard refuses.
+    fireEvent.click(screen.getByTestId('compliance-gap-filter-pending_security_updates'));
+    last = useGetComplianceGapQueryMock.mock.calls.at(-1)?.[0];
+    expect(last.gapTypes).toEqual(['pending_security_updates']);
+  });
+
+  it('Codex 019e88db P1: isFetching gates stale data + filterEcho render', () => {
+    mockGap({
+      data: buildResponse([buildDeviceGap()]),
+      isFetching: true,
+    });
+    render(<EndpointComplianceGapPage />);
+    // Stale → loading visible, no filterEcho banner, no row, no empty.
+    expect(screen.getByTestId('compliance-gap-loading')).toBeTruthy();
+    expect(screen.queryByTestId('compliance-gap-filter-echo')).toBeNull();
+    expect(screen.queryByTestId('compliance-gap-row-device-1')).toBeNull();
+    expect(screen.queryByTestId('compliance-gap-empty')).toBeNull();
+  });
 });

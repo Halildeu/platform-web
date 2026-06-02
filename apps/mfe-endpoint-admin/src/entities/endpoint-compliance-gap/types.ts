@@ -9,11 +9,12 @@
  *   ComplianceGapResponse.java
  *
  * Endpoint contract (Faz 22.7 D2 — PR #378, sha-6fa713b):
- *   GET /api/v1/endpoint-admin/compliance-gap
+ *   gateway GET /api/v1/endpoint-admin/endpoint-devices/compliance-gap
  *     ?gapTypes=rdp_enabled,pending_security_updates
  *     &freshnessWindow=PT168H
  *     &page=1
  *     &pageSize=50
+ *   → service /api/v1/admin/endpoint-devices/compliance-gap
  *   → ComplianceGapResponse
  *
  * Backend uses 1-based page numbering (page>=1 → offset=(page-1)*pageSize).

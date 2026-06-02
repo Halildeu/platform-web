@@ -131,8 +131,16 @@ export const EndpointComplianceGapPage: React.FC = () => {
   const onGapTypeToggle = React.useCallback((gap: ComplianceGapWire) => {
     setSelectedGapTypes((prev) => {
       const next = new Set(prev);
-      if (next.has(gap)) next.delete(gap);
-      else next.add(gap);
+      if (next.has(gap)) {
+        // Codex 019e88db P1 absorb: refuse to unselect the LAST gap type.
+        // Backend treats empty gapTypes as "all" — operator-facing semantics
+        // would silently flip back to all-selected, which contradicts the
+        // visible empty filter state. Keep at least one always selected.
+        if (next.size <= 1) return prev;
+        next.delete(gap);
+      } else {
+        next.add(gap);
+      }
       return next;
     });
     setPage(1);
@@ -166,9 +174,17 @@ export const EndpointComplianceGapPage: React.FC = () => {
     return buildStubDevice(selectedDeviceId, hostnameByDeviceId[selectedDeviceId] ?? null);
   }, [selectedDeviceId, deviceList, hostnameByDeviceId]);
 
-  const items: DeviceComplianceGap[] = data?.items ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / DEFAULT_PAGE_SIZE));
+  // Codex 019e88db P1 absorb: gate render on `!isFetching` so a filter/window/
+  // page change does NOT briefly render stale items + filterEcho + total under
+  // the new control state. WEB-014B canonical pattern (compliance device list).
+  const stale = isLoading || isFetching;
+  const items: DeviceComplianceGap[] = stale ? [] : (data?.items ?? []);
+  const total = stale ? 0 : (data?.total ?? 0);
+  // Codex 019e88db P2 absorb: derive totalPages from backend effective pageSize
+  // (filterEcho.pageSize) rather than the client constant — single source of
+  // truth on the server.
+  const effectivePageSize = data?.filterEcho?.pageSize ?? DEFAULT_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
   const forbidden = error && (error as { status?: number }).status === 403;
 
   return (
@@ -224,7 +240,9 @@ export const EndpointComplianceGapPage: React.FC = () => {
         </label>
       </div>
 
-      {data?.filterEcho && (
+      {/* filterEcho gated on !stale so old echo doesn't survive a control
+          change while the next response is in flight. */}
+      {!stale && data?.filterEcho && (
         <div
           data-testid="compliance-gap-filter-echo"
           style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}
@@ -239,7 +257,7 @@ export const EndpointComplianceGapPage: React.FC = () => {
         </div>
       )}
 
-      {isLoading && (
+      {stale && !error && (
         <div data-testid="compliance-gap-loading" role="status" aria-live="polite">
           {t('endpointAdmin.complianceGap.loading')}
         </div>
@@ -255,7 +273,7 @@ export const EndpointComplianceGapPage: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && error && !forbidden && (
+      {!stale && error && !forbidden && (
         <div
           data-testid="compliance-gap-error"
           role="alert"
@@ -265,13 +283,13 @@ export const EndpointComplianceGapPage: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && !error && items.length === 0 && (
+      {!stale && !error && items.length === 0 && (
         <div data-testid="compliance-gap-empty" style={{ padding: 24 }}>
           {t('endpointAdmin.complianceGap.empty')}
         </div>
       )}
 
-      {!isLoading && !error && items.length > 0 && (
+      {!stale && !error && items.length > 0 && (
         <>
           <table
             data-testid="compliance-gap-table"
