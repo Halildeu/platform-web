@@ -76,3 +76,120 @@ describe('EndpointDevicesPage (server mode)', () => {
     expect(screen.queryByTestId('export-snapshot-columns-notice')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * WEB-015 v2-a (Codex 019e87aa AGREE) — schema/registry contract pins
+ * for the 5 new DeviceGrid columns. The page-level grid test only smokes
+ * mount; the registry contract is asserted by reading the module's
+ * SOURCE so we can pin GRID_SCHEMA_VERSION + the 5 colIds + the i18n
+ * keys WITHOUT booting AG Grid for every assertion (which the
+ * EntityGridTemplate test setup makes prohibitively slow + flaky).
+ *
+ * <p>This complements the i18n drift detector (device-grid-v2a-i18n.test.ts)
+ * and the row shape pin (deviceGridRowV3Shape.test.ts).
+ */
+describe('EndpointDevicesPage v2-a column registry (WEB-015 v2-a)', () => {
+  // We read the file as text rather than dynamic-importing the component:
+  // EntityGridTemplate's lazy ag-grid bootstrap fights the test harness and
+  // hand-rolling a smoke per column is enormously more flaky than asserting
+  // the canonical registry. AG Grid behaviour itself is already covered by
+  // the v0 PR-3 mount test above.
+  let source = '';
+  beforeEach(async () => {
+    if (!source) {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const here = path.dirname(new URL(import.meta.url).pathname);
+      source = await fs.readFile(path.join(here, 'EndpointDevicesPage.tsx'), 'utf8');
+    }
+  });
+
+  it('GRID_SCHEMA_VERSION is bumped to 3 (invalidates persisted v2 column state)', () => {
+    expect(source).toMatch(/const GRID_SCHEMA_VERSION = 3;/);
+    // A literal "= 2" survival would silently revert state invalidation.
+    expect(source).not.toMatch(/const GRID_SCHEMA_VERSION = 2;/);
+  });
+
+  it('5 new DeviceGrid colIds appear in the source (raw export sequence parity with backend)', () => {
+    const expectedColIds = [
+      'prohibited_status',
+      'prohibited_decision',
+      'prohibited_findings_count',
+      'app_control_wdac_mode',
+      'app_control_app_id_svc_state',
+    ];
+    for (const colId of expectedColIds) {
+      expect(source).toContain(`field: '${colId}'`);
+    }
+  });
+
+  it('5 new i18n header keys are wired through the t() resolver', () => {
+    const expectedHeaderKeys = [
+      'endpointAdmin.devices.col.prohibitedStatus',
+      'endpointAdmin.devices.col.prohibitedDecision',
+      'endpointAdmin.devices.col.prohibitedFindingsCount',
+      'endpointAdmin.devices.col.wdacMode',
+      'endpointAdmin.devices.col.appIdSvcState',
+    ];
+    for (const key of expectedHeaderKeys) {
+      expect(source).toContain(key);
+    }
+  });
+
+  it('domain enum tuples preserve backend-canonical raw codes (Set Filter contract)', () => {
+    // The Set Filter sends RAW backend enum codes upstream (i18n labels are
+    // for display only); the raw tuples must match DeviceGridColumns
+    // SQL CASE/JOIN domains exactly.
+    expect(source).toMatch(/PROHIBITED_STATUS_VALUES = \['NO_EVALUATION', 'OK'\]/);
+    expect(source).toMatch(
+      /PROHIBITED_DECISION_VALUES = \['COMPLIANT', 'UNAUTHORIZED', 'INSUFFICIENT_DATA'\]/,
+    );
+    expect(source).toMatch(/WDAC_MODE_VALUES = \['OFF', 'AUDIT', 'ENFORCE', 'UNKNOWN'\]/);
+    expect(source).toMatch(
+      /APP_ID_SVC_STATE_VALUES = \['RUNNING', 'STOPPED', 'DISABLED', 'UNKNOWN'\]/,
+    );
+  });
+
+  it('all 5 v2-a columns default to hide:true (Codex guardrail #1 — toggleable surfacing)', () => {
+    // The 5 v2-a column blocks appear AFTER the existing
+    // 'outdated_upgrade_truncated' column. Each block declares hide:true.
+    // We don't assert "exactly 5 hide:true beyond this index" (other v2
+    // toggleables — uptime / longUptime / domain — also hide:true and we
+    // do not want to fight that), only that every v2-a colId block has a
+    // hide:true near its field declaration.
+    const colIds = [
+      'prohibited_status',
+      'prohibited_decision',
+      'prohibited_findings_count',
+      'app_control_wdac_mode',
+      'app_control_app_id_svc_state',
+    ];
+    for (const colId of colIds) {
+      const idx = source.indexOf(`field: '${colId}'`);
+      expect(idx).toBeGreaterThan(0);
+      // Look at the next ~600 chars (one ColDef block); hide:true must appear.
+      const block = source.slice(idx, idx + 600);
+      expect(block).toContain('hide: true');
+    }
+  });
+
+  it('prohibited_status uses a cellRenderer (badge), enum columns use valueFormatter (Codex guardrail #2)', () => {
+    // prohibited_status block must contain BOTH cellRenderer + valueFormatter
+    // (cell render = badge, formatter = Set Filter / CSV value).
+    const startIdx = source.indexOf("field: 'prohibited_status'");
+    expect(startIdx).toBeGreaterThan(0);
+    const block = source.slice(startIdx, startIdx + 1200);
+    expect(block).toContain('cellRenderer');
+    expect(block).toContain('valueFormatter');
+    // The other 4 enum columns use valueFormatter (no badge).
+    for (const colId of [
+      'prohibited_decision',
+      'app_control_wdac_mode',
+      'app_control_app_id_svc_state',
+    ]) {
+      const fIdx = source.indexOf(`field: '${colId}'`);
+      const fBlock = source.slice(fIdx, fIdx + 800);
+      expect(fBlock).toContain('valueFormatter');
+    }
+  });
+});

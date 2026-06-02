@@ -68,7 +68,28 @@ const OS_LABEL: Record<OsType, string> = {
 };
 
 const GRID_ID = 'endpoint-admin-devices';
-const GRID_SCHEMA_VERSION = 2; // bumped: server-mode flat colId schema
+// WEB-015 v2-a (backend DeviceGridColumns SCHEMA_VERSION = 3) — bump from 2
+// invalidates persisted column state from v2 grids: 5 new colIds
+// (prohibited_status, prohibited_decision, prohibited_findings_count,
+// app_control_wdac_mode, app_control_app_id_svc_state) are appended to the
+// raw-export registry and ANY persisted state from v2 must NOT silently
+// reuse — EntityGridTemplate gates persisted state on this version.
+const GRID_SCHEMA_VERSION = 3;
+
+// v2-a domain enums kept verbatim from backend (DeviceGridColumns SQL).
+// Raw codes stay backend-canonical; UI labels are i18n. `null` ⇒ no
+// snapshot/no evaluation (LEFT JOIN supplied NULL), distinct from the
+// explicit domain value 'NO_EVALUATION' (compliance evaluation absent
+// per server contract).
+const PROHIBITED_STATUS_VALUES = ['NO_EVALUATION', 'OK'] as const;
+const PROHIBITED_DECISION_VALUES = ['COMPLIANT', 'UNAUTHORIZED', 'INSUFFICIENT_DATA'] as const;
+const WDAC_MODE_VALUES = ['OFF', 'AUDIT', 'ENFORCE', 'UNKNOWN'] as const;
+const APP_ID_SVC_STATE_VALUES = ['RUNNING', 'STOPPED', 'DISABLED', 'UNKNOWN'] as const;
+
+const PROHIBITED_STATUS_COLOR: Record<string, string> = {
+  OK: 'var(--state-success-text)',
+  NO_EVALUATION: 'var(--text-secondary)',
+};
 
 const formatTimestamp = (value: unknown): string => {
   if (value == null || value === '') return '—';
@@ -241,6 +262,93 @@ export const EndpointDevicesPage: React.FC = () => {
         hide: true,
         valueFormatter: (p) =>
           formatBool(p.value, t('endpointAdmin.export.val.yes'), t('endpointAdmin.export.val.no')),
+      },
+      // ── WEB-015 v2-a (DeviceGridColumns SCHEMA_VERSION = 3) ──
+      // BE-025 prohibited-software latest evaluation + AG-041 latest
+      // app-control snapshot. All 5 hide:true by default — toggleable via
+      // the column tool panel; default-visible would crowd the grid for
+      // tenants with high NO_EVALUATION / UNKNOWN density (Codex
+      // 019e87aa AGREE guardrail).
+      {
+        field: 'prohibited_status',
+        headerName: t('endpointAdmin.devices.col.prohibitedStatus'),
+        minWidth: 170,
+        filter: 'agSetColumnFilter',
+        hide: true,
+        filterParams: {
+          values: PROHIBITED_STATUS_VALUES,
+          valueFormatter: (p: ValueFormatterParams<DeviceGridRow>) =>
+            p.value == null ? '—' : t(`endpointAdmin.devices.prohibitedStatus.${String(p.value)}`),
+        },
+        // Codex 019e87aa: explicit `Değerlendirilmedi` for the domain
+        // value NO_EVALUATION; tire (—) reserved for null/missing.
+        valueFormatter: (p) =>
+          p.value == null ? '—' : t(`endpointAdmin.devices.prohibitedStatus.${String(p.value)}`),
+        cellRenderer: (params: { value: string | null }) => {
+          const status = params.value;
+          if (status == null) return '—';
+          const color = PROHIBITED_STATUS_COLOR[status] ?? 'var(--text-secondary)';
+          const label = t(`endpointAdmin.devices.prohibitedStatus.${status}`);
+          return (
+            <span data-testid={`prohibited-status-${status}`} style={{ color, fontWeight: 500 }}>
+              {label}
+            </span>
+          );
+        },
+      },
+      {
+        field: 'prohibited_decision',
+        headerName: t('endpointAdmin.devices.col.prohibitedDecision'),
+        minWidth: 150,
+        filter: 'agSetColumnFilter',
+        hide: true,
+        filterParams: {
+          values: PROHIBITED_DECISION_VALUES,
+          valueFormatter: (p: ValueFormatterParams<DeviceGridRow>) =>
+            p.value == null
+              ? '—'
+              : t(`endpointAdmin.devices.prohibitedDecision.${String(p.value)}`),
+        },
+        valueFormatter: (p) =>
+          p.value == null ? '—' : t(`endpointAdmin.devices.prohibitedDecision.${String(p.value)}`),
+      },
+      {
+        field: 'prohibited_findings_count',
+        headerName: t('endpointAdmin.devices.col.prohibitedFindingsCount'),
+        minWidth: 160,
+        filter: 'agNumberColumnFilter',
+        hide: true,
+        // Codex 019e87aa: 0 !== null (real "no prohibited installs found"
+        // vs "no evaluation row"); preserve the distinction in the UI.
+        valueFormatter: (p) => (p.value == null ? '—' : String(p.value)),
+      },
+      {
+        field: 'app_control_wdac_mode',
+        headerName: t('endpointAdmin.devices.col.wdacMode'),
+        minWidth: 130,
+        filter: 'agSetColumnFilter',
+        hide: true,
+        filterParams: {
+          values: WDAC_MODE_VALUES,
+          valueFormatter: (p: ValueFormatterParams<DeviceGridRow>) =>
+            p.value == null ? '—' : t(`endpointAdmin.devices.wdacMode.${String(p.value)}`),
+        },
+        valueFormatter: (p) =>
+          p.value == null ? '—' : t(`endpointAdmin.devices.wdacMode.${String(p.value)}`),
+      },
+      {
+        field: 'app_control_app_id_svc_state',
+        headerName: t('endpointAdmin.devices.col.appIdSvcState'),
+        minWidth: 150,
+        filter: 'agSetColumnFilter',
+        hide: true,
+        filterParams: {
+          values: APP_ID_SVC_STATE_VALUES,
+          valueFormatter: (p: ValueFormatterParams<DeviceGridRow>) =>
+            p.value == null ? '—' : t(`endpointAdmin.devices.appIdSvcState.${String(p.value)}`),
+        },
+        valueFormatter: (p) =>
+          p.value == null ? '—' : t(`endpointAdmin.devices.appIdSvcState.${String(p.value)}`),
       },
     ];
     // Flat-only server grid: the /query datasource sends no
