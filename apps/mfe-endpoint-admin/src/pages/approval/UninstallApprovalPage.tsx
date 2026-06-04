@@ -63,10 +63,15 @@ export const UninstallApprovalPage: React.FC = () => {
 
   const mapError = (err: unknown): { headline: string; detail: string } => {
     const status = readErrorStatus(err);
+    // Approve context: a 403 is a maker-checker / forbidden-approver error,
+    // NOT the propose-time "no permission to create" headline. Use the
+    // approval-specific key; all other statuses share the uninstall map.
     const headlineKey =
-      status !== null && UNINSTALL_ERROR_HEADLINE_KEY[status]
-        ? UNINSTALL_ERROR_HEADLINE_KEY[status]
-        : UNINSTALL_ERROR_HEADLINE_FALLBACK_KEY;
+      status === 403
+        ? 'endpointAdmin.uninstallApproval.error.forbidden'
+        : status !== null && UNINSTALL_ERROR_HEADLINE_KEY[status]
+          ? UNINSTALL_ERROR_HEADLINE_KEY[status]
+          : UNINSTALL_ERROR_HEADLINE_FALLBACK_KEY;
     return {
       headline: t(headlineKey),
       detail: readErrorDetail(err) ?? t('endpointAdmin.drawer.uninstall.error.genericDetail'),
@@ -97,18 +102,21 @@ export const UninstallApprovalPage: React.FC = () => {
   }
 
   const isLoading = listQuery.isLoading;
-  // Self-approve guard (Codex 019e93ab): only treat as self-approval when
-  // BOTH the canonical client subject AND createdBy are resolvable AND
-  // they match. An unresolved subject does NOT disable the button — the
-  // backend 403 stays authoritative.
+  // Codex 019e93d2 must-fix #2 — fail-SAFE: an unresolved client subject
+  // (bearer token absent / undecodable) must DISABLE approve; we must not
+  // let an unidentified actor approve. The backend 403 stays authoritative.
+  const actorResolved = Boolean(currentSubject);
+  // Self-approve guard: treat as self-approval only when BOTH the canonical
+  // client subject AND createdBy are resolvable AND they match.
   const isSelfApproval = Boolean(
     request && currentSubject && request.createdBy && request.createdBy === currentSubject,
   );
   const isPending = request?.state === 'PENDING_APPROVAL';
   // Approve is permitted only when the request is still PENDING_APPROVAL,
-  // it is not a (client-detected) self-approval, and no submit is in
-  // flight (double-submit guard).
-  const approveDisabled = !isPending || isSelfApproval || approveState.isLoading || approved;
+  // the active admin identity is resolved, it is not a (client-detected)
+  // self-approval, and no submit is in flight (double-submit guard).
+  const approveDisabled =
+    !isPending || !actorResolved || isSelfApproval || approveState.isLoading || approved;
 
   const renderBody = () => {
     if (isLoading) {
@@ -166,6 +174,15 @@ export const UninstallApprovalPage: React.FC = () => {
             data-testid="uninstall-approval-not-pending"
           >
             {t('endpointAdmin.uninstallApproval.notPending')}
+          </p>
+        )}
+
+        {isPending && !actorResolved && !isSelfApproval && (
+          <p
+            className="rounded-md border border-state-warning-border bg-state-warning-bg px-3 py-2 text-sm text-state-warning-text"
+            data-testid="uninstall-approval-actor-unverified"
+          >
+            {t('endpointAdmin.uninstallApproval.actorUnverified')}
           </p>
         )}
 

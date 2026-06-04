@@ -1178,12 +1178,12 @@ const DICT_TR = {
   // the verbatim server message is rendered as detail; no sub-reason
   // substring matching since the five 422 reasons share one status).
   'endpointAdmin.drawer.uninstall.error.badRequest': 'Geçersiz istek',
-  'endpointAdmin.drawer.uninstall.error.forbidden':
-    'Kendi oluşturduğun talebi onaylayamazsın (maker-checker).',
+  'endpointAdmin.drawer.uninstall.error.forbidden': 'Bu kaldırma talebini oluşturma yetkin yok.',
   'endpointAdmin.drawer.uninstall.error.notFound': 'Cihaz veya katalog kalemi bulunamadı',
   'endpointAdmin.drawer.uninstall.error.conflict':
     'Bu cihaz + uygulama için zaten açık bir kaldırma talebi var',
-  'endpointAdmin.drawer.uninstall.error.rejected': 'Kaldırma talebi reddedildi',
+  'endpointAdmin.drawer.uninstall.error.rejected':
+    'Kaldırma kapısı geçilmedi (talep kabul edilmedi)',
   'endpointAdmin.drawer.uninstall.error.dependency':
     'Ajan ulaşılamıyor; bağlandıktan sonra tekrar deneyin',
   'endpointAdmin.drawer.uninstall.error.disabled': 'Kaldırma özelliği şu an kapalı',
@@ -1269,6 +1269,10 @@ const DICT_TR = {
     'Bu talep onay bekleyen durumda değil; onaylanamaz.',
   'endpointAdmin.uninstallApproval.selfApproveBlocked':
     'Kendi oluşturduğun kaldırma talebini onaylayamazsın.',
+  'endpointAdmin.uninstallApproval.error.forbidden':
+    'Bu kaldırma talebini onaylama yetkin yok (maker-checker).',
+  'endpointAdmin.uninstallApproval.actorUnverified':
+    'Aktif yönetici kimliği doğrulanamadı; onay devre dışı.',
   'endpointAdmin.uninstallApproval.approved': 'Kaldırma talebi onaylandı ve komut gönderildi.',
   'endpointAdmin.uninstallApproval.field.state': 'Durum',
   'endpointAdmin.uninstallApproval.field.createdBy': 'Oluşturan',
@@ -2427,11 +2431,12 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.uninstall.toast.success': 'Uninstall request sent, awaiting approval.',
   'endpointAdmin.drawer.uninstall.error.badRequest': 'Invalid request',
   'endpointAdmin.drawer.uninstall.error.forbidden':
-    'You cannot approve a request you created (maker-checker).',
+    'You are not authorized to create this uninstall request.',
   'endpointAdmin.drawer.uninstall.error.notFound': 'Device or catalog item not found',
   'endpointAdmin.drawer.uninstall.error.conflict':
     'An uninstall is already in flight for this device + app',
-  'endpointAdmin.drawer.uninstall.error.rejected': 'Uninstall request rejected',
+  'endpointAdmin.drawer.uninstall.error.rejected':
+    'Uninstall gate not passed (request not accepted)',
   'endpointAdmin.drawer.uninstall.error.dependency': 'Agent unreachable; retry after it reconnects',
   'endpointAdmin.drawer.uninstall.error.disabled': 'The uninstall feature is currently disabled',
   'endpointAdmin.drawer.uninstall.error.generic': 'Could not send the uninstall request',
@@ -2510,6 +2515,10 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
     'This request is not awaiting approval; it cannot be approved.',
   'endpointAdmin.uninstallApproval.selfApproveBlocked':
     'You cannot approve an uninstall request you created.',
+  'endpointAdmin.uninstallApproval.error.forbidden':
+    'You are not authorized to approve this uninstall request (maker-checker).',
+  'endpointAdmin.uninstallApproval.actorUnverified':
+    'The active administrator identity could not be verified; approval is disabled.',
   'endpointAdmin.uninstallApproval.approved':
     'Uninstall request approved and the command dispatched.',
   'endpointAdmin.uninstallApproval.field.state': 'State',
