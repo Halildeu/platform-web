@@ -100,6 +100,16 @@ import type {
   ListInstallAuditsArgs,
 } from '../../entities/endpoint-install/types';
 import type {
+  AdminUninstallAuditResponse,
+  AdminUninstallRequestResponse,
+  ApproveUninstallArgs,
+  ApproveUninstallSuccess,
+  CreateUninstallArgs,
+  CreateUninstallSuccess,
+  ListUninstallAuditsArgs,
+  ListUninstallRequestsArgs,
+} from '../../entities/endpoint-uninstall/types';
+import type {
   CreateEndpointEnrollmentArgs,
   CreateEndpointEnrollmentResponse,
   EndpointEnrollment,
@@ -396,6 +406,8 @@ export const endpointAdminApi = createApi({
     'CompliancePolicyItem',
     'EndpointSoftwareCatalog',
     'EndpointInstallAudit',
+    'EndpointUninstallRequest',
+    'EndpointUninstallAudit',
     'EndpointEnrollment',
   ] as const,
   endpoints: (builder) => ({
@@ -1508,6 +1520,125 @@ export const endpointAdminApi = createApi({
       ],
     }),
     /**
+     * AG-028 Phase 3 — Propose a managed uninstall (BE dedicated POST).
+     *   gateway POST /api/v1/endpoint-admin/endpoint-devices/{deviceId}/uninstalls
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/uninstalls
+     *   @RequireModule(MODULE='endpoint-admin', MANAGER='can_manage')
+     *
+     * Body: { catalogItemId(slug), idempotencyKey?, reason? }. There is
+     * NO uninstall-preflight; the propose endpoint enforces every gate
+     * INLINE and returns 4xx on failure:
+     *  - 201 → AdminUninstallRequestResponse (PENDING_APPROVAL, commandId null)
+     *  - 422 → catalog gate (not APPROVED / !uninstall_supported /
+     *          uninstall_protected / detection-rule not authoritative),
+     *          no install-provenance
+     *  - 409 → in-flight request or idempotency-key reuse mismatch
+     *  - 503 → feature flag endpoint-admin.uninstall.enabled=false
+     *  - 400 / 404 → validation / device-or-catalog not visible
+     * Error body is `{ error, message, ... }` where `message` is the
+     * verbatim reason (no stable machine code — Codex 019e93ab b3).
+     *
+     * Invalidation: per-device request list (the new PENDING_APPROVAL
+     * row appears immediately) + device audit event list (propose emits
+     * an audit event). The terminal-result history row is created later
+     * by the agent report; the history-panel poll surfaces it.
+     */
+    createUninstall: builder.mutation<CreateUninstallSuccess, CreateUninstallArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/uninstalls`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointUninstallRequest' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
+     * AG-028 Phase 3 — Approve a managed uninstall (maker-checker).
+     *   gateway POST /api/v1/endpoint-admin/endpoint-devices/{deviceId}/uninstalls/{requestId}/approve
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/uninstalls/{requestId}/approve
+     *   @RequireModule(MODULE='endpoint-admin', MANAGER='can_manage')
+     *
+     * Body (optional): { reason? }. The approver subject MUST differ
+     * from the proposer (createdBy) — server-enforced from tenant
+     * context:
+     *  - 200 → AdminUninstallRequestResponse (APPROVED, commandId set)
+     *  - 403 → maker-checker violation (approver == proposer) — there is
+     *          NO reject endpoint; self-approve is the only 403 here
+     *  - 409 → request not in PENDING_APPROVAL state
+     *  - 422 → catalog gates drifted / agent capability not advertised
+     *  - 424 → agent heartbeat stale (retryable)
+     *  - 503 → feature flag disabled
+     *
+     * Invalidation: per-device request list (the row flips to APPROVED)
+     * + the new UNINSTALL_SOFTWARE command list + device audit events.
+     */
+    approveUninstall: builder.mutation<ApproveUninstallSuccess, ApproveUninstallArgs>({
+      query: ({ deviceId, requestId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(
+          deviceId,
+        )}/uninstalls/${encodeURIComponent(requestId)}/approve`,
+        method: 'POST',
+        // Backend declares the approve body @RequestBody(required=false);
+        // always send an object (empty when no reason) so the Content-Type
+        // is set and Jackson binds an AdminUninstallRequestApproval rather
+        // than seeing a bodyless request.
+        body: body ?? {},
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointUninstallRequest' as const, id: `device-${deviceId}` },
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
+     * AG-028 Phase 3 — Per-device uninstall request list (states).
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/uninstalls?page=&size=
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/uninstalls
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns a PLAIN List<AdminUninstallRequestResponse> (NOT a Spring
+     * Page envelope — the controller returns `List<...>` directly),
+     * ordered createdAt DESC. Backend clamps size into [1, 200].
+     */
+    listUninstallRequests: builder.query<
+      AdminUninstallRequestResponse[],
+      ListUninstallRequestsArgs
+    >({
+      query: ({ deviceId, page = 0, size = 50 }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/uninstalls`,
+        method: 'GET',
+        params: { page: String(page), size: String(size) },
+      }),
+      providesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointUninstallRequest' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
+     * AG-028 Phase 3 — Per-device uninstall terminal-result history.
+     *   gateway GET /api/v1/endpoint-admin/endpoint-devices/{deviceId}/uninstalls/history?page=&size=
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/uninstalls/history
+     *   @RequireModule(MODULE='endpoint-admin', VIEWER='can_view')
+     *
+     * Returns a PLAIN List<AdminUninstallAuditResponse> (NOT a Spring
+     * Page envelope), ordered reportedAt DESC. Backend clamps size into
+     * [1, 200]. The drawer polls this every 30 s while the tab is
+     * active (mirror of the install audit polling) — terminal results
+     * from the Windows agent arrive a few seconds to a minute after the
+     * approve dispatch.
+     */
+    listUninstallAudits: builder.query<AdminUninstallAuditResponse[], ListUninstallAuditsArgs>({
+      query: ({ deviceId, page = 0, size = 10 }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/uninstalls/history`,
+        method: 'GET',
+        params: { page: String(page), size: String(size) },
+      }),
+      providesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointUninstallAudit' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
      * WEB-017 — Endpoint enrollment list (Faz 22.5.x manager surface).
      *
      * Backend: `AdminEndpointEnrollmentController.listEnrollments` —
@@ -1583,6 +1714,11 @@ export const {
   useCreateInstallMutation,
   useListInstallAuditsQuery,
   useGetInstallAuditQuery,
+  // AG-028 Phase 3 — managed uninstall.
+  useCreateUninstallMutation,
+  useApproveUninstallMutation,
+  useListUninstallRequestsQuery,
+  useListUninstallAuditsQuery,
   useGetOutdatedSoftwareLatestQuery,
   useGetOutdatedSoftwareHistoryQuery,
   // AG-037 hotfix posture (WEB-014G).

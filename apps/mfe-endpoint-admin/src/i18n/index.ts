@@ -1157,6 +1157,127 @@ const DICT_TR = {
   'endpointAdmin.catalog.error.validation': 'Sunucu doğrulaması başarısız oldu.',
   'endpointAdmin.catalog.error.badRequest': 'Geçersiz istek; alanları kontrol edin.',
   'endpointAdmin.catalog.error.generic': 'Kayıt sırasında bir hata oluştu.',
+
+  // AG-028 Phase 3 — Managed Uninstall (device drawer + approval page).
+  // Catalog row uninstall action.
+  'endpointAdmin.drawer.softwareCatalog.kaldir': 'Kaldır',
+  'endpointAdmin.drawer.softwareCatalog.kaldir.offlineHint':
+    'Cihaz çevrim dışı; kaldırma talebi gönderilebilir ama ajan bağlanınca işlenir.',
+  // Uninstall confirm modal.
+  'endpointAdmin.drawer.uninstall.modal.title': '{name} kaldırma',
+  'endpointAdmin.drawer.uninstall.modal.warning':
+    'Bu işlem cihazdan yazılımı kaldırma talebi oluşturur. Talep, farklı bir yöneticinin onayından sonra yürütülür (maker-checker). Kaldırma yalnızca platformun kurduğu yazılım için yapılabilir.',
+  'endpointAdmin.drawer.uninstall.reason.label': 'Kaldırma gerekçesi (zorunlu)',
+  'endpointAdmin.drawer.uninstall.reason.placeholder':
+    'Örn. lisans iptali / güvenlik politikası gereği kaldırılıyor',
+  'endpointAdmin.drawer.uninstall.reason.required': 'Kaldırma gerekçesi zorunludur.',
+  'endpointAdmin.drawer.uninstall.cancel': 'Vazgeç',
+  'endpointAdmin.drawer.uninstall.confirm': 'Kaldırma talebi gönder',
+  'endpointAdmin.drawer.uninstall.toast.success': 'Kaldırma talebi gönderildi, onay bekliyor.',
+  // Propose/approve error headlines (HTTP-status keyed — Codex 019e93ab b3:
+  // the verbatim server message is rendered as detail; no sub-reason
+  // substring matching since the five 422 reasons share one status).
+  'endpointAdmin.drawer.uninstall.error.badRequest': 'Geçersiz istek',
+  'endpointAdmin.drawer.uninstall.error.forbidden':
+    'Kendi oluşturduğun talebi onaylayamazsın (maker-checker).',
+  'endpointAdmin.drawer.uninstall.error.notFound': 'Cihaz veya katalog kalemi bulunamadı',
+  'endpointAdmin.drawer.uninstall.error.conflict':
+    'Bu cihaz + uygulama için zaten açık bir kaldırma talebi var',
+  'endpointAdmin.drawer.uninstall.error.rejected': 'Kaldırma talebi reddedildi',
+  'endpointAdmin.drawer.uninstall.error.dependency':
+    'Ajan ulaşılamıyor; bağlandıktan sonra tekrar deneyin',
+  'endpointAdmin.drawer.uninstall.error.disabled': 'Kaldırma özelliği şu an kapalı',
+  'endpointAdmin.drawer.uninstall.error.generic': 'Kaldırma talebi gönderilemedi',
+  'endpointAdmin.drawer.uninstall.error.genericDetail':
+    'Sunucu bir ayrıntı döndürmedi. Lütfen daha sonra tekrar deneyin.',
+  // Open request pills (drawer).
+  'endpointAdmin.drawer.uninstall.openRequests.heading': 'Onay bekleyen kaldırmalar',
+  'endpointAdmin.drawer.uninstall.openRequests.approveLink': 'Onay merkezinde aç',
+  // Recent uninstalls table (drawer).
+  'endpointAdmin.drawer.uninstall.recentUninstalls.heading': 'Son Kaldırmalar',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.loading': 'Son kaldırmalar yükleniyor…',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.empty': 'Henüz kaldırma kaydı yok.',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.result': 'Sonuç',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.verification': 'Doğrulama',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.exitCode': 'Çıkış Kodu',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.reportedAt': 'Zaman',
+  // Request state labels.
+  'endpointAdmin.drawer.uninstall.state.PENDING_APPROVAL': 'Onay bekliyor',
+  'endpointAdmin.drawer.uninstall.state.APPROVED': 'Onaylandı',
+  'endpointAdmin.drawer.uninstall.state.QUEUED': 'Sıraya alındı',
+  'endpointAdmin.drawer.uninstall.state.CLAIMED': 'Ajan aldı',
+  'endpointAdmin.drawer.uninstall.state.RUNNING': 'Çalışıyor',
+  'endpointAdmin.drawer.uninstall.state.TERMINAL': 'Tamamlandı',
+  // Result-status labels + aria (exhaustive).
+  'endpointAdmin.drawer.uninstall.resultStatus.SUCCEEDED_VERIFIED': 'Başarılı (doğrulandı)',
+  'endpointAdmin.drawer.uninstall.resultStatus.SUCCEEDED_VERIFIED.aria':
+    'Kaldırma başarılı ve yazılımın gittiği doğrulandı',
+  'endpointAdmin.drawer.uninstall.resultStatus.SKIP_ALREADY_ABSENT': 'Atlandı (zaten yok)',
+  'endpointAdmin.drawer.uninstall.resultStatus.SKIP_ALREADY_ABSENT.aria':
+    'Ön kontrol yazılımı bulamadı; kaldırma çalıştırılmadı',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_VERIFY_GHOST': 'Başarısız (hâlâ mevcut)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_VERIFY_GHOST.aria':
+    'Komut başarılı görünse de yazılım kaldırma sonrası hâlâ tespit edildi',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_EXIT': 'Başarısız (çıkış kodu)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_EXIT.aria':
+    'Kaldırma komutu sıfır olmayan çıkış kodu döndürdü ve yokluk doğrulanamadı',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_RESIDUE': 'Kısmi (kalıntı)',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_RESIDUE.aria':
+    'Kaldırma sonrası dosya mevcut ama hash/sürüm uyuşmuyor (kalıntı)',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_INCONCLUSIVE': 'Kısmi (belirsiz)',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_INCONCLUSIVE.aria':
+    'Kaldırma sonrası doğrulama belirsiz; yokluk teyit edilemedi',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_PRECHECK_INCONCLUSIVE':
+    'Başarısız (ön kontrol belirsiz)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_PRECHECK_INCONCLUSIVE.aria':
+    'Ön kontrol prob hatası; güvenli tarafta kalındı (kaldırma çalıştırılmadı)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_PLATFORM':
+    'Başarısız (desteklenmeyen platform)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_PLATFORM.aria':
+    'Windows / winget olmayan platform; kaldırma desteklenmiyor',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_VERIFICATION':
+    'Başarısız (doğrulama desteklenmiyor)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_VERIFICATION.aria':
+    'Katalog tespit kuralı türü kaldırma doğrulaması için desteklenmiyor',
+  'endpointAdmin.drawer.uninstall.resultStatus.unknown.aria':
+    'Bilinmeyen sonuç kodu (ham değer gösteriliyor)',
+  // Verification labels + aria (exhaustive).
+  'endpointAdmin.drawer.uninstall.verification.ABSENT_VERIFIED': 'Yok (doğrulandı)',
+  'endpointAdmin.drawer.uninstall.verification.ABSENT_VERIFIED.aria':
+    'Tespit probu yazılımın yokluğunu yetkili biçimde doğruladı',
+  'endpointAdmin.drawer.uninstall.verification.PRESENT_VERIFIED': 'Mevcut (doğrulandı)',
+  'endpointAdmin.drawer.uninstall.verification.PRESENT_VERIFIED.aria':
+    'Tespit probu yazılımın hâlâ mevcut olduğunu doğruladı',
+  'endpointAdmin.drawer.uninstall.verification.RESIDUE_PRESENT': 'Kalıntı mevcut',
+  'endpointAdmin.drawer.uninstall.verification.RESIDUE_PRESENT.aria':
+    'Tespit probu kalıntı (kısmi mevcudiyet) buldu',
+  'endpointAdmin.drawer.uninstall.verification.VERIFY_INCONCLUSIVE': 'Belirsiz',
+  'endpointAdmin.drawer.uninstall.verification.VERIFY_INCONCLUSIVE.aria':
+    'Tespit probu belirsiz / hatalı / desteklenmiyor',
+  'endpointAdmin.drawer.uninstall.verification.NOT_RUN': 'Çalıştırılmadı',
+  'endpointAdmin.drawer.uninstall.verification.NOT_RUN.aria':
+    'Doğrulama çalıştırılmadı (zaten yok atlama durumu)',
+  'endpointAdmin.drawer.uninstall.verification.unknown.aria':
+    'Bilinmeyen doğrulama kodu (ham değer gösteriliyor)',
+  // Approval page (device-scoped, approve-only).
+  'endpointAdmin.uninstallApproval.heading': 'Kaldırma onayı',
+  'endpointAdmin.uninstallApproval.subtitle':
+    'Bu kaldırma talebini ikinci yönetici olarak onaylayın. Talebi oluşturan onaylayamaz (maker-checker).',
+  'endpointAdmin.uninstallApproval.loading': 'Talep yükleniyor…',
+  'endpointAdmin.uninstallApproval.notFound': 'Kaldırma talebi bulunamadı veya artık açık değil.',
+  'endpointAdmin.uninstallApproval.notPending':
+    'Bu talep onay bekleyen durumda değil; onaylanamaz.',
+  'endpointAdmin.uninstallApproval.selfApproveBlocked':
+    'Kendi oluşturduğun kaldırma talebini onaylayamazsın.',
+  'endpointAdmin.uninstallApproval.approved': 'Kaldırma talebi onaylandı ve komut gönderildi.',
+  'endpointAdmin.uninstallApproval.field.state': 'Durum',
+  'endpointAdmin.uninstallApproval.field.createdBy': 'Oluşturan',
+  'endpointAdmin.uninstallApproval.field.requestId': 'Talep Kimliği',
+  'endpointAdmin.uninstallApproval.field.proposeReason': 'Talep gerekçesi',
+  'endpointAdmin.uninstallApproval.reason.label': 'Onay gerekçesi (opsiyonel)',
+  'endpointAdmin.uninstallApproval.reason.placeholder': 'Örn. güvenlik onayı verildi',
+  'endpointAdmin.uninstallApproval.approve': 'Onayla',
+  'endpointAdmin.uninstallApproval.back': 'Geri',
 } as const;
 
 const DICT_EN: Record<keyof typeof DICT_TR, string> = {
@@ -2289,6 +2410,116 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.catalog.error.validation': 'Server validation failed.',
   'endpointAdmin.catalog.error.badRequest': 'Invalid request — check the fields.',
   'endpointAdmin.catalog.error.generic': 'An error occurred while saving.',
+
+  // AG-028 Phase 3 — Managed Uninstall (DICT_EN parity).
+  'endpointAdmin.drawer.softwareCatalog.kaldir': 'Uninstall',
+  'endpointAdmin.drawer.softwareCatalog.kaldir.offlineHint':
+    'Device is offline; the uninstall request can be sent but runs once the agent reconnects.',
+  'endpointAdmin.drawer.uninstall.modal.title': 'Uninstall {name}',
+  'endpointAdmin.drawer.uninstall.modal.warning':
+    'This creates a request to uninstall the software from the device. It runs only after a DIFFERENT admin approves it (maker-checker). Uninstall is only possible for software the platform installed.',
+  'endpointAdmin.drawer.uninstall.reason.label': 'Uninstall reason (required)',
+  'endpointAdmin.drawer.uninstall.reason.placeholder':
+    'e.g. removing due to license cancellation / security policy',
+  'endpointAdmin.drawer.uninstall.reason.required': 'An uninstall reason is required.',
+  'endpointAdmin.drawer.uninstall.cancel': 'Cancel',
+  'endpointAdmin.drawer.uninstall.confirm': 'Send uninstall request',
+  'endpointAdmin.drawer.uninstall.toast.success': 'Uninstall request sent, awaiting approval.',
+  'endpointAdmin.drawer.uninstall.error.badRequest': 'Invalid request',
+  'endpointAdmin.drawer.uninstall.error.forbidden':
+    'You cannot approve a request you created (maker-checker).',
+  'endpointAdmin.drawer.uninstall.error.notFound': 'Device or catalog item not found',
+  'endpointAdmin.drawer.uninstall.error.conflict':
+    'An uninstall is already in flight for this device + app',
+  'endpointAdmin.drawer.uninstall.error.rejected': 'Uninstall request rejected',
+  'endpointAdmin.drawer.uninstall.error.dependency': 'Agent unreachable; retry after it reconnects',
+  'endpointAdmin.drawer.uninstall.error.disabled': 'The uninstall feature is currently disabled',
+  'endpointAdmin.drawer.uninstall.error.generic': 'Could not send the uninstall request',
+  'endpointAdmin.drawer.uninstall.error.genericDetail':
+    'The server returned no detail. Please try again later.',
+  'endpointAdmin.drawer.uninstall.openRequests.heading': 'Uninstalls awaiting approval',
+  'endpointAdmin.drawer.uninstall.openRequests.approveLink': 'Open in approval center',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.heading': 'Recent uninstalls',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.loading': 'Loading recent uninstalls…',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.empty': 'No uninstalls yet.',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.result': 'Result',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.verification': 'Verification',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.exitCode': 'Exit code',
+  'endpointAdmin.drawer.uninstall.recentUninstalls.col.reportedAt': 'Time',
+  'endpointAdmin.drawer.uninstall.state.PENDING_APPROVAL': 'Awaiting approval',
+  'endpointAdmin.drawer.uninstall.state.APPROVED': 'Approved',
+  'endpointAdmin.drawer.uninstall.state.QUEUED': 'Queued',
+  'endpointAdmin.drawer.uninstall.state.CLAIMED': 'Claimed by agent',
+  'endpointAdmin.drawer.uninstall.state.RUNNING': 'Running',
+  'endpointAdmin.drawer.uninstall.state.TERMINAL': 'Completed',
+  'endpointAdmin.drawer.uninstall.resultStatus.SUCCEEDED_VERIFIED': 'Succeeded (verified)',
+  'endpointAdmin.drawer.uninstall.resultStatus.SUCCEEDED_VERIFIED.aria':
+    'Uninstall succeeded and the software was verified absent',
+  'endpointAdmin.drawer.uninstall.resultStatus.SKIP_ALREADY_ABSENT': 'Skipped (already absent)',
+  'endpointAdmin.drawer.uninstall.resultStatus.SKIP_ALREADY_ABSENT.aria':
+    'Pre-check did not find the software; uninstall was not run',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_VERIFY_GHOST': 'Failed (still present)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_VERIFY_GHOST.aria':
+    'The command looked successful but the software is still detected after uninstall',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_EXIT': 'Failed (exit code)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_EXIT.aria':
+    'The uninstall command returned a non-zero exit code and absence could not be confirmed',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_RESIDUE': 'Partial (residue)',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_RESIDUE.aria':
+    'A file is present after uninstall but the hash/version mismatches (residue)',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_INCONCLUSIVE': 'Partial (inconclusive)',
+  'endpointAdmin.drawer.uninstall.resultStatus.PARTIAL_INCONCLUSIVE.aria':
+    'Post-uninstall verification was inconclusive; absence could not be asserted',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_PRECHECK_INCONCLUSIVE':
+    'Failed (pre-check inconclusive)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_PRECHECK_INCONCLUSIVE.aria':
+    'Pre-check probe error; failed closed (uninstall was not run)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_PLATFORM':
+    'Failed (unsupported platform)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_PLATFORM.aria':
+    'Non-Windows / no winget platform; uninstall is unsupported',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_VERIFICATION':
+    'Failed (unsupported verification)',
+  'endpointAdmin.drawer.uninstall.resultStatus.FAILED_UNSUPPORTED_VERIFICATION.aria':
+    'Catalog detection rule type is not supported for uninstall verification',
+  'endpointAdmin.drawer.uninstall.resultStatus.unknown.aria':
+    'Unknown result code (raw value shown)',
+  'endpointAdmin.drawer.uninstall.verification.ABSENT_VERIFIED': 'Absent (verified)',
+  'endpointAdmin.drawer.uninstall.verification.ABSENT_VERIFIED.aria':
+    'The detection probe authoritatively verified the software is absent',
+  'endpointAdmin.drawer.uninstall.verification.PRESENT_VERIFIED': 'Present (verified)',
+  'endpointAdmin.drawer.uninstall.verification.PRESENT_VERIFIED.aria':
+    'The detection probe verified the software is still present',
+  'endpointAdmin.drawer.uninstall.verification.RESIDUE_PRESENT': 'Residue present',
+  'endpointAdmin.drawer.uninstall.verification.RESIDUE_PRESENT.aria':
+    'The detection probe found residue (partial presence)',
+  'endpointAdmin.drawer.uninstall.verification.VERIFY_INCONCLUSIVE': 'Inconclusive',
+  'endpointAdmin.drawer.uninstall.verification.VERIFY_INCONCLUSIVE.aria':
+    'The detection probe was inconclusive / errored / unsupported',
+  'endpointAdmin.drawer.uninstall.verification.NOT_RUN': 'Not run',
+  'endpointAdmin.drawer.uninstall.verification.NOT_RUN.aria':
+    'Verification was not run (already-absent skip case)',
+  'endpointAdmin.drawer.uninstall.verification.unknown.aria':
+    'Unknown verification code (raw value shown)',
+  'endpointAdmin.uninstallApproval.heading': 'Uninstall approval',
+  'endpointAdmin.uninstallApproval.subtitle':
+    'Approve this uninstall request as a second admin. The proposer cannot approve (maker-checker).',
+  'endpointAdmin.uninstallApproval.loading': 'Loading request…',
+  'endpointAdmin.uninstallApproval.notFound': 'Uninstall request not found or no longer open.',
+  'endpointAdmin.uninstallApproval.notPending':
+    'This request is not awaiting approval; it cannot be approved.',
+  'endpointAdmin.uninstallApproval.selfApproveBlocked':
+    'You cannot approve an uninstall request you created.',
+  'endpointAdmin.uninstallApproval.approved':
+    'Uninstall request approved and the command dispatched.',
+  'endpointAdmin.uninstallApproval.field.state': 'State',
+  'endpointAdmin.uninstallApproval.field.createdBy': 'Created by',
+  'endpointAdmin.uninstallApproval.field.requestId': 'Request ID',
+  'endpointAdmin.uninstallApproval.field.proposeReason': 'Request reason',
+  'endpointAdmin.uninstallApproval.reason.label': 'Approval reason (optional)',
+  'endpointAdmin.uninstallApproval.reason.placeholder': 'e.g. security approval granted',
+  'endpointAdmin.uninstallApproval.approve': 'Approve',
+  'endpointAdmin.uninstallApproval.back': 'Back',
 };
 
 function resolveLocale(): 'tr' | 'en' {
