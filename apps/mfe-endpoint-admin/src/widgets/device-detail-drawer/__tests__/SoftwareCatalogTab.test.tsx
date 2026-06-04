@@ -23,10 +23,15 @@ import type { InstallPreflightModalProps } from '../components/InstallPreflightM
 
 const useListCatalogItemsQueryMock = vi.fn();
 const useListInstallAuditsQueryMock = vi.fn();
+const useListUninstallAuditsQueryMock = vi.fn();
+const useListUninstallRequestsQueryMock = vi.fn();
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
   useListCatalogItemsQuery: (...args: unknown[]) => useListCatalogItemsQueryMock(...args),
   useListInstallAuditsQuery: (...args: unknown[]) => useListInstallAuditsQueryMock(...args),
+  // AG-028: the tab now also subscribes to uninstall history + open requests.
+  useListUninstallAuditsQuery: (...args: unknown[]) => useListUninstallAuditsQueryMock(...args),
+  useListUninstallRequestsQuery: (...args: unknown[]) => useListUninstallRequestsQueryMock(...args),
 }));
 
 let capturedModalProps: InstallPreflightModalProps | null = null;
@@ -203,6 +208,16 @@ beforeEach(() => {
   capturedModalProps = null;
   useListCatalogItemsQueryMock.mockReset();
   useListInstallAuditsQueryMock.mockReset();
+  useListUninstallAuditsQueryMock.mockReset();
+  useListUninstallRequestsQueryMock.mockReset();
+  // AG-028: default the uninstall subscriptions to empty arrays so the
+  // existing install-focused tests render without the new hooks throwing.
+  useListUninstallAuditsQueryMock.mockReturnValue({ data: [], error: undefined, isLoading: false });
+  useListUninstallRequestsQueryMock.mockReturnValue({
+    data: [],
+    error: undefined,
+    isLoading: false,
+  });
 });
 
 afterEach(() => {

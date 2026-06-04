@@ -3,6 +3,8 @@ import React from 'react';
 import {
   useListCatalogItemsQuery,
   useListInstallAuditsQuery,
+  useListUninstallAuditsQuery,
+  useListUninstallRequestsQuery,
 } from '../../../app/services/endpointAdminApi';
 import type { AdminCatalogItemSummary } from '../../../entities/endpoint-software-catalog/types';
 import type { EndpointDevice } from '../../../entities/endpoint-device/types';
@@ -12,7 +14,17 @@ import type {
   InstallPostVerification,
   InstallPreflightDecisionRecorded,
 } from '../../../entities/endpoint-install/types';
+import {
+  isOpenUninstallRequest,
+  type AdminUninstallAuditResponse,
+  type AdminUninstallRequestResponse,
+  type CreateUninstallSuccess,
+} from '../../../entities/endpoint-uninstall/types';
 import { useEndpointAdminI18n } from '../../../i18n';
+import {
+  UninstallResultStatusBadge,
+  UninstallVerificationBadge,
+} from '../components/UninstallBadges';
 
 // WEB-014D perf follow-up (Codex 019e707e iter-2 PARTIAL absorb):
 // load the install confirmation modal lazily so the catalog tab's cold
@@ -27,24 +39,44 @@ const InstallPreflightModal = React.lazy(() =>
   })),
 );
 
+// AG-028 Phase 3 — uninstall confirm modal, lazy-loaded for the same
+// cold-path reason as the install modal.
+const UninstallConfirmModal = React.lazy(() =>
+  import('../components/UninstallConfirmModal').then((m) => ({
+    default: m.UninstallConfirmModal,
+  })),
+);
+
 /**
- * WEB-014D — Software catalog tab for the device detail drawer (Faz
- * 22.5; Codex 019e6fd1 plan-time PARTIAL absorb).
+ * WEB-014D + AG-028 Phase 3 — Software catalog tab for the device detail
+ * drawer (Faz 22.5; Codex 019e6fd1 install plan + 019e93a4 uninstall
+ * plan).
  *
- * Reads two queries — both skipped until `active`:
+ * Reads four queries — all skipped until `active`:
  *  - useListCatalogItemsQuery({ status: APPROVED, enabled: true, size:
- *    200 }) for the install picker. Backend caps at 200 per page;
- *    server-side typeahead is a separate backlog (Codex iter §B).
- *  - useListInstallAuditsQuery({ deviceId, page: 0, size: 10 }) for
- *    the "Son Kurulumlar" panel. Auto-refetches on createInstall via
- *    the `EndpointInstallAudit:device-{id}` invalidation tag.
+ *    200 }) for the install/uninstall picker.
+ *  - useListInstallAuditsQuery({ deviceId, page: 0, size: 10 }) for the
+ *    "Son Kurulumlar" panel (30 s poll).
+ *  - useListUninstallAuditsQuery({ deviceId, page: 0, size: 10 }) for
+ *    the "Son Kaldırmalar" panel (30 s poll — terminal results from the
+ *    agent arrive a few seconds to a minute after approve).
+ *  - useListUninstallRequestsQuery({ deviceId, page: 0, size: 50 }) for
+ *    the open-request ("Onay bekliyor") pills. Auto-refetches on
+ *    createUninstall via the `EndpointUninstallRequest:device-{id}` tag.
  *
- * Selecting an item opens the InstallPreflightModal in a nested
- * overlay layer (LIFO ESC closes the modal before the BottomSheet).
+ * The drawer NEVER renders an approve button — the approve action lives
+ * only in the approval center. Each open request links there.
  */
 export interface SoftwareCatalogTabProps {
   device: EndpointDevice;
   active: boolean;
+  /**
+   * Relative path (within the endpoint-admin MFE) to the approval
+   * center, surfaced as a link on each open uninstall request. The
+   * drawer is mounted across pages so this is supplied by the host
+   * rather than hard-coded; defaults to the canonical inbox route.
+   */
+  approvalsPath?: string;
 }
 
 interface ToastState {
@@ -90,14 +122,21 @@ const POST_VERIFICATION_BADGE: Record<InstallPostVerification, string> = {
   UNKNOWN: 'bg-surface-muted text-text-secondary',
 };
 
+const DEFAULT_APPROVALS_PATH = '/endpoint-admin/approvals';
+
 interface SelectedItem {
   catalogItemId: string;
   displayName: string;
 }
 
-export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, active }) => {
+export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({
+  device,
+  active,
+  approvalsPath = DEFAULT_APPROVALS_PATH,
+}) => {
   const { t } = useEndpointAdminI18n();
   const [selected, setSelected] = React.useState<SelectedItem | null>(null);
+  const [uninstallSelected, setUninstallSelected] = React.useState<SelectedItem | null>(null);
   const [toast, setToast] = React.useState<ToastState | null>(null);
 
   // Clear transient toast when tab becomes inactive or device changes.
@@ -105,11 +144,13 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
     if (!active) {
       setToast(null);
       setSelected(null);
+      setUninstallSelected(null);
     }
   }, [active]);
   React.useEffect(() => {
     setToast(null);
     setSelected(null);
+    setUninstallSelected(null);
   }, [device.id]);
 
   const catalogQuery = useListCatalogItemsQuery(
@@ -118,20 +159,28 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
   );
 
   // Codex 019e6fe4 must-fix #3: the install audit row is created only
-  // when the agent reports a terminal install result
-  // (EndpointInstallAuditService writes from
-  // EndpointAgentCommandService#reportResult). The `createInstall`
+  // when the agent reports a terminal install result. The `createInstall`
   // invalidation refetches immediately on POST, before the row exists;
   // the agent's later report does NOT trigger a fresh RTK tag
-  // invalidation. The IslemlerTab command-list poll is on a different
-  // cache.
-  //
-  // WEB-014D perf follow-up: poll interval relaxed from 10 s to 30 s.
-  // Terminal install results from the Windows agent typically arrive
-  // 5–60 s after the POST; a 30 s tab-active poll still surfaces them
-  // promptly while cutting the background request rate by 3×.
+  // invalidation. The 30 s tab-active poll surfaces them.
   const installAuditQuery = useListInstallAuditsQuery(
     { deviceId: device.id, page: 0, size: 10 },
+    { skip: !active, pollingInterval: active ? 30_000 : 0 },
+  );
+
+  // AG-028 Phase 3 — uninstall terminal-result history (30 s poll, same
+  // rationale as install: the audit row lands only when the agent
+  // reports a terminal uninstall result, after the POST invalidation).
+  const uninstallAuditQuery = useListUninstallAuditsQuery(
+    { deviceId: device.id, page: 0, size: 10 },
+    { skip: !active, pollingInterval: active ? 30_000 : 0 },
+  );
+
+  // AG-028 Phase 3 — open uninstall requests (drives the "Onay
+  // bekliyor" pills). Polled so an approval in the approval center
+  // surfaces here too without a manual refresh.
+  const uninstallRequestsQuery = useListUninstallRequestsQuery(
+    { deviceId: device.id, page: 0, size: 50 },
     { skip: !active, pollingInterval: active ? 30_000 : 0 },
   );
 
@@ -150,24 +199,38 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
   const auditRows: EndpointInstallAuditDto[] = auditPage?.content ?? [];
   const isAuditLoading = installAuditQuery.isLoading;
 
+  const uninstallAuditRows: AdminUninstallAuditResponse[] = uninstallAuditQuery.data ?? [];
+  const isUninstallAuditLoading = uninstallAuditQuery.isLoading;
+
+  const uninstallRequests: AdminUninstallRequestResponse[] = uninstallRequestsQuery.data ?? [];
+  // Open requests, newest first (the list already returns createdAt DESC).
+  const openUninstallRequests = uninstallRequests.filter((r) => isOpenUninstallRequest(r.state));
+
   const isOnline = device.status === 'ONLINE';
 
   const openInstallModal = (item: AdminCatalogItemSummary) => {
-    setSelected({
-      catalogItemId: item.catalogItemId,
-      displayName: item.displayName,
-    });
+    setSelected({ catalogItemId: item.catalogItemId, displayName: item.displayName });
   };
+  const closeInstallModal = () => setSelected(null);
 
-  const closeInstallModal = () => {
-    setSelected(null);
+  const openUninstallModal = (item: AdminCatalogItemSummary) => {
+    setUninstallSelected({ catalogItemId: item.catalogItemId, displayName: item.displayName });
   };
+  const closeUninstallModal = () => setUninstallSelected(null);
 
   const handleInstalled = (command: CreateInstallSuccess) => {
     setSelected(null);
     setToast({
       kind: 'success',
       message: t('endpointAdmin.drawer.install.toast.success').replace('{commandId}', command.id),
+    });
+  };
+
+  const handleProposedUninstall = (_request: CreateUninstallSuccess) => {
+    setUninstallSelected(null);
+    setToast({
+      kind: 'success',
+      message: t('endpointAdmin.drawer.uninstall.toast.success'),
     });
   };
 
@@ -224,39 +287,64 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
             </tr>
           </thead>
           <tbody>
-            {catalogItems.map((item) => (
-              <tr
-                key={item.id}
-                className="border-t border-border-subtle"
-                data-testid={`catalog-row-${item.catalogItemId}`}
-              >
-                <td className="px-3 py-2">{item.displayName}</td>
-                <td className="px-3 py-2">{item.publisher ?? '—'}</td>
-                <td className="px-3 py-2 font-mono text-xs">{item.packageId}</td>
-                <td className="px-3 py-2">
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${RISK_TIER_BADGE_CLASSES[item.riskTier]}`}
-                  >
-                    {t(`endpointAdmin.drawer.softwareCatalog.riskTier.${item.riskTier}`)}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => openInstallModal(item)}
-                    data-testid={`kur-button-${item.catalogItemId}`}
-                    title={
-                      isOnline
-                        ? undefined
-                        : t('endpointAdmin.drawer.softwareCatalog.kur.offlineHint')
-                    }
-                    className="px-3 py-1 rounded-md border border-primary text-primary text-xs hover:bg-state-success-bg"
-                  >
-                    {t('endpointAdmin.drawer.softwareCatalog.kur')}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {catalogItems.map((item) => {
+              // Codex 019e93ab Q1 = B: render "Kaldır" UNLESS the flag is
+              // explicitly false. The backend summary DTO does not emit
+              // this field today (so it is `undefined` → render); the
+              // server propose 422 is the authoritative gate. NEVER
+              // default to false.
+              const canUninstall = item.uninstallSupported !== false;
+              return (
+                <tr
+                  key={item.id}
+                  className="border-t border-border-subtle"
+                  data-testid={`catalog-row-${item.catalogItemId}`}
+                >
+                  <td className="px-3 py-2">{item.displayName}</td>
+                  <td className="px-3 py-2">{item.publisher ?? '—'}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{item.packageId}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${RISK_TIER_BADGE_CLASSES[item.riskTier]}`}
+                    >
+                      {t(`endpointAdmin.drawer.softwareCatalog.riskTier.${item.riskTier}`)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openInstallModal(item)}
+                        data-testid={`kur-button-${item.catalogItemId}`}
+                        title={
+                          isOnline
+                            ? undefined
+                            : t('endpointAdmin.drawer.softwareCatalog.kur.offlineHint')
+                        }
+                        className="px-3 py-1 rounded-md border border-primary text-primary text-xs hover:bg-state-success-bg"
+                      >
+                        {t('endpointAdmin.drawer.softwareCatalog.kur')}
+                      </button>
+                      {canUninstall && (
+                        <button
+                          type="button"
+                          onClick={() => openUninstallModal(item)}
+                          data-testid={`kaldir-button-${item.catalogItemId}`}
+                          title={
+                            isOnline
+                              ? undefined
+                              : t('endpointAdmin.drawer.softwareCatalog.kaldir.offlineHint')
+                          }
+                          className="px-3 py-1 rounded-md border border-state-danger-border text-state-danger-text text-xs hover:bg-state-danger-bg"
+                        >
+                          {t('endpointAdmin.drawer.softwareCatalog.kaldir')}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -364,6 +452,110 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
     );
   };
 
+  const renderOpenUninstalls = () => {
+    if (openUninstallRequests.length === 0) return null;
+    return (
+      <div
+        className="rounded-md border border-state-warning-border bg-state-warning-bg px-3 py-2"
+        data-testid="uninstall-open-requests"
+      >
+        <h5 className="text-xs font-semibold uppercase tracking-wider text-state-warning-text mb-1">
+          {t('endpointAdmin.drawer.uninstall.openRequests.heading')}
+        </h5>
+        <ul className="space-y-1">
+          {openUninstallRequests.map((req) => (
+            <li
+              key={req.requestId}
+              className="flex flex-wrap items-center gap-2 text-sm"
+              data-testid={`uninstall-open-request-${req.requestId}`}
+            >
+              <span className="inline-flex items-center rounded-full border border-state-warning-border bg-state-warning-bg px-2 py-0.5 text-xs text-state-warning-text">
+                {t(`endpointAdmin.drawer.uninstall.state.${req.state}`)}
+              </span>
+              <a
+                href={`${approvalsPath}/uninstall/${encodeURIComponent(
+                  device.id,
+                )}/${encodeURIComponent(req.requestId)}`}
+                data-testid={`uninstall-open-request-link-${req.requestId}`}
+                className="text-primary text-xs underline"
+              >
+                {t('endpointAdmin.drawer.uninstall.openRequests.approveLink')}
+              </a>
+              <span className="text-xs text-text-secondary">{formatTimestamp(req.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const renderRecentUninstalls = () => {
+    if (isUninstallAuditLoading) {
+      return (
+        <p className="text-sm text-text-secondary py-2" data-testid="uninstall-audit-loading">
+          {t('endpointAdmin.drawer.uninstall.recentUninstalls.loading')}
+        </p>
+      );
+    }
+    if (uninstallAuditRows.length === 0) {
+      return (
+        <p className="text-sm text-text-secondary py-2" data-testid="uninstall-audit-empty">
+          {t('endpointAdmin.drawer.uninstall.recentUninstalls.empty')}
+        </p>
+      );
+    }
+    return (
+      <div className="rounded-md border border-border-default overflow-hidden">
+        <table className="w-full text-sm" data-testid="uninstall-audit-table">
+          <thead className="bg-surface-muted text-text-secondary text-xs">
+            <tr>
+              <th className="text-left px-3 py-2">
+                {t('endpointAdmin.drawer.uninstall.recentUninstalls.col.result')}
+              </th>
+              <th className="text-left px-3 py-2">
+                {t('endpointAdmin.drawer.uninstall.recentUninstalls.col.verification')}
+              </th>
+              <th className="text-left px-3 py-2">
+                {t('endpointAdmin.drawer.uninstall.recentUninstalls.col.exitCode')}
+              </th>
+              <th className="text-left px-3 py-2">
+                {t('endpointAdmin.drawer.uninstall.recentUninstalls.col.reportedAt')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {uninstallAuditRows.map((row) => (
+              <tr
+                key={row.auditId}
+                className="border-t border-border-subtle"
+                data-testid={`uninstall-audit-row-${row.auditId}`}
+              >
+                <td className="px-3 py-2">
+                  <UninstallResultStatusBadge
+                    value={row.resultStatus}
+                    testIdPrefix={`uninstall-audit-result-${row.auditId}`}
+                  />
+                </td>
+                <td className="px-3 py-2">
+                  <UninstallVerificationBadge
+                    value={row.verification}
+                    testIdPrefix={`uninstall-audit-verification-${row.auditId}`}
+                  />
+                </td>
+                <td className="px-3 py-2 font-mono text-xs text-text-secondary">
+                  {row.exitCode === null ? '—' : row.exitCode}
+                </td>
+                <td className="px-3 py-2 text-xs text-text-secondary">
+                  {formatTimestamp(row.reportedAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="px-6 py-4 space-y-6" data-testid="device-software-catalog-tab">
       {toast && (
@@ -397,6 +589,16 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
         {renderRecentInstalls()}
       </section>
 
+      <section>
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
+          {t('endpointAdmin.drawer.uninstall.recentUninstalls.heading')}
+        </h4>
+        <div className="space-y-2">
+          {renderOpenUninstalls()}
+          {renderRecentUninstalls()}
+        </div>
+      </section>
+
       {selected && (
         <React.Suspense fallback={null}>
           <InstallPreflightModal
@@ -406,6 +608,19 @@ export const SoftwareCatalogTab: React.FC<SoftwareCatalogTabProps> = ({ device, 
             catalogDisplayName={selected.displayName}
             onClose={closeInstallModal}
             onInstalled={handleInstalled}
+          />
+        </React.Suspense>
+      )}
+
+      {uninstallSelected && (
+        <React.Suspense fallback={null}>
+          <UninstallConfirmModal
+            open={uninstallSelected !== null}
+            deviceId={device.id}
+            catalogItemId={uninstallSelected.catalogItemId}
+            catalogDisplayName={uninstallSelected.displayName}
+            onClose={closeUninstallModal}
+            onProposed={handleProposedUninstall}
           />
         </React.Suspense>
       )}

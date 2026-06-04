@@ -52,6 +52,11 @@ const EndpointComplianceGapPage = React.lazy(
 const ApprovalInboxPage = React.lazy(() => import('../../pages/approval/ApprovalInboxPage'));
 const ApprovalCasePage = React.lazy(() => import('../../pages/approval/ApprovalCasePage'));
 const ApprovalProposeForm = React.lazy(() => import('../../pages/approval/ApprovalProposeForm'));
+// AG-028 Phase 3 — device-scoped, approve-only managed-uninstall approval
+// page (reached from the device drawer's open-request deep-link).
+const UninstallApprovalPage = React.lazy(
+  () => import('../../pages/approval/UninstallApprovalPage'),
+);
 // WEB-017 — Endpoint enrollment management lazy route.
 const EnrollmentListPage = React.lazy(() => import('../../pages/enrollments/EnrollmentListPage'));
 // Path C3 — Endpoint catalog item authoring lazy route.
@@ -81,6 +86,12 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="compliance/policies" element={<EndpointCompliancePoliciesPage />} />
         <Route path="compliance/gaps" element={<EndpointComplianceGapPage />} />
         <Route path="approvals" element={<ApprovalInboxPage />} />
+        {/* AG-028 Phase 3 — device-scoped uninstall approval (more
+            specific than `approvals/:requestId`, so declared first). */}
+        <Route
+          path="approvals/uninstall/:deviceId/:requestId"
+          element={<UninstallApprovalPage />}
+        />
         <Route path="approvals/:requestId" element={<ApprovalCasePage />} />
         <Route path="policies/:policyId/approval/new" element={<ApprovalProposeForm />} />
         <Route path="enrollments" element={<EnrollmentListPage />} />

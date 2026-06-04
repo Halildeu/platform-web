@@ -50,6 +50,25 @@ export interface AdminCatalogItemSummary {
   riskTier: CatalogRiskTier;
   enabled: boolean;
   lastUpdatedAt: string;
+  /**
+   * AG-028 Phase 3 — managed-uninstall opt-in flag.
+   *
+   * Forward-compat OPTIONAL field (Codex 019e93ab Q1 = option B). The
+   * backend `AdminCatalogItemSummary` DTO does NOT currently emit this
+   * — it lives only on the `EndpointSoftwareCatalogItem` entity
+   * (`uninstall_supported` column). So this field is `undefined` today
+   * for every row off the wire.
+   *
+   * Gating contract: the device-drawer "Kaldır" button renders UNLESS
+   * this is explicitly `=== false` (undefined → render, true → render,
+   * false → hide). NEVER default it to `false` (`?? false` would kill
+   * the whole uninstall surface under the current contract). The
+   * authoritative gate is the server-side propose 422 (fail-closed for
+   * `!uninstall_supported`); when the backend later adds this field to
+   * the summary DTO, `=== false` immediately starts hiding unsupported
+   * rows with zero further frontend change.
+   */
+  uninstallSupported?: boolean;
 }
 
 /** Spring `Page<T>` envelope returned by the catalog list endpoint. */
