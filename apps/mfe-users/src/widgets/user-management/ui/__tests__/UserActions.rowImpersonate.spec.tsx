@@ -24,6 +24,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const mockShellAuth = vi.hoisted(() => ({
   isSuperAdmin: vi.fn(() => true),
   isImpersonating: vi.fn(() => false),
+  // Codex 019ea409 — shell-singleton module-level gate. Super-admin already
+  // unlocks the menu here; MANAGE keeps the reset/toggle items present so
+  // their nodes do not interfere with the impersonate assertions.
+  getModuleLevel: vi.fn((module: string) => (module === 'USER_MANAGEMENT' ? 'MANAGE' : 'NONE')),
   getUser: vi.fn(() => ({ id: 'admin-kc-uuid', subscriberId: '1' })),
   enterImpersonationSession: vi.fn(async () => undefined),
 }));
@@ -54,7 +58,13 @@ vi.mock('../../../../features/user-management/model/use-users-query.model', () =
 }));
 
 vi.mock('../../../../i18n/useUsersI18n', () => ({
-  useUsersI18n: () => ({ t: (k: string) => k, locale: 'tr' }),
+  // Codex 019ea409 — resolve the impersonate key to its real TR label so
+  // the assertions verify the i18n fix (no raw key leaks) instead of
+  // pinning the bug. Other keys pass through as identity.
+  useUsersI18n: () => ({
+    t: (k: string) => (k === 'users.actions.impersonate.menu' ? 'Hesaba Geç' : k),
+    locale: 'tr',
+  }),
 }));
 
 vi.mock('../../../../shared/notifications', () => ({
@@ -81,6 +91,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
   beforeEach(() => {
     mockShellAuth.isSuperAdmin.mockReset().mockReturnValue(true);
     mockShellAuth.isImpersonating.mockReset().mockReturnValue(false);
+    mockShellAuth.getModuleLevel.mockReset().mockReturnValue('MANAGE');
     mockShellAuth.getUser.mockReset().mockReturnValue({
       id: 'admin-kc-uuid',
       subscriberId: '1',
@@ -92,7 +103,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
   it('exposes the Hesaba Geç item when shell auth is SuperAdmin and target is not self', () => {
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    const item = screen.queryByText((content) => content.includes('users.actions.impersonate.menu'));
+    const item = screen.queryByText((content) => content.includes('Hesaba Geç'));
     expect(item).toBeTruthy();
   });
 
@@ -100,21 +111,21 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
     mockShellAuth.isSuperAdmin.mockReturnValue(false);
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
   });
 
   it('hides the item during an active impersonation session', () => {
     mockShellAuth.isImpersonating.mockReturnValue(true);
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
   });
 
   it('hides the item when row.id matches the caller subscriberId (self target)', () => {
     mockShellAuth.getUser.mockReturnValue({ id: 'admin-kc-uuid', subscriberId: '42' });
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
   });
 
   it('hides the item when getShellServices throws (fail-closed)', () => {
@@ -123,13 +134,13 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
     };
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    expect(screen.queryByText((c) => c.includes('users.actions.impersonate.menu'))).toBeNull();
+    expect(screen.queryByText((c) => c.includes('Hesaba Geç'))).toBeNull();
   });
 
   it('opens the inline reason modal on click and exposes the submit testid', () => {
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    fireEvent.click(screen.getByText((c) => c.includes('users.actions.impersonate.menu')));
+    fireEvent.click(screen.getByText((c) => c.includes('Hesaba Geç')));
     expect(screen.queryByTestId('row-impersonate-modal')).toBeTruthy();
     expect(screen.queryByTestId('row-impersonate-reason')).toBeTruthy();
     expect(screen.queryByTestId('row-impersonate-submit-btn')).toBeTruthy();
@@ -138,7 +149,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
   it('submits the orchestration call with reason + targetUserId + targetEmail', async () => {
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    fireEvent.click(screen.getByText((c) => c.includes('users.actions.impersonate.menu')));
+    fireEvent.click(screen.getByText((c) => c.includes('Hesaba Geç')));
 
     fireEvent.change(screen.getByTestId('row-impersonate-reason'), {
       target: { value: 'Row-level impersonate quick action — 15 chars ok' },
@@ -167,7 +178,7 @@ describe('UserActions — row-level impersonate quick action (Faz 1 follow-up)',
 
     render(<UserActions user={buildUser() as never} onSelect={vi.fn()} />);
     openMenu();
-    fireEvent.click(screen.getByText((c) => c.includes('users.actions.impersonate.menu')));
+    fireEvent.click(screen.getByText((c) => c.includes('Hesaba Geç')));
 
     fireEvent.change(screen.getByTestId('row-impersonate-reason'), {
       target: { value: 'valid 15 chars row' },

@@ -103,6 +103,35 @@ describe('canonical shell-services — auth transport contract', () => {
     // call it as a defensive replacement for `usePermissions()` when
     // their local `@mfe/auth` context is split via Vite alias drift.
     expect(typeof services.auth.isSuperAdmin).toBe('function');
+    // Codex 019ea409 — shell-level per-module access getter must also be a
+    // first-class method so remotes gate MANAGE-only actions canonically.
+    expect(typeof services.auth.getModuleLevel).toBe('function');
+  });
+
+  it('Codex 019ea409: getModuleLevel routes to wired callback (no caching)', () => {
+    let currentLevel: 'NONE' | 'VIEW' | 'MANAGE' = 'NONE';
+    configureShellServices({
+      queryClient,
+      getAuthToken: () => null,
+      getModuleLevel: (module) => (module === 'USER_MANAGEMENT' ? currentLevel : 'NONE'),
+    });
+
+    const services = getShellServices();
+    expect(services.auth.getModuleLevel('USER_MANAGEMENT')).toBe('NONE');
+    currentLevel = 'VIEW';
+    expect(services.auth.getModuleLevel('USER_MANAGEMENT')).toBe('VIEW');
+    currentLevel = 'MANAGE';
+    expect(services.auth.getModuleLevel('USER_MANAGEMENT')).toBe('MANAGE');
+    // Unwired module name still resolves through the same callback.
+    expect(services.auth.getModuleLevel('AUDIT')).toBe('NONE');
+  });
+
+  it("Codex 019ea409: getModuleLevel defaults to 'NONE' when wiring omits the getter", () => {
+    configureShellServices({ queryClient, getAuthToken: () => null });
+    const services = getShellServices();
+    // Fail-closed: remotes cannot unlock MANAGE-gated actions by calling
+    // getShellServices() before shell finishes hydrating authz.
+    expect(services.auth.getModuleLevel('USER_MANAGEMENT')).toBe('NONE');
   });
 
   it('Codex 019e1bed C-prime: isSuperAdmin routes to wired callback (no caching)', () => {

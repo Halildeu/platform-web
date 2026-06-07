@@ -93,6 +93,7 @@ const users = {
   'users.actions.resetPassword': 'Parolayı Sıfırla',
   'users.actions.toggleStatus.disable': 'Pasifleştir',
   'users.actions.toggleStatus.enable': 'Aktifleştir',
+  'users.actions.impersonate.menu': 'Hesaba Geç',
   'users.actions.resetPassword.success': 'Parola sıfırlama bağlantısı gönderildi.',
   'users.actions.status.success': 'Kullanıcı durumu güncellendi.',
   'users.notifications.activation.description': 'Audit ID: {auditId}',

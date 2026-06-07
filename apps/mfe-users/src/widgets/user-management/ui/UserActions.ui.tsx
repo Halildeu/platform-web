@@ -2,11 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { UserSummary } from '@mfe/shared-types';
 import { useUserMutations } from '../../../features/user-management/model/use-users-query.model';
-import { usePermissions } from '@mfe/auth';
-import { PERMISSIONS } from '../../../features/user-management/lib/permissions.constants';
 import { useUsersI18n } from '../../../i18n/useUsersI18n';
 import { pushToast } from '../../../shared/notifications';
-import { getShellServices } from '../../../app/services/shell-services';
+import { getShellServices, type ShellModuleLevel } from '../../../app/services/shell-services';
 
 // Codex 019e27bf fresh-context audit follow-up — single source of truth
 // for impersonation error code → Turkish UI message mapping. Previously
@@ -27,24 +25,19 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
     grantSuperAdminMutation,
     revokeSuperAdminMutation,
   } = useUserMutations();
-  const { hasModule, isSuperAdmin } = usePermissions();
-  const hasPermission = (perm: string | string[] | undefined) => {
-    if (!perm || isSuperAdmin()) return true;
-    return hasModule('USER_MANAGEMENT');
-  };
-  // Codex 019dda1c iter-33: super-admin grant/revoke items only visible to
-  // current super-admins. Backend enforces the same check (403 on non-super-
-  // admin); this UI guard avoids surfacing a button that always errors.
-  const callerIsSuperAdmin = isSuperAdmin();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const { t } = useUsersI18n();
 
-  // Codex 019e2022 follow-up — row-level impersonate quick action.
-  // The action is gated by the shell auth singleton (matches
-  // ImpersonateAction's defense-in-depth contract). Self-target is
-  // suppressed via the shell's getUser()/subscriberId comparison.
+  // Codex 019e2022 + 019ea409 — EVERY authz gate in this menu (impersonate
+  // AND the user-management mutations) reads the shell auth singleton, NOT
+  // the local `@mfe/auth` usePermissions() context. That context degrades
+  // to its no-op default (`isSuperAdmin: () => false`,
+  // `getModuleLevel: () => 'NONE'`) in mfe-users when the Vite alias
+  // bypasses MF shared-singleton registration (documented in
+  // app/services/shell-services.ts) — which previously hid
+  // reset/toggle/grant/revoke even for a super-admin.
   const shellAuth = useMemo(() => {
     try {
       return getShellServices().auth;
@@ -52,21 +45,51 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
       return null;
     }
   }, []);
-  const shellSuperAdmin = useMemo(() => {
+
+  // Codex 019ea409 — recompute the gates when the shell auth/authz changes
+  // (token swap, impersonation enter/exit, authz version refresh) instead
+  // of freezing them at mount. onTokenChange fires immediately with the
+  // current token and again on every swap; the state bump forces a
+  // re-render so the fresh getter reads below never go stale.
+  const [, bumpAuthTick] = useState(0);
+  useEffect(() => {
+    if (!shellAuth?.onTokenChange) return undefined;
+    try {
+      return shellAuth.onTokenChange(() => bumpAuthTick((n) => n + 1));
+    } catch {
+      return undefined;
+    }
+  }, [shellAuth]);
+
+  // Fresh reads each render (cheap getter calls) — never frozen. Staleness
+  // is avoided by the onTokenChange-driven re-render above; all reads are
+  // wrapped fail-closed so a throwing/absent getter degrades to no access.
+  const shellSuperAdmin = ((): boolean => {
     try {
       return Boolean(shellAuth?.isSuperAdmin?.());
     } catch {
       return false;
     }
-  }, [shellAuth]);
-  const shellImpersonating = useMemo(() => {
+  })();
+  const shellImpersonating = ((): boolean => {
     try {
       return Boolean(shellAuth?.isImpersonating?.());
     } catch {
       return false;
     }
-  }, [shellAuth]);
-  const callerSubscriberId = useMemo(() => {
+  })();
+  // Destructive user-management actions require MANAGE specifically (not any
+  // VIEW); reset-password / deactivate are mutations. getModuleLevel is
+  // optional-chained so an older shell without the method fails closed while
+  // the super-admin path still works via isSuperAdmin().
+  const userManagementLevel: ShellModuleLevel = ((): ShellModuleLevel => {
+    try {
+      return shellAuth?.getModuleLevel?.('USER_MANAGEMENT') ?? 'NONE';
+    } catch {
+      return 'NONE';
+    }
+  })();
+  const callerSubscriberId = ((): string | null => {
     try {
       const profile = shellAuth?.getUser?.() as { subscriberId?: string | number } | null;
       const raw = profile?.subscriberId;
@@ -74,9 +97,17 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
     } catch {
       return null;
     }
-  }, [shellAuth]);
+  })();
   const isSelfTarget = callerSubscriberId != null && callerSubscriberId === String(user.id);
   const canRowImpersonate = shellSuperAdmin && !shellImpersonating && !isSelfTarget;
+  // Codex 019ea409 — super-admin OR module-manager (USER_MANAGEMENT=MANAGE)
+  // may reset passwords / toggle status. Grant/revoke super-admin stays
+  // super-admin only (mirrors the backend 403 on non-super-admins).
+  const canManageUsers = shellSuperAdmin || userManagementLevel === 'MANAGE';
+  // Codex 019dda1c iter-33: super-admin grant/revoke items only visible to
+  // current super-admins (now sourced from the shell singleton, not the
+  // possibly-empty local PermissionContext).
+  const callerIsSuperAdmin = shellSuperAdmin;
 
   const [impersonateOpen, setImpersonateOpen] = useState(false);
   const [impersonateReason, setImpersonateReason] = useState('');
@@ -129,7 +160,7 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
       },
     ];
 
-    if (hasPermission(PERMISSIONS.USER_MANAGEMENT_RESET_PASSWORD)) {
+    if (canManageUsers) {
       menu.push({
         key: 'reset-password',
         label: t('users.actions.resetPassword'),
@@ -144,7 +175,7 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
       });
     }
 
-    if (hasPermission(PERMISSIONS.USER_MANAGEMENT_TOGGLE_STATUS)) {
+    if (canManageUsers) {
       const nextEnabled = user.status !== 'ACTIVE';
       menu.push({
         key: 'toggle-status',
@@ -190,7 +221,10 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
       // operator does not have to navigate into UserDetailDrawer first.
       menu.push({
         key: 'impersonate',
-        label: t('users.actions.impersonate.menu') || 'Hesaba Geç',
+        // Codex 019ea409 — the `|| 'Hesaba Geç'` fallback was dead code:
+        // translateSync returns the raw key string (truthy) on a miss, so
+        // `||` never fired. The key now exists in all locale dicts.
+        label: t('users.actions.impersonate.menu'),
         onClick: () => {
           setImpersonateOpen(true);
           setImpersonateReason('');
@@ -246,7 +280,7 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
 
     return menu;
   }, [
-    hasPermission,
+    canManageUsers,
     onSelect,
     resetPasswordMutation,
     toggleStatusMutation,
@@ -306,7 +340,8 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
           </div>,
           document.body,
         )}
-      {impersonateOpen && typeof document !== 'undefined' &&
+      {impersonateOpen &&
+        typeof document !== 'undefined' &&
         createPortal(
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -325,8 +360,8 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
                 Impersonate {user.fullName || user.email}
               </p>
               <p className="mt-1 text-xs text-state-warning-text">
-                Bu işlem audit log&apos;una kaydedilir. Devam etmek için sebep (min 10 karakter) gerekli;
-                hedef kullanıcı sistem tarafından otomatik çözümlenir.
+                Bu işlem audit log&apos;una kaydedilir. Devam etmek için sebep (min 10 karakter)
+                gerekli; hedef kullanıcı sistem tarafından otomatik çözümlenir.
               </p>
               <label className="mt-3 block">
                 <span className="block text-xs font-semibold uppercase tracking-wide text-state-warning-text">
@@ -363,9 +398,7 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
                 <button
                   type="button"
                   onClick={submitImpersonate}
-                  disabled={
-                    impersonateSubmitting || impersonateReason.trim().length < 10
-                  }
+                  disabled={impersonateSubmitting || impersonateReason.trim().length < 10}
                   className="rounded-xl bg-state-warning-text px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                   data-testid="row-impersonate-submit-btn"
                 >

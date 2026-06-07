@@ -93,6 +93,7 @@ const users = {
   'users.actions.resetPassword': 'Reset password',
   'users.actions.toggleStatus.disable': 'Deactivate',
   'users.actions.toggleStatus.enable': 'Activate',
+  'users.actions.impersonate.menu': 'Impersonate',
   'users.actions.resetPassword.success': 'Password reset link has been sent.',
   'users.actions.status.success': 'User status has been updated.',
   'users.notifications.activation.description': 'Audit ID: {auditId}',
