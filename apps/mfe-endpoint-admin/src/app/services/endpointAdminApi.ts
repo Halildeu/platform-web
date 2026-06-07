@@ -13,7 +13,7 @@ import {
   useEndpointAdminStore,
 } from './redux-context';
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
-import type { EndpointDevice } from '../../entities/endpoint-device/types';
+import type { EndpointDevice, UpdateDeviceRolloutArgs } from '../../entities/endpoint-device/types';
 import type {
   EndpointAuditEvent,
   ListAuditEventsArgs,
@@ -1829,6 +1829,22 @@ export const endpointAdminApi = createApi({
       }),
       invalidatesTags: [{ type: 'EndpointSoftwareBundle' as const, id: 'LIST' }],
     }),
+    /**
+     * BE-026 — assign a device's rollout ring + tags.
+     *   gateway PATCH /api/v1/endpoint-admin/endpoint-devices/{deviceId}/rollout
+     * Body { deploymentRing, deviceTags }. Invalidates the device detail so the
+     * drawer re-reads the new assignment.
+     */
+    patchDeviceRollout: builder.mutation<EndpointDevice, UpdateDeviceRolloutArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/rollout`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointDevice' as const, id: deviceId },
+      ],
+    }),
   }),
 });
 
@@ -1890,4 +1906,6 @@ export const {
   useCreateSoftwareBundleMutation,
   useApproveSoftwareBundleMutation,
   useRevokeSoftwareBundleMutation,
+  // BE-026 device rollout-ring assignment (slice 4).
+  usePatchDeviceRolloutMutation,
 } = endpointAdminApi;

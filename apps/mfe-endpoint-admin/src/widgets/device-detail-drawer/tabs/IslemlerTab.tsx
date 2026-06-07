@@ -12,6 +12,7 @@ import {
   type DestructiveCommandSubmitBody,
 } from '../components/DestructiveCommandModal';
 import { AgentUpdateModal } from '../components/AgentUpdateModal';
+import { RolloutRingModal } from '../components/RolloutRingModal';
 
 export interface IslemlerTabProps {
   device: EndpointDevice;
@@ -57,6 +58,10 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
   // destructive actions; its own modal + dedicated BE-032 endpoint).
   const [agentUpdateOpen, setAgentUpdateOpen] = React.useState(false);
   const [agentUpdateCommandId, setAgentUpdateCommandId] = React.useState<string | null>(null);
+  // BE-026 — per-device rollout-ring + tags assignment (server-side metadata,
+  // not an online-device command, so it is not gated by `allowedAtAll`).
+  const [rolloutOpen, setRolloutOpen] = React.useState(false);
+  const [rolloutSaved, setRolloutSaved] = React.useState(false);
 
   const isOnline = device.status === 'ONLINE';
   const allowedAtAll = isOnline; // STALE/OFFLINE/DECOMMISSIONED/PENDING_ENROLLMENT → all disabled in v1
@@ -235,6 +240,44 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
         </div>
       </section>
 
+      <section data-testid="islemler-rollout-section">
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
+          {t('endpointAdmin.rollout.section.heading')}
+        </h4>
+        {rolloutSaved && (
+          <div
+            role="status"
+            data-testid="rollout-success-toast"
+            className="rounded-md border border-state-success-border bg-state-success-subtle px-4 py-2 text-sm text-state-success-text mb-2"
+          >
+            {t('endpointAdmin.rollout.section.saved')}
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-text-secondary" data-testid="rollout-current-ring">
+            {t('endpointAdmin.rollout.section.current')}:{' '}
+            <span className="font-mono text-text-primary">
+              {device.deploymentRing ?? t('endpointAdmin.rollout.ring.unassigned')}
+            </span>
+            {device.deviceTags && device.deviceTags.length > 0 && (
+              <span className="text-text-subtle"> · {device.deviceTags.join(', ')}</span>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setRolloutSaved(false);
+              setRolloutOpen(true);
+            }}
+            disabled={isSubmitting}
+            data-testid="rollout-open-button"
+            className="px-3 py-1.5 rounded-md border border-border-default bg-surface-default text-sm text-text-primary hover:bg-surface-hover disabled:opacity-50"
+          >
+            {t('endpointAdmin.rollout.section.button')}
+          </button>
+        </div>
+      </section>
+
       {recentCommands.length > 0 && (
         <section data-testid="recent-commands-list">
           <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
@@ -285,6 +328,20 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
           onDispatched={(commandId) => {
             setAgentUpdateOpen(false);
             setAgentUpdateCommandId(commandId);
+          }}
+        />
+      )}
+
+      {rolloutOpen && (
+        <RolloutRingModal
+          open
+          deviceId={device.id}
+          currentRing={device.deploymentRing}
+          currentTags={device.deviceTags ?? []}
+          onCancel={() => setRolloutOpen(false)}
+          onSaved={() => {
+            setRolloutOpen(false);
+            setRolloutSaved(true);
           }}
         />
       )}

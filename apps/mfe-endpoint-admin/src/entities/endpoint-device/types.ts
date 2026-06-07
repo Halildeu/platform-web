@@ -14,6 +14,9 @@ export type DeviceStatus = 'PENDING_ENROLLMENT' | 'ONLINE' | 'STALE' | 'OFFLINE'
 
 export type OsType = 'WINDOWS' | 'MACOS' | 'LINUX' | 'UNKNOWN';
 
+// BE-026 — mirror of backend model/DeploymentRing.java { PILOT, IT, DEPARTMENT, ALL }.
+export type DeploymentRing = 'PILOT' | 'IT' | 'DEPARTMENT' | 'ALL';
+
 export interface EndpointDevice {
   id: string;
   tenantId: string;
@@ -41,6 +44,24 @@ export interface EndpointDevice {
   createdAt: string;
   /** ISO-8601 timestamp from `Instant`. */
   updatedAt: string;
+  /**
+   * BE-026 rollout assignment. `deploymentRing` is null until assigned;
+   * `deviceTags` is a (possibly empty) set of free-form rollout-targeting tags.
+   * Backend EndpointDeviceDto exposes both directly.
+   */
+  deploymentRing: DeploymentRing | null;
+  deviceTags: string[];
+}
+
+/** BE-026 PATCH /endpoint-devices/{deviceId}/rollout body. */
+export interface UpdateDeviceRolloutBody {
+  deploymentRing: DeploymentRing | null;
+  deviceTags: string[];
+}
+
+export interface UpdateDeviceRolloutArgs {
+  deviceId: string;
+  body: UpdateDeviceRolloutBody;
 }
 
 /** Static map for surfacing translatable status badges in the grid. */
