@@ -180,6 +180,43 @@ export function isStartupExposureFullyEvaluable(
 }
 
 /**
+ * Probe-error code emitted by the agent when an autorun/task NAME matched
+ * the forbidden-value denylist (path / executable extension / braced MSI
+ * GUID / SID / control char) and the entry was OMITTED from the wire.
+ * (platform-agent internal/inventory/startup_exposure.go)
+ */
+export const STARTUP_EXPOSURE_NAME_VALUE_REDACTED = 'NAME_VALUE_REDACTED';
+
+/**
+ * Helper: "redaction-only partial-visible" state (AG-040 v1 UX fix; Codex
+ * 019ea174 AGREE Option A). The probe ENUMERATION succeeded but `probeComplete`
+ * is false SOLELY because some entry NAMES were redacted for privacy — NOT
+ * because of a real probe/enumeration failure.
+ *
+ * Distinguished by: every probe error is `NAME_VALUE_REDACTED`. Genuine
+ * failures emit DISTINCT codes (REGISTRY_QUERY_FAILED, STARTUP_FOLDER_UNREADABLE,
+ * TASK_SCHEDULER_UNAVAILABLE/QUERY_FAILED, NO_EVIDENCE, ENTRY_CAP_APPLIED, …),
+ * and `NAME_VALUE_REDACTED` is appended only AFTER a successful enumeration, so
+ * "all errors are redactions" reliably means the surviving rows are trustworthy.
+ *
+ * The snapshot stays `fullyEvaluable === false` (NOT widened); this only lets
+ * the caller render the surviving rows + a redaction banner instead of hiding
+ * the whole table. Requires at least one surviving row to be meaningful.
+ */
+export function isStartupExposureRedactionOnly(
+  snapshot: StartupExposureSnapshot | null | undefined,
+): boolean {
+  if (!snapshot) return false;
+  return (
+    snapshot.supported === true &&
+    snapshot.probeComplete === false &&
+    snapshot.startupApps.length > 0 &&
+    snapshot.probeErrors.length > 0 &&
+    snapshot.probeErrors.every((e) => e.code === STARTUP_EXPOSURE_NAME_VALUE_REDACTED)
+  );
+}
+
+/**
  * Helper: stale-arg guard (currentData.deviceId === active deviceId).
  * WEB-014D-followup precedent (Codex 019e830b) applied to AG-038, then
  * AG-039, now AG-040.

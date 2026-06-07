@@ -206,6 +206,85 @@ describe('StartupExposureView — supported / probeComplete (AG-039 P1 precedent
   });
 });
 
+describe('StartupExposureView — redaction-only partial-visible (AG-040 v1, Codex 019ea174)', () => {
+  it('redaction-only (all errors NAME_VALUE_REDACTED) + survivors → table + banner VISIBLE, incomplete HIDDEN, data-fully-evaluable=false', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        probeComplete: false,
+        startupApps: [...SAMPLE_APPS],
+        probeErrors: [
+          {
+            rowOrdinal: 0,
+            code: 'NAME_VALUE_REDACTED',
+            source: 'TASK_SCHEDULER:CUSTOM',
+            summary: 'Autorun entry name(s) redacted under this anchor (forbidden value pattern)',
+          },
+          {
+            rowOrdinal: 1,
+            code: 'NAME_VALUE_REDACTED',
+            source: 'TASK_SCHEDULER:ROOT',
+            summary: 'Autorun entry name(s) redacted under this anchor (forbidden value pattern)',
+          },
+        ],
+      }),
+    });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    const view = screen.getByTestId('startup-exposure-view');
+    // Stays NOT fully-evaluable — survivors shown as partial, privacy-preserving evidence.
+    expect(view.getAttribute('data-fully-evaluable')).toBe('false');
+    expect(screen.getByTestId('startup-exposure-redaction-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('startup-exposure-table')).toBeInTheDocument();
+    for (const app of SAMPLE_APPS) {
+      expect(screen.getByTestId(`startup-exposure-row-${app.rowOrdinal}`)).toBeInTheDocument();
+    }
+    expect(screen.queryByTestId('startup-exposure-incomplete')).toBeNull();
+    expect(screen.getByTestId('startup-exposure-probe-errors')).toBeInTheDocument();
+  });
+
+  it('redaction-only but NO survivors → table HIDDEN, incomplete shown (nothing safe to render)', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        probeComplete: false,
+        startupApps: [],
+        probeErrors: [
+          {
+            rowOrdinal: 0,
+            code: 'NAME_VALUE_REDACTED',
+            source: 'TASK_SCHEDULER:ROOT',
+            summary: 'redacted',
+          },
+        ],
+      }),
+    });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    expect(screen.queryByTestId('startup-exposure-table')).toBeNull();
+    expect(screen.queryByTestId('startup-exposure-redaction-banner')).toBeNull();
+    expect(screen.getByTestId('startup-exposure-incomplete')).toBeInTheDocument();
+  });
+
+  it('MIXED redaction + real probe failure → table HIDDEN, incomplete shown (fail-closed)', () => {
+    mockQuery({
+      currentData: buildSnapshot({
+        probeComplete: false,
+        startupApps: [...SAMPLE_APPS],
+        probeErrors: [
+          {
+            rowOrdinal: 0,
+            code: 'NAME_VALUE_REDACTED',
+            source: 'TASK_SCHEDULER:CUSTOM',
+            summary: 'redacted',
+          },
+          { rowOrdinal: 1, code: 'TASK_SCHEDULER_QUERY_FAILED', summary: 'json decode failed' },
+        ],
+      }),
+    });
+    render(<StartupExposureView deviceId={DEVICE_A} active />);
+    expect(screen.queryByTestId('startup-exposure-table')).toBeNull();
+    expect(screen.queryByTestId('startup-exposure-redaction-banner')).toBeNull();
+    expect(screen.getByTestId('startup-exposure-incomplete')).toBeInTheDocument();
+  });
+});
+
 describe('StartupExposureView — exposure tri-state badges (Codex iter-2 must_fix #1+#2)', () => {
   it('rdpEnabled=true → data-polarity=rdp + warning toned', () => {
     mockQuery({ currentData: buildSnapshot({ rdpEnabled: true }) });
