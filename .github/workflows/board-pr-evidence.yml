@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   pr-evidence:
@@ -23,12 +24,13 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: Halildeu/platform-k8s-gitops
-          token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          token: ${{ secrets.ADD_TO_PROJECT_PAT || github.token }}
           persist-credentials: false
 
       - name: board-sync verify for each Tracked-by ref
         env:
-          GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT || github.token }}
+          BOARD_PAT_PRESENT: ${{ secrets.ADD_TO_PROJECT_PAT != '' && 'yes' || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_REPO: ${{ github.repository }}
           PR_BODY: ${{ github.event.pull_request.body }}
