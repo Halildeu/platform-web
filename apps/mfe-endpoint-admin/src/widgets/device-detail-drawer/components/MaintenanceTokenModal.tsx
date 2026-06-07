@@ -56,7 +56,7 @@ export const MaintenanceTokenModal: React.FC<MaintenanceTokenModalProps> = ({
   const [actionError, setActionError] = React.useState<string | null>(null);
 
   const { data: tokens, isLoading } = useListMaintenanceTokensQuery({ deviceId }, { skip: !open });
-  const [create, { isLoading: creating }] = useCreateMaintenanceTokenMutation();
+  const [create, { isLoading: creating, reset: resetCreate }] = useCreateMaintenanceTokenMutation();
   const [revoke, { isLoading: revoking }] = useRevokeMaintenanceTokenMutation();
 
   const panelRef = useFocusTrap({ active: open, autoFocus: true, restoreFocus: true, layerId });
@@ -74,8 +74,11 @@ export const MaintenanceTokenModal: React.FC<MaintenanceTokenModalProps> = ({
   const dismiss = React.useCallback(() => {
     setRevealed(null);
     setCopied(false);
+    // Clear the RTK Query mutation cache too — the create response held the
+    // cleartext token; without reset() it would linger in the Redux store.
+    resetCreate();
     onClose();
-  }, [onClose]);
+  }, [onClose, resetCreate]);
   useEscapeKey(open, dismiss, { layerId });
 
   if (!open) return null;
@@ -106,6 +109,9 @@ export const MaintenanceTokenModal: React.FC<MaintenanceTokenModalProps> = ({
       setCopied(false);
       setReason('');
       setSubmitted(false);
+      // Immediately drop the cleartext from the RTK Query mutation cache so the
+      // secret lives only in `revealed` state (mirrors CreateEnrollmentDialog).
+      resetCreate();
     } catch {
       setActionError(t('endpointAdmin.maint.create.error'));
     }
@@ -197,6 +203,7 @@ export const MaintenanceTokenModal: React.FC<MaintenanceTokenModalProps> = ({
               onClick={() => {
                 setRevealed(null);
                 setCopied(false);
+                resetCreate();
               }}
               data-testid="maintenance-reveal-dismiss"
               className="px-4 py-2 rounded-md border border-border-default text-sm text-text-primary"

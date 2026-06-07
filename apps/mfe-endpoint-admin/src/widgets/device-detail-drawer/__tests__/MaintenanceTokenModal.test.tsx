@@ -42,11 +42,12 @@ const h = vi.hoisted(() => ({
   revokeMock: vi.fn((_a: { tokenId: string; deviceId: string }) => ({
     unwrap: () => Promise.resolve({}),
   })),
+  resetMock: vi.fn(),
 }));
 
 vi.mock('../../../app/services/endpointAdminApi', () => ({
   useListMaintenanceTokensQuery: () => ({ data: h.listData, isLoading: false }),
-  useCreateMaintenanceTokenMutation: () => [h.createMock, { isLoading: false }],
+  useCreateMaintenanceTokenMutation: () => [h.createMock, { isLoading: false, reset: h.resetMock }],
   useRevokeMaintenanceTokenMutation: () => [h.revokeMock, { isLoading: false }],
 }));
 
@@ -59,6 +60,7 @@ afterEach(() => {
   cleanup();
   h.createMock.mockClear();
   h.revokeMock.mockClear();
+  h.resetMock.mockClear();
 });
 
 const renderModal = (props?: Partial<React.ComponentProps<typeof MaintenanceTokenModal>>) =>
@@ -104,6 +106,9 @@ describe('MaintenanceTokenModal', () => {
     // revealed once
     await waitFor(() => expect(screen.getByTestId('maintenance-reveal')).toBeInTheDocument());
     expect(screen.getByTestId('maintenance-reveal-value').textContent).toBe(RAW);
+    // SECURITY: the create mutation cache (which held the cleartext) is reset
+    // immediately after reveal, so the secret lives only in `revealed` state.
+    expect(h.resetMock).toHaveBeenCalled();
     // dismiss ("ack") clears the secret from the DOM
     fireEvent.click(screen.getByTestId('maintenance-reveal-dismiss'));
     expect(screen.queryByTestId('maintenance-reveal')).toBeNull();
@@ -120,6 +125,9 @@ describe('MaintenanceTokenModal', () => {
     await waitFor(() => expect(screen.getByTestId('maintenance-reveal')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('maintenance-close'));
     expect(onClose).toHaveBeenCalledTimes(1);
+    // close drops the secret from the DOM and resets the mutation cache
+    expect(screen.queryByText(RAW)).toBeNull();
+    expect(h.resetMock).toHaveBeenCalled();
   });
 
   it('copy butonu clipboard.writeText(token) çağırır', async () => {
