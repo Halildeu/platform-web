@@ -21,23 +21,28 @@
  * fields so a future edit cannot accidentally widen the wire.
  */
 
-export type AgentUpdateSigningTier = 'TRUSTED' | 'LAB_ONLY_EVIDENCE';
+// Mirror of platform-backend model/AgentUpdateSigningTier.java —
+// { TRUSTED_SIGNED, LAB_ONLY_EVIDENCE }. LAB_ONLY_EVIDENCE is test/lab proof
+// only; production self-update must require TRUSTED_SIGNED + live signature
+// verification.
+export type AgentUpdateSigningTier = 'TRUSTED_SIGNED' | 'LAB_ONLY_EVIDENCE';
 
 export type AgentUpdateReleaseStatus = 'DRAFT' | 'APPROVED' | 'REVOKED';
 
-/** Backend DTO mirror — a row of the agent-update release catalog (BE-031). */
+/**
+ * Backend DTO mirror — `AdminAgentUpdateReleaseSummary` (the row the BE-031
+ * LIST endpoint returns). Exactly: releaseId, targetVersion, signingTier,
+ * status, enabled, lastUpdatedAt. The summary intentionally does NOT carry
+ * channel/ring or any trust material (sha/signer); those live on the full
+ * record / detail view, not the dispatch picker.
+ */
 export interface AgentUpdateRelease {
   releaseId: string;
   targetVersion: string;
-  channel: string | null;
-  ring: string | null;
   signingTier: AgentUpdateSigningTier;
   status: AgentUpdateReleaseStatus;
   enabled: boolean;
-  // Trust/source fields exist on the backend row for audit but are NOT used
-  // by the dispatch UI; kept optional + read-only for display/audit only.
-  claimedSha256?: string | null;
-  claimedSignerThumbprint?: string | null;
+  lastUpdatedAt: string;
 }
 
 export interface ListAgentUpdateReleasesArgs {

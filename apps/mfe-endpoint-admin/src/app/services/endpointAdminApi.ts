@@ -1697,7 +1697,7 @@ export const endpointAdminApi = createApi({
      * dispatchable set); the trust decision was made at release-approve time.
      */
     listAgentUpdateReleases: builder.query<
-      AgentUpdateRelease[],
+      SpringPage<AgentUpdateRelease>,
       ListAgentUpdateReleasesArgs | void
     >({
       query: (args) => ({

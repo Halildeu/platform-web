@@ -1045,7 +1045,7 @@ const DICT_TR = {
   'endpointAdmin.modal.agentUpdate.loading': 'Sürümler yükleniyor…',
   'endpointAdmin.modal.agentUpdate.releasesError': 'Sürümler yüklenemedi.',
   'endpointAdmin.modal.agentUpdate.noReleases': 'Dağıtılabilir (onaylı + etkin) ajan sürümü yok.',
-  'endpointAdmin.modal.agentUpdate.tier.TRUSTED': 'Güvenilir',
+  'endpointAdmin.modal.agentUpdate.tier.TRUSTED_SIGNED': 'Güvenilir imzalı',
   'endpointAdmin.modal.agentUpdate.tier.LAB_ONLY_EVIDENCE': 'Yalnızca laboratuvar',
   'endpointAdmin.modal.agentUpdate.dispatchError': 'Ajan güncelleme komutu gönderilemedi.',
   'endpointAdmin.modal.agentUpdate.dispatch': 'Güncelle',
@@ -2322,7 +2322,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.modal.agentUpdate.releasesError': 'Could not load releases.',
   'endpointAdmin.modal.agentUpdate.noReleases':
     'No dispatchable (approved + enabled) agent release.',
-  'endpointAdmin.modal.agentUpdate.tier.TRUSTED': 'Trusted',
+  'endpointAdmin.modal.agentUpdate.tier.TRUSTED_SIGNED': 'Trusted signed',
   'endpointAdmin.modal.agentUpdate.tier.LAB_ONLY_EVIDENCE': 'Lab only',
   'endpointAdmin.modal.agentUpdate.dispatchError': 'Could not dispatch the agent update command.',
   'endpointAdmin.modal.agentUpdate.dispatch': 'Update',

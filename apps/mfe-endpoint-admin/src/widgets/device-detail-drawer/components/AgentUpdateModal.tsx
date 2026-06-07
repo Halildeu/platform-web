@@ -80,7 +80,8 @@ export const AgentUpdateModal: React.FC<AgentUpdateModalProps> = ({
 
   if (!open) return null;
 
-  const dispatchable = releases ?? [];
+  // BE-031 returns a Spring Page envelope ({ content, ... }); unwrap to the rows.
+  const dispatchable = releases?.content ?? [];
   const trimmedReason = reason.trim();
   const reasonError = submitted && trimmedReason.length === 0;
   const reasonTooLong = trimmedReason.length > 512;
@@ -175,19 +176,9 @@ export const AgentUpdateModal: React.FC<AgentUpdateModalProps> = ({
                     <span className="flex-1">
                       <span className="font-mono text-sm text-text-primary">{r.targetVersion}</span>
                       <span className="flex flex-wrap gap-1 mt-1">
-                        {r.channel && (
-                          <span className="text-xs rounded bg-surface-subtle px-1.5 py-0.5 text-text-secondary">
-                            {r.channel}
-                          </span>
-                        )}
-                        {r.ring && (
-                          <span className="text-xs rounded bg-surface-subtle px-1.5 py-0.5 text-text-secondary">
-                            {r.ring}
-                          </span>
-                        )}
                         <span
                           className={
-                            r.signingTier === 'TRUSTED'
+                            r.signingTier === 'TRUSTED_SIGNED'
                               ? 'text-xs rounded bg-state-success-subtle px-1.5 py-0.5 text-state-success-text'
                               : 'text-xs rounded bg-state-warning-subtle px-1.5 py-0.5 text-state-warning-text'
                           }
