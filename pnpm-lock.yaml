@@ -22,6 +22,7 @@ overrides:
   basic-ftp: '>=5.2.2'
   tmp: '>=0.2.6'
   react-router: '>=7.15.0'
+  react-router-dom: '>=7.15.0'
   fast-uri: '>=3.1.2'
   lucide-react: 1.7.0
   vitest-browser-react: 2.1.0
@@ -64,8 +65,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       shiki:
         specifier: ^4.1.0
         version: 4.1.0
@@ -284,8 +285,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@mfe/i18n-dicts':
         specifier: '*'
@@ -351,8 +352,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.6.3
@@ -424,8 +425,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@module-federation/vite':
         specifier: ^1.15.5
@@ -491,8 +492,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.5.0
@@ -573,8 +574,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.4.0
@@ -634,8 +635,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@module-federation/vite':
         specifier: ^1.15.5
@@ -737,8 +738,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.5.0
@@ -798,8 +799,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.5.0
@@ -868,8 +869,8 @@ importers:
         specifier: '>=7.15.0'
         version: 7.15.1(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react-router-dom:
-        specifier: ^7.14.2
-        version: 7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        specifier: '>=7.15.0'
+        version: 7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.6.3
@@ -8146,8 +8147,8 @@ packages:
       redux:
         optional: true
 
-  react-router-dom@7.14.2:
-    resolution: {integrity: sha512-YZcM5ES8jJSM+KrJ9BdvHHqlnGTg5tH3sC5ChFRj4inosKctdyzBDhOyyHdGk597q2OT6NTrCA1OvB/YDwfekQ==}
+  react-router-dom@7.17.0:
+    resolution: {integrity: sha512-fyU2yjGups/hE6Xz0I5ZYbVL8Gx29eCjgpHaRaTaVU+OOAdfRX05KsvyRm0GO8YQwOkhpU3MurW1jyMUJn+zSw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       react: '>=18'
@@ -17661,7 +17662,7 @@ snapshots:
       '@types/react': 18.3.28
       redux: 5.0.1
 
-  react-router-dom@7.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
+  react-router-dom@7.17.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
     dependencies:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
