@@ -293,7 +293,10 @@ const HardwareDisksList: React.FC<HardwareDisksListProps> = ({ disks, formatByte
   return (
     <section data-testid="hardware-disks-section" style={{ marginTop: 16 }}>
       <h4>{t('endpointAdmin.drawer.inventory.hardware.disks.title')}</h4>
-      <table data-testid="hardware-disks-table">
+      <table
+        data-testid="hardware-disks-table"
+        className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top"
+      >
         <thead>
           <tr>
             <th>{t('endpointAdmin.drawer.inventory.hardware.disks.columns.devicePath')}</th>
@@ -341,7 +344,10 @@ const HardwareNetworkInterfacesList: React.FC<HardwareNetworkInterfacesListProps
   return (
     <section data-testid="hardware-nics-section" style={{ marginTop: 16 }}>
       <h4>{t('endpointAdmin.drawer.inventory.hardware.nics.title')}</h4>
-      <table data-testid="hardware-nics-table">
+      <table
+        data-testid="hardware-nics-table"
+        className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top"
+      >
         <thead>
           <tr>
             <th>{t('endpointAdmin.drawer.inventory.hardware.nics.columns.name')}</th>

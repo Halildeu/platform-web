@@ -370,7 +370,10 @@ const DeviceHealthDisksList: React.FC<DeviceHealthDisksListProps> = ({
           {t('endpointAdmin.drawer.deviceHealth.disks.empty')}
         </p>
       ) : (
-        <table data-testid="device-health-disks-table">
+        <table
+          data-testid="device-health-disks-table"
+          className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top"
+        >
           <thead>
             <tr>
               <th>{t('endpointAdmin.drawer.deviceHealth.disks.columns.driveLetter')}</th>

@@ -254,7 +254,7 @@ function DiffEntryTable({
   return (
     <section className="software-diff-view__table" data-testid={testIdPrefix}>
       <h4>{title}</h4>
-      <table>
+      <table className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top">
         <thead>
           <tr>
             <th>{colDisplayNameLabel}</th>
@@ -300,7 +300,7 @@ function VersionChangedTable({
   return (
     <section className="software-diff-view__table" data-testid="software-diff-view-version-changed">
       <h4>{title}</h4>
-      <table>
+      <table className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top">
         <thead>
           <tr>
             <th>{colNameLabel}</th>

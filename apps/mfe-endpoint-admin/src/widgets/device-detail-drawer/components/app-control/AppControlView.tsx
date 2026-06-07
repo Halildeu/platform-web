@@ -357,7 +357,7 @@ export const AppControlView: React.FC<AppControlViewProps> = ({ deviceId, active
           data-testid="app-control-view-probe-errors"
         >
           <h4>{t('endpointAdmin.drawer.appControl.probeErrors.title')}</h4>
-          <table>
+          <table className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top">
             <thead>
               <tr>
                 <th>#</th>

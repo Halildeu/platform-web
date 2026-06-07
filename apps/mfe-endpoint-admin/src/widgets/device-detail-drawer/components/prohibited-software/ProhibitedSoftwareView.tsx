@@ -217,7 +217,7 @@ export const ProhibitedSoftwareView: React.FC<ProhibitedSoftwareViewProps> = ({
           data-testid="prohibited-software-view-findings"
         >
           <h4>{t('endpointAdmin.drawer.prohibitedSoftware.findings.title')}</h4>
-          <table>
+          <table className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top">
             <thead>
               <tr>
                 <th>{t('endpointAdmin.drawer.prohibitedSoftware.col.ruleId')}</th>

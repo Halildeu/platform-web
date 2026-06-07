@@ -278,7 +278,7 @@ function SimpleEntryTable({
   return (
     <section className="outdated-software-diff-view__table" data-testid={testIdPrefix}>
       <h4>{title}</h4>
-      <table>
+      <table className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top">
         <thead>
           <tr>
             <th>{colPackageLabel}</th>
@@ -330,7 +330,7 @@ function DoubleEntryTable({
   return (
     <section className="outdated-software-diff-view__table" data-testid={testIdPrefix}>
       <h4>{title}</h4>
-      <table>
+      <table className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top">
         <thead>
           <tr>
             <th>{colPackageLabel}</th>
