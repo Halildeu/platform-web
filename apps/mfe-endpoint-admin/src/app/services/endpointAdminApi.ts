@@ -54,8 +54,11 @@ import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnost
 import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
 import type {
   AgentUpdateRelease,
+  ApproveAgentUpdateReleaseArgs,
+  CreateAgentUpdateReleaseArgs,
   DispatchAgentUpdateArgs,
   ListAgentUpdateReleasesArgs,
+  RevokeAgentUpdateReleaseArgs,
 } from '../../entities/agent-update/types';
 import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
 import type { AppControlSnapshot } from '../../entities/endpoint-app-control/types';
@@ -1736,6 +1739,45 @@ export const endpointAdminApi = createApi({
         { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
       ],
     }),
+    /**
+     * AG-029 (BE-031) — create an agent-update release (status=DRAFT).
+     *   gateway POST /api/v1/endpoint-admin/endpoint-agent-update-releases
+     * This IS the trust-establishment surface: the body carries the trust
+     * material (binaryUrl / sha256 / signerThumbprint / signingTier). The
+     * backend creates it DRAFT; trust is sealed only at /approve.
+     */
+    createAgentUpdateRelease: builder.mutation<AgentUpdateRelease, CreateAgentUpdateReleaseArgs>({
+      query: ({ body }) => ({
+        url: '/endpoint-admin/endpoint-agent-update-releases',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'EndpointAgentUpdateRelease' as const, id: 'LIST' }],
+    }),
+    /**
+     * AG-029 (BE-031) — approve a DRAFT release (DRAFT→APPROVED). Maker-checker:
+     * the approver MUST differ from the creator (server-enforced; 403/409 on
+     * self-approve). NO request body.
+     */
+    approveAgentUpdateRelease: builder.mutation<AgentUpdateRelease, ApproveAgentUpdateReleaseArgs>({
+      query: ({ releaseId }) => ({
+        url: `/endpoint-admin/endpoint-agent-update-releases/${encodeURIComponent(releaseId)}/approve`,
+        method: 'POST',
+      }),
+      invalidatesTags: [{ type: 'EndpointAgentUpdateRelease' as const, id: 'LIST' }],
+    }),
+    /**
+     * AG-029 (BE-031) — revoke an APPROVED release (APPROVED→REVOKED).
+     * Body is EXACTLY { revocationReason }.
+     */
+    revokeAgentUpdateRelease: builder.mutation<AgentUpdateRelease, RevokeAgentUpdateReleaseArgs>({
+      query: ({ releaseId, body }) => ({
+        url: `/endpoint-admin/endpoint-agent-update-releases/${encodeURIComponent(releaseId)}/revoke`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'EndpointAgentUpdateRelease' as const, id: 'LIST' }],
+    }),
   }),
 });
 
@@ -1788,4 +1830,8 @@ export const {
   // AG-029 signed self-update (BE-031 release list + BE-032 dispatch).
   useListAgentUpdateReleasesQuery,
   useDispatchAgentUpdateMutation,
+  // AG-029 BE-031 release catalog management (slice 2).
+  useCreateAgentUpdateReleaseMutation,
+  useApproveAgentUpdateReleaseMutation,
+  useRevokeAgentUpdateReleaseMutation,
 } = endpointAdminApi;

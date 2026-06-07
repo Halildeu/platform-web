@@ -82,3 +82,44 @@ export interface DispatchAgentUpdateArgs {
   deviceId: string;
   body: DispatchAgentUpdateBody;
 }
+
+/**
+ * BE-031 create/update body — mirror of backend AdminAgentUpdateReleaseRequest.
+ *
+ * UNLIKE the dispatch body, this IS the trust-establishment surface: the
+ * operator deliberately supplies the trust material (binaryUrl / sha256 /
+ * sha512 / signerThumbprint / signingTier). The backend creates the release as
+ * DRAFT; the trust decision is sealed only at /approve (maker-checker). These
+ * are public hashes / thumbprints / URLs, not secrets. POST creates; PUT
+ * /{releaseId} updates (DRAFT-only — never an APPROVED/REVOKED artifact).
+ */
+export interface AgentUpdateReleaseRequest {
+  releaseId: string;
+  channel: AgentUpdateChannel;
+  targetVersion: string;
+  binaryUrl: string;
+  manifestUrl?: string;
+  sha256: string;
+  sha512?: string;
+  signerThumbprint: string;
+  signingTier: AgentUpdateSigningTier;
+  releaseNotes?: string;
+}
+
+export interface CreateAgentUpdateReleaseArgs {
+  body: AgentUpdateReleaseRequest;
+}
+
+export interface ApproveAgentUpdateReleaseArgs {
+  releaseId: string;
+}
+
+/** Backend AdminAgentUpdateReleaseRevokeRequest — { revocationReason } only. */
+export interface RevokeAgentUpdateReleaseBody {
+  revocationReason: string;
+}
+
+export interface RevokeAgentUpdateReleaseArgs {
+  releaseId: string;
+  body: RevokeAgentUpdateReleaseBody;
+}
