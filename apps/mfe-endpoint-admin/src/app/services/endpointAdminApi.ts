@@ -15,6 +15,13 @@ import {
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
 import type { EndpointDevice, UpdateDeviceRolloutArgs } from '../../entities/endpoint-device/types';
 import type {
+  CreateMaintenanceTokenArgs,
+  CreateMaintenanceTokenResponse,
+  ListMaintenanceTokensArgs,
+  MaintenanceTokenDto,
+  RevokeMaintenanceTokenArgs,
+} from '../../entities/maintenance-token/types';
+import type {
   EndpointAuditEvent,
   ListAuditEventsArgs,
 } from '../../entities/endpoint-audit-event/types';
@@ -428,6 +435,7 @@ export const endpointAdminApi = createApi({
     'EndpointEnrollment',
     'EndpointAgentUpdateRelease',
     'EndpointSoftwareBundle',
+    'EndpointMaintenanceToken',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -1875,6 +1883,46 @@ export const endpointAdminApi = createApi({
         { type: 'EndpointDevice' as const, id: deviceId },
       ],
     }),
+    /**
+     * BE-027 — list a device's maintenance tokens. Metadata only; the cleartext
+     * token is NEVER returned here (only once, at create).
+     */
+    listMaintenanceTokens: builder.query<MaintenanceTokenDto[], ListMaintenanceTokensArgs>({
+      query: ({ deviceId }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/maintenance-tokens`,
+        method: 'GET',
+      }),
+      providesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointMaintenanceToken' as const, id: deviceId },
+      ],
+    }),
+    /**
+     * BE-027 — issue a maintenance token. The response carries the ONE-TIME
+     * cleartext secret; callers must reveal it once and never persist/log it.
+     */
+    createMaintenanceToken: builder.mutation<
+      CreateMaintenanceTokenResponse,
+      CreateMaintenanceTokenArgs
+    >({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/maintenance-tokens`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointMaintenanceToken' as const, id: deviceId },
+      ],
+    }),
+    /** BE-027 — revoke a PENDING maintenance token. */
+    revokeMaintenanceToken: builder.mutation<MaintenanceTokenDto, RevokeMaintenanceTokenArgs>({
+      query: ({ tokenId }) => ({
+        url: `/endpoint-admin/maintenance-tokens/${encodeURIComponent(tokenId)}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointMaintenanceToken' as const, id: deviceId },
+      ],
+    }),
   }),
 });
 
@@ -1939,4 +1987,8 @@ export const {
   useRevokeSoftwareBundleMutation,
   // BE-026 device rollout-ring assignment (slice 4).
   usePatchDeviceRolloutMutation,
+  // BE-027 device maintenance tokens (slice 5).
+  useListMaintenanceTokensQuery,
+  useCreateMaintenanceTokenMutation,
+  useRevokeMaintenanceTokenMutation,
 } = endpointAdminApi;

@@ -68,6 +68,8 @@ const mockDevice = (): EndpointDevice => ({
   enrolledAt: '2026-05-25T15:12:43Z',
   createdAt: '2026-05-25T15:12:43Z',
   updatedAt: '2026-05-26T02:19:13Z',
+  deploymentRing: null,
+  deviceTags: [],
 });
 
 // dataLen=3 matches the user-reported store snapshot (commit message

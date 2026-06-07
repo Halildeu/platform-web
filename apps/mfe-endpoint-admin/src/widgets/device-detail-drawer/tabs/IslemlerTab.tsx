@@ -13,6 +13,7 @@ import {
 } from '../components/DestructiveCommandModal';
 import { AgentUpdateModal } from '../components/AgentUpdateModal';
 import { RolloutRingModal } from '../components/RolloutRingModal';
+import { MaintenanceTokenModal } from '../components/MaintenanceTokenModal';
 
 export interface IslemlerTabProps {
   device: EndpointDevice;
@@ -65,6 +66,9 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
   // not an online-device command, so it is not gated by `allowedAtAll`).
   const [rolloutOpen, setRolloutOpen] = React.useState(false);
   const [rolloutSaved, setRolloutSaved] = React.useState(false);
+  // BE-027 — maintenance-token manager (one-time secret handling lives in the
+  // modal; conditionally mounted so its list query + hooks stay dormant).
+  const [maintOpen, setMaintOpen] = React.useState(false);
 
   const isOnline = device.status === 'ONLINE';
   const allowedAtAll = isOnline; // STALE/OFFLINE/DECOMMISSIONED/PENDING_ENROLLMENT → all disabled in v1
@@ -302,6 +306,20 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
         </div>
       </section>
 
+      <section data-testid="islemler-maintenance-section">
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
+          {t('endpointAdmin.maint.section.heading')}
+        </h4>
+        <button
+          type="button"
+          onClick={() => setMaintOpen(true)}
+          data-testid="maintenance-open-button"
+          className="px-4 py-2 rounded-md border border-border-default bg-surface-default text-sm text-text-primary hover:bg-surface-hover"
+        >
+          {t('endpointAdmin.maint.section.button')}
+        </button>
+      </section>
+
       {recentCommands.length > 0 && (
         <section data-testid="recent-commands-list">
           <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
@@ -368,6 +386,10 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
             setRolloutSaved(true);
           }}
         />
+      )}
+
+      {maintOpen && (
+        <MaintenanceTokenModal open deviceId={device.id} onClose={() => setMaintOpen(false)} />
       )}
     </div>
   );
