@@ -14,6 +14,7 @@ import type {
 import {
   useListDeviceCommandsQuery,
   useCreateDeviceCommandMutation,
+  useCreateLocalPasswordChangeMutation,
 } from '../../app/services/endpointAdminApi';
 import { useEndpointAdminI18n } from '../../i18n';
 import { DetayTab } from './tabs/DetayTab';
@@ -216,6 +217,7 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
   const { t } = useEndpointAdminI18n();
   const [activeTab, setActiveTab] = React.useState<TabKey>(initialTab ?? 'detay');
   const [lastIssuedCommand, setLastIssuedCommand] = React.useState<EndpointCommand | null>(null);
+  const [lastIssuedLocalPassword, setLastIssuedLocalPassword] = React.useState<string | null>(null);
   const [lastError, setLastError] = React.useState<string | null>(null);
 
   const deviceId = device?.id ?? null;
@@ -239,12 +241,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
   );
 
   const [createCommand, createState] = useCreateDeviceCommandMutation();
+  const [createLocalPasswordChange, createLocalPasswordState] =
+    useCreateLocalPasswordChangeMutation();
 
   // Reset transient toast state when the drawer closes — stale
   // "command queued" banners must not bleed across selections.
   React.useEffect(() => {
     if (!open) {
       setLastIssuedCommand(null);
+      setLastIssuedLocalPassword(null);
       setLastError(null);
     }
   }, [open]);
@@ -258,6 +263,7 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
 
   React.useEffect(() => {
     setLastIssuedCommand(null);
+    setLastIssuedLocalPassword(null);
     setLastError(null);
   }, [deviceId]);
 
@@ -266,14 +272,41 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
       if (!deviceId) return;
       setLastError(null);
       try {
+        const idempotencyKey = generateIdempotencyKey();
+        if (body.type === 'CHANGE_LOCAL_PASSWORD') {
+          const username =
+            body.payload &&
+            typeof body.payload.username === 'string' &&
+            body.payload.username.trim().length > 0
+              ? body.payload.username.trim()
+              : '';
+          if (!username || !body.reason) {
+            setLastError(t('endpointAdmin.drawer.islemler.error'));
+            return;
+          }
+          const next = await createLocalPasswordChange({
+            deviceId,
+            body: {
+              username,
+              reason: body.reason,
+              idempotencyKey,
+              notBefore: body.visibleAfterAt,
+              expiresAt: body.expiresAt,
+            },
+          }).unwrap();
+          setLastIssuedCommand(next.command);
+          setLastIssuedLocalPassword(next.oneTimePassword);
+          return;
+        }
         const next = await createCommand({
           deviceId,
           body: {
-            idempotencyKey: generateIdempotencyKey(),
+            idempotencyKey,
             ...body,
           },
         }).unwrap();
         setLastIssuedCommand(next);
+        setLastIssuedLocalPassword(null);
       } catch (err: unknown) {
         const status =
           err && typeof err === 'object' && 'status' in err
@@ -286,7 +319,7 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         }
       }
     },
-    [createCommand, deviceId, t],
+    [createCommand, createLocalPasswordChange, deviceId, t],
   );
 
   // WEB-014D perf follow-up: memoise the tab items list so the array
@@ -310,9 +343,10 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
           <IslemlerTab
             device={device}
             recentCommands={deviceCommands}
-            isSubmitting={createState.isLoading}
+            isSubmitting={createState.isLoading || createLocalPasswordState.isLoading}
             lastIssuedCommandId={lastIssuedCommand?.id ?? null}
             lastIssuedRequiresApproval={lastIssuedCommand?.approvalStatus === 'PENDING'}
+            lastIssuedLocalPassword={lastIssuedLocalPassword}
             lastError={lastError}
             onIssueCommand={handleIssueCommand}
           />
@@ -464,7 +498,9 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
     device,
     commands,
     createState.isLoading,
+    createLocalPasswordState.isLoading,
     lastIssuedCommand,
+    lastIssuedLocalPassword,
     lastError,
     handleIssueCommand,
     activeTab,

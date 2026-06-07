@@ -129,6 +129,31 @@ export interface CreateEndpointCommandBody {
   expiresAt?: string;
 }
 
+/**
+ * Backend `CreateLocalPasswordChangeRequest` body. This dedicated path is
+ * intentionally separate from `CreateEndpointCommandRequest`: the browser
+ * supplies only local username + reason, while the backend generates and
+ * stores the one-time password through its encrypted command-secret path.
+ */
+export interface CreateLocalPasswordChangeBody {
+  username: string;
+  idempotencyKey?: string;
+  /** Max 512 chars. */
+  reason: string;
+  notBefore?: string;
+  expiresAt?: string;
+}
+
+/** Backend `CreateLocalPasswordChangeResponse` body. */
+export interface CreateLocalPasswordChangeResponse {
+  command: EndpointCommand;
+  /**
+   * Returned only on first create. Idempotency replay must return null so
+   * the browser cannot redisplay an old generated secret.
+   */
+  oneTimePassword: string | null;
+}
+
 /** Backend `ApproveEndpointCommandRequest` body. */
 export interface ApproveEndpointCommandBody {
   decision: ApprovalDecision;

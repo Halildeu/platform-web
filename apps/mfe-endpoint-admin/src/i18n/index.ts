@@ -676,6 +676,10 @@ const DICT_TR = {
   'endpointAdmin.drawer.islemler.success': 'Komut sıraya alındı (ID: {commandId})',
   'endpointAdmin.drawer.islemler.successPending':
     'Komut sıraya alındı, ikinci yönetici onayı bekleniyor (ID: {commandId})',
+  'endpointAdmin.drawer.islemler.localPassword.oneTimeTitle':
+    'Tek kullanımlık yerel parola üretildi',
+  'endpointAdmin.drawer.islemler.localPassword.oneTimeHint':
+    'Bu parola yalnızca bu ekranda gösterilir. Komut ikinci yönetici onayından sonra ajan tarafından alınır.',
   'endpointAdmin.drawer.islemler.error': 'Komut gönderilemedi.',
   'endpointAdmin.drawer.islemler.error403': 'Bu işlem için yönetici yetkisi gerekiyor.',
   // Audit tab
@@ -2040,6 +2044,9 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.drawer.islemler.success': 'Command queued (ID: {commandId})',
   'endpointAdmin.drawer.islemler.successPending':
     'Command queued, awaiting second-admin approval (ID: {commandId})',
+  'endpointAdmin.drawer.islemler.localPassword.oneTimeTitle': 'One-time local password generated',
+  'endpointAdmin.drawer.islemler.localPassword.oneTimeHint':
+    'This password is shown only on this screen. The agent can claim the command after second-admin approval.',
   'endpointAdmin.drawer.islemler.error': 'Failed to queue command.',
   'endpointAdmin.drawer.islemler.error403': 'Manager permission required for this action.',
   'endpointAdmin.drawer.audit.empty': 'No audit events for this device yet.',

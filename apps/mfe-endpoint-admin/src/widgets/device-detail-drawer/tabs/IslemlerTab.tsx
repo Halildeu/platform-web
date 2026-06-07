@@ -22,6 +22,8 @@ export interface IslemlerTabProps {
   lastIssuedCommandId: string | null;
   /** True when the last submit returned approvalStatus=PENDING. */
   lastIssuedRequiresApproval: boolean;
+  /** One-time local recovery password returned by AG-042 dedicated backend path. */
+  lastIssuedLocalPassword: string | null;
   /** Last error message (already i18n-resolved). */
   lastError: string | null;
   onIssueCommand: (body: CreateEndpointCommandBody) => void;
@@ -49,6 +51,7 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
   isSubmitting,
   lastIssuedCommandId,
   lastIssuedRequiresApproval,
+  lastIssuedLocalPassword,
   lastError,
   onIssueCommand,
 }) => {
@@ -155,6 +158,27 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
           className="rounded-md border border-state-success-border bg-state-success-subtle px-4 py-2 text-sm text-state-success-text"
         >
           {successMessage}
+        </div>
+      )}
+
+      {lastIssuedLocalPassword && (
+        <div
+          role="status"
+          data-testid="local-password-one-time-banner"
+          className="rounded-md border border-state-warning-border bg-state-warning-subtle px-4 py-3 text-sm text-state-warning-text"
+        >
+          <div className="font-medium">
+            {t('endpointAdmin.drawer.islemler.localPassword.oneTimeTitle')}
+          </div>
+          <div className="mt-1 text-xs">
+            {t('endpointAdmin.drawer.islemler.localPassword.oneTimeHint')}
+          </div>
+          <code
+            className="mt-2 block rounded border border-border-default bg-surface-default px-3 py-2 font-mono text-sm text-text-primary"
+            data-testid="local-password-one-time-value"
+          >
+            {lastIssuedLocalPassword}
+          </code>
         </div>
       )}
 
