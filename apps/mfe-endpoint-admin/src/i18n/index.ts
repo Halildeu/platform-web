@@ -474,6 +474,8 @@ const DICT_TR = {
     'Bu çalışma zamanında desteklenmiyor (Windows dışı runtime).',
   'endpointAdmin.drawer.startupExposure.incomplete':
     'Ajan kanıtı eksik — startup-exposure taraması tamamlanamadı. Aşağıdaki tablo gizli; probe hataları nedeni gösterir.',
+  'endpointAdmin.drawer.startupExposure.redactionBanner':
+    'Bazı başlangıç girdilerinin adı yasaklı değer örüntüsü (yol / yürütülebilir uzantı / GUID / SID) nedeniyle gizlendi — aşağıdaki probe hatalarına bakın. Tarama başarılı; görünen satırlar policy’den geçmiş, gözlemlenmiş girdilerdir.',
   'endpointAdmin.drawer.startupExposure.staleArg':
     'Bu görünüm farklı bir cihaza ait önceki sonuçtan kalmış. Lütfen yeniden açın.',
   'endpointAdmin.drawer.startupExposure.meta.heading': 'Tarama Üst Verisi',
@@ -1843,6 +1845,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
     'Not supported on this runtime (non-Windows).',
   'endpointAdmin.drawer.startupExposure.incomplete':
     'Agent evidence is incomplete — the startup-exposure probe did not finish. The table below is hidden; the probe errors explain why.',
+  'endpointAdmin.drawer.startupExposure.redactionBanner':
+    'Some startup entry names were hidden because they matched a forbidden value pattern (path / executable extension / GUID / SID) — see the probe errors below. The scan succeeded; the rows shown are observed, policy-passed entries.',
   'endpointAdmin.drawer.startupExposure.staleArg':
     'This view shows a stale result from a different device. Please re-open the drawer.',
   'endpointAdmin.drawer.startupExposure.meta.heading': 'Scan Metadata',
