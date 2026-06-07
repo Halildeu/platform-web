@@ -271,15 +271,23 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
         />
       )}
 
-      <AgentUpdateModal
-        open={agentUpdateOpen}
-        deviceId={device.id}
-        onCancel={() => setAgentUpdateOpen(false)}
-        onDispatched={(commandId) => {
-          setAgentUpdateOpen(false);
-          setAgentUpdateCommandId(commandId);
-        }}
-      />
+      {/* Mounted only while open: AgentUpdateModal calls RTK Query hooks
+          (useListAgentUpdateReleasesQuery / useDispatchAgentUpdateMutation)
+          unconditionally, so rendering it always would require a Redux
+          <Provider> in every IslemlerTab/drawer test. Conditional mount keeps
+          the hooks dormant until the operator opens it (matches the
+          DestructiveCommandModal pattern above). */}
+      {agentUpdateOpen && (
+        <AgentUpdateModal
+          open
+          deviceId={device.id}
+          onCancel={() => setAgentUpdateOpen(false)}
+          onDispatched={(commandId) => {
+            setAgentUpdateOpen(false);
+            setAgentUpdateCommandId(commandId);
+          }}
+        />
+      )}
     </div>
   );
 };
