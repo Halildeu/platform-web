@@ -61,7 +61,12 @@ import { useEndpointAdminI18n } from '../../../../i18n';
  *  - !isStartupExposureForDevice → stale-arg warning
  *  - supported=false OR probeComplete=false → fail-closed inside the
  *    `startup-exposure-view` container with `data-fully-evaluable="false"`,
- *    table hidden, meta + exposure-summary + probeErrors visible
+ *    table hidden, meta + exposure-summary + probeErrors visible — EXCEPT
+ *    the redaction-only carve-out below.
+ *  - redaction-only (probeComplete=false but every probeError is
+ *    NAME_VALUE_REDACTED + survivors present; AG-040 v1, Codex 019ea174):
+ *    render the surviving rows + a redaction banner; `data-fully-evaluable`
+ *    STAYS "false" (survivors are partial, privacy-preserving evidence).
  *  - happy → meta + exposure-summary + table + probeErrors
  */
 export interface StartupExposureViewProps {
