@@ -345,7 +345,10 @@ const HotfixInstalledTable: React.FC<InstalledTableProps> = ({
         {t('endpointAdmin.drawer.hotfixPosture.installed.empty')}
       </p>
     ) : (
-      <table data-testid="hotfix-posture-installed-table">
+      <table
+        data-testid="hotfix-posture-installed-table"
+        className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top"
+      >
         <thead>
           <tr>
             <th>{t('endpointAdmin.drawer.hotfixPosture.installed.col.kbId')}</th>
@@ -399,7 +402,10 @@ const HotfixPendingTable: React.FC<PendingTableProps> = ({
         {t('endpointAdmin.drawer.hotfixPosture.pending.empty')}
       </p>
     ) : (
-      <table data-testid="hotfix-posture-pending-table">
+      <table
+        data-testid="hotfix-posture-pending-table"
+        className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top"
+      >
         <thead>
           <tr>
             <th>{t('endpointAdmin.drawer.hotfixPosture.pending.col.kbIds')}</th>
@@ -641,7 +647,10 @@ const HotfixPostureHistoryPageView: React.FC<HistoryPageProps> = ({ page, onPage
   }
   return (
     <div data-testid="hotfix-posture-history-rows">
-      <table data-testid="hotfix-posture-history-table">
+      <table
+        data-testid="hotfix-posture-history-table"
+        className="w-full text-sm [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-medium [&_td]:px-3 [&_td]:py-2 [&_td]:align-top"
+      >
         <thead>
           <tr>
             <th>{t('endpointAdmin.drawer.hotfixPosture.history.col.collectedAt')}</th>
