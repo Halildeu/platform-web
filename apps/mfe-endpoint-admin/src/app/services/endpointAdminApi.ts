@@ -60,6 +60,13 @@ import type {
   ListAgentUpdateReleasesArgs,
   RevokeAgentUpdateReleaseArgs,
 } from '../../entities/agent-update/types';
+import type {
+  ApproveSoftwareBundleArgs,
+  CreateSoftwareBundleArgs,
+  ListSoftwareBundlesArgs,
+  RevokeSoftwareBundleArgs,
+  SoftwareBundleSummary,
+} from '../../entities/software-bundle/types';
 import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
 import type { AppControlSnapshot } from '../../entities/endpoint-app-control/types';
 import type { SoftwareInventoryDiffSnapshot } from '../../entities/endpoint-software-inventory-diff/types';
@@ -418,6 +425,7 @@ export const endpointAdminApi = createApi({
     'EndpointUninstallAudit',
     'EndpointEnrollment',
     'EndpointAgentUpdateRelease',
+    'EndpointSoftwareBundle',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -1778,6 +1786,49 @@ export const endpointAdminApi = createApi({
       }),
       invalidatesTags: [{ type: 'EndpointAgentUpdateRelease' as const, id: 'LIST' }],
     }),
+    /** BE-029 — list software bundles (all statuses, paged Spring Page). */
+    listSoftwareBundles: builder.query<
+      SpringPage<SoftwareBundleSummary>,
+      ListSoftwareBundlesArgs | void
+    >({
+      query: (args) => ({
+        url: '/endpoint-admin/endpoint-software-bundles',
+        method: 'GET',
+        params: {
+          ...(args?.status ? { status: args.status } : {}),
+          ...(args?.enabled !== undefined ? { enabled: String(args.enabled) } : {}),
+          page: String(args?.page ?? 0),
+          size: String(args?.size ?? 20),
+        },
+      }),
+      providesTags: [{ type: 'EndpointSoftwareBundle' as const, id: 'LIST' }],
+    }),
+    /** BE-029 — create a software bundle (status=DRAFT). */
+    createSoftwareBundle: builder.mutation<SoftwareBundleSummary, CreateSoftwareBundleArgs>({
+      query: ({ body }) => ({
+        url: '/endpoint-admin/endpoint-software-bundles',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'EndpointSoftwareBundle' as const, id: 'LIST' }],
+    }),
+    /** BE-029 — approve a DRAFT bundle (DRAFT→APPROVED; maker-checker; no body). */
+    approveSoftwareBundle: builder.mutation<SoftwareBundleSummary, ApproveSoftwareBundleArgs>({
+      query: ({ bundleId }) => ({
+        url: `/endpoint-admin/endpoint-software-bundles/${encodeURIComponent(bundleId)}/approve`,
+        method: 'POST',
+      }),
+      invalidatesTags: [{ type: 'EndpointSoftwareBundle' as const, id: 'LIST' }],
+    }),
+    /** BE-029 — revoke an APPROVED bundle (body exactly { revocationReason }). */
+    revokeSoftwareBundle: builder.mutation<SoftwareBundleSummary, RevokeSoftwareBundleArgs>({
+      query: ({ bundleId, body }) => ({
+        url: `/endpoint-admin/endpoint-software-bundles/${encodeURIComponent(bundleId)}/revoke`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'EndpointSoftwareBundle' as const, id: 'LIST' }],
+    }),
   }),
 });
 
@@ -1834,4 +1885,9 @@ export const {
   useCreateAgentUpdateReleaseMutation,
   useApproveAgentUpdateReleaseMutation,
   useRevokeAgentUpdateReleaseMutation,
+  // BE-029 approved software bundles (slice 3).
+  useListSoftwareBundlesQuery,
+  useCreateSoftwareBundleMutation,
+  useApproveSoftwareBundleMutation,
+  useRevokeSoftwareBundleMutation,
 } = endpointAdminApi;

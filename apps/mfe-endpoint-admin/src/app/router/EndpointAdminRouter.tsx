@@ -67,6 +67,10 @@ const EndpointCatalogItemsPage = React.lazy(
 const AgentUpdateReleasesPage = React.lazy(
   () => import('../../pages/agent-update-releases/AgentUpdateReleasesPage'),
 );
+// GAP 1 slice 3 — BE-029 approved software bundles management lazy route.
+const SoftwareBundlesPage = React.lazy(
+  () => import('../../pages/software-bundles/SoftwareBundlesPage'),
+);
 
 const RouteFallback: React.FC = () => (
   <div
@@ -101,6 +105,7 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="enrollments" element={<EnrollmentListPage />} />
         <Route path="catalog/items" element={<EndpointCatalogItemsPage />} />
         <Route path="agent-updates/releases" element={<AgentUpdateReleasesPage />} />
+        <Route path="software-bundles" element={<SoftwareBundlesPage />} />
         <Route path="*" element={<Navigate to="devices" replace />} />
       </Routes>
     </Suspense>
