@@ -63,6 +63,10 @@ const EnrollmentListPage = React.lazy(() => import('../../pages/enrollments/Enro
 const EndpointCatalogItemsPage = React.lazy(
   () => import('../../pages/catalog-items/EndpointCatalogItemsPage'),
 );
+// GAP 1 slice 2 — AG-029 agent-update release catalog management lazy route.
+const AgentUpdateReleasesPage = React.lazy(
+  () => import('../../pages/agent-update-releases/AgentUpdateReleasesPage'),
+);
 
 const RouteFallback: React.FC = () => (
   <div
@@ -96,6 +100,7 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="policies/:policyId/approval/new" element={<ApprovalProposeForm />} />
         <Route path="enrollments" element={<EnrollmentListPage />} />
         <Route path="catalog/items" element={<EndpointCatalogItemsPage />} />
+        <Route path="agent-updates/releases" element={<AgentUpdateReleasesPage />} />
         <Route path="*" element={<Navigate to="devices" replace />} />
       </Routes>
     </Suspense>
