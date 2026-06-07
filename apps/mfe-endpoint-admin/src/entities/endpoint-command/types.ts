@@ -27,7 +27,12 @@ export type CommandType =
   | 'SMB_READ_FILE_METADATA'
   | 'SMB_DOWNLOAD_FILE'
   | 'SMB_UPLOAD_FILE'
-  | 'INSTALL_SOFTWARE';
+  | 'INSTALL_SOFTWARE'
+  // AG-029 (Faz 22.5) — catalog-bound signed agent self-update. Dispatched
+  // via the dedicated BE-032 endpoint (NOT the generic /commands surface);
+  // surfaced as a recent command in the device drawer, so it is part of the
+  // union for type-safe "Son komutlar" rendering.
+  | 'UPDATE_AGENT';
 
 export type CommandStatus =
   | 'QUEUED'

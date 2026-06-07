@@ -11,6 +11,7 @@ import {
   DestructiveCommandModal,
   type DestructiveCommandSubmitBody,
 } from '../components/DestructiveCommandModal';
+import { AgentUpdateModal } from '../components/AgentUpdateModal';
 
 export interface IslemlerTabProps {
   device: EndpointDevice;
@@ -52,6 +53,10 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
 }) => {
   const { t } = useEndpointAdminI18n();
   const [activeModalType, setActiveModalType] = React.useState<DestructiveType | null>(null);
+  // AG-029 — catalog-bound self-update dispatch (separate from the dual-control
+  // destructive actions; its own modal + dedicated BE-032 endpoint).
+  const [agentUpdateOpen, setAgentUpdateOpen] = React.useState(false);
+  const [agentUpdateCommandId, setAgentUpdateCommandId] = React.useState<string | null>(null);
 
   const isOnline = device.status === 'ONLINE';
   const allowedAtAll = isOnline; // STALE/OFFLINE/DECOMMISSIONED/PENDING_ENROLLMENT → all disabled in v1
@@ -201,6 +206,35 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
         </div>
       </section>
 
+      <section data-testid="islemler-agent-mgmt-section">
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
+          {t('endpointAdmin.drawer.islemler.heading.agentMgmt')}
+        </h4>
+        {agentUpdateCommandId && (
+          <div
+            role="status"
+            data-testid="agent-update-success-toast"
+            className="rounded-md border border-state-success-border bg-state-success-subtle px-4 py-2 text-sm text-state-success-text mb-2"
+          >
+            {t('endpointAdmin.drawer.islemler.agentUpdateSuccess').replace(
+              '{commandId}',
+              agentUpdateCommandId,
+            )}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setAgentUpdateOpen(true)}
+            disabled={!allowedAtAll || isSubmitting}
+            data-testid="command-button-UPDATE_AGENT"
+            className="px-4 py-2 rounded-md border border-border-default bg-surface-default text-sm text-text-primary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t('endpointAdmin.drawer.islemler.button.UPDATE_AGENT')}
+          </button>
+        </div>
+      </section>
+
       {recentCommands.length > 0 && (
         <section data-testid="recent-commands-list">
           <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
@@ -236,6 +270,16 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
           onSubmit={handleDestructiveSubmit}
         />
       )}
+
+      <AgentUpdateModal
+        open={agentUpdateOpen}
+        deviceId={device.id}
+        onCancel={() => setAgentUpdateOpen(false)}
+        onDispatched={(commandId) => {
+          setAgentUpdateOpen(false);
+          setAgentUpdateCommandId(commandId);
+        }}
+      />
     </div>
   );
 };

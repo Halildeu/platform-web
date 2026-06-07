@@ -52,6 +52,11 @@ import type {
 } from '../../entities/endpoint-hotfix-posture/types';
 import type { DiagnosticsSnapshot } from '../../entities/endpoint-agent-diagnostics/types';
 import type { ServicesSnapshot } from '../../entities/endpoint-services/types';
+import type {
+  AgentUpdateRelease,
+  DispatchAgentUpdateArgs,
+  ListAgentUpdateReleasesArgs,
+} from '../../entities/agent-update/types';
 import type { StartupExposureSnapshot } from '../../entities/endpoint-startup-exposure/types';
 import type { AppControlSnapshot } from '../../entities/endpoint-app-control/types';
 import type { SoftwareInventoryDiffSnapshot } from '../../entities/endpoint-software-inventory-diff/types';
@@ -409,6 +414,7 @@ export const endpointAdminApi = createApi({
     'EndpointUninstallRequest',
     'EndpointUninstallAudit',
     'EndpointEnrollment',
+    'EndpointAgentUpdateRelease',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -1683,6 +1689,53 @@ export const endpointAdminApi = createApi({
       }),
       invalidatesTags: [{ type: 'EndpointEnrollment' as const, id: 'LIST' }],
     }),
+    /**
+     * AG-029 (BE-031) — list agent-update releases for the dispatch picker.
+     *   gateway GET /api/v1/endpoint-admin/endpoint-agent-update-releases
+     *   → service /api/v1/admin/endpoint-agent-update-releases
+     * The dispatch UI requests only APPROVED + enabled releases (the
+     * dispatchable set); the trust decision was made at release-approve time.
+     */
+    listAgentUpdateReleases: builder.query<
+      AgentUpdateRelease[],
+      ListAgentUpdateReleasesArgs | void
+    >({
+      query: (args) => ({
+        url: '/endpoint-admin/endpoint-agent-update-releases',
+        method: 'GET',
+        params: {
+          ...(args?.status ? { status: args.status } : {}),
+          ...(args?.enabled !== undefined ? { enabled: String(args.enabled) } : {}),
+          ...(args?.channel ? { channel: args.channel } : {}),
+          page: String(args?.page ?? 0),
+          size: String(args?.size ?? 50),
+        },
+      }),
+      providesTags: [{ type: 'EndpointAgentUpdateRelease' as const, id: 'LIST' }],
+    }),
+    /**
+     * AG-029 (BE-032) — dispatch a catalog-bound signed agent self-update.
+     *   gateway POST /api/v1/endpoint-admin/endpoint-devices/{deviceId}/agent-updates
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/agent-updates
+     *
+     * SECURITY (Codex 019ea0a6): the body is EXACTLY { releaseId, reason }.
+     * The backend resolves the approved+enabled release server-side, re-checks
+     * fresh heartbeat + advertised UPDATE_AGENT capability, builds the payload,
+     * and REJECTS any caller-supplied trust field (binaryUrl / sha256 /
+     * signerThumbprint / signingTier) with HTTP 400. DispatchAgentUpdateBody
+     * pins this with never-typed forbidden fields.
+     */
+    dispatchAgentUpdate: builder.mutation<EndpointCommand, DispatchAgentUpdateArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/agent-updates`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+      ],
+    }),
   }),
 });
 
@@ -1732,4 +1785,7 @@ export const {
   useGetOutdatedSoftwareDiffQuery,
   useGetProhibitedSoftwareQuery,
   useGetLatestSnapshotsQuery,
+  // AG-029 signed self-update (BE-031 release list + BE-032 dispatch).
+  useListAgentUpdateReleasesQuery,
+  useDispatchAgentUpdateMutation,
 } = endpointAdminApi;
