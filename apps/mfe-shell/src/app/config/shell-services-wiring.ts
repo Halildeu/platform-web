@@ -27,6 +27,8 @@ import {
   setKeycloakSession,
   selectIsImpersonating,
   selectIsSuperAdmin,
+  selectModuleLevel,
+  type ModuleAccessLevel,
 } from '../../features/auth/model/auth.slice';
 import {
   enterImpersonationOrchestration,
@@ -233,6 +235,11 @@ configureShellServices({
   // `ImpersonateAction` read this instead of the local PermissionContext
   // so the gate cannot regress when MF share + alias setup drifts.
   isSuperAdmin: () => selectIsSuperAdmin(store.getState()),
+  // Codex 019ea409: shell-level per-module access getter. mfe-users
+  // `UserActions` gates destructive user-management actions (reset
+  // password, deactivate) on MANAGE-level access via this canonical
+  // selector rather than a duplicated local PermissionContext.
+  getModuleLevel: (module: string) => selectModuleLevel(module)(store.getState()),
 });
 
 // Phase 2 PR-HTTP-3: wire the same auth-ready bridge into
@@ -446,6 +453,7 @@ export type SharedShellServices = {
     exitImpersonationSession: () => ReturnType<typeof exitImpersonationOrchestration>;
     isImpersonating: () => boolean;
     isSuperAdmin: () => boolean;
+    getModuleLevel: (module: string) => ModuleAccessLevel;
     onTokenChange: (listener: (token: string | null) => void) => () => void;
   };
 };
@@ -507,6 +515,11 @@ function buildSharedShellServices(): SharedShellServices {
       // `ImpersonateAction` read this instead of the local PermissionContext
       // so the gate cannot regress when MF share + alias setup drifts.
       isSuperAdmin: () => selectIsSuperAdmin(store.getState()),
+      // Codex 019ea409: shell-level per-module access getter (see init
+      // wiring above). Routes to the canonical `selectModuleLevel` so
+      // remote consumers gate MANAGE-only actions without depending on a
+      // duplicated local `@mfe/auth` PermissionContext.
+      getModuleLevel: (module: string) => selectModuleLevel(module)(store.getState()),
       /**
        * PR-C2 token change subscription. SSE consumers (mfe-audit
        * useAuditLiveStream) re-open their stream when the broker

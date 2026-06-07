@@ -58,6 +58,14 @@ export type ShellAuthPhase =
   | 'failed';
 
 /**
+ * Codex 019ea409 — per-module access level surfaced to remote MFE
+ * consumers. Mirrors the shell auth slice's `ModuleAccessLevel`; kept as a
+ * local type so this generic service registry does not import the auth
+ * feature slice. Wiring maps the Redux selector onto this contract.
+ */
+export type ShellModuleLevel = 'NONE' | 'VIEW' | 'MANAGE';
+
+/**
  * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
  * start payload. The orchestration handles backend start request +
  * cookie write + authz/me + Redux dispatch + storage persist.
@@ -127,6 +135,18 @@ export interface ShellAuthService {
    * fetched (fail-closed; matches `isImpersonating` shape).
    */
   isSuperAdmin(): boolean;
+  /**
+   * Codex 019ea409 — per-module access level for remote MFE consumers that
+   * must gate destructive actions (reset password, deactivate user) on
+   * MANAGE specifically rather than any VIEW access. `isSuperAdmin()` only
+   * answers the all-or-nothing super-admin case; this exposes the
+   * canonical `authzSnapshot.modules[module]` level so a non-super-admin
+   * module manager is gated correctly.
+   *
+   * Source-of-truth: shell auth slice `selectModuleLevel(module)`.
+   * Fallback: `'NONE'` until wired + authz fetched (fail-closed).
+   */
+  getModuleLevel(module: string): ShellModuleLevel;
 }
 
 export interface ShellTelemetryService {
@@ -187,6 +207,12 @@ export type ShellServicesInit = {
    * `store.getState().auth.authzSnapshot?.superAdmin === true`.
    */
   isSuperAdmin?: () => boolean;
+  /**
+   * Codex 019ea409: shell-level per-module access getter. Wiring passes
+   * `(module) => selectModuleLevel(module)(store.getState())`. Omitted ⇒
+   * fail-closed `'NONE'`.
+   */
+  getModuleLevel?: (module: string) => ShellModuleLevel;
 };
 
 const authListeners = new Set<AuthListener>();
@@ -255,6 +281,9 @@ let isImpersonatingImpl: () => boolean = () => false;
 // `false` is fail-closed; wiring (`shell-services-wiring.ts`) supplies
 // the Redux-backed implementation reading `auth.authzSnapshot.superAdmin`.
 let isSuperAdminImpl: () => boolean = () => false;
+// Codex 019ea409: shell-level per-module access getter. Default `'NONE'`
+// is fail-closed; wiring supplies the Redux-backed `selectModuleLevel`.
+let getModuleLevelImpl: (module: string) => ShellModuleLevel = () => 'NONE';
 
 const emitTokenChange = (token: string | null, options?: AuthEmitOptions) => {
   const normalizedToken = normalizeToken(token);
@@ -293,7 +322,14 @@ export const configureShellServices = (init: ShellServicesInit): void => {
     enterImpersonationSessionImpl = init.enterImpersonationSession;
   if (init.exitImpersonationSession) exitImpersonationSessionImpl = init.exitImpersonationSession;
   if (init.isImpersonating) isImpersonatingImpl = init.isImpersonating;
-  if (init.isSuperAdmin) isSuperAdminImpl = init.isSuperAdmin;
+  // Codex 019ea409 — superAdmin + getModuleLevel are reset to their
+  // fail-closed defaults when wiring OMITS them, rather than retaining a
+  // stale impl from a prior configure call. Both directly gate destructive
+  // UserActions visibility, so a partial re-configure must NOT leave a
+  // previous `true` / MANAGE getter dangling. (isImpersonating stale-`true`
+  // is itself fail-closed, so it keeps the lighter legacy `if (provided)`.)
+  isSuperAdminImpl = init.isSuperAdmin ?? (() => false);
+  getModuleLevelImpl = init.getModuleLevel ?? (() => 'NONE');
 
   unsubscribeAuthSource?.();
   if (init.subscribeAuthToken) {
@@ -351,6 +387,7 @@ function createShellServices(queryClient: QueryClient | null): ShellServices {
       exitImpersonationSession: () => exitImpersonationSessionImpl(),
       isImpersonating: () => isImpersonatingImpl(),
       isSuperAdmin: () => isSuperAdminImpl(),
+      getModuleLevel: (module: string) => getModuleLevelImpl(module),
     },
     query: queryClient ?? fallbackQueryClient ?? new QueryClient(),
     telemetry: {

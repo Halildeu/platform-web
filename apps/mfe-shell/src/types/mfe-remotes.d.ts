@@ -86,6 +86,12 @@ type RemoteShellServices = {
      * to avoid reading from a duplicated local `PermissionContext`.
      */
     isSuperAdmin: () => boolean;
+    /**
+     * Codex 019ea409: shell-level per-module access getter. Remotes gate
+     * destructive actions on `=== 'MANAGE'` (not any VIEW) so a non-super-
+     * admin module manager is gated correctly. Fail-closed `'NONE'`.
+     */
+    getModuleLevel: (module: string) => 'NONE' | 'VIEW' | 'MANAGE';
     /** PR-C2 token swap subscription (SSE consumers reconnect on broker swap). */
     onTokenChange: (listener: (token: string | null) => void) => () => void;
   };

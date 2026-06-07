@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import reducer, { setKeycloakSession, decodeJwtPayload } from './auth.slice';
+import reducer, {
+  setKeycloakSession,
+  decodeJwtPayload,
+  selectModuleLevel,
+  selectIsSuperAdmin,
+} from './auth.slice';
 
 const originalWindow = globalThis.window;
 const originalLocalStorage = globalThis.localStorage;
@@ -204,5 +209,65 @@ describe('decodeJwtPayload — UTF-8 claim decoding', () => {
 
   it('returns null for a malformed token', () => {
     expect(decodeJwtPayload('not-a-jwt')).toBeNull();
+  });
+});
+
+// Codex 019ea409 — shell-level per-module access selector consumed by remote
+// MFEs (mfe-users UserActions) to gate destructive actions on MANAGE.
+describe('selectModuleLevel (Codex 019ea409)', () => {
+  const lvl = (authzSnapshot: unknown, module = 'USER_MANAGEMENT') =>
+    selectModuleLevel(module)({ auth: { authzSnapshot } } as never);
+
+  it('returns NONE when authz is not hydrated yet (null/undefined snapshot)', () => {
+    expect(lvl(null)).toBe('NONE');
+    expect(lvl(undefined)).toBe('NONE');
+  });
+
+  it('returns MANAGE for a super-admin regardless of the modules map', () => {
+    expect(lvl({ superAdmin: true })).toBe('MANAGE');
+    expect(lvl({ superAdmin: true, modules: { USER_MANAGEMENT: 'VIEW' } })).toBe('MANAGE');
+    expect(lvl({ superAdmin: true, modules: {} })).toBe('MANAGE');
+  });
+
+  it('maps the per-module level: MANAGE -> MANAGE, VIEW -> VIEW', () => {
+    expect(lvl({ modules: { USER_MANAGEMENT: 'MANAGE' } })).toBe('MANAGE');
+    expect(lvl({ modules: { USER_MANAGEMENT: 'VIEW' } })).toBe('VIEW');
+  });
+
+  it('returns NONE for an absent module, an explicit NONE, or an unknown level', () => {
+    expect(lvl({ modules: {} })).toBe('NONE');
+    expect(lvl({ modules: { USER_MANAGEMENT: 'NONE' } })).toBe('NONE');
+    expect(lvl({ modules: { USER_MANAGEMENT: 'OWNER' } })).toBe('NONE');
+  });
+
+  it('does NOT promote allowedModules to MANAGE (regression guard)', () => {
+    // allowedModules is a navigation/view signal; a destructive gate must not
+    // unlock just because the module appears there.
+    expect(lvl({ allowedModules: ['USER_MANAGEMENT'] })).toBe('NONE');
+    // when both are present, the modules map is authoritative.
+    expect(lvl({ allowedModules: ['USER_MANAGEMENT'], modules: { USER_MANAGEMENT: 'VIEW' } })).toBe(
+      'VIEW',
+    );
+  });
+
+  it('is scoped to the requested module key', () => {
+    const snap = { modules: { USER_MANAGEMENT: 'MANAGE' } };
+    expect(lvl(snap, 'USER_MANAGEMENT')).toBe('MANAGE');
+    expect(lvl(snap, 'AUDIT')).toBe('NONE');
+  });
+});
+
+describe('selectIsSuperAdmin (fail-closed parity)', () => {
+  const sa = (authzSnapshot: unknown) => selectIsSuperAdmin({ auth: { authzSnapshot } } as never);
+
+  it('is false when not hydrated', () => {
+    expect(sa(null)).toBe(false);
+    expect(sa(undefined)).toBe(false);
+  });
+
+  it('reflects the snapshot superAdmin flag', () => {
+    expect(sa({ superAdmin: true })).toBe(true);
+    expect(sa({ superAdmin: false })).toBe(false);
+    expect(sa({})).toBe(false);
   });
 });

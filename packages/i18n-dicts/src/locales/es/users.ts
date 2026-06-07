@@ -90,9 +90,21 @@ const users = {
   'users.actions.resetPassword': 'Restablecer contraseña',
   'users.actions.toggleStatus.disable': 'Desactivar',
   'users.actions.toggleStatus.enable': 'Activar',
+  'users.actions.impersonate.menu': 'Suplantar identidad',
   'users.actions.resetPassword.success': 'Se ha enviado el enlace para restablecer la contraseña.',
   'users.actions.status.success': 'El estado del usuario se ha actualizado.',
   'users.notifications.activation.description': 'ID de auditoría: {auditId}',
+  // iter-33 super-admin grant/revoke (Codex 019ea409 — cobertura 5 idiomas)
+  'users.actions.superAdmin.grant': 'Convertir en superadministrador',
+  'users.actions.superAdmin.revoke': 'Revocar superadministrador',
+  'users.actions.superAdmin.grant.success': 'El usuario ahora es superadministrador.',
+  'users.actions.superAdmin.grant.alreadySuccess':
+    'El usuario ya era superadministrador (sin cambios).',
+  'users.actions.superAdmin.revoke.success': 'Privilegio de superadministrador revocado.',
+  'users.actions.superAdmin.revoke.alreadySuccess':
+    'El usuario no era superadministrador (sin cambios).',
+  'users.actions.superAdmin.bootstrapWarning':
+    'Esta cuenta está en la lista de administradores de arranque: el privilegio se reasignará tras reiniciar el pod.',
 
   'users.detail.title': 'Detalles del usuario',
   'users.detail.section.profile': 'Información de perfil',
@@ -102,8 +114,10 @@ const users = {
   'users.detail.sessionTimeout.unit': 'minutos',
   'users.detail.sessionTimeout.saving': 'Guardando...',
   'users.detail.sessionTimeout.save': 'Guardar',
-  'users.detail.sessionTimeout.minWarning': 'La duración de la sesión debe ser de al menos 1 minuto.',
-  'users.detail.sessionTimeout.noChange': 'La duración de la sesión ya está configurada con este valor.',
+  'users.detail.sessionTimeout.minWarning':
+    'La duración de la sesión debe ser de al menos 1 minuto.',
+  'users.detail.sessionTimeout.noChange':
+    'La duración de la sesión ya está configurada con este valor.',
   'users.detail.sessionTimeout.updated': 'La duración de la sesión se ha actualizado.',
   'users.detail.sessionTimeout.updateFailed': 'No se pudo actualizar la duración de la sesión.',
 

@@ -90,9 +90,21 @@ const users = {
   'users.actions.resetPassword': 'Passwort zurücksetzen',
   'users.actions.toggleStatus.disable': 'Deaktivieren',
   'users.actions.toggleStatus.enable': 'Aktivieren',
+  'users.actions.impersonate.menu': 'Identität übernehmen',
   'users.actions.resetPassword.success': 'Link zum Zurücksetzen des Passworts wurde gesendet.',
   'users.actions.status.success': 'Der Benutzerstatus wurde aktualisiert.',
   'users.notifications.activation.description': 'Audit-ID: {auditId}',
+  // iter-33 super-admin grant/revoke (Codex 019ea409 — 5-locale coverage)
+  'users.actions.superAdmin.grant': 'Zum Super-Admin machen',
+  'users.actions.superAdmin.revoke': 'Super-Admin entziehen',
+  'users.actions.superAdmin.grant.success': 'Benutzer ist jetzt Super-Admin.',
+  'users.actions.superAdmin.grant.alreadySuccess':
+    'Benutzer war bereits Super-Admin (keine Änderung).',
+  'users.actions.superAdmin.revoke.success': 'Super-Admin-Berechtigung entzogen.',
+  'users.actions.superAdmin.revoke.alreadySuccess':
+    'Benutzer war kein Super-Admin (keine Änderung).',
+  'users.actions.superAdmin.bootstrapWarning':
+    'Dieses Konto steht auf der Bootstrap-Admin-Liste — die Berechtigung wird nach einem Pod-Neustart neu zugewiesen.',
 
   'users.detail.title': 'Benutzerdetails',
   'users.detail.section.profile': 'Profilinformationen',

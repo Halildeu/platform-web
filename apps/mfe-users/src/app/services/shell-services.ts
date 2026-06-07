@@ -36,6 +36,14 @@ export type RemoteShellAuthPhase =
   | 'failed';
 
 /**
+ * Codex 019ea409 — per-module access level mirrored from the shell auth
+ * singleton. `UserActions` gates destructive user-management actions on
+ * `=== 'MANAGE'` so a non-super-admin module manager is gated correctly
+ * (VIEW is read-only and must NOT unlock reset/deactivate).
+ */
+export type ShellModuleLevel = 'NONE' | 'VIEW' | 'MANAGE';
+
+/**
  * User Impersonation v1 PR-C2 (Codex AGREE thread `019e109c` iter-4):
  * orchestration types mirrored from the shell so this MFE can call
  * {@code getShellServices().auth.enterImpersonationSession(...)} with
@@ -97,6 +105,13 @@ export type RemoteShellServices = {
      * shared-singleton registration.
      */
     isSuperAdmin: () => boolean;
+    /**
+     * Codex 019ea409: shell-level per-module access getter. `UserActions`
+     * gates destructive user-management actions on `=== 'MANAGE'` so a
+     * non-super-admin module manager is handled correctly while VIEW-only
+     * users are not shown reset/deactivate. Fail-closed `'NONE'`.
+     */
+    getModuleLevel: (module: string) => ShellModuleLevel;
     /** PR-C2 token swap subscription (SSE consumers reconnect on broker swap). */
     onTokenChange: (listener: (token: string | null) => void) => () => void;
   };
@@ -146,6 +161,9 @@ const createNoopServices = (): RemoteShellServices => ({
       }),
     isImpersonating: () => false,
     isSuperAdmin: () => false,
+    // Codex 019ea409: standalone-dev fail-closed — no module access until
+    // the host shell wires the real authz-backed getter.
+    getModuleLevel: () => 'NONE',
     onTokenChange: () => () => undefined,
   },
 });

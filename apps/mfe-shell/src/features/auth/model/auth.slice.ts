@@ -239,6 +239,18 @@ type AuthzSnapshotV1 = {
   subscriberId?: string | number | null;
   permissions?: string[];
   superAdmin?: boolean;
+  /**
+   * Codex 019ea409 — per-module grant level map from `/api/v1/authz/me`
+   * (e.g. `{ USER_MANAGEMENT: 'MANAGE', AUDIT: 'VIEW' }`). The reducer
+   * stores the full authz payload wholesale ({@code state.authzSnapshot =
+   * authzSnapshot}), so this field is present at runtime even though it
+   * was previously omitted from the narrow type. Consumed by
+   * {@link selectModuleLevel} so remote MFEs can gate destructive actions
+   * on MANAGE specifically (not any VIEW access).
+   */
+  modules?: Record<string, string> | null;
+  /** Legacy navigation/view signal — never treated as MANAGE for mutations. */
+  allowedModules?: string[] | null;
 };
 
 /**
@@ -934,5 +946,33 @@ export const selectImpersonationExpiresAt = (state: { auth: AuthState }): number
 export const selectIsSuperAdmin = (state: { auth: AuthState }): boolean =>
   state.auth.authzSnapshot != null &&
   (state.auth.authzSnapshot as { superAdmin?: boolean }).superAdmin === true;
+
+export type ModuleAccessLevel = 'NONE' | 'VIEW' | 'MANAGE';
+
+/**
+ * Codex 019ea409 — shell-level per-module access selector for remote MFE
+ * consumers. Mirrors {@link selectIsSuperAdmin} but returns the grant LEVEL
+ * for a given module so destructive actions (reset password, deactivate
+ * user) can require `MANAGE` specifically rather than any `VIEW` access.
+ *
+ * Fail-closed contract:
+ * - authz not hydrated (`authzSnapshot == null`) ⇒ `NONE`.
+ * - `superAdmin === true` ⇒ `MANAGE` (full access bypass).
+ * - only `modules[module] === 'MANAGE'` counts as `MANAGE`; `'VIEW'` ⇒ `VIEW`.
+ * - everything else (absent module, `allowedModules`-only, unknown level) ⇒ `NONE`.
+ *   `allowedModules` is a navigation/view signal and is deliberately NOT
+ *   promoted to `MANAGE` for mutation gating.
+ */
+export const selectModuleLevel =
+  (module: string) =>
+  (state: { auth: AuthState }): ModuleAccessLevel => {
+    const snap = state.auth.authzSnapshot as AuthzSnapshotV1 | null;
+    if (snap == null) return 'NONE';
+    if (snap.superAdmin === true) return 'MANAGE';
+    const level = snap.modules?.[module];
+    if (level === 'MANAGE') return 'MANAGE';
+    if (level === 'VIEW') return 'VIEW';
+    return 'NONE';
+  };
 
 export default authSlice.reducer;
