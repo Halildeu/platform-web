@@ -21,6 +21,8 @@ const baseDevice: EndpointDevice = {
   enrolledAt: '2026-05-24T00:00:00Z',
   createdAt: '2026-05-24T00:00:00Z',
   updatedAt: '2026-05-25T10:00:00Z',
+  deploymentRing: null,
+  deviceTags: [],
 };
 
 const defaults = {

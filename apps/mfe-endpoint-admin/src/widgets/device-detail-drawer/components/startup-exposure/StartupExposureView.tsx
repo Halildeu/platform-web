@@ -13,6 +13,7 @@ import {
   getEffectiveRdpEnabled,
   isStartupExposureForDevice,
   isStartupExposureFullyEvaluable,
+  isStartupExposureRedactionOnly,
 } from '../../../../entities/endpoint-startup-exposure/types';
 import { useEndpointAdminI18n } from '../../../../i18n';
 
@@ -477,6 +478,12 @@ export const StartupExposureView: React.FC<StartupExposureViewProps> = ({ device
   // container + data-fully-evaluable contract; only the apps TABLE
   // is hidden. Meta + exposure-summary + probeErrors visible.
   const fullyEvaluable = isStartupExposureFullyEvaluable(snapshot);
+  // AG-040 v1 UX (Codex 019ea174 AGREE Option A): when probeComplete=false
+  // SOLELY because some entry names were redacted (no real probe failure),
+  // render the surviving rows + a banner instead of hiding the whole table.
+  // The snapshot stays data-fully-evaluable="false" (NOT widened).
+  const redactionOnly = isStartupExposureRedactionOnly(snapshot);
+  const showStartupAppsTable = fullyEvaluable || redactionOnly;
   const isUnsupported = snapshot.supported === false;
 
   return (
@@ -497,8 +504,18 @@ export const StartupExposureView: React.FC<StartupExposureViewProps> = ({ device
       <MetaPanel snapshot={snapshot} t={t} />
       <ExposurePanel snapshot={snapshot} t={t} />
 
-      {fullyEvaluable ? (
-        <AppsTable apps={snapshot.startupApps} t={t} />
+      {showStartupAppsTable ? (
+        <>
+          {redactionOnly ? (
+            <p
+              className="text-sm text-state-warning-text border-l-4 border-state-warning-border pl-3 py-1"
+              data-testid="startup-exposure-redaction-banner"
+            >
+              {t('endpointAdmin.drawer.startupExposure.redactionBanner')}
+            </p>
+          ) : null}
+          <AppsTable apps={snapshot.startupApps} t={t} />
+        </>
       ) : isUnsupported ? (
         <p
           className="text-sm text-text-secondary border-l-4 border-border-default pl-3 py-1"
