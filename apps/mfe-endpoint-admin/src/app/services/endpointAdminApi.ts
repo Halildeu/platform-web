@@ -21,6 +21,8 @@ import type {
 import type {
   EndpointCommand,
   CreateEndpointCommandBody,
+  CreateLocalPasswordChangeBody,
+  CreateLocalPasswordChangeResponse,
 } from '../../entities/endpoint-command/types';
 import type {
   DeviceSoftwareInventory,
@@ -1074,6 +1076,34 @@ export const endpointAdminApi = createApi({
       ],
     }),
     /**
+     * AG-042 — dedicated local password change command path.
+     *
+     * Backend: `AdminEndpointCommandController.createLocalPasswordChange` —
+     *   gateway POST /api/v1/endpoint-admin/endpoint-devices/{deviceId}/local-password-changes
+     *   → service /api/v1/admin/endpoint-devices/{deviceId}/local-password-changes
+     *   @RequireModule(MANAGER='can_manage')
+     *
+     * This path MUST NOT use the generic `/commands` mutation because
+     * `CHANGE_LOCAL_PASSWORD` secrets are backend-generated and stored in the
+     * encrypted command-secret table. The browser sends username/reason only;
+     * the one-time password comes back in the create response and is never
+     * sent as a command payload field.
+     */
+    createLocalPasswordChange: builder.mutation<
+      CreateLocalPasswordChangeResponse,
+      { deviceId: string; body: CreateLocalPasswordChangeBody }
+    >({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/local-password-changes`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
      * WEB-014A — Faz 22.5 Compliance State (Codex 019e6d68 plan-time
      * AGREE).
      *
@@ -1842,6 +1872,7 @@ export const {
   useListDeviceCommandsQuery,
   useGetEndpointCommandQuery,
   useCreateDeviceCommandMutation,
+  useCreateLocalPasswordChangeMutation,
   useGetDeviceComplianceQuery,
   useForceEvaluateDeviceComplianceMutation,
   useGetComplianceDeviceListQuery,

@@ -28,6 +28,7 @@ const defaults = {
   isSubmitting: false,
   lastIssuedCommandId: null,
   lastIssuedRequiresApproval: false,
+  lastIssuedLocalPassword: null,
   lastError: null,
   onIssueCommand: vi.fn(),
 };
@@ -144,5 +145,19 @@ describe('IslemlerTab — toast surfaces', () => {
   it('lastError set iken error banner gosterir', () => {
     render(<IslemlerTab {...defaults} device={baseDevice} lastError="403 — yetkisiz" />);
     expect(screen.getByTestId('islemler-error-toast').textContent).toBe('403 — yetkisiz');
+  });
+
+  it('CHANGE_LOCAL_PASSWORD response one-time password banner gosterir', () => {
+    render(
+      <IslemlerTab
+        {...defaults}
+        device={baseDevice}
+        lastIssuedCommandId="cmd-local-1"
+        lastIssuedRequiresApproval
+        lastIssuedLocalPassword="Abc12345!"
+      />,
+    );
+    expect(screen.getByTestId('local-password-one-time-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('local-password-one-time-value').textContent).toBe('Abc12345!');
   });
 });
