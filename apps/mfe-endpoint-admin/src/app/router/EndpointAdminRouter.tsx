@@ -71,6 +71,27 @@ const AgentUpdateReleasesPage = React.lazy(
 const SoftwareBundlesPage = React.lazy(
   () => import('../../pages/software-bundles/SoftwareBundlesPage'),
 );
+const EndpointOutdatedSoftwareListPage = React.lazy(async () => {
+  const [, mod] = await Promise.all([
+    import('@mfe/design-system/advanced/data-grid/setup'),
+    import('../../pages/software-triage/EndpointSoftwareTriagePages'),
+  ]);
+  return { default: mod.EndpointOutdatedSoftwareListPage };
+});
+const EndpointProhibitedSoftwareListPage = React.lazy(async () => {
+  const [, mod] = await Promise.all([
+    import('@mfe/design-system/advanced/data-grid/setup'),
+    import('../../pages/software-triage/EndpointSoftwareTriagePages'),
+  ]);
+  return { default: mod.EndpointProhibitedSoftwareListPage };
+});
+const EndpointSoftwareDiffListPage = React.lazy(async () => {
+  const [, mod] = await Promise.all([
+    import('@mfe/design-system/advanced/data-grid/setup'),
+    import('../../pages/software-triage/EndpointSoftwareTriagePages'),
+  ]);
+  return { default: mod.EndpointSoftwareDiffListPage };
+});
 
 const RouteFallback: React.FC = () => (
   <div
@@ -106,6 +127,9 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="catalog/items" element={<EndpointCatalogItemsPage />} />
         <Route path="agent-updates/releases" element={<AgentUpdateReleasesPage />} />
         <Route path="software-bundles" element={<SoftwareBundlesPage />} />
+        <Route path="outdated-software-list" element={<EndpointOutdatedSoftwareListPage />} />
+        <Route path="prohibited-software-list" element={<EndpointProhibitedSoftwareListPage />} />
+        <Route path="software-diff-list" element={<EndpointSoftwareDiffListPage />} />
         <Route path="*" element={<Navigate to="devices" replace />} />
       </Routes>
     </Suspense>

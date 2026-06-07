@@ -39,6 +39,17 @@ const DICT_TR = {
   // #1154 PR-3 — server-mode grid + İndir export
   'endpointAdmin.devices.subtitle':
     'Sunucu taraflı cihaz envanteri; filtre/sıralama ve İndir menüsünden Excel/CSV dışa aktarma.',
+  'endpointAdmin.devices.quickFilterPlaceholder': 'Hostname, durum, ajan sürümü…',
+  'endpointAdmin.softwareTriage.quickFilterPlaceholder': 'Hostname, paket, durum…',
+  'endpointAdmin.softwareTriage.outdated.title': 'Güncellenebilir Yazılımlar',
+  'endpointAdmin.softwareTriage.outdated.subtitle':
+    'Güncelleme adayı olan cihazlar için odaklı liste.',
+  'endpointAdmin.softwareTriage.prohibited.title': 'Yasaklı Yazılım Bulguları',
+  'endpointAdmin.softwareTriage.prohibited.subtitle':
+    'Denylist eşleşmesi olan cihazlar için triage listesi.',
+  'endpointAdmin.softwareTriage.diff.title': 'Yazılım Değişim Listesi',
+  'endpointAdmin.softwareTriage.diff.subtitle':
+    'Son iki envanter karşılaştırmasında değişim görülen cihazlar.',
   'endpointAdmin.devices.col.domain': 'Etki Alanı',
   'endpointAdmin.devices.col.memoryUsedPercent': 'Bellek %',
   'endpointAdmin.devices.col.lowDisk': 'Düşük Disk',
@@ -1453,6 +1464,17 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   // #1154 PR-3 — server-mode grid + İndir export
   'endpointAdmin.devices.subtitle':
     'Server-side device inventory; filter/sort and export to Excel/CSV from the Download menu.',
+  'endpointAdmin.devices.quickFilterPlaceholder': 'Hostname, status, agent version…',
+  'endpointAdmin.softwareTriage.quickFilterPlaceholder': 'Hostname, package, status…',
+  'endpointAdmin.softwareTriage.outdated.title': 'Outdated Software',
+  'endpointAdmin.softwareTriage.outdated.subtitle':
+    'Focused list for devices with upgrade candidates.',
+  'endpointAdmin.softwareTriage.prohibited.title': 'Prohibited Software Findings',
+  'endpointAdmin.softwareTriage.prohibited.subtitle':
+    'Triage list for devices with denylist matches.',
+  'endpointAdmin.softwareTriage.diff.title': 'Software Diff List',
+  'endpointAdmin.softwareTriage.diff.subtitle':
+    'Devices with changes between the latest two inventory captures.',
   'endpointAdmin.devices.col.domain': 'Domain',
   'endpointAdmin.devices.col.memoryUsedPercent': 'Memory %',
   'endpointAdmin.devices.col.lowDisk': 'Low Disk',

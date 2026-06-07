@@ -128,6 +128,28 @@ const formatBool = (value: unknown, yes: string, no: string): string => {
   return value ? yes : no;
 };
 
+export interface EndpointDevicesPagePreset {
+  gridId: string;
+  dataTestId: string;
+  headingKey: string;
+  subtitleKey: string;
+  exportFileBaseName: string;
+  exportSheetName: string;
+  quickFilterPlaceholderKey?: string;
+  forceVisibleColumns?: readonly string[];
+  initialFilterModel?: Record<string, unknown>;
+}
+
+const DEFAULT_PRESET: EndpointDevicesPagePreset = {
+  gridId: GRID_ID,
+  dataTestId: 'endpoint-admin-devices-page',
+  headingKey: 'endpointAdmin.devices.heading',
+  subtitleKey: 'endpointAdmin.devices.subtitle',
+  exportFileBaseName: 'endpoint-devices',
+  exportSheetName: 'Cihazlar',
+  quickFilterPlaceholderKey: 'endpointAdmin.devices.quickFilterPlaceholder',
+};
+
 /** Stream a blob to disk via a transient anchor (no library). */
 function triggerDownload(blob: Blob, filename: string): void {
   const url = window.URL.createObjectURL(blob);
@@ -140,12 +162,23 @@ function triggerDownload(blob: Blob, filename: string): void {
   window.URL.revokeObjectURL(url);
 }
 
-export const EndpointDevicesPage: React.FC = () => {
+export interface EndpointDevicesPageProps {
+  preset?: EndpointDevicesPagePreset;
+}
+
+export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
+  preset = DEFAULT_PRESET,
+}) => {
   const { t } = useEndpointAdminI18n();
   const gridApiRef = React.useRef<GridApi<DeviceGridRow> | null>(null);
+  const initialFilterAppliedRef = React.useRef(false);
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | null>(null);
   const [loadError, setLoadError] = React.useState<DeviceGridExportError | null>(null);
   const [exportNotice, setExportNotice] = React.useState<string | null>(null);
+  const forcedVisibleColumns = React.useMemo(
+    () => new Set(preset.forceVisibleColumns ?? []),
+    [preset.forceVisibleColumns],
+  );
 
   // Row click fetches the full EndpointDevice by id (the flat grid row lacks
   // tenantId/machineFingerprint/enrolledAt/createdAt/updatedAt the drawer
@@ -530,13 +563,17 @@ export const EndpointDevicesPage: React.FC = () => {
     // the user enter SSRM grouping mode against a flat backend and break
     // (Codex 019e7f89). Per-column false also wins over GridShell's
     // enableRowGroup:true default.
-    return cols.map((c) => ({
-      enableRowGroup: false,
-      enablePivot: false,
-      enableValue: false,
-      ...c,
-    }));
-  }, [t, statusLabel]);
+    return cols.map((c) => {
+      const colId = typeof c.field === 'string' ? c.field : undefined;
+      return {
+        enableRowGroup: false,
+        enablePivot: false,
+        enableValue: false,
+        ...c,
+        hide: colId != null && forcedVisibleColumns.has(colId) ? false : c.hide,
+      };
+    });
+  }, [t, statusLabel, forcedVisibleColumns]);
 
   const createServerSideDatasource = React.useCallback(
     (): IServerSideDatasource => ({
@@ -573,12 +610,12 @@ export const EndpointDevicesPage: React.FC = () => {
 
   const exportConfig = React.useMemo<GridExportConfig<DeviceGridRow>>(
     () => ({
-      fileBaseName: 'endpoint-devices',
-      sheetName: 'Cihazlar',
+      fileBaseName: preset.exportFileBaseName,
+      sheetName: preset.exportSheetName,
       csvColumnSeparator: ';',
       csvBom: true,
     }),
-    [],
+    [preset.exportFileBaseName, preset.exportSheetName],
   );
 
   const handleServerExport = React.useCallback(
@@ -665,16 +702,25 @@ export const EndpointDevicesPage: React.FC = () => {
     [],
   );
 
-  const onGridReady = React.useCallback((event: GridReadyEvent<DeviceGridRow>) => {
-    gridApiRef.current = event.api;
-  }, []);
+  const onGridReady = React.useCallback(
+    (event: GridReadyEvent<DeviceGridRow>) => {
+      gridApiRef.current = event.api;
+      if (initialFilterAppliedRef.current || !preset.initialFilterModel) return;
+      initialFilterAppliedRef.current = true;
+      window.queueMicrotask(() => {
+        event.api.setFilterModel(
+          preset.initialFilterModel as Parameters<GridApi<DeviceGridRow>['setFilterModel']>[0],
+        );
+        event.api.onFilterChanged();
+      });
+    },
+    [preset.initialFilterModel],
+  );
 
   if (forbidden) {
     return (
       <section role="alert" aria-live="polite" style={{ padding: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-          {t('endpointAdmin.devices.heading')}
-        </h2>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t(preset.headingKey)}</h2>
         <p style={{ marginTop: 12, color: 'var(--danger-color)' }}>
           {t('endpointAdmin.devices.forbidden')} (HTTP 403)
         </p>
@@ -683,7 +729,7 @@ export const EndpointDevicesPage: React.FC = () => {
   }
 
   return (
-    <section style={{ padding: 24 }} data-testid="endpoint-admin-devices-page">
+    <section style={{ padding: 24 }} data-testid={preset.dataTestId}>
       <div
         style={{
           display: 'flex',
@@ -694,11 +740,9 @@ export const EndpointDevicesPage: React.FC = () => {
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-            {t('endpointAdmin.devices.heading')}
-          </h2>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t(preset.headingKey)}</h2>
           <p style={{ marginTop: 4, color: 'var(--text-secondary)', fontSize: 13 }}>
-            {t('endpointAdmin.devices.subtitle')}
+            {t(preset.subtitleKey)}
           </p>
         </div>
         {exportNotice ? (
@@ -729,7 +773,7 @@ export const EndpointDevicesPage: React.FC = () => {
       <div style={{ marginTop: 16, height: 'calc(100vh - 200px)', minHeight: 400 }}>
         <React.Suspense fallback={<div style={{ height: 400 }} />}>
           <EntityGridTemplate<DeviceGridRow>
-            gridId={GRID_ID}
+            gridId={preset.gridId}
             gridSchemaVersion={GRID_SCHEMA_VERSION}
             columnDefs={columnDefs}
             gridOptions={gridOptions}
@@ -741,7 +785,11 @@ export const EndpointDevicesPage: React.FC = () => {
             supportsViewExport
             themeLabel="Tema"
             quickFilterLabel="Hızlı Filtre"
-            quickFilterPlaceholder="Hostname, durum, ajan sürümü…"
+            quickFilterPlaceholder={
+              preset.quickFilterPlaceholderKey
+                ? t(preset.quickFilterPlaceholderKey)
+                : 'Hostname, durum, ajan sürümü…'
+            }
             resetFiltersLabel="Filtreleri Temizle"
           />
         </React.Suspense>
