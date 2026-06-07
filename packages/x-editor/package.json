@@ -124,6 +124,6 @@
     "@tiptap/extension-text-align": "^3.23.6",
     "@vitejs/plugin-react": "^6.0.2",
     "typescript": "^5.0.0",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }
