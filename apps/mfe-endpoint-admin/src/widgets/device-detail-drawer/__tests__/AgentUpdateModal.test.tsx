@@ -7,7 +7,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 // so the mock data must be a page, not a bare array (Codex 019ea0a6 must-fix).
 const h = vi.hoisted(() => {
   const REL = {
+    id: 'uuid-rel-1',
     releaseId: 'rel-1',
+    channel: 'STABLE',
     targetVersion: '0.1.3-lab.1',
     signingTier: 'LAB_ONLY_EVIDENCE',
     status: 'APPROVED',

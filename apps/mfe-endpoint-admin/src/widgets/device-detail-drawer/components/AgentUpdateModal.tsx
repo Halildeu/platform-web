@@ -177,6 +177,12 @@ export const AgentUpdateModal: React.FC<AgentUpdateModalProps> = ({
                       <span className="font-mono text-sm text-text-primary">{r.targetVersion}</span>
                       <span className="flex flex-wrap gap-1 mt-1">
                         <span
+                          className="text-xs rounded bg-surface-subtle px-1.5 py-0.5 text-text-secondary"
+                          data-testid={`agent-update-release-channel-${r.releaseId}`}
+                        >
+                          {r.channel}
+                        </span>
+                        <span
                           className={
                             r.signingTier === 'TRUSTED_SIGNED'
                               ? 'text-xs rounded bg-state-success-subtle px-1.5 py-0.5 text-state-success-text'

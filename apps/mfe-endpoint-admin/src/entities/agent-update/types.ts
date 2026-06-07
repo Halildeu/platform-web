@@ -29,15 +29,22 @@ export type AgentUpdateSigningTier = 'TRUSTED_SIGNED' | 'LAB_ONLY_EVIDENCE';
 
 export type AgentUpdateReleaseStatus = 'DRAFT' | 'APPROVED' | 'REVOKED';
 
+// Mirror of platform-backend model/AgentUpdateChannel.java —
+// { STAGING, PILOT, STABLE }. Shown as a badge so operators can tell apart
+// same-version/same-tier releases on different rollout channels.
+export type AgentUpdateChannel = 'STAGING' | 'PILOT' | 'STABLE';
+
 /**
  * Backend DTO mirror — `AdminAgentUpdateReleaseSummary` (the row the BE-031
- * LIST endpoint returns). Exactly: releaseId, targetVersion, signingTier,
+ * LIST endpoint returns): id, releaseId, channel, targetVersion, signingTier,
  * status, enabled, lastUpdatedAt. The summary intentionally does NOT carry
- * channel/ring or any trust material (sha/signer); those live on the full
- * record / detail view, not the dispatch picker.
+ * ring or any trust material (sha / signer); those live on the full record /
+ * detail view, not the dispatch picker.
  */
 export interface AgentUpdateRelease {
+  id: string;
   releaseId: string;
+  channel: AgentUpdateChannel;
   targetVersion: string;
   signingTier: AgentUpdateSigningTier;
   status: AgentUpdateReleaseStatus;
