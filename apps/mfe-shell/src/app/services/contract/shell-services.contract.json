@@ -1,16 +1,26 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ShellServicesContract",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "object",
   "required": ["auth", "query", "telemetry", "notify", "featureFlags"],
   "properties": {
     "auth": {
       "type": "object",
+      "description": "Codex 019ea409 — `properties` documents the FULL current ShellAuthService runtime surface; `required` stays the historical minimum (getToken/onTokenChange) so older-shell consumers still validate.",
       "required": ["getToken", "onTokenChange"],
       "properties": {
         "getToken": { "const": "function" },
-        "onTokenChange": { "const": "function" }
+        "onTokenChange": { "const": "function" },
+        "ready": { "const": "function" },
+        "isTransportReady": { "const": "function" },
+        "getPhase": { "const": "function" },
+        "getEpoch": { "const": "function" },
+        "enterImpersonationSession": { "const": "function" },
+        "exitImpersonationSession": { "const": "function" },
+        "isImpersonating": { "const": "function" },
+        "isSuperAdmin": { "const": "function" },
+        "getModuleLevel": { "const": "function" }
       }
     },
     "query": {

@@ -322,12 +322,13 @@ export const configureShellServices = (init: ShellServicesInit): void => {
     enterImpersonationSessionImpl = init.enterImpersonationSession;
   if (init.exitImpersonationSession) exitImpersonationSessionImpl = init.exitImpersonationSession;
   if (init.isImpersonating) isImpersonatingImpl = init.isImpersonating;
-  if (init.isSuperAdmin) isSuperAdminImpl = init.isSuperAdmin;
-  // Codex 019ea409 — reset to the fail-closed default when wiring OMITS the
-  // getter, rather than retaining a stale impl from a prior configure call.
-  // (The legacy `if (provided)` callbacks above can leak a previous impl on
-  // re-configure; the new getter is reset-on-omit so a partial re-wire never
-  // leaves MANAGE-level access dangling.)
+  // Codex 019ea409 — superAdmin + getModuleLevel are reset to their
+  // fail-closed defaults when wiring OMITS them, rather than retaining a
+  // stale impl from a prior configure call. Both directly gate destructive
+  // UserActions visibility, so a partial re-configure must NOT leave a
+  // previous `true` / MANAGE getter dangling. (isImpersonating stale-`true`
+  // is itself fail-closed, so it keeps the lighter legacy `if (provided)`.)
+  isSuperAdminImpl = init.isSuperAdmin ?? (() => false);
   getModuleLevelImpl = init.getModuleLevel ?? (() => 'NONE');
 
   unsubscribeAuthSource?.();

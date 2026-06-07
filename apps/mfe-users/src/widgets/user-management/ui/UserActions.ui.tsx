@@ -46,11 +46,14 @@ const UserActions: React.FC<UserActionsProps> = ({ user, onSelect }) => {
     }
   }, []);
 
-  // Codex 019ea409 — recompute the gates when the shell auth/authz changes
-  // (token swap, impersonation enter/exit, authz version refresh) instead
-  // of freezing them at mount. onTokenChange fires immediately with the
-  // current token and again on every swap; the state bump forces a
-  // re-render so the fresh getter reads below never go stale.
+  // Codex 019ea409 — recompute the gates on a shell auth TOKEN/EPOCH change
+  // (login/logout, broker token swap, impersonation enter/exit) instead of
+  // freezing them at mount. onTokenChange fires immediately with the current
+  // token and again on every swap/epoch bump; the state bump forces a
+  // re-render so the fresh getter reads below pick up the new authz. Note:
+  // this tracks token/epoch, not an authzSnapshot-only/module-level delta —
+  // but opening the menu re-renders and re-reads anyway, and the backend
+  // stays authoritative, so a live mid-open revocation is not a UI concern.
   const [, bumpAuthTick] = useState(0);
   useEffect(() => {
     if (!shellAuth?.onTokenChange) return undefined;

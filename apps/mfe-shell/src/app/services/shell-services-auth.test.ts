@@ -158,6 +158,26 @@ describe('canonical shell-services — auth transport contract', () => {
     expect(services.auth.isSuperAdmin()).toBe(false);
   });
 
+  it('Codex 019ea409: isSuperAdmin resets to false on a re-configure that omits the getter', () => {
+    // Stale-on-omit guard: a prior configure wiring `() => true` must NOT
+    // leak through a later partial/minimal configure that omits the getter.
+    configureShellServices({ queryClient, getAuthToken: () => null, isSuperAdmin: () => true });
+    expect(getShellServices().auth.isSuperAdmin()).toBe(true);
+    configureShellServices({ queryClient, getAuthToken: () => null });
+    expect(getShellServices().auth.isSuperAdmin()).toBe(false);
+  });
+
+  it('Codex 019ea409: getModuleLevel resets to NONE on a re-configure that omits the getter', () => {
+    configureShellServices({
+      queryClient,
+      getAuthToken: () => null,
+      getModuleLevel: () => 'MANAGE',
+    });
+    expect(getShellServices().auth.getModuleLevel('USER_MANAGEMENT')).toBe('MANAGE');
+    configureShellServices({ queryClient, getAuthToken: () => null });
+    expect(getShellServices().auth.getModuleLevel('USER_MANAGEMENT')).toBe('NONE');
+  });
+
   it('phase getter routes to wired callback (no caching)', () => {
     let currentPhase: ShellAuthPhase = 'initializing';
     configureShellServices({
