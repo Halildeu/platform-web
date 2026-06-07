@@ -11,7 +11,7 @@
   "dependencies": {
     "@mfe/shared-types": "*",
     "@tanstack/react-query": "^5.100.14",
-    "axios": "^1.16.1",
+    "axios": "^1.17.0",
     "clsx": "^2.1.1",
     "cytoscape": "^3.33.4",
     "cytoscape-fcose": "^2.2.0",
