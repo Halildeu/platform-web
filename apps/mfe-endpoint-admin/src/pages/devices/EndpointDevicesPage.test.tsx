@@ -7,7 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 import '@mfe/design-system/advanced/data-grid/setup';
 import { endpointAdminApi } from '../../app/services/endpointAdminApi';
 import { endpointAdminReduxContext } from '../../app/services/redux-context';
-import EndpointDevicesPage from './EndpointDevicesPage';
+import EndpointDevicesPage, { DEFAULT_PRESET } from './EndpointDevicesPage';
 
 /**
  * #1154 PR-3 — the devices grid is now SERVER-mode (SSRM datasource →
@@ -74,6 +74,24 @@ describe('EndpointDevicesPage (server mode)', () => {
     });
     expect(screen.queryByTestId('inventory-export-button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('export-snapshot-columns-notice')).not.toBeInTheDocument();
+  });
+});
+
+describe('EndpointDevicesPage default status filter (Aktif/Pasif)', () => {
+  it('defaults the grid to ACTIVE devices — status set-filter hides DECOMMISSIONED ("Pasif")', () => {
+    const fm = DEFAULT_PRESET.initialFilterModel as
+      | { status?: { filterType?: string; values?: string[] } }
+      | undefined;
+    expect(fm).toBeTruthy();
+    expect(fm?.status?.filterType).toBe('set');
+    const values = fm?.status?.values ?? [];
+    // DECOMMISSIONED ("Pasif"/Hizmet dışı) is hidden by default…
+    expect(values).not.toContain('DECOMMISSIONED');
+    // …while every other (active) lifecycle status is shown, so the default
+    // list is not accidentally empty.
+    expect(values).toEqual(
+      expect.arrayContaining(['PENDING_ENROLLMENT', 'ONLINE', 'STALE', 'OFFLINE']),
+    );
   });
 });
 

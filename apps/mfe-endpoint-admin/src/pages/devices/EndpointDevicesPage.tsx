@@ -59,6 +59,11 @@ const STATUS_VARIANT_MAP: Record<DeviceStatus, string> = {
 };
 
 const STATUS_VALUES = Object.keys(STATUS_VARIANT_MAP) as DeviceStatus[];
+// "Active" lifecycle statuses = everything except DECOMMISSIONED ("Pasif" /
+// Hizmet dışı). Used as the DEFAULT status filter so the everyday list hides
+// decommissioned ("işi biten") devices without deleting them — operators
+// reveal passive devices by editing the existing Durum (status) column filter.
+const ACTIVE_STATUS_VALUES = STATUS_VALUES.filter((s) => s !== 'DECOMMISSIONED');
 const OS_VALUES: OsType[] = ['WINDOWS', 'MACOS', 'LINUX', 'UNKNOWN'];
 
 const OS_LABEL: Record<OsType, string> = {
@@ -141,7 +146,7 @@ export interface EndpointDevicesPagePreset {
   initialFilterModel?: Record<string, unknown>;
 }
 
-const DEFAULT_PRESET: EndpointDevicesPagePreset = {
+export const DEFAULT_PRESET: EndpointDevicesPagePreset = {
   gridId: GRID_ID,
   dataTestId: 'endpoint-admin-devices-page',
   headingKey: 'endpointAdmin.devices.heading',
@@ -149,6 +154,15 @@ const DEFAULT_PRESET: EndpointDevicesPagePreset = {
   exportFileBaseName: 'endpoint-devices',
   exportSheetName: 'Cihazlar',
   quickFilterPlaceholderKey: 'endpointAdmin.devices.quickFilterPlaceholder',
+  // Default the grid to ACTIVE devices only (hide DECOMMISSIONED / "Pasif").
+  // Applied through the existing Durum (status) `agSetColumnFilter` via
+  // onGridReady → setFilterModel, so it IS the standard column filter: an
+  // operator opens that filter to re-include DECOMMISSIONED or clear it to see
+  // everything. No separate toggle/control. Backend treats this as a status
+  // set-filter (status IN active values).
+  initialFilterModel: {
+    status: { filterType: 'set', values: ACTIVE_STATUS_VALUES },
+  },
 };
 
 /** Stream a blob to disk via a transient anchor (no library). */
