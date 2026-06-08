@@ -246,7 +246,10 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
         headerName: t('endpointAdmin.devices.col.domain'),
         minWidth: 140,
         filter: 'agTextColumnFilter',
-        hide: true,
+        // Faz 22.5 #517: surfaced by default + text-filterable so operators
+        // can filter the device fleet cross-machine by AD domain. Backed by
+        // the endpoint_devices.domain_name filter cache (inventory-projected
+        // server-side; see platform-backend #519).
         valueFormatter: (p) => (p.value ? String(p.value) : '—'),
       },
       {
