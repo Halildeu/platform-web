@@ -5,13 +5,16 @@ import { Provider as ReduxProvider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { endpointAdminApi } from '../../app/services/endpointAdminApi';
 import { endpointAdminReduxContext } from '../../app/services/redux-context';
+import { FULL_COLLECT_INVENTORY_PAYLOAD } from '../../entities/endpoint-command/collectInventory';
 import DeviceBulkActionsMenu, { type BulkSelectableDevice } from './DeviceBulkActionsMenu';
 
 /**
  * Toolbar bulk-action menu (left of İndir). Uses the real RTK Query
  * endpointAdminApi with a mocked `fetch` (same harness as
  * EndpointDevicesPage.test.tsx) so the COLLECT_INVENTORY / compliance-evaluate
- * dispatch contract is exercised end-to-end through the slice.
+ * dispatch contract is exercised end-to-end through the slice — including the
+ * canonical full-snapshot payload and the ONLINE-only collect guard
+ * (Codex 019ea756 must-fix #1 + #2).
  */
 const buildStore = () =>
   configureStore({
@@ -37,17 +40,37 @@ const renderMenu = (
   return { onNotice, onAfterRun };
 };
 
+type Call = { url: string; method: string; body?: Record<string, unknown> };
+
+const commandPosts = (calls: Call[]) =>
+  calls.filter((c) => c.url.includes('/commands') && c.method === 'POST');
+
 describe('DeviceBulkActionsMenu', () => {
   let originalFetch: typeof fetch;
-  let calls: { url: string; method: string }[];
+  let calls: Call[];
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
     window.localStorage.setItem('token', 'fake-token');
     calls = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : (input as Request).url;
-      calls.push({ url, method: (init?.method ?? 'GET').toUpperCase() });
+      // Mirror endpointAdminApi.uninstall.test.ts: wrap into a Request so the
+      // body is readable whether fetch is called as fetch(Request) OR the
+      // unwrapped fetch(url, init) form (endpointAdminApi uses
+      // unwrapRequestFetchFn — the body then lives on `init`).
+      const req = input instanceof Request ? input : new Request(String(input), init);
+      const url = req.url;
+      const method = req.method.toUpperCase();
+      let body: Record<string, unknown> | undefined;
+      try {
+        if (method !== 'GET' && method !== 'HEAD') {
+          const text = await req.clone().text();
+          body = text ? (JSON.parse(text) as Record<string, unknown>) : undefined;
+        }
+      } catch {
+        body = undefined;
+      }
+      calls.push({ url, method, body });
       return new Response(JSON.stringify({ id: 'cmd-1', status: 'QUEUED' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -70,28 +93,59 @@ describe('DeviceBulkActionsMenu', () => {
     expect(screen.getByTestId('device-bulk-evaluate')).toBeInTheDocument();
   });
 
-  it('dispatches COLLECT_INVENTORY for every selected device and notifies success', async () => {
+  it('dispatches a FULL-snapshot COLLECT_INVENTORY per ONLINE device with distinct idempotency keys', async () => {
     const devices: BulkSelectableDevice[] = [
-      { device_id: 'dev-1', hostname: 'h1' },
-      { device_id: 'dev-2', hostname: 'h2' },
+      { device_id: 'dev-1', hostname: 'h1', status: 'ONLINE' },
+      { device_id: 'dev-2', hostname: 'h2', status: 'ONLINE' },
     ];
     const { onNotice, onAfterRun } = renderMenu(() => devices);
     fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
     fireEvent.click(screen.getByTestId('device-bulk-collect'));
 
-    await waitFor(() => {
-      const cmdCalls = calls.filter((c) => c.url.includes('/commands') && c.method === 'POST');
-      expect(cmdCalls.length).toBe(2);
-    });
-    await waitFor(() => expect(onNotice).toHaveBeenCalled());
-    const lastCall = onNotice.mock.calls.at(-1)!;
-    expect(lastCall[1]).toBe('success');
-    expect(String(lastCall[0])).toMatch(/2/);
+    await waitFor(() => expect(commandPosts(calls).length).toBe(2));
+    const posts = commandPosts(calls);
+    for (const c of posts) {
+      expect(c.body?.type).toBe('COLLECT_INVENTORY');
+      // canonical full-snapshot payload (every opt-in probe bit), same as drawer
+      expect(c.body?.payload).toMatchObject(FULL_COLLECT_INVENTORY_PAYLOAD);
+      expect(c.body?.idempotencyKey).toEqual(expect.any(String));
+    }
+    // distinct idempotency key per device
+    expect(new Set(posts.map((c) => c.body?.idempotencyKey)).size).toBe(2);
+
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'success'));
     expect(onAfterRun).toHaveBeenCalled();
   });
 
-  it('dispatches compliance evaluate for every selected device', async () => {
-    const { onNotice } = renderMenu(() => [{ device_id: 'dev-9', hostname: 'h9' }]);
+  it('skips non-ONLINE devices for collect and reports the skip (info)', async () => {
+    const devices: BulkSelectableDevice[] = [
+      { device_id: 'on-1', hostname: 'on1', status: 'ONLINE' },
+      { device_id: 'off-1', hostname: 'off1', status: 'OFFLINE' },
+    ];
+    const { onNotice } = renderMenu(() => devices);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-collect'));
+
+    await waitFor(() => expect(commandPosts(calls).length).toBe(1));
+    expect(commandPosts(calls)[0].url).toContain('on-1'); // only the ONLINE device
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'info'));
+  });
+
+  it('refuses collect when no selected device is ONLINE (info, zero POSTs)', async () => {
+    const { onNotice } = renderMenu(() => [
+      { device_id: 'off-9', hostname: 'o', status: 'OFFLINE' },
+    ]);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-collect'));
+
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'info'));
+    expect(calls.filter((c) => c.method === 'POST').length).toBe(0);
+  });
+
+  it('dispatches compliance evaluate for every selected device regardless of status', async () => {
+    const { onNotice } = renderMenu(() => [
+      { device_id: 'dev-9', hostname: 'h9', status: 'OFFLINE' },
+    ]);
     fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
     fireEvent.click(screen.getByTestId('device-bulk-evaluate'));
 

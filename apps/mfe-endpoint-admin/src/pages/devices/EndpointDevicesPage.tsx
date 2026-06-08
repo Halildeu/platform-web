@@ -679,6 +679,9 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
   const gridOptions = React.useMemo<GridOptions<DeviceGridRow>>(
     () => ({
       multiSortKey: 'ctrl' as const,
+      // Stable row identity so grid selection survives SSRM block reloads and
+      // refreshServerSide({ purge }) (Codex 019ea756 selection-scope hardening).
+      getRowId: (params) => params.data.device_id,
       onRowClicked: (event) => {
         const ev = event.event as MouseEvent | undefined;
         if (ev && ev.button !== undefined && ev.button !== 0) return;
@@ -726,7 +729,11 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     const rows = gridApiRef.current?.getSelectedRows() ?? [];
     return rows
       .filter((r): r is DeviceGridRow => typeof r?.device_id === 'string')
-      .map((r) => ({ device_id: r.device_id, hostname: r.hostname }));
+      .map((r) => ({
+        device_id: r.device_id,
+        hostname: r.hostname,
+        status: r.status as DeviceStatus,
+      }));
   }, []);
 
   const refreshGrid = React.useCallback(() => {

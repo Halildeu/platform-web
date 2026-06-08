@@ -360,9 +360,11 @@ export const GridToolbar = <RowData = unknown,>({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Primary action slot — right cluster, immediately LEFT of the
-          İndir export control (e.g. a bulk action menu). */}
-      {exportLeadingExtras}
+      {/* Primary action slot — right cluster, immediately LEFT of the İndir
+          export control (e.g. a bulk action menu). Gated on !isFullscreen so it
+          tracks the export control's visibility and always sits left of it
+          (Codex 019ea756 must-fix #3). */}
+      {!isFullscreen && exportLeadingExtras}
 
       {/*
         Export controls. PR-0.5b2 (Codex 019e2d85, iter-2 §P1):

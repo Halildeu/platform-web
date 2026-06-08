@@ -3,6 +3,8 @@ import {
   useCreateDeviceCommandMutation,
   useForceEvaluateDeviceComplianceMutation,
 } from '../../app/services/endpointAdminApi';
+import { buildFullCollectInventoryBody } from '../../entities/endpoint-command/collectInventory';
+import type { DeviceStatus } from '../../entities/endpoint-device/types';
 import { useEndpointAdminI18n } from '../../i18n';
 
 /** Per-command idempotency key (mirrors DeviceDetailDrawer). */
@@ -16,6 +18,12 @@ function newIdempotencyKey(): string {
 export interface BulkSelectableDevice {
   device_id: string;
   hostname?: string;
+  /**
+   * Device status. `collect` (a device command) is only dispatched to ONLINE
+   * devices — mirrors the drawer İşlemler `allowedAtAll` guard; non-ONLINE
+   * selections are skipped (Codex 019ea756 must-fix #2).
+   */
+  status?: DeviceStatus;
 }
 
 export interface DeviceBulkActionsMenuProps {
@@ -74,8 +82,8 @@ export const DeviceBulkActionsMenu: React.FC<DeviceBulkActionsMenuProps> = ({
   const runBulk = React.useCallback(
     async (action: BulkAction) => {
       setOpen(false);
-      const devices = getSelectedDevices();
-      if (devices.length === 0) {
+      const selected = getSelectedDevices();
+      if (selected.length === 0) {
         onNotice(t('endpointAdmin.devices.bulk.noSelection'), 'info');
         return;
       }
@@ -83,19 +91,32 @@ export const DeviceBulkActionsMenu: React.FC<DeviceBulkActionsMenuProps> = ({
         action === 'collect'
           ? t('endpointAdmin.devices.bulk.collect.label')
           : t('endpointAdmin.devices.bulk.evaluate.label');
+
+      // `collect` is a device command — only ONLINE devices are eligible
+      // (mirrors the drawer İşlemler `allowedAtAll` guard). `evaluate` is a
+      // server-side recompute from existing snapshots → applies to every
+      // selected device (Codex 019ea756 must-fix #2).
+      const eligible =
+        action === 'collect' ? selected.filter((d) => d.status === 'ONLINE') : selected;
+      const skipped = selected.length - eligible.length;
+
+      if (eligible.length === 0) {
+        onNotice(t('endpointAdmin.devices.bulk.collect.noneOnline'), 'info');
+        return;
+      }
+
       setRunning(true);
       let ok = 0;
       let fail = 0;
-      for (const device of devices) {
+      for (const device of eligible) {
         try {
           if (action === 'collect') {
             await createCommand({
               deviceId: device.device_id,
-              body: {
-                type: 'COLLECT_INVENTORY',
+              body: buildFullCollectInventoryBody({
                 idempotencyKey: newIdempotencyKey(),
                 reason: t('endpointAdmin.devices.bulk.collect.reason'),
-              },
+              }),
             }).unwrap();
           } else {
             await forceEvaluate({ deviceId: device.device_id }).unwrap();
@@ -106,12 +127,21 @@ export const DeviceBulkActionsMenu: React.FC<DeviceBulkActionsMenuProps> = ({
         }
       }
       setRunning(false);
-      if (fail === 0) {
+
+      if (fail === 0 && skipped === 0) {
         onNotice(
           t('endpointAdmin.devices.bulk.resultOk')
             .replace('{action}', actionLabel)
             .replace('{count}', String(ok)),
           'success',
+        );
+      } else if (fail === 0) {
+        onNotice(
+          t('endpointAdmin.devices.bulk.resultOkSkipped')
+            .replace('{action}', actionLabel)
+            .replace('{count}', String(ok))
+            .replace('{skipped}', String(skipped)),
+          'info',
         );
       } else {
         onNotice(
