@@ -40,7 +40,9 @@ type BulkAction = 'collect' | 'evaluate';
 /**
  * Toolbar bulk-action menu for the devices grid — rendered immediately LEFT of
  * the İndir export control via EntityGridTemplate `exportLeadingExtras`. Opens
- * on hover (and click). Applies a device-level command to every grid-selected
+ * on CLICK only (click-away backdrop closes) — matches the İndir export
+ * dropdown; no hover-open, so cursor pass-overs don't pop the menu open.
+ * Applies a device-level command to every grid-selected
  * device: Envanteri Şimdi Topla (COLLECT_INVENTORY) + Uyumluluk Değerlendir
  * (force compliance evaluate). Per-row install/uninstall stay in the detail
  * drawer (software-target + maker-checker — not safe to bulk from a toolbar).
@@ -55,29 +57,6 @@ export const DeviceBulkActionsMenu: React.FC<DeviceBulkActionsMenuProps> = ({
   const [running, setRunning] = React.useState(false);
   const [createCommand] = useCreateDeviceCommandMutation();
   const [forceEvaluate] = useForceEvaluateDeviceComplianceMutation();
-  const closeTimer = React.useRef<number | null>(null);
-
-  React.useEffect(
-    () => () => {
-      if (closeTimer.current != null) window.clearTimeout(closeTimer.current);
-    },
-    [],
-  );
-
-  const cancelClose = React.useCallback(() => {
-    if (closeTimer.current != null) {
-      window.clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  }, []);
-  const openMenu = React.useCallback(() => {
-    cancelClose();
-    setOpen(true);
-  }, [cancelClose]);
-  const scheduleClose = React.useCallback(() => {
-    cancelClose();
-    closeTimer.current = window.setTimeout(() => setOpen(false), 180);
-  }, [cancelClose]);
 
   const runBulk = React.useCallback(
     async (action: BulkAction) => {
@@ -158,12 +137,7 @@ export const DeviceBulkActionsMenu: React.FC<DeviceBulkActionsMenuProps> = ({
   );
 
   return (
-    <div
-      className="relative"
-      data-component="device-bulk-actions-menu"
-      onMouseEnter={openMenu}
-      onMouseLeave={scheduleClose}
-    >
+    <div className="relative" data-component="device-bulk-actions-menu">
       <button
         type="button"
         disabled={running}
@@ -188,8 +162,6 @@ export const DeviceBulkActionsMenu: React.FC<DeviceBulkActionsMenuProps> = ({
             role="menu"
             data-testid="device-bulk-actions-menu"
             className="absolute right-0 z-50 mt-1 w-64 rounded-md border border-border-default bg-surface-default py-1 shadow-lg"
-            onMouseEnter={openMenu}
-            onMouseLeave={scheduleClose}
           >
             <button
               type="button"

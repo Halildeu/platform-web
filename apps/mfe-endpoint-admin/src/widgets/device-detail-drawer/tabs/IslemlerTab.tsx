@@ -367,22 +367,49 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
             Son komutlar
           </h4>
           <ul className="space-y-1">
-            {recentCommands.slice(0, 5).map((c) => (
-              <li
-                key={c.id}
-                className="flex items-center justify-between gap-2 text-xs border-b border-border-subtle py-1"
-              >
-                <span className="font-mono truncate flex-1">{c.type}</span>
-                <span className="text-text-secondary">
-                  {t(`endpointAdmin.command.status.${c.status}`)}
-                </span>
-                {isDestructive(c.type) && (
-                  <span className="text-text-secondary">
-                    {t(`endpointAdmin.command.approval.${c.approvalStatus}`)}
-                  </span>
-                )}
-              </li>
-            ))}
+            {recentCommands.slice(0, 5).map((c) => {
+              // P0-0 visibility final-mile (Faz 22.5 §0.5 M0): the backend
+              // (#511) marks a command FAILED with a redacted, ≤512-char
+              // `lastError` prefixed `RESULT_REJECTED:` when a result
+              // submission is rejected (e.g. the MKR-A1 16-char configHash
+              // 400). Render that reason so an operator sees WHY a command
+              // failed — not just a silent "Başarısız" badge — which is what
+              // an 800-PC rollout needs to be debuggable. The string is
+              // already redacted + bounded server-side; React escapes it and
+              // `break-words` contains the worst-case 512-char line.
+              const failureReason =
+                c.lastError && c.lastError.trim() !== '' ? c.lastError.trim() : null;
+              return (
+                <li
+                  key={c.id}
+                  className="flex flex-col gap-0.5 text-xs border-b border-border-subtle py-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono truncate flex-1">{c.type}</span>
+                    <span className="text-text-secondary">
+                      {t(`endpointAdmin.command.status.${c.status}`)}
+                    </span>
+                    {isDestructive(c.type) && (
+                      <span className="text-text-secondary">
+                        {t(`endpointAdmin.command.approval.${c.approvalStatus}`)}
+                      </span>
+                    )}
+                  </div>
+                  {failureReason && (
+                    <p
+                      data-testid={`command-last-error-${c.id}`}
+                      className="text-danger break-words"
+                      title={failureReason}
+                    >
+                      <span className="font-semibold">
+                        {t('endpointAdmin.command.lastError.label')}:{' '}
+                      </span>
+                      {failureReason}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
