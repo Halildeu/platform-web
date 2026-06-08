@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { IslemlerTab } from '../tabs/IslemlerTab';
 import type { EndpointDevice } from '../../../entities/endpoint-device/types';
+import type { EndpointCommand } from '../../../entities/endpoint-command/types';
 
 afterEach(() => cleanup());
 
@@ -161,5 +162,78 @@ describe('IslemlerTab — toast surfaces', () => {
     );
     expect(screen.getByTestId('local-password-one-time-banner')).toBeInTheDocument();
     expect(screen.getByTestId('local-password-one-time-value').textContent).toBe('Abc12345!');
+  });
+});
+
+// P0-0 visibility final-mile (Faz 22.5 §0.5 M0): the recent-commands list must
+// surface a per-command `lastError` reason (backend #511 RESULT_REJECTED) so an
+// operator sees WHY a command failed — not just a silent "Başarısız" badge.
+const makeCommand = (over: Partial<EndpointCommand> = {}): EndpointCommand => ({
+  id: 'cmd-1',
+  tenantId: 't-1',
+  deviceId: 'd-1',
+  type: 'COLLECT_INVENTORY',
+  idempotencyKey: null,
+  status: 'FAILED',
+  approvalStatus: 'NOT_REQUIRED',
+  payload: null,
+  priority: null,
+  attemptCount: 1,
+  maxAttempts: 1,
+  lockedBy: null,
+  lockedUntil: null,
+  visibleAfterAt: null,
+  expiresAt: null,
+  issuedBySubject: null,
+  issuedAt: '2026-06-08T10:00:00Z',
+  deliveredAt: '2026-06-08T10:00:01Z',
+  ackedAt: null,
+  startedAt: '2026-06-08T10:00:02Z',
+  completedAt: '2026-06-08T10:00:03Z',
+  cancelledAt: null,
+  lastError: null,
+  createdAt: '2026-06-08T10:00:00Z',
+  updatedAt: '2026-06-08T10:00:03Z',
+  result: null,
+  ...over,
+});
+
+describe('IslemlerTab — recent-commands lastError visibility (P0-0)', () => {
+  it('FAILED komutun RESULT_REJECTED lastError sebebini satirda gosterir', () => {
+    const reason =
+      'RESULT_REJECTED: diagnostics.configHash must be 64-char lowercase hex or "unknown"';
+    render(
+      <IslemlerTab
+        {...defaults}
+        device={baseDevice}
+        recentCommands={[makeCommand({ id: 'cmd-fail', status: 'FAILED', lastError: reason })]}
+      />,
+    );
+    const row = screen.getByTestId('command-last-error-cmd-fail');
+    // language-agnostic label (test env may resolve TR or EN dictionary)
+    expect(row.textContent).toMatch(/Hata sebebi|Failure reason/);
+    expect(row.textContent).toContain('64-char lowercase hex');
+  });
+
+  it('lastError null olan komut icin sebep satiri RENDER ETMEZ', () => {
+    render(
+      <IslemlerTab
+        {...defaults}
+        device={baseDevice}
+        recentCommands={[makeCommand({ id: 'cmd-ok', status: 'SUCCEEDED', lastError: null })]}
+      />,
+    );
+    expect(screen.queryByTestId('command-last-error-cmd-ok')).not.toBeInTheDocument();
+  });
+
+  it('bos/whitespace lastError icin sebep satiri RENDER ETMEZ (fail-clear)', () => {
+    render(
+      <IslemlerTab
+        {...defaults}
+        device={baseDevice}
+        recentCommands={[makeCommand({ id: 'cmd-blank', status: 'FAILED', lastError: '   ' })]}
+      />,
+    );
+    expect(screen.queryByTestId('command-last-error-cmd-blank')).not.toBeInTheDocument();
   });
 });
