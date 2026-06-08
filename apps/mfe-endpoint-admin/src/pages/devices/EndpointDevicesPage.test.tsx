@@ -7,7 +7,10 @@ import { MemoryRouter } from 'react-router-dom';
 import '@mfe/design-system/advanced/data-grid/setup';
 import { endpointAdminApi } from '../../app/services/endpointAdminApi';
 import { endpointAdminReduxContext } from '../../app/services/redux-context';
-import EndpointDevicesPage, { DEFAULT_PRESET } from './EndpointDevicesPage';
+import EndpointDevicesPage, {
+  DEFAULT_PRESET,
+  withDefaultStatusFilter,
+} from './EndpointDevicesPage';
 
 /**
  * #1154 PR-3 — the devices grid is now SERVER-mode (SSRM datasource →
@@ -92,6 +95,57 @@ describe('EndpointDevicesPage default status filter (Aktif/Pasif)', () => {
     expect(values).toEqual(
       expect.arrayContaining(['PENDING_ENROLLMENT', 'ONLINE', 'STALE', 'OFFLINE']),
     );
+  });
+});
+
+/**
+ * #782 follow-up (Codex 019ea960 AGREE Option A) — the default ACTIVE status
+ * floor is enforced at the SSRM datasource layer via `withDefaultStatusFilter`,
+ * NOT onGridReady, because the EntityGridTemplate variant system owns the live
+ * filterModel and would clobber a UI-level default (a saved variant with an
+ * empty `{}` filterModel re-showed DECOMMISSIONED — the live bug this fixes).
+ */
+describe('withDefaultStatusFilter (datasource default-active floor)', () => {
+  const statusDefault = { filterType: 'set', values: ['PENDING_ENROLLMENT', 'ONLINE'] };
+
+  it('injects the default status filter when the caller has NO status key', () => {
+    const out = withDefaultStatusFilter({}, statusDefault);
+    expect(out.status).toEqual(statusDefault);
+  });
+
+  it('preserves other filters while injecting the status floor', () => {
+    const out = withDefaultStatusFilter(
+      { os_type: { filterType: 'set', values: ['WINDOWS'] } },
+      statusDefault,
+    );
+    expect(out.os_type).toEqual({ filterType: 'set', values: ['WINDOWS'] });
+    expect(out.status).toEqual(statusDefault);
+  });
+
+  it('respects an explicit status filter that re-includes DECOMMISSIONED (does NOT override)', () => {
+    const explicit = { status: { filterType: 'set', values: ['ONLINE', 'DECOMMISSIONED'] } };
+    const out = withDefaultStatusFilter(explicit, statusDefault);
+    expect(out.status).toEqual({ filterType: 'set', values: ['ONLINE', 'DECOMMISSIONED'] });
+  });
+
+  it('respects an explicit EMPTY status set (values:[] = match nothing, NOT a fallback)', () => {
+    const explicitEmpty = { status: { filterType: 'set', values: [] as string[] } };
+    const out = withDefaultStatusFilter(explicitEmpty, statusDefault);
+    expect(out.status).toEqual({ filterType: 'set', values: [] });
+  });
+
+  it('is non-mutating (returns a fresh object; input untouched)', () => {
+    const input = { os_type: { filterType: 'set', values: ['LINUX'] } };
+    const out = withDefaultStatusFilter(input, statusDefault);
+    expect(out).not.toBe(input);
+    expect(input).toEqual({ os_type: { filterType: 'set', values: ['LINUX'] } });
+    expect('status' in input).toBe(false);
+  });
+
+  it('no-ops when statusDefault is nullish (returns the input unchanged)', () => {
+    const input = { os_type: { filterType: 'set', values: ['MACOS'] } };
+    expect(withDefaultStatusFilter(input, undefined)).toBe(input);
+    expect(withDefaultStatusFilter(input, null)).toBe(input);
   });
 });
 
