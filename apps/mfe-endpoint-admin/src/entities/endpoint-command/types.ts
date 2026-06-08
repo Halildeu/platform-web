@@ -32,7 +32,13 @@ export type CommandType =
   // via the dedicated BE-032 endpoint (NOT the generic /commands surface);
   // surfaced as a recent command in the device drawer, so it is part of the
   // union for type-safe "Son komutlar" rendering.
-  | 'UPDATE_AGENT';
+  | 'UPDATE_AGENT'
+  // #508 (Faz 22.5) — Endpoint Display Policy. Always maker-checker; dispatched
+  // via the dedicated display-policy surface (NOT the generic /commands path),
+  // surfaced as a recent command (PENDING until a 2nd admin approves) in the
+  // device drawer, so it is part of the union for type-safe rendering + the
+  // approval badge (Codex 019ea99b).
+  | 'SET_DISPLAY_POLICY';
 
 export type CommandStatus =
   | 'QUEUED'

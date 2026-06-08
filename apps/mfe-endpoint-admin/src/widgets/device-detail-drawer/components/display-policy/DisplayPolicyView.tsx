@@ -67,6 +67,10 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
       setFormError(t('endpointAdmin.displayPolicy.reasonRequired'));
       return;
     }
+    if (ssEnabled && (!Number.isFinite(ssTimeout) || ssTimeout < 60 || ssTimeout > 86400)) {
+      setFormError(t('endpointAdmin.displayPolicy.timeoutInvalid'));
+      return;
+    }
     const body: SetDisplayPolicyRequest = {
       operation: 'ENFORCE',
       reason: reason.trim(),
@@ -126,6 +130,21 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
         data-testid="display-policy-feature-disabled"
       >
         {t('endpointAdmin.displayPolicy.featureDisabled')}
+      </div>
+    );
+  }
+
+  // Any GET error that is NOT 404 (no policy) / 503 (handled above) — 403/500/
+  // network — must surface as an error, never as "no policy" (Codex 019ea99b).
+  if (error && !noPolicy) {
+    return (
+      <div
+        className="px-6 py-4 text-sm text-danger"
+        role="alert"
+        data-testid="display-policy-error"
+      >
+        {t('endpointAdmin.displayPolicy.error.generic')}
+        {status ? ` (${status})` : ''}
       </div>
     );
   }
@@ -302,7 +321,7 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
         </label>
 
         {formError && (
-          <div className="text-danger" data-testid="display-policy-form-error">
+          <div className="text-danger" role="alert" data-testid="display-policy-form-error">
             {formError}
           </div>
         )}

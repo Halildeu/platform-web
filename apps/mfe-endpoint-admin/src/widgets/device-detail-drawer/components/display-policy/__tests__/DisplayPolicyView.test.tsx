@@ -85,6 +85,25 @@ describe('DisplayPolicyView', () => {
     expect(screen.getByTestId('display-policy-open-proposal')).toHaveTextContent('PENDING');
   });
 
+  it('renders a generic error (NOT "no policy") on a non-404/503 GET error', () => {
+    mockMutations();
+    mockQuery({ error: { status: 500 } });
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    expect(screen.getByTestId('display-policy-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('display-policy-none')).not.toBeInTheDocument();
+  });
+
+  it('blocks an ENFORCE with an out-of-range screensaver timeout', () => {
+    const { setTrigger } = mockMutations();
+    mockQuery({ data: { deviceId: DEVICE, operation: null, openProposal: null } });
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    fireEvent.change(screen.getByTestId('dp-reason'), { target: { value: 'kiosk' } });
+    fireEvent.change(screen.getByTestId('dp-ss-timeout'), { target: { value: '10' } }); // < 60
+    fireEvent.click(screen.getByTestId('display-policy-propose'));
+    expect(screen.getByTestId('display-policy-form-error')).toBeInTheDocument();
+    expect(setTrigger).not.toHaveBeenCalled();
+  });
+
   it('shows "no policy" on 404 and blocks a propose without a reason', () => {
     const { setTrigger } = mockMutations();
     mockQuery({ error: { status: 404 } });

@@ -1990,7 +1990,11 @@ export const endpointAdminApi = createApi({
       }),
       invalidatesTags: (_res, _err, { deviceId }) => [
         { type: 'EndpointDisplayPolicy' as const, id: deviceId },
-        { type: 'EndpointCommand' as const, id: deviceId },
+        // The maker-checker proposal creates a PENDING command + an audit event;
+        // match the canonical `device-${deviceId}` tag listDeviceCommands /
+        // listAuditEvents provide so İşlemler + Audit refresh (Codex 019ea99b).
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
       ],
     }),
     /** #508 — propose CLEAR (maker-checker). */
@@ -2002,7 +2006,11 @@ export const endpointAdminApi = createApi({
       }),
       invalidatesTags: (_res, _err, { deviceId }) => [
         { type: 'EndpointDisplayPolicy' as const, id: deviceId },
-        { type: 'EndpointCommand' as const, id: deviceId },
+        // The maker-checker proposal creates a PENDING command + an audit event;
+        // match the canonical `device-${deviceId}` tag listDeviceCommands /
+        // listAuditEvents provide so İşlemler + Audit refresh (Codex 019ea99b).
+        { type: 'EndpointCommand' as const, id: `device-${deviceId}` },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
       ],
     }),
   }),

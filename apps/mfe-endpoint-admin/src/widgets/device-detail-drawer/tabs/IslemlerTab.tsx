@@ -389,8 +389,11 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
                     <span className="text-text-secondary">
                       {t(`endpointAdmin.command.status.${c.status}`)}
                     </span>
-                    {isDestructive(c.type) && (
-                      <span className="text-text-secondary">
+                    {(isDestructive(c.type) || c.approvalStatus !== 'NOT_REQUIRED') && (
+                      <span
+                        className="text-text-secondary"
+                        data-testid={`command-approval-${c.id}`}
+                      >
                         {t(`endpointAdmin.command.approval.${c.approvalStatus}`)}
                       </span>
                     )}

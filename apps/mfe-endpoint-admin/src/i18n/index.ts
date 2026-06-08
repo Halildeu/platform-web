@@ -233,6 +233,8 @@ const DICT_TR = {
   'endpointAdmin.displayPolicy.action.clear': 'Temizle (CLEAR)',
   'endpointAdmin.displayPolicy.action.clearing': 'Temizleniyor…',
   'endpointAdmin.displayPolicy.reasonRequired': 'Gerekçe zorunludur.',
+  'endpointAdmin.displayPolicy.timeoutInvalid':
+    'Ekran koruyucu zaman aşımı 60–86400 saniye arasında olmalıdır.',
   'endpointAdmin.displayPolicy.error.generic': 'İşlem başarısız oldu.',
   'endpointAdmin.displayPolicy.makerCheckerHint':
     'Her değişiklik maker-checker: PENDING bir komut oluşturulur; İşlemler sekmesinden ikinci bir yönetici onaylamadan uygulanmaz.',
@@ -1727,6 +1729,8 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.displayPolicy.action.clear': 'Clear (CLEAR)',
   'endpointAdmin.displayPolicy.action.clearing': 'Clearing…',
   'endpointAdmin.displayPolicy.reasonRequired': 'A reason is required.',
+  'endpointAdmin.displayPolicy.timeoutInvalid':
+    'Screensaver timeout must be between 60 and 86400 seconds.',
   'endpointAdmin.displayPolicy.error.generic': 'The operation failed.',
   'endpointAdmin.displayPolicy.makerCheckerHint':
     'Every change is maker-checker: it creates a PENDING command that a second admin must approve from the Commands tab before it applies.',
