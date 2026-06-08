@@ -193,4 +193,137 @@ describe('DeviceBulkActionsMenu', () => {
     await waitFor(() => expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'info'));
     expect(calls.filter((c) => c.method === 'POST').length).toBe(0);
   });
+
+  const lifecyclePosts = (kind: 'decommission' | 'reactivate') =>
+    calls.filter((c) => c.url.endsWith(`/${kind}`) && c.method === 'POST');
+
+  it('bulk decommission: opens modal with frozen counts + decommissions only KNOWN-active devices (fail-closed)', async () => {
+    const devices: BulkSelectableDevice[] = [
+      { device_id: 'on-1', hostname: 'a', status: 'ONLINE' },
+      { device_id: 'off-1', hostname: 'b', status: 'OFFLINE' },
+      { device_id: 'dec-1', hostname: 'c', status: 'DECOMMISSIONED' }, // already passive → skip
+      { device_id: 'unk-1', hostname: 'd' }, // unknown status → skip (fail-closed)
+    ];
+    const { onNotice, onAfterRun } = renderMenu(() => devices);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-decommission'));
+
+    // frozen snapshot: selected 4, eligible 2 (on-1, off-1), skipped 2
+    expect(screen.getByTestId('bulk-lifecycle-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('bulk-lifecycle-counts')).toHaveTextContent(/4/);
+    expect(screen.getByTestId('bulk-lifecycle-counts')).toHaveTextContent(/2/);
+
+    fireEvent.change(screen.getByTestId('bulk-lifecycle-reason'), {
+      target: { value: 'cihaz emekli' },
+    });
+    fireEvent.click(screen.getByTestId('bulk-lifecycle-submit'));
+
+    await waitFor(() => expect(lifecyclePosts('decommission').length).toBe(2));
+    const urls = lifecyclePosts('decommission').map((c) => c.url);
+    expect(urls.some((u) => u.includes('on-1'))).toBe(true);
+    expect(urls.some((u) => u.includes('off-1'))).toBe(true);
+    expect(urls.some((u) => u.includes('dec-1'))).toBe(false); // already passive
+    expect(urls.some((u) => u.includes('unk-1'))).toBe(false); // fail-closed
+    expect(lifecyclePosts('decommission')[0].body?.reason).toBe('cihaz emekli');
+    expect(lifecyclePosts('reactivate').length).toBe(0);
+
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'success'));
+    expect(onAfterRun).toHaveBeenCalled();
+  });
+
+  it('bulk reactivate: only DECOMMISSIONED devices are reactivated', async () => {
+    const devices: BulkSelectableDevice[] = [
+      { device_id: 'dec-1', status: 'DECOMMISSIONED' },
+      { device_id: 'on-1', status: 'ONLINE' }, // not passive → skip
+    ];
+    const { onNotice } = renderMenu(() => devices);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-reactivate'));
+    fireEvent.change(screen.getByTestId('bulk-lifecycle-reason'), {
+      target: { value: 'geri al' },
+    });
+    fireEvent.click(screen.getByTestId('bulk-lifecycle-submit'));
+
+    await waitFor(() => expect(lifecyclePosts('reactivate').length).toBe(1));
+    expect(lifecyclePosts('reactivate')[0].url).toContain('dec-1');
+    expect(lifecyclePosts('decommission').length).toBe(0);
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'success'));
+  });
+
+  it('bulk lifecycle requires a reason — empty submit does not POST', () => {
+    renderMenu(() => [{ device_id: 'on-1', status: 'ONLINE' }]);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-decommission'));
+    fireEvent.submit(screen.getByTestId('bulk-lifecycle-form'));
+    expect(lifecyclePosts('decommission').length).toBe(0);
+    expect(screen.getByTestId('bulk-lifecycle-reason-error')).toBeInTheDocument();
+  });
+
+  it('empty selection for bulk lifecycle → info notice, no modal', () => {
+    const { onNotice } = renderMenu(() => []);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-decommission'));
+    expect(screen.queryByTestId('bulk-lifecycle-modal')).not.toBeInTheDocument();
+    expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'info');
+  });
+
+  it('bulk decommission above the threshold requires the acknowledgement checkbox', () => {
+    const devices: BulkSelectableDevice[] = Array.from({ length: 11 }, (_, i) => ({
+      device_id: `on-${i}`,
+      status: 'ONLINE' as const,
+    }));
+    renderMenu(() => devices);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-decommission'));
+    fireEvent.change(screen.getByTestId('bulk-lifecycle-reason'), {
+      target: { value: 'toplu emekli' },
+    });
+    // 11 eligible > 10 threshold → submit blocked until acknowledged
+    expect(screen.getByTestId('bulk-lifecycle-submit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('bulk-lifecycle-ack'));
+    expect(screen.getByTestId('bulk-lifecycle-submit')).not.toBeDisabled();
+  });
+
+  it('partial failure: result reports succeeded + failed with non-error (info) kind', async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(String(input), init);
+      const url = req.url;
+      const method = req.method.toUpperCase();
+      let body: Record<string, unknown> | undefined;
+      try {
+        if (method !== 'GET' && method !== 'HEAD') {
+          const text = await req.clone().text();
+          body = text ? (JSON.parse(text) as Record<string, unknown>) : undefined;
+        }
+      } catch {
+        body = undefined;
+      }
+      calls.push({ url, method, body });
+      if (url.endsWith('/decommission') && url.includes('fail-1')) {
+        return new Response('{"message":"boom"}', {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ id: 'd', status: 'DECOMMISSIONED' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const { onNotice } = renderMenu(() => [
+      { device_id: 'ok-1', status: 'ONLINE' },
+      { device_id: 'fail-1', status: 'ONLINE' },
+    ]);
+    fireEvent.click(screen.getByTestId('device-bulk-actions-trigger'));
+    fireEvent.click(screen.getByTestId('device-bulk-decommission'));
+    fireEvent.change(screen.getByTestId('bulk-lifecycle-reason'), {
+      target: { value: 'kısmi' },
+    });
+    fireEvent.click(screen.getByTestId('bulk-lifecycle-submit'));
+
+    await waitFor(() => expect(lifecyclePosts('decommission').length).toBe(2));
+    // 1 ok + 1 fail → info (some succeeded), not a hard error
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith(expect.any(String), 'info'));
+  });
 });

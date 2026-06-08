@@ -37,6 +37,23 @@ const DICT_TR = {
     '{action}: {count} cihaz için kuyruğa alındı ({skipped} cihaz çevrimiçi değil, atlandı).',
   'endpointAdmin.devices.bulk.collect.noneOnline':
     'Seçili cihazların hiçbiri çevrimiçi değil; envanter toplanamaz.',
+  'endpointAdmin.devices.bulk.lifecycle.decommission.label': 'Toplu Pasif Al',
+  'endpointAdmin.devices.bulk.lifecycle.reactivate.label': 'Toplu Yeniden Etkinleştir',
+  'endpointAdmin.devices.bulk.lifecycle.modal.title.decommission': 'Cihazları Toplu Pasif Al',
+  'endpointAdmin.devices.bulk.lifecycle.modal.title.reactivate':
+    'Cihazları Toplu Yeniden Etkinleştir',
+  'endpointAdmin.devices.bulk.lifecycle.modal.warning.decommission':
+    'Seçili cihazlar pasife alınacak: bekleyen komutlar, bakım jetonları ve açık kaldırma istekleri iptal edilir. Geri alınabilir — veriler silinmez ama iptal edilen işlemler otomatik geri kurulmaz.',
+  'endpointAdmin.devices.bulk.lifecycle.modal.warning.reactivate':
+    'Seçili cihazlar yeniden etkinleştirilecek. Çevrimiçi durumu bir sonraki heartbeat ile kazanılır.',
+  'endpointAdmin.devices.bulk.lifecycle.modal.counts':
+    'Seçili: {selected} · İşlenecek: {eligible} · Atlanacak: {skipped}',
+  'endpointAdmin.devices.bulk.lifecycle.modal.ack': '{eligible} cihazı pasife alacağımı anlıyorum.',
+  'endpointAdmin.devices.bulk.lifecycle.modal.error': 'İşlem sırasında bir hata oluştu.',
+  'endpointAdmin.devices.bulk.lifecycle.noneEligible':
+    'Seçili cihazların hiçbiri bu işlem için uygun değil.',
+  'endpointAdmin.devices.bulk.lifecycle.result':
+    'Toplu {action}: {ok} başarılı, {fail} başarısız, {skipped} atlandı.',
   'endpointAdmin.devices.forbidden': 'Cihaz listesini görüntüleme yetkiniz yok.',
   'endpointAdmin.devices.empty': 'Henüz kayıtlı cihaz yok.',
   'endpointAdmin.devices.countLabel': 'Toplam',
@@ -1493,6 +1510,23 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
     '{action}: queued for {count} device(s) ({skipped} offline, skipped).',
   'endpointAdmin.devices.bulk.collect.noneOnline':
     'None of the selected devices are online; cannot collect inventory.',
+  'endpointAdmin.devices.bulk.lifecycle.decommission.label': 'Decommission Selected',
+  'endpointAdmin.devices.bulk.lifecycle.reactivate.label': 'Reactivate Selected',
+  'endpointAdmin.devices.bulk.lifecycle.modal.title.decommission': 'Bulk Decommission Devices',
+  'endpointAdmin.devices.bulk.lifecycle.modal.title.reactivate': 'Bulk Reactivate Devices',
+  'endpointAdmin.devices.bulk.lifecycle.modal.warning.decommission':
+    'The selected devices will be decommissioned: pending commands, maintenance tokens and open uninstall requests are cancelled. Reversible — data is not deleted, but cancelled operations are not automatically restored.',
+  'endpointAdmin.devices.bulk.lifecycle.modal.warning.reactivate':
+    'The selected devices will be reactivated. Online status is regained on the next heartbeat.',
+  'endpointAdmin.devices.bulk.lifecycle.modal.counts':
+    'Selected: {selected} · To process: {eligible} · Skipped: {skipped}',
+  'endpointAdmin.devices.bulk.lifecycle.modal.ack':
+    'I understand I am decommissioning {eligible} device(s).',
+  'endpointAdmin.devices.bulk.lifecycle.modal.error': 'An error occurred during the operation.',
+  'endpointAdmin.devices.bulk.lifecycle.noneEligible':
+    'None of the selected devices are eligible for this action.',
+  'endpointAdmin.devices.bulk.lifecycle.result':
+    'Bulk {action}: {ok} succeeded, {fail} failed, {skipped} skipped.',
   'endpointAdmin.devices.forbidden': 'You do not have permission to view devices.',
   'endpointAdmin.devices.empty': 'No devices enrolled yet.',
   'endpointAdmin.devices.countLabel': 'Total',
