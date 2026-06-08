@@ -1254,6 +1254,9 @@ const DICT_TR = {
   'endpointAdmin.command.approval.PENDING': 'Onay bekliyor',
   'endpointAdmin.command.approval.APPROVED': 'Onaylandı',
   'endpointAdmin.command.approval.REJECTED': 'Reddedildi',
+  // P0-0 visibility final-mile (Faz 22.5 §0.5 M0): per-command failure reason
+  // surfaced in the İşlemler recent-commands list (backend #511 RESULT_REJECTED).
+  'endpointAdmin.command.lastError.label': 'Hata sebebi',
   // Path C3 — Endpoint catalog authoring UI (Codex thread 019e8982 iter-2 absorb).
   'endpointAdmin.catalog.page.title': 'Yazılım Kataloğu',
   'endpointAdmin.catalog.page.newButton': 'Yeni Katalog Öğesi',
@@ -2684,6 +2687,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.command.approval.PENDING': 'Awaiting approval',
   'endpointAdmin.command.approval.APPROVED': 'Approved',
   'endpointAdmin.command.approval.REJECTED': 'Rejected',
+  'endpointAdmin.command.lastError.label': 'Failure reason',
   // Path C3 — Endpoint catalog authoring UI (DICT_EN parity).
   'endpointAdmin.catalog.page.title': 'Software Catalog',
   'endpointAdmin.catalog.page.newButton': 'New Catalog Item',
