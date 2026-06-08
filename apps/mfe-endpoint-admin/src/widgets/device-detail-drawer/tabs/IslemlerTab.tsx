@@ -15,6 +15,10 @@ import {
 import { AgentUpdateModal } from '../components/AgentUpdateModal';
 import { RolloutRingModal } from '../components/RolloutRingModal';
 import { MaintenanceTokenModal } from '../components/MaintenanceTokenModal';
+import {
+  DeviceLifecycleModal,
+  type DeviceLifecycleAction,
+} from '../components/DeviceLifecycleModal';
 
 export interface IslemlerTabProps {
   device: EndpointDevice;
@@ -70,8 +74,14 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
   // BE-027 — maintenance-token manager (one-time secret handling lives in the
   // modal; conditionally mounted so its list query + hooks stay dormant).
   const [maintOpen, setMaintOpen] = React.useState(false);
+  // Device lifecycle (V56) — DECOMMISSION ("Pasif Al") / REACTIVATE ("Yeniden
+  // Etkinleştir"). Admin metadata action; NOT gated by `allowedAtAll` (works in
+  // any status, and reactivate is only reachable once DECOMMISSIONED).
+  const [lifecycleAction, setLifecycleAction] = React.useState<DeviceLifecycleAction | null>(null);
+  const [lifecycleDone, setLifecycleDone] = React.useState<DeviceLifecycleAction | null>(null);
 
   const isOnline = device.status === 'ONLINE';
+  const isDecommissioned = device.status === 'DECOMMISSIONED';
   const allowedAtAll = isOnline; // STALE/OFFLINE/DECOMMISSIONED/PENDING_ENROLLMENT → all disabled in v1
 
   const successMessage = lastIssuedCommandId
@@ -306,6 +316,51 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
         </button>
       </section>
 
+      <section data-testid="islemler-lifecycle-section">
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
+          {t('endpointAdmin.lifecycle.section.heading')}
+        </h4>
+        {lifecycleDone && (
+          <div
+            role="status"
+            data-testid="lifecycle-success-toast"
+            className="rounded-md border border-state-success-border bg-state-success-subtle px-4 py-2 text-sm text-state-success-text mb-2"
+          >
+            {t(`endpointAdmin.lifecycle.section.done.${lifecycleDone}`)}
+          </div>
+        )}
+        <p className="text-xs text-text-secondary mb-3">
+          {t('endpointAdmin.lifecycle.section.note')}
+        </p>
+        {isDecommissioned ? (
+          <button
+            type="button"
+            onClick={() => {
+              setLifecycleDone(null);
+              setLifecycleAction('reactivate');
+            }}
+            disabled={isSubmitting}
+            data-testid="lifecycle-reactivate-button"
+            className="px-4 py-2 rounded-md border border-brand-primary bg-surface-default text-sm text-brand-primary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t('endpointAdmin.lifecycle.button.reactivate')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setLifecycleDone(null);
+              setLifecycleAction('decommission');
+            }}
+            disabled={isSubmitting}
+            data-testid="lifecycle-decommission-button"
+            className="px-4 py-2 rounded-md border border-danger bg-surface-default text-sm text-danger hover:bg-state-danger-subtle disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {t('endpointAdmin.lifecycle.button.decommission')}
+          </button>
+        )}
+      </section>
+
       {recentCommands.length > 0 && (
         <section data-testid="recent-commands-list">
           <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
@@ -376,6 +431,19 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
 
       {maintOpen && (
         <MaintenanceTokenModal open deviceId={device.id} onClose={() => setMaintOpen(false)} />
+      )}
+
+      {lifecycleAction && (
+        <DeviceLifecycleModal
+          open
+          deviceId={device.id}
+          action={lifecycleAction}
+          onCancel={() => setLifecycleAction(null)}
+          onDone={() => {
+            setLifecycleDone(lifecycleAction);
+            setLifecycleAction(null);
+          }}
+        />
       )}
     </div>
   );
