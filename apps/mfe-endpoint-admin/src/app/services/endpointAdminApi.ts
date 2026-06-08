@@ -30,6 +30,11 @@ import type {
   ListAuditEventsArgs,
 } from '../../entities/endpoint-audit-event/types';
 import type {
+  DisplayPolicyResponse,
+  SetDisplayPolicyArgs,
+  ClearDisplayPolicyArgs,
+} from '../../entities/endpoint-display-policy/types';
+import type {
   EndpointCommand,
   CreateEndpointCommandBody,
   CreateLocalPasswordChangeBody,
@@ -440,6 +445,7 @@ export const endpointAdminApi = createApi({
     'EndpointAgentUpdateRelease',
     'EndpointSoftwareBundle',
     'EndpointMaintenanceToken',
+    'EndpointDisplayPolicy',
   ] as const,
   endpoints: (builder) => ({
     getAgentStatus: builder.query<EndpointAgentServiceStatus, void>({
@@ -1961,6 +1967,44 @@ export const endpointAdminApi = createApi({
         { type: 'EndpointMaintenanceToken' as const, id: deviceId },
       ],
     }),
+    /**
+     * #508 — Endpoint Display Policy (Faz 22.5): GET current desired-state +
+     * open proposal. 404 when no policy/proposal exists; 503 when the dark-ship
+     * feature flag (`endpoint-admin.display-policy.enabled`) is off.
+     */
+    getDisplayPolicy: builder.query<DisplayPolicyResponse, string>({
+      query: (deviceId) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/display-policy`,
+        method: 'GET',
+      }),
+      providesTags: (_result, _error, deviceId) => [
+        { type: 'EndpointDisplayPolicy' as const, id: deviceId },
+      ],
+    }),
+    /** #508 — propose ENFORCE (always maker-checker; creates a PENDING command). */
+    setDisplayPolicy: builder.mutation<DisplayPolicyResponse, SetDisplayPolicyArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/display-policy`,
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointDisplayPolicy' as const, id: deviceId },
+        { type: 'EndpointCommand' as const, id: deviceId },
+      ],
+    }),
+    /** #508 — propose CLEAR (maker-checker). */
+    clearDisplayPolicy: builder.mutation<DisplayPolicyResponse, ClearDisplayPolicyArgs>({
+      query: ({ deviceId, reason }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/display-policy`,
+        method: 'DELETE',
+        body: { reason },
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointDisplayPolicy' as const, id: deviceId },
+        { type: 'EndpointCommand' as const, id: deviceId },
+      ],
+    }),
   }),
 });
 
@@ -2031,4 +2075,8 @@ export const {
   useListMaintenanceTokensQuery,
   useCreateMaintenanceTokenMutation,
   useRevokeMaintenanceTokenMutation,
+  // #508 Endpoint Display Policy (Faz 22.5).
+  useGetDisplayPolicyQuery,
+  useSetDisplayPolicyMutation,
+  useClearDisplayPolicyMutation,
 } = endpointAdminApi;

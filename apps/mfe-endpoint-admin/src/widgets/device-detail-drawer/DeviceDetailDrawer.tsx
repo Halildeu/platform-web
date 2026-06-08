@@ -82,6 +82,14 @@ const HotfixPostureTab = React.lazy(() =>
     default: m.HotfixPostureView,
   })),
 );
+// #508 Endpoint Display Policy — Faz 22.5. Lazy: the current-state panel +
+// propose form never render until the operator selects the "Görüntü Politikası"
+// tab, preserving the drawer cold-path perf budget.
+const DisplayPolicyTab = React.lazy(() =>
+  import('./components/display-policy/DisplayPolicyView').then((m) => ({
+    default: m.DisplayPolicyView,
+  })),
+);
 
 // AG-038 agent self-diagnostics — Faz 22.5. Same lazy-mount pattern as
 // hotfix-posture / outdated-software: the agent-meta panel, connectivity
@@ -179,6 +187,7 @@ export type DeviceDetailDrawerTabKey =
   | 'services'
   | 'startup-exposure'
   | 'app-control'
+  | 'display-policy'
   | 'software-diff'
   | 'outdated-software-diff'
   | 'prohibited-software'
@@ -430,6 +439,15 @@ export const DeviceDetailDrawer: React.FC<DeviceDetailDrawerProps> = ({
         content: (
           <React.Suspense fallback={<TabFallback />}>
             <StartupExposureTab deviceId={device.id} active={activeTab === 'startup-exposure'} />
+          </React.Suspense>
+        ),
+      },
+      {
+        key: 'display-policy' as const,
+        label: t('endpointAdmin.drawer.tab.displayPolicy'),
+        content: (
+          <React.Suspense fallback={<TabFallback />}>
+            <DisplayPolicyTab deviceId={device.id} active={activeTab === 'display-policy'} />
           </React.Suspense>
         ),
       },
