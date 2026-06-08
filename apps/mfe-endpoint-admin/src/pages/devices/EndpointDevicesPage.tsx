@@ -64,6 +64,35 @@ const STATUS_VALUES = Object.keys(STATUS_VARIANT_MAP) as DeviceStatus[];
 // decommissioned ("işi biten") devices without deleting them — operators
 // reveal passive devices by editing the existing Durum (status) column filter.
 const ACTIVE_STATUS_VALUES = STATUS_VALUES.filter((s) => s !== 'DECOMMISSIONED');
+
+/**
+ * Apply the default ACTIVE status floor to an SSRM query's filterModel
+ * (#782 follow-up, Codex 019ea960 AGREE Option A).
+ *
+ * Why at the datasource layer and not via onGridReady setFilterModel: the
+ * design-system EntityGridTemplate has a grid-VARIANT system that OWNS the
+ * live filterModel — on mount it runs `applyVariantState` →
+ * `setFilterModel(variant.state.filterModel ?? null)`, which clobbers any
+ * page-level default applied in onGridReady (a saved variant with an empty
+ * `{}` filterModel re-shows DECOMMISSIONED devices — the live bug this fixes).
+ * Enforcing the default here, at every server query build, is robust against
+ * the variant system, persistence and lifecycle timing.
+ *
+ * Semantics: inject `statusDefault` ONLY when the caller's filterModel has no
+ * `status` KEY at all (field-level presence, NOT truthiness of `values`). An
+ * explicit `status` filter — including a deliberate empty `values: []`
+ * ("match nothing") or a full set that re-includes DECOMMISSIONED — is
+ * respected verbatim. Pure + non-mutating: the input is never modified.
+ */
+export function withDefaultStatusFilter(
+  filterModel: Record<string, unknown>,
+  statusDefault: unknown,
+): Record<string, unknown> {
+  if (statusDefault == null) return filterModel;
+  if (Object.prototype.hasOwnProperty.call(filterModel, 'status')) return filterModel;
+  return { ...filterModel, status: statusDefault };
+}
+
 const OS_VALUES: OsType[] = ['WINDOWS', 'MACOS', 'LINUX', 'UNKNOWN'];
 
 const OS_LABEL: Record<OsType, string> = {
@@ -155,11 +184,14 @@ export const DEFAULT_PRESET: EndpointDevicesPagePreset = {
   exportSheetName: 'Cihazlar',
   quickFilterPlaceholderKey: 'endpointAdmin.devices.quickFilterPlaceholder',
   // Default the grid to ACTIVE devices only (hide DECOMMISSIONED / "Pasif").
-  // Applied through the existing Durum (status) `agSetColumnFilter` via
-  // onGridReady → setFilterModel, so it IS the standard column filter: an
-  // operator opens that filter to re-include DECOMMISSIONED or clear it to see
-  // everything. No separate toggle/control. Backend treats this as a status
-  // set-filter (status IN active values).
+  // The default lives in the existing Durum (status) set-filter semantics (no
+  // separate toggle/control) but is ENFORCED at the SSRM datasource layer via
+  // `withDefaultStatusFilter` — NOT onGridReady — because the EntityGridTemplate
+  // variant system owns the live filterModel and would clobber a UI-level
+  // default (see the helper's docblock). `.status` here is the canonical
+  // default-floor source consumed by the datasource; the operator re-includes
+  // DECOMMISSIONED by selecting it in the Durum filter (an explicit status key
+  // is respected verbatim). Backend treats this as `status IN (active values)`.
   initialFilterModel: {
     status: { filterType: 'set', values: ACTIVE_STATUS_VALUES },
   },
@@ -186,7 +218,6 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
 }) => {
   const { t } = useEndpointAdminI18n();
   const gridApiRef = React.useRef<GridApi<DeviceGridRow> | null>(null);
-  const initialFilterAppliedRef = React.useRef(false);
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | null>(null);
   const [loadError, setLoadError] = React.useState<DeviceGridExportError | null>(null);
   const [exportNotice, setExportNotice] = React.useState<string | null>(null);
@@ -603,11 +634,20 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
         const req = params.request;
         const quickFilterText =
           (params.api.getGridOption('quickFilterText') as string | undefined) ?? '';
+        // Default ACTIVE status floor: when the operator has set no explicit
+        // Durum (status) filter, hide DECOMMISSIONED ("Pasif") devices. Enforced
+        // here (not onGridReady) so the variant system can't clobber it; a
+        // quickFilter text search stays within the default view (status is a
+        // separate filterModel key). Codex 019ea960 AGREE Option A.
+        const effectiveFilterModel = withDefaultStatusFilter(
+          (req.filterModel as Record<string, unknown>) ?? {},
+          preset.initialFilterModel?.status,
+        );
         try {
           const response = await queryDevices({
             startRow: req.startRow ?? 0,
             endRow: req.endRow ?? 100,
-            filterModel: (req.filterModel as Record<string, unknown>) ?? {},
+            filterModel: effectiveFilterModel,
             sortModel: (req.sortModel as unknown[]) ?? [],
             quickFilterText,
           });
@@ -627,7 +667,7 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
         }
       },
     }),
-    [],
+    [preset.initialFilterModel],
   );
 
   const exportConfig = React.useMemo<GridExportConfig<DeviceGridRow>>(
@@ -665,10 +705,19 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
       const visibleColumns = isView
         ? exportViewColumns(gridApiRef.current?.getColumnState() ?? [])
         : undefined;
+      // VIEW export must carry the SAME default-active status floor as the live
+      // grid (Codex 019ea960 REVISE): otherwise a saved variant with an empty
+      // `{}` filterModel hides DECOMMISSIONED on screen (datasource floor) but a
+      // "view export" with no status filter would re-include them — breaking the
+      // "export the visible view" contract. RAW export is unaffected (ships every
+      // canonical row regardless of filter).
+      const viewFilterModel = isView
+        ? withDefaultStatusFilter(params.filterModel ?? {}, preset.initialFilterModel?.status)
+        : undefined;
       const args: DeviceGridExportArgs = {
         format: format === 'excel' ? 'xlsx' : 'csv',
         exportMode,
-        filterModel: isView ? params.filterModel : undefined,
+        filterModel: viewFilterModel,
         sortModel: isView ? params.sortModel : undefined,
         quickFilterText: isView ? params.quickFilterText : undefined,
         columns: visibleColumns,
@@ -690,7 +739,7 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
         }
       }
     },
-    [t],
+    [t, preset.initialFilterModel],
   );
 
   const gridOptions = React.useMemo<GridOptions<DeviceGridRow>>(
@@ -727,20 +776,14 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     [],
   );
 
-  const onGridReady = React.useCallback(
-    (event: GridReadyEvent<DeviceGridRow>) => {
-      gridApiRef.current = event.api;
-      if (initialFilterAppliedRef.current || !preset.initialFilterModel) return;
-      initialFilterAppliedRef.current = true;
-      window.queueMicrotask(() => {
-        event.api.setFilterModel(
-          preset.initialFilterModel as Parameters<GridApi<DeviceGridRow>['setFilterModel']>[0],
-        );
-        event.api.onFilterChanged();
-      });
-    },
-    [preset.initialFilterModel],
-  );
+  const onGridReady = React.useCallback((event: GridReadyEvent<DeviceGridRow>) => {
+    gridApiRef.current = event.api;
+    // The default ACTIVE status floor is NOT applied here: the EntityGridTemplate
+    // variant system owns the live filterModel and clobbers any onGridReady
+    // setFilterModel (a saved variant with an empty `{}` filter re-shows
+    // DECOMMISSIONED). It is enforced at the SSRM datasource layer instead — see
+    // `withDefaultStatusFilter` + createServerSideDatasource (Codex 019ea960).
+  }, []);
 
   const getSelectedDevices = React.useCallback((): BulkSelectableDevice[] => {
     const rows = gridApiRef.current?.getSelectedRows() ?? [];
