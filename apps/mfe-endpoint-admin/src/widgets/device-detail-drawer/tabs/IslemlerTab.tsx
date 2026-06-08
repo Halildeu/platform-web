@@ -6,6 +6,7 @@ import type {
   EndpointCommand,
 } from '../../../entities/endpoint-command/types';
 import { isDestructiveCommand } from '../../../entities/endpoint-command/types';
+import { buildFullCollectInventoryBody } from '../../../entities/endpoint-command/collectInventory';
 import { useEndpointAdminI18n } from '../../../i18n';
 import {
   DestructiveCommandModal,
@@ -109,26 +110,11 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
     // friction — the canonical "trigger every probe" button must just
     // work).
     if (type === 'COLLECT_INVENTORY') {
-      onIssueCommand({
-        type,
-        payload: {
-          includeSoftware: true,
-          includeWinGetEgress: true,
-          includeHardware: true,
-          includeDeviceHealth: true,
-          includeOutdatedSoftware: true,
-          includeHotfixPosture: true,
-          includeDiagnostics: true,
-          includeServices: true,
-          includeStartupExposure: true,
-          // AG-041 — Application Control (WDAC + AppLocker) snapshot.
-          // Without this bit the AppControlView would only ever render
-          // the 404 empty state because no operator command flips the
-          // payload toggle (mirrors AG-039/AG-040 pattern; agent stub
-          // returns supported=false + NO_EVIDENCE on non-Windows).
-          includeAppControl: true,
-        },
-      });
+      // Canonical full-snapshot payload (all opt-in probe bits) — now shared
+      // with the devices-grid toolbar bulk action via a single helper so
+      // "Envanteri Şimdi Topla" means the same full snapshot everywhere
+      // (Codex 019ea756 must-fix #1: single source of truth).
+      onIssueCommand(buildFullCollectInventoryBody());
       return;
     }
     onIssueCommand({ type });

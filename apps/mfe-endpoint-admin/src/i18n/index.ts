@@ -23,6 +23,20 @@ const DICT_TR = {
   'endpointAdmin.devices.heading': 'Uç Birimler',
   'endpointAdmin.devices.loading': 'Cihazlar yükleniyor…',
   'endpointAdmin.devices.error': 'Cihaz listesi alınamadı.',
+  // Toolbar bulk-action menu (left of İndir) — applies a device command to
+  // every grid-selected device.
+  'endpointAdmin.devices.bulk.trigger': 'İşlemler',
+  'endpointAdmin.devices.bulk.running': 'İşleniyor…',
+  'endpointAdmin.devices.bulk.noSelection': 'Önce listeden bir veya daha fazla cihaz seçin.',
+  'endpointAdmin.devices.bulk.collect.label': 'Envanteri Şimdi Topla',
+  'endpointAdmin.devices.bulk.collect.reason': 'Toplu envanter toplama (cihaz listesi)',
+  'endpointAdmin.devices.bulk.evaluate.label': 'Uyumluluk Değerlendir',
+  'endpointAdmin.devices.bulk.resultOk': '{action}: {count} cihaz için kuyruğa alındı.',
+  'endpointAdmin.devices.bulk.resultPartial': '{action}: {ok} başarılı, {fail} başarısız.',
+  'endpointAdmin.devices.bulk.resultOkSkipped':
+    '{action}: {count} cihaz için kuyruğa alındı ({skipped} cihaz çevrimiçi değil, atlandı).',
+  'endpointAdmin.devices.bulk.collect.noneOnline':
+    'Seçili cihazların hiçbiri çevrimiçi değil; envanter toplanamaz.',
   'endpointAdmin.devices.forbidden': 'Cihaz listesini görüntüleme yetkiniz yok.',
   'endpointAdmin.devices.empty': 'Henüz kayıtlı cihaz yok.',
   'endpointAdmin.devices.countLabel': 'Toplam',
@@ -1448,6 +1462,18 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.devices.heading': 'Endpoint Devices',
   'endpointAdmin.devices.loading': 'Loading devices…',
   'endpointAdmin.devices.error': 'Failed to load device list.',
+  'endpointAdmin.devices.bulk.trigger': 'Actions',
+  'endpointAdmin.devices.bulk.running': 'Working…',
+  'endpointAdmin.devices.bulk.noSelection': 'Select one or more devices from the list first.',
+  'endpointAdmin.devices.bulk.collect.label': 'Collect Inventory Now',
+  'endpointAdmin.devices.bulk.collect.reason': 'Bulk inventory collection (devices list)',
+  'endpointAdmin.devices.bulk.evaluate.label': 'Evaluate Compliance',
+  'endpointAdmin.devices.bulk.resultOk': '{action}: queued for {count} device(s).',
+  'endpointAdmin.devices.bulk.resultPartial': '{action}: {ok} succeeded, {fail} failed.',
+  'endpointAdmin.devices.bulk.resultOkSkipped':
+    '{action}: queued for {count} device(s) ({skipped} offline, skipped).',
+  'endpointAdmin.devices.bulk.collect.noneOnline':
+    'None of the selected devices are online; cannot collect inventory.',
   'endpointAdmin.devices.forbidden': 'You do not have permission to view devices.',
   'endpointAdmin.devices.empty': 'No devices enrolled yet.',
   'endpointAdmin.devices.countLabel': 'Total',

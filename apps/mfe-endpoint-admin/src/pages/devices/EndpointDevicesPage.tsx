@@ -27,6 +27,7 @@ import {
 import { useEndpointAdminI18n } from '../../i18n';
 import type { DeviceStatus, OsType } from '../../entities/endpoint-device/types';
 import { DeviceDetailDrawer } from '../../widgets/device-detail-drawer';
+import DeviceBulkActionsMenu, { type BulkSelectableDevice } from './DeviceBulkActionsMenu';
 
 /**
  * Devices surface — #1154 PR-3: SERVER-MODE grid.
@@ -175,6 +176,10 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
   const [selectedDeviceId, setSelectedDeviceId] = React.useState<string | null>(null);
   const [loadError, setLoadError] = React.useState<DeviceGridExportError | null>(null);
   const [exportNotice, setExportNotice] = React.useState<string | null>(null);
+  const [bulkNotice, setBulkNotice] = React.useState<{
+    message: string;
+    kind: 'success' | 'error' | 'info';
+  } | null>(null);
   const forcedVisibleColumns = React.useMemo(
     () => new Set(preset.forceVisibleColumns ?? []),
     [preset.forceVisibleColumns],
@@ -674,6 +679,9 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
   const gridOptions = React.useMemo<GridOptions<DeviceGridRow>>(
     () => ({
       multiSortKey: 'ctrl' as const,
+      // Stable row identity so grid selection survives SSRM block reloads and
+      // refreshServerSide({ purge }) (Codex 019ea756 selection-scope hardening).
+      getRowId: (params) => params.data.device_id,
       onRowClicked: (event) => {
         const ev = event.event as MouseEvent | undefined;
         if (ev && ev.button !== undefined && ev.button !== 0) return;
@@ -716,6 +724,21 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
     },
     [preset.initialFilterModel],
   );
+
+  const getSelectedDevices = React.useCallback((): BulkSelectableDevice[] => {
+    const rows = gridApiRef.current?.getSelectedRows() ?? [];
+    return rows
+      .filter((r): r is DeviceGridRow => typeof r?.device_id === 'string')
+      .map((r) => ({
+        device_id: r.device_id,
+        hostname: r.hostname,
+        status: r.status as DeviceStatus,
+      }));
+  }, []);
+
+  const refreshGrid = React.useCallback(() => {
+    gridApiRef.current?.refreshServerSide({ purge: true });
+  }, []);
 
   if (forbidden) {
     return (
@@ -761,6 +784,25 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
           </span>
         ) : null}
       </div>
+      {bulkNotice ? (
+        <p
+          role="status"
+          aria-live="polite"
+          data-testid="bulk-notice"
+          style={{
+            marginTop: 12,
+            fontSize: 13,
+            color:
+              bulkNotice.kind === 'error'
+                ? 'var(--danger-color)'
+                : bulkNotice.kind === 'success'
+                  ? 'var(--state-success-text, #027a48)'
+                  : 'var(--text-secondary)',
+          }}
+        >
+          {bulkNotice.message}
+        </p>
+      ) : null}
       {loadError && !forbidden ? (
         <p
           role="alert"
@@ -783,6 +825,13 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
             exportConfig={exportConfig}
             onServerExport={handleServerExport}
             supportsViewExport
+            exportLeadingExtras={
+              <DeviceBulkActionsMenu
+                getSelectedDevices={getSelectedDevices}
+                onNotice={(message, kind) => setBulkNotice({ message, kind })}
+                onAfterRun={refreshGrid}
+              />
+            }
             themeLabel="Tema"
             quickFilterLabel="Hızlı Filtre"
             quickFilterPlaceholder={

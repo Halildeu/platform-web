@@ -222,6 +222,13 @@ export interface EntityGridTemplateProps<
   onRequestFullscreen?: () => void;
   toolbarExtras?: React.ReactNode;
   /**
+   * Toolbar slot rendered on the RIGHT cluster, immediately to the LEFT of the
+   * export ("İndir") control — for a primary action menu (e.g. bulk device
+   * actions on selected rows). Forwarded to {@link GridToolbar}'s
+   * `exportLeadingExtras`. Optional; default undefined renders nothing.
+   */
+  exportLeadingExtras?: React.ReactNode;
+  /**
    * Content surfaced at the top of the toolbar's "Filtre" drawer (the
    * AG-Grid-style {@link FilterBuilderPanel}), above the rule tree. Use
    * this to embed report-level locked filters — e.g. CompanyPicker —
@@ -359,6 +366,7 @@ export function EntityGridTemplate<
     isFullscreen = false,
     onRequestFullscreen,
     toolbarExtras,
+    exportLeadingExtras,
     filterBuilderPrefix,
     footerStartSlot,
     exportConfig,
@@ -698,6 +706,7 @@ export function EntityGridTemplate<
             {toolbarExtras}
           </>
         }
+        exportLeadingExtras={exportLeadingExtras}
         variantSlot={
           <VariantIntegration<RowData>
             gridId={gridId}
