@@ -201,6 +201,18 @@ describe('EndpointDevicesPage v2-a column registry (WEB-015 v2-a)', () => {
     }
   });
 
+  it('domain_name column is surfaced by default + text-filterable for the cross-fleet domain filter (#517)', () => {
+    // Faz 22.5 #517: the AD-domain column must be visible (NOT hide:true)
+    // and text-filterable so operators can filter the device fleet by
+    // domain. It is fed by the backend endpoint_devices.domain_name filter
+    // cache (inventory-projected). Guards against an accidental re-hide.
+    const idx = source.indexOf("field: 'domain_name'");
+    expect(idx).toBeGreaterThan(0);
+    const block = source.slice(idx, idx + 400);
+    expect(block).toContain("filter: 'agTextColumnFilter'");
+    expect(block).not.toContain('hide: true');
+  });
+
   it('prohibited_status uses a cellRenderer (badge), enum columns use valueFormatter (Codex guardrail #2)', () => {
     // prohibited_status block must contain BOTH cellRenderer + valueFormatter
     // (cell render = badge, formatter = Set Filter / CSV value).
