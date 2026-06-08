@@ -93,7 +93,6 @@ export const DetayTab: React.FC<DetayTabProps> = ({ device }) => {
           )
         }
       />
-      <Row label={t('endpointAdmin.drawer.detay.domainName')} value={device.domainName ?? '—'} />
       <Row
         label={t('endpointAdmin.drawer.detay.enrolledAt')}
         value={formatTimestamp(device.enrolledAt)}
