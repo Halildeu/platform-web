@@ -1204,6 +1204,23 @@ const DICT_TR = {
   'endpointAdmin.modal.cancel': 'İptal',
   'endpointAdmin.modal.requiredField': 'Bu alan zorunludur.',
   'endpointAdmin.modal.reasonTooLong': '512 karakter sınırını aştı.',
+  // Device lifecycle (V56) — DECOMMISSION / REACTIVATE.
+  'endpointAdmin.lifecycle.section.heading': 'Yaşam Döngüsü',
+  'endpointAdmin.lifecycle.section.note':
+    'Cihazı pasife almak geri alınabilir: veriler korunur, ajan yeni iş alamaz. Yeniden etkinleştirme geri döndürür.',
+  'endpointAdmin.lifecycle.section.done.decommission': 'Cihaz pasife alındı.',
+  'endpointAdmin.lifecycle.section.done.reactivate': 'Cihaz yeniden etkinleştirildi.',
+  'endpointAdmin.lifecycle.button.decommission': 'Pasif Al',
+  'endpointAdmin.lifecycle.button.reactivate': 'Yeniden Etkinleştir',
+  'endpointAdmin.lifecycle.modal.title.decommission': 'Cihazı Pasif Al',
+  'endpointAdmin.lifecycle.modal.title.reactivate': 'Cihazı Yeniden Etkinleştir',
+  'endpointAdmin.lifecycle.modal.warning.decommission':
+    'Cihaz pasife alınacak: bekleyen komutlar, bakım jetonları ve açık kaldırma istekleri iptal edilir. Geri alınabilir — veriler silinmez.',
+  'endpointAdmin.lifecycle.modal.warning.reactivate':
+    'Cihaz yeniden etkinleştirilecek. Çevrimiçi durumu bir sonraki heartbeat ile kazanılır.',
+  'endpointAdmin.lifecycle.modal.submit.decommission': 'Pasif Al',
+  'endpointAdmin.lifecycle.modal.submit.reactivate': 'Yeniden Etkinleştir',
+  'endpointAdmin.lifecycle.modal.error': 'İşlem başarısız oldu. Lütfen tekrar deneyin.',
   // Command status badges
   'endpointAdmin.command.status.QUEUED': 'Sırada',
   'endpointAdmin.command.status.DELIVERED': 'İletildi',
@@ -2623,6 +2640,23 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.modal.cancel': 'Cancel',
   'endpointAdmin.modal.requiredField': 'This field is required.',
   'endpointAdmin.modal.reasonTooLong': 'Exceeds 512-character limit.',
+  // Device lifecycle (V56) — DECOMMISSION / REACTIVATE.
+  'endpointAdmin.lifecycle.section.heading': 'Lifecycle',
+  'endpointAdmin.lifecycle.section.note':
+    'Decommissioning is reversible: data is retained and the agent receives no new work. Reactivation reverses it.',
+  'endpointAdmin.lifecycle.section.done.decommission': 'Device decommissioned.',
+  'endpointAdmin.lifecycle.section.done.reactivate': 'Device reactivated.',
+  'endpointAdmin.lifecycle.button.decommission': 'Decommission',
+  'endpointAdmin.lifecycle.button.reactivate': 'Reactivate',
+  'endpointAdmin.lifecycle.modal.title.decommission': 'Decommission device',
+  'endpointAdmin.lifecycle.modal.title.reactivate': 'Reactivate device',
+  'endpointAdmin.lifecycle.modal.warning.decommission':
+    'The device will be decommissioned: pending commands, maintenance tokens and open uninstall requests are cancelled. Reversible — no data is deleted.',
+  'endpointAdmin.lifecycle.modal.warning.reactivate':
+    'The device will be reactivated. Online status is earned again on the next heartbeat.',
+  'endpointAdmin.lifecycle.modal.submit.decommission': 'Decommission',
+  'endpointAdmin.lifecycle.modal.submit.reactivate': 'Reactivate',
+  'endpointAdmin.lifecycle.modal.error': 'The operation failed. Please try again.',
   'endpointAdmin.command.status.QUEUED': 'Queued',
   'endpointAdmin.command.status.DELIVERED': 'Delivered',
   'endpointAdmin.command.status.ACKED': 'Acked',

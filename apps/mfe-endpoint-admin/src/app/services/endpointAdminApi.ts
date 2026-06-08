@@ -13,7 +13,11 @@ import {
   useEndpointAdminStore,
 } from './redux-context';
 import type { EndpointAgentServiceStatus } from '../../entities/endpoint-agent-status/types';
-import type { EndpointDevice, UpdateDeviceRolloutArgs } from '../../entities/endpoint-device/types';
+import type {
+  DeviceLifecycleArgs,
+  EndpointDevice,
+  UpdateDeviceRolloutArgs,
+} from '../../entities/endpoint-device/types';
 import type {
   CreateMaintenanceTokenArgs,
   CreateMaintenanceTokenResponse,
@@ -1884,6 +1888,40 @@ export const endpointAdminApi = createApi({
       ],
     }),
     /**
+     * Device lifecycle (V56) — DECOMMISSION (KVKK reversible deactivate).
+     *   gateway POST /api/v1/endpoint-admin/endpoint-devices/{deviceId}/decommission
+     * Body { reason } (required, max 512). Returns the updated device
+     * (status=DECOMMISSIONED). Invalidates the device detail (drawer re-reads
+     * the new status) + the device audit-event list (the lifecycle audit row).
+     */
+    decommissionDevice: builder.mutation<EndpointDevice, DeviceLifecycleArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/decommission`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointDevice' as const, id: deviceId },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
+     * Device lifecycle (V56) — REACTIVATE (reverse a decommission). The backend
+     * never restores ONLINE (that is earned by a real heartbeat); the target is
+     * OFFLINE or PENDING_ENROLLMENT. Body { reason } (required, max 512).
+     */
+    reactivateDevice: builder.mutation<EndpointDevice, DeviceLifecycleArgs>({
+      query: ({ deviceId, body }) => ({
+        url: `/endpoint-admin/endpoint-devices/${encodeURIComponent(deviceId)}/reactivate`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (_res, _err, { deviceId }) => [
+        { type: 'EndpointDevice' as const, id: deviceId },
+        { type: 'EndpointAuditEvent' as const, id: `device-${deviceId}` },
+      ],
+    }),
+    /**
      * BE-027 — list a device's maintenance tokens. Metadata only; the cleartext
      * token is NEVER returned here (only once, at create).
      */
@@ -1987,6 +2025,8 @@ export const {
   useRevokeSoftwareBundleMutation,
   // BE-026 device rollout-ring assignment (slice 4).
   usePatchDeviceRolloutMutation,
+  useDecommissionDeviceMutation,
+  useReactivateDeviceMutation,
   // BE-027 device maintenance tokens (slice 5).
   useListMaintenanceTokensQuery,
   useCreateMaintenanceTokenMutation,

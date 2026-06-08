@@ -64,6 +64,19 @@ export interface UpdateDeviceRolloutArgs {
   body: UpdateDeviceRolloutBody;
 }
 
+/**
+ * Device lifecycle (V56) — DECOMMISSION / REACTIVATE POST body. `reason` is
+ * required and bounded to 512 chars (backend `@NotBlank @Size(max = 512)`).
+ */
+export interface DeviceLifecycleBody {
+  reason: string;
+}
+
+export interface DeviceLifecycleArgs {
+  deviceId: string;
+  body: DeviceLifecycleBody;
+}
+
 /** Static map for surfacing translatable status badges in the grid. */
 export const DEVICE_STATUS_VALUES: readonly DeviceStatus[] = [
   'PENDING_ENROLLMENT',
