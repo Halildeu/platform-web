@@ -277,7 +277,7 @@
     "@storybook/addon-themes": "^10.3.6",
     "@storybook/react": "^10.3.6",
     "@storybook/react-vite": "^10.3.6",
-    "@tailwindcss/postcss": "4.2.4",
+    "@tailwindcss/postcss": "4.3.0",
     "@tailwindcss/vite": "^4.2.4",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
