@@ -117,6 +117,14 @@ export interface GridToolbarProps<RowData = unknown> extends AccessControlledPro
   messages?: GridToolbarMessages;
   /** Extra elements to render in toolbar */
   extras?: React.ReactNode;
+  /**
+   * Trailing toolbar slot rendered on the RIGHT cluster, immediately to the
+   * LEFT of the export ("İndir") control — for primary toolbar actions such as
+   * a bulk action menu. Distinct from `extras` (left cluster, near Filtre).
+   * Optional; default undefined renders nothing (backward-compatible — no
+   * existing grid is affected).
+   */
+  exportLeadingExtras?: React.ReactNode;
   /** Variant selector slot (injected by VariantIntegration) */
   variantSlot?: React.ReactNode;
   /** Container className */
@@ -213,6 +221,7 @@ export const GridToolbar = <RowData = unknown,>({
   supportsViewExport = false,
   messages,
   extras,
+  exportLeadingExtras,
   variantSlot,
   className,
   access,
@@ -350,6 +359,10 @@ export const GridToolbar = <RowData = unknown,>({
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Primary action slot — right cluster, immediately LEFT of the
+          İndir export control (e.g. a bulk action menu). */}
+      {exportLeadingExtras}
 
       {/*
         Export controls. PR-0.5b2 (Codex 019e2d85, iter-2 §P1):
