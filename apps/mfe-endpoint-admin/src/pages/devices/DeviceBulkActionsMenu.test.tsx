@@ -93,6 +93,33 @@ describe('DeviceBulkActionsMenu', () => {
     expect(screen.getByTestId('device-bulk-evaluate')).toBeInTheDocument();
   });
 
+  it('does NOT open on hover; opens only on click and toggles closed (matches İndir)', () => {
+    renderMenu(() => []);
+    const trigger = screen.getByTestId('device-bulk-actions-trigger');
+    const wrapper = trigger.closest('[data-component="device-bulk-actions-menu"]') as HTMLElement;
+
+    // hover over the trigger / wrapper must NOT open the menu
+    fireEvent.mouseEnter(wrapper);
+    fireEvent.mouseEnter(trigger);
+    fireEvent.mouseOver(trigger);
+    expect(screen.queryByTestId('device-bulk-actions-menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    // a click opens it
+    fireEvent.click(trigger);
+    expect(screen.getByTestId('device-bulk-actions-menu')).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    // mouse-leaving does NOT close it (no hover-driven close timer anymore)
+    fireEvent.mouseLeave(wrapper);
+    expect(screen.getByTestId('device-bulk-actions-menu')).toBeInTheDocument();
+
+    // a second click toggles it closed
+    fireEvent.click(trigger);
+    expect(screen.queryByTestId('device-bulk-actions-menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('dispatches a FULL-snapshot COLLECT_INVENTORY per ONLINE device with distinct idempotency keys', async () => {
     const devices: BulkSelectableDevice[] = [
       { device_id: 'dev-1', hostname: 'h1', status: 'ONLINE' },
