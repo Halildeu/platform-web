@@ -331,6 +331,130 @@ function cloneColumnState(state: VariantColumnState): VariantColumnState {
   ) as VariantColumnState;
 }
 
+/**
+ * Live grid column descriptor used to reconcile a saved variant against the
+ * grid's current column set. Just the {@code colId} plus the column's
+ * colDef-default visibility — enough to splice a column the saved state
+ * predates back into the right place.
+ */
+export interface LiveGridColumn {
+  colId: string;
+  hide: boolean;
+}
+
+/** Read a `colId` off a possibly-malformed saved-state entry, else undefined. */
+function entryColId(entry: unknown): string | undefined {
+  if (entry && typeof entry === 'object') {
+    const id = (entry as { colId?: unknown }).colId;
+    if (typeof id === 'string') return id;
+  }
+  return undefined;
+}
+
+/**
+ * Reconcile a saved variant column-state against the grid's live column set.
+ *
+ * A variant persisted before a column shipped (e.g. AG-043 `active_user`) has
+ * no entry for that column. AG Grid's `applyColumnState({ applyOrder: true })`
+ * then orders the listed columns and pushes every column absent from the saved
+ * state to the grid tail, leaving its visibility to `defaultState`. So a
+ * freshly-added, default-visible column lands out of its intended colDef
+ * position for everyone who already has a saved variant — while brand-new
+ * users (no saved state at all) see it correctly off the colDefs. This is the
+ * "new column doesn't render for existing users" class of bug.
+ *
+ * Fix: merge every live grid column absent from the saved state into the saved
+ * state, honoring the colDef's own resolved `hide`. The user's saved order /
+ * width / visibility for columns they already had is preserved untouched; only
+ * genuinely-new columns are inserted.
+ *
+ * Placement rule (precise): each new column is inserted immediately AFTER the
+ * right-most saved entry that naturally precedes it (the saved entry with the
+ * largest list index whose colDef order index is below the new column's). With
+ * a default-order saved layout this is exactly its colDef neighbour — so
+ * `active_user` lands right after `agent_version`. With a user-reordered layout
+ * it lands after the right-most of its natural predecessors the user kept,
+ * which never jumps it ahead of a natural predecessor and minimally disturbs
+ * the user's order. When it has NO natural predecessor in the saved state it
+ * goes to the front — but still AFTER any leading run of special/unknown
+ * columns (selection checkbox, auto-group), which `api.getColumns()` does not
+ * report and which must stay pinned-left.
+ *
+ * Pure + order-preserving. Malformed (non-object / null) saved entries and
+ * stale saved colIds (columns no longer in the grid) pass through unchanged —
+ * `applyColumnState` ignores unknown colIds, exactly as today. Exported
+ * (`_` prefix) for direct unit testing.
+ */
+export function _reconcileColumnStateWithGrid(
+  savedState: VariantColumnState,
+  liveColumns: readonly LiveGridColumn[],
+): VariantColumnState {
+  if (liveColumns.length === 0) return savedState;
+  const savedIds = new Set<string>();
+  for (const entry of savedState) {
+    const colId = entryColId(entry);
+    if (colId !== undefined) savedIds.add(colId);
+  }
+  const missing = liveColumns.filter((c) => !savedIds.has(c.colId));
+  if (missing.length === 0) return savedState; // hot path: nothing new to merge
+  // Natural (colDef) order index for every live column.
+  const naturalIndex = new Map<string, number>();
+  liveColumns.forEach((c, i) => naturalIndex.set(c.colId, i));
+  const natOf = (entry: unknown): number | undefined => {
+    const id = entryColId(entry);
+    return id !== undefined ? naturalIndex.get(id) : undefined;
+  };
+  const result: VariantColumnState = [...savedState];
+  for (const col of missing) {
+    const colNat = naturalIndex.get(col.colId) ?? Number.MAX_SAFE_INTEGER;
+    // Right-most saved entry that naturally precedes this column.
+    let lastPredecessor = -1;
+    for (let i = 0; i < result.length; i++) {
+      const nat = natOf(result[i]);
+      if (nat !== undefined && nat < colNat) lastPredecessor = i;
+    }
+    let insertAt: number;
+    if (lastPredecessor >= 0) {
+      insertAt = lastPredecessor + 1;
+    } else {
+      // No natural predecessor — sit at the front, but AFTER any leading
+      // special/unknown columns (selection, auto-group) that getColumns()
+      // doesn't report, so they keep their pinned-left position.
+      insertAt = 0;
+      while (insertAt < result.length && natOf(result[insertAt]) === undefined) insertAt++;
+    }
+    result.splice(insertAt, 0, { colId: col.colId, hide: col.hide } as VariantColumnState[number]);
+  }
+  return result;
+}
+
+/**
+ * Pull the grid's live columns ({@link LiveGridColumn}) off the GridApi and run
+ * {@link _reconcileColumnStateWithGrid}. Resolves each column's default
+ * visibility the way AG Grid does (`hide ?? initialHide`) and guards every
+ * optional AG Grid accessor so a partial mock (or a grid not yet initialised)
+ * cleanly falls back to the raw saved state — same behaviour as before this
+ * fix. Exported (`_` prefix) for direct unit testing.
+ */
+export function _reconcileWithLiveColumns<RowData>(
+  api: GridApi<RowData>,
+  state: VariantColumnState,
+): VariantColumnState {
+  if (typeof api.getColumns !== 'function') return state;
+  const cols = api.getColumns();
+  if (!cols || cols.length === 0) return state;
+  const live: LiveGridColumn[] = [];
+  for (const col of cols) {
+    const colId = typeof col.getColId === 'function' ? col.getColId() : undefined;
+    if (typeof colId !== 'string') continue;
+    const colDef = typeof col.getColDef === 'function' ? col.getColDef() : undefined;
+    // AG Grid resolves a column's default visibility as `hide ?? initialHide`.
+    const hide = (colDef?.hide ?? colDef?.initialHide) === true;
+    live.push({ colId, hide });
+  }
+  return _reconcileColumnStateWithGrid(state, live);
+}
+
 function applyVariantState<RowData>(
   api: GridApi<RowData>,
   state: GridVariantState,
@@ -347,8 +471,19 @@ function applyVariantState<RowData>(
       typeof sanitizers.sanitizeColumnState === 'function'
         ? sanitizers.sanitizeColumnState(cloned)
         : cloned;
+    /*
+     * AG-043 (#799) — merge any live grid column the saved variant predates
+     * into the saved state at its natural colDef position BEFORE applying it,
+     * so a newly-shipped default-visible column (e.g. `active_user`) surfaces
+     * for users who already have a saved variant, not only brand-new users.
+     * Without this, `applyOrder: true` tails the unknown column and leaves its
+     * visibility to `defaultState` alone. Falls back to the raw sanitized state
+     * when the grid can't be introspected. Runs after the sanitizer so the
+     * capability envelope still governs group/value/pivot.
+     */
+    const reconciledColumnState = _reconcileWithLiveColumns(api, sanitizedColumnState);
     api.applyColumnState?.({
-      state: sanitizedColumnState as ColumnState[],
+      state: reconciledColumnState as ColumnState[],
       applyOrder: true,
       defaultState: { hide: false },
     });
