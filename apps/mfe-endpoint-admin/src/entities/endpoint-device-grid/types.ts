@@ -14,6 +14,7 @@ export interface DeviceGridRow {
   os_type: string;
   os_version: string | null;
   agent_version: string | null;
+  active_user: string | null;
   domain_name: string | null;
   status: string;
   last_seen_at: string | null;

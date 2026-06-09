@@ -33,6 +33,7 @@ export interface EndpointDevice {
   osType: OsType;
   osVersion: string | null;
   agentVersion: string | null;
+  activeUser: string | null;
   machineFingerprint: string | null;
   domainName: string | null;
   status: DeviceStatus;
