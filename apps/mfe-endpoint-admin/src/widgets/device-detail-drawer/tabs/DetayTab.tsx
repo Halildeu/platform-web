@@ -75,6 +75,11 @@ export const DetayTab: React.FC<DetayTabProps> = ({ device }) => {
         testId="detay-agentversion"
       />
       <Row
+        label={t('endpointAdmin.drawer.detay.activeUser')}
+        value={device.activeUser ? <span className="font-mono">{device.activeUser}</span> : '—'}
+        testId="detay-activeuser"
+      />
+      <Row
         label={t('endpointAdmin.drawer.detay.deviceId')}
         value={<span className="font-mono text-xs">{device.id}</span>}
         testId="detay-deviceid"

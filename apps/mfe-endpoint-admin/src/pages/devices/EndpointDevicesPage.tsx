@@ -287,6 +287,13 @@ export const EndpointDevicesPage: React.FC<EndpointDevicesPageProps> = ({
         valueFormatter: (p) => (p.value ? String(p.value) : '—'),
       },
       {
+        field: 'active_user',
+        headerName: t('endpointAdmin.devices.col.activeUser'),
+        minWidth: 160,
+        filter: 'agTextColumnFilter',
+        valueFormatter: (p) => (p.value ? String(p.value) : '—'),
+      },
+      {
         field: 'domain_name',
         headerName: t('endpointAdmin.devices.col.domain'),
         minWidth: 140,
