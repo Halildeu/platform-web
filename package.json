@@ -285,7 +285,7 @@
     "@testing-library/user-event": "^14.5.0",
     "@tokens-studio/sd-transforms": "^2.0.3",
     "@types/node": "^25.6.0",
-    "@types/react": "^18.2.0",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/browser-playwright": "^4.1.8",
@@ -328,15 +328,15 @@
     "axios": "^1.17.0",
     "cytoscape": "^3.34.0",
     "lucide-react": "~1.7.0",
-    "react": "~18.2.0",
-    "react-dom": "~18.2.0",
+    "react": "~19.2.7",
+    "react-dom": "~19.2.7",
     "react-redux": "^9.2.0",
     "react-router": "^7.15.1",
     "react-router-dom": "^7.14.2",
     "shiki": "^4.1.0"
   },
   "overrides": {
-    "@types/react": "^18.2.0",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^18.2.0",
     "ag-grid-community": "34.3.1",
     "ag-grid-enterprise": "34.3.1",
@@ -349,7 +349,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@types/react": "^18.2.0",
+      "@types/react": "^19.2.17",
       "@types/react-dom": "^18.2.0",
       "ag-grid-community": "34.3.1",
       "ag-grid-enterprise": "34.3.1",
