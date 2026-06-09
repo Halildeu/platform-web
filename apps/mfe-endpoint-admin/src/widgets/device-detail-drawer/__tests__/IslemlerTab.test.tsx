@@ -215,6 +215,27 @@ describe('IslemlerTab — recent-commands lastError visibility (P0-0)', () => {
     expect(row.textContent).toContain('64-char lowercase hex');
   });
 
+  // #508 (Codex 019ea99b): a maker-checker SET_DISPLAY_POLICY command is NOT in
+  // the destructive list, but its approval status MUST still surface so the
+  // operator can see the pending dual-control gate.
+  it('SET_DISPLAY_POLICY PENDING komut icin approval rozeti gosterir', () => {
+    render(
+      <IslemlerTab
+        {...defaults}
+        device={baseDevice}
+        recentCommands={[
+          makeCommand({
+            id: 'cmd-dp',
+            type: 'SET_DISPLAY_POLICY',
+            status: 'QUEUED',
+            approvalStatus: 'PENDING',
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('command-approval-cmd-dp')).toBeInTheDocument();
+  });
+
   it('lastError null olan komut icin sebep satiri RENDER ETMEZ', () => {
     render(
       <IslemlerTab
