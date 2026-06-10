@@ -73,6 +73,17 @@ function isValidManifest(value: unknown): value is ReleaseManifest {
  * pinned `-ExpectedZipSha256` makes a stale paste fail LOUDLY (sha256) rather
  * than install the wrong bytes — operator then regenerates. Single line (not
  * backtick-continued) is the most paste-robust form.
+ *
+ * byte[] GUARD (VM-verified 2026-06-10): the artifact host serves
+ * bootstrap-package.ps1 as `application/octet-stream`, so on Windows PowerShell
+ * 5.1 (the DEFAULT admin shell operators paste into) `(Invoke-WebRequest …)
+ * .Content` is a byte[], NOT a string — feeding it straight to
+ * `[scriptblock]::Create` stringifies the bytes ("60 35 10 …") → ParseException
+ * on every default Windows box. We bind `.Content` to $s and UTF8-decode it iff
+ * it is a byte[] (PS 7 already returns a string, so the guard is a no-op there).
+ * Done at the command layer (not server content-type) so it is robust to any
+ * proxy/CDN that rewrites the content-type. The `[scriptblock]::Create` form is
+ * retained to bypass execution policy for the unsigned bootstrap.
  */
 function buildOneCommand(args: {
   token: string;
@@ -83,7 +94,9 @@ function buildOneCommand(args: {
   const base = `${args.artifactBaseUrl}/endpoint-agent/current`;
   const q = (v: string): string => `'${powerShellEscape(v)}'`;
   return [
-    `& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing ${q(`${base}/bootstrap-package.ps1`)}).Content))`,
+    `$s = (Invoke-WebRequest -UseBasicParsing ${q(`${base}/bootstrap-package.ps1`)}).Content;`,
+    `if ($s -is [byte[]]) { $s = [System.Text.Encoding]::UTF8.GetString($s) };`,
+    `& ([scriptblock]::Create($s))`,
     `-PackageUrl ${q(`${base}/EndpointAgent.zip`)}`,
     `-ExpectedZipSha256 ${q(args.zipSha256)}`,
     `-ApiUrl ${q(args.apiUrl)}`,

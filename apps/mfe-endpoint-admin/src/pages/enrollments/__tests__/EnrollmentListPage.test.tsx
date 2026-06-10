@@ -320,9 +320,16 @@ describe('EnrollmentListPage', () => {
 
     const pre = await screen.findByTestId('enrollment-token-modal-onecommand');
     const cmd = pre.textContent ?? '';
-    // bootstrap fetched + run from the stable /current/ alias
-    expect(cmd).toContain('[scriptblock]::Create((Invoke-WebRequest -UseBasicParsing ');
+    // bootstrap fetched from the stable /current/ alias
+    expect(cmd).toContain('$s = (Invoke-WebRequest -UseBasicParsing ');
     expect(cmd).toContain('/artifacts/endpoint-agent/current/bootstrap-package.ps1');
+    // byte[] GUARD (VM-verified): PS 5.1 returns .Content as byte[] for the
+    // octet-stream .ps1 — must UTF8-decode before [scriptblock]::Create or it
+    // ParseExceptions on every default Windows admin shell.
+    expect(cmd).toContain(
+      'if ($s -is [byte[]]) { $s = [System.Text.Encoding]::UTF8.GetString($s) }',
+    );
+    expect(cmd).toContain('& ([scriptblock]::Create($s))');
     expect(cmd).toContain('-PackageUrl');
     expect(cmd).toContain('/artifacts/endpoint-agent/current/EndpointAgent.zip');
     // pinned hash from the manifest (loud-fail on stale paste)
