@@ -291,12 +291,25 @@ const publicOrigin = resolvePublicOrigin(
 );
 const remoteEntryUrlFor = (slug) => `${publicOrigin}/remotes/${slug}/remoteEntry.js`;
 
-// Faz 22 Web endpoint-admin runtime acceptance (#653): endpoint-admin MFE
-// is testai-only. PLAN.md Faz 22 prod is deferred, so the prod single-domain
-// build omits the remote entirely — no eager /remotes/endpoint-admin/
-// remoteEntry.js fetch on prod bootstrap. Faz 22.2 prod activation makes
-// this unconditional.
-const endpointAdminEnabled = publicOrigin === STAGE_PUBLIC_ORIGIN;
+// Faz 22 Web endpoint-admin runtime acceptance (#653): historically
+// testai-only. Faz 22.5 GA (owner 2026-06-10 "ga açalım", platform-web#806):
+// the prod variant now opts in via VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE
+// (Dockerfile ARG→ENV from the ci-web-image-push prod matrix) — same flag +
+// truthy set the shell reads at runtime (shell-navigation readEnvBoolean), so
+// build inclusion and runtime gating stay in lockstep. testai stays
+// unconditionally enabled (origin match), independent of the flag.
+const envFlagTruthy = (value) =>
+  ['1', 'true', 'yes', 'on'].includes(
+    String(value ?? '')
+      .trim()
+      .toLowerCase(),
+  );
+const endpointAdminEnabled =
+  publicOrigin === STAGE_PUBLIC_ORIGIN ||
+  envFlagTruthy(
+    process.env.VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE ??
+      process.env.SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE,
+  );
 if (endpointAdminEnabled) {
   coreRemotes.push({ app: 'mfe-endpoint-admin', slug: 'endpoint-admin' });
 }
