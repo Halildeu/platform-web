@@ -45,6 +45,10 @@ jobs:
             # ready for prod rollout (post-canary measurement + B5b2 admin
             # ramp closure).
             mfe_on_demand_bootstrap: 'false'
+            # Faz 22.5 endpoint-admin GA (owner 2026-06-10 "ga açalım"): include
+            # the endpoint-admin MFE in the prod eager build (buildRemotes +
+            # define + env-config). Backplane (gitops#1436) + modal (#1438) live.
+            enable_endpoint_admin: 'true'
           - variant: testai
             image_name: platform-web-frontend-testai
             kc_url: https://testai.acik.com
@@ -118,6 +122,7 @@ jobs:
             VITE_AG_GRID_LICENSE_KEY=${{ secrets.AG_GRID_LICENSE_KEY }}
             VITE_MFE_ON_DEMAND_BOOTSTRAP=${{ matrix.mfe_on_demand_bootstrap }}
             VITE_NOTIFY_VAPID_PUBLIC_KEY=${{ vars.NOTIFY_VAPID_PUBLIC_KEY }}
+            VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE=${{ matrix.enable_endpoint_admin }}
             BUILD_SHA=${{ github.sha }}
             BUILD_REF=${{ github.ref_name }}
           tags: |

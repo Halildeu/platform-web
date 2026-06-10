@@ -59,6 +59,13 @@ ARG VITE_MFE_ON_DEMAND_BOOTSTRAP="false"
 # warning state'inde gösterir (fail-closed UI; subscribe button disabled).
 ARG VITE_NOTIFY_VAPID_PUBLIC_KEY=""
 
+# Faz 22.5 — endpoint-admin remote GA gate (gitops#1436 backplane + #1438 modal).
+# Default OFF (test-first rollout); set "true" for the prod variant to include
+# the endpoint-admin MFE: vite.config buildRemotes() manifest entry +
+# __SHELL_ENDPOINT_ADMIN_REMOTE_ENABLED__ define (keeps the static EndpointAdminApp
+# import) + the window.__env__ env-config payload (AppRouter runtime guard).
+ARG VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE=""
+
 ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM} \
     VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID} \
@@ -68,6 +75,7 @@ ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
     VITE_AG_GRID_LICENSE_KEY=${VITE_AG_GRID_LICENSE_KEY} \
     VITE_MFE_ON_DEMAND_BOOTSTRAP=${VITE_MFE_ON_DEMAND_BOOTSTRAP} \
     VITE_NOTIFY_VAPID_PUBLIC_KEY=${VITE_NOTIFY_VAPID_PUBLIC_KEY} \
+    VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE=${VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE} \
     BUILD_SHA=${BUILD_SHA} \
     BUILD_REF=${BUILD_REF}
 
