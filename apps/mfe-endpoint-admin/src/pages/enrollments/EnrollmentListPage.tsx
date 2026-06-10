@@ -63,10 +63,25 @@ function resolveApiUrl(): string {
   return 'https://testai.acik.com/api/v1/endpoint-agent';
 }
 
+/**
+ * Public base for the artifact host (gitops#1434). Mirrors {@link resolveApiUrl}:
+ * derived from `window.location.origin` so the modal's release-manifest discovery
+ * fetch is SAME-ORIGIN (the artifact host sits behind the same edge at
+ * `/artifacts/...`). No env knob, no per-release edit — the `/current/` alias the
+ * host serves is what re-points across releases.
+ */
+function resolveArtifactBaseUrl(): string {
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    return `${window.location.origin}/artifacts`;
+  }
+  return 'https://testai.acik.com/artifacts';
+}
+
 const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride }) => {
   const { t } = useEndpointAdminI18n();
   const canManage = useManageGate();
   const apiUrl = apiUrlOverride ?? resolveApiUrl();
+  const artifactBaseUrl = resolveArtifactBaseUrl();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [tokenResponse, setTokenResponse] = React.useState<CreateEndpointEnrollmentResponse | null>(
@@ -176,6 +191,7 @@ const EnrollmentListPage: React.FC<EnrollmentListPageProps> = ({ apiUrlOverride 
       <EnrollmentTokenModal
         response={tokenResponse}
         apiUrl={apiUrl}
+        artifactBaseUrl={artifactBaseUrl}
         onClose={() => setTokenResponse(null)}
       />
     </div>

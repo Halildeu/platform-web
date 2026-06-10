@@ -48,10 +48,42 @@ const mockedCreateHook = endpointAdminApi.useCreateEndpointEnrollmentMutation as
   typeof vi.fn
 >;
 
+/** 64-hex stand-in for endpoint_agent_zip_sha256 in the discovery manifest. */
+const ONE_CMD_SHA = 'a1b2c3d4'.repeat(8);
+
+function manifestResponse(body: unknown, ok = true, status = 200): Response {
+  return { ok, status, json: async () => body } as unknown as Response;
+}
+
+/**
+ * Default discovery-fetch stub: the REAL /current/ release-manifest.json shape
+ * (live testai: `release_tag`, NO `version` field — only the zip hash is
+ * required; verified live 2026-06-10).
+ */
+function stubValidManifest(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      manifestResponse({
+        schema_version: 1,
+        release_tag: 'v0.2.3',
+        signing_tier: 'trusted-internal-ca',
+        endpoint_agent_zip: 'EndpointAgent.zip',
+        endpoint_agent_zip_sha256: ONE_CMD_SHA,
+      }),
+    ),
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   canManageMock = true;
   mockedCreateHook.mockReturnValue([mockCreate, { isLoading: false, reset: mockResetCreate }]);
+  stubValidManifest();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 function row(overrides: Partial<EndpointEnrollment> = {}): EndpointEnrollment {
@@ -266,5 +298,88 @@ describe('EnrollmentListPage', () => {
     const snippet = screen.getByTestId('enrollment-token-modal-snippet').textContent ?? '';
     expect(snippet).toContain('/api/v1/endpoint-agent');
     expect(snippet).not.toContain('/endpoint-admin');
+  });
+
+  // ── Faz 22.5 one-command install (gitops#1434, Codex 019eb26e hardened-A) ──
+
+  function openModalWith(token: string): void {
+    const response: CreateEndpointEnrollmentResponse = {
+      enrollmentId: '99999999-9999-9999-9999-999999999999',
+      token,
+      expiresAt: '2026-05-29T13:00:00Z',
+    };
+    mockedList.mockReturnValue({ data: [], error: undefined, isLoading: false, isFetching: false });
+    mockCreate.mockReturnValue({ unwrap: () => Promise.resolve(response) });
+    render(<EnrollmentListPage apiUrlOverride="https://testai.acik.com/api/v1/endpoint-agent" />);
+    fireEvent.click(screen.getByTestId('enrollment-list-page-create'));
+    fireEvent.click(screen.getByTestId('create-enrollment-dialog-submit'));
+  }
+
+  it('builds the trusted one-command from the live /current/ manifest hash', async () => {
+    openModalWith("tok-with-'-quote");
+
+    const pre = await screen.findByTestId('enrollment-token-modal-onecommand');
+    const cmd = pre.textContent ?? '';
+    // bootstrap fetched + run from the stable /current/ alias
+    expect(cmd).toContain('[scriptblock]::Create((Invoke-WebRequest -UseBasicParsing ');
+    expect(cmd).toContain('/artifacts/endpoint-agent/current/bootstrap-package.ps1');
+    expect(cmd).toContain('-PackageUrl');
+    expect(cmd).toContain('/artifacts/endpoint-agent/current/EndpointAgent.zip');
+    // pinned hash from the manifest (loud-fail on stale paste)
+    expect(cmd).toContain(`-ExpectedZipSha256 '${ONE_CMD_SHA}'`);
+    // canonical agent base + single-quote escape on the token
+    expect(cmd).toContain("-ApiUrl 'https://testai.acik.com/api/v1/endpoint-agent'");
+    expect(cmd).toContain("-EnrollmentToken 'tok-with-''-quote'");
+    expect(cmd).toContain('-Start');
+    // discovery fetch was SAME-ORIGIN /current/ manifest, no-store
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/artifacts/endpoint-agent/current/release-manifest.json'),
+      expect.objectContaining({ cache: 'no-store' }),
+    );
+  });
+
+  it('renders error + retry and NO one-command when the manifest fetch fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => manifestResponse({}, false, 503)),
+    );
+    openModalWith('fetch-fail-token');
+
+    await screen.findByTestId('enrollment-token-modal-onecommand-error');
+    expect(screen.queryByTestId('enrollment-token-modal-onecommand')).not.toBeInTheDocument();
+    expect(screen.getByTestId('enrollment-token-modal-onecommand-retry')).toBeInTheDocument();
+    // the manual (advanced) fallback is still available
+    expect(screen.getByTestId('enrollment-token-modal-snippet')).toBeInTheDocument();
+  });
+
+  it('treats an off-schema manifest (short/missing hash) as error (no command)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        manifestResponse({ release_tag: 'v0.2.3', endpoint_agent_zip_sha256: 'tooshort' }),
+      ),
+    );
+    openModalWith('bad-schema-token');
+
+    await screen.findByTestId('enrollment-token-modal-onecommand-error');
+    expect(screen.queryByTestId('enrollment-token-modal-onecommand')).not.toBeInTheDocument();
+  });
+
+  it('retry re-fetches and renders the one-command after recovery', async () => {
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        call += 1;
+        return call === 1
+          ? manifestResponse({}, false, 500)
+          : manifestResponse({ release_tag: 'v0.2.3', endpoint_agent_zip_sha256: ONE_CMD_SHA });
+      }),
+    );
+    openModalWith('retry-token');
+
+    fireEvent.click(await screen.findByTestId('enrollment-token-modal-onecommand-retry'));
+    const pre = await screen.findByTestId('enrollment-token-modal-onecommand');
+    expect(pre.textContent ?? '').toContain(`-ExpectedZipSha256 '${ONE_CMD_SHA}'`);
   });
 });

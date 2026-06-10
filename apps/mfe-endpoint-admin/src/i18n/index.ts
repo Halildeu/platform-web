@@ -281,7 +281,16 @@ const DICT_TR = {
   'endpointAdmin.enrollments.modal.warning':
     'Bu token yalnızca şimdi gösterilir. Kapattıktan sonra tekrar görüntülenemez. Hemen güvenli bir yere kopyalayın veya aşağıdaki komutu hedef cihaza yapıştırın.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
-  'endpointAdmin.enrollments.modal.snippetLabel': 'PowerShell Kurulum Komutu (Administrator)',
+  'endpointAdmin.enrollments.modal.oneCommandLabel': 'Tek Komut Kurulum (Administrator PowerShell)',
+  'endpointAdmin.enrollments.modal.oneCommandHelp':
+    'Bu komut güncel agent sürümü için geçerlidir. Administrator PowerShell’e yapıştırın; kurulum hash hatası verirse yeni bir token oluşturun.',
+  'endpointAdmin.enrollments.modal.oneCommandLoading': 'Kurulum komutu hazırlanıyor…',
+  'endpointAdmin.enrollments.modal.oneCommandError':
+    'Güncel paket bilgisi alınamadı; güvenilir tek-komut şu an üretilemiyor. Tekrar deneyin veya aşağıdaki manuel adımları kullanın.',
+  'endpointAdmin.enrollments.modal.retry': 'Tekrar Dene',
+  'endpointAdmin.enrollments.modal.manualLabel': 'Manuel Kurulum (Gelişmiş)',
+  'endpointAdmin.enrollments.modal.manualHelp':
+    'Paketi (EndpointAgent.zip) zaten indirip çıkardıysanız, çıkarılan klasörde Administrator PowerShell ile çalıştırın.',
   'endpointAdmin.enrollments.modal.expiresLabel': 'Geçerlilik',
   'endpointAdmin.enrollments.modal.copy': 'Kopyala',
   'endpointAdmin.enrollments.modal.copied': 'Kopyalandı ✓',
@@ -1780,7 +1789,17 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.enrollments.modal.warning':
     'This token is shown only now. After closing this dialog it cannot be retrieved. Copy it to a secure place or paste the install snippet on the target host now.',
   'endpointAdmin.enrollments.modal.tokenLabel': 'Token',
-  'endpointAdmin.enrollments.modal.snippetLabel': 'PowerShell install snippet (Administrator)',
+  'endpointAdmin.enrollments.modal.oneCommandLabel':
+    'One-command install (Administrator PowerShell)',
+  'endpointAdmin.enrollments.modal.oneCommandHelp':
+    'Valid for the current agent release. Paste it into an Administrator PowerShell; if the install fails on the hash, generate a new token.',
+  'endpointAdmin.enrollments.modal.oneCommandLoading': 'Preparing install command…',
+  'endpointAdmin.enrollments.modal.oneCommandError':
+    'Couldn’t fetch current package info; the trusted one-command can’t be generated now. Retry, or use the manual steps below.',
+  'endpointAdmin.enrollments.modal.retry': 'Retry',
+  'endpointAdmin.enrollments.modal.manualLabel': 'Manual install (advanced)',
+  'endpointAdmin.enrollments.modal.manualHelp':
+    'If you already downloaded and extracted the package (EndpointAgent.zip), run this from the extracted folder in an Administrator PowerShell.',
   'endpointAdmin.enrollments.modal.expiresLabel': 'Expires',
   'endpointAdmin.enrollments.modal.copy': 'Copy',
   'endpointAdmin.enrollments.modal.copied': 'Copied ✓',
