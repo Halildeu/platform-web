@@ -36,10 +36,15 @@ export interface EnrollmentTokenModalProps {
   onClose: () => void;
 }
 
-/** Minimal shape the one-command needs out of release-manifest.json. */
+/**
+ * Minimal shape the one-command needs out of release-manifest.json. Only the
+ * zip hash matters — the command targets the version-independent `/current/`
+ * URLs, so the manifest's `release_tag` is informational and intentionally NOT
+ * required (the live host manifest has `release_tag`, not `version`).
+ */
 interface ReleaseManifest {
-  version: string;
   endpoint_agent_zip_sha256: string;
+  release_tag?: string;
 }
 
 type ManifestState =
@@ -58,9 +63,7 @@ function isValidManifest(value: unknown): value is ReleaseManifest {
   const m = value as Record<string, unknown>;
   return (
     typeof m.endpoint_agent_zip_sha256 === 'string' &&
-    /^[0-9a-f]{64}$/.test(m.endpoint_agent_zip_sha256) &&
-    typeof m.version === 'string' &&
-    m.version.length > 0
+    /^[0-9a-f]{64}$/.test(m.endpoint_agent_zip_sha256)
   );
 }
 

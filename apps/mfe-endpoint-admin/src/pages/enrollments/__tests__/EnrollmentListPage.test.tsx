@@ -55,14 +55,20 @@ function manifestResponse(body: unknown, ok = true, status = 200): Response {
   return { ok, status, json: async () => body } as unknown as Response;
 }
 
-/** Default discovery-fetch stub: a valid /current/ release manifest. */
+/**
+ * Default discovery-fetch stub: the REAL /current/ release-manifest.json shape
+ * (live testai: `release_tag`, NO `version` field — only the zip hash is
+ * required; verified live 2026-06-10).
+ */
 function stubValidManifest(): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () =>
       manifestResponse({
         schema_version: 1,
-        version: '0.2.3',
+        release_tag: 'v0.2.3',
+        signing_tier: 'trusted-internal-ca',
+        endpoint_agent_zip: 'EndpointAgent.zip',
         endpoint_agent_zip_sha256: ONE_CMD_SHA,
       }),
     ),
@@ -350,7 +356,7 @@ describe('EnrollmentListPage', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
-        manifestResponse({ version: '0.2.3', endpoint_agent_zip_sha256: 'tooshort' }),
+        manifestResponse({ release_tag: 'v0.2.3', endpoint_agent_zip_sha256: 'tooshort' }),
       ),
     );
     openModalWith('bad-schema-token');
@@ -367,7 +373,7 @@ describe('EnrollmentListPage', () => {
         call += 1;
         return call === 1
           ? manifestResponse({}, false, 500)
-          : manifestResponse({ version: '0.2.3', endpoint_agent_zip_sha256: ONE_CMD_SHA });
+          : manifestResponse({ release_tag: 'v0.2.3', endpoint_agent_zip_sha256: ONE_CMD_SHA });
       }),
     );
     openModalWith('retry-token');
