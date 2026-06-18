@@ -71,6 +71,9 @@ const AgentUpdateReleasesPage = React.lazy(
 const SoftwareBundlesPage = React.lazy(
   () => import('../../pages/software-bundles/SoftwareBundlesPage'),
 );
+const RemoteResponsePage = React.lazy(
+  () => import('../../pages/remote-response/RemoteResponsePage'),
+);
 const EndpointOutdatedSoftwareListPage = React.lazy(async () => {
   const [, mod] = await Promise.all([
     import('@mfe/design-system/advanced/data-grid/setup'),
@@ -127,6 +130,7 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="catalog/items" element={<EndpointCatalogItemsPage />} />
         <Route path="agent-updates/releases" element={<AgentUpdateReleasesPage />} />
         <Route path="software-bundles" element={<SoftwareBundlesPage />} />
+        <Route path="remote-response" element={<RemoteResponsePage />} />
         <Route path="outdated-software-list" element={<EndpointOutdatedSoftwareListPage />} />
         <Route path="prohibited-software-list" element={<EndpointProhibitedSoftwareListPage />} />
         <Route path="software-diff-list" element={<EndpointSoftwareDiffListPage />} />

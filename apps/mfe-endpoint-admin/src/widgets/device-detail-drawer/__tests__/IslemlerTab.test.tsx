@@ -44,6 +44,7 @@ describe('IslemlerTab — offline guard', () => {
     expect(screen.getByTestId('command-button-LOCK_USER_LOGIN')).toBeDisabled();
     expect(screen.getByTestId('command-button-CHANGE_LOCAL_PASSWORD')).toBeDisabled();
     expect(screen.getByTestId('command-button-ROTATE_CREDENTIAL')).toBeDisabled();
+    expect(screen.getByTestId('remote-response-open-disabled')).toBeDisabled();
   });
 
   it('STALE durumda butonlar disabled', () => {
@@ -61,6 +62,10 @@ describe('IslemlerTab — offline guard', () => {
     expect(screen.queryByTestId('islemler-offline-banner')).toBeNull();
     expect(screen.getByTestId('command-button-COLLECT_INVENTORY')).not.toBeDisabled();
     expect(screen.getByTestId('command-button-LOCK_USER_LOGIN')).not.toBeDisabled();
+    expect(screen.getByTestId('remote-response-open-link')).toHaveAttribute(
+      'href',
+      '/endpoint-admin/remote-response?deviceId=d-1',
+    );
   });
 });
 
