@@ -83,6 +83,9 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
   const isOnline = device.status === 'ONLINE';
   const isDecommissioned = device.status === 'DECOMMISSIONED';
   const allowedAtAll = isOnline; // STALE/OFFLINE/DECOMMISSIONED/PENDING_ENROLLMENT → all disabled in v1
+  const remoteResponseHref = `/endpoint-admin/remote-response?deviceId=${encodeURIComponent(
+    device.id,
+  )}`;
 
   const successMessage = lastIssuedCommandId
     ? (lastIssuedRequiresApproval
@@ -210,6 +213,30 @@ export const IslemlerTab: React.FC<IslemlerTabProps> = ({
             </button>
           ))}
         </div>
+      </section>
+
+      <section data-testid="islemler-remote-response-section">
+        <h4 className="text-sm font-semibold uppercase tracking-wider text-text-secondary mb-2">
+          {t('endpointAdmin.drawer.islemler.heading.remoteResponse')}
+        </h4>
+        {allowedAtAll ? (
+          <a
+            href={remoteResponseHref}
+            data-testid="remote-response-open-link"
+            className="inline-flex items-center px-4 py-2 rounded-md border border-border-default bg-surface-default text-sm text-text-primary hover:bg-surface-hover"
+          >
+            {t('endpointAdmin.drawer.islemler.remoteResponse.open')}
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            data-testid="remote-response-open-disabled"
+            className="px-4 py-2 rounded-md border border-border-default bg-surface-default text-sm text-text-primary opacity-50 cursor-not-allowed"
+          >
+            {t('endpointAdmin.drawer.islemler.remoteResponse.open')}
+          </button>
+        )}
       </section>
 
       <section>
