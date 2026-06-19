@@ -2,10 +2,12 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   APPROVED_REMOTE_SCRIPT_OPTIONS,
-  buildDefaultRemoteResponseGateState,
+  buildRemoteResponseGateState,
   canDispatchApprovedRemoteOperation,
   canUnlockRemoteTerminal,
+  type ApprovedRemoteScriptOption,
   type RemoteResponseMode,
+  type RemoteResponseSessionState,
 } from '../../entities/remote-response/types';
 import { useEndpointAdminI18n } from '../../i18n';
 
@@ -28,17 +30,31 @@ const buttonBase: React.CSSProperties = {
   fontSize: 13,
 };
 
-export const RemoteResponsePage: React.FC = () => {
+export interface RemoteResponsePageProps {
+  // Backend-fed state injection seam. The route defaults to null so production
+  // remains fail-closed until the API container provides authoritative state.
+  sessionState?: RemoteResponseSessionState | null;
+  scriptOptions?: readonly ApprovedRemoteScriptOption[];
+}
+
+export const RemoteResponsePage: React.FC<RemoteResponsePageProps> = ({
+  sessionState = null,
+  scriptOptions = APPROVED_REMOTE_SCRIPT_OPTIONS,
+}) => {
   const { t } = useEndpointAdminI18n();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = React.useState<RemoteResponseMode>('APPROVED_SCRIPT');
 
   const deviceIdParam = searchParams.get('deviceId');
   const deviceId = deviceIdParam && deviceIdParam.trim() !== '' ? deviceIdParam.trim() : null;
-  const gateState = React.useMemo(() => buildDefaultRemoteResponseGateState(deviceId), [deviceId]);
+  const gateState = React.useMemo(
+    () => buildRemoteResponseGateState(deviceId, sessionState),
+    [deviceId, sessionState],
+  );
   const approvedOperationEnabled = canDispatchApprovedRemoteOperation(gateState);
   const terminalUnlocked = canUnlockRemoteTerminal(gateState);
-  const selectedScript = APPROVED_REMOTE_SCRIPT_OPTIONS[0];
+  const selectedScript = scriptOptions[0];
+  const approvedScriptEnabled = approvedOperationEnabled && Boolean(selectedScript);
 
   const gates = [
     {
@@ -211,6 +227,10 @@ export const RemoteResponsePage: React.FC = () => {
               {t('endpointAdmin.remoteResponse.ttl')}
             </dt>
             <dd style={{ margin: 0, fontFamily: 'monospace' }}>{gateState.ttlSecondsRemaining}s</dd>
+            <dt style={{ color: 'var(--text-secondary)' }}>
+              {t('endpointAdmin.remoteResponse.phase')}
+            </dt>
+            <dd style={{ margin: 0, fontFamily: 'monospace' }}>{sessionState?.phase ?? '—'}</dd>
           </dl>
         </section>
       </div>
@@ -236,7 +256,7 @@ export const RemoteResponsePage: React.FC = () => {
               {t('endpointAdmin.remoteResponse.approvedScript.script')}
             </span>
             <select
-              disabled={!approvedOperationEnabled}
+              disabled={!approvedScriptEnabled}
               data-testid="remote-response-approved-script-select"
               style={{
                 minHeight: 36,
@@ -246,9 +266,9 @@ export const RemoteResponsePage: React.FC = () => {
                 background: 'var(--surface-default)',
                 color: 'var(--text-primary)',
               }}
-              defaultValue={selectedScript.id}
+              defaultValue={selectedScript?.id}
             >
-              {APPROVED_REMOTE_SCRIPT_OPTIONS.map((script) => (
+              {scriptOptions.map((script) => (
                 <option key={script.id} value={script.id}>
                   {script.label}
                 </option>
@@ -258,18 +278,18 @@ export const RemoteResponsePage: React.FC = () => {
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
             <span>{t('endpointAdmin.remoteResponse.approvedScript.hash')}: </span>
             <code data-testid="remote-response-approved-script-hash">
-              {formatHash(selectedScript.hash)}
+              {selectedScript ? formatHash(selectedScript.hash) : '—'}
             </code>
           </div>
           <button
             type="button"
-            disabled={!approvedOperationEnabled}
+            disabled={!approvedScriptEnabled}
             data-testid="remote-response-approved-script-submit"
             style={{
               ...buttonBase,
               minWidth: 96,
-              opacity: approvedOperationEnabled ? 1 : 0.5,
-              cursor: approvedOperationEnabled ? 'pointer' : 'not-allowed',
+              opacity: approvedScriptEnabled ? 1 : 0.5,
+              cursor: approvedScriptEnabled ? 'pointer' : 'not-allowed',
             }}
           >
             {t('endpointAdmin.remoteResponse.action.run')}
@@ -370,6 +390,30 @@ export const RemoteResponsePage: React.FC = () => {
         >
           {t('endpointAdmin.remoteResponse.transcript.empty')}
         </pre>
+        {sessionState?.recording && (
+          <dl
+            data-testid="remote-response-recording-metadata"
+            style={{
+              margin: '12px 0 0',
+              display: 'grid',
+              gridTemplateColumns: 'max-content 1fr',
+              gap: '6px 12px',
+              fontSize: 12,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <dt>{t('endpointAdmin.remoteResponse.recording.chain')}</dt>
+            <dd style={{ margin: 0, fontFamily: 'monospace' }}>{sessionState.recording.chainId}</dd>
+            <dt>{t('endpointAdmin.remoteResponse.recording.lastEvent')}</dt>
+            <dd style={{ margin: 0, fontFamily: 'monospace' }}>
+              {sessionState.recording.lastEventKind}
+            </dd>
+            <dt>{t('endpointAdmin.remoteResponse.recording.redaction')}</dt>
+            <dd style={{ margin: 0, fontFamily: 'monospace' }}>
+              {sessionState.recording.redactionClass}
+            </dd>
+          </dl>
+        )}
       </section>
     </section>
   );

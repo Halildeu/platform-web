@@ -790,6 +790,7 @@ const DICT_TR = {
   'endpointAdmin.remoteResponse.mode.breakGlass': 'Break-glass Terminal',
   'endpointAdmin.remoteResponse.session': 'Oturum',
   'endpointAdmin.remoteResponse.ttl': 'TTL',
+  'endpointAdmin.remoteResponse.phase': 'Durum',
   'endpointAdmin.remoteResponse.approvedScript.heading': 'Onaylı Script',
   'endpointAdmin.remoteResponse.approvedScript.script': 'Script',
   'endpointAdmin.remoteResponse.approvedScript.hash': 'SHA-256',
@@ -803,6 +804,9 @@ const DICT_TR = {
   'endpointAdmin.remoteResponse.action.clipboard': 'Pano',
   'endpointAdmin.remoteResponse.transcript.heading': 'Oturum Kaydı',
   'endpointAdmin.remoteResponse.transcript.empty': 'Kayıt yok.',
+  'endpointAdmin.remoteResponse.recording.chain': 'Kayıt zinciri',
+  'endpointAdmin.remoteResponse.recording.lastEvent': 'Son olay',
+  'endpointAdmin.remoteResponse.recording.redaction': 'Redaksiyon',
   // Audit tab
   'endpointAdmin.drawer.audit.empty': 'Bu cihaz için denetim olayı yok.',
   // Inventory tab (WEB-011 — BE-020I read-only software inventory view)
@@ -2330,6 +2334,7 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.remoteResponse.mode.breakGlass': 'Break-glass Terminal',
   'endpointAdmin.remoteResponse.session': 'Session',
   'endpointAdmin.remoteResponse.ttl': 'TTL',
+  'endpointAdmin.remoteResponse.phase': 'State',
   'endpointAdmin.remoteResponse.approvedScript.heading': 'Approved Script',
   'endpointAdmin.remoteResponse.approvedScript.script': 'Script',
   'endpointAdmin.remoteResponse.approvedScript.hash': 'SHA-256',
@@ -2343,6 +2348,9 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.remoteResponse.action.clipboard': 'Clipboard',
   'endpointAdmin.remoteResponse.transcript.heading': 'Session Transcript',
   'endpointAdmin.remoteResponse.transcript.empty': 'No transcript.',
+  'endpointAdmin.remoteResponse.recording.chain': 'Recording chain',
+  'endpointAdmin.remoteResponse.recording.lastEvent': 'Last event',
+  'endpointAdmin.remoteResponse.recording.redaction': 'Redaction',
   'endpointAdmin.drawer.audit.empty': 'No audit events for this device yet.',
   // Inventory tab (WEB-011 — BE-020I read-only software inventory view)
   'endpointAdmin.drawer.inventory.empty':
