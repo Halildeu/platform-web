@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout platform-k8s-gitops (board-sync.sh)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: Halildeu/platform-k8s-gitops
           token: ${{ secrets.ADD_TO_PROJECT_PAT || github.token }}
