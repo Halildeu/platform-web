@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
@@ -134,7 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
@@ -180,7 +180,7 @@ jobs:
     outputs:
       cssom_full_outcome: ${{ steps.cssom_full_run.outcome }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
@@ -217,7 +217,7 @@ jobs:
       total_warnings: ${{ steps.summarize.outputs.total_warnings }}
       test_env_warnings: ${{ steps.summarize.outputs.test_env_warnings }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Need full history for changed-file diff against base.
           fetch-depth: 0
@@ -451,7 +451,7 @@ jobs:
     # job below handles that path. Push/PR/normal-dispatch run the gate.
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Codex iter-3 MEDIUM 3: full history needed for the boundary
           # guard's `git diff origin/<base>...HEAD` call. Default
@@ -506,7 +506,7 @@ jobs:
     # x-charts-visual-gate.yml).
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'invariant-baseline'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
@@ -563,7 +563,7 @@ jobs:
     # invariant-baseline mode (mirrors `web-test-gate-required` below).
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'invariant-baseline'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '22.12'
