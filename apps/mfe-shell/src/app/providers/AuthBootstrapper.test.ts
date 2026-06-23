@@ -134,8 +134,8 @@ describe('bootstrapAuthController — production controller import test', () => 
 
   it('M365 provision: ensureUserProvisioned reject olsa bile transportReadye ulasir (non-fatal)', async () => {
     // The provision call is best-effort. A rejection (defensive: the
-    // helper swallows its own errors, but a synchronous throw could
-    // still reject) must NEVER block the FSM from reaching
+    // helper swallows its own errors, but the outer .catch isolates any
+    // rejection regardless) must NEVER block the FSM from reaching
     // transportReady — authz + login are not coupled to a provisioning
     // hiccup. The controller's Promise.all + .catch backstop guarantees
     // this.

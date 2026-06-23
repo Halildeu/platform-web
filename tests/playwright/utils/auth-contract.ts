@@ -195,6 +195,26 @@ export const mockBootstrapEndpoints = async (
       }),
     }),
   );
+
+  // M365 first-login provision trigger (Codex 019ef311): the bootstrap fires
+  // GET /api/v1/users/me/profile (ensureUserProvisioned). Stub it so the
+  // bootstrap chain stays on the deterministic mock backend (no real-network
+  // hit). The mock user is treated as already-active → 200 with a minimal
+  // profile; a brand-new passive user would instead get 403 ACCOUNT_DISABLED,
+  // which the helper swallows either way (it is fire-and-forget, non-fatal).
+  await page.route('**/api/v1/users/me/profile', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 1,
+        email: 'mock@example.com',
+        name: 'Mock User',
+        role: 'USER',
+        enabled: true,
+      }),
+    }),
+  );
 };
 
 /**
@@ -268,6 +288,12 @@ export const readRequestLog = async (page: Page): Promise<RequestProbe[]> =>
 export const PRE_TRANSPORT_ALLOWLIST: ReadonlyArray<RegExp> = [
   /\/api\/auth\/cookie\b/,
   /\/api\/v1\/authz\/me\b/,
+  // M365 first-login provision trigger (Codex 019ef311). ensureUserProvisioned
+  // fires GET /api/v1/users/me/profile in the bootstrap chain (with
+  // __skipAuthReadyGate) so the backend requireCurrentUser lazy-provisions a
+  // first-login M365 user. It is a sanctioned bootstrap-chain request, same
+  // class as /auth/cookie + /v1/authz/me.
+  /\/api\/v1\/users\/me\/profile\b/,
   /\/api\/v1\/auth\/sessions\b/,
   /\/api\/users\/by-email\b/,
   /\/api\/users\/public\/register\b/,

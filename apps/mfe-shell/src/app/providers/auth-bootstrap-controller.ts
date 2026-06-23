@@ -192,11 +192,12 @@ export async function bootstrapAuthController(deps: BootstrapDeps): Promise<Boot
     // CONCURRENTLY with the authz fetch. Both hit different services with
     // the same bearer token and have no inter-dependency, so Promise.all
     // just shaves latency while still GUARANTEEING the provision call is
-    // attempted before transportReady. ensureUserProvisioned is non-fatal
-    // and swallows its own errors; the extra .catch is a defensive
-    // backstop so an unexpected synchronous throw can never reject the
-    // Promise.all and strand the FSM short of transportReady (authz must
-    // not be coupled to a provisioning hiccup).
+    // attempted before transportReady. ensureUserProvisioned is async and
+    // non-fatal — it swallows its own errors — so it cannot synchronously
+    // throw; the extra .catch is a defensive backstop so any unexpected
+    // rejection still can never fail the Promise.all and strand the FSM
+    // short of transportReady (authz must not be coupled to a provisioning
+    // hiccup).
     const [authzResult] = await Promise.all([
       deps.fetchAppPermissions(kcToken),
       deps.ensureUserProvisioned(kcToken).catch(() => undefined),
