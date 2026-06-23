@@ -69,7 +69,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -121,7 +121,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -139,7 +139,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -157,7 +157,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -185,7 +185,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -225,7 +225,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -471,7 +471,7 @@ jobs:
           git fetch origin "${{ github.base_ref || 'main' }}" --depth=1 || true
           node scripts/ci/check-visual-invariant-boundary.mjs --base=origin/${{ github.base_ref || 'main' }}
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -511,7 +511,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
@@ -568,7 +568,7 @@ jobs:
         with:
           node-version: '22.12'
       - uses: pnpm/action-setup@v6
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: ~/.pnpm-store
           key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
