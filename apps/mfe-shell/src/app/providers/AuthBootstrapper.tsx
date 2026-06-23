@@ -72,6 +72,88 @@ export async function fetchAppPermissions(token: string): Promise<AuthzMeResult>
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  M365 first-login backend provision trigger                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Trigger the user-service backend provision side-effect for M365/Entra
+ * SSO first-login (Codex AGREE thread `019ef311`).
+ *
+ * <p>Why this exists: the M365 SSO bootstrap (keycloak.init → cookie →
+ * mapProfile(JWT) + GET /v1/authz/me) never calls user-service, so the
+ * backend {@code KeycloakUserAutoProvisionFilter} / {@code requireCurrentUser}
+ * never runs and a first-login M365 user is never inserted into the
+ * admin user list — an admin therefore cannot see or activate them.
+ * (The local password-login path, the {@code loginUser} thunk, DOES call
+ * user-service by-email; this gap is M365-SSO-only.) This call hits the
+ * self-scoped {@code GET /api/v1/users/me/profile}, whose
+ * {@code requireCurrentUser()} lazy-provisions a PASSIVE (enabled=false)
+ * row on first login.
+ *
+ * <p><strong>Fire-and-forget by design.</strong> The response is
+ * intentionally discarded — {@code mapKeycloakProfile(JWT)} keeps driving
+ * the Redux profile. The SOLE purpose is the server-side provision
+ * side-effect. Named {@code ensureUserProvisioned} (not {@code …Profile})
+ * so a future reader does not wire response-based profile enrichment onto
+ * it (Codex 019ef311 naming note).
+ *
+ * <p><strong>Non-fatal</strong> (same contract as {@link fetchAppPermissions}):
+ * a brand-new passive user gets {@code 403 ACCOUNT_DISABLED} — that is the
+ * EXPECTED success signal (row provisioned, activation gate fired), NOT an
+ * error, and must never block the bootstrap FSM from reaching
+ * {@code transportReady}. Errors are classified for log hygiene only
+ * (Codex 019ef311 §3): the expected {@code ACCOUNT_DISABLED} logs at
+ * debug; anything else (401 invalid token, 5xx, network/timeout) logs at
+ * warn — but ALL are swallowed; provisioning is best-effort.
+ *
+ * <p>Idempotent: backend lazy-provision keys on sub/email, so the
+ * bootstrap-path + onAuthSuccess-catch-up double invocation is safe.
+ *
+ * <p>Exported for regression tests (same rationale as {@link fetchAppPermissions}).
+ */
+export async function ensureUserProvisioned(token: string): Promise<void> {
+  try {
+    // Same __skipAuthReadyGate rationale as fetchAppPermissions /
+    // setTokenCookie: this fires in the bootstrap chain BEFORE the FSM
+    // reaches transportReady; without the bypass the request would await
+    // a phase that this very call precedes — a self-deadlock.
+    const cfg: SharedHttpRequestConfig = {
+      headers: { Authorization: `Bearer ${token}` },
+      __skipAuthReadyGate: true,
+    };
+    await api.get('/v1/users/me/profile', cfg);
+  } catch (err: unknown) {
+    // Error classification (Codex 019ef311 §3). A passive (not-yet-
+    // activated) first-login M365 user returns 403 ACCOUNT_DISABLED — the
+    // EXPECTED outcome (provision happened, activation gate fired). Treat
+    // as a debug-level success, not a noisy error. Any other failure is
+    // warn-level but still non-fatal — provisioning must never block login.
+    const response =
+      typeof err === 'object' && err !== null && 'response' in err
+        ? (err as { response?: { status?: number; data?: unknown } }).response
+        : undefined;
+    const status = response?.status ?? null;
+    const data = response?.data;
+    const dataStr =
+      typeof data === 'string'
+        ? data
+        : data && typeof data === 'object'
+          ? `${(data as { errorCode?: string }).errorCode ?? ''} ${(data as { message?: string }).message ?? ''}`
+          : '';
+    const isExpectedDisabled = status === 403 && dataStr.includes('ACCOUNT_DISABLED');
+    if (isExpectedDisabled) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug(
+          '[AuthBootstrapper] ensureUserProvisioned: account provisioned, awaiting admin activation (403 ACCOUNT_DISABLED)',
+        );
+      }
+      return;
+    }
+    console.warn('[AuthBootstrapper] ensureUserProvisioned non-fatal failure', err);
+  }
+}
+
 /**
  * Store token in httpOnly cookie via gateway endpoint.
  *
@@ -195,6 +277,8 @@ export interface OnAuthSuccessHandlerDeps {
   getKeycloakTokenParsed: () => { exp?: number } | undefined;
   setTokenCookie: (token: string) => Promise<void>;
   fetchAppPermissions: (token: string) => Promise<AuthzMeResult>;
+  /** M365 first-login provision side-effect (Codex 019ef311); non-fatal. */
+  ensureUserProvisioned: (token: string) => Promise<void>;
   mapProfile: typeof mapKeycloakProfile;
   dispatch: (action: AnyAction) => unknown;
   /**
@@ -269,7 +353,15 @@ export function createOnAuthSuccessHandler(deps: OnAuthSuccessHandlerDeps): () =
       await deps.setTokenCookie(token);
       if (!deps.getMounted()) return;
       const profile = deps.mapProfile(token);
-      const authzResult = await deps.fetchAppPermissions(token);
+      // Codex AGREE 019ef311: the post-redirect catch-up is exactly the
+      // genuine first-login path, so the M365 provision side-effect MUST
+      // fire here too (not only in the controller). Concurrent with the
+      // authz fetch; non-fatal .catch backstop so it never breaks the
+      // catch-up closure that converts the FSM to transportReady.
+      const [authzResult] = await Promise.all([
+        deps.fetchAppPermissions(token),
+        deps.ensureUserProvisioned(token).catch(() => undefined),
+      ]);
       if (!deps.getMounted()) return;
       const mergedProfile = profile
         ? {
@@ -822,6 +914,7 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
           initOptions,
           setTokenCookie,
           fetchAppPermissions,
+          ensureUserProvisioned,
           mapProfile: mapKeycloakProfile,
           dispatchPhase: (phase) => dispatch(setAuthPhase(phase)),
           dispatchFailed: (error) => dispatch(setAuthFailed(error)),
@@ -959,6 +1052,7 @@ export const AuthBootstrapper: React.FC<{ children: React.ReactNode }> = ({ chil
       getKeycloakTokenParsed: () => keycloak.tokenParsed,
       setTokenCookie,
       fetchAppPermissions,
+      ensureUserProvisioned,
       mapProfile: mapKeycloakProfile,
       dispatch,
       bootstrapOutcome: bootstrapOutcomeDeferred.promise,

@@ -35,7 +35,12 @@ vi.mock('@mfe/shared-http', () => ({
   },
 }));
 
-import { fetchAppPermissions, setTokenCookie, clearTokenCookie } from './AuthBootstrapper';
+import {
+  fetchAppPermissions,
+  setTokenCookie,
+  clearTokenCookie,
+  ensureUserProvisioned,
+} from './AuthBootstrapper';
 
 describe('AuthBootstrapper helpers — auth-ready gate bypass (PR-HTTP-3)', () => {
   beforeEach(() => {
@@ -77,5 +82,35 @@ describe('AuthBootstrapper helpers — auth-ready gate bypass (PR-HTTP-3)', () =
     expect(url).toBe('/v1/authz/me');
     expect(config?.__skipAuthReadyGate).toBe(true);
     expect(config?.headers?.Authorization).toBe('Bearer mock-token');
+  });
+
+  it('ensureUserProvisioned hits /v1/users/me/profile with __skipAuthReadyGate + bearer (Codex 019ef311)', async () => {
+    await ensureUserProvisioned('mock-token');
+
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    const [url, config] = mockGet.mock.calls[0];
+    // Self-scoped provision endpoint (requireCurrentUser → lazy-provision).
+    expect(url).toBe('/v1/users/me/profile');
+    expect(config?.__skipAuthReadyGate).toBe(true);
+    expect(config?.headers?.Authorization).toBe('Bearer mock-token');
+  });
+
+  it('ensureUserProvisioned swallows the expected 403 ACCOUNT_DISABLED (passive first-login)', async () => {
+    // A brand-new passive user provisions, then the activation gate
+    // throws 403 ACCOUNT_DISABLED. That is the EXPECTED success signal —
+    // the helper must RESOLVE (never throw), so it never blocks bootstrap.
+    mockGet.mockRejectedValueOnce({
+      response: { status: 403, data: { message: 'ACCOUNT_DISABLED' } },
+    });
+
+    await expect(ensureUserProvisioned('mock-token')).resolves.toBeUndefined();
+  });
+
+  it('ensureUserProvisioned swallows unexpected failures too (best-effort, non-fatal)', async () => {
+    // 5xx / network / 401 are warn-logged but still swallowed —
+    // provisioning is best-effort and must never reject into the FSM.
+    mockGet.mockRejectedValueOnce({ response: { status: 503 } });
+
+    await expect(ensureUserProvisioned('mock-token')).resolves.toBeUndefined();
   });
 });

@@ -53,11 +53,14 @@ const baseDeps = () => {
     superAdmin: true,
     rawResponse: { permissions: ['ADMIN'], superAdmin: true },
   }));
+  // M365 provision trigger (Codex 019ef311) — non-fatal; default no-op.
+  const ensureUserProvisioned = vi.fn(async () => undefined);
   const dispatch = vi.fn();
   const bootstrapOutcome = Promise.resolve<BootstrapOutcome>({ kind: 'unauthenticated' });
   return {
     setTokenCookie,
     fetchAppPermissions,
+    ensureUserProvisioned,
     dispatch,
     bootstrapOutcome,
     mapProfile: vi.fn(() => ({
@@ -98,6 +101,33 @@ describe('createOnAuthSuccessHandler — impersonation guard (iter-6 P1-3)', () 
     expect(dispatchedTypes).toContain('auth/setKeycloakSession');
     expect(dispatchedTypes).toContain('auth/setAuthPhase');
     expect(dispatchedTypes).toContain('auth/setAuthInitialized');
+  });
+
+  it('M365 provision: triggers ensureUserProvisioned in the catch-up closure (Codex 019ef311)', async () => {
+    // The post-redirect catch-up closure is exactly the genuine
+    // first-login path, so the M365 provision side-effect must fire here
+    // too (not only in the controller). Otherwise a user whose token only
+    // arrived via the onAuthSuccess race would never be provisioned.
+    const deps = baseDeps();
+    const handler = createOnAuthSuccessHandler(deps);
+    await handler();
+
+    expect(deps.ensureUserProvisioned).toHaveBeenCalledWith('admin-jwt');
+  });
+
+  it('M365 provision: ensureUserProvisioned rejection does not break the catch-up (non-fatal)', async () => {
+    // Best-effort: a provision rejection must not prevent the closure
+    // from reaching transportReady. The closure's Promise.all + .catch
+    // backstop guarantees the session dispatch + transportReady still fire.
+    const deps = baseDeps();
+    deps.ensureUserProvisioned.mockRejectedValueOnce(new Error('notify down'));
+    const handler = createOnAuthSuccessHandler(deps);
+    await handler();
+
+    const dispatchedTypes = deps.dispatch.mock.calls.map((c) => (c[0] as { type: string }).type);
+    expect(dispatchedTypes).toContain('auth/setKeycloakSession');
+    expect(dispatchedTypes).toContain('auth/setAuthPhase');
+    expect(dispatchedTypes).not.toContain('auth/setAuthFailed');
   });
 
   it('aborts gracefully when component unmounts during cookie await', async () => {

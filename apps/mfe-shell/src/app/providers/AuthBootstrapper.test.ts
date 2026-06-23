@@ -53,6 +53,8 @@ const buildDeps = (overrides: Partial<BootstrapDeps>): BootstrapDeps => ({
     superAdmin: false,
     rawResponse: null,
   }),
+  // M365 provision trigger (Codex 019ef311) — non-fatal; default no-op.
+  ensureUserProvisioned: vi.fn().mockResolvedValue(undefined),
   mapProfile: vi.fn().mockReturnValue({ email: 'test@example.com' }),
   dispatchPhase: vi.fn(),
   dispatchFailed: vi.fn(),
@@ -105,6 +107,46 @@ describe('bootstrapAuthController — production controller import test', () => 
 
     expect(result.finalPhase).toBe('transportReady');
     expect(result.cookieAwaited).toBe(true);
+    expect(dispatchPhase.mock.calls.map((c) => c[0])).toEqual([
+      'keycloakReady',
+      'cookieReady',
+      'authzReady',
+      'transportReady',
+    ]);
+  });
+
+  it('M365 provision: ensureUserProvisioned bootstrap chain icinde kcToken ile cagrilir (Codex 019ef311)', async () => {
+    // Regression guard for the M365 first-login hands-free onboarding
+    // fix: the bootstrap controller MUST trigger the user-service
+    // provision side-effect (GET /api/v1/users/me/profile via
+    // requireCurrentUser) so a first-login M365 user is inserted into
+    // the admin list. Without this call nothing ever hits user-service
+    // on the SSO path and the user never appears for activation.
+    const ensureUserProvisioned = vi.fn().mockResolvedValue(undefined);
+    const result = await bootstrapAuthController(
+      buildDeps({ ensureUserProvisioned, dispatchPhase, dispatchFailed, dispatchSession }),
+    );
+
+    expect(result.finalPhase).toBe('transportReady');
+    expect(ensureUserProvisioned).toHaveBeenCalledTimes(1);
+    expect(ensureUserProvisioned).toHaveBeenCalledWith('mock-jwt');
+  });
+
+  it('M365 provision: ensureUserProvisioned reject olsa bile transportReadye ulasir (non-fatal)', async () => {
+    // The provision call is best-effort. A rejection (defensive: the
+    // helper swallows its own errors, but a synchronous throw could
+    // still reject) must NEVER block the FSM from reaching
+    // transportReady — authz + login are not coupled to a provisioning
+    // hiccup. The controller's Promise.all + .catch backstop guarantees
+    // this.
+    const ensureUserProvisioned = vi.fn().mockRejectedValue(new Error('notify down'));
+    const result = await bootstrapAuthController(
+      buildDeps({ ensureUserProvisioned, dispatchPhase, dispatchFailed, dispatchSession }),
+    );
+
+    expect(result.finalPhase).toBe('transportReady');
+    expect(ensureUserProvisioned).toHaveBeenCalledTimes(1);
+    expect(dispatchFailed).not.toHaveBeenCalled();
     expect(dispatchPhase.mock.calls.map((c) => c[0])).toEqual([
       'keycloakReady',
       'cookieReady',
