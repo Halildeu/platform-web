@@ -34,6 +34,19 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: 'ag-charts-react'
         update-types: ['version-update:semver-major']
+      # 2026-06-23: @module-federation/vite PINNED to 1.15.5. 1.16.x (1.16.8,
+      # landed via #819) regressed the host-only (import:false) shared-module
+      # class proxy → `new QueryClient()` in federated hostOnly paths threw
+      # "Class constructor cannot be invoked without 'new'", crashing mfe-users
+      # on testai (confirmed). Risk applies to any remote that instantiates an
+      # exported class from a host-only shared module (access/audit/reporting
+      # are risk-surface, not separately confirmed). Ignore minor+major until
+      # upstream fixes; re-evaluate manually with users + another hostOnly
+      # remote smoke before unpinning.
+      - dependency-name: '@module-federation/vite'
+        update-types:
+          - 'version-update:semver-minor'
+          - 'version-update:semver-major'
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
