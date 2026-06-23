@@ -79,6 +79,26 @@ export interface BootstrapDeps {
     rawResponse: Record<string, unknown> | null;
   }>;
   /**
+   * M365 first-login provision trigger (Codex AGREE thread 019ef311).
+   *
+   * <p>The M365/Entra SSO bootstrap never otherwise calls user-service,
+   * so the backend's {@code requireCurrentUser()} lazy-provision never
+   * runs and a first-login M365 user is never inserted into the admin
+   * user list (so an admin cannot activate them). This helper hits the
+   * self-scoped {@code GET /api/v1/users/me/profile}, whose
+   * {@code requireCurrentUser()} provisions a PASSIVE (enabled=false)
+   * row on first login.
+   *
+   * <p>NON-FATAL by contract (same as {@code fetchAppPermissions}): a
+   * brand-new passive user returns {@code 403 ACCOUNT_DISABLED} — the
+   * EXPECTED success signal, not an error — and must never block the FSM
+   * from reaching {@code transportReady}. The implementation swallows
+   * its own errors; this typing returns {@code Promise<void>} because
+   * the response is intentionally discarded (fire-and-forget side-effect;
+   * {@code mapProfile(JWT)} keeps driving the Redux profile).
+   */
+  ensureUserProvisioned: (token: string) => Promise<void>;
+  /**
    * Profile mapper — pure function, no side effects. Called after token
    * available; nullable when keycloak token cannot be parsed.
    */
@@ -168,7 +188,20 @@ export async function bootstrapAuthController(deps: BootstrapDeps): Promise<Boot
     }
 
     const profile = deps.mapProfile(kcToken);
-    const authzResult = await deps.fetchAppPermissions(kcToken);
+    // Codex AGREE 019ef311: fire the user-service provision side-effect
+    // CONCURRENTLY with the authz fetch. Both hit different services with
+    // the same bearer token and have no inter-dependency, so Promise.all
+    // just shaves latency while still GUARANTEEING the provision call is
+    // attempted before transportReady. ensureUserProvisioned is async and
+    // non-fatal — it swallows its own errors — so it cannot synchronously
+    // throw; the extra .catch is a defensive backstop so any unexpected
+    // rejection still can never fail the Promise.all and strand the FSM
+    // short of transportReady (authz must not be coupled to a provisioning
+    // hiccup).
+    const [authzResult] = await Promise.all([
+      deps.fetchAppPermissions(kcToken),
+      deps.ensureUserProvisioned(kcToken).catch(() => undefined),
+    ]);
     if (!deps.isMounted()) {
       return { finalPhase: 'unauthenticated', cookieAwaited };
     }
