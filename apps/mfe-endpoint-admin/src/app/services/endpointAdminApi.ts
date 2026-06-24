@@ -1988,6 +1988,14 @@ export const endpointAdminApi = createApi({
         method: 'PUT',
         body,
       }),
+      async onQueryStarted({ deviceId }, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(endpointAdminApi.util.upsertQueryData('getDisplayPolicy', deviceId, data));
+        } catch {
+          // The mutation error path is rendered by the caller; keep the query cache unchanged.
+        }
+      },
       invalidatesTags: (_res, _err, { deviceId }) => [
         { type: 'EndpointDisplayPolicy' as const, id: deviceId },
         // The maker-checker proposal creates a PENDING command + an audit event;
@@ -2004,6 +2012,14 @@ export const endpointAdminApi = createApi({
         method: 'DELETE',
         body: { reason },
       }),
+      async onQueryStarted({ deviceId }, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(endpointAdminApi.util.upsertQueryData('getDisplayPolicy', deviceId, data));
+        } catch {
+          // The mutation error path is rendered by the caller; keep the query cache unchanged.
+        }
+      },
       invalidatesTags: (_res, _err, { deviceId }) => [
         { type: 'EndpointDisplayPolicy' as const, id: deviceId },
         // The maker-checker proposal creates a PENDING command + an audit event;

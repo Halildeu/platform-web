@@ -9,6 +9,7 @@ import { useEndpointAdminI18n } from '../../../../i18n';
 import {
   ALLOWED_SCR_PATHS,
   WALLPAPER_STYLES,
+  type DisplayPolicyResponse,
   type SetDisplayPolicyRequest,
 } from '../../../../entities/endpoint-display-policy/types';
 
@@ -55,8 +56,34 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
   const [wpAssetRef, setWpAssetRef] = React.useState('');
   const [reason, setReason] = React.useState('');
   const [formError, setFormError] = React.useState<string | null>(null);
+  const [lastMutationData, setLastMutationData] = React.useState<DisplayPolicyResponse | null>(
+    null,
+  );
 
-  const status = httpStatus(error);
+  React.useEffect(() => {
+    setLastMutationData(null);
+  }, [deviceId]);
+
+  const queryProposalLifecycleToken = data?.openProposal
+    ? [
+        data.openProposal.revisionId,
+        data.openProposal.commandId ?? '',
+        data.openProposal.approvalStatus ?? '',
+        data.openProposal.commandStatus ?? '',
+      ].join(':')
+    : (data?.currentRevisionId ?? null);
+
+  // Reset when the proposal lifecycle token changes (proposal created → approved →
+  // dispatched → cleared). Depends on stable server ids/status rather than data to avoid missing
+  // the reset when the backend returns a structurally-equal body with a different
+  // proposal token (RTK Query structuralSharing preserves reference on shape match).
+  React.useEffect(() => {
+    setLastMutationData(null);
+  }, [queryProposalLifecycleToken]);
+
+  const effectiveData = lastMutationData ?? data;
+  const effectiveError = effectiveData ? null : error;
+  const status = httpStatus(effectiveError);
   const featureDisabled = status === 503;
   const noPolicy = status === 404;
   const busy = setState.isLoading || clearState.isLoading;
@@ -90,8 +117,12 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
         : null,
     };
     try {
-      await setPolicy({ deviceId, body }).unwrap();
+      const response = await setPolicy({ deviceId, body }).unwrap();
+      setLastMutationData(response);
       setReason('');
+      // Explicit refetch: guarantees an immediate server revalidation regardless of
+      // invalidation timing. RTK Query deduplicates in-flight requests, so only one
+      // actual request fires even though invalidatesTags also triggers a refetch.
       refetch();
     } catch (e) {
       const s = httpStatus(e);
@@ -106,8 +137,12 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
       return;
     }
     try {
-      await clearPolicy({ deviceId, reason: reason.trim() }).unwrap();
+      const response = await clearPolicy({ deviceId, reason: reason.trim() }).unwrap();
+      setLastMutationData(response);
       setReason('');
+      // Explicit refetch: guarantees an immediate server revalidation regardless of
+      // invalidation timing. RTK Query deduplicates in-flight requests, so only one
+      // actual request fires even though invalidatesTags also triggers a refetch.
       refetch();
     } catch (e) {
       const s = httpStatus(e);
@@ -115,7 +150,7 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
     }
   };
 
-  if (isLoading || (isFetching && !data && !error)) {
+  if (isLoading || (isFetching && !effectiveData && !effectiveError)) {
     return (
       <div className="px-6 py-4 text-sm text-text-secondary" data-testid="display-policy-loading">
         {t('endpointAdmin.displayPolicy.loading')}
@@ -136,7 +171,7 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
 
   // Any GET error that is NOT 404 (no policy) / 503 (handled above) — 403/500/
   // network — must surface as an error, never as "no policy" (Codex 019ea99b).
-  if (error && !noPolicy) {
+  if (effectiveError && !noPolicy) {
     return (
       <div
         className="px-6 py-4 text-sm text-danger"
@@ -149,8 +184,8 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
     );
   }
 
-  const op = data?.operation ?? null;
-  const proposal = data?.openProposal ?? null;
+  const op = effectiveData?.operation ?? null;
+  const proposal = effectiveData?.openProposal ?? null;
 
   return (
     <div className="px-6 py-4 space-y-4" data-testid="display-policy-view">
@@ -177,25 +212,27 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
               {t('endpointAdmin.displayPolicy.current.screensaver')}
             </dt>
             <dd data-testid="display-policy-screensaver">
-              {data?.screensaver
-                ? `${data.screensaver.enabled ? '✓' : '✗'} ${data.screensaver.timeoutSeconds ?? '—'}s ${
-                    data.screensaver.scrPath ?? ''
-                  }`
+              {effectiveData?.screensaver
+                ? `${effectiveData.screensaver.enabled ? '✓' : '✗'} ${
+                    effectiveData.screensaver.timeoutSeconds ?? '—'
+                  }s ${effectiveData.screensaver.scrPath ?? ''}`
                 : '—'}
             </dd>
             <dt className="text-text-secondary">
               {t('endpointAdmin.displayPolicy.current.wallpaper')}
             </dt>
             <dd data-testid="display-policy-wallpaper">
-              {data?.wallpaper
-                ? `${data.wallpaper.enabled ? '✓' : '✗'} ${data.wallpaper.style ?? ''}`
+              {effectiveData?.wallpaper
+                ? `${effectiveData.wallpaper.enabled ? '✓' : '✗'} ${
+                    effectiveData.wallpaper.style ?? ''
+                  }`
                 : '—'}
             </dd>
             <dt className="text-text-secondary">
               {t('endpointAdmin.displayPolicy.current.lastEnforcement')}
             </dt>
             <dd data-testid="display-policy-last-enforcement">
-              {data?.lastEnforcementStatus ?? '—'}
+              {effectiveData?.lastEnforcementStatus ?? '—'}
             </dd>
           </dl>
         )}

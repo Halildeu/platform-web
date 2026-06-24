@@ -24,12 +24,23 @@ import {
   useSetDisplayPolicyMutation,
   useClearDisplayPolicyMutation,
 } from '../../../../../app/services/endpointAdminApi';
+import type { DisplayPolicyResponse } from '../../../../../entities/endpoint-display-policy/types';
 
 const DEVICE = 'dev-1';
 
-function mockMutations() {
-  const setTrigger = vi.fn(() => ({ unwrap: vi.fn().mockResolvedValue({}) }));
-  const clearTrigger = vi.fn(() => ({ unwrap: vi.fn().mockResolvedValue({}) }));
+function mockMutations({
+  setResponse = {},
+  clearResponse = {},
+}: {
+  setResponse?: Partial<DisplayPolicyResponse>;
+  clearResponse?: Partial<DisplayPolicyResponse>;
+} = {}) {
+  const setTrigger = vi.fn(() => ({
+    unwrap: vi.fn().mockResolvedValue(setResponse),
+  }));
+  const clearTrigger = vi.fn(() => ({
+    unwrap: vi.fn().mockResolvedValue(clearResponse),
+  }));
   vi.mocked(useSetDisplayPolicyMutation).mockReturnValue([
     setTrigger,
     { isLoading: false },
@@ -42,10 +53,12 @@ function mockMutations() {
 }
 
 function mockQuery(value: Record<string, unknown>) {
+  const refetch = vi.fn();
   vi.mocked(useGetDisplayPolicyQuery).mockReturnValue({
-    refetch: vi.fn(),
+    refetch,
     ...value,
   } as unknown as ReturnType<typeof useGetDisplayPolicyQuery>);
+  return { refetch };
 }
 
 describe('DisplayPolicyView', () => {
@@ -127,6 +140,61 @@ describe('DisplayPolicyView', () => {
         body: expect.objectContaining({ operation: 'ENFORCE', reason: 'kiosk lockdown' }),
       }),
     );
+  });
+
+  it('renders the pending proposal from a successful ENFORCE response before the refetch returns', async () => {
+    const { refetch } = mockQuery({
+      data: { deviceId: DEVICE, operation: null, openProposal: null },
+    });
+    const { setTrigger } = mockMutations({
+      setResponse: {
+        deviceId: DEVICE,
+        operation: null,
+        openProposal: {
+          operation: 'ENFORCE',
+          approvalStatus: 'PENDING',
+          commandStatus: 'QUEUED',
+          revisionId: 'revision-after-put',
+          commandId: 'command-after-put',
+        },
+      },
+    });
+
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    fireEvent.change(screen.getByTestId('dp-reason'), { target: { value: 'kiosk lockdown' } });
+    fireEvent.click(screen.getByTestId('display-policy-propose'));
+
+    await waitFor(() => expect(setTrigger).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByTestId('display-policy-open-proposal')).toHaveTextContent('PENDING'),
+    );
+    expect(screen.queryByTestId('display-policy-none')).not.toBeInTheDocument();
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not show proposal overlay when the mutation fails', async () => {
+    const setTrigger = vi.fn(() => ({
+      unwrap: vi.fn().mockRejectedValue(new Error('server error')),
+    }));
+    vi.mocked(useSetDisplayPolicyMutation).mockReturnValue([
+      setTrigger,
+      { isLoading: false },
+    ] as unknown as ReturnType<typeof useSetDisplayPolicyMutation>);
+    mockQuery({ data: { deviceId: DEVICE, operation: null, openProposal: null } });
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    fireEvent.change(screen.getByTestId('dp-reason'), { target: { value: 'kiosk' } });
+    fireEvent.click(screen.getByTestId('display-policy-propose'));
+    await waitFor(() => expect(setTrigger).toHaveBeenCalledTimes(1));
+    // Proposal overlay must not appear when the mutation failed
+    expect(screen.queryByTestId('display-policy-open-proposal')).not.toBeInTheDocument();
+    expect(screen.getByTestId('display-policy-form-error')).toBeInTheDocument();
+  });
+
+  it('does not render the propose button when the feature is disabled (503)', () => {
+    mockMutations();
+    mockQuery({ error: { status: 503 } });
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    expect(screen.queryByTestId('display-policy-propose')).not.toBeInTheDocument();
   });
 
   it('clears the policy with a reason', async () => {
