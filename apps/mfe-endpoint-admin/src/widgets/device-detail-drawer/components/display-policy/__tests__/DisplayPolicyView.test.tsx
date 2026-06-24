@@ -172,6 +172,31 @@ describe('DisplayPolicyView', () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
+  it('does not show proposal overlay when the mutation fails', async () => {
+    const setTrigger = vi.fn(() => ({
+      unwrap: vi.fn().mockRejectedValue(new Error('server error')),
+    }));
+    vi.mocked(useSetDisplayPolicyMutation).mockReturnValue([
+      setTrigger,
+      { isLoading: false },
+    ] as unknown as ReturnType<typeof useSetDisplayPolicyMutation>);
+    mockQuery({ data: { deviceId: DEVICE, operation: null, openProposal: null } });
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    fireEvent.change(screen.getByTestId('dp-reason'), { target: { value: 'kiosk' } });
+    fireEvent.click(screen.getByTestId('display-policy-propose'));
+    await waitFor(() => expect(setTrigger).toHaveBeenCalledTimes(1));
+    // Proposal overlay must not appear when the mutation failed
+    expect(screen.queryByTestId('display-policy-open-proposal')).not.toBeInTheDocument();
+    expect(screen.getByTestId('display-policy-form-error')).toBeInTheDocument();
+  });
+
+  it('does not render the propose button when the feature is disabled (503)', () => {
+    mockMutations();
+    mockQuery({ error: { status: 503 } });
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    expect(screen.queryByTestId('display-policy-propose')).not.toBeInTheDocument();
+  });
+
   it('clears the policy with a reason', async () => {
     const { clearTrigger } = mockMutations();
     mockQuery({ data: { deviceId: DEVICE, operation: 'ENFORCE', openProposal: null } });

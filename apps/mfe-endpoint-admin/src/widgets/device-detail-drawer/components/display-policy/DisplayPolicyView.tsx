@@ -64,9 +64,13 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
     setLastMutationData(null);
   }, [deviceId]);
 
+  // Reset when the proposal lifecycle token changes (proposal created → approved →
+  // dispatched → cleared). Depends on approvalId rather than data to avoid missing
+  // the reset when the backend returns a structurally-equal body with a different
+  // proposal token (RTK Query structuralSharing preserves referance on shape match).
   React.useEffect(() => {
     setLastMutationData(null);
-  }, [data]);
+  }, [data?.openProposal?.approvalId]);
 
   const effectiveData = lastMutationData ?? data;
   const effectiveError = effectiveData ? null : error;
@@ -107,6 +111,9 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
       const response = await setPolicy({ deviceId, body }).unwrap();
       setLastMutationData(response);
       setReason('');
+      // Explicit refetch: guarantees an immediate server revalidation regardless of
+      // invalidation timing. RTK Query deduplicates in-flight requests, so only one
+      // actual request fires even though invalidatesTags also triggers a refetch.
       refetch();
     } catch (e) {
       const s = httpStatus(e);
@@ -124,6 +131,9 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
       const response = await clearPolicy({ deviceId, reason: reason.trim() }).unwrap();
       setLastMutationData(response);
       setReason('');
+      // Explicit refetch: guarantees an immediate server revalidation regardless of
+      // invalidation timing. RTK Query deduplicates in-flight requests, so only one
+      // actual request fires even though invalidatesTags also triggers a refetch.
       refetch();
     } catch (e) {
       const s = httpStatus(e);
