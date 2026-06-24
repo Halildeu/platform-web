@@ -197,6 +197,7 @@ describe('DisplayPolicyView', () => {
     expect(screen.queryByTestId('display-policy-propose')).not.toBeInTheDocument();
   });
 
+
   it('clears the policy with a reason', async () => {
     const { clearTrigger } = mockMutations();
     mockQuery({ data: { deviceId: DEVICE, operation: 'ENFORCE', openProposal: null } });
