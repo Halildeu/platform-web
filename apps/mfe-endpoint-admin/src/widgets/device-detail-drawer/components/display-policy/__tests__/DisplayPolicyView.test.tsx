@@ -24,12 +24,23 @@ import {
   useSetDisplayPolicyMutation,
   useClearDisplayPolicyMutation,
 } from '../../../../../app/services/endpointAdminApi';
+import type { DisplayPolicyResponse } from '../../../../../entities/endpoint-display-policy/types';
 
 const DEVICE = 'dev-1';
 
-function mockMutations() {
-  const setTrigger = vi.fn(() => ({ unwrap: vi.fn().mockResolvedValue({}) }));
-  const clearTrigger = vi.fn(() => ({ unwrap: vi.fn().mockResolvedValue({}) }));
+function mockMutations({
+  setResponse = {},
+  clearResponse = {},
+}: {
+  setResponse?: Partial<DisplayPolicyResponse>;
+  clearResponse?: Partial<DisplayPolicyResponse>;
+} = {}) {
+  const setTrigger = vi.fn(() => ({
+    unwrap: vi.fn().mockResolvedValue(setResponse),
+  }));
+  const clearTrigger = vi.fn(() => ({
+    unwrap: vi.fn().mockResolvedValue(clearResponse),
+  }));
   vi.mocked(useSetDisplayPolicyMutation).mockReturnValue([
     setTrigger,
     { isLoading: false },
@@ -42,10 +53,12 @@ function mockMutations() {
 }
 
 function mockQuery(value: Record<string, unknown>) {
+  const refetch = vi.fn();
   vi.mocked(useGetDisplayPolicyQuery).mockReturnValue({
-    refetch: vi.fn(),
+    refetch,
     ...value,
   } as unknown as ReturnType<typeof useGetDisplayPolicyQuery>);
+  return { refetch };
 }
 
 describe('DisplayPolicyView', () => {
@@ -127,6 +140,36 @@ describe('DisplayPolicyView', () => {
         body: expect.objectContaining({ operation: 'ENFORCE', reason: 'kiosk lockdown' }),
       }),
     );
+  });
+
+  it('renders the pending proposal from a successful ENFORCE response before the refetch returns', async () => {
+    const { refetch } = mockQuery({
+      data: { deviceId: DEVICE, operation: null, openProposal: null },
+    });
+    const { setTrigger } = mockMutations({
+      setResponse: {
+        deviceId: DEVICE,
+        operation: null,
+        openProposal: {
+          operation: 'ENFORCE',
+          approvalStatus: 'PENDING',
+          commandStatus: 'QUEUED',
+          revisionId: 'revision-after-put',
+          commandId: 'command-after-put',
+        },
+      },
+    });
+
+    render(<DisplayPolicyView deviceId={DEVICE} active />);
+    fireEvent.change(screen.getByTestId('dp-reason'), { target: { value: 'kiosk lockdown' } });
+    fireEvent.click(screen.getByTestId('display-policy-propose'));
+
+    await waitFor(() => expect(setTrigger).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByTestId('display-policy-open-proposal')).toHaveTextContent('PENDING'),
+    );
+    expect(screen.queryByTestId('display-policy-none')).not.toBeInTheDocument();
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('clears the policy with a reason', async () => {
