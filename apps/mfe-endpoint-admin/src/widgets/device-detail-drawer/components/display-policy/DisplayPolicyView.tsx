@@ -64,13 +64,22 @@ export const DisplayPolicyView: React.FC<DisplayPolicyViewProps> = ({ deviceId, 
     setLastMutationData(null);
   }, [deviceId]);
 
+  const queryProposalLifecycleToken = data?.openProposal
+    ? [
+        data.openProposal.revisionId,
+        data.openProposal.commandId ?? '',
+        data.openProposal.approvalStatus ?? '',
+        data.openProposal.commandStatus ?? '',
+      ].join(':')
+    : (data?.currentRevisionId ?? null);
+
   // Reset when the proposal lifecycle token changes (proposal created → approved →
-  // dispatched → cleared). Depends on approvalId rather than data to avoid missing
+  // dispatched → cleared). Depends on stable server ids/status rather than data to avoid missing
   // the reset when the backend returns a structurally-equal body with a different
-  // proposal token (RTK Query structuralSharing preserves referance on shape match).
+  // proposal token (RTK Query structuralSharing preserves reference on shape match).
   React.useEffect(() => {
     setLastMutationData(null);
-  }, [data?.openProposal?.approvalId]);
+  }, [queryProposalLifecycleToken]);
 
   const effectiveData = lastMutationData ?? data;
   const effectiveError = effectiveData ? null : error;
