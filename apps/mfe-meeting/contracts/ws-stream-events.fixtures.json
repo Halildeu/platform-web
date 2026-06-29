@@ -1,0 +1,99 @@
+{
+  "valid": [
+    {
+      "name": "loading-live-model",
+      "event": {
+        "type": "loading",
+        "stage": "live_model"
+      }
+    },
+    {
+      "name": "ready-models",
+      "event": {
+        "type": "ready",
+        "sample_rate": 16000,
+        "live_model": "faster-whisper-live",
+        "final_model": "faster-whisper-final"
+      }
+    },
+    {
+      "name": "partial-draft",
+      "event": {
+        "type": "partial",
+        "seq": 3,
+        "confirmed": "bugun faz yirmi dort",
+        "tentative": "urun yuzeyi",
+        "elapsed_ms": 1240,
+        "rms": 0.18,
+        "source": "desktop"
+      }
+    },
+    {
+      "name": "final-segment",
+      "event": {
+        "type": "final",
+        "seq": 4,
+        "text": "Bugun Faz 24 urun yuzeyi oncelikli ilerliyor.",
+        "reason": "vad-final",
+        "elapsed_ms": 3520,
+        "rms": 0.21
+      }
+    },
+    {
+      "name": "error-message",
+      "event": {
+        "type": "error",
+        "msg": "worker timeout"
+      }
+    },
+    {
+      "name": "debug-opt-in-extra",
+      "event": {
+        "type": "debug",
+        "event": "vad-state",
+        "detail": "debug payload is opt-in only"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown-event-type",
+      "event": {
+        "type": "transcript",
+        "text": "not in producer contract"
+      }
+    },
+    {
+      "name": "ready-sample-rate-too-low",
+      "event": {
+        "type": "ready",
+        "sample_rate": 4000,
+        "live_model": "live",
+        "final_model": "final"
+      }
+    },
+    {
+      "name": "partial-extra-field",
+      "event": {
+        "type": "partial",
+        "seq": 1,
+        "confirmed": "",
+        "tentative": "hello",
+        "elapsed_ms": 12,
+        "rms": 0.1,
+        "source": "desktop",
+        "raw_audio": "forbidden"
+      }
+    },
+    {
+      "name": "final-missing-reason",
+      "event": {
+        "type": "final",
+        "seq": 1,
+        "text": "done",
+        "elapsed_ms": 12,
+        "rms": 0.1
+      }
+    }
+  ]
+}
