@@ -48,6 +48,7 @@ export default defineConfig({
       'apps/mfe-audit/vitest.config.ts',
       'apps/mfe-access/vitest.config.ts',
       'apps/mfe-users/vitest.config.ts',
+      'apps/mfe-meeting/vitest.config.ts',
       // #1148 (Codex 019e8038): mfe-endpoint-admin had its own
       // vitest.config.ts but was not allowlisted into the workspace
       // gate, so its unit suite (e.g. OutdatedSoftwareView guard tests)
