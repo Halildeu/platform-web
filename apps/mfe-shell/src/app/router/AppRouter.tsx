@@ -7,6 +7,7 @@ import { selectAuthPhase } from '../../features/auth/model/auth.slice';
 import {
   isEndpointAdminRemoteEnabled,
   isEthicRemoteEnabled,
+  isMeetingRemoteEnabled,
   isSuggestionsRemoteEnabled,
 } from '../shell-navigation';
 import { useShellCommonI18n } from '../i18n';
@@ -17,6 +18,7 @@ import {
   AuditModule,
   UsersModule,
   SchemaExplorerModule,
+  MeetingModule,
   EndpointAdminModule,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
@@ -107,6 +109,7 @@ export const AppRouter: React.FC = () => {
   const suggestionsEnabled = isSuggestionsRemoteEnabled();
   const ethicEnabled = isEthicRemoteEnabled();
   const endpointAdminEnabled = isEndpointAdminRemoteEnabled();
+  const meetingEnabled = isMeetingRemoteEnabled();
 
   const defaultShellPath = '/home';
 
@@ -275,6 +278,20 @@ export const AppRouter: React.FC = () => {
         />
         <Route path="/reports/*" element={<Navigate to="/admin/reports" replace />} />
         <Route path="/reports" element={<Navigate to="/admin/reports" replace />} />
+        <Route
+          path="/admin/meetings/*"
+          element={
+            meetingEnabled ? (
+              <ProtectedRoute requiredModule="REPORT">
+                <MeetingModule />
+              </ProtectedRoute>
+            ) : (
+              <Navigate to={defaultShellPath} replace />
+            )
+          }
+        />
+        <Route path="/meetings/*" element={<Navigate to="/admin/meetings" replace />} />
+        <Route path="/meetings" element={<Navigate to="/admin/meetings" replace />} />
         <Route
           path="/admin/users"
           element={

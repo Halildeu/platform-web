@@ -49,6 +49,7 @@ vi.mock('../auth/auth-config', () => ({
 vi.mock('../shell-navigation', () => ({
   isSuggestionsRemoteEnabled: () => true,
   isEthicRemoteEnabled: () => true,
+  isMeetingRemoteEnabled: () => true,
 }));
 
 const LocationViewer = () => {
@@ -146,6 +147,20 @@ describe('buildSidebarNavItems — module gating', () => {
     const item = pick(buildSidebarNavItems(true, denyAll), 'schema-explorer');
     expect(item?.disabled).toBe(false);
     expect(item?.href).toBe('/admin/schema-explorer');
+  });
+
+  it('gates the meetings item by REPORT and the meeting remote flag', () => {
+    const denied = pick(buildSidebarNavItems(false, denyAll), 'meetings');
+    expect(denied?.disabled).toBe(true);
+    expect(denied?.href).toBeUndefined();
+
+    const remoteDisabled = pick(buildSidebarNavItems(false, allow('REPORT'), false), 'meetings');
+    expect(remoteDisabled?.disabled).toBe(true);
+    expect(remoteDisabled?.href).toBeUndefined();
+
+    const granted = pick(buildSidebarNavItems(false, allow('REPORT')), 'meetings');
+    expect(granted?.disabled).toBe(false);
+    expect(granted?.href).toBe('/admin/meetings');
   });
 
   it('keeps every privileged item gated (no ungated leak)', () => {
