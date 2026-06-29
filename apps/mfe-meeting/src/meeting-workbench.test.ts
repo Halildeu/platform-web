@@ -6,9 +6,11 @@ import {
   filterMeetings,
   findSelectedMeeting,
   gateStateLabel,
+  getPolicyAction,
   getMeetingOutputCounts,
   meetings,
   orderTranscriptSegments,
+  policyActionStateLabel,
   segmentStatusLabel,
   sourceLabel,
 } from './meeting-workbench';
@@ -69,6 +71,7 @@ describe('meeting workbench domain', () => {
   it('returns Turkish labels for transcript and gate states', () => {
     expect(segmentStatusLabel('stabilizing')).toBe('Netleşiyor');
     expect(gateStateLabel('blocked')).toBe('Blokeli');
+    expect(policyActionStateLabel('pending')).toBe('Bekliyor');
     expect(sourceLabel('calendar')).toBe('Takvim');
     expect(confidenceLabel(0.91)).toBe('Yüksek');
     expect(meetings.find((meeting) => meeting.id === 'mtg-direct-stt')?.transcriptFeed.state).toBe(
@@ -89,6 +92,27 @@ describe('meeting workbench domain', () => {
       total: 2,
       sourced: 0,
       uncited: 2,
+    });
+  });
+
+  it('returns policy action metadata with safe fallback for missing kinds', () => {
+    const weekly = meetings.find((meeting) => meeting.id === 'mtg-f24-weekly');
+
+    expect(weekly && getPolicyAction(weekly, 'export')).toMatchObject({
+      kind: 'export',
+      state: 'pending',
+      auditTag: 'MEETING_EXPORT_REQUESTED',
+    });
+    expect(
+      weekly &&
+        getPolicyAction(
+          { ...weekly, policyActions: weekly.policyActions.filter((a) => a.kind !== 'delete') },
+          'delete',
+        ),
+    ).toMatchObject({
+      kind: 'delete',
+      state: 'pending',
+      requirement: 'Policy state + audit sink',
     });
   });
 });

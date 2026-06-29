@@ -57,13 +57,49 @@ describe('MeetingApp', () => {
     ).toBeInTheDocument();
   });
 
-  it('keeps export/share/delete actions disabled until runtime policies are wired', async () => {
+  it('opens policy-aware export/share/delete action surfaces without enabling mutations', async () => {
     render(<MeetingApp />);
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'Paylaş' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Dışa aktar' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Sil' })).toBeDisabled();
+    const actionRow = screen.getByLabelText('Toplantı aksiyonları');
+
+    fireEvent.click(within(actionRow).getByRole('button', { name: 'Dışa aktar' }));
+
+    expect(screen.getByLabelText('Dışa aktar politika durumu')).toHaveTextContent(
+      'Dışa aktar politikası',
+    );
+    expect(screen.getByLabelText('Dışa aktar politika durumu')).toHaveTextContent(
+      'Export policy + audit event + retention sınıfı',
+    );
+    expect(screen.getByRole('button', { name: 'Runtime mutasyon kapalı' })).toBeDisabled();
+
+    fireEvent.click(within(actionRow).getByRole('button', { name: 'Paylaş' }));
+
+    expect(screen.getByLabelText('Paylaş politika durumu')).toHaveTextContent('Paylaş politikası');
+    expect(screen.getByLabelText('Paylaş politika durumu')).toHaveTextContent(
+      'Recipient authorization + share audit + link TTL',
+    );
+
+    fireEvent.click(within(actionRow).getByRole('button', { name: 'Sil' }));
+
+    expect(screen.getByLabelText('Sil politika durumu')).toHaveTextContent('Sil politikası');
+    expect(screen.getByLabelText('Sil politika durumu')).toHaveTextContent(
+      'Retention decision + dual-control approval + delete audit',
+    );
+  });
+
+  it('clears an open policy panel when the selected meeting changes', async () => {
+    render(<MeetingApp />);
+    expect(await screen.findByText('Demo veri')).toBeInTheDocument();
+
+    const actionRow = screen.getByLabelText('Toplantı aksiyonları');
+    fireEvent.click(within(actionRow).getByRole('button', { name: 'Sil' }));
+    expect(screen.getByLabelText('Sil politika durumu')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Direct-STT mTLS unblock/i }));
+
+    expect(screen.getByRole('heading', { name: 'Direct-STT mTLS unblock' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Sil politika durumu')).not.toBeInTheDocument();
   });
 
   it('surfaces API fallback as a visible non-acceptance state', async () => {

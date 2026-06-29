@@ -1,4 +1,9 @@
-import { meetings, type MeetingRecord } from './meeting-workbench';
+import {
+  meetings,
+  policyActionLabel,
+  type MeetingPolicyActionKind,
+  type MeetingRecord,
+} from './meeting-workbench';
 
 export type WorkbenchSourceMode = 'demo' | 'api' | 'api-fallback';
 
@@ -59,8 +64,57 @@ const isFeedState = (value: string): value is MeetingRecord['transcriptFeed']['s
 const isGateState = (value: string): value is MeetingRecord['gates'][number]['state'] =>
   value === 'pass' || value === 'pending' || value === 'blocked';
 
+const isPolicyActionKind = (
+  value: string,
+): value is MeetingRecord['policyActions'][number]['kind'] =>
+  value === 'export' || value === 'share' || value === 'delete';
+
+const isPolicyActionState = (
+  value: string,
+): value is MeetingRecord['policyActions'][number]['state'] =>
+  value === 'preview' || value === 'pending' || value === 'blocked';
+
 const isActionState = (value: string): value is MeetingRecord['actions'][number]['state'] =>
   value === 'open' || value === 'waiting' || value === 'done';
+
+const policyActionKinds: MeetingPolicyActionKind[] = ['export', 'share', 'delete'];
+
+function createDefaultPolicyAction(
+  kind: MeetingPolicyActionKind,
+): MeetingRecord['policyActions'][number] {
+  switch (kind) {
+    case 'export':
+      return {
+        kind,
+        state: 'pending',
+        label: policyActionLabel(kind),
+        detail: 'Runtime policy bilgisi bekleniyor; mutasyon üretilmez.',
+        requirement: 'Export policy + audit sink',
+        auditTag: 'MEETING_EXPORT_REQUESTED',
+      };
+    case 'share':
+      return {
+        kind,
+        state: 'pending',
+        label: policyActionLabel(kind),
+        detail: 'Runtime policy bilgisi bekleniyor; paylaşım linki üretilmez.',
+        requirement: 'Share policy + recipient authorization',
+        auditTag: 'MEETING_SHARE_REQUESTED',
+      };
+    case 'delete':
+      return {
+        kind,
+        state: 'pending',
+        label: policyActionLabel(kind),
+        detail: 'Runtime policy bilgisi bekleniyor; silme mutasyonu üretilmez.',
+        requirement: 'Retention guard + delete audit',
+        auditTag: 'MEETING_DELETE_REQUESTED',
+      };
+  }
+}
+
+const createDefaultPolicyActions = (): MeetingRecord['policyActions'] =>
+  policyActionKinds.map(createDefaultPolicyAction);
 
 const isCitationConfidence = (
   value: string,
@@ -117,6 +171,40 @@ function normalizeSourcedOutput(value: unknown): MeetingRecord['summary'] {
     citations: normalizeCitations(value.citations),
     confidence: Math.max(0, Math.min(1, readNumber(value, 'confidence', 0))),
   };
+}
+
+function normalizePolicyActions(value: unknown): MeetingRecord['policyActions'] {
+  if (!Array.isArray(value)) {
+    return createDefaultPolicyActions();
+  }
+
+  const normalized = value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const kind = readString(item, 'kind');
+    if (!isPolicyActionKind(kind)) return [];
+    const state = readString(item, 'state');
+    return [
+      {
+        kind,
+        state: isPolicyActionState(state) ? state : 'pending',
+        label: readString(item, 'label', policyActionLabel(kind)),
+        detail: readString(
+          item,
+          'detail',
+          'Runtime policy bilgisi bekleniyor; mutasyon üretilmez.',
+        ),
+        requirement: readString(item, 'requirement', 'Policy state + audit sink'),
+        auditTag: readString(item, 'auditTag', `MEETING_${kind.toUpperCase()}_REQUESTED`),
+      },
+    ];
+  });
+
+  const presentKinds = new Set(normalized.map((action) => action.kind));
+  const missingDefaults = policyActionKinds
+    .filter((kind) => !presentKinds.has(kind))
+    .map(createDefaultPolicyAction);
+
+  return [...normalized, ...missingDefaults];
 }
 
 function normalizeMeeting(value: unknown): MeetingRecord {
@@ -203,6 +291,7 @@ function normalizeMeeting(value: unknown): MeetingRecord {
         },
       ];
     }),
+    policyActions: normalizePolicyActions(value.policyActions),
   };
 }
 

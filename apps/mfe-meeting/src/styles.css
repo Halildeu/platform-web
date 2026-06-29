@@ -116,6 +116,7 @@ button {
   gap: 6px;
   padding: 7px 11px;
   font-weight: 700;
+  cursor: pointer;
 }
 
 .filter-row button {
@@ -404,6 +405,134 @@ button {
 .detail-header h2 {
   margin-top: 5px;
   font-size: 22px;
+}
+
+.action-policy-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--meeting-border-subtle);
+  background: var(--meeting-surface-muted);
+}
+
+.policy-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.policy-panel-header h3 {
+  margin: 4px 0 0;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.policy-close-button,
+.policy-tab,
+.policy-disabled-action {
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+  background: var(--meeting-surface);
+  color: var(--meeting-text-action);
+  font-weight: 750;
+}
+
+.policy-close-button {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.policy-action-tabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.policy-tab {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.policy-tab.active {
+  border-color: var(--meeting-accent);
+  background: var(--meeting-info-bg);
+  color: var(--meeting-info-text);
+}
+
+.policy-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.policy-preview {
+  background: var(--meeting-info-bg);
+  color: var(--meeting-info-text);
+}
+
+.policy-pending {
+  background: var(--meeting-warning-bg);
+  color: var(--meeting-warning-text);
+}
+
+.policy-blocked {
+  background: var(--meeting-danger-bg);
+  color: var(--meeting-danger-text);
+}
+
+.policy-body {
+  display: grid;
+  gap: 12px;
+}
+
+.policy-body p {
+  margin: 0;
+  color: var(--meeting-text-muted);
+  line-height: 1.5;
+}
+
+.policy-body dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.policy-body dl > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--meeting-border-subtle);
+  border-radius: 7px;
+  background: var(--meeting-surface);
+}
+
+.policy-body dt {
+  color: var(--meeting-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.policy-body dd {
+  margin: 0;
+  color: var(--meeting-text-primary);
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.policy-disabled-action {
+  justify-self: start;
+  padding: 7px 11px;
+  color: var(--meeting-text-disabled);
+  cursor: not-allowed;
+  background: var(--meeting-surface);
 }
 
 .detail-meta {
@@ -712,5 +841,14 @@ button {
   .meeting-list-item .status-chip {
     grid-column: 2;
     justify-self: start;
+  }
+
+  .policy-panel-header,
+  .policy-body dl {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-panel-header {
+    align-items: stretch;
   }
 }

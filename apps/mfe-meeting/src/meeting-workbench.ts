@@ -2,6 +2,8 @@ export type MeetingStatus = 'live' | 'ready' | 'processing' | 'blocked';
 export type TranscriptSegmentStatus = 'draft' | 'stabilizing' | 'final' | 'revised';
 export type TranscriptFeedState = 'live' | 'recorded' | 'demo' | 'blocked';
 export type GateState = 'pass' | 'pending' | 'blocked';
+export type MeetingPolicyActionKind = 'export' | 'share' | 'delete';
+export type MeetingPolicyActionState = 'preview' | 'pending' | 'blocked';
 
 export interface TranscriptSegment {
   id: string;
@@ -47,6 +49,15 @@ export interface MeetingGate {
   state: GateState;
 }
 
+export interface MeetingPolicyAction {
+  kind: MeetingPolicyActionKind;
+  state: MeetingPolicyActionState;
+  label: string;
+  detail: string;
+  requirement: string;
+  auditTag: string;
+}
+
 export interface TranscriptFeed {
   state: TranscriptFeedState;
   label: string;
@@ -68,6 +79,7 @@ export interface MeetingRecord {
   decisions: MeetingDecision[];
   actions: MeetingAction[];
   gates: MeetingGate[];
+  policyActions: MeetingPolicyAction[];
 }
 
 export interface MeetingStats {
@@ -189,6 +201,35 @@ export const meetings: MeetingRecord[] = [
       { id: 'gate-transcript', label: 'Direct-STT stream', state: 'blocked' },
       { id: 'gate-export', label: 'Export policy', state: 'pending' },
     ],
+    policyActions: [
+      {
+        kind: 'export',
+        state: 'pending',
+        label: 'Dışa aktar',
+        detail:
+          'Toplantı çıktısı kaynaklı ve gösterilebilir durumda; dışa aktarım için audit sink ve retention policy kanıtı bekleniyor.',
+        requirement: 'Export policy + audit event + retention sınıfı',
+        auditTag: 'MEETING_EXPORT_REQUESTED',
+      },
+      {
+        kind: 'share',
+        state: 'blocked',
+        label: 'Paylaş',
+        detail:
+          'Paylaşım, toplantı sahibi/katılımcı yetkisi ve alıcı tarafı OpenFGA allow kanıtı gelmeden açılmaz.',
+        requirement: 'Recipient authorization + share audit + link TTL',
+        auditTag: 'MEETING_SHARE_REQUESTED',
+      },
+      {
+        kind: 'delete',
+        state: 'blocked',
+        label: 'Sil',
+        detail:
+          'Silme, retention/dual-control ve legal hold kontrolü bağlanmadan mutasyon üretmez.',
+        requirement: 'Retention decision + dual-control approval + delete audit',
+        auditTag: 'MEETING_DELETE_REQUESTED',
+      },
+    ],
   },
   {
     id: 'mtg-direct-stt',
@@ -227,6 +268,34 @@ export const meetings: MeetingRecord[] = [
       { id: 'gate-secret', label: 'mTLS Secret', state: 'blocked' },
       { id: 'gate-leak', label: 'Artifact leak scan', state: 'pass' },
       { id: 'gate-transcribe', label: '/transcribe proof', state: 'pending' },
+    ],
+    policyActions: [
+      {
+        kind: 'export',
+        state: 'blocked',
+        label: 'Dışa aktar',
+        detail:
+          'Gerçek transcript henüz üretilmediği için dışa aktarılacak accepted transcript yok.',
+        requirement: 'Direct-STT e2e PASS + transcript result stream',
+        auditTag: 'MEETING_EXPORT_BLOCKED_NO_TRANSCRIPT',
+      },
+      {
+        kind: 'share',
+        state: 'blocked',
+        label: 'Paylaş',
+        detail: 'Canlı transcript kanıtı ve alıcı yetkisi yokken paylaşım linki üretilemez.',
+        requirement: 'Transcript availability + recipient authorization',
+        auditTag: 'MEETING_SHARE_BLOCKED_NO_TRANSCRIPT',
+      },
+      {
+        kind: 'delete',
+        state: 'pending',
+        label: 'Sil',
+        detail:
+          'Runtime delete endpointi retention/dual-control ile bağlanınca sadece auditli silme isteği açılır.',
+        requirement: 'Delete endpoint + retention guard + audit sink',
+        auditTag: 'MEETING_DELETE_REQUESTED',
+      },
     ],
   },
   {
@@ -295,6 +364,33 @@ export const meetings: MeetingRecord[] = [
       { id: 'gate-ui', label: 'Web workbench', state: 'pending' },
       { id: 'gate-auth', label: 'Meeting auth', state: 'pending' },
     ],
+    policyActions: [
+      {
+        kind: 'export',
+        state: 'preview',
+        label: 'Dışa aktar',
+        detail:
+          'Demo veride dışa aktarım isteği ön inceleme olarak gösterilir; canlı veri indirme yapılmaz.',
+        requirement: 'Demo-only preview; live export requires backend audit',
+        auditTag: 'MEETING_EXPORT_PREVIEW',
+      },
+      {
+        kind: 'share',
+        state: 'pending',
+        label: 'Paylaş',
+        detail: 'Paylaşım alıcı yetkisi, TTL ve audit endpointi gelene kadar ön incelemede kalır.',
+        requirement: 'Recipient authorization + TTL + share audit',
+        auditTag: 'MEETING_SHARE_REQUESTED',
+      },
+      {
+        kind: 'delete',
+        state: 'blocked',
+        label: 'Sil',
+        detail: 'Demo/accepted veri ayrımı ve retention guard olmadan silme aksiyonu çalışmaz.',
+        requirement: 'Accepted meeting id + retention guard + delete audit',
+        auditTag: 'MEETING_DELETE_BLOCKED_POLICY',
+      },
+    ],
   },
 ];
 
@@ -335,6 +431,28 @@ export function gateStateLabel(state: GateState): string {
   switch (state) {
     case 'pass':
       return 'Geçti';
+    case 'pending':
+      return 'Bekliyor';
+    case 'blocked':
+      return 'Blokeli';
+  }
+}
+
+export function policyActionLabel(kind: MeetingPolicyActionKind): string {
+  switch (kind) {
+    case 'export':
+      return 'Dışa aktar';
+    case 'share':
+      return 'Paylaş';
+    case 'delete':
+      return 'Sil';
+  }
+}
+
+export function policyActionStateLabel(state: MeetingPolicyActionState): string {
+  switch (state) {
+    case 'preview':
+      return 'Ön inceleme';
     case 'pending':
       return 'Bekliyor';
     case 'blocked':
@@ -385,6 +503,22 @@ export function getMeetingOutputCounts(meeting: MeetingRecord): {
       };
     },
     { total: 0, sourced: 0, uncited: 0 },
+  );
+}
+
+export function getPolicyAction(
+  meeting: MeetingRecord,
+  kind: MeetingPolicyActionKind,
+): MeetingPolicyAction {
+  return (
+    meeting.policyActions.find((action) => action.kind === kind) ?? {
+      kind,
+      state: 'pending',
+      label: policyActionLabel(kind),
+      detail: 'Runtime policy bilgisi bekleniyor; mutasyon üretilmez.',
+      requirement: 'Policy state + audit sink',
+      auditTag: `MEETING_${kind.toUpperCase()}_REQUESTED`,
+    }
   );
 }
 
