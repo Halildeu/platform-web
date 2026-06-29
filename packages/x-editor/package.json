@@ -122,8 +122,8 @@
     "@tiptap/extension-task-item": "^3.26.0",
     "@tiptap/extension-task-list": "^3.26.1",
     "@tiptap/extension-text-align": "^3.25.0",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^6.0.3",
     "typescript": "^5.0.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   }
 }
