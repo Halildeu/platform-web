@@ -1,0 +1,8 @@
+{
+  "sourceRepo": "Halildeu/platform-ai",
+  "sourcePath": "docs/contracts/ws-stream-events.schema.json",
+  "sourceCommit": "87b3f22022602f9fa853371511e08b0fada82550",
+  "sourceBlobSha": "c88cec831915c136dfb19ef7347b90753aa6149b",
+  "rawUrl": "https://raw.githubusercontent.com/Halildeu/platform-ai/87b3f22022602f9fa853371511e08b0fada82550/docs/contracts/ws-stream-events.schema.json",
+  "breakingChangeProcedure": "Schema version bump plus platform-web consumer sign-off before mfe-meeting accepts a changed /ws/stream event shape."
+}

@@ -6,6 +6,7 @@
   "scripts": {
     "start": "npx kill-port 3010 || true && vite",
     "build": "vite build",
+    "contract:ws-stream": "node scripts/verify-ws-stream-contract.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

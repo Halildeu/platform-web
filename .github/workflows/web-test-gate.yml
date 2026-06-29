@@ -76,6 +76,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Vitest workspace (jsdom)
         run: pnpm run test:workspace
+      - name: mfe-meeting ws-stream consumer contract
+        run: pnpm --filter mfe-meeting run contract:ws-stream
       - name: Vitest mfe-reporting SSRM response contract + dynamic-report
         # Root vitest.config.ts intentionally excludes apps/mfe-reporting
         # from the workspace project list (chart fixture isolation), so
