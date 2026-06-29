@@ -1,0 +1,28 @@
+{
+  "name": "mfe-meeting",
+  "version": "0.1.0",
+  "description": "Faz 24 Meeting Intelligence mikro-frontend",
+  "main": "dist/remoteEntry.js",
+  "scripts": {
+    "start": "npx kill-port 3010 || true && vite",
+    "build": "vite build",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "~1.20.0",
+    "react": "~18.2.0",
+    "react-dom": "~18.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^25.6.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
+  }
+}
