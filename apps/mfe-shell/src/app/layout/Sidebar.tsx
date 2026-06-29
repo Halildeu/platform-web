@@ -7,6 +7,7 @@ import {
   Home,
   LayoutDashboard,
   LifeBuoy,
+  MessagesSquare,
   Server,
   Settings,
   Database,
@@ -28,6 +29,7 @@ import {
 } from '../../features/notifications/model/notifications.slice';
 import { usePermissions } from '@mfe/auth';
 import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
+import { isMeetingRemoteEnabled } from '../shell-navigation';
 
 const STORAGE_KEY = 'shell.sidebar.mode';
 const defaultReportingRoute = getSharedReport('users-overview').webRoute;
@@ -47,11 +49,13 @@ const defaultReportingRoute = getSharedReport('users-overview').webRoute;
 export const buildSidebarNavItems = (
   sa: boolean,
   hasModule: (moduleKey: string) => boolean,
+  meetingEnabled = true,
 ): ShellSidebarNavItem[] => {
   const canAccess = sa || hasModule(MODULE_KEYS.ACCESS);
   const canAudit = sa || hasModule(MODULE_KEYS.AUDIT);
   const canReport = sa || hasModule(MODULE_KEYS.REPORT);
   const canThemeAdmin = sa || hasModule(MODULE_KEYS.THEME);
+  const canUseMeeting = meetingEnabled && canReport;
   const homePath = '/home';
 
   return [
@@ -85,6 +89,14 @@ export const buildSidebarNavItems = (
       icon: <BarChart3 aria-hidden />,
       dataTestId: 'nav-reporting',
       disabled: !canReport,
+    },
+    {
+      key: 'meetings',
+      label: 'Meetings',
+      href: canUseMeeting ? '/admin/meetings' : undefined,
+      icon: <MessagesSquare aria-hidden />,
+      dataTestId: 'nav-meetings',
+      disabled: !canUseMeeting,
     },
     {
       key: 'services',
@@ -129,7 +141,7 @@ export const Sidebar: React.FC = () => {
 
   /* ---- Navigation items ---- */
   const navItems: ShellSidebarNavItem[] = useMemo(
-    () => buildSidebarNavItems(sa, hasModule),
+    () => buildSidebarNavItems(sa, hasModule, isMeetingRemoteEnabled()),
     [hasModule, sa],
   );
 
@@ -142,6 +154,7 @@ export const Sidebar: React.FC = () => {
     if (p.startsWith('/audit')) return 'dashboard';
     if (p.startsWith('/access')) return homePath === '/access/roles' ? 'home' : 'projects';
     if (p.startsWith('/admin/reports')) return 'reporting';
+    if (p.startsWith('/admin/meetings') || p.startsWith('/meetings')) return 'meetings';
     if (p.startsWith('/admin/services')) return 'services';
     if (p.startsWith('/admin/schema-explorer')) return 'schema-explorer';
     return 'home';

@@ -57,6 +57,7 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
     // gating in vite.config buildRemotes() and runtime gating in
     // shell-navigation read the same flag.
     'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
+    'SHELL_ENABLE_MEETING_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
@@ -186,6 +187,10 @@ function buildRemotes(
       'SHELL_ENABLE_SCHEMA_EXPLORER_REMOTE',
     ]),
     endpointAdmin: endpointAdminEnabled,
+    meeting: readEnvBoolean(
+      ['VITE_SHELL_ENABLE_MEETING_REMOTE', 'SHELL_ENABLE_MEETING_REMOTE'],
+      false,
+    ),
   };
 
   // All remotes must be declared so the MF plugin can resolve their imports
@@ -243,6 +248,10 @@ function buildRemotes(
     endpointAdmin: readEnvString(
       ['MFE_ENDPOINT_ADMIN_URL', 'VITE_MFE_ENDPOINT_ADMIN_URL'],
       'http://localhost:3009/remoteEntry.js',
+    ),
+    meeting: readEnvString(
+      ['MFE_MEETING_URL', 'VITE_MFE_MEETING_URL'],
+      'http://localhost:3010/remoteEntry.js',
     ),
   };
 
@@ -358,6 +367,11 @@ function buildRemotes(
             entry: enabled.schemaExplorer ? remoteEntries.schemaExplorer : STUB,
           },
         }),
+    mfe_meeting: {
+      type: 'module' as const,
+      name: 'mfe_meeting',
+      entry: enabled.meeting ? remoteEntries.meeting : STUB,
+    },
     // FE-001 reapply build-time omit (post-#284): when the flag is
     // OFF, the manifest entry is omitted entirely. The earlier
     // INVALID stub (no init/get) tried in PR #258/#280 crashed live
@@ -752,6 +766,7 @@ export default defineConfig(({ mode }) => {
         'mfe_audit',
         'mfe_users',
         'mfe_reporting',
+        'mfe_meeting',
       ],
     },
 

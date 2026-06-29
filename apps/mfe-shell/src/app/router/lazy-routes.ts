@@ -91,6 +91,11 @@ export const SchemaExplorerModule: React.ComponentType = __MFE_SCHEMA_EXPLORER_O
   ? SchemaExplorerAppOnDemand
   : createLazyRemoteModule('SchemaExplorer', () => import('mfe_schema_explorer/SchemaExplorerApp'));
 
+export const MeetingModule: React.ComponentType = createLazyRemoteModule(
+  'Meeting',
+  () => import('mfe_meeting/MeetingApp'),
+);
+
 /* ------------------------------------------------------------------ */
 /*  Endpoint admin — build-time conditional                            */
 /* ------------------------------------------------------------------ */
