@@ -1562,6 +1562,27 @@ const DICT_TR = {
   'endpointAdmin.uninstallApproval.reason.placeholder': 'Örn. güvenlik onayı verildi',
   'endpointAdmin.uninstallApproval.approve': 'Onayla',
   'endpointAdmin.uninstallApproval.back': 'Geri',
+
+  // Faz 22.6 — VIEW_ONLY operator screen-observation viewer.
+  'endpointAdmin.remoteView.title': 'Canlı Ekran İzleme (Yalnız İzleme)',
+  'endpointAdmin.remoteView.missingParams':
+    'Oturum kimliği veya akış kimliği eksik; izleme başlatılamaz.',
+  'endpointAdmin.remoteView.badge.viewOnly': 'YALNIZ İZLEME',
+  'endpointAdmin.remoteView.badge.recordingOff': 'KAYIT KAPALI',
+  'endpointAdmin.remoteView.badge.attended': 'Kullanıcı Onaylı',
+  'endpointAdmin.remoteView.status.connecting': 'Bağlanıyor…',
+  'endpointAdmin.remoteView.status.live': 'Canlı',
+  'endpointAdmin.remoteView.status.closed': 'Oturum kapandı',
+  'endpointAdmin.remoteView.status.error': 'Bağlantı hatası',
+  'endpointAdmin.remoteView.status.forbidden': 'Bu oturumu izleme yetkiniz yok',
+  'endpointAdmin.remoteView.status.busy': 'Bu oturumu başka bir operatör izliyor',
+  'endpointAdmin.remoteView.stop': 'İzlemeyi Durdur',
+  'endpointAdmin.remoteView.alt': 'Uzak cihaz ekranı (canlı kare)',
+  'endpointAdmin.remoteView.waiting': 'İlk kare bekleniyor…',
+  'endpointAdmin.remoteView.frameCount': 'Kare',
+  'endpointAdmin.remoteView.lastFrame': 'Son kare',
+  'endpointAdmin.remoteView.noInputNote':
+    'Bu görünüm yalnızca izlemedir — fare/klavye girişi uzak cihaza iletilmez.',
 } as const;
 
 const DICT_EN: Record<keyof typeof DICT_TR, string> = {
@@ -3085,6 +3106,27 @@ const DICT_EN: Record<keyof typeof DICT_TR, string> = {
   'endpointAdmin.uninstallApproval.reason.placeholder': 'e.g. security approval granted',
   'endpointAdmin.uninstallApproval.approve': 'Approve',
   'endpointAdmin.uninstallApproval.back': 'Back',
+
+  // Faz 22.6 — VIEW_ONLY operator screen-observation viewer.
+  'endpointAdmin.remoteView.title': 'Live Screen Observation (View-Only)',
+  'endpointAdmin.remoteView.missingParams':
+    'Missing session or stream id; cannot start observation.',
+  'endpointAdmin.remoteView.badge.viewOnly': 'VIEW-ONLY',
+  'endpointAdmin.remoteView.badge.recordingOff': 'RECORDING OFF',
+  'endpointAdmin.remoteView.badge.attended': 'Attended',
+  'endpointAdmin.remoteView.status.connecting': 'Connecting…',
+  'endpointAdmin.remoteView.status.live': 'Live',
+  'endpointAdmin.remoteView.status.closed': 'Session closed',
+  'endpointAdmin.remoteView.status.error': 'Connection error',
+  'endpointAdmin.remoteView.status.forbidden': 'You are not authorized to view this session',
+  'endpointAdmin.remoteView.status.busy': 'Another operator is viewing this session',
+  'endpointAdmin.remoteView.stop': 'Stop Viewing',
+  'endpointAdmin.remoteView.alt': 'Remote device screen (live frame)',
+  'endpointAdmin.remoteView.waiting': 'Waiting for the first frame…',
+  'endpointAdmin.remoteView.frameCount': 'Frames',
+  'endpointAdmin.remoteView.lastFrame': 'Last frame',
+  'endpointAdmin.remoteView.noInputNote':
+    'This view is observation-only — mouse/keyboard input is not forwarded to the remote device.',
 };
 
 function resolveLocale(): 'tr' | 'en' {

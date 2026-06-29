@@ -74,6 +74,9 @@ const SoftwareBundlesPage = React.lazy(
 const RemoteResponsePage = React.lazy(
   () => import('../../pages/remote-response/RemoteResponsePage'),
 );
+// Faz 22.6 — VIEW_ONLY operator screen-observation viewer (web-MFE path,
+// disabled-by-default backend; owner/ops-gated gateway route).
+const RemoteViewPage = React.lazy(() => import('../../pages/remote-view/RemoteViewPage'));
 const EndpointOutdatedSoftwareListPage = React.lazy(async () => {
   const [, mod] = await Promise.all([
     import('@mfe/design-system/advanced/data-grid/setup'),
@@ -131,6 +134,7 @@ export const EndpointAdminRouter: React.FC = () => {
         <Route path="agent-updates/releases" element={<AgentUpdateReleasesPage />} />
         <Route path="software-bundles" element={<SoftwareBundlesPage />} />
         <Route path="remote-response" element={<RemoteResponsePage />} />
+        <Route path="remote-access/sessions/:sessionId/view" element={<RemoteViewPage />} />
         <Route path="outdated-software-list" element={<EndpointOutdatedSoftwareListPage />} />
         <Route path="prohibited-software-list" element={<EndpointProhibitedSoftwareListPage />} />
         <Route path="software-diff-list" element={<EndpointSoftwareDiffListPage />} />

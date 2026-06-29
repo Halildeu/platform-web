@@ -244,7 +244,7 @@ export interface GetProhibitedSoftwareArgs {
  * delegates to `new Request(url)` first, so we must hand it an
  * absolute string in every environment.
  */
-function resolveBaseUrl(): string {
+export function resolveBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location && window.location.origin) {
     return `${window.location.origin}/api/v1`;
   }
@@ -277,7 +277,7 @@ function normalizeAuthToken(value: string | null | undefined): string | null {
  * `null` silently rather than throwing inside RTK Query's
  * `prepareHeaders`.
  */
-function readBearerToken(): string | null {
+export function readBearerToken(): string | null {
   let token: string | null = null;
   try {
     token = normalizeAuthToken(getShellServices().auth.getToken());
