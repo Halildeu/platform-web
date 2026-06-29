@@ -43,21 +43,28 @@ const UnauthorizedPage: React.FC = () => {
     from?: string;
     reason?: string;
     requiredModule?: string;
+    requiredAnyModule?: string[];
     requiredPermission?: string;
   } | null;
 
   const fromPath = state?.from ?? '/';
   const reason = state?.reason;
   const requiredModule = state?.requiredModule;
+  const requiredAnyModule = state?.requiredAnyModule?.filter(Boolean) ?? [];
   const requiredPermission = state?.requiredPermission;
+  const requiredModuleOptions = [
+    ...new Set([requiredModule, ...requiredAnyModule].filter(Boolean)),
+  ];
+  const requiredModuleLabel = requiredModuleOptions.join(' veya ');
   const userRoles = authz?.roles ?? [];
-  const userId = (authz as Record<string, unknown>)?.userId as string | undefined;
+  const userId = authz?.userId;
 
   const reasonInfo = reason ? REASON_MESSAGES[reason] : null;
 
-  const canExplain = !!userId && !!(requiredModule || requiredPermission);
+  const modalModuleKey = requiredModule ?? requiredModuleOptions[0] ?? '';
+  const canExplain = !!userId && !!(modalModuleKey || requiredPermission);
   const modalPermType: 'MODULE' | 'ACTION' | 'REPORT' = requiredPermission ? 'ACTION' : 'MODULE';
-  const modalPermKey = requiredPermission ?? requiredModule ?? '';
+  const modalPermKey = requiredPermission ?? modalModuleKey;
 
   return (
     <div className="mt-16 flex justify-center px-4">
@@ -74,11 +81,13 @@ const UnauthorizedPage: React.FC = () => {
           </Alert>
         )}
 
-        {requiredModule && (
+        {requiredModuleOptions.length > 0 && (
           <div className="mb-4 rounded-xl border border-border-subtle bg-surface-muted p-4 text-sm">
             <div className="flex justify-between">
-              <span className="text-text-subtle">Gerekli modül:</span>
-              <span className="font-semibold text-text-primary">{requiredModule}</span>
+              <span className="text-text-subtle">
+                {requiredModuleOptions.length > 1 ? 'Gerekli modüllerden biri:' : 'Gerekli modül:'}
+              </span>
+              <span className="font-semibold text-text-primary">{requiredModuleLabel}</span>
             </div>
             {userRoles.length > 0 && (
               <div className="flex justify-between mt-2">

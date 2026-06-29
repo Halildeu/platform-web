@@ -149,18 +149,26 @@ describe('buildSidebarNavItems — module gating', () => {
     expect(item?.href).toBe('/admin/schema-explorer');
   });
 
-  it('gates the meetings item by REPORT and the meeting remote flag', () => {
+  it('gates the meetings item by MEETING or TRANSCRIPT and the meeting remote flag', () => {
     const denied = pick(buildSidebarNavItems(false, denyAll), 'meetings');
     expect(denied?.disabled).toBe(true);
     expect(denied?.href).toBeUndefined();
 
-    const remoteDisabled = pick(buildSidebarNavItems(false, allow('REPORT'), false), 'meetings');
+    const reportOnly = pick(buildSidebarNavItems(false, allow('REPORT')), 'meetings');
+    expect(reportOnly?.disabled).toBe(true);
+    expect(reportOnly?.href).toBeUndefined();
+
+    const remoteDisabled = pick(buildSidebarNavItems(false, allow('MEETING'), false), 'meetings');
     expect(remoteDisabled?.disabled).toBe(true);
     expect(remoteDisabled?.href).toBeUndefined();
 
-    const granted = pick(buildSidebarNavItems(false, allow('REPORT')), 'meetings');
-    expect(granted?.disabled).toBe(false);
-    expect(granted?.href).toBe('/admin/meetings');
+    const meetingGranted = pick(buildSidebarNavItems(false, allow('MEETING')), 'meetings');
+    expect(meetingGranted?.disabled).toBe(false);
+    expect(meetingGranted?.href).toBe('/admin/meetings');
+
+    const transcriptGranted = pick(buildSidebarNavItems(false, allow('TRANSCRIPT')), 'meetings');
+    expect(transcriptGranted?.disabled).toBe(false);
+    expect(transcriptGranted?.href).toBe('/admin/meetings');
   });
 
   it('keeps every privileged item gated (no ungated leak)', () => {

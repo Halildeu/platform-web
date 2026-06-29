@@ -11,6 +11,8 @@ interface ProtectedRouteProps {
   requiredPermissions?: string[];
   /** OpenFGA module key — preferred over requiredPermissions. */
   requiredModule?: string;
+  /** OpenFGA module alternatives — route is allowed when any one is granted. */
+  requiredAnyModule?: string[];
   fallbackPath?: string;
 }
 
@@ -18,6 +20,7 @@ export const ProtectedRoute = ({
   children,
   requiredPermissions,
   requiredModule,
+  requiredAnyModule,
   fallbackPath = '/unauthorized',
 }: ProtectedRouteProps) => {
   const { token, initialized } = useAppSelector((state) => state.auth);
@@ -69,7 +72,10 @@ export const ProtectedRoute = ({
 
   // Module-based check (preferred)
   let canAccess: boolean;
-  if (requiredModule) {
+  const requiredModuleAlternatives = requiredAnyModule?.filter(Boolean) ?? [];
+  if (requiredModuleAlternatives.length > 0) {
+    canAccess = isSuperAdmin() || requiredModuleAlternatives.some((module) => hasModule(module));
+  } else if (requiredModule) {
     canAccess = isSuperAdmin() || hasModule(requiredModule);
   } else if (requiredPermissions) {
     // Legacy string-based check — map to module check for backward compat
@@ -85,8 +91,10 @@ export const ProtectedRoute = ({
         replace
         state={{
           from: location.pathname,
-          reason: requiredModule ? 'module_denied' : 'forbidden',
+          reason:
+            requiredModule || requiredModuleAlternatives.length > 0 ? 'module_denied' : 'forbidden',
           requiredModule,
+          requiredAnyModule: requiredModuleAlternatives,
         }}
       />
     );

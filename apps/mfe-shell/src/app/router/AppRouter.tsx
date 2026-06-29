@@ -4,6 +4,7 @@ import { useAppSelector } from '../store/store.hooks';
 import { isPermitAllMode } from '../auth/auth-config';
 import { ProtectedRoute } from '../guards/ProtectedRoute';
 import { selectAuthPhase } from '../../features/auth/model/auth.slice';
+import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
 import {
   isEndpointAdminRemoteEnabled,
   isEthicRemoteEnabled,
@@ -282,7 +283,7 @@ export const AppRouter: React.FC = () => {
           path="/admin/meetings/*"
           element={
             meetingEnabled ? (
-              <ProtectedRoute requiredModule="REPORT">
+              <ProtectedRoute requiredAnyModule={[MODULE_KEYS.MEETING, MODULE_KEYS.TRANSCRIPT]}>
                 <MeetingModule />
               </ProtectedRoute>
             ) : (
