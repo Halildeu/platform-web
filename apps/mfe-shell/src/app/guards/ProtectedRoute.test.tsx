@@ -15,7 +15,7 @@ const authState = {
 };
 
 const permissionsMock = {
-  hasModule: () => true,
+  hasModule: (_module: string) => true,
   isSuperAdmin: () => false,
   initialized: true,
   // PR-FE-4 (Codex thread 019e08e2 iter-15 AGREE absorb, 2026-05-08):
@@ -72,6 +72,24 @@ const renderWithRouter = () =>
     </MemoryRouter>,
   );
 
+const renderWithAnyModuleRoute = () =>
+  render(
+    <MemoryRouter initialEntries={['/admin/meetings']}>
+      <Routes>
+        <Route
+          path="/admin/meetings"
+          element={
+            <ProtectedRoute requiredAnyModule={['MEETING', 'TRANSCRIPT']}>
+              <div>Meeting Content</div>
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/login" element={<LocationViewer label="Login Page" />} />
+        <Route path="/unauthorized" element={<LocationViewer label="Unauthorized Page" />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
 describe('ProtectedRoute', () => {
   afterEach(() => {
     cleanup();
@@ -117,6 +135,25 @@ describe('ProtectedRoute', () => {
 
     renderWithRouter();
     expect(screen.getByText('Protected Content')).toBeInTheDocument();
+  });
+
+  it('renders children when any required module is granted', () => {
+    authState.auth.token = 'valid-token';
+    permissionsMock.hasModule = (module) => module === 'TRANSCRIPT';
+
+    renderWithAnyModuleRoute();
+
+    expect(screen.getByText('Meeting Content')).toBeInTheDocument();
+  });
+
+  it('rejects any-module routes when none of the alternatives are granted', () => {
+    authState.auth.token = 'valid-token';
+    permissionsMock.hasModule = (module) => module === 'REPORT';
+
+    renderWithAnyModuleRoute();
+
+    expect(screen.getByText('Unauthorized Page')).toBeInTheDocument();
+    expect(screen.getByTestId('location-state')).toHaveTextContent('module_denied');
   });
 
   it('permitAll modunda bootstrap sonrası token olmasa da children render eder', () => {

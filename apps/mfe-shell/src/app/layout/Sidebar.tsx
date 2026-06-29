@@ -54,8 +54,9 @@ export const buildSidebarNavItems = (
   const canAccess = sa || hasModule(MODULE_KEYS.ACCESS);
   const canAudit = sa || hasModule(MODULE_KEYS.AUDIT);
   const canReport = sa || hasModule(MODULE_KEYS.REPORT);
+  const canMeeting = sa || hasModule(MODULE_KEYS.MEETING) || hasModule(MODULE_KEYS.TRANSCRIPT);
   const canThemeAdmin = sa || hasModule(MODULE_KEYS.THEME);
-  const canUseMeeting = meetingEnabled && canReport;
+  const canUseMeeting = meetingEnabled && canMeeting;
   const homePath = '/home';
 
   return [
