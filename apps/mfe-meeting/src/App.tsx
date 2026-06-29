@@ -23,6 +23,13 @@ import {
   type MeetingWorkbenchData,
 } from './meeting-api';
 import {
+  createLiveStreamSnapshot,
+  displayLiveStreamEndpoint,
+  reduceLiveStreamEvent,
+  resolveMeetingLiveStreamEndpoint,
+  type MeetingLiveStreamSnapshot,
+} from './meeting-live-stream';
+import {
   computeStats,
   confidenceLabel,
   filterMeetings,
@@ -40,6 +47,7 @@ import {
   type MeetingRecord,
   type MeetingStatus,
 } from './meeting-workbench';
+import { parseWsStreamEventMessage } from './ws-stream-events';
 
 const statusFilters: Array<{ value: MeetingStatus | 'all'; label: string }> = [
   { value: 'all', label: 'Tümü' },
@@ -51,7 +59,20 @@ const statusFilters: Array<{ value: MeetingStatus | 'all'; label: string }> = [
 
 export interface MeetingAppProps {
   loadWorkbench?: () => Promise<MeetingWorkbenchData>;
+  resolveLiveStreamEndpoint?: (meeting: MeetingRecord) => string | null;
+  webSocketFactory?: (endpoint: string) => MeetingWebSocket;
 }
+
+interface MeetingWebSocket {
+  onopen: (() => void) | null;
+  onmessage: ((event: { data: unknown }) => void) | null;
+  onerror: (() => void) | null;
+  onclose: (() => void) | null;
+  close: () => void;
+}
+
+const defaultResolveLiveStreamEndpoint = (meeting: MeetingRecord): string | null =>
+  resolveMeetingLiveStreamEndpoint(meeting.id);
 
 function formatStart(value: string): string {
   return new Intl.DateTimeFormat('tr-TR', {
@@ -209,6 +230,55 @@ function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
   );
 }
 
+function LiveStreamStatusPanel({
+  snapshot,
+  onReconnect,
+}: {
+  snapshot: MeetingLiveStreamSnapshot;
+  onReconnect: () => void;
+}) {
+  const isConfigured = snapshot.state !== 'not-configured';
+  return (
+    <section className={`stream-status stream-${snapshot.state}`} aria-label="Canlı stream durumu">
+      <div className="stream-status-heading">
+        <Radio size={16} aria-hidden="true" />
+        <span>
+          <strong>{snapshot.label}</strong>
+          <small>{snapshot.detail}</small>
+        </span>
+      </div>
+      <dl>
+        <div>
+          <dt>Uç nokta</dt>
+          <dd>
+            {snapshot.endpoint ? displayLiveStreamEndpoint(snapshot.endpoint) : 'Tanımlı değil'}
+          </dd>
+        </div>
+        <div>
+          <dt>Son olay</dt>
+          <dd>{snapshot.lastEvent ?? '-'}</dd>
+        </div>
+        <div>
+          <dt>Model</dt>
+          <dd>{snapshot.liveModel ? `${snapshot.liveModel} / ${snapshot.finalModel}` : '-'}</dd>
+        </div>
+      </dl>
+      {isConfigured ? (
+        <button
+          type="button"
+          className="stream-reconnect-button"
+          onClick={onReconnect}
+          disabled={snapshot.state === 'connecting'}
+          aria-label="Canlı stream yeniden bağlan"
+        >
+          <RefreshCw size={15} aria-hidden="true" />
+          Yeniden bağlan
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
 function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   return (
     <section className="insight-panel" aria-label="Toplantı çıktıları">
@@ -350,6 +420,8 @@ function ActionPolicyPanel({
 
 export default function MeetingApp({
   loadWorkbench = loadMeetingWorkbenchData,
+  resolveLiveStreamEndpoint = defaultResolveLiveStreamEndpoint,
+  webSocketFactory,
 }: MeetingAppProps = {}) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all');
@@ -359,6 +431,10 @@ export default function MeetingApp({
   const [selectedId, setSelectedId] = useState(workbench.records[0]?.id ?? '');
   const [selectedPolicyAction, setSelectedPolicyAction] = useState<MeetingPolicyActionKind | null>(
     null,
+  );
+  const [liveStreamToken, setLiveStreamToken] = useState(0);
+  const [liveStream, setLiveStream] = useState<MeetingLiveStreamSnapshot>(() =>
+    createLiveStreamSnapshot('not-configured'),
   );
 
   useEffect(() => {
@@ -389,15 +465,120 @@ export default function MeetingApp({
     () => filterMeetings(workbench.records, { query, status: statusFilter }),
     [query, statusFilter, workbench.records],
   );
-  const selectedMeeting = findSelectedMeeting(
-    filteredMeetings.length > 0 ? filteredMeetings : workbench.records,
-    selectedId,
+  const selectedMeeting = useMemo(
+    () =>
+      findSelectedMeeting(
+        filteredMeetings.length > 0 ? filteredMeetings : workbench.records,
+        selectedId,
+      ),
+    [filteredMeetings, selectedId, workbench.records],
   );
+  const renderedSelectedMeeting =
+    selectedMeeting && liveStream.segments.length > 0
+      ? {
+          ...selectedMeeting,
+          status: 'live' as const,
+          transcriptFeed: {
+            state: 'live' as const,
+            label: liveStream.label,
+            detail: liveStream.detail,
+          },
+          transcript: [...selectedMeeting.transcript, ...liveStream.segments],
+        }
+      : selectedMeeting;
   const stats = computeStats(workbench.records);
   const handleSelectMeeting = (meetingId: string) => {
     setSelectedId(meetingId);
     setSelectedPolicyAction(null);
   };
+
+  useEffect(() => {
+    if (!selectedMeeting) {
+      setLiveStream(
+        createLiveStreamSnapshot('not-configured', undefined, 'Toplantı seçili değil.'),
+      );
+      return;
+    }
+
+    const endpoint = resolveLiveStreamEndpoint(selectedMeeting);
+    if (!endpoint) {
+      setLiveStream(createLiveStreamSnapshot('not-configured'));
+      return;
+    }
+
+    setLiveStream(createLiveStreamSnapshot('connecting', endpoint));
+
+    if (!webSocketFactory && typeof WebSocket === 'undefined') {
+      setLiveStream(
+        createLiveStreamSnapshot('error', endpoint, 'Bu runtime WebSocket bağlantısı kuramıyor.'),
+      );
+      return;
+    }
+
+    let closedByCleanup = false;
+    let contractFailed = false;
+    const socket: MeetingWebSocket = webSocketFactory
+      ? webSocketFactory(endpoint)
+      : (new WebSocket(endpoint) as MeetingWebSocket);
+
+    socket.onopen = () => {
+      if (closedByCleanup) return;
+      setLiveStream((current) => ({
+        ...current,
+        state: 'connecting',
+        label: 'Stream bağlandı',
+        detail: 'WebSocket açık; ready event bekleniyor.',
+      }));
+    };
+
+    socket.onmessage = (event) => {
+      if (closedByCleanup) return;
+      const payload = typeof event.data === 'string' ? event.data : String(event.data);
+      const parsed = parseWsStreamEventMessage(payload);
+      if (!parsed.ok) {
+        contractFailed = true;
+        setLiveStream((current) => ({
+          ...current,
+          state: 'contract-error',
+          label: 'Sözleşme hatası',
+          detail: `Beklenmeyen /ws/stream eventi reddedildi: ${parsed.reason}`,
+          error: parsed.reason,
+        }));
+        socket.close();
+        return;
+      }
+      setLiveStream((current) => reduceLiveStreamEvent(current, parsed.event));
+    };
+
+    socket.onerror = () => {
+      if (closedByCleanup) return;
+      setLiveStream((current) => ({
+        ...current,
+        state: 'error',
+        label: 'Stream hatası',
+        detail: 'Canlı stream bağlantısı hata verdi.',
+        error: 'websocket-error',
+      }));
+    };
+
+    socket.onclose = () => {
+      if (closedByCleanup || contractFailed) return;
+      setLiveStream((current) => ({
+        ...current,
+        state: current.state === 'error' ? 'error' : 'closed',
+        label: current.state === 'error' ? current.label : 'Stream kapandı',
+        detail:
+          current.state === 'error'
+            ? current.detail
+            : 'Canlı stream kapandı; son güvenilir transcript parçaları korunuyor.',
+      }));
+    };
+
+    return () => {
+      closedByCleanup = true;
+      socket.close();
+    };
+  }, [resolveLiveStreamEndpoint, selectedMeeting, liveStreamToken, webSocketFactory]);
 
   return (
     <main className="meeting-app">
@@ -506,26 +687,26 @@ export default function MeetingApp({
           </div>
         </aside>
 
-        {selectedMeeting ? (
+        {renderedSelectedMeeting ? (
           <section className="meeting-detail" aria-label="Seçili toplantı">
             <div className="detail-header">
               <div>
                 <div className="detail-meta">
                   <CalendarDays size={16} aria-hidden="true" />
-                  <span>{formatStart(selectedMeeting.startsAt)}</span>
+                  <span>{formatStart(renderedSelectedMeeting.startsAt)}</span>
                   <Mic size={16} aria-hidden="true" />
-                  <span>{sourceLabel(selectedMeeting.source)}</span>
+                  <span>{sourceLabel(renderedSelectedMeeting.source)}</span>
                 </div>
-                <h2>{selectedMeeting.title}</h2>
+                <h2>{renderedSelectedMeeting.title}</h2>
               </div>
-              <span className={`status-chip status-${selectedMeeting.status}`}>
-                {statusLabel(selectedMeeting.status)}
+              <span className={`status-chip status-${renderedSelectedMeeting.status}`}>
+                {statusLabel(renderedSelectedMeeting.status)}
               </span>
             </div>
 
             {selectedPolicyAction ? (
               <ActionPolicyPanel
-                meeting={selectedMeeting}
+                meeting={renderedSelectedMeeting}
                 selectedAction={selectedPolicyAction}
                 onSelectAction={setSelectedPolicyAction}
                 onClose={() => setSelectedPolicyAction(null)}
@@ -536,15 +717,19 @@ export default function MeetingApp({
               <section className="transcript-panel" aria-labelledby="transcript-title">
                 <div className="panel-title-row">
                   <h3 id="transcript-title">
-                    {selectedMeeting.transcriptFeed.state === 'live'
+                    {renderedSelectedMeeting.transcriptFeed.state === 'live'
                       ? 'Canlı Transkript'
                       : 'Transkript'}
                   </h3>
-                  <span>{selectedMeeting.language.toUpperCase()}</span>
+                  <span>{renderedSelectedMeeting.language.toUpperCase()}</span>
                 </div>
-                <TranscriptTimeline meeting={selectedMeeting} />
+                <LiveStreamStatusPanel
+                  snapshot={liveStream}
+                  onReconnect={() => setLiveStreamToken((value) => value + 1)}
+                />
+                <TranscriptTimeline meeting={renderedSelectedMeeting} />
               </section>
-              <InsightPanel meeting={selectedMeeting} />
+              <InsightPanel meeting={renderedSelectedMeeting} />
             </div>
           </section>
         ) : (

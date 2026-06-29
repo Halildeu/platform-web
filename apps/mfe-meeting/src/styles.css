@@ -578,6 +578,103 @@ button {
   font-weight: 750;
 }
 
+.stream-status {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+  background: var(--meeting-surface-muted);
+}
+
+.stream-status-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stream-status svg {
+  flex: 0 0 auto;
+  color: var(--meeting-accent);
+  margin-top: 2px;
+}
+
+.stream-status span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stream-status strong {
+  color: var(--meeting-text-primary);
+  font-size: 13px;
+}
+
+.stream-status small {
+  color: var(--meeting-text-muted);
+  line-height: 1.45;
+}
+
+.stream-status dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.stream-status dl > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stream-status dt {
+  color: var(--meeting-text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.stream-status dd {
+  margin: 0;
+  color: var(--meeting-text-primary);
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.stream-reconnect-button {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--meeting-border);
+  border-radius: 7px;
+  color: var(--meeting-text-action);
+  background: var(--meeting-surface);
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.stream-reconnect-button:disabled {
+  color: var(--meeting-text-disabled);
+  cursor: wait;
+}
+
+.stream-ready,
+.stream-receiving {
+  border-color: var(--meeting-live-border);
+  background: var(--meeting-live-bg);
+}
+
+.stream-error,
+.stream-contract-error {
+  border-color: var(--meeting-danger-border);
+  background: var(--meeting-danger-bg);
+}
+
 .feed-banner {
   display: grid;
   gap: 3px;
@@ -844,7 +941,8 @@ button {
   }
 
   .policy-panel-header,
-  .policy-body dl {
+  .policy-body dl,
+  .stream-status dl {
     grid-template-columns: 1fr;
   }
 
