@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import MeetingApp from './App';
 import { createDemoWorkbenchData } from './meeting-api';
+import type { MeetingRecord } from './meeting-workbench';
 
 describe('MeetingApp', () => {
   it('renders the meeting workbench with stats, controls, and transcript readiness surface', async () => {
@@ -17,6 +18,7 @@ describe('MeetingApp', () => {
     expect(screen.getByLabelText('Toplantılar')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Transkript' })).toBeInTheDocument();
     expect(screen.getByText('Recorder kanıtı')).toBeInTheDocument();
+    expect(screen.getByLabelText('Canlı stream durumu')).toHaveTextContent('Stream kapalı');
     expect(
       screen.getByText('Web ürün yüzeyi acceptance hattından bağımsız paralel ilerleyecek.'),
     ).toBeInTheDocument();
@@ -100,6 +102,194 @@ describe('MeetingApp', () => {
 
     expect(screen.getByRole('heading', { name: 'Direct-STT mTLS unblock' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Sil politika durumu')).not.toBeInTheDocument();
+  });
+
+  it('connects a configured live transcript stream without sending audio', async () => {
+    const sockets: Array<{
+      onopen: (() => void) | null;
+      onmessage: ((event: { data: unknown }) => void) | null;
+      onerror: (() => void) | null;
+      onclose: (() => void) | null;
+      close: ReturnType<typeof vi.fn>;
+      send: ReturnType<typeof vi.fn>;
+    }> = [];
+    const webSocketFactory = vi.fn((endpoint: string) => {
+      const socket = {
+        endpoint,
+        onopen: null,
+        onmessage: null,
+        onerror: null,
+        onclose: null,
+        close: vi.fn(),
+        send: vi.fn(),
+      };
+      sockets.push(socket);
+      return socket;
+    });
+
+    render(
+      <MeetingApp
+        resolveLiveStreamEndpoint={() => 'ws://live.example.test/ws/stream?token=redacted'}
+        webSocketFactory={webSocketFactory}
+      />,
+    );
+    expect(await screen.findByText('Stream bağlanıyor')).toBeInTheDocument();
+    expect(screen.getByLabelText('Canlı stream durumu')).toHaveTextContent(
+      'ws://live.example.test/ws/stream',
+    );
+
+    act(() => sockets[0]?.onopen?.());
+    expect(screen.getByLabelText('Canlı stream durumu')).toHaveTextContent('Stream bağlandı');
+
+    act(() =>
+      sockets[0]?.onmessage?.({
+        data: JSON.stringify({
+          type: 'ready',
+          sample_rate: 16000,
+          live_model: 'live',
+          final_model: 'final',
+        }),
+      }),
+    );
+    expect(screen.getByLabelText('Canlı stream durumu')).toHaveTextContent('Stream hazır');
+
+    act(() =>
+      sockets[0]?.onmessage?.({
+        data: JSON.stringify({
+          type: 'partial',
+          seq: 4,
+          confirmed: 'faz yirmi dört',
+          tentative: 'canlı',
+          elapsed_ms: 2500,
+          rms: 0.22,
+          source: 'desktop',
+        }),
+      }),
+    );
+    expect(screen.getByText('faz yirmi dört canlı')).toBeInTheDocument();
+
+    act(() =>
+      sockets[0]?.onmessage?.({
+        data: JSON.stringify({
+          type: 'final',
+          seq: 4,
+          text: 'Faz yirmi dört canlı transcript bağlandı.',
+          reason: 'vad-final',
+          elapsed_ms: 3200,
+          rms: 0.2,
+        }),
+      }),
+    );
+    expect(screen.queryByText('faz yirmi dört canlı')).not.toBeInTheDocument();
+    expect(screen.getByText('Faz yirmi dört canlı transcript bağlandı.')).toBeInTheDocument();
+    expect(sockets[0]?.send).not.toHaveBeenCalled();
+  });
+
+  it('ignores stale websocket messages after the selected meeting changes', async () => {
+    const sockets: Array<{
+      endpoint: string;
+      onmessage: ((event: { data: unknown }) => void) | null;
+      close: ReturnType<typeof vi.fn>;
+    }> = [];
+    const webSocketFactory = vi.fn((endpoint: string) => {
+      const socket = {
+        endpoint,
+        onopen: null,
+        onmessage: null,
+        onerror: null,
+        onclose: null,
+        close: vi.fn(),
+      };
+      sockets.push(socket);
+      return socket;
+    });
+    const resolveLiveStreamEndpoint = (meeting: MeetingRecord) =>
+      `ws://live.example.test/ws/stream/${meeting.id}`;
+
+    render(
+      <MeetingApp
+        resolveLiveStreamEndpoint={resolveLiveStreamEndpoint}
+        webSocketFactory={webSocketFactory}
+      />,
+    );
+    expect(await screen.findByText('Stream bağlanıyor')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Direct-STT mTLS unblock/i }));
+
+    expect(screen.getByRole('heading', { name: 'Direct-STT mTLS unblock' })).toBeInTheDocument();
+    expect(webSocketFactory).toHaveBeenCalledTimes(2);
+    expect(sockets[0]?.close).toHaveBeenCalled();
+
+    act(() =>
+      sockets[0]?.onmessage?.({
+        data: JSON.stringify({
+          type: 'final',
+          seq: 41,
+          text: 'Stale first meeting transcript must be ignored.',
+          reason: 'late-final',
+          elapsed_ms: 4100,
+          rms: 0.2,
+        }),
+      }),
+    );
+    expect(
+      screen.queryByText('Stale first meeting transcript must be ignored.'),
+    ).not.toBeInTheDocument();
+
+    act(() =>
+      sockets[1]?.onmessage?.({
+        data: JSON.stringify({
+          type: 'final',
+          seq: 42,
+          text: 'Current selected meeting transcript is accepted.',
+          reason: 'selected-final',
+          elapsed_ms: 4200,
+          rms: 0.2,
+        }),
+      }),
+    );
+    expect(
+      screen.getByText('Current selected meeting transcript is accepted.'),
+    ).toBeInTheDocument();
+  });
+
+  it('fails closed when the websocket event contract drifts', async () => {
+    const sockets: Array<{
+      onopen: (() => void) | null;
+      onmessage: ((event: { data: unknown }) => void) | null;
+      onerror: (() => void) | null;
+      onclose: (() => void) | null;
+      close: ReturnType<typeof vi.fn>;
+    }> = [];
+    const webSocketFactory = vi.fn(() => {
+      const socket = {
+        onopen: null,
+        onmessage: null,
+        onerror: null,
+        onclose: null,
+        close: vi.fn(),
+      };
+      sockets.push(socket);
+      return socket;
+    });
+
+    render(
+      <MeetingApp
+        resolveLiveStreamEndpoint={() => 'ws://live.example.test/ws/stream'}
+        webSocketFactory={webSocketFactory}
+      />,
+    );
+    expect(await screen.findByText('Stream bağlanıyor')).toBeInTheDocument();
+
+    act(() =>
+      sockets[0]?.onmessage?.({
+        data: JSON.stringify({ type: 'transcript', text: 'drifted event should not render' }),
+      }),
+    );
+
+    expect(screen.getByLabelText('Canlı stream durumu')).toHaveTextContent('Sözleşme hatası');
+    expect(screen.queryByText('drifted event should not render')).not.toBeInTheDocument();
+    expect(sockets[0]?.close).toHaveBeenCalled();
   });
 
   it('surfaces API fallback as a visible non-acceptance state', async () => {
