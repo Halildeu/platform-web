@@ -133,10 +133,25 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
   }, []);
 
   React.useEffect(() => {
+    // Reset per-target view state FIRST so a previous session's frame/meta can
+    // never bleed into a new target, an unauthorized (403/busy) one, or one that
+    // has not pushed a frame yet — a stale screen frame is a privacy leak and a
+    // VIEW_ONLY acceptance-truth violation.
+    setMeta(null);
+    setFrameSrc(null);
+    setFrameCount(0);
+    setLastFrameAt(null);
+
     if (missing) {
       setStatus('error');
-      return;
+      return undefined;
     }
+    setStatus('connecting');
+
+    // Generation guard: only the CURRENT stream may write state. Cleanup flips
+    // `active` so an aborted/superseded stream's late callbacks (an abort race
+    // on target change or unmount) become no-ops and cannot touch the new target.
+    let active = true;
     const token = (tokenResolver ?? readBearerToken)();
     const url = `${resolveBaseUrl()}${VIEWER_PATH}/${encodeURIComponent(
       sessionId,
@@ -145,10 +160,14 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
       url,
       token,
       fetchImpl,
-      onStatus: setStatus,
-      onMeta: setMeta,
+      onStatus: (s) => {
+        if (active) setStatus(s);
+      },
+      onMeta: (m) => {
+        if (active) setMeta(m);
+      },
       onFrame: (frame) => {
-        if (!isRenderableFrame(frame)) return; // never build a data URL from a non-image type
+        if (!active || !isRenderableFrame(frame)) return; // never build a data URL from a non-image type
         setFrameSrc(`data:${frame.contentType};base64,${frame.dataB64}`);
         setFrameCount((c) => c + 1);
         setLastFrameAt(now());
@@ -156,6 +175,7 @@ export const RemoteViewPage: React.FC<RemoteViewPageProps> = ({
     });
     handleRef.current = handle;
     return () => {
+      active = false;
       handle.close();
       handleRef.current = null;
     };
