@@ -51,6 +51,16 @@ describe('meeting workbench API boundary', () => {
           decisions: [],
           actions: [],
           gates: [{ id: 'gate-api', label: 'API contract', state: 'pass' }],
+          policyActions: [
+            {
+              kind: 'export',
+              state: 'preview',
+              label: 'Dışa aktar',
+              detail: 'Ön inceleme',
+              requirement: 'Audit ready',
+              auditTag: 'MEETING_EXPORT_PREVIEW',
+            },
+          ],
         },
       ],
     });
@@ -58,6 +68,47 @@ describe('meeting workbench API boundary', () => {
     expect(records).toHaveLength(1);
     expect(records[0]?.summary.citations[0]?.segmentId).toBe('seg-api-1');
     expect(records[0]?.gates[0]?.state).toBe('pass');
+    expect(records[0]?.policyActions[0]).toMatchObject({
+      kind: 'export',
+      state: 'preview',
+      auditTag: 'MEETING_EXPORT_PREVIEW',
+    });
+    expect(records[0]?.policyActions.map((action) => action.kind).sort()).toEqual([
+      'delete',
+      'export',
+      'share',
+    ]);
+    expect(records[0]?.policyActions.find((action) => action.kind === 'share')).toMatchObject({
+      state: 'pending',
+      auditTag: 'MEETING_SHARE_REQUESTED',
+    });
+  });
+
+  it('defaults missing policy actions to pending non-mutating states', () => {
+    const records = normalizeWorkbenchPayload([
+      {
+        id: 'api-meeting-2',
+        title: 'Policy fallback',
+        organizer: 'Platform',
+        startsAt: '2026-06-29T08:00:00+03:00',
+        durationMinutes: 15,
+        status: 'ready',
+        language: 'tr',
+        source: 'web',
+        transcriptFeed: { state: 'recorded', label: 'API', detail: 'endpoint' },
+        transcript: [],
+        summary: 'Policy bekliyor.',
+        decisions: [],
+        actions: [],
+        gates: [],
+      },
+    ]);
+
+    expect(records[0]?.policyActions.map((action) => [action.kind, action.state])).toEqual([
+      ['export', 'pending'],
+      ['share', 'pending'],
+      ['delete', 'pending'],
+    ]);
   });
 
   it('falls back visibly when the configured API endpoint cannot be read', async () => {

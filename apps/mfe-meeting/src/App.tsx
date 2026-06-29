@@ -28,11 +28,15 @@ import {
   filterMeetings,
   findSelectedMeeting,
   gateStateLabel,
+  getPolicyAction,
   orderTranscriptSegments,
+  policyActionLabel,
+  policyActionStateLabel,
   segmentStatusLabel,
   sourceLabel,
   statusLabel,
   type EvidenceCitation,
+  type MeetingPolicyActionKind,
   type MeetingRecord,
   type MeetingStatus,
 } from './meeting-workbench';
@@ -284,6 +288,66 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   );
 }
 
+function ActionPolicyPanel({
+  meeting,
+  selectedAction,
+  onSelectAction,
+  onClose,
+}: {
+  meeting: MeetingRecord;
+  selectedAction: MeetingPolicyActionKind;
+  onSelectAction: (kind: MeetingPolicyActionKind) => void;
+  onClose: () => void;
+}) {
+  const policyAction = getPolicyAction(meeting, selectedAction);
+
+  return (
+    <section className="action-policy-panel" aria-label={`${policyAction.label} politika durumu`}>
+      <div className="policy-panel-header">
+        <div>
+          <span className={`policy-state policy-${policyAction.state}`}>
+            {policyActionStateLabel(policyAction.state)}
+          </span>
+          <h3>{policyAction.label} politikası</h3>
+        </div>
+        <button type="button" className="policy-close-button" onClick={onClose}>
+          Kapat
+        </button>
+      </div>
+
+      <div className="policy-action-tabs" aria-label="Aksiyon türü">
+        {(['export', 'share', 'delete'] as MeetingPolicyActionKind[]).map((kind) => (
+          <button
+            type="button"
+            key={kind}
+            className={`policy-tab ${selectedAction === kind ? 'active' : ''}`}
+            onClick={() => onSelectAction(kind)}
+          >
+            {policyActionLabel(kind)}
+          </button>
+        ))}
+      </div>
+
+      <div className="policy-body">
+        <p>{policyAction.detail}</p>
+        <dl>
+          <div>
+            <dt>Gereken kapı</dt>
+            <dd>{policyAction.requirement}</dd>
+          </div>
+          <div>
+            <dt>Audit olayı</dt>
+            <dd>{policyAction.auditTag}</dd>
+          </div>
+        </dl>
+        <button type="button" className="policy-disabled-action" disabled>
+          Runtime mutasyon kapalı
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function MeetingApp({
   loadWorkbench = loadMeetingWorkbenchData,
 }: MeetingAppProps = {}) {
@@ -293,6 +357,9 @@ export default function MeetingApp({
   const [isLoading, setIsLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [selectedId, setSelectedId] = useState(workbench.records[0]?.id ?? '');
+  const [selectedPolicyAction, setSelectedPolicyAction] = useState<MeetingPolicyActionKind | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -301,6 +368,7 @@ export default function MeetingApp({
       .then((data) => {
         if (!cancelled) {
           setWorkbench(data);
+          setSelectedPolicyAction(null);
           setSelectedId((current) => {
             if (data.records.some((meeting) => meeting.id === current)) return current;
             return data.records[0]?.id ?? '';
@@ -326,6 +394,10 @@ export default function MeetingApp({
     selectedId,
   );
   const stats = computeStats(workbench.records);
+  const handleSelectMeeting = (meetingId: string) => {
+    setSelectedId(meetingId);
+    setSelectedPolicyAction(null);
+  };
 
   return (
     <main className="meeting-app">
@@ -335,15 +407,30 @@ export default function MeetingApp({
           <h1>Meeting Intelligence</h1>
         </div>
         <div className="action-row" aria-label="Toplantı aksiyonları">
-          <button type="button" disabled aria-label="Paylaş">
+          <button
+            type="button"
+            disabled={!selectedMeeting}
+            aria-label="Paylaş"
+            onClick={() => setSelectedPolicyAction('share')}
+          >
             <Share2 size={16} aria-hidden="true" />
             Paylaş
           </button>
-          <button type="button" disabled aria-label="Dışa aktar">
+          <button
+            type="button"
+            disabled={!selectedMeeting}
+            aria-label="Dışa aktar"
+            onClick={() => setSelectedPolicyAction('export')}
+          >
             <Download size={16} aria-hidden="true" />
             Dışa aktar
           </button>
-          <button type="button" disabled aria-label="Sil">
+          <button
+            type="button"
+            disabled={!selectedMeeting}
+            aria-label="Sil"
+            onClick={() => setSelectedPolicyAction('delete')}
+          >
             <Trash2 size={16} aria-hidden="true" />
             Sil
           </button>
@@ -413,7 +500,7 @@ export default function MeetingApp({
                 key={meeting.id}
                 meeting={meeting}
                 selected={meeting.id === selectedMeeting?.id}
-                onSelect={setSelectedId}
+                onSelect={handleSelectMeeting}
               />
             ))}
           </div>
@@ -435,6 +522,15 @@ export default function MeetingApp({
                 {statusLabel(selectedMeeting.status)}
               </span>
             </div>
+
+            {selectedPolicyAction ? (
+              <ActionPolicyPanel
+                meeting={selectedMeeting}
+                selectedAction={selectedPolicyAction}
+                onSelectAction={setSelectedPolicyAction}
+                onClose={() => setSelectedPolicyAction(null)}
+              />
+            ) : null}
 
             <div className="detail-grid">
               <section className="transcript-panel" aria-labelledby="transcript-title">
