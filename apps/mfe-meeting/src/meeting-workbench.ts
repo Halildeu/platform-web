@@ -11,10 +11,24 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export interface EvidenceCitation {
+  segmentId: string;
+  quote: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface SourcedOutput {
+  text: string;
+  citations: EvidenceCitation[];
+  confidence: number;
+}
+
 export interface MeetingDecision {
   id: string;
   label: string;
   owner: string;
+  citations: EvidenceCitation[];
+  confidence: number;
 }
 
 export interface MeetingAction {
@@ -23,6 +37,8 @@ export interface MeetingAction {
   owner: string;
   due: string;
   state: 'open' | 'waiting' | 'done';
+  citations: EvidenceCitation[];
+  confidence: number;
 }
 
 export interface MeetingGate {
@@ -48,7 +64,7 @@ export interface MeetingRecord {
   source: 'desktop' | 'web' | 'calendar';
   transcriptFeed: TranscriptFeed;
   transcript: TranscriptSegment[];
-  summary: string;
+  summary: SourcedOutput;
   decisions: MeetingDecision[];
   actions: MeetingAction[];
   gates: MeetingGate[];
@@ -59,6 +75,8 @@ export interface MeetingStats {
   live: number;
   blocked: number;
   openActions: number;
+  sourcedOutputs: number;
+  uncitedOutputs: number;
 }
 
 export const meetings: MeetingRecord[] = [
@@ -100,13 +118,37 @@ export const meetings: MeetingRecord[] = [
         text: 'Aksiyonlar ve kararlar toplantı sonunda kaynaklı biçimde ayrıştırılacak.',
       },
     ],
-    summary:
-      'Recorder yüzeyi ürünleşti; sıradaki görünür boşluk web meeting workbench ve gerçek transcript stream bağlantısı.',
+    summary: {
+      text: 'Recorder yüzeyi ürünleşti; sıradaki görünür boşluk web meeting workbench ve gerçek transcript stream bağlantısı.',
+      confidence: 0.86,
+      citations: [
+        {
+          segmentId: 'seg-1',
+          quote: 'Desktop recorder lifecycle kanıtı ürün yüzeyinde görünür hale getiriliyor.',
+          confidence: 'high',
+        },
+        {
+          segmentId: 'seg-2',
+          quote:
+            'Direct-STT Gate 1 unblock olduğunda gerçek transcript stream adapter aynı ekrana bağlanacak.',
+          confidence: 'medium',
+        },
+      ],
+    },
     decisions: [
       {
         id: 'dec-1',
         label: 'Web ürün yüzeyi acceptance hattından bağımsız paralel ilerleyecek.',
         owner: 'Platform',
+        confidence: 0.91,
+        citations: [
+          {
+            segmentId: 'seg-2',
+            quote:
+              'Direct-STT Gate 1 unblock olduğunda gerçek transcript stream adapter aynı ekrana bağlanacak.',
+            confidence: 'medium',
+          },
+        ],
       },
     ],
     actions: [
@@ -116,6 +158,14 @@ export const meetings: MeetingRecord[] = [
         owner: 'Frontend',
         due: '2026-06-30',
         state: 'open',
+        confidence: 0.93,
+        citations: [
+          {
+            segmentId: 'seg-1',
+            quote: 'Desktop recorder lifecycle kanıtı ürün yüzeyinde görünür hale getiriliyor.',
+            confidence: 'high',
+          },
+        ],
       },
       {
         id: 'act-2',
@@ -123,6 +173,15 @@ export const meetings: MeetingRecord[] = [
         owner: 'AI/Backend',
         due: '2026-07-01',
         state: 'waiting',
+        confidence: 0.79,
+        citations: [
+          {
+            segmentId: 'seg-2',
+            quote:
+              'Direct-STT Gate 1 unblock olduğunda gerçek transcript stream adapter aynı ekrana bağlanacak.',
+            confidence: 'medium',
+          },
+        ],
       },
     ],
     gates: [
@@ -147,8 +206,11 @@ export const meetings: MeetingRecord[] = [
         'audio-gateway-direct-stt-mtls Secret henüz oluşmadığı için gerçek transcript stream kapalı.',
     },
     transcript: [],
-    summary:
-      'Runtime Secret beklenen mTLS key adlarını henüz üretmediği için gerçek transcript akışı bekliyor.',
+    summary: {
+      text: 'Runtime Secret beklenen mTLS key adlarını henüz üretmediği için gerçek transcript akışı bekliyor.',
+      confidence: 0.74,
+      citations: [],
+    },
     decisions: [],
     actions: [
       {
@@ -157,6 +219,8 @@ export const meetings: MeetingRecord[] = [
         owner: 'Ops',
         due: '2026-06-30',
         state: 'waiting',
+        confidence: 0.72,
+        citations: [],
       },
     ],
     gates: [
@@ -188,12 +252,25 @@ export const meetings: MeetingRecord[] = [
         text: 'Demo akışında kayıt, transkript ve aksiyon paneli tek çalışma alanında gösterilecek.',
       },
     ],
-    summary: 'Demo senaryosu web workbench üzerinden tek ekranla anlatılacak.',
+    summary: {
+      text: 'Demo senaryosu web workbench üzerinden tek ekranla anlatılacak.',
+      confidence: 0.82,
+      citations: [
+        {
+          segmentId: 'seg-4',
+          quote:
+            'Demo akışında kayıt, transkript ve aksiyon paneli tek çalışma alanında gösterilecek.',
+          confidence: 'high',
+        },
+      ],
+    },
     decisions: [
       {
         id: 'dec-2',
         label: 'Demo ekranı önce web/desktop eşliğinde, mobil daha sonra.',
         owner: 'Product',
+        confidence: 0.68,
+        citations: [],
       },
     ],
     actions: [
@@ -203,6 +280,15 @@ export const meetings: MeetingRecord[] = [
         owner: 'Product',
         due: '2026-06-30',
         state: 'open',
+        confidence: 0.87,
+        citations: [
+          {
+            segmentId: 'seg-4',
+            quote:
+              'Demo akışında kayıt, transkript ve aksiyon paneli tek çalışma alanında gösterilecek.',
+            confidence: 'high',
+          },
+        ],
       },
     ],
     gates: [
@@ -256,6 +342,12 @@ export function gateStateLabel(state: GateState): string {
   }
 }
 
+export function confidenceLabel(score: number): string {
+  if (score >= 0.85) return 'Yüksek';
+  if (score >= 0.7) return 'Orta';
+  return 'Düşük';
+}
+
 export function sourceLabel(source: MeetingRecord['source']): string {
   switch (source) {
     case 'desktop':
@@ -277,16 +369,40 @@ export function orderTranscriptSegments(segments: TranscriptSegment[]): Transcri
   });
 }
 
+export function getMeetingOutputCounts(meeting: MeetingRecord): {
+  total: number;
+  sourced: number;
+  uncited: number;
+} {
+  const outputs = [meeting.summary, ...meeting.decisions, ...meeting.actions];
+  return outputs.reduce(
+    (acc, output) => {
+      const hasCitation = output.citations.length > 0;
+      return {
+        total: acc.total + 1,
+        sourced: acc.sourced + (hasCitation ? 1 : 0),
+        uncited: acc.uncited + (hasCitation ? 0 : 1),
+      };
+    },
+    { total: 0, sourced: 0, uncited: 0 },
+  );
+}
+
 export function computeStats(records: MeetingRecord[]): MeetingStats {
   return records.reduce<MeetingStats>(
-    (acc, meeting) => ({
-      total: acc.total + 1,
-      live: acc.live + (meeting.status === 'live' ? 1 : 0),
-      blocked: acc.blocked + (meeting.status === 'blocked' ? 1 : 0),
-      openActions:
-        acc.openActions + meeting.actions.filter((action) => action.state !== 'done').length,
-    }),
-    { total: 0, live: 0, blocked: 0, openActions: 0 },
+    (acc, meeting) => {
+      const outputCounts = getMeetingOutputCounts(meeting);
+      return {
+        total: acc.total + 1,
+        live: acc.live + (meeting.status === 'live' ? 1 : 0),
+        blocked: acc.blocked + (meeting.status === 'blocked' ? 1 : 0),
+        openActions:
+          acc.openActions + meeting.actions.filter((action) => action.state !== 'done').length,
+        sourcedOutputs: acc.sourcedOutputs + outputCounts.sourced,
+        uncitedOutputs: acc.uncitedOutputs + outputCounts.uncited,
+      };
+    },
+    { total: 0, live: 0, blocked: 0, openActions: 0, sourcedOutputs: 0, uncitedOutputs: 0 },
   );
 }
 
@@ -299,7 +415,14 @@ export function filterMeetings(
     const matchesStatus = args.status === 'all' || meeting.status === args.status;
     const matchesQuery =
       query.length === 0 ||
-      [meeting.title, meeting.organizer, meeting.summary, meeting.id]
+      [
+        meeting.title,
+        meeting.organizer,
+        meeting.summary.text,
+        meeting.id,
+        ...meeting.decisions.map((decision) => decision.label),
+        ...meeting.actions.map((action) => action.label),
+      ]
         .join(' ')
         .toLocaleLowerCase('tr-TR')
         .includes(query);

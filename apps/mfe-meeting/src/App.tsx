@@ -1,29 +1,38 @@
 import {
+  AlertCircle,
   CalendarDays,
   CheckCircle2,
   Clock3,
   Download,
   FileText,
+  Link2,
   Mic,
   Radio,
+  RefreshCw,
   Search,
   Share2,
   ShieldAlert,
   Trash2,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import './styles.css';
 import {
+  createDemoWorkbenchData,
+  loadMeetingWorkbenchData,
+  type MeetingWorkbenchData,
+} from './meeting-api';
+import {
   computeStats,
+  confidenceLabel,
   filterMeetings,
   findSelectedMeeting,
   gateStateLabel,
-  meetings,
   orderTranscriptSegments,
   segmentStatusLabel,
   sourceLabel,
   statusLabel,
+  type EvidenceCitation,
   type MeetingRecord,
   type MeetingStatus,
 } from './meeting-workbench';
@@ -35,6 +44,10 @@ const statusFilters: Array<{ value: MeetingStatus | 'all'; label: string }> = [
   { value: 'processing', label: 'İşleniyor' },
   { value: 'blocked', label: 'Blokeli' },
 ];
+
+export interface MeetingAppProps {
+  loadWorkbench?: () => Promise<MeetingWorkbenchData>;
+}
 
 function formatStart(value: string): string {
   return new Intl.DateTimeFormat('tr-TR', {
@@ -79,6 +92,75 @@ function MeetingListItem({
   );
 }
 
+function DataSourceBanner({
+  data,
+  loading,
+  onReload,
+}: {
+  data: MeetingWorkbenchData;
+  loading: boolean;
+  onReload: () => void;
+}) {
+  return (
+    <section className={`source-banner source-${data.source.mode}`} aria-label="Veri kaynağı">
+      <div>
+        <AlertCircle size={18} aria-hidden="true" />
+        <span>
+          <strong>{loading ? 'Veri kaynağı kontrol ediliyor' : data.source.label}</strong>
+          <small>{data.source.detail}</small>
+        </span>
+      </div>
+      <button type="button" onClick={onReload} disabled={loading} aria-label="Veriyi yenile">
+        <RefreshCw size={16} aria-hidden="true" />
+        Yenile
+      </button>
+    </section>
+  );
+}
+
+function CitationTrail({
+  meeting,
+  citations,
+  confidence,
+}: {
+  meeting: MeetingRecord;
+  citations: EvidenceCitation[];
+  confidence: number;
+}) {
+  if (citations.length === 0) {
+    return (
+      <div className="citation-trail">
+        <span className="confidence-chip confidence-low">
+          {confidenceLabel(confidence)} güven · kaynak bekliyor
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="citation-trail" aria-label="Kaynaklar">
+      <span className={`confidence-chip confidence-${confidence >= 0.85 ? 'high' : 'medium'}`}>
+        {confidenceLabel(confidence)} güven
+      </span>
+      {citations.map((citation) => {
+        const segment = meeting.transcript.find((item) => item.id === citation.segmentId);
+        const label = segment
+          ? `${formatOffset(segment.startedAtMs)} · ${segment.speaker}`
+          : citation.segmentId;
+        return (
+          <a
+            href={`#segment-${citation.segmentId}`}
+            key={`${citation.segmentId}-${citation.quote}`}
+          >
+            <Link2 size={13} aria-hidden="true" />
+            {label}
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
   const segments = orderTranscriptSegments(meeting.transcript);
   if (segments.length === 0) {
@@ -91,7 +173,7 @@ function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
         <div className="empty-transcript">
           <ShieldAlert size={22} aria-hidden="true" />
           <strong>Transkript akışı bekleniyor</strong>
-          <span>{meeting.summary}</span>
+          <span>{meeting.summary.text}</span>
         </div>
       </>
     );
@@ -105,7 +187,11 @@ function TranscriptTimeline({ meeting }: { meeting: MeetingRecord }) {
       </div>
       <div className="transcript-timeline" aria-label="Transkript zaman çizgisi">
         {segments.map((segment) => (
-          <article className={`transcript-row segment-${segment.status}`} key={segment.id}>
+          <article
+            className={`transcript-row segment-${segment.status}`}
+            id={`segment-${segment.id}`}
+            key={segment.id}
+          >
             <div className="segment-meta">
               <span>{formatOffset(segment.startedAtMs)}</span>
               <span>{segment.speaker}</span>
@@ -124,7 +210,12 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
     <section className="insight-panel" aria-label="Toplantı çıktıları">
       <div className="summary-block">
         <h3>Özet</h3>
-        <p>{meeting.summary}</p>
+        <p>{meeting.summary.text}</p>
+        <CitationTrail
+          meeting={meeting}
+          citations={meeting.summary.citations}
+          confidence={meeting.summary.confidence}
+        />
       </div>
 
       <div className="output-grid">
@@ -135,8 +226,15 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
               {meeting.decisions.map((decision) => (
                 <li key={decision.id}>
                   <CheckCircle2 size={16} aria-hidden="true" />
-                  <span>{decision.label}</span>
-                  <em>{decision.owner}</em>
+                  <span className="output-copy">
+                    <span>{decision.label}</span>
+                    <em>{decision.owner}</em>
+                    <CitationTrail
+                      meeting={meeting}
+                      citations={decision.citations}
+                      confidence={decision.confidence}
+                    />
+                  </span>
                 </li>
               ))}
             </ul>
@@ -152,10 +250,17 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
               {meeting.actions.map((action) => (
                 <li key={action.id}>
                   <Clock3 size={16} aria-hidden="true" />
-                  <span>{action.label}</span>
-                  <em>
-                    {action.owner} · {action.due}
-                  </em>
+                  <span className="output-copy">
+                    <span>{action.label}</span>
+                    <em>
+                      {action.owner} · {action.due}
+                    </em>
+                    <CitationTrail
+                      meeting={meeting}
+                      citations={action.citations}
+                      confidence={action.confidence}
+                    />
+                  </span>
                 </li>
               ))}
             </ul>
@@ -179,20 +284,48 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   );
 }
 
-export default function MeetingApp() {
+export default function MeetingApp({
+  loadWorkbench = loadMeetingWorkbenchData,
+}: MeetingAppProps = {}) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all');
-  const [selectedId, setSelectedId] = useState(meetings[0]?.id ?? '');
+  const [workbench, setWorkbench] = useState<MeetingWorkbenchData>(() => createDemoWorkbenchData());
+  const [isLoading, setIsLoading] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [selectedId, setSelectedId] = useState(workbench.records[0]?.id ?? '');
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    loadWorkbench()
+      .then((data) => {
+        if (!cancelled) {
+          setWorkbench(data);
+          setSelectedId((current) => {
+            if (data.records.some((meeting) => meeting.id === current)) return current;
+            return data.records[0]?.id ?? '';
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadWorkbench, reloadToken]);
 
   const filteredMeetings = useMemo(
-    () => filterMeetings(meetings, { query, status: statusFilter }),
-    [query, statusFilter],
+    () => filterMeetings(workbench.records, { query, status: statusFilter }),
+    [query, statusFilter, workbench.records],
   );
   const selectedMeeting = findSelectedMeeting(
-    filteredMeetings.length > 0 ? filteredMeetings : meetings,
+    filteredMeetings.length > 0 ? filteredMeetings : workbench.records,
     selectedId,
   );
-  const stats = computeStats(meetings);
+  const stats = computeStats(workbench.records);
 
   return (
     <main className="meeting-app">
@@ -217,6 +350,12 @@ export default function MeetingApp() {
         </div>
       </header>
 
+      <DataSourceBanner
+        data={workbench}
+        loading={isLoading}
+        onReload={() => setReloadToken((value) => value + 1)}
+      />
+
       <section className="metric-strip" aria-label="Meeting Intelligence metrikleri">
         <div>
           <Radio size={18} aria-hidden="true" />
@@ -232,6 +371,11 @@ export default function MeetingApp() {
           <Clock3 size={18} aria-hidden="true" />
           <span>Aksiyon</span>
           <strong>{stats.openActions}</strong>
+        </div>
+        <div>
+          <Link2 size={18} aria-hidden="true" />
+          <span>Kaynaklı</span>
+          <strong>{stats.sourcedOutputs}</strong>
         </div>
         <div>
           <ShieldAlert size={18} aria-hidden="true" />

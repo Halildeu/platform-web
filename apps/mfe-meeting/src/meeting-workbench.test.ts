@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   computeStats,
+  confidenceLabel,
   filterMeetings,
   findSelectedMeeting,
   gateStateLabel,
+  getMeetingOutputCounts,
   meetings,
   orderTranscriptSegments,
   segmentStatusLabel,
@@ -18,6 +20,8 @@ describe('meeting workbench domain', () => {
       live: 1,
       blocked: 1,
       openActions: 4,
+      sourcedOutputs: 6,
+      uncitedOutputs: 3,
     });
   });
 
@@ -66,8 +70,25 @@ describe('meeting workbench domain', () => {
     expect(segmentStatusLabel('stabilizing')).toBe('Netleşiyor');
     expect(gateStateLabel('blocked')).toBe('Blokeli');
     expect(sourceLabel('calendar')).toBe('Takvim');
+    expect(confidenceLabel(0.91)).toBe('Yüksek');
     expect(meetings.find((meeting) => meeting.id === 'mtg-direct-stt')?.transcriptFeed.state).toBe(
       'blocked',
     );
+  });
+
+  it('computes citation coverage without treating empty outputs as sourced', () => {
+    const weekly = meetings.find((meeting) => meeting.id === 'mtg-f24-weekly');
+    const blocked = meetings.find((meeting) => meeting.id === 'mtg-direct-stt');
+
+    expect(weekly && getMeetingOutputCounts(weekly)).toEqual({
+      total: 4,
+      sourced: 4,
+      uncited: 0,
+    });
+    expect(blocked && getMeetingOutputCounts(blocked)).toEqual({
+      total: 2,
+      sourced: 0,
+      uncited: 2,
+    });
   });
 });
