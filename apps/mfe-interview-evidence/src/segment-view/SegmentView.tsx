@@ -13,7 +13,7 @@ function fmtMs(ms: number): string {
  * F3: zaman-damgalı segment görünümü — `@mfe/design-system` primitifleriyle
  * (Badge + Text). Konuşmacılar DAİMA takma-ad (S1..Sn; ATS-0013 diarization:
  * sağlayıcıdan kimlik alınmaz, UI da üretmez). Renk literali YOK; ayraç semantik
- * token (`--border-muted`) — platform lint (`semantic-theme/no-inline-color-literals`).
+ * token (`--border-subtle`) — platform lint (`semantic-theme/no-inline-color-literals`).
  */
 export function SegmentView({ segments }: { segments: Segment[] }) {
   if (segments.length === 0) {
@@ -34,7 +34,7 @@ export function SegmentView({ segments }: { segments: Segment[] }) {
             gap: '12px',
             alignItems: 'baseline',
             padding: '8px 4px',
-            borderBottom: '1px solid var(--border-muted)',
+            borderBottom: '1px solid var(--border-subtle)',
           }}
         >
           <Badge variant="default">{seg.speakerLabel}</Badge>

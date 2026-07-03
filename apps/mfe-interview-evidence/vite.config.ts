@@ -40,8 +40,9 @@ const sharedCore = {
 };
 // @mfe/design-system MF singleton (mfe-users pattern): shell zaten eager singleton
 // olarak sağlar; remote prod'da host'un tek örneğini tüketir (çift-bundle YOK).
-// Dev'de remote kendi kopyasını bundle'lar (standalone çalışsın). requiredVersion "*"
-// + strictVersion: host'un gerçek sürümü her zaman karşılar.
+// Dev'de DS kopyası bundle edilir; ancak react/react-dom hostOnly (import:false)
+// olduğu için DESTEKLENEN render path SHELL'dir — standalone dev render OLMAZ.
+// requiredVersion "*" + strictVersion: host'un gerçek sürümü her zaman karşılar.
 const sharedProdOnly = {
   '@mfe/design-system': singleton('@mfe/design-system', '@mfe/design-system', false),
 };
