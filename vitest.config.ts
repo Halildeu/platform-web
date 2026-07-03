@@ -56,6 +56,11 @@ export default defineConfig({
       // CI gate. Add it here so every mfe-endpoint-admin change goes
       // through the same regression net as the other admin MFEs.
       'apps/mfe-endpoint-admin/vitest.config.ts',
+      // ATS-0019 39c-3a (Codex 019f2850): interview-evidence jsdom smoke
+      // (SegmentView/App render). Same rationale as mfe-endpoint-admin above —
+      // allowlist so the suite runs in the required web-test-gate, not just the
+      // package script (otherwise the new tests are invisible to CI).
+      'apps/mfe-interview-evidence/vitest.config.ts',
       'scripts/vitest.config.ts',
     ],
     coverage: {
