@@ -8,6 +8,7 @@ import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
 import {
   isEndpointAdminRemoteEnabled,
   isEthicRemoteEnabled,
+  isInterviewEvidenceRemoteEnabled,
   isMeetingRemoteEnabled,
   isSuggestionsRemoteEnabled,
 } from '../shell-navigation';
@@ -20,6 +21,7 @@ import {
   UsersModule,
   SchemaExplorerModule,
   MeetingModule,
+  InterviewEvidenceModule,
   EndpointAdminModule,
 } from './lazy-routes';
 import { ReportingLayout } from '../../pages/admin/reports/ReportingLayout';
@@ -111,6 +113,7 @@ export const AppRouter: React.FC = () => {
   const ethicEnabled = isEthicRemoteEnabled();
   const endpointAdminEnabled = isEndpointAdminRemoteEnabled();
   const meetingEnabled = isMeetingRemoteEnabled();
+  const interviewEvidenceEnabled = isInterviewEvidenceRemoteEnabled();
 
   const defaultShellPath = '/home';
 
@@ -293,6 +296,20 @@ export const AppRouter: React.FC = () => {
         />
         <Route path="/meetings/*" element={<Navigate to="/admin/meetings" replace />} />
         <Route path="/meetings" element={<Navigate to="/admin/meetings" replace />} />
+        {/* ATS-0019: interview-evidence MFE (default-disabled STUB; testai'de flag ON, 39c-3).
+            UI-visibility gate MODULE_KEYS.INTERVIEW_EVIDENCE — backend ats.* scope AYRI. */}
+        <Route
+          path="/admin/interview-evidence/*"
+          element={
+            interviewEvidenceEnabled ? (
+              <ProtectedRoute requiredModule={MODULE_KEYS.INTERVIEW_EVIDENCE}>
+                <InterviewEvidenceModule />
+              </ProtectedRoute>
+            ) : (
+              <Navigate to={defaultShellPath} replace />
+            )
+          }
+        />
         <Route
           path="/admin/users"
           element={

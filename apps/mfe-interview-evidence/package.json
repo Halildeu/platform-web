@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "npx kill-port 3010 || true && vite",
+    "start": "npx kill-port 3011 || true && vite",
     "build": "vite build",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "echo \"no tests\""

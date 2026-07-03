@@ -58,6 +58,7 @@ function buildRuntimeEnv(mode: string): Record<string, string> {
     // shell-navigation read the same flag.
     'SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE',
     'SHELL_ENABLE_MEETING_REMOTE',
+    'SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE',
   ]);
   const payload: Record<string, string> = {};
   for (const [key, value] of Object.entries(merged)) {
@@ -191,6 +192,10 @@ function buildRemotes(
       ['VITE_SHELL_ENABLE_MEETING_REMOTE', 'SHELL_ENABLE_MEETING_REMOTE'],
       false,
     ),
+    interviewEvidence: readEnvBoolean(
+      ['VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE', 'SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE'],
+      false,
+    ),
   };
 
   // All remotes must be declared so the MF plugin can resolve their imports
@@ -252,6 +257,10 @@ function buildRemotes(
     meeting: readEnvString(
       ['MFE_MEETING_URL', 'VITE_MFE_MEETING_URL'],
       'http://localhost:3010/remoteEntry.js',
+    ),
+    interviewEvidence: readEnvString(
+      ['MFE_INTERVIEW_EVIDENCE_URL', 'VITE_MFE_INTERVIEW_EVIDENCE_URL'],
+      'http://localhost:3011/remoteEntry.js',
     ),
   };
 
@@ -371,6 +380,11 @@ function buildRemotes(
       type: 'module' as const,
       name: 'mfe_meeting',
       entry: enabled.meeting ? remoteEntries.meeting : STUB,
+    },
+    mfe_interview_evidence: {
+      type: 'module' as const,
+      name: 'mfe_interview_evidence',
+      entry: enabled.interviewEvidence ? remoteEntries.interviewEvidence : STUB,
     },
     // FE-001 reapply build-time omit (post-#284): when the flag is
     // OFF, the manifest entry is omitted entirely. The earlier
@@ -767,6 +781,7 @@ export default defineConfig(({ mode }) => {
         'mfe_users',
         'mfe_reporting',
         'mfe_meeting',
+        'mfe_interview_evidence',
       ],
     },
 

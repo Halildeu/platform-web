@@ -32,7 +32,7 @@
   ],
   "main": "index.js",
   "scripts": {
-    "prestart": "npx kill-port 3000 3001 3002 3003 3004 3005 3006 3007 3010 || true",
+    "prestart": "npx kill-port 3000 3001 3002 3003 3004 3005 3006 3007 3010 3011 || true",
     "dev": "pnpm start",
     "dev:remotes": "bash ./scripts/health/run-dev-servers.sh --profile remotes",
     "dev:shell": "npm start --prefix apps/mfe-shell",

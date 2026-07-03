@@ -96,6 +96,11 @@ export const MeetingModule: React.ComponentType = createLazyRemoteModule(
   () => import('mfe_meeting/MeetingApp'),
 );
 
+export const InterviewEvidenceModule: React.ComponentType = createLazyRemoteModule(
+  'InterviewEvidence',
+  () => import('mfe_interview_evidence/InterviewEvidenceApp'),
+);
+
 /* ------------------------------------------------------------------ */
 /*  Endpoint admin — build-time conditional                            */
 /* ------------------------------------------------------------------ */
