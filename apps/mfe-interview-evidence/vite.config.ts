@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { federation } from '@module-federation/vite';
 import path from 'node:path';
@@ -140,6 +140,15 @@ export default defineConfig(({ mode }) => {
       target: 'esnext',
       outDir: 'dist',
       sourcemap: mode === 'development',
+    },
+
+    // jsdom smoke: SegmentView/App yapısal render (mfe-ethic pattern). react
+    // node_modules'den çözülür (federation hostOnly yalnız build'i etkiler);
+    // @mfe/design-system yukarıdaki resolve.alias ile src'ye çözülür.
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./src/test-setup.ts'],
     },
   };
 });
