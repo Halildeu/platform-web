@@ -53,3 +53,9 @@ export const isEndpointAdminRemoteEnabled = (): boolean =>
 
 export const isMeetingRemoteEnabled = (): boolean =>
   readEnvBoolean(['VITE_SHELL_ENABLE_MEETING_REMOTE', 'SHELL_ENABLE_MEETING_REMOTE'], false);
+
+export const isInterviewEvidenceRemoteEnabled = (): boolean =>
+  readEnvBoolean(
+    ['VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE', 'SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE'],
+    false,
+  );
