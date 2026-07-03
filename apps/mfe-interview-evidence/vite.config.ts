@@ -38,7 +38,13 @@ const sharedCore = {
   'react-router-dom': hostOnly('react-router-dom'),
   '@tanstack/react-query': singleton('@tanstack/react-query'),
 };
-const sharedProdOnly = {};
+// @mfe/design-system MF singleton (mfe-users pattern): shell zaten eager singleton
+// olarak sağlar; remote prod'da host'un tek örneğini tüketir (çift-bundle YOK).
+// Dev'de remote kendi kopyasını bundle'lar (standalone çalışsın). requiredVersion "*"
+// + strictVersion: host'un gerçek sürümü her zaman karşılar.
+const sharedProdOnly = {
+  '@mfe/design-system': singleton('@mfe/design-system', '@mfe/design-system', false),
+};
 
 function readEnvString(keys: string[], fallback: string): string {
   for (const key of keys) {
@@ -85,6 +91,12 @@ export default defineConfig(({ mode }) => {
 
     resolve: {
       alias: [
+        // @mfe/design-system'i kaynağa (src) çöz — mfe-ethic/mfe-users pattern.
+        // String alias prefix eşleşmesi subpath'i de kapsar (…/design-system/*).
+        {
+          find: '@mfe/design-system',
+          replacement: path.resolve(__dirname, '../../packages/design-system/src'),
+        },
         {
           find: '@tanstack/react-query',
           replacement: path.resolve(

@@ -11,6 +11,7 @@ import {
   Server,
   Settings,
   Database,
+  FileText,
 } from 'lucide-react';
 // PERF-INIT-V2 PR-B5a: consumer-side subpath migration. Sidebar is on
 // every authenticated route's critical render path. ShellSidebar + its
@@ -29,7 +30,7 @@ import {
 } from '../../features/notifications/model/notifications.slice';
 import { usePermissions } from '@mfe/auth';
 import { MODULE_KEYS } from '../../features/auth/lib/permissions.constants';
-import { isMeetingRemoteEnabled } from '../shell-navigation';
+import { isInterviewEvidenceRemoteEnabled, isMeetingRemoteEnabled } from '../shell-navigation';
 
 const STORAGE_KEY = 'shell.sidebar.mode';
 const defaultReportingRoute = getSharedReport('users-overview').webRoute;
@@ -50,6 +51,7 @@ export const buildSidebarNavItems = (
   sa: boolean,
   hasModule: (moduleKey: string) => boolean,
   meetingEnabled = true,
+  interviewEvidenceEnabled = false,
 ): ShellSidebarNavItem[] => {
   const canAccess = sa || hasModule(MODULE_KEYS.ACCESS);
   const canAudit = sa || hasModule(MODULE_KEYS.AUDIT);
@@ -57,6 +59,11 @@ export const buildSidebarNavItems = (
   const canMeeting = sa || hasModule(MODULE_KEYS.MEETING) || hasModule(MODULE_KEYS.TRANSCRIPT);
   const canThemeAdmin = sa || hasModule(MODULE_KEYS.THEME);
   const canUseMeeting = meetingEnabled && canMeeting;
+  // ATS-0019: interview-evidence remote (default-off). Meeting ile aynı çift-kapı:
+  // remote flag AÇIK + modül grant. Kapalıysa item disabled (href yok) — route guard
+  // reddine tıklanamaz (schema-explorer/meetings ile aynı sözleşme).
+  const canInterviewEvidence = sa || hasModule(MODULE_KEYS.INTERVIEW_EVIDENCE);
+  const canUseInterviewEvidence = interviewEvidenceEnabled && canInterviewEvidence;
   const homePath = '/home';
 
   return [
@@ -98,6 +105,14 @@ export const buildSidebarNavItems = (
       icon: <MessagesSquare aria-hidden />,
       dataTestId: 'nav-meetings',
       disabled: !canUseMeeting,
+    },
+    {
+      key: 'interview-evidence',
+      label: 'Interview Evidence',
+      href: canUseInterviewEvidence ? '/admin/interview-evidence' : undefined,
+      icon: <FileText aria-hidden />,
+      dataTestId: 'nav-interview-evidence',
+      disabled: !canUseInterviewEvidence,
     },
     {
       key: 'services',
@@ -142,7 +157,13 @@ export const Sidebar: React.FC = () => {
 
   /* ---- Navigation items ---- */
   const navItems: ShellSidebarNavItem[] = useMemo(
-    () => buildSidebarNavItems(sa, hasModule, isMeetingRemoteEnabled()),
+    () =>
+      buildSidebarNavItems(
+        sa,
+        hasModule,
+        isMeetingRemoteEnabled(),
+        isInterviewEvidenceRemoteEnabled(),
+      ),
     [hasModule, sa],
   );
 
@@ -156,6 +177,7 @@ export const Sidebar: React.FC = () => {
     if (p.startsWith('/access')) return homePath === '/access/roles' ? 'home' : 'projects';
     if (p.startsWith('/admin/reports')) return 'reporting';
     if (p.startsWith('/admin/meetings') || p.startsWith('/meetings')) return 'meetings';
+    if (p.startsWith('/admin/interview-evidence')) return 'interview-evidence';
     if (p.startsWith('/admin/services')) return 'services';
     if (p.startsWith('/admin/schema-explorer')) return 'schema-explorer';
     return 'home';
