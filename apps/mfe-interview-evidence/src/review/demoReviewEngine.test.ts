@@ -82,6 +82,18 @@ describe('kanıt-kapısı + F5 state-machine', () => {
     expect(() => exportPacket(caseKey, 'c-1', 'ref-j')).toThrow(/FINALIZED/);
   });
 
+  test('export FINALIZED→EXPORTED terminal geçişi + çift-export YASAK (Codex 019f2850)', () => {
+    const { caseKey } = openCase(supported());
+    transition(caseKey, 'START');
+    transition(caseKey, 'REVIEWED_NO_CHANGE');
+    transition(caseKey, 'RATIONALE', 'ref-g');
+    finalizeCase(caseKey, 'ref-k');
+    exportPacket(caseKey, 'c-1', 'ref-j');
+    expect(getCaseDetail(caseKey).state).toBe('EXPORTED');
+    expect(listCases()).toEqual([{ caseKey, state: 'EXPORTED' }]);
+    expect(() => exportPacket(caseKey, 'c-1', 'ref-j')).toThrow(/zaten export/);
+  });
+
   test('geçersiz geçiş reddedilir + listCases vaka durumunu yansıtır', () => {
     const { caseKey } = openCase(supported());
     expect(() => transition(caseKey, 'REVIEWED_NO_CHANGE')).toThrow(/Geçersiz geçiş/);

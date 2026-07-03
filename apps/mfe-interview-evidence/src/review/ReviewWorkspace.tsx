@@ -181,7 +181,11 @@ export function ReviewWorkspace() {
               <Text as="span" size="sm" variant="secondary">
                 Vaka durumu
               </Text>
-              <Badge variant={caseState === 'FINALIZED' ? 'success' : 'default'}>
+              <Badge
+                variant={
+                  caseState === 'FINALIZED' || caseState === 'EXPORTED' ? 'success' : 'default'
+                }
+              >
                 <span data-testid="case-state">{caseState}</span>
               </Badge>
             </div>
@@ -298,9 +302,12 @@ export function ReviewWorkspace() {
                     disabled={!criterionId.trim() || !jobRelRef.trim()}
                     data-testid="export-button"
                     onClick={() =>
-                      run(() =>
-                        setExportReceipt(engine.exportPacket(caseKey, criterionId, jobRelRef)),
-                      )
+                      run(() => {
+                        // FINALIZED→EXPORTED idari geçiş: motor state'i terminale
+                        // çeker (çift-export yasak); UI aynı durumu yansıtır.
+                        setExportReceipt(engine.exportPacket(caseKey, criterionId, jobRelRef));
+                        setCaseState('EXPORTED');
+                      })
                     }
                   >
                     Kanıt-paketi oluştur (F7)

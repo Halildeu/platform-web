@@ -37,6 +37,32 @@ describe('ReviewWorkspace (F4/F5 demo akışı)', () => {
     fireEvent.click(screen.getByTestId('export-button'));
     expect(screen.getByTestId('export-result')).toBeInTheDocument();
     expect(screen.getByText('Kanıt-paketi hazır')).toBeInTheDocument();
+
+    // FINALIZED→EXPORTED terminal: durum rozeti EXPORTED + export formu kaybolur
+    expect(screen.getByTestId('case-state')).toHaveTextContent('EXPORTED');
+    expect(screen.queryByTestId('export-button')).not.toBeInTheDocument();
+  });
+
+  test('resume edilen EXPORTED vakada export formu render edilmez (çift-export kapısı)', () => {
+    render(<ReviewWorkspace />);
+    // tam yolu koş → EXPORTED terminaline getir
+    type('claim-input', 'aday teknik liderliğini yürüttü');
+    fireEvent.click(screen.getByTestId('cite-button'));
+    fireEvent.click(screen.getByTestId('open-case-button'));
+    fireEvent.click(screen.getByTestId('no-change-button'));
+    type('rationale-input', 'ref-g');
+    fireEvent.click(screen.getByTestId('rationale-button'));
+    type('decision-input', 'ref-k');
+    fireEvent.click(screen.getByTestId('finalize-button'));
+    type('jobrel-input', 'ref-j');
+    fireEvent.click(screen.getByTestId('export-button'));
+
+    // vakayı listeden resume et → EXPORTED durumda export yüzeyi YOK
+    fireEvent.click(screen.getByTestId('case-list-button'));
+    fireEvent.click(screen.getByTestId('case-row'));
+    expect(screen.getByTestId('case-state')).toHaveTextContent('EXPORTED');
+    expect(screen.queryByTestId('export-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('criterion-input')).not.toBeInTheDocument();
   });
 
   test('kanıt-kapısı: NOT_SUPPORTED sonuçta vaka-aç düğmesi YOK + uyarı görünür', () => {

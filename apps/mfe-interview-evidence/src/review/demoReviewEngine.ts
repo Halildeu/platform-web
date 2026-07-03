@@ -3,12 +3,12 @@ import type { CaseState, CaseSummary, CitationReceipt, Entailment, ExportReceipt
 
 /**
  * DEMO inceleme motoru (ATS-0016 dürüst sınır: sentetik bağlam; 39d'de `/api/ats`
- * ile değişir). F4/F5 invariant'ları BACKEND kontratıyla aynı şekilde uygular —
- * bu yüzey demo olsa da kural-akışı gerçek üründekiyle birebir:
+ * ile değişir). F4/F5 AKIŞ-İSKELETİ invariant'larını backend kontratıyla aynı
+ * uygular (tam ref-seti — actor/oversight vb. — 39d'de canlı API'ye kalır):
  * - Kanıt-kapısı: vaka YALNIZ SUPPORTED + ref'li citation'dan açılır.
  * - 3 insan-yolu (NO_CHANGE / EDIT / REJECT), EDIT/REJECT ref zorunlu.
  * - RATIONALE olmadan FINALIZE yok; otomatik-finalize YOK (karar daima insan).
- * - Export FINALIZED-only.
+ * - Export FINALIZED-only + FINALIZED→EXPORTED terminal (çift-export yasak).
  *
  * Entailment DETERMİNİSTİK: claim'in ≥4 harfli kelimeleri demo transkript
  * segmentlerinde aranır — eşleşme varsa SUPPORTED (refCount = eşleşen segment
@@ -123,7 +123,11 @@ export function finalizeCase(caseKey: string, decisionOutcomeRef: string): CaseS
   return r.state;
 }
 
-/** Export FINALIZED-only; digest deterministik (vaka+ref içeriğinden FNV-1a). */
+/**
+ * Export FINALIZED-only + FINALIZED→EXPORTED idari geçiş (Codex 019f2850:
+ * kanonik backend çift-export'u yapısal reddeder — vaka EXPORTED terminaline
+ * geçer; ikinci export bu kapıda düşer). Digest deterministik (FNV-1a).
+ */
 export function exportPacket(
   caseKey: string,
   criterionId: string,
@@ -131,6 +135,7 @@ export function exportPacket(
 ): ExportReceipt {
   const r = cases.get(caseKey);
   if (!r) throw new Error(`Vaka bulunamadı: ${caseKey}`);
+  if (r.state === 'EXPORTED') throw new Error('Bu vaka zaten export edildi (çift-export yasak).');
   if (r.state !== 'FINALIZED') throw new Error('Export yalnız FINALIZED vakada yapılabilir.');
   if (!criterionId.trim() || !jobRelRef.trim()) {
     throw new Error('Kriter + iş-ilgisi referansı zorunlu (F7).');
@@ -144,5 +149,6 @@ export function exportPacket(
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   const packetDigest = `demo-${h.toString(16).padStart(8, '0')}${material.length.toString(16).padStart(4, '0')}`;
+  r.state = 'EXPORTED';
   return { packetDigest, claimCount: 1 };
 }

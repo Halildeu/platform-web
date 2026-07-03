@@ -17,7 +17,8 @@ export type CaseState =
   | 'HUMAN_EDITED'
   | 'AI_SUGGESTION_REJECTED'
   | 'HUMAN_RATIONALE_RECORDED'
-  | 'FINALIZED';
+  | 'FINALIZED'
+  | 'EXPORTED';
 
 export interface CaseSummary {
   caseKey: string;
