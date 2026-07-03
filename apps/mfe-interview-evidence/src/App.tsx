@@ -1,13 +1,16 @@
 import { Badge, Card, Stack, Text } from '@mfe/design-system';
 import { SegmentView } from './segment-view/SegmentView';
 import { DEMO_SEGMENTS } from './segment-view/demo-data';
+import { ReviewWorkspace } from './review/ReviewWorkspace';
 
 /**
  * ATS Interview-Evidence — platform-web MFE ürün yüzeyi (ATS-0019 pivot).
  *
  * 39c-2b: `@mfe/design-system` reuse'lu F3 Segment View (placeholder → gerçek ekran).
+ * 39c-4: F4/F5 İnceleme çalışma-alanı (demo motor; kanıt-kapısı + 3 insan-yolu +
+ * no-auto-finalize + F7 export invariant'ları üründekiyle birebir).
  * Bileşenler platform design-lab'ından türetilir (Card/Stack/Text/Badge); ayrı bir
- * ATS design-system YOK. shell-auth token + `/api/ats` canlı veri akışı 39c-3.
+ * ATS design-system YOK. shell-auth token + `/api/ats` canlı veri akışı 39d.
  *
  * DÜRÜST SINIR (ATS-0016): bu yüzey sentetik/demo bağlamındadır; gerçek aday verisiyle
  * işleme G0=GO gerektirir (release-gate). Auth shell-managed (ATS-0019: MFE kendi
@@ -37,6 +40,10 @@ export default function InterviewEvidenceApp() {
           </Text>
           <SegmentView segments={DEMO_SEGMENTS} />
         </Stack>
+      </Card>
+
+      <Card variant="outlined" padding="md">
+        <ReviewWorkspace />
       </Card>
     </Stack>
   );
