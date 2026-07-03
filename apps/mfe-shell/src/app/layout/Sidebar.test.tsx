@@ -171,6 +171,44 @@ describe('buildSidebarNavItems — module gating', () => {
     expect(transcriptGranted?.href).toBe('/admin/meetings');
   });
 
+  it('gates the interview-evidence item by INTERVIEW_EVIDENCE and the remote flag', () => {
+    // ATS-0019 mirror of the meetings gate: default-off remote means the item is
+    // disabled with no href even when the module is granted. Both the remote flag
+    // AND the module (or super-admin) must hold before it links to the route.
+    const denied = pick(buildSidebarNavItems(false, denyAll), 'interview-evidence');
+    expect(denied?.disabled).toBe(true);
+    expect(denied?.href).toBeUndefined();
+
+    // Module granted but remote OFF (default 4th arg false) → still disabled.
+    const remoteDisabled = pick(
+      buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE')),
+      'interview-evidence',
+    );
+    expect(remoteDisabled?.disabled).toBe(true);
+    expect(remoteDisabled?.href).toBeUndefined();
+
+    // Remote ON but no module → disabled (no ungated leak through the flag).
+    const moduleMissing = pick(
+      buildSidebarNavItems(false, denyAll, true, true),
+      'interview-evidence',
+    );
+    expect(moduleMissing?.disabled).toBe(true);
+    expect(moduleMissing?.href).toBeUndefined();
+
+    // Remote ON + module granted → active link.
+    const granted = pick(
+      buildSidebarNavItems(false, allow('INTERVIEW_EVIDENCE'), true, true),
+      'interview-evidence',
+    );
+    expect(granted?.disabled).toBe(false);
+    expect(granted?.href).toBe('/admin/interview-evidence');
+
+    // Super-admin + remote ON → active even without an explicit module grant.
+    const superAdmin = pick(buildSidebarNavItems(true, denyAll, true, true), 'interview-evidence');
+    expect(superAdmin?.disabled).toBe(false);
+    expect(superAdmin?.href).toBe('/admin/interview-evidence');
+  });
+
   it('keeps every privileged item gated (no ungated leak)', () => {
     // With no modules and no super-admin, only Home stays enabled;
     // every other item must be disabled with no href.

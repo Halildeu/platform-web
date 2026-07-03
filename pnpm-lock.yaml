@@ -525,6 +525,9 @@ importers:
 
   apps/mfe-interview-evidence:
     dependencies:
+      '@mfe/design-system':
+        specifier: '*'
+        version: link:../../packages/design-system
       '@mfe/shared-types':
         specifier: '*'
         version: link:../../packages/shared-types

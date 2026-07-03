@@ -12,7 +12,11 @@
     "isolatedModules": true,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": {
+      "@/*": ["src/*"],
+      "@mfe/design-system": ["../../packages/design-system/src"],
+      "@mfe/design-system/*": ["../../packages/design-system/src/*"]
+    }
   },
   "include": ["src"]
 }
