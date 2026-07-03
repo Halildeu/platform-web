@@ -26,6 +26,9 @@ const outputDir = path.resolve(webRoot, 'dist/ubuntu-single-domain');
 // Faz 22 Web endpoint-admin (#653): mfe-endpoint-admin testai-only — bu
 // listeye aşağıda (publicOrigin hesaplandıktan sonra) `endpointAdminEnabled`
 // koşuluyla push edilir.
+// ATS-0019 39c-3c: mfe-interview-evidence de aynı pattern — STAGE'de (testai)
+// otomatik, prod'da yalnız env-flag ile; `interviewEvidenceEnabled` koşuluyla
+// aşağıda push edilir (default-disabled → testai-görünür kademeli açılış).
 const coreRemotes = [
   { app: 'mfe-access', slug: 'access' },
   { app: 'mfe-audit', slug: 'audit' },
@@ -313,6 +316,17 @@ const endpointAdminEnabled =
 if (endpointAdminEnabled) {
   coreRemotes.push({ app: 'mfe-endpoint-admin', slug: 'endpoint-admin' });
 }
+// ATS-0019 39c-3c: interview-evidence, endpoint-admin ile aynı kademeli açılış —
+// STAGE (testai) origin'de otomatik enabled; prod'da yalnız explicit env-flag.
+const interviewEvidenceEnabled =
+  publicOrigin === STAGE_PUBLIC_ORIGIN ||
+  envFlagTruthy(
+    process.env.VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE ??
+      process.env.SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE,
+  );
+if (interviewEvidenceEnabled) {
+  coreRemotes.push({ app: 'mfe-interview-evidence', slug: 'interview-evidence' });
+}
 const authMode =
   process.env.VITE_AUTH_MODE || process.env.AUTH_MODE || process.env.WEB_AUTH_MODE || 'keycloak';
 const keycloakUrl = resolveKeycloakPublicUrl(
@@ -392,6 +406,17 @@ const shellEnv = {
         VITE_MFE_ENDPOINT_ADMIN_URL: remoteEntryUrlFor('endpoint-admin'),
         SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE: '1',
         VITE_SHELL_ENABLE_ENDPOINT_ADMIN_REMOTE: '1',
+      }
+    : {}),
+  // ATS-0019 39c-3c: interview-evidence — endpoint-admin mirror. Kapalıysa
+  // (prod default) boş spread → shell vite.config buildRemotes() STUB üretir,
+  // AppRouter /home'a Navigate eder; testai'de flag ON → gerçek mount.
+  ...(interviewEvidenceEnabled
+    ? {
+        MFE_INTERVIEW_EVIDENCE_URL: remoteEntryUrlFor('interview-evidence'),
+        VITE_MFE_INTERVIEW_EVIDENCE_URL: remoteEntryUrlFor('interview-evidence'),
+        SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE: '1',
+        VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE: '1',
       }
     : {}),
 };
