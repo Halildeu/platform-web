@@ -327,6 +327,20 @@ const interviewEvidenceEnabled =
 if (interviewEvidenceEnabled) {
   coreRemotes.push({ app: 'mfe-interview-evidence', slug: 'interview-evidence' });
 }
+// Faz 24 mfe-meeting — interview-evidence / endpoint-admin ile aynı kademeli açılış:
+// STAGE (testai) origin'de otomatik enabled; prod'da yalnız explicit env-flag.
+// Shell (Sidebar/AppRouter/vite.config) meeting remote'unu zaten VITE_SHELL_ENABLE_MEETING_REMOTE
+// + MFE_MEETING_URL ile flag-gated wire'lı; eksik olan tek şey bu build'de remote'un
+// derlenip serve edilmesi + shellEnv flag'inin set edilmesiydi (aşağıda shellEnv spread).
+const meetingEnabled =
+  publicOrigin === STAGE_PUBLIC_ORIGIN ||
+  envFlagTruthy(
+    process.env.VITE_SHELL_ENABLE_MEETING_REMOTE ??
+      process.env.SHELL_ENABLE_MEETING_REMOTE,
+  );
+if (meetingEnabled) {
+  coreRemotes.push({ app: 'mfe-meeting', slug: 'meeting' });
+}
 const authMode =
   process.env.VITE_AUTH_MODE || process.env.AUTH_MODE || process.env.WEB_AUTH_MODE || 'keycloak';
 const keycloakUrl = resolveKeycloakPublicUrl(
@@ -417,6 +431,17 @@ const shellEnv = {
         VITE_MFE_INTERVIEW_EVIDENCE_URL: remoteEntryUrlFor('interview-evidence'),
         SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE: '1',
         VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE: '1',
+      }
+    : {}),
+  // Faz 24 mfe-meeting — interview-evidence mirror. Kapalıysa (prod default) boş
+  // spread → shell vite.config buildRemotes() STUB üretir, AppRouter /home'a
+  // Navigate eder; testai'de flag ON → gerçek mount (/admin/meetings, MEETING/TRANSCRIPT modül).
+  ...(meetingEnabled
+    ? {
+        MFE_MEETING_URL: remoteEntryUrlFor('meeting'),
+        VITE_MFE_MEETING_URL: remoteEntryUrlFor('meeting'),
+        SHELL_ENABLE_MEETING_REMOTE: '1',
+        VITE_SHELL_ENABLE_MEETING_REMOTE: '1',
       }
     : {}),
 };
