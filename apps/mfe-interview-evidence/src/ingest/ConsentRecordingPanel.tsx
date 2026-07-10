@@ -29,13 +29,21 @@ export function ConsentRecordingPanel() {
   const [transcribedKey, setTranscribedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function run(step: () => void) {
+  async function run(step: () => void | Promise<void>) {
     setError(null);
     try {
-      step();
+      await step();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Beklenmeyen hata.');
     }
+  }
+
+  /** Yükleme kimliği = dosya BAYTLARININ SHA-256'sı (dosya adı anahtara girmez — PII hijyeni). */
+  async function sha256Hex(f: File): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', await f.arrayBuffer());
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
   }
 
   return (
@@ -55,7 +63,13 @@ export function ConsentRecordingPanel() {
           zeka yalnız kanıt/alıntı çıkarımında yardımcıdır; kararı insan verir.
         </Text>
         <Text as="p" size="sm" variant="secondary">
-          Kişi referansı OPAK bir ref'tir — bu alana ad/e-posta gibi PII girmeyin.
+          Bu ekran, operatörün görüşme ÖNCESİNDE usulünce alınmış rıza beyanını sisteme kaydettiği
+          ekrandır — rıza burada üretilmez. Kişi referansı OPAK bir ref'tir; bu alana ad/e-posta
+          gibi PII girmeyin.
+        </Text>
+        <Text as="p" size="sm" variant="secondary">
+          Bu özet KVKK m.10 aydınlatmasının yerine geçmez — tam aydınlatma metni (sürüm ref:
+          aydinlatma-v1) süreç sahibince adaya iletilir.
         </Text>
       </div>
 
@@ -116,10 +130,10 @@ export function ConsentRecordingPanel() {
           Görüşme kaydını yükle
         </Text>
         <label style={{ display: 'grid', gap: 4, fontSize: 14 }}>
-          Ses dosyası (yalnız audio/*)
+          Kayıt dosyası (kapalı allowlist: wav/mpeg/mp4/webm ses + mp4/webm video)
           <input
             type="file"
-            accept="audio/*"
+            accept="audio/wav,audio/mpeg,audio/mp4,audio/webm,video/mp4,video/webm"
             data-testid="upload-file-input"
             onChange={(e) => {
               setFile(e.target.files?.[0] ?? null);
@@ -137,9 +151,10 @@ export function ConsentRecordingPanel() {
           disabled={!file}
           data-testid="upload-button"
           onClick={() =>
-            run(() => {
+            void run(async () => {
               if (!file) return;
-              setReceipt(engine.uploadRecording(file.name, file.type, file.size));
+              const contentHash = await sha256Hex(file);
+              setReceipt(engine.uploadRecording(contentHash, file.type, file.size));
             })
           }
         >
