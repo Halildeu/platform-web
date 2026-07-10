@@ -46,7 +46,7 @@ describe('InterviewEvidenceApp', () => {
     expect(screen.getByTestId('erasure-receipt')).toBeInTheDocument();
     expect(screen.getByText(/WORM defteri silinmez/)).toBeInTheDocument();
 
-    // riza paneli (icerik-disi operasyon yuzeyi) KALIR
+    // riza paneli (bu dar silme kapsami DISINDA) KALIR
     expect(screen.getByTestId('consent-recording-panel')).toBeInTheDocument();
   });
 });

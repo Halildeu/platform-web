@@ -23,7 +23,7 @@ describe('DsarPanel (F10 demo akışı)', () => {
     expect(screen.getByTestId('dsar-receive-button')).toBeDisabled();
     intake();
     expect(screen.getByTestId('dsar-key-badge')).toBeInTheDocument();
-    expect(screen.getByTestId('dsar-key')).toHaveTextContent(/^dsar-[0-9a-f]{8}$/);
+    expect(screen.getByTestId('dsar-key')).toHaveTextContent(/^dsar-\d{4}$/);
   });
 
   test('İKİ-ADIMLI yıkıcı onay: İLK tık YÜRÜTMEZ (uyarı açılır), ikinci tık yürütür', () => {

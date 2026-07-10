@@ -2,65 +2,72 @@ import type { ErasureReceipt, ErasureScope } from './types';
 
 /**
  * DEMO DSAR/erasure motoru (ATS-0016 dürüst sınır: sentetik bağlam; 39d'de
- * `/api/ats`). F10 AKIŞ-İSKELETİ invariant'ları backend kontratıyla birebir:
- * - INTAKE-FIRST: silme yalnız kayıtlı bir DSAR talebi (dsarKey) üzerinden
- *   yürütülür; talepsiz silme yapısal RED.
- * - Idempotent replay: aynı dsarKey için ikinci executeErasure AYNI makbuzu
- *   döndürür (yeni silme işi üretmez — retry güvenli).
- * - DÜRÜST DAR KAPSAM: bu yüzey WORM tombstone ÜRETMEZ (tombstoneCount=0;
- *   WORM silinmez, silme privacy-event'leriyle kayıtlanır); tombstone dahil
- *   tam-kapsam DSAR operasyonel süreçtedir.
+ * `/api/ats`). F10 AKIŞ-İSKELETİ invariant'ları backend kontratıyla birebir
+ * (Codex 019f4b50 iter-2):
+ * - dsarKey TALEP-BAŞINA BENZERSİZ (kanonik in-memory store gibi artan sayaç;
+ *   aynı kişi + aynı gerekçeyle ikinci intake YENİ hukuki taleptir, yeni key alır).
+ * - INTAKE-FIRST: silme yalnız kayıtlı bir DSAR talebi üzerinden yürütülür.
+ * - RECEIVED → FULFILLED durum modeli; FULFILLED TERMİNALDİR — aynı talebin
+ *   ikinci yürütmesi YAPISAL RED (kanonik DsrService semantiği; idempotency
+ *   backend'de içerik-delete retry'larına aittir, tamamlanmış komuta değil).
+ * - DÜRÜST DAR KAPSAM: bu yüzey YALNIZ görüntülenen transkripti siler; citation/
+ *   export/review/tombstone listeleri YAPISAL REDDEDİLİR (sahte genel destek
+ *   verilmez — backend review case'i silmez, WITHDRAWN'a geçirir; tombstone
+ *   dahil tam-kapsam DSAR operasyonel süreçtedir). tombstoneCount=0.
  * - subjectRef OPAK ref (PII girilmez); kimlik eşlemesi backend/operasyon işi.
- * Determinizm: dsarKey FNV-1a'dan türetilir (Math.random/Date.now YOK).
+ * Determinizm: artan sayaç (Math.random/Date.now YOK); resetDemoDsar sıfırlar.
  */
 
-const fnv = (s: string): string => {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i += 1) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h.toString(16).padStart(8, '0');
-};
+type DsarState = 'RECEIVED' | 'FULFILLED';
 
-const requests = new Map<string, { subjectRef: string; reasonCode: string }>();
-const receipts = new Map<string, ErasureReceipt>();
+const requests = new Map<string, { state: DsarState }>();
+let dsarSeq = 0;
 
 /** Test izolasyonu için (yalnız test kullanır). */
 export function resetDemoDsar(): void {
   requests.clear();
-  receipts.clear();
+  dsarSeq = 0;
 }
 
 export function receiveDsar(subjectRef: string, reasonCode: string): string {
   if (!subjectRef.trim()) throw new Error('Kişi referansı zorunlu (opak ref; PII girmeyin).');
   if (!reasonCode.trim()) throw new Error('Gerekçe kodu zorunlu (denetim izi).');
-  const dsarKey = `dsar-${fnv(`${subjectRef.trim()}|${reasonCode.trim()}`)}`;
-  requests.set(dsarKey, { subjectRef: subjectRef.trim(), reasonCode: reasonCode.trim() });
+  dsarSeq += 1;
+  const dsarKey = `dsar-${String(dsarSeq).padStart(4, '0')}`;
+  requests.set(dsarKey, { state: 'RECEIVED' });
   return dsarKey;
 }
 
-/** INTAKE-FIRST + idempotent replay; dar kapsam (tombstone üretmez). */
+/**
+ * INTAKE-FIRST + FULFILLED-terminal + dar-kapsam yapısal reddi.
+ * Başarılı yürütme talebi FULFILLED'a geçirir; ikinci çağrı RED.
+ */
 export function executeErasure(dsarKey: string, scope: ErasureScope): ErasureReceipt {
-  if (!requests.has(dsarKey)) {
+  const req = requests.get(dsarKey);
+  if (!req) {
     throw new Error('Kayıtlı DSAR talebi yok — silme reddedildi (intake-first).');
   }
-  const existing = receipts.get(dsarKey);
-  if (existing) return existing;
-  const deletedContentCount =
-    scope.transcriptKeys.length +
-    scope.citationKeys.length +
-    scope.exportArtifactKeys.length +
-    scope.reviewCaseKeys.length;
-  if (deletedContentCount === 0) {
-    throw new Error('Silme kapsamı boş — en az bir içerik anahtarı gerekli.');
+  if (req.state === 'FULFILLED') {
+    throw new Error('Bu DSAR talebi zaten yürütüldü (FULFILLED terminal — çift-yürütme yasak).');
   }
-  const receipt: ErasureReceipt = {
+  if (
+    scope.citationKeys.length > 0 ||
+    scope.exportArtifactKeys.length > 0 ||
+    scope.reviewCaseKeys.length > 0 ||
+    scope.tombstoneTargetEvidenceIds.length > 0
+  ) {
+    throw new Error(
+      'Bu demo yüzeyi yalnız görüntülenen transkripti siler — diğer kapsam listeleri reddedilir.',
+    );
+  }
+  if (scope.transcriptKeys.length === 0) {
+    throw new Error('Silme kapsamı boş — en az bir transkript anahtarı gerekli.');
+  }
+  req.state = 'FULFILLED';
+  return {
     dsarKey,
     tombstoneCount: 0, // dürüst dar kapsam: bu yüzey WORM tombstone üretmez
-    deletedContentCount,
+    deletedContentCount: scope.transcriptKeys.length,
     caseTransitioned: false,
   };
-  receipts.set(dsarKey, receipt);
-  return receipt;
 }
