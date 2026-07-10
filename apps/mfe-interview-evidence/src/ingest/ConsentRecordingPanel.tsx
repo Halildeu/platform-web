@@ -153,6 +153,9 @@ export function ConsentRecordingPanel() {
           onClick={() =>
             void run(async () => {
               if (!file) return;
+              // Kapı ÖNCE (fail-fast): rıza kapalıyken hash hesaplanmaz; hata
+              // metni kapı gerçeğini söyler (crypto ortam farklarından bağımsız).
+              engine.assertUploadAllowed();
               const contentHash = await sha256Hex(file);
               setReceipt(engine.uploadRecording(contentHash, file.type, file.size));
             })

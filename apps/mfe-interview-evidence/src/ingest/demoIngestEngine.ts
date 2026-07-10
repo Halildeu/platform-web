@@ -59,6 +59,14 @@ function requireGrantedConsent(step: string): void {
   }
 }
 
+/**
+ * Panelin hash'lemeden ÖNCE çağırdığı ucuz ön-kapı (fail-fast): kapı kapalıyken
+ * içerik-hash hesaplamak anlamsız; hata metni de kapı gerçeğini söyler.
+ */
+export function assertUploadAllowed(): void {
+  requireGrantedConsent('yükleme');
+}
+
 /** Kanonik UploadRequest.ALLOWED_CONTENT_TYPES ile aynı kapalı exact-set. */
 const ALLOWED_CONTENT_TYPES = new Set([
   'audio/wav',
