@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Badge, Button, Input, Text } from '@mfe/design-system';
 import * as engine from './demoReviewEngine';
+import type { Segment } from '../segment-view/types';
 import type { CaseState, CaseSummary, CitationReceipt, ExportReceipt } from './types';
 
 /**
@@ -13,9 +14,20 @@ import type { CaseState, CaseSummary, CitationReceipt, ExportReceipt } from './t
  * açılır — NOT_SUPPORTED karar-kanıtı OLAMAZ, INSUFFICIENT export'a GİREMEZ;
  * UI bu durumda akışı açmaz ve nedenini açıkça söyler (dead-end üretmez).
  *
+ * KANIT-BAĞLAMA (39c-7): çalışma alanı SEÇİLİ transkripte bağlıdır — entailment
+ * o transkriptin segmentlerine karşı hesaplanır, vaka listesi transkript-scope'lu.
+ * App bileşeni `key={transcriptKey}` ile mount eder: transkript değişimi bağlam
+ * değişimidir, geçici UI state sıfırlanır.
+ *
  * Veri kaynağı: demo motor (ATS-0016 sentetik sınır); 39d'de `/api/ats`.
  */
-export function ReviewWorkspace() {
+export function ReviewWorkspace({
+  transcriptKey,
+  segments,
+}: {
+  transcriptKey: string;
+  segments: Segment[];
+}) {
   const [claim, setClaim] = useState('');
   const [citation, setCitation] = useState<CitationReceipt | null>(null);
   const [caseKey, setCaseKey] = useState<string | null>(null);
@@ -69,7 +81,7 @@ export function ReviewWorkspace() {
         <Button
           data-testid="case-list-button"
           variant="secondary"
-          onClick={() => run(() => setExistingCases(engine.listCases()))}
+          onClick={() => run(() => setExistingCases(engine.listCases(transcriptKey)))}
         >
           Mevcut vakaları listele
         </Button>
@@ -120,7 +132,7 @@ export function ReviewWorkspace() {
           data-testid="cite-button"
           onClick={() =>
             run(() => {
-              setCitation(engine.evaluateClaim(claim.trim()));
+              setCitation(engine.evaluateClaim(claim.trim(), segments, transcriptKey));
               setCaseKey(null);
               setCaseState(null);
               setResumedRefs([]);
@@ -164,7 +176,7 @@ export function ReviewWorkspace() {
               data-testid="open-case-button"
               onClick={() =>
                 run(() => {
-                  const opened = engine.openCase(citation);
+                  const opened = engine.openCase(citation, transcriptKey);
                   const state = engine.transition(opened.caseKey, 'START');
                   setCaseKey(opened.caseKey);
                   setCaseState(state);

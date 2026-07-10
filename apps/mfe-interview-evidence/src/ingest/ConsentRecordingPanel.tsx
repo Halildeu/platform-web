@@ -20,7 +20,15 @@ const CONSENT_OPTIONS: { value: ConsentState; label: string }[] = [
   { value: 'WITHDRAWN', label: 'Rıza GERİ ÇEKİLDİ (yükleme reddedilir)' },
 ];
 
-export function ConsentRecordingPanel() {
+export function ConsentRecordingPanel({
+  onTranscribed,
+}: {
+  /**
+   * Transkript üretildiğinde tetiklenir (39c-7 F-liste bağlama: App yeni
+   * transkripti kayıt-defterine ekler). Pointer-only veri taşır (PII yok).
+   */
+  onTranscribed?: (transcriptKey: string, evidenceId: string) => void;
+} = {}) {
   const [subjectRef, setSubjectRef] = useState('');
   const [state, setState] = useState<ConsentState | ''>('');
   const [savedState, setSavedState] = useState<ConsentState | null>(null);
@@ -182,9 +190,11 @@ export function ConsentRecordingPanel() {
               <Button
                 data-testid="transcribe-button"
                 onClick={() =>
-                  run(() =>
-                    setTranscribedKey(engine.transcribeRecording(receipt.objectKey).transcriptKey),
-                  )
+                  run(() => {
+                    const { transcriptKey } = engine.transcribeRecording(receipt.objectKey);
+                    setTranscribedKey(transcriptKey);
+                    onTranscribed?.(transcriptKey, receipt.evidenceId);
+                  })
                 }
               >
                 Transkript üret

@@ -6,6 +6,12 @@ export type Entailment = 'SUPPORTED' | 'NOT_SUPPORTED' | 'INSUFFICIENT';
 
 export interface CitationReceipt {
   citationKey: string;
+  /**
+   * Kanıt-bağlama (39c-7, Codex 019f4bfd MAJOR): citation'ın üretildiği
+   * transkript AYRI alan olarak taşınır ve openCase TAM EŞİTLİK arar —
+   * string-prefix kontrolü `tr-a`/`tr-a-b` çakışmasıyla delinebilir.
+   */
+  transcriptKey: string;
   entailment: Entailment;
   resolvedRefCount: number;
 }
