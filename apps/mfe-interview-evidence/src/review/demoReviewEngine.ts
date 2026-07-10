@@ -1,4 +1,4 @@
-import { DEMO_SEGMENTS } from '../segment-view/demo-data';
+import type { Segment } from '../segment-view/types';
 import type { CaseState, CaseSummary, CitationReceipt, Entailment, ExportReceipt } from './types';
 
 /**
@@ -6,11 +6,15 @@ import type { CaseState, CaseSummary, CitationReceipt, Entailment, ExportReceipt
  * ile değişir). F4/F5 AKIŞ-İSKELETİ invariant'larını backend kontratıyla aynı
  * uygular (tam ref-seti — actor/oversight vb. — 39d'de canlı API'ye kalır):
  * - Kanıt-kapısı: vaka YALNIZ SUPPORTED + ref'li citation'dan açılır.
+ * - KANIT-BAĞLAMA (39c-7): citation SEÇİLİ transkriptin segmentlerine karşı
+ *   üretilir ve transkript-anahtarını taşır; başka transkriptin citation'ıyla
+ *   vaka açmak YAPISAL RED (çapraz-transkript sızıntı yasak). Vaka listesi
+ *   transkript-scope'ludur.
  * - 3 insan-yolu (NO_CHANGE / EDIT / REJECT), EDIT/REJECT ref zorunlu.
  * - RATIONALE olmadan FINALIZE yok; otomatik-finalize YOK (karar daima insan).
  * - Export FINALIZED-only + FINALIZED→EXPORTED terminal (çift-export yasak).
  *
- * Entailment DETERMİNİSTİK: claim'in ≥4 harfli kelimeleri demo transkript
+ * Entailment DETERMİNİSTİK: claim'in ≥4 harfli kelimeleri VERİLEN transkript
  * segmentlerinde aranır — eşleşme varsa SUPPORTED (refCount = eşleşen segment
  * sayısı), yoksa NOT_SUPPORTED; <2 anlamlı kelime = INSUFFICIENT. Böylece demo,
  * ürünün kanıt-bağlama davranışının anlamlı bir minyatürüdür (rastgelelik yok).
@@ -23,13 +27,20 @@ const norm = (s: string) =>
     .split(/\s+/)
     .filter((w) => w.length >= 4);
 
-export function evaluateClaim(claim: string): CitationReceipt {
+export function evaluateClaim(
+  claim: string,
+  segments: Segment[],
+  transcriptKey: string,
+): CitationReceipt {
+  if (!transcriptKey.trim()) throw new Error('Transkript anahtarı zorunlu (kanıt-bağlama).');
   const words = norm(claim);
-  const citationKey = `cit-${words.length}-${claim.length}`;
+  // citationKey transkript-anahtarını taşır: openCase kanıt-bağlama kapısı
+  // bu ön-eki doğrular (çapraz-transkript citation yapısal reddedilir).
+  const citationKey = `cit-${transcriptKey}-${words.length}-${claim.length}`;
   if (words.length < 2) {
     return { citationKey, entailment: 'INSUFFICIENT', resolvedRefCount: 0 };
   }
-  const matched = DEMO_SEGMENTS.filter((seg) => {
+  const matched = segments.filter((seg) => {
     const text = seg.text.toLocaleLowerCase('tr-TR');
     return words.some((w) => text.includes(w));
   });
@@ -39,6 +50,7 @@ export function evaluateClaim(claim: string): CitationReceipt {
 
 interface CaseRecord {
   state: CaseState;
+  transcriptKey: string;
   citationKey: string;
   refs: string[];
 }
@@ -52,8 +64,11 @@ export function resetDemoEngine(): void {
   caseSeq = 0;
 }
 
-export function listCases(): CaseSummary[] {
-  return Array.from(cases.entries()).map(([caseKey, r]) => ({ caseKey, state: r.state }));
+/** Vaka listesi transkript-scope'lu (F-liste: çapraz-transkript görünürlük yok). */
+export function listCases(transcriptKey: string): CaseSummary[] {
+  return Array.from(cases.entries())
+    .filter(([, r]) => r.transcriptKey === transcriptKey)
+    .map(([caseKey, r]) => ({ caseKey, state: r.state }));
 }
 
 export function getCaseDetail(caseKey: string): { state: CaseState; sourceEvidenceRefs: string[] } {
@@ -62,15 +77,23 @@ export function getCaseDetail(caseKey: string): { state: CaseState; sourceEviden
   return { state: r.state, sourceEvidenceRefs: r.refs };
 }
 
-/** Kanıt-kapısı: yalnız SUPPORTED + ref'li citation vaka açar. */
-export function openCase(citation: CitationReceipt): { caseKey: string } {
+/**
+ * Kanıt-kapısı: yalnız SUPPORTED + ref'li citation vaka açar.
+ * Kanıt-bağlama: citation'ın transkripti ile vakanın transkripti AYNI olmalı —
+ * başka transkriptin kanıtıyla vaka açmak yapısal reddedilir (39c-7).
+ */
+export function openCase(citation: CitationReceipt, transcriptKey: string): { caseKey: string } {
   if (citation.entailment !== 'SUPPORTED' || citation.resolvedRefCount < 1) {
     throw new Error('Yalnız SUPPORTED + kaynaklı citation vaka açabilir (kanıt-kapısı).');
+  }
+  if (!citation.citationKey.startsWith(`cit-${transcriptKey}-`)) {
+    throw new Error('Citation başka transkripte ait — vaka açılamaz (kanıt-bağlama).');
   }
   caseSeq += 1;
   const caseKey = `case-${caseSeq}`;
   cases.set(caseKey, {
     state: 'AI_SUGGESTED',
+    transcriptKey,
     citationKey: citation.citationKey,
     refs: [citation.citationKey],
   });

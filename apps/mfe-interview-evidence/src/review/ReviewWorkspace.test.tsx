@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ReviewWorkspace } from './ReviewWorkspace';
+import { DEMO_SEGMENTS } from '../segment-view/demo-data';
 import { resetDemoEngine } from './demoReviewEngine';
 
 beforeEach(() => resetDemoEngine());
@@ -13,7 +14,7 @@ const type = (testId: string, value: string) => {
 
 describe('ReviewWorkspace (F4/F5 demo akışı)', () => {
   test('tam mutlu yol: iddia → SUPPORTED → vaka → NO_CHANGE → gerekçe → FINALIZE → F7 export', () => {
-    render(<ReviewWorkspace />);
+    render(<ReviewWorkspace transcriptKey="tr-demo-1" segments={DEMO_SEGMENTS} />);
 
     type('claim-input', 'aday teknik liderliğini yürüttü');
     fireEvent.click(screen.getByTestId('cite-button'));
@@ -44,7 +45,7 @@ describe('ReviewWorkspace (F4/F5 demo akışı)', () => {
   });
 
   test('resume edilen EXPORTED vakada export formu render edilmez (çift-export kapısı)', () => {
-    render(<ReviewWorkspace />);
+    render(<ReviewWorkspace transcriptKey="tr-demo-1" segments={DEMO_SEGMENTS} />);
     // tam yolu koş → EXPORTED terminaline getir
     type('claim-input', 'aday teknik liderliğini yürüttü');
     fireEvent.click(screen.getByTestId('cite-button'));
@@ -66,7 +67,7 @@ describe('ReviewWorkspace (F4/F5 demo akışı)', () => {
   });
 
   test('kanıt-kapısı: NOT_SUPPORTED sonuçta vaka-aç düğmesi YOK + uyarı görünür', () => {
-    render(<ReviewWorkspace />);
+    render(<ReviewWorkspace transcriptKey="tr-demo-1" segments={DEMO_SEGMENTS} />);
     type('claim-input', 'kuantum fiziği doktorası tamamlandı');
     fireEvent.click(screen.getByTestId('cite-button'));
     expect(screen.getByText('DESTEKLENMİYOR')).toBeInTheDocument();
@@ -75,7 +76,7 @@ describe('ReviewWorkspace (F4/F5 demo akışı)', () => {
   });
 
   test('REJECT yolu UI üzerinden yürür (3. insan-yolu) + vaka listesi devam', () => {
-    render(<ReviewWorkspace />);
+    render(<ReviewWorkspace transcriptKey="tr-demo-1" segments={DEMO_SEGMENTS} />);
     type('claim-input', 'aday mimari kararlardan sorumluydu');
     fireEvent.click(screen.getByTestId('cite-button'));
     fireEvent.click(screen.getByTestId('open-case-button'));
