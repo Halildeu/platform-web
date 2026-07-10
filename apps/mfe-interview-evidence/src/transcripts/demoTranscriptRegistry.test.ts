@@ -85,4 +85,11 @@ describe('demoTranscriptRegistry (F-liste kayıt-defteri, 39c-7)', () => {
     if (leaked.erasure) leaked.erasure.dsarKey = 'dsar-sahte';
     expect(getTranscript('tr-demo-1').erasure?.dsarKey).toBe('dsar-0001');
   });
+
+  test('giriş-alias: çağıranın makbuz referansı sonradan mutasyona uğrasa da kayıt-defteri etkilenmez', () => {
+    const r = receipt('dsar-0001');
+    markErased('tr-demo-1', r);
+    r.dsarKey = 'dsar-sahte';
+    expect(getTranscript('tr-demo-1').erasure?.dsarKey).toBe('dsar-0001');
+  });
 });

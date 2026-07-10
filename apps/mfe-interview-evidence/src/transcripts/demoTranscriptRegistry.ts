@@ -102,5 +102,7 @@ export function markErased(transcriptKey: string, receipt: ErasureReceipt): void
     throw new Error('Bu transkript zaten silinmiş — içerik yüzeyi tek kez kaldırılır.');
   }
   e.segments = [];
-  e.erasure = receipt;
+  // giriş de klonlanır: çağıranın elindeki makbuz referansı sonradan mutasyona
+  // uğrasa bile kayıt-defteri etkilenmez (Codex 019f4bfd giriş-alias bulgusu)
+  e.erasure = { ...receipt };
 }
