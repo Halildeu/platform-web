@@ -38,9 +38,16 @@ export function ConsentRecordingPanel() {
     }
   }
 
-  /** Yükleme kimliği = dosya BAYTLARININ SHA-256'sı (dosya adı anahtara girmez — PII hijyeni). */
+  /**
+   * Yükleme kimliği = dosya BAYTLARININ SHA-256'sı (dosya adı anahtara girmez —
+   * PII hijyeni). Baytlar mevcut realm'e Uint8Array olarak KOPYALANIR: jsdom
+   * testinde File.arrayBuffer() farklı realm'den döner ve webcrypto brand-check'i
+   * reddeder ("not instance of ArrayBuffer"); TypedArray kopyası her ortamda
+   * geçerli WebCrypto girdisidir (tarayıcı davranışı değişmez).
+   */
   async function sha256Hex(f: File): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', await f.arrayBuffer());
+    const bytes = Uint8Array.from(new Uint8Array(await f.arrayBuffer()));
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
