@@ -34,18 +34,16 @@ export function evaluateClaim(
 ): CitationReceipt {
   if (!transcriptKey.trim()) throw new Error('Transkript anahtarı zorunlu (kanıt-bağlama).');
   const words = norm(claim);
-  // citationKey transkript-anahtarını taşır: openCase kanıt-bağlama kapısı
-  // bu ön-eki doğrular (çapraz-transkript citation yapısal reddedilir).
   const citationKey = `cit-${transcriptKey}-${words.length}-${claim.length}`;
   if (words.length < 2) {
-    return { citationKey, entailment: 'INSUFFICIENT', resolvedRefCount: 0 };
+    return { citationKey, transcriptKey, entailment: 'INSUFFICIENT', resolvedRefCount: 0 };
   }
   const matched = segments.filter((seg) => {
     const text = seg.text.toLocaleLowerCase('tr-TR');
     return words.some((w) => text.includes(w));
   });
   const entailment: Entailment = matched.length > 0 ? 'SUPPORTED' : 'NOT_SUPPORTED';
-  return { citationKey, entailment, resolvedRefCount: matched.length };
+  return { citationKey, transcriptKey, entailment, resolvedRefCount: matched.length };
 }
 
 interface CaseRecord {
@@ -80,13 +78,15 @@ export function getCaseDetail(caseKey: string): { state: CaseState; sourceEviden
 /**
  * Kanıt-kapısı: yalnız SUPPORTED + ref'li citation vaka açar.
  * Kanıt-bağlama: citation'ın transkripti ile vakanın transkripti AYNI olmalı —
- * başka transkriptin kanıtıyla vaka açmak yapısal reddedilir (39c-7).
+ * başka transkriptin kanıtıyla vaka açmak yapısal reddedilir (39c-7). Bağ AYRI
+ * alan üzerinden TAM EŞİTLİKLE kurulur; string-prefix kontrolü `tr-a`/`tr-a-b`
+ * anahtar çakışmasıyla delinebildiğinden YASAK (Codex 019f4bfd MAJOR).
  */
 export function openCase(citation: CitationReceipt, transcriptKey: string): { caseKey: string } {
   if (citation.entailment !== 'SUPPORTED' || citation.resolvedRefCount < 1) {
     throw new Error('Yalnız SUPPORTED + kaynaklı citation vaka açabilir (kanıt-kapısı).');
   }
-  if (!citation.citationKey.startsWith(`cit-${transcriptKey}-`)) {
+  if (citation.transcriptKey !== transcriptKey) {
     throw new Error('Citation başka transkripte ait — vaka açılamaz (kanıt-bağlama).');
   }
   caseSeq += 1;

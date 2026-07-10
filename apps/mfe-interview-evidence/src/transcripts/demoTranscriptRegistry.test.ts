@@ -73,4 +73,16 @@ describe('demoTranscriptRegistry (F-liste kayıt-defteri, 39c-7)', () => {
     all[0].segments.length = 0;
     expect(getTranscript('tr-demo-1').segments.length).toBeGreaterThan(0);
   });
+
+  test('kopyalar DERİN: segment-alanı ve makbuz mutasyonu kayıt-defterine SIZMAZ (Codex 019f4bfd)', () => {
+    const before = getTranscript('tr-demo-1').segments[0].text;
+    const all = listTranscripts();
+    all[0].segments[0].text = 'kurcalanmış içerik'; // alan mutasyonu
+    expect(getTranscript('tr-demo-1').segments[0].text).toBe(before);
+
+    markErased('tr-demo-1', receipt('dsar-0001'));
+    const leaked = getTranscript('tr-demo-1');
+    if (leaked.erasure) leaked.erasure.dsarKey = 'dsar-sahte';
+    expect(getTranscript('tr-demo-1').erasure?.dsarKey).toBe('dsar-0001');
+  });
 });

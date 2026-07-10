@@ -27,7 +27,8 @@ function seedEntries(): Map<string, TranscriptEntry> {
         transcriptKey: DEMO_TRANSCRIPT_KEY,
         label: 'Demo görüşme (S1/S2)',
         origin: 'DEMO' as const,
-        segments: DEMO_SEGMENTS,
+        // klon: kayıt-defteri girdisi modül-seviyesi demo diziyle nesne paylaşmaz
+        segments: DEMO_SEGMENTS.map((s) => ({ ...s })),
         erasure: null,
       },
     ],
@@ -41,15 +42,28 @@ export function resetDemoTranscripts(): void {
   entries = seedEntries();
 }
 
+/**
+ * Kopyalar DERİNDİR (Codex 019f4bfd MINOR): yüzeysel dizi kopyası Segment
+ * nesnelerini ve erasure makbuzunu paylaşımlı bırakır — dışarıdan alan
+ * mutasyonu kayıt-defterini (dolayısıyla entailment sonucunu) bozabilirdi.
+ */
+function cloneEntry(e: TranscriptEntry): TranscriptEntry {
+  return {
+    ...e,
+    segments: e.segments.map((s) => ({ ...s })),
+    erasure: e.erasure ? { ...e.erasure } : null,
+  };
+}
+
 /** Liste kopya döner (kayıt-defteri dışarıdan mutasyona kapalı). */
 export function listTranscripts(): TranscriptEntry[] {
-  return Array.from(entries.values()).map((e) => ({ ...e, segments: [...e.segments] }));
+  return Array.from(entries.values()).map(cloneEntry);
 }
 
 export function getTranscript(transcriptKey: string): TranscriptEntry {
   const e = entries.get(transcriptKey);
   if (!e) throw new Error(`Transkript bulunamadı: ${transcriptKey}`);
-  return { ...e, segments: [...e.segments] };
+  return cloneEntry(e);
 }
 
 /**

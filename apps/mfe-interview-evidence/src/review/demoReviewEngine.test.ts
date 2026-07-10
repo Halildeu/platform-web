@@ -132,6 +132,17 @@ describe('kanıt-bağlama + transkript-scope (39c-7)', () => {
     expect(() => openCase(citation, 'tr-demo-1')).toThrow(/kanıt-bağlama/);
   });
 
+  test('adversarial: tr-a/tr-a-b anahtar-öneki çakışması bağlamayı DELEMEZ (Codex 019f4bfd MAJOR)', () => {
+    // `cit-tr-a-b-...` string'i `cit-tr-a-` önekiyle başlar — prefix kontrolü
+    // olsaydı geçerdi; TAM EŞİTLİK bağı yapısal reddeder.
+    const citation = evaluateClaim('yer tutucu kanıt transkript', OTHER_SEGMENTS, 'tr-a-b');
+    expect(citation.entailment).toBe('SUPPORTED');
+    expect(citation.citationKey.startsWith('cit-tr-a-')).toBe(true); // çakışma gerçek
+    expect(() => openCase(citation, 'tr-a')).toThrow(/kanıt-bağlama/);
+    // doğru transkriptle açılış çalışır (regresyon değil)
+    expect(openCase(citation, 'tr-a-b').caseKey).toMatch(/^case-/);
+  });
+
   test("listCases transkript-scope'lu: başka transkriptin vakası görünmez", () => {
     const demoCase = openCase(
       evaluateClaim('aday teknik liderliğini yürüttü', DEMO_SEGMENTS, 'tr-demo-1'),
