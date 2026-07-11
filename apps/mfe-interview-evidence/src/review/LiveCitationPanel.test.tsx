@@ -111,6 +111,39 @@ describe('LiveCitationPanel — AI-taslak dili + hata sınıfları (Codex 019f50
     expect(screen.queryByTestId('live-citation-result')).not.toBeInTheDocument();
   });
 
+  test('submit ANINDA onReceiptChange(null) — cevap dönmeden eski receipt geçersiz (Codex 7b-2 blocker)', async () => {
+    const onReceiptChange = vi.fn();
+    let release!: (v: typeof RECEIPT) => void;
+    mockCite.mockImplementationOnce(
+      () =>
+        new Promise((res) => {
+          release = res;
+        }),
+    );
+    render(
+      <LiveCitationPanel
+        interviewId="iv-1"
+        transcriptKey="iv-1/tr-a"
+        onReceiptChange={onReceiptChange}
+      />,
+    );
+    type('iddia');
+    onReceiptChange.mockClear(); // claim-change kaynaklı null çağrılarını ayıkla
+    fireEvent.click(screen.getByTestId('live-citation-submit'));
+    // Promise HÂLÂ pending — invalidate senkron olmalı (stale-receipt penceresi yok):
+    expect(onReceiptChange).toHaveBeenCalledTimes(1);
+    expect(onReceiptChange).toHaveBeenCalledWith(null);
+    release(RECEIPT);
+    await waitFor(() =>
+      expect(onReceiptChange).toHaveBeenLastCalledWith({
+        interviewId: 'iv-1',
+        transcriptKey: 'iv-1/tr-a',
+        evidenceId: 'ev-9',
+        citationKey: RECEIPT.citationKey,
+      }),
+    );
+  });
+
   test('unmount sonrası geç dönen cevap state yazmaz (act uyarısı/sızıntı yok)', async () => {
     let release!: (v: typeof RECEIPT) => void;
     mockCite.mockImplementationOnce(

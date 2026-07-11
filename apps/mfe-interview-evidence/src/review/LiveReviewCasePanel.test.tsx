@@ -229,7 +229,7 @@ describe('reconciliation modu (Codex şart-4/5)', () => {
 });
 
 describe('hata sınıfları + kilitler', () => {
-  test('liste 401 → Oturum hatası; 403 → Yetki hatası (ats.review mesajı)', async () => {
+  test('liste 401 → Oturum hatası; 403 → READ-op mesajı (ats.review.read)', async () => {
     mockList.mockRejectedValueOnce({ response: { status: 401 } });
     const { unmount } = renderPanel();
     await waitFor(() => expect(screen.getByTestId('review-list-error')).toBeInTheDocument());
@@ -238,7 +238,54 @@ describe('hata sınıfları + kilitler', () => {
     mockList.mockRejectedValueOnce({ response: { status: 403 } });
     renderPanel();
     await waitFor(() => expect(screen.getByTestId('review-list-error')).toBeInTheDocument());
-    expect(screen.getByText(/ats\.review/)).toBeInTheDocument();
+    expect(screen.getByText(/ats\.review\.read/)).toBeInTheDocument();
+  });
+
+  test.each([
+    [401, 'Oturum hatası', /rol ataması bu hatayı çözmez/],
+    [403, 'Yetki hatası', /ats\.review\.read/],
+  ])(
+    'reconciliation → manuel reload %i verirse sınıf KORUNUR (generic değil — Codex 7b-2 blocker)',
+    async (status, badge, detail) => {
+      mockList.mockResolvedValueOnce([CASE_OPEN]);
+      renderPanel();
+      await waitFor(() =>
+        expect(screen.getByTestId('review-case-select-case-1')).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByTestId('review-case-select-case-1'));
+      set('review-oversight-input', 'role-x');
+      mockTransition.mockResolvedValueOnce(undefined);
+      mockList.mockRejectedValueOnce(new Error('liste kesildi')); // mutasyon-sonrası refetch FAIL
+      fireEvent.click(screen.getByTestId('review-action-START'));
+      await waitFor(() =>
+        expect(screen.getByTestId('review-reconcile-notice')).toBeInTheDocument(),
+      );
+      // Reconciliation'dan çıkış denemesi authn/authz'a çarparsa kullanıcı DOĞRU yönlendirilir:
+      mockList.mockRejectedValueOnce({ response: { status } });
+      fireEvent.click(screen.getByTestId('review-reload-list'));
+      await waitFor(() => expect(screen.getByTestId('review-list-error')).toBeInTheDocument());
+      expect(screen.getByText(badge)).toBeInTheDocument();
+      expect(screen.getByText(detail)).toBeInTheDocument();
+    },
+  );
+
+  test('vaka seçimi değişince opak ref girdileri TAŞINMAZ (temizlenir)', async () => {
+    mockList.mockResolvedValue([
+      CASE_OPEN,
+      { caseKey: 'case-2', state: { kind: 'known', value: 'IN_REVIEW' } },
+    ]);
+    renderPanel();
+    await waitFor(() =>
+      expect(screen.getByTestId('review-case-select-case-1')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('review-case-select-case-1'));
+    set('review-oversight-input', 'role-x');
+    set('review-actionref-input', 'change-1');
+    set('review-decision-input', 'decision-A');
+    fireEvent.click(screen.getByTestId('review-case-select-case-2'));
+    expect(screen.getByTestId('review-oversight-input')).toHaveValue('');
+    expect(screen.getByTestId('review-actionref-input')).toHaveValue('');
+    expect(screen.getByTestId('review-decision-input')).toHaveValue('');
   });
 
   test('transition in-flight iken TÜM mutasyonlar kilitli (open + finalize dahil)', async () => {

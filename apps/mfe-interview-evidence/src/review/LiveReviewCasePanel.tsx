@@ -46,7 +46,10 @@ type ListState =
 
 type ErrKind = 'authn' | 'authz' | 'validation' | 'generic';
 
-function classify(error: unknown): { kind: ErrKind; detail: string } {
+function classify(
+  error: unknown,
+  op: 'read' | 'write' = 'write',
+): { kind: ErrKind; detail: string } {
   if (error instanceof AtsClientValidationError) {
     return { kind: 'validation', detail: error.message };
   }
@@ -60,7 +63,9 @@ function classify(error: unknown): { kind: ErrKind; detail: string } {
     return {
       kind: 'authz',
       detail:
-        'Bu işlem için yetkiniz yok (ats.review.write / ats.review.read rolleri — rol-kapısı fail-closed).',
+        op === 'read'
+          ? 'Bu listeyi görüntüleme yetkiniz yok (ats.review.read rolü — rol-kapısı fail-closed).'
+          : 'Bu işlem için yetkiniz yok (ats.review.write rolü — rol-kapısı fail-closed).',
     };
   }
   // Review çağrıları AI'ya gitmez — 5xx dahil generic-backend sınıfı.
@@ -124,15 +129,16 @@ export function LiveReviewCasePanel({
     setActionError(null);
   }, [interviewId, citationReceipt]);
 
-  const refetchList = async (): Promise<boolean> => {
+  type RefetchResult = { ok: true } | { ok: false; error: unknown };
+  const refetchList = async (): Promise<RefetchResult> => {
     try {
       const cases = await fetchLiveReviewCases(interviewId);
-      if (!alive.current) return true;
+      if (!alive.current) return { ok: true };
       setList({ phase: 'ready', cases });
       setSelectedCaseKey((prev) => (cases.some((c) => c.caseKey === prev) ? prev : ''));
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error };
     }
   };
 
@@ -146,7 +152,7 @@ export function LiveReviewCasePanel({
       },
       (error) => {
         if (cancelled || !alive.current) return;
-        setList({ phase: 'error', ...classify(error) });
+        setList({ phase: 'error', ...classify(error, 'read') });
       },
     );
     return () => {
@@ -179,9 +185,9 @@ export function LiveReviewCasePanel({
       await fn();
       if (!alive.current) return;
       setFinalizeConfirm(null);
-      const ok = await refetchList();
+      const refetched = await refetchList();
       if (!alive.current) return;
-      if (!ok) {
+      if (!refetched.ok) {
         setList({
           phase: 'reconcile',
           notice:
@@ -209,9 +215,14 @@ export function LiveReviewCasePanel({
     if (busy) return;
     setBusy('list');
     setList({ phase: 'loading' });
-    const ok = await refetchList();
+    const refetched = await refetchList();
     if (alive.current) {
-      if (!ok) setList({ phase: 'error', kind: 'generic', detail: 'Liste yenilenemedi.' });
+      if (!refetched.ok) {
+        // Codex 7b-2: manuel reload'da authn/authz sınıfı KAYBOLMAZ (yalnız
+        // mutasyon-sonrası otomatik refetch reconciliation'da sınıfsız kalır —
+        // orada esas durum authoritative listenin alınamamasıdır).
+        setList({ phase: 'error', ...classify(refetched.error, 'read') });
+      }
       setBusy(null);
     }
   };
@@ -338,6 +349,10 @@ export function LiveReviewCasePanel({
                       setSelectedCaseKey(c.caseKey);
                       setFinalizeConfirm(null); // seçim değişimi teyidi sıfırlar
                       setActionError(null);
+                      // Bir vakaya ait opak referanslar başka vakaya TAŞINMAZ:
+                      setOversightRoleRef('');
+                      setActionRef('');
+                      setDecisionRef('');
                     }}
                   >
                     <code>{keyTail(c.caseKey)}</code>

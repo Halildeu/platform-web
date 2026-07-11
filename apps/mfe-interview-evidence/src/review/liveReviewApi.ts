@@ -85,7 +85,7 @@ export async function fetchLiveReviewCases(interviewId: string): Promise<LiveRev
   }
   return response.data.map((row, i) => {
     const r = row as { caseKey?: unknown; state?: unknown } | null;
-    if (!r || typeof r.caseKey !== 'string' || !r.caseKey) {
+    if (!r || typeof r.caseKey !== 'string' || !r.caseKey.trim()) {
       throw new AtsContractError(`review-cases[${i}] beklenen {caseKey,state} şeklinde değil`);
     }
     return { caseKey: r.caseKey, state: parseState(r.state, i) };
@@ -112,7 +112,7 @@ export async function openLiveReviewCase(
   if (
     response.status !== 201 ||
     typeof response.data?.caseKey !== 'string' ||
-    !response.data.caseKey
+    !response.data.caseKey.trim()
   ) {
     throw new AtsContractError('review-cases open cevabı beklenen 201 {caseKey} şeklinde değil');
   }
@@ -160,9 +160,9 @@ export async function finalizeLiveReviewCase(
   if (
     response.status !== 200 ||
     typeof d?.caseKey !== 'string' ||
-    !d.caseKey ||
+    !d.caseKey.trim() ||
     typeof d?.evidenceId !== 'string' ||
-    !d.evidenceId
+    !d.evidenceId.trim()
   ) {
     throw new AtsContractError('finalize cevabı beklenen 200 {caseKey,evidenceId} şeklinde değil');
   }

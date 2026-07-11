@@ -94,6 +94,9 @@ export function LiveCitationPanel({
 
   const submit = () => {
     if (inFlight) return;
+    // Codex 7b-2 blocker: YENİ sınama başlarken eski receipt geçerli kalamaz —
+    // istek sürerken F5 bayat kanıtla vaka açamasın (senkron invalidate).
+    onReceiptChange?.(null);
     setState({ phase: 'submitting' });
     requestLiveCitation(interviewId, transcriptKey, claim).then(
       (receipt) => {
