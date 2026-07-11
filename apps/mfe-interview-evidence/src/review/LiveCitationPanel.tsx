@@ -121,7 +121,13 @@ export function LiveCitationPanel({
         maxLength={MAX_CLAIM_LENGTH}
         rows={2}
         disabled={inFlight}
-        onChange={(e) => setClaim(e.target.value)}
+        onChange={(e) => {
+          setClaim(e.target.value);
+          // Codex iter: eski öneri/hata YENİ iddiaya bağlıymış gibi kalamaz —
+          // claim değişimi görünür sonucu invalidate eder (yanıt pointer-only
+          // olduğundan ekrandan ayırt edilemezdi).
+          setState({ phase: 'idle' });
+        }}
         placeholder="örn. Aday deneyimini somut örneklerle anlattı"
         style={{ width: '100%', resize: 'vertical' }}
       />

@@ -72,6 +72,7 @@ export async function requestLiveCitation(
     typeof entailment !== 'string' ||
     !ENTAILMENTS.includes(entailment as CitationEntailment) ||
     typeof d.resolvedRefCount !== 'number' ||
+    !Number.isSafeInteger(d.resolvedRefCount) ||
     d.resolvedRefCount < 0
   ) {
     // Bilinmeyen entailment dahil (Codex şartı): şekil-geçersiz 201 sessizce

@@ -58,6 +58,10 @@ describe('requestLiveCitation — kontrat (CitationApiController kaynak-kanıtl�
     ['evidenceId yok', { ...RECEIPT, evidenceId: undefined }],
     ['refCount negatif', { ...RECEIPT, resolvedRefCount: -1 }],
     ['refCount string', { ...RECEIPT, resolvedRefCount: '2' }],
+    ['refCount kesirli 1.5', { ...RECEIPT, resolvedRefCount: 1.5 }],
+    ['refCount NaN', { ...RECEIPT, resolvedRefCount: NaN }],
+    ['refCount Infinity', { ...RECEIPT, resolvedRefCount: Infinity }],
+    ['refCount unsafe-integer', { ...RECEIPT, resolvedRefCount: Number.MAX_SAFE_INTEGER + 1 }],
   ])('bozuk 201 gövdesi (%s) → AtsContractError', async (_n, body) => {
     httpPost.mockResolvedValueOnce({ data: body });
     await expect(requestLiveCitation('iv-1', 'k', 'iddia')).rejects.toBeInstanceOf(

@@ -42,6 +42,29 @@ describe('LiveCitationPanel — AI-taslak dili + hata sınıfları (Codex 019f50
     expect(html).not.toMatch(/FINALIZED|APPROVED|Onaylandı/);
   });
 
+  test('claim değişince eski öneri/hata INVALIDATE edilir (yanlış iddiaya bağlanamaz)', async () => {
+    mockCite.mockResolvedValueOnce(RECEIPT);
+    render(<LiveCitationPanel interviewId="iv-1" transcriptKey="iv-1/tr-a" />);
+    type('Claim A');
+    fireEvent.click(screen.getByTestId('live-citation-submit'));
+    await waitFor(() => expect(screen.getByTestId('live-citation-result')).toBeInTheDocument());
+    // Kullanıcı iddiayı değiştirir — submit ETMEDEN eski sonuç kaybolmalı:
+    type('Claim B');
+    expect(screen.queryByTestId('live-citation-result')).not.toBeInTheDocument();
+    expect(mockCite).toHaveBeenCalledTimes(1);
+    // Hata görünümü için de aynı invalidate:
+    mockCite.mockRejectedValueOnce({ response: { status: 403 } });
+    fireEvent.click(screen.getByTestId('live-citation-submit'));
+    await waitFor(() => expect(screen.getByTestId('live-citation-error')).toBeInTheDocument());
+    type('Claim C');
+    expect(screen.queryByTestId('live-citation-error')).not.toBeInTheDocument();
+    // Yeni submit YENİ canonical claim ile gider:
+    mockCite.mockResolvedValueOnce(RECEIPT);
+    fireEvent.click(screen.getByTestId('live-citation-submit'));
+    await waitFor(() => expect(screen.getByTestId('live-citation-result')).toBeInTheDocument());
+    expect(mockCite).toHaveBeenLastCalledWith('iv-1', 'iv-1/tr-a', 'Claim C');
+  });
+
   test('in-flight kilit: çift tık tek istek üretir', async () => {
     let release!: (v: typeof RECEIPT) => void;
     mockCite.mockImplementationOnce(
