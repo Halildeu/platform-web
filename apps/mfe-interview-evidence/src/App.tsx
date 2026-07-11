@@ -158,8 +158,9 @@ function LiveReadApp() {
       (transcripts) => {
         if (cancelled) return;
         const target = pendingTargetKey.current;
-        pendingTargetKey.current = null;
         if (target && !transcripts.some((t) => t.transcriptKey === target)) {
+          // Hedef ref KORUNUR (Codex 39d-7a P1): "Yeniden dene" sonrası hedef
+          // gelirse seçilebilsin — sessiz ilk-seçime düşülmesin.
           setList({
             phase: 'error',
             kind: 'generic',
@@ -167,6 +168,7 @@ function LiveReadApp() {
           });
           return;
         }
+        if (target) pendingTargetKey.current = null; // yalnız hedef bulununca temizle
         setList({ phase: 'ready', transcripts });
         setSelectedKey((prev) => {
           if (target) return target;

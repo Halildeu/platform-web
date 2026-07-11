@@ -89,6 +89,15 @@ describe('uploadLiveRecording — fail-closed ön-doğrulama + RAW kontrat', () 
     httpPost.mockResolvedValueOnce({ data: { evidenceId: 'ev-1' } });
     await expect(uploadLiveRecording('iv-1', audioFile())).rejects.toBeInstanceOf(AtsContractError);
   });
+
+  test('FAIL-CLOSED kontrat: ledgerSequence eksik/bozuk null-a DÜŞÜRÜLMEZ → AtsContractError', async () => {
+    httpPost.mockResolvedValueOnce({ data: { evidenceId: 'ev-1', objectKey: 'k' } }); // eksik
+    await expect(uploadLiveRecording('iv-1', audioFile())).rejects.toBeInstanceOf(AtsContractError);
+    httpPost.mockResolvedValueOnce({
+      data: { evidenceId: 'ev-1', objectKey: 'k', ledgerSequence: '7' }, // bozuk tip
+    });
+    await expect(uploadLiveRecording('iv-1', audioFile())).rejects.toBeInstanceOf(AtsContractError);
+  });
 });
 
 describe('sanitizeUploadFilename', () => {
@@ -117,5 +126,15 @@ describe('transcribeLiveRecording — aynı-objectKey retry sözleşmesinin API 
     );
     httpPost.mockResolvedValueOnce({ data: {} });
     await expect(transcribeLiveRecording('iv-1', 'k')).rejects.toBeInstanceOf(AtsContractError);
+  });
+
+  test('FAIL-CLOSED: segmentCount eksikse 0-a DÜŞÜRÜLMEZ → AtsContractError; explicit 0 kabul', async () => {
+    httpPost.mockResolvedValueOnce({ data: { transcriptKey: 'iv-1/tr-x' } }); // segmentCount yok
+    await expect(transcribeLiveRecording('iv-1', 'k')).rejects.toBeInstanceOf(AtsContractError);
+    httpPost.mockResolvedValueOnce({ data: { transcriptKey: 'iv-1/tr-x', segmentCount: 0 } });
+    expect(await transcribeLiveRecording('iv-1', 'k')).toEqual({
+      transcriptKey: 'iv-1/tr-x',
+      segmentCount: 0,
+    });
   });
 });

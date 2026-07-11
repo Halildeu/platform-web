@@ -178,7 +178,7 @@ export function sanitizeUploadFilename(name: string): string {
 export interface UploadReceipt {
   evidenceId: string;
   objectKey: string;
-  ledgerSequence: number | null;
+  ledgerSequence: number;
 }
 
 export interface TranscribeReceipt {
@@ -229,19 +229,26 @@ export async function uploadLiveRecording(interviewId: string, file: File): Prom
     { headers: { 'Content-Type': file.type, 'X-ATS-Filename': filename } },
   );
   const d = response.data;
+  // FAIL-CLOSED (Codex 39d-7a P1): ledgerSequence dahil TAM kontrat — eksik/bozuk
+  // alan null'a düşürülmez, kontrat regresyonu başarı gibi maskelenmez.
   if (
     !d ||
     typeof d.evidenceId !== 'string' ||
     !d.evidenceId ||
     typeof d.objectKey !== 'string' ||
-    !d.objectKey
+    !d.objectKey ||
+    typeof d.ledgerSequence !== 'number' ||
+    !Number.isInteger(d.ledgerSequence) ||
+    d.ledgerSequence < 0
   ) {
-    throw new AtsContractError('recordings cevabı beklenen {evidenceId,objectKey} şeklinde değil');
+    throw new AtsContractError(
+      'recordings cevabı beklenen {evidenceId,objectKey,ledgerSequence} şeklinde değil',
+    );
   }
   return {
     evidenceId: d.evidenceId,
     objectKey: d.objectKey,
-    ledgerSequence: typeof d.ledgerSequence === 'number' ? d.ledgerSequence : null,
+    ledgerSequence: d.ledgerSequence,
   };
 }
 
@@ -263,11 +270,19 @@ export async function transcribeLiveRecording(
     { headers: { 'Content-Type': 'application/json' } },
   );
   const d = response.data;
-  if (!d || typeof d.transcriptKey !== 'string' || !d.transcriptKey) {
-    throw new AtsContractError('transcribe cevabı beklenen {transcriptKey} şeklinde değil');
+  // FAIL-CLOSED (Codex 39d-7a P1): segmentCount 0'a düşürülmez — gerçek 0 yalnız
+  // backend AÇIKÇA segmentCount: 0 döndürürse kabul edilir.
+  if (
+    !d ||
+    typeof d.transcriptKey !== 'string' ||
+    !d.transcriptKey ||
+    typeof d.segmentCount !== 'number' ||
+    !Number.isInteger(d.segmentCount) ||
+    d.segmentCount < 0
+  ) {
+    throw new AtsContractError(
+      'transcribe cevabı beklenen {transcriptKey,segmentCount} şeklinde değil',
+    );
   }
-  return {
-    transcriptKey: d.transcriptKey,
-    segmentCount: typeof d.segmentCount === 'number' ? d.segmentCount : 0,
-  };
+  return { transcriptKey: d.transcriptKey, segmentCount: d.segmentCount };
 }

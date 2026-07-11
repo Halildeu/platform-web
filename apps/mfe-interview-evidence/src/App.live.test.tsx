@@ -213,4 +213,29 @@ describe('canlı liste + segment akışı', () => {
     expect(screen.getByText(/Tutarlılık hatası/)).toBeInTheDocument();
     expect(screen.getByText(/tr-new/)).toBeInTheDocument();
   });
+
+  test('consistency retry HEDEFI UNUTMAZ: hata → Yeniden dene → hedef gelir → hedef seçilir', async () => {
+    const NEW = {
+      transcriptKey: 'iv-smoke-1/tr-new',
+      label: 'Canlı tr · 2 segment · tr-new',
+      origin: 'LIVE' as const,
+      segments: [],
+      erasure: null,
+    };
+    mockList.mockResolvedValueOnce(LIST); // ilk yükleme
+    mockList.mockResolvedValueOnce(LIST); // transcribe sonrası: hedef HENÜZ yok → consistency error
+    mockList.mockResolvedValueOnce([...LIST, NEW]); // retry: hedef geldi
+    mockSegments.mockResolvedValue(SEGS_A);
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('transcript-list-panel')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('mock-live-transcribed'));
+    await waitFor(() => expect(screen.getByText(/Tutarlılık hatası/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Yeniden dene'));
+    await waitFor(() =>
+      expect(screen.getByTestId('transcript-select-iv-smoke-1/tr-new')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    ); // sessizce ilk transkripte DÜŞMEDİ — hedef korundu (Codex 39d-7a P1)
+  });
 });
