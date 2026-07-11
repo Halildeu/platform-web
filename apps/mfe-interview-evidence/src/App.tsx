@@ -3,6 +3,7 @@ import { Badge, Button, Card, Stack, Text } from '@mfe/design-system';
 import { SegmentView } from './segment-view/SegmentView';
 import { ReviewWorkspace } from './review/ReviewWorkspace';
 import { ConsentRecordingPanel } from './ingest/ConsentRecordingPanel';
+import { LiveConsentUploadPanel } from './ingest/LiveConsentUploadPanel';
 import { DsarPanel } from './dsar/DsarPanel';
 import { TranscriptList } from './transcripts/TranscriptList';
 import {
@@ -144,6 +145,9 @@ function LiveReadApp() {
   const [segments, setSegments] = useState<LiveSegmentsState>({ phase: 'idle' });
   const segCache = useRef(new Map<string, Segment[]>());
   const [reloadNonce, setReloadNonce] = useState(0);
+  // 39d-7a: transcribe sonrası hedef seçim — refresh'te bulunamazsa
+  // CONSISTENCY hatası (sessizce ilk transkripte GEÇİLMEZ; Codex #6).
+  const pendingTargetKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (!interviewId) return;
@@ -153,15 +157,29 @@ function LiveReadApp() {
     fetchLiveTranscripts(interviewId).then(
       (transcripts) => {
         if (cancelled) return;
+        const target = pendingTargetKey.current;
+        if (target && !transcripts.some((t) => t.transcriptKey === target)) {
+          // Hedef ref KORUNUR (Codex 39d-7a P1): "Yeniden dene" sonrası hedef
+          // gelirse seçilebilsin — sessiz ilk-seçime düşülmesin.
+          setList({
+            phase: 'error',
+            kind: 'generic',
+            detail: `Tutarlılık hatası: üretilen transkript (${target}) liste re-fetch'inde bulunamadı — backend listing/kontrat incelenmeli.`,
+          });
+          return;
+        }
+        if (target) pendingTargetKey.current = null; // yalnız hedef bulununca temizle
         setList({ phase: 'ready', transcripts });
-        setSelectedKey((prev) =>
-          prev && transcripts.some((t) => t.transcriptKey === prev)
+        setSelectedKey((prev) => {
+          if (target) return target;
+          return prev && transcripts.some((t) => t.transcriptKey === prev)
             ? prev
-            : (transcripts[0]?.transcriptKey ?? ''),
-        );
+            : (transcripts[0]?.transcriptKey ?? '');
+        });
       },
       (error) => {
         if (cancelled) return;
+        // Refresh hatasında yalnız re-fetch tekrarlanır (upload/transcribe DEĞİL).
         setList({ phase: 'error', ...classifyError(error) });
       },
     );
@@ -169,6 +187,11 @@ function LiveReadApp() {
       cancelled = true;
     };
   }, [interviewId, reloadNonce]);
+
+  const handleLiveTranscribed = (transcriptKey: string) => {
+    pendingTargetKey.current = transcriptKey;
+    setReloadNonce((n) => n + 1); // backend-authority tam liste re-fetch (optimistik ekleme YOK)
+  };
 
   useEffect(() => {
     if (!interviewId || !selectedKey) return;
@@ -249,11 +272,18 @@ function LiveReadApp() {
 
       {list.phase === 'ready' && (
         <>
+          {/* Ürün akış sırası (39c-5 aynası): Rıza → kayıt → transkript. */}
+          <Card variant="outlined" padding="md">
+            <LiveConsentUploadPanel
+              interviewId={interviewId}
+              onTranscribed={handleLiveTranscribed}
+            />
+          </Card>
+
           <Card variant="outlined" padding="md">
             {list.transcripts.length === 0 ? (
               <Text as="p" size="sm" data-testid="live-list-empty">
-                Bu mülakat için transkript yok. (Yazma yüzeyleri canlı modda 39d-7'de bağlanır; tam
-                akışı demo modunda deneyebilirsiniz.)
+                Bu mülakat için transkript yok — yukarıdaki rıza + yükleme zinciriyle üretin.
               </Text>
             ) : (
               <TranscriptList
@@ -294,12 +324,14 @@ function LiveReadApp() {
 
           <Card variant="outlined" padding="md">
             <Stack direction="column" gap={2} data-testid="live-write-surfaces-note">
-              <Badge variant="info">Okuma modu (39d-6)</Badge>
+              <Badge variant="info">
+                Canlı yüzeyler: okuma + rıza/yükleme/transkripsiyon (39d-7a)
+              </Badge>
               <Text as="p" size="sm" variant="secondary">
-                Rıza/kayıt, inceleme (F4/F5) ve DSAR (F10) yazma yüzeyleri canlı modda 39d-7'de
-                bağlanır. Demo motorlar canlı transkript anahtarlarını tanımadığı için burada
-                gösterilmezler (yanıltıcı karışım yerine dürüst sınır). Tam ürün akışı demo modunda
-                çalışır durumda.
+                İnceleme (F4/F5) ve DSAR (F10) yazma yüzeyleri canlı modda 39d-7b/7c'de bağlanır;
+                demo motorlar canlı transkript anahtarlarını tanımadığı için burada gösterilmezler
+                (yanıltıcı karışım yerine dürüst sınır). Tam ürün akışı demo modunda çalışır
+                durumda.
               </Text>
             </Stack>
           </Card>

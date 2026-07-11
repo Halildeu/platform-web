@@ -19,6 +19,16 @@ vi.mock('./transcripts/liveTranscriptApi', async (importOriginal) => {
 
 import { fetchLiveSegments, fetchLiveTranscripts } from './transcripts/liveTranscriptApi';
 
+// 39d-7a: canlı panel App testinde stub — onTranscribed köprüsünü tetikleyen düğme
+// (panelin kendi state-machine testleri LiveConsentUploadPanel.test.tsx'te).
+vi.mock('./ingest/LiveConsentUploadPanel', () => ({
+  LiveConsentUploadPanel: ({ onTranscribed }: { onTranscribed: (k: string) => void }) => (
+    <button data-testid="mock-live-transcribed" onClick={() => onTranscribed('iv-smoke-1/tr-new')}>
+      transkribe-stub
+    </button>
+  ),
+}));
+
 const mockList = vi.mocked(fetchLiveTranscripts);
 const mockSegments = vi.mocked(fetchLiveSegments);
 
@@ -167,5 +177,65 @@ describe('canlı liste + segment akışı', () => {
     fireEvent.click(screen.getByTestId('transcript-select-iv-smoke-1/tr-aaa'));
     await waitFor(() => expect(screen.getByText('A segmenti')).toBeInTheDocument());
     expect(mockSegments).toHaveBeenCalledTimes(2); // A + B; cache'ten dönüş 3. çağrı üretmedi
+  });
+
+  test('transcribe sonrası re-fetch: dönen key listede VARSA hedef-seçilir (39d-7a)', async () => {
+    const NEW = {
+      transcriptKey: 'iv-smoke-1/tr-new',
+      label: 'Canlı tr · 2 segment · tr-new',
+      origin: 'LIVE' as const,
+      segments: [],
+      erasure: null,
+    };
+    mockList.mockResolvedValueOnce(LIST);
+    mockList.mockResolvedValueOnce([...LIST, NEW]);
+    mockSegments.mockResolvedValue(SEGS_A);
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('transcript-list-panel')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('mock-live-transcribed'));
+    await waitFor(() =>
+      expect(screen.getByTestId('transcript-select-iv-smoke-1/tr-new')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(mockList).toHaveBeenCalledTimes(2); // optimistik ekleme YOK — tam re-fetch
+  });
+
+  test('transcribe sonrası re-fetch: dönen key listede YOKSA consistency hatası (sessiz ilk-seçim YOK)', async () => {
+    mockList.mockResolvedValueOnce(LIST);
+    mockList.mockResolvedValueOnce(LIST); // yeni key GELMEDİ
+    mockSegments.mockResolvedValue(SEGS_A);
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('transcript-list-panel')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('mock-live-transcribed'));
+    await waitFor(() => expect(screen.getByTestId('live-list-error')).toBeInTheDocument());
+    expect(screen.getByText(/Tutarlılık hatası/)).toBeInTheDocument();
+    expect(screen.getByText(/tr-new/)).toBeInTheDocument();
+  });
+
+  test('consistency retry HEDEFI UNUTMAZ: hata → Yeniden dene → hedef gelir → hedef seçilir', async () => {
+    const NEW = {
+      transcriptKey: 'iv-smoke-1/tr-new',
+      label: 'Canlı tr · 2 segment · tr-new',
+      origin: 'LIVE' as const,
+      segments: [],
+      erasure: null,
+    };
+    mockList.mockResolvedValueOnce(LIST); // ilk yükleme
+    mockList.mockResolvedValueOnce(LIST); // transcribe sonrası: hedef HENÜZ yok → consistency error
+    mockList.mockResolvedValueOnce([...LIST, NEW]); // retry: hedef geldi
+    mockSegments.mockResolvedValue(SEGS_A);
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('transcript-list-panel')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('mock-live-transcribed'));
+    await waitFor(() => expect(screen.getByText(/Tutarlılık hatası/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText('Yeniden dene'));
+    await waitFor(() =>
+      expect(screen.getByTestId('transcript-select-iv-smoke-1/tr-new')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    ); // sessizce ilk transkripte DÜŞMEDİ — hedef korundu (Codex 39d-7a P1)
   });
 });

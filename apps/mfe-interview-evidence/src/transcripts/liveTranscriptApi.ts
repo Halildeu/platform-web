@@ -142,3 +142,147 @@ export async function fetchLiveSegments(
   }
   return segments.map(asSegment);
 }
+
+/* ------------------------------------------------------------------ */
+/* 39d-7a — yazma zinciri: consent → upload(RAW) → transcribe          */
+/* (Codex 019f50b7: checkpoint/retry semantiği panelde; burada her     */
+/* adım tekil, idempotent-dostu ve fail-closed doğrulamalı)            */
+/* ------------------------------------------------------------------ */
+
+/** İstemci-tarafı ön-doğrulama hatası (istek HİÇ atılmaz — fail-closed). */
+export class AtsClientValidationError extends Error {
+  constructor(detail: string) {
+    super(detail);
+    this.name = 'AtsClientValidationError';
+  }
+}
+
+/** Ingress/configmap tek kontratı: 25 MiB (ATS_MAX_UPLOAD_BYTES ile aynı). */
+export const MAX_UPLOAD_BYTES = 26_214_400;
+
+/**
+ * X-ATS-Filename güvenliği (Codex 39d-7a iter): path bileşeni atılır;
+ * control-char/CRLF REDDEDİLİR (header injection); uzunluk sınırlandırılır.
+ */
+export function sanitizeUploadFilename(name: string): string {
+  const base = name.split(/[\\/]/).pop() ?? '';
+  const trimmed = base.trim();
+  if (!trimmed) throw new AtsClientValidationError('Dosya adı boş.');
+  // eslint-disable-next-line no-control-regex -- header-injection guard'ı control-char arar
+  if (/[\u0000-\u001f\u007f]/.test(trimmed)) {
+    throw new AtsClientValidationError('Dosya adı geçersiz karakter içeriyor.');
+  }
+  return trimmed.length > 120 ? trimmed.slice(-120) : trimmed;
+}
+
+export interface UploadReceipt {
+  evidenceId: string;
+  objectKey: string;
+  ledgerSequence: number;
+}
+
+export interface TranscribeReceipt {
+  transcriptKey: string;
+  segmentCount: number;
+}
+
+export type ConsentState = 'GRANTED' | 'DENIED' | 'WITHDRAWN';
+
+/** PUT recording-consent — backend-persist rıza kapısı (204 beklenir). */
+export async function putLiveConsent(
+  interviewId: string,
+  subjectRef: string,
+  state: ConsentState,
+): Promise<void> {
+  if (!subjectRef.trim())
+    throw new AtsClientValidationError('Aday referansı (subjectRef) zorunlu.');
+  const services = await resolveServices();
+  await services.http.put(
+    `/ats/v1/interviews/${encodeURIComponent(interviewId)}/recording-consent`,
+    { subjectRef: subjectRef.trim(), state },
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+/**
+ * POST recordings — RAW body (multipart DEĞİL; 39d-4 kanıtlı kontrat).
+ * Fail-closed ön-doğrulama (Codex: boş MIME fallback'lenmez, REDDEDİLİR):
+ * audio/* MIME + 0 < boyut ≤ 25 MiB + güvenli dosya adı.
+ */
+export async function uploadLiveRecording(interviewId: string, file: File): Promise<UploadReceipt> {
+  if (!file.type || !file.type.startsWith('audio/')) {
+    throw new AtsClientValidationError(
+      `Desteklenmeyen dosya türü: "${file.type || 'bilinmiyor'}" (audio/* gerekli; tür boşsa reddedilir — fail-closed).`,
+    );
+  }
+  if (!(file.size > 0)) throw new AtsClientValidationError('Dosya boş.');
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new AtsClientValidationError(
+      `Dosya çok büyük (${file.size} bayt; sınır ${MAX_UPLOAD_BYTES}).`,
+    );
+  }
+  const filename = sanitizeUploadFilename(file.name);
+  const services = await resolveServices();
+  const response = await services.http.post<Partial<UploadReceipt>>(
+    `/ats/v1/interviews/${encodeURIComponent(interviewId)}/recordings`,
+    file,
+    { headers: { 'Content-Type': file.type, 'X-ATS-Filename': filename } },
+  );
+  const d = response.data;
+  // FAIL-CLOSED (Codex 39d-7a P1): ledgerSequence dahil TAM kontrat — eksik/bozuk
+  // alan null'a düşürülmez, kontrat regresyonu başarı gibi maskelenmez.
+  if (
+    !d ||
+    typeof d.evidenceId !== 'string' ||
+    !d.evidenceId ||
+    typeof d.objectKey !== 'string' ||
+    !d.objectKey ||
+    typeof d.ledgerSequence !== 'number' ||
+    !Number.isInteger(d.ledgerSequence) ||
+    d.ledgerSequence < 0
+  ) {
+    throw new AtsContractError(
+      'recordings cevabı beklenen {evidenceId,objectKey,ledgerSequence} şeklinde değil',
+    );
+  }
+  return {
+    evidenceId: d.evidenceId,
+    objectKey: d.objectKey,
+    ledgerSequence: d.ledgerSequence,
+  };
+}
+
+/**
+ * POST transcribe {sourceObjectKey} — backend idempotent (slice-29);
+ * retry AYNI objectKey ile yapılır (panelde checkpoint — ikinci upload asla).
+ */
+export async function transcribeLiveRecording(
+  interviewId: string,
+  sourceObjectKey: string,
+): Promise<TranscribeReceipt> {
+  if (!sourceObjectKey.trim()) {
+    throw new AtsClientValidationError('sourceObjectKey boş (upload checkpoint kayıp).');
+  }
+  const services = await resolveServices();
+  const response = await services.http.post<Partial<TranscribeReceipt>>(
+    `/ats/v1/interviews/${encodeURIComponent(interviewId)}/transcribe`,
+    { sourceObjectKey },
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+  const d = response.data;
+  // FAIL-CLOSED (Codex 39d-7a P1): segmentCount 0'a düşürülmez — gerçek 0 yalnız
+  // backend AÇIKÇA segmentCount: 0 döndürürse kabul edilir.
+  if (
+    !d ||
+    typeof d.transcriptKey !== 'string' ||
+    !d.transcriptKey ||
+    typeof d.segmentCount !== 'number' ||
+    !Number.isInteger(d.segmentCount) ||
+    d.segmentCount < 0
+  ) {
+    throw new AtsContractError(
+      'transcribe cevabı beklenen {transcriptKey,segmentCount} şeklinde değil',
+    );
+  }
+  return { transcriptKey: d.transcriptKey, segmentCount: d.segmentCount };
+}
