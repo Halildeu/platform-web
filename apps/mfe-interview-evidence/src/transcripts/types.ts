@@ -6,7 +6,7 @@ import type { ErasureReceipt } from '../dsar/types';
  * liste/seçim" ürün yüzeyinin (standalone slice-22/23) platform-web karşılığı.
  * 39d'de `/api/ats` transcript-listing DTO'suna bağlanır; şimdilik demo kayıt-defteri.
  */
-export type TranscriptOrigin = 'DEMO' | 'INGEST';
+export type TranscriptOrigin = 'DEMO' | 'INGEST' | 'LIVE';
 
 export interface TranscriptEntry {
   transcriptKey: string;

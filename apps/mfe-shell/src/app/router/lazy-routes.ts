@@ -13,6 +13,7 @@ import { AccessAppOnDemand } from '../createAccessAppOnDemand';
 import { AuditAppOnDemand } from '../createAuditAppOnDemand';
 import { ReportingAppOnDemand } from '../createReportingAppOnDemand';
 import { createMeetingApp } from '../createMeetingApp';
+import { createProtectedRemoteApp } from '../createProtectedRemoteApp';
 
 /**
  * PERF-INIT-V2 PR-B5b1 + PR-B5b1.5 + PR-B5b2a canary build-time
@@ -97,9 +98,12 @@ export const MeetingModule: React.ComponentType = createMeetingApp(
   () => import('mfe_meeting/shell-services'),
 );
 
-export const InterviewEvidenceModule: React.ComponentType = createLazyRemoteModule(
+// 39d-6: shell-token köprüsü — mount ÖNCESİ configureShellServices (meeting deseni);
+// canlı /api/ats çağrıları Bearer/auth-ready zincirini shell'den alır.
+export const InterviewEvidenceModule: React.ComponentType = createProtectedRemoteApp(
   'InterviewEvidence',
   () => import('mfe_interview_evidence/InterviewEvidenceApp'),
+  () => import('mfe_interview_evidence/shell-services'),
 );
 
 /* ------------------------------------------------------------------ */

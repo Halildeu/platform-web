@@ -81,6 +81,9 @@ export default defineConfig(({ mode }) => {
         },
         exposes: {
           './InterviewEvidenceApp': './src/App.tsx',
+          // 39d-6 shell-token köprüsü (mfe-meeting deseni): shell mount ÖNCESİ
+          // configureShellServices çağırır — canlı /api/ats Bearer zinciri.
+          './shell-services': './src/shell-services.ts',
         },
         shared: {
           ...sharedCore,
