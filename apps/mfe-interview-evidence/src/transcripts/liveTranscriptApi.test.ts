@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  AtsContractError,
   fetchLiveSegments,
   fetchLiveTranscripts,
+  isAuthnError,
   isAuthzError,
   toTranscriptEntry,
 } from './liveTranscriptApi';
@@ -48,12 +50,20 @@ describe('fetchLiveTranscripts — 39d-4 kanıtlı kontrat', () => {
     expect(entries[0].label).toContain('3 segment');
   });
 
-  test('bozuk satırlar filtrelenir, dizi-olmayan cevap boş liste', async () => {
-    httpGet.mockResolvedValueOnce({
-      data: [{ transcriptKey: 'ok-key', language: 'tr', segmentCount: 1 }, { bogus: true }, null],
-    });
-    expect(await fetchLiveTranscripts('iv-1')).toHaveLength(1);
+  test('FAIL-CLOSED: dizi-olmayan 200 cevabı AtsContractError (sessiz boş liste YOK)', async () => {
     httpGet.mockResolvedValueOnce({ data: { unexpected: 'object' } });
+    await expect(fetchLiveTranscripts('iv-1')).rejects.toBeInstanceOf(AtsContractError);
+  });
+
+  test('FAIL-CLOSED: bozuk liste satırı AtsContractError (sessiz filtre YOK)', async () => {
+    httpGet.mockResolvedValueOnce({
+      data: [{ transcriptKey: 'ok-key', language: 'tr', segmentCount: 1 }, { bogus: true }],
+    });
+    await expect(fetchLiveTranscripts('iv-1')).rejects.toBeInstanceOf(AtsContractError);
+  });
+
+  test('gerçekten boş liste [] kabul edilir (kontrat hatası DEĞİL)', async () => {
+    httpGet.mockResolvedValueOnce({ data: [] });
     expect(await fetchLiveTranscripts('iv-1')).toEqual([]);
   });
 
@@ -86,21 +96,37 @@ describe('fetchLiveSegments', () => {
     expect(result).toEqual(segments);
   });
 
-  test('segments alanı yoksa boş liste (crash yok)', async () => {
+  test('FAIL-CLOSED: segments alanı yoksa AtsContractError (sessiz boş segment YOK)', async () => {
     httpGet.mockResolvedValueOnce({ data: {} });
+    await expect(fetchLiveSegments('iv-1', 'k')).rejects.toBeInstanceOf(AtsContractError);
+  });
+
+  test('FAIL-CLOSED: bozuk segment satırı AtsContractError', async () => {
+    httpGet.mockResolvedValueOnce({
+      data: { segments: [{ index: 0, text: 'eksik-alanlar' }] },
+    });
+    await expect(fetchLiveSegments('iv-1', 'k')).rejects.toBeInstanceOf(AtsContractError);
+  });
+
+  test('gerçekten boş segments [] kabul edilir', async () => {
+    httpGet.mockResolvedValueOnce({ data: { segments: [] } });
     expect(await fetchLiveSegments('iv-1', 'k')).toEqual([]);
   });
 });
 
-describe('isAuthzError — rol-kapısı sınıflandırması', () => {
-  test('401/403 response → true; 500 → false; adlandırılmış authn hatası → true', () => {
-    expect(isAuthzError({ response: { status: 401 } })).toBe(true);
+describe('authn ≠ authz sınıflandırması (D29 Authn-deny/Authz-deny aynası)', () => {
+  test('401 → authn (rol atamak çözmez); 403 → authz (rol-kapısı); kesişim YOK', () => {
+    expect(isAuthnError({ response: { status: 401 } })).toBe(true);
+    expect(isAuthzError({ response: { status: 401 } })).toBe(false);
     expect(isAuthzError({ response: { status: 403 } })).toBe(true);
+    expect(isAuthnError({ response: { status: 403 } })).toBe(false);
+    expect(isAuthnError({ response: { status: 500 } })).toBe(false);
     expect(isAuthzError({ response: { status: 500 } })).toBe(false);
     const named = new Error('no session');
     named.name = 'InterviewEvidenceUnauthenticatedError';
-    expect(isAuthzError(named)).toBe(true);
-    expect(isAuthzError(new Error('boom'))).toBe(false);
+    expect(isAuthnError(named)).toBe(true);
+    expect(isAuthzError(named)).toBe(false);
+    expect(isAuthnError(new Error('boom'))).toBe(false);
   });
 });
 

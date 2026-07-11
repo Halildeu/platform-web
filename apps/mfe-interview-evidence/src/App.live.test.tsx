@@ -103,12 +103,23 @@ describe('canlı liste + segment akışı', () => {
     expect(mockSegments).not.toHaveBeenCalled();
   });
 
-  test('403 → yetki mesajı (rol-kapısı)', async () => {
+  test('403 → AUTHZ: rol-kapısı mesajı (401 metni DEĞİL)', async () => {
     mockList.mockRejectedValueOnce({ response: { status: 403 } });
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('live-list-error')).toBeInTheDocument());
+    expect(screen.getByText('Yetki hatası')).toBeInTheDocument();
     expect(screen.getByText(/yetkiniz yok/i)).toBeInTheDocument();
     // Yetki hatasında retry düğmesi YOK (tekrar denemek yetki getirmez):
+    expect(screen.queryByText('Yeniden dene')).not.toBeInTheDocument();
+  });
+
+  test('401 → AUTHN: oturum mesajı — rol mesajıyla KARIŞMAZ (D29 Authn≠Authz aynası)', async () => {
+    mockList.mockRejectedValueOnce({ response: { status: 401 } });
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('live-list-error')).toBeInTheDocument());
+    expect(screen.getByText('Oturum hatası')).toBeInTheDocument();
+    expect(screen.getByText(/rol ataması bu hatayı çözmez/i)).toBeInTheDocument();
+    expect(screen.queryByText(/yetkiniz yok/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Yeniden dene')).not.toBeInTheDocument();
   });
 

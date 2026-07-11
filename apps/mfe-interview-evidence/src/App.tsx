@@ -14,6 +14,7 @@ import { resolveDataMode, resolveLiveInterviewId } from './config/dataMode';
 import {
   fetchLiveSegments,
   fetchLiveTranscripts,
+  isAuthnError,
   isAuthzError,
 } from './transcripts/liveTranscriptApi';
 import type { Segment } from './segment-view/types';
@@ -83,22 +84,42 @@ function ConfigErrorCard({ reason }: { reason: string }) {
   );
 }
 
+type LiveErrorKind = 'authn' | 'authz' | 'generic';
+
 type LiveListState =
   | { phase: 'loading' }
-  | { phase: 'error'; kind: 'authz' | 'generic'; detail: string }
+  | { phase: 'error'; kind: LiveErrorKind; detail: string }
   | { phase: 'ready'; transcripts: TranscriptEntry[] };
 
 type LiveSegmentsState =
   | { phase: 'idle' }
   | { phase: 'loading' }
-  | { phase: 'error'; kind: 'authz' | 'generic'; detail: string }
+  | { phase: 'error'; kind: LiveErrorKind; detail: string }
   | { phase: 'ready'; segments: Segment[] };
+
+const LIVE_ERROR_BADGE: Record<LiveErrorKind, string> = {
+  authn: 'Oturum hatası',
+  authz: 'Yetki hatası',
+  generic: 'Canlı veri okunamadı',
+};
 
 /** Canlı segment cache anahtarı — interviewId + transcriptKey (Codex 39d-6 iter). */
 const segCacheKey = (interviewId: string, transcriptKey: string) =>
   `${interviewId} ${transcriptKey}`;
 
-function classifyError(error: unknown): { kind: 'authz' | 'generic'; detail: string } {
+/**
+ * D29 Authn-deny ≠ Authz-deny aynası (Codex 019f50b7 post-impl P1): 401/oturum-yok
+ * rol atamakla ÇÖZÜLMEZ — "yeniden giriş" yüzeyi; yalnız 403 rol-kapısıdır.
+ * Kontrat hatası (AtsContractError) generic'e düşer (retry'lı hata kartı).
+ */
+function classifyError(error: unknown): { kind: LiveErrorKind; detail: string } {
+  if (isAuthnError(error)) {
+    return {
+      kind: 'authn',
+      detail:
+        'Oturum doğrulanamadı (401/audience) — sayfayı yenileyip yeniden giriş yapmayı deneyin; rol ataması bu hatayı çözmez.',
+    };
+  }
   if (isAuthzError(error)) {
     return {
       kind: 'authz',
@@ -211,9 +232,7 @@ function LiveReadApp() {
       {list.phase === 'error' && (
         <Card variant="outlined" padding="md">
           <Stack direction="column" gap={2} data-testid="live-list-error">
-            <Badge variant="error">
-              {list.kind === 'authz' ? 'Yetki hatası' : 'Canlı veri okunamadı'}
-            </Badge>
+            <Badge variant="error">{LIVE_ERROR_BADGE[list.kind]}</Badge>
             <Text as="p" size="sm">
               {list.detail}
             </Text>
@@ -259,7 +278,9 @@ function LiveReadApp() {
                 {segments.phase === 'error' && (
                   <Stack direction="column" gap={2} data-testid="live-segments-error">
                     <Badge variant="error">
-                      {segments.kind === 'authz' ? 'Yetki hatası' : 'Segmentler okunamadı'}
+                      {segments.kind === 'generic'
+                        ? 'Segmentler okunamadı'
+                        : LIVE_ERROR_BADGE[segments.kind]}
                     </Badge>
                     <Text as="p" size="sm">
                       {segments.detail}
