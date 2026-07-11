@@ -48,8 +48,10 @@ export default defineConfig(({ mode }) => ({
             remotes: {},
             exposes: {
               './MeetingApp': './src/App.tsx',
+              './shell-services': './src/shell-services.ts',
             },
             shared: {
+              '@mfe/shared-http': singleton('@mfe/shared-http', false),
               react: hostOnly('react'),
               'react-dom': hostOnly('react-dom'),
               'react/jsx-runtime': hostOnly('react/jsx-runtime', 'react'),

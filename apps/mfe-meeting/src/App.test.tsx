@@ -1,13 +1,15 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import MeetingApp from './App';
-import { createDemoWorkbenchData } from './meeting-api';
+import { createDemoWorkbenchData, normalizeWorkbenchPayload } from './meeting-api';
 import type { MeetingRecord } from './meeting-workbench';
 
 describe('MeetingApp', () => {
+  const loadDemo = async () => createDemoWorkbenchData();
+
   it('renders the meeting workbench with stats, controls, and transcript readiness surface', async () => {
-    render(<MeetingApp />);
+    render(<MeetingApp loadWorkbench={loadDemo} />);
 
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Meeting Intelligence' })).toBeInTheDocument();
@@ -27,7 +29,7 @@ describe('MeetingApp', () => {
   });
 
   it('filters blocked meetings and keeps empty transcript state honest', async () => {
-    render(<MeetingApp />);
+    render(<MeetingApp loadWorkbench={loadDemo} />);
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Blokeli' }));
@@ -42,7 +44,7 @@ describe('MeetingApp', () => {
   });
 
   it('searches meetings and selects the demo readout detail', async () => {
-    render(<MeetingApp />);
+    render(<MeetingApp loadWorkbench={loadDemo} />);
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Toplantı ara'), {
@@ -60,7 +62,7 @@ describe('MeetingApp', () => {
   });
 
   it('opens policy-aware export/share/delete action surfaces without enabling mutations', async () => {
-    render(<MeetingApp />);
+    render(<MeetingApp loadWorkbench={loadDemo} />);
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
 
     const actionRow = screen.getByLabelText('Toplantı aksiyonları');
@@ -91,7 +93,7 @@ describe('MeetingApp', () => {
   });
 
   it('clears an open policy panel when the selected meeting changes', async () => {
-    render(<MeetingApp />);
+    render(<MeetingApp loadWorkbench={loadDemo} />);
     expect(await screen.findByText('Demo veri')).toBeInTheDocument();
 
     const actionRow = screen.getByLabelText('Toplantı aksiyonları');
@@ -129,6 +131,7 @@ describe('MeetingApp', () => {
 
     render(
       <MeetingApp
+        loadWorkbench={loadDemo}
         resolveLiveStreamEndpoint={() => 'ws://live.example.test/ws/stream?token=redacted'}
         webSocketFactory={webSocketFactory}
       />,
@@ -208,6 +211,7 @@ describe('MeetingApp', () => {
 
     render(
       <MeetingApp
+        loadWorkbench={loadDemo}
         resolveLiveStreamEndpoint={resolveLiveStreamEndpoint}
         webSocketFactory={webSocketFactory}
       />,
@@ -275,6 +279,7 @@ describe('MeetingApp', () => {
 
     render(
       <MeetingApp
+        loadWorkbench={loadDemo}
         resolveLiveStreamEndpoint={() => 'ws://live.example.test/ws/stream'}
         webSocketFactory={webSocketFactory}
       />,
@@ -295,9 +300,9 @@ describe('MeetingApp', () => {
   it('surfaces API fallback as a visible non-acceptance state', async () => {
     const fallback = createDemoWorkbenchData('2026-06-29T00:00:00.000Z');
     fallback.source = {
-      mode: 'api-fallback',
+      mode: 'api-error',
       label: 'API ulaşılamadı',
-      detail: 'Demo veriyle devam ediliyor; canlı acceptance iddiası yok.',
+      detail: 'Canonical veri alınamadı; demo veriye geçilmedi.',
       checkedAt: '2026-06-29T00:00:00.000Z',
       endpoint: '/api/v1/meeting-intelligence/workbench',
     };
@@ -305,6 +310,116 @@ describe('MeetingApp', () => {
     render(<MeetingApp loadWorkbench={async () => fallback} />);
 
     expect(await screen.findByText('API ulaşılamadı')).toBeInTheDocument();
-    expect(screen.getByText(/canlı acceptance iddiası yok/i)).toBeInTheDocument();
+    expect(screen.getByText(/demo veriye geçilmedi/i)).toBeInTheDocument();
+  });
+
+  it('hydrates the selected canonical meeting once and surfaces partial detail', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: '2e5e58c6-1ac8-4d94-a493-48ae85d7207a',
+          title: 'Canonical toplantı',
+          status: 'COMPLETED',
+          scheduledStart: '2026-07-11T08:00:00Z',
+          scheduledEnd: '2026-07-11T08:30:00Z',
+        },
+      ],
+    })[0] as MeetingRecord;
+    const loadDetail = vi.fn().mockResolvedValue({
+      ...record,
+      detail: {
+        state: 'partial',
+        label: 'Detay kısmen hazır',
+        detail: 'Transcript yetkisi doğrulanamadı.',
+      },
+      actions: [
+        {
+          id: 'action-1',
+          label: 'Canonical aksiyon',
+          owner: 'user-1',
+          due: '2026-07-12',
+          state: 'open',
+          citations: [],
+          confidence: 0,
+        },
+      ],
+    });
+
+    render(
+      <MeetingApp
+        loadWorkbench={async () => ({
+          records: [record],
+          source: {
+            mode: 'api',
+            label: 'Canonical meeting-service',
+            detail: 'Canonical liste',
+            checkedAt: '2026-07-11T08:00:00Z',
+          },
+        })}
+        loadDetail={loadDetail}
+        subscribeAuthChanges={() => () => undefined}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    expect(await screen.findByText('Detay kısmen hazır')).toBeInTheDocument();
+    expect(screen.getByText('Canonical aksiyon')).toBeInTheDocument();
+    await waitFor(() => expect(loadDetail).toHaveBeenCalledTimes(1));
+  });
+
+  it('reloads canonical data when the shell auth identity changes', async () => {
+    const record = normalizeWorkbenchPayload({
+      content: [
+        {
+          id: '2e5e58c6-1ac8-4d94-a493-48ae85d7207a',
+          title: 'Yeni kimlik toplantısı',
+          status: 'SCHEDULED',
+          createdAt: '2026-07-11T08:00:00Z',
+        },
+      ],
+    })[0] as MeetingRecord;
+    const loadWorkbench = vi
+      .fn()
+      .mockResolvedValueOnce({
+        records: [],
+        source: {
+          mode: 'unauthorized',
+          label: 'Toplantı yetkisi gerekli',
+          detail: 'Oturum bekleniyor.',
+          checkedAt: '2026-07-11T08:00:00Z',
+        },
+      })
+      .mockResolvedValue({
+        records: [record],
+        source: {
+          mode: 'api',
+          label: 'Canonical meeting-service',
+          detail: 'Canonical liste',
+          checkedAt: '2026-07-11T08:01:00Z',
+        },
+      });
+    let authChanged: (() => void) | undefined;
+
+    render(
+      <MeetingApp
+        loadWorkbench={loadWorkbench}
+        loadDetail={async (meeting) => ({
+          ...meeting,
+          detail: { state: 'ready', label: 'Hazır', detail: 'Hazır' },
+        })}
+        subscribeAuthChanges={(listener) => {
+          authChanged = listener;
+          return () => undefined;
+        }}
+        resolveLiveStreamEndpoint={() => null}
+      />,
+    );
+
+    expect(await screen.findByText('Toplantı yetkisi gerekli')).toBeInTheDocument();
+    act(() => authChanged?.());
+    expect(
+      await screen.findByRole('heading', { name: 'Yeni kimlik toplantısı' }),
+    ).toBeInTheDocument();
+    expect(loadWorkbench).toHaveBeenCalledTimes(2);
   });
 });

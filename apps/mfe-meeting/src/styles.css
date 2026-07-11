@@ -18,6 +18,7 @@
   --meeting-info-text: oklch(47% 0.14 260deg);
   --meeting-info-dot: oklch(62% 0.17 260deg);
   --meeting-warning-bg: oklch(98% 0.04 98deg);
+  --meeting-warning-border: oklch(86% 0.11 90deg);
   --meeting-warning-text: oklch(43% 0.11 75deg);
   --meeting-warning-dot: oklch(75% 0.16 75deg);
   --meeting-danger-bg: oklch(97% 0.025 25deg);
@@ -153,6 +154,49 @@ button {
   border: 1px solid var(--meeting-border);
   border-radius: 8px;
   background: var(--meeting-surface);
+}
+
+.source-loading,
+.source-empty {
+  border-color: var(--meeting-border);
+  background: var(--meeting-surface-muted);
+  color: var(--meeting-text-action);
+}
+
+.source-unauthorized,
+.source-api-error {
+  border-color: var(--meeting-danger-border);
+  background: var(--meeting-danger-bg);
+  color: var(--meeting-danger-text);
+}
+
+.detail-status {
+  display: flex;
+  gap: 0.35rem;
+  flex-direction: column;
+  margin: 0 1.25rem 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--meeting-border);
+  background: var(--meeting-surface-muted);
+  color: var(--meeting-text-action);
+}
+
+.detail-status span {
+  color: inherit;
+  font-size: 0.82rem;
+}
+
+.detail-status-partial {
+  border-color: var(--meeting-warning-border);
+  background: var(--meeting-warning-bg);
+  color: var(--meeting-warning-text);
+}
+
+.detail-status-unauthorized,
+.detail-status-error {
+  border-color: var(--meeting-danger-border);
+  background: var(--meeting-danger-bg);
+  color: var(--meeting-danger-text);
 }
 
 .source-banner > div {

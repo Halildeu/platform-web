@@ -12,6 +12,7 @@ import { UsersAppOnDemand } from '../createUsersAppOnDemand';
 import { AccessAppOnDemand } from '../createAccessAppOnDemand';
 import { AuditAppOnDemand } from '../createAuditAppOnDemand';
 import { ReportingAppOnDemand } from '../createReportingAppOnDemand';
+import { createMeetingApp } from '../createMeetingApp';
 
 /**
  * PERF-INIT-V2 PR-B5b1 + PR-B5b1.5 + PR-B5b2a canary build-time
@@ -91,9 +92,9 @@ export const SchemaExplorerModule: React.ComponentType = __MFE_SCHEMA_EXPLORER_O
   ? SchemaExplorerAppOnDemand
   : createLazyRemoteModule('SchemaExplorer', () => import('mfe_schema_explorer/SchemaExplorerApp'));
 
-export const MeetingModule: React.ComponentType = createLazyRemoteModule(
-  'Meeting',
+export const MeetingModule: React.ComponentType = createMeetingApp(
   () => import('mfe_meeting/MeetingApp'),
+  () => import('mfe_meeting/shell-services'),
 );
 
 export const InterviewEvidenceModule: React.ComponentType = createLazyRemoteModule(

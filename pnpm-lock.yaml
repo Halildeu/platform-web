@@ -580,6 +580,12 @@ importers:
 
   apps/mfe-meeting:
     dependencies:
+      '@mfe/shared-http':
+        specifier: '*'
+        version: link:../../packages/shared-http
+      '@mfe/shared-types':
+        specifier: '*'
+        version: link:../../packages/shared-types
       lucide-react:
         specifier: 1.7.0
         version: 1.7.0(react@18.2.0)
@@ -4747,8 +4753,8 @@ packages:
     resolution: {integrity: sha512-x0HvcHqVJNTPk/Bw8JbLWlWoo6Wwnsug0fnYYro1HBrjxZ3G7/AZk7Ahv8JwDe1uIcz8eBqvu86FuF1POiG7vQ==}
     engines: {node: '>=6.0'}
 
-  adm-zip@0.5.17:
-    resolution: {integrity: sha512-+Ut8d9LLqwEvHHJl1+PIHqoyDxFgVN847JTVM3Izi3xHDWPE4UtzzXysMZQs64DMcrJfBeS/uoEP4AD3HQHnQQ==}
+  adm-zip@0.5.18:
+    resolution: {integrity: sha512-ufJnssQGbxzLNS1Ho9bCtX4rQKCCvoVuDLHoJyc3F9dOGDB4BkWs2Ci0kv53lqocAEQ/Cbi+I2XCsNYGqVYqng==}
     engines: {node: '>=12.0'}
 
   ag-charts-community@12.3.1:
@@ -5268,8 +5274,8 @@ packages:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
     engines: {node: '>=6.0'}
 
-  chromedriver@150.0.0:
-    resolution: {integrity: sha512-MhHObBXNUOxJFzHuwRC+BXRFJNJgbgIr+y7B/MB++QioxbHz2R3Zj4WyJJVGqkjZyoVAF4zc46egxJ1GSFG7+w==}
+  chromedriver@150.0.3:
+    resolution: {integrity: sha512-i2L979d6YDTVVUDUPWXz75HGKKVhjNXo74gLiy/f8Adb5zHLU+h3ABdg8RRoiegtjJB0m9vUEiPTdecD0ifa3w==}
     engines: {node: '>=22'}
     hasBin: true
 
@@ -10391,7 +10397,7 @@ snapshots:
     dependencies:
       '@axe-core/webdriverjs': 4.11.3(selenium-webdriver@4.41.0)
       axe-core: 4.11.4
-      chromedriver: 150.0.0
+      chromedriver: 150.0.3
       colors: 1.4.0
       commander: 9.5.0
       dotenv: 17.4.2
@@ -13739,7 +13745,7 @@ snapshots:
 
   adm-zip@0.5.10: {}
 
-  adm-zip@0.5.17: {}
+  adm-zip@0.5.18: {}
 
   ag-charts-community@12.3.1:
     dependencies:
@@ -14337,10 +14343,10 @@ snapshots:
 
   chrome-trace-event@1.0.4: {}
 
-  chromedriver@150.0.0:
+  chromedriver@150.0.3:
     dependencies:
       '@testim/chrome-version': 1.1.4
-      adm-zip: 0.5.17
+      adm-zip: 0.5.18
       axios: 1.17.0
       compare-versions: 6.1.1
       proxy-agent: 8.0.2
