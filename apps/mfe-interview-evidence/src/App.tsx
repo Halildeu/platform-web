@@ -4,6 +4,7 @@ import { SegmentView } from './segment-view/SegmentView';
 import { ReviewWorkspace } from './review/ReviewWorkspace';
 import { ConsentRecordingPanel } from './ingest/ConsentRecordingPanel';
 import { LiveConsentUploadPanel } from './ingest/LiveConsentUploadPanel';
+import { LiveCitationPanel } from './review/LiveCitationPanel';
 import { DsarPanel } from './dsar/DsarPanel';
 import { TranscriptList } from './transcripts/TranscriptList';
 import {
@@ -322,16 +323,27 @@ function LiveReadApp() {
             </Card>
           )}
 
+          {selectedKey && (
+            <Card variant="outlined" padding="md">
+              <LiveCitationPanel
+                key={selectedKey}
+                interviewId={interviewId}
+                transcriptKey={selectedKey}
+              />
+            </Card>
+          )}
+
           <Card variant="outlined" padding="md">
             <Stack direction="column" gap={2} data-testid="live-write-surfaces-note">
               <Badge variant="info">
-                Canlı yüzeyler: okuma + rıza/yükleme/transkripsiyon (39d-7a)
+                Canlı yüzeyler: okuma + rıza/yükleme/transkripsiyon (39d-7a) + kanıt-alıntı taslağı
+                (39d-7b)
               </Badge>
               <Text as="p" size="sm" variant="secondary">
-                İnceleme (F4/F5) ve DSAR (F10) yazma yüzeyleri canlı modda 39d-7b/7c'de bağlanır;
-                demo motorlar canlı transkript anahtarlarını tanımadığı için burada gösterilmezler
-                (yanıltıcı karışım yerine dürüst sınır). Tam ürün akışı demo modunda çalışır
-                durumda.
+                İnsan-onay yolları (F5 APPROVE/EDIT/REJECT + finalize) 39d-7b-2'de, DSAR (F10)
+                39d-7c'de bağlanır; demo motorlar canlı transkript anahtarlarını tanımadığı için
+                burada gösterilmezler (yanıltıcı karışım yerine dürüst sınır). Tam ürün akışı demo
+                modunda çalışır durumda.
               </Text>
             </Stack>
           </Card>
