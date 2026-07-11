@@ -51,8 +51,10 @@ export function TranscriptList({
               >
                 {t.label} — <code>{t.transcriptKey}</code>
               </Button>
-              <Badge variant={t.origin === 'DEMO' ? 'muted' : 'info'}>
-                {t.origin === 'DEMO' ? 'Demo' : 'Yükleme'}
+              <Badge
+                variant={t.origin === 'DEMO' ? 'muted' : t.origin === 'LIVE' ? 'success' : 'info'}
+              >
+                {t.origin === 'DEMO' ? 'Demo' : t.origin === 'LIVE' ? 'Canlı' : 'Yükleme'}
               </Badge>
               {t.erasure && (
                 <Badge variant="error" data-testid={`transcript-erased-${t.transcriptKey}`}>

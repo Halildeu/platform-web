@@ -121,6 +121,10 @@ declare module 'mfe_meeting/shell-services' {
   export function configureShellServices(services: Partial<RemoteShellServices>): void;
 }
 
+declare module 'mfe_interview_evidence/shell-services' {
+  export function configureShellServices(services: Partial<RemoteShellServices>): void;
+}
+
 declare module 'mfe_endpoint_admin/EndpointAdminApp' {
   const EndpointAdminApp: React.ComponentType;
   export default EndpointAdminApp;

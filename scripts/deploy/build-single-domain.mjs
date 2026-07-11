@@ -433,6 +433,19 @@ const shellEnv = {
         VITE_SHELL_ENABLE_INTERVIEW_EVIDENCE_REMOTE: '1',
       }
     : {}),
+  // 39d-6: STAGE'de canlı /api/ats READ EXPLICIT enjekte edilir (Codex 019f50b7:
+  // "STAGE olduğu için otomatik" değil, STAGE dalının açık değer yazması).
+  // Prod'da anahtar YOK → MFE default 'demo' (fail-safe). iv-smoke-1 = 39d-4
+  // D29 smoke'unun SENTETİK fixture interview'u (gerçek aday verisi DEĞİL;
+  // ATS-0016/G0 sınırı) — uygulama koduna hardcode edilmez, buradan enjekte edilir.
+  ...(interviewEvidenceEnabled && publicOrigin === STAGE_PUBLIC_ORIGIN
+    ? {
+        INTERVIEW_EVIDENCE_DATA_MODE: 'live',
+        VITE_INTERVIEW_EVIDENCE_DATA_MODE: 'live',
+        INTERVIEW_EVIDENCE_INTERVIEW_ID: 'iv-smoke-1',
+        VITE_INTERVIEW_EVIDENCE_INTERVIEW_ID: 'iv-smoke-1',
+      }
+    : {}),
   // Faz 24 mfe-meeting — interview-evidence mirror. Kapalıysa (prod default) boş
   // spread → shell vite.config buildRemotes() STUB üretir, AppRouter /home'a
   // Navigate eder; testai'de flag ON → gerçek mount (/admin/meetings, MEETING/TRANSCRIPT modül).

@@ -528,6 +528,9 @@ importers:
       '@mfe/design-system':
         specifier: '*'
         version: link:../../packages/design-system
+      '@mfe/shared-http':
+        specifier: '*'
+        version: link:../../packages/shared-http
       '@mfe/shared-types':
         specifier: '*'
         version: link:../../packages/shared-types
