@@ -23,6 +23,13 @@ export interface SourcedOutput {
   text: string;
   citations: EvidenceCitation[];
   confidence: number;
+  kind?: 'ai-summary' | 'canonical-description' | 'pending';
+}
+
+export interface MeetingDetailStatus {
+  state: 'idle' | 'loading' | 'ready' | 'partial' | 'unauthorized' | 'error';
+  label: string;
+  detail: string;
 }
 
 export interface MeetingDecision {
@@ -73,6 +80,7 @@ export interface MeetingRecord {
   status: MeetingStatus;
   language: string;
   source: 'desktop' | 'web' | 'calendar';
+  detail?: MeetingDetailStatus;
   transcriptFeed: TranscriptFeed;
   transcript: TranscriptSegment[];
   summary: SourcedOutput;

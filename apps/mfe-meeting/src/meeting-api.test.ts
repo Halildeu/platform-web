@@ -2,131 +2,200 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   createDemoWorkbenchData,
+  loadMeetingDetail,
   loadMeetingWorkbenchData,
   normalizeWorkbenchPayload,
 } from './meeting-api';
+import type { MeetingRecord } from './meeting-workbench';
+import type { MeetingShellServices } from './shell-services';
 
-describe('meeting workbench API boundary', () => {
-  it('returns clearly labeled demo data when no endpoint is configured', async () => {
+function createServices(get: ReturnType<typeof vi.fn>): MeetingShellServices {
+  return {
+    http: { get } as unknown as MeetingShellServices['http'],
+    auth: {
+      getToken: () => 'redacted-token',
+      ready: () => Promise.resolve({ ok: true }),
+      getEpoch: () => 1,
+    },
+  };
+}
+
+const canonicalMeeting = {
+  id: '2e5e58c6-1ac8-4d94-a493-48ae85d7207a',
+  title: 'Canonical toplantı',
+  description: 'Gerçek toplantı açıklaması',
+  status: 'COMPLETED',
+  scheduledStart: '2026-07-11T08:00:00Z',
+  scheduledEnd: '2026-07-11T08:30:00Z',
+  organizerSubject: 'user-1',
+  createdAt: '2026-07-11T07:00:00Z',
+};
+
+describe('meeting canonical API boundary', () => {
+  it('uses demo records only when demo mode is explicitly requested', async () => {
     const data = await loadMeetingWorkbenchData({ endpoint: null });
 
     expect(data.source.mode).toBe('demo');
-    expect(data.source.label).toBe('Demo veri');
-    expect(data.records.length).toBeGreaterThan(0);
+    expect(data.records).toEqual(createDemoWorkbenchData(data.source.checkedAt).records);
   });
 
-  it('normalizes API payloads while preserving citation metadata', () => {
+  it('normalizes the canonical meeting-service page without fabricating outputs', () => {
     const records = normalizeWorkbenchPayload({
-      meetings: [
-        {
-          id: 'api-meeting-1',
-          title: 'API toplantısı',
-          organizer: 'Platform',
-          startsAt: '2026-06-29T08:00:00+03:00',
-          durationMinutes: 15,
-          status: 'ready',
-          language: 'tr',
-          source: 'web',
-          transcriptFeed: { state: 'recorded', label: 'API', detail: 'endpoint' },
-          transcript: [
-            {
-              id: 'seg-api-1',
-              speaker: 'Product',
-              startedAtMs: 0,
-              status: 'final',
-              text: 'Karar kaynaklı biçimde gösterilecek.',
-            },
-          ],
-          summary: {
-            text: 'Kaynaklı API özeti.',
-            confidence: 0.92,
-            citations: [
-              {
-                segmentId: 'seg-api-1',
-                quote: 'Karar kaynaklı biçimde gösterilecek.',
-                confidence: 'high',
-              },
-            ],
-          },
-          decisions: [],
-          actions: [],
-          gates: [{ id: 'gate-api', label: 'API contract', state: 'pass' }],
-          policyActions: [
-            {
-              kind: 'export',
-              state: 'preview',
-              label: 'Dışa aktar',
-              detail: 'Ön inceleme',
-              requirement: 'Audit ready',
-              auditTag: 'MEETING_EXPORT_PREVIEW',
-            },
-          ],
-        },
-      ],
+      content: [canonicalMeeting],
+      page: 0,
+      size: 50,
+      totalElements: 1,
+      totalPages: 1,
     });
 
     expect(records).toHaveLength(1);
-    expect(records[0]?.summary.citations[0]?.segmentId).toBe('seg-api-1');
-    expect(records[0]?.gates[0]?.state).toBe('pass');
-    expect(records[0]?.policyActions[0]).toMatchObject({
-      kind: 'export',
-      state: 'preview',
-      auditTag: 'MEETING_EXPORT_PREVIEW',
-    });
-    expect(records[0]?.policyActions.map((action) => action.kind).sort()).toEqual([
-      'delete',
-      'export',
-      'share',
-    ]);
-    expect(records[0]?.policyActions.find((action) => action.kind === 'share')).toMatchObject({
-      state: 'pending',
-      auditTag: 'MEETING_SHARE_REQUESTED',
-    });
-  });
-
-  it('defaults missing policy actions to pending non-mutating states', () => {
-    const records = normalizeWorkbenchPayload([
-      {
-        id: 'api-meeting-2',
-        title: 'Policy fallback',
-        organizer: 'Platform',
-        startsAt: '2026-06-29T08:00:00+03:00',
-        durationMinutes: 15,
-        status: 'ready',
-        language: 'tr',
-        source: 'web',
-        transcriptFeed: { state: 'recorded', label: 'API', detail: 'endpoint' },
-        transcript: [],
-        summary: 'Policy bekliyor.',
-        decisions: [],
-        actions: [],
-        gates: [],
+    expect(records[0]).toMatchObject({
+      id: canonicalMeeting.id,
+      status: 'ready',
+      durationMinutes: 30,
+      summary: {
+        text: 'Gerçek toplantı açıklaması',
+        kind: 'canonical-description',
+        citations: [],
       },
-    ]);
-
-    expect(records[0]?.policyActions.map((action) => [action.kind, action.state])).toEqual([
-      ['export', 'pending'],
-      ['share', 'pending'],
-      ['delete', 'pending'],
-    ]);
+      decisions: [],
+      actions: [],
+    });
+    expect(records[0]?.gates).toContainEqual({
+      id: 'grounded-summary',
+      label: 'Kaynaklı özet',
+      state: 'pending',
+    });
   });
 
-  it('falls back visibly when the configured API endpoint cannot be read', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new Error('network'));
-    const data = await loadMeetingWorkbenchData({
-      endpoint: '/api/v1/meeting-intelligence/workbench',
-      fetcher,
-      timeoutMs: 50,
+  it('waits for auth and reads the canonical list through shell HTTP', async () => {
+    const get = vi.fn().mockResolvedValue({ data: { content: [canonicalMeeting] } });
+    const services = createServices(get);
+
+    const data = await loadMeetingWorkbenchData({ services });
+
+    expect(get).toHaveBeenCalledWith(
+      '/v1/admin/meetings?page=0&size=50',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
+    expect(data.source.mode).toBe('api');
+    expect(data.records[0]?.id).toBe(canonicalMeeting.id);
+  });
+
+  it('fails closed without demo fallback when canonical list is unavailable', async () => {
+    const get = vi.fn().mockRejectedValue(new Error('network'));
+    const data = await loadMeetingWorkbenchData({ services: createServices(get) });
+
+    expect(data.source.mode).toBe('api-error');
+    expect(data.records).toEqual([]);
+    expect(data.source.detail).toMatch(/demo veriye geçilmedi/i);
+  });
+
+  it('surfaces unauthorized auth readiness without issuing a request', async () => {
+    const get = vi.fn();
+    const services = createServices(get);
+    services.auth.ready = () => Promise.resolve({ ok: false, reason: 'unauthenticated' });
+
+    const data = await loadMeetingWorkbenchData({ services });
+
+    expect(get).not.toHaveBeenCalled();
+    expect(data.source.mode).toBe('unauthorized');
+    expect(data.records).toEqual([]);
+  });
+
+  it('hydrates only the selected meeting and keeps a failed transcript source visible', async () => {
+    const base = normalizeWorkbenchPayload({ content: [canonicalMeeting] })[0] as MeetingRecord;
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/sessions')) return Promise.resolve({ data: [{ id: 'session-1' }] });
+      if (url.endsWith('/actions')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'action-1',
+              description: 'Müşteri dönüşünü yap',
+              assigneeSubject: 'user-2',
+              status: 'OPEN',
+              dueAt: '2026-07-12T08:00:00Z',
+            },
+          ],
+        });
+      }
+      if (url.endsWith('/decisions')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'decision-1',
+              title: 'Pilot',
+              detail: 'Genel amaçlı kalacak',
+              decidedBySubject: 'user-1',
+            },
+          ],
+        });
+      }
+      return Promise.reject({ response: { status: 403 } });
     });
 
-    expect(fetcher).toHaveBeenCalledWith(
-      '/api/v1/meeting-intelligence/workbench',
-      expect.objectContaining({
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      }),
-    );
-    expect(data.source.mode).toBe('api-fallback');
-    expect(data.records).toEqual(createDemoWorkbenchData(data.source.checkedAt).records);
+    const detail = await loadMeetingDetail(base, { services: createServices(get) });
+
+    expect(detail.detail?.state).toBe('partial');
+    expect(detail.actions[0]?.label).toBe('Müşteri dönüşünü yap');
+    expect(detail.decisions[0]?.label).toBe('Pilot: Genel amaçlı kalacak');
+    expect(detail.transcript).toEqual([]);
+    expect(detail.gates).toContainEqual({
+      id: 'canonical-transcript',
+      label: 'Canonical transcript',
+      state: 'blocked',
+    });
+  });
+
+  it('continues transcript pagination instead of silently dropping later segments', async () => {
+    const base = normalizeWorkbenchPayload({ content: [canonicalMeeting] })[0] as MeetingRecord;
+    const get = vi.fn((url: string) => {
+      if (url.endsWith('/sessions') || url.endsWith('/actions') || url.endsWith('/decisions')) {
+        return Promise.resolve({ data: [] });
+      }
+      if (url.includes('page=0')) {
+        return Promise.resolve({
+          data: {
+            content: [
+              {
+                id: 'segment-1',
+                startTime: 1.5,
+                textDraft: 'Birinci segment',
+                status: 'DRAFT',
+              },
+            ],
+            totalElements: 201,
+            page: 0,
+            size: 200,
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          content: [
+            {
+              id: 'segment-201',
+              startTime: 601.25,
+              textFinal: 'Son segment',
+              status: 'FINALIZED',
+            },
+          ],
+          totalElements: 201,
+          page: 1,
+          size: 200,
+        },
+      });
+    });
+
+    const detail = await loadMeetingDetail(base, { services: createServices(get) });
+
+    expect(get).toHaveBeenCalledWith(expect.stringContaining('page=1&size=200'));
+    expect(detail.transcript.map((segment) => segment.text)).toEqual([
+      'Birinci segment',
+      'Son segment',
+    ]);
+    expect(detail.transcript[0]?.startedAtMs).toBe(1500);
+    expect(detail.detail?.state).toBe('ready');
   });
 });

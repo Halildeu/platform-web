@@ -18,7 +18,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import './styles.css';
 import {
-  createDemoWorkbenchData,
+  createPendingWorkbenchData,
+  loadMeetingDetail,
   loadMeetingWorkbenchData,
   type MeetingWorkbenchData,
 } from './meeting-api';
@@ -48,6 +49,7 @@ import {
   type MeetingStatus,
 } from './meeting-workbench';
 import { parseWsStreamEventMessage } from './ws-stream-events';
+import { getShellServices } from './shell-services';
 
 const statusFilters: Array<{ value: MeetingStatus | 'all'; label: string }> = [
   { value: 'all', label: 'Tümü' },
@@ -59,6 +61,8 @@ const statusFilters: Array<{ value: MeetingStatus | 'all'; label: string }> = [
 
 export interface MeetingAppProps {
   loadWorkbench?: () => Promise<MeetingWorkbenchData>;
+  loadDetail?: (meeting: MeetingRecord) => Promise<MeetingRecord>;
+  subscribeAuthChanges?: (listener: () => void) => () => void;
   resolveLiveStreamEndpoint?: (meeting: MeetingRecord) => string | null;
   webSocketFactory?: (endpoint: string) => MeetingWebSocket;
 }
@@ -73,6 +77,19 @@ interface MeetingWebSocket {
 
 const defaultResolveLiveStreamEndpoint = (meeting: MeetingRecord): string | null =>
   resolveMeetingLiveStreamEndpoint(meeting.id);
+
+const defaultSubscribeAuthChanges = (listener: () => void): (() => void) => {
+  const subscribe = getShellServices().auth.onTokenChange;
+  if (!subscribe) return () => undefined;
+  let initialSignal = true;
+  return subscribe(() => {
+    if (initialSignal) {
+      initialSignal = false;
+      return;
+    }
+    listener();
+  });
+};
 
 function formatStart(value: string): string {
   return new Intl.DateTimeFormat('tr-TR', {
@@ -283,7 +300,7 @@ function InsightPanel({ meeting }: { meeting: MeetingRecord }) {
   return (
     <section className="insight-panel" aria-label="Toplantı çıktıları">
       <div className="summary-block">
-        <h3>Özet</h3>
+        <h3>{meeting.summary.kind === 'canonical-description' ? 'Toplantı açıklaması' : 'Özet'}</h3>
         <p>{meeting.summary.text}</p>
         <CitationTrail
           meeting={meeting}
@@ -420,14 +437,19 @@ function ActionPolicyPanel({
 
 export default function MeetingApp({
   loadWorkbench = loadMeetingWorkbenchData,
+  loadDetail = loadMeetingDetail,
+  subscribeAuthChanges = defaultSubscribeAuthChanges,
   resolveLiveStreamEndpoint = defaultResolveLiveStreamEndpoint,
   webSocketFactory,
 }: MeetingAppProps = {}) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all');
-  const [workbench, setWorkbench] = useState<MeetingWorkbenchData>(() => createDemoWorkbenchData());
+  const [workbench, setWorkbench] = useState<MeetingWorkbenchData>(() =>
+    createPendingWorkbenchData(),
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [authRevision, setAuthRevision] = useState(0);
   const [selectedId, setSelectedId] = useState(workbench.records[0]?.id ?? '');
   const [selectedPolicyAction, setSelectedPolicyAction] = useState<MeetingPolicyActionKind | null>(
     null,
@@ -435,6 +457,11 @@ export default function MeetingApp({
   const [liveStreamToken, setLiveStreamToken] = useState(0);
   const [liveStream, setLiveStream] = useState<MeetingLiveStreamSnapshot>(() =>
     createLiveStreamSnapshot('not-configured'),
+  );
+
+  useEffect(
+    () => subscribeAuthChanges(() => setAuthRevision((value) => value + 1)),
+    [subscribeAuthChanges],
   );
 
   useEffect(() => {
@@ -459,7 +486,69 @@ export default function MeetingApp({
     return () => {
       cancelled = true;
     };
-  }, [loadWorkbench, reloadToken]);
+  }, [authRevision, loadWorkbench, reloadToken]);
+
+  useEffect(() => {
+    if (workbench.source.mode !== 'api' || !selectedId) return;
+    const selected = workbench.records.find((meeting) => meeting.id === selectedId);
+    if (!selected) return;
+    if (selected.detail && selected.detail.state !== 'idle') return;
+
+    let cancelled = false;
+    setWorkbench((current) => ({
+      ...current,
+      records: current.records.map((meeting) =>
+        meeting.id === selectedId
+          ? {
+              ...meeting,
+              detail: {
+                state: 'loading',
+                label: 'Canonical detay yükleniyor',
+                detail: 'Transcript, oturum, aksiyon ve karar kaynakları okunuyor.',
+              },
+            }
+          : meeting,
+      ),
+    }));
+
+    loadDetail(selected)
+      .then((hydrated) => {
+        if (cancelled) return;
+        setWorkbench((current) => ({
+          ...current,
+          records: current.records.map((meeting) =>
+            meeting.id === hydrated.id ? hydrated : meeting,
+          ),
+        }));
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const unauthorized =
+          error instanceof Error &&
+          (error.name === 'MeetingUnauthenticatedError' || /unauthenticated/i.test(error.message));
+        setWorkbench((current) => ({
+          ...current,
+          records: current.records.map((meeting) =>
+            meeting.id === selectedId
+              ? {
+                  ...meeting,
+                  detail: {
+                    state: unauthorized ? 'unauthorized' : 'error',
+                    label: unauthorized ? 'Detay yetkisi gerekli' : 'Detay alınamadı',
+                    detail: unauthorized
+                      ? 'MEETING veya TRANSCRIPT görüntüleme yetkisi doğrulanamadı.'
+                      : 'Canonical toplantı alt kaynaklarına ulaşılamadı.',
+                  },
+                }
+              : meeting,
+          ),
+        }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadDetail, reloadToken, selectedId, workbench.source.mode]);
 
   const filteredMeetings = useMemo(
     () => filterMeetings(workbench.records, { query, status: statusFilter }),
@@ -637,7 +726,7 @@ export default function MeetingApp({
         </div>
         <div>
           <Clock3 size={18} aria-hidden="true" />
-          <span>Aksiyon</span>
+          <span>{workbench.source.mode === 'api' ? 'Yüklü aksiyon' : 'Aksiyon'}</span>
           <strong>{stats.openActions}</strong>
         </div>
         <div>
@@ -703,6 +792,16 @@ export default function MeetingApp({
                 {statusLabel(renderedSelectedMeeting.status)}
               </span>
             </div>
+
+            {renderedSelectedMeeting.detail && renderedSelectedMeeting.detail.state !== 'ready' ? (
+              <section
+                className={`detail-status detail-status-${renderedSelectedMeeting.detail.state}`}
+                aria-label="Toplantı detay durumu"
+              >
+                <strong>{renderedSelectedMeeting.detail.label}</strong>
+                <span>{renderedSelectedMeeting.detail.detail}</span>
+              </section>
+            ) : null}
 
             {selectedPolicyAction ? (
               <ActionPolicyPanel
