@@ -66,9 +66,19 @@ function classify(error: unknown): {
 export function LiveCitationPanel({
   interviewId,
   transcriptKey,
+  onReceiptChange,
 }: {
   interviewId: string;
   transcriptKey: string;
+  /** 39d-7b-2 F4→F5 bağı: güncel receipt yukarı taşınır; invalidate'te null (Codex şart-3). */
+  onReceiptChange?: (
+    receipt: {
+      interviewId: string;
+      transcriptKey: string;
+      evidenceId: string;
+      citationKey: string;
+    } | null,
+  ) => void;
 }) {
   const [claim, setClaim] = useState('');
   const [state, setState] = useState<PanelState>({ phase: 'idle' });
@@ -89,10 +99,17 @@ export function LiveCitationPanel({
       (receipt) => {
         if (!alive.current) return;
         setState({ phase: 'suggested', receipt });
+        onReceiptChange?.({
+          interviewId,
+          transcriptKey,
+          evidenceId: receipt.evidenceId,
+          citationKey: receipt.citationKey,
+        });
       },
       (error) => {
         if (!alive.current) return;
         setState({ phase: 'error', ...classify(error) });
+        onReceiptChange?.(null);
       },
     );
   };
@@ -125,8 +142,10 @@ export function LiveCitationPanel({
           setClaim(e.target.value);
           // Codex iter: eski öneri/hata YENİ iddiaya bağlıymış gibi kalamaz —
           // claim değişimi görünür sonucu invalidate eder (yanıt pointer-only
-          // olduğundan ekrandan ayırt edilemezdi).
+          // olduğundan ekrandan ayırt edilemezdi). Receipt de yukarıda invalidate
+          // edilir (F5 open'ı bayat kanıta bağlanamaz).
           setState({ phase: 'idle' });
+          onReceiptChange?.(null);
         }}
         placeholder="örn. Aday deneyimini somut örneklerle anlattı"
         style={{ width: '100%', resize: 'vertical' }}
