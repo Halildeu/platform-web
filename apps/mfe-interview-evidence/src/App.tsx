@@ -5,6 +5,8 @@ import { ReviewWorkspace } from './review/ReviewWorkspace';
 import { ConsentRecordingPanel } from './ingest/ConsentRecordingPanel';
 import { LiveConsentUploadPanel } from './ingest/LiveConsentUploadPanel';
 import { LiveCitationPanel } from './review/LiveCitationPanel';
+import { LiveReviewCasePanel } from './review/LiveReviewCasePanel';
+import type { CitationReceiptRef } from './review/LiveReviewCasePanel';
 import { DsarPanel } from './dsar/DsarPanel';
 import { TranscriptList } from './transcripts/TranscriptList';
 import {
@@ -146,6 +148,8 @@ function LiveReadApp() {
   const [segments, setSegments] = useState<LiveSegmentsState>({ phase: 'idle' });
   const segCache = useRef(new Map<string, Segment[]>());
   const [reloadNonce, setReloadNonce] = useState(0);
+  // 39d-7b-2: güncel citation receipt'i (F4→F5 bağı); citation invalidate'inde null.
+  const [citationReceipt, setCitationReceipt] = useState<CitationReceiptRef | null>(null);
   // 39d-7a: transcribe sonrası hedef seçim — refresh'te bulunamazsa
   // CONSISTENCY hatası (sessizce ilk transkripte GEÇİLMEZ; Codex #6).
   const pendingTargetKey = useRef<string | null>(null);
@@ -329,6 +333,18 @@ function LiveReadApp() {
                 key={selectedKey}
                 interviewId={interviewId}
                 transcriptKey={selectedKey}
+                onReceiptChange={setCitationReceipt}
+              />
+            </Card>
+          )}
+
+          {selectedKey && (
+            <Card variant="outlined" padding="md">
+              <LiveReviewCasePanel
+                key={selectedKey}
+                interviewId={interviewId}
+                transcriptKey={selectedKey}
+                citationReceipt={citationReceipt}
               />
             </Card>
           )}
@@ -337,13 +353,12 @@ function LiveReadApp() {
             <Stack direction="column" gap={2} data-testid="live-write-surfaces-note">
               <Badge variant="info">
                 Canlı yüzeyler: okuma + rıza/yükleme/transkripsiyon (39d-7a) + kanıt-alıntı taslağı
-                (39d-7b)
+                (39d-7b) + insan incelemesi/finalize (39d-7b-2)
               </Badge>
               <Text as="p" size="sm" variant="secondary">
-                İnsan-onay yolları (F5 APPROVE/EDIT/REJECT + finalize) 39d-7b-2'de, DSAR (F10)
-                39d-7c'de bağlanır; demo motorlar canlı transkript anahtarlarını tanımadığı için
-                burada gösterilmezler (yanıltıcı karışım yerine dürüst sınır). Tam ürün akışı demo
-                modunda çalışır durumda.
+                Export (F7) ve DSAR (F10) canlı bağlanmadı (39d-7c+); demo motorlar canlı transkript
+                anahtarlarını tanımadığı için burada gösterilmezler (yanıltıcı karışım yerine dürüst
+                sınır). Tam ürün akışı demo modunda çalışır durumda.
               </Text>
             </Stack>
           </Card>
