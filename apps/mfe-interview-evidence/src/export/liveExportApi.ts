@@ -31,12 +31,21 @@ export interface LiveExportReceipt {
   evidenceId: string;
   packetDigest: string;
   claimCount: number;
+  /** 39d-13: true = makbuz idempotent-replay'le alındı (200+X-ATS-Replay). */
+  replayed: boolean;
 }
 
 export type ExportOutcomeCertainty = 'not-applied' | 'unresolved';
 
 export interface ClassifiedExportError {
-  kind: 'authn' | 'authz' | 'tenant-scope' | 'validation' | 'not-found' | 'generic';
+  kind:
+    | 'authn'
+    | 'authz'
+    | 'tenant-scope'
+    | 'validation'
+    | 'not-found'
+    | 'r4-in-progress'
+    | 'generic';
   detail: string;
   certainty: ExportOutcomeCertainty;
 }
@@ -172,8 +181,18 @@ export async function executeLiveExport(
     { headers: { 'Content-Type': 'application/json' } },
   );
   const d = response.data;
+  // 39d-13 (Codex A-kararı): 200 YALNIZ X-ATS-Replay:true ile meşru (idempotent
+  // replay — backend #107); header'sız-200 ve header'lı-201 kontrat-dışı.
+  const replayHeader = String(
+    (response as { headers?: Record<string, unknown> }).headers?.['x-ats-replay'] ?? '',
+  )
+    .trim()
+    .toLowerCase();
+  const replayed = response.status === 200;
   if (
-    response.status !== 201 ||
+    (response.status !== 201 && response.status !== 200) ||
+    (response.status === 200 && replayHeader !== 'true') ||
+    (response.status === 201 && replayHeader === 'true') ||
     typeof d?.artifactKey !== 'string' ||
     !d.artifactKey.trim() ||
     typeof d?.evidenceId !== 'string' ||
@@ -186,7 +205,7 @@ export async function executeLiveExport(
     (d.claimCount as number) < 1
   ) {
     throw new AtsContractError(
-      'export cevabı beklenen 201 {artifactKey, evidenceId, packetDigest(64-hex), claimCount≥1} şeklinde değil',
+      'export cevabı beklenen 201-created / 200+X-ATS-Replay {artifactKey, evidenceId, packetDigest(64-hex), claimCount≥1} şeklinde değil',
     );
   }
   return {
@@ -194,6 +213,7 @@ export async function executeLiveExport(
     evidenceId: d.evidenceId,
     packetDigest: d.packetDigest,
     claimCount: d.claimCount as number,
+    replayed,
   };
 }
 
@@ -264,6 +284,17 @@ export function classifyExportError(error: unknown): ClassifiedExportError {
       detail:
         'İstenen kaynaklardan en az biri tenant/mülakat kapsamı ihlali bildirdi; export sonucunun uygulanıp uygulanmadığı doğrulanamadı.',
       certainty: 'unresolved', // export akışında üretim noktası kanıtsız — fail-closed
+    };
+  }
+  if (status === 409 && code === 'UNSUPPORTED_IN_GATE') {
+    // 39d-11: export kaydı var ama EXPORTED geçişi tamamlanmamış (R4) —
+    // her retry deterministik 409; onarım onay-kapılı repair yolu.
+    return {
+      kind: 'r4-in-progress',
+      detail:
+        'Export kaydı var ama geçiş tamamlanmamış (R4): makbuz durumu için makbuz sorgusu' +
+        ' (INCOMPLETE); onarım onay-kapılı repair adımıyla yapılır. Yeniden üretim yapılmaz.',
+      certainty: 'unresolved',
     };
   }
   if (status === 404 && code === 'NOT_FOUND') {

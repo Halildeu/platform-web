@@ -136,7 +136,7 @@ describe('executeLiveExport — client validasyonları (istek atılmadan)', () =
   test('başarı: 14-alan context profil+kullanıcı girdilerinden; dedupe-sorted citationKeys; strict receipt', async () => {
     httpPost.mockResolvedValueOnce({ status: 201, data: OK_RECEIPT });
     const r = await executeLiveExport('iv-1', 'case-1', ['iv-1/cit-1', 'iv-1/cit-1'], ctx());
-    expect(r).toEqual(OK_RECEIPT);
+    expect(r).toEqual({ ...OK_RECEIPT, replayed: false });
     const [url, body] = httpPost.mock.calls[0] as [string, Record<string, unknown>];
     expect(url).toBe('/ats/v1/interviews/iv-1/export');
     expect(body.citationKeys).toEqual(['iv-1/cit-1']); // dedupe
@@ -369,5 +369,53 @@ describe('fetchExportReceipt — 39d-8b makbuz-kurtarma exact-matrisi', () => {
     });
     expect((await fetchExportReceipt('iv-1', 'case-1')).kind).toBe('authn');
     expect(httpGet).not.toHaveBeenCalled();
+  });
+});
+describe('executeLiveExport — 39d-13 replay kabulü (200+X-ATS-Replay zorunlu-header)', () => {
+  test('200 + x-ats-replay:true → replayed:true makbuz', async () => {
+    httpPost.mockResolvedValueOnce({
+      status: 200,
+      data: OK_RECEIPT,
+      headers: { 'x-ats-replay': 'true' },
+    });
+    const r = await executeLiveExport('iv-1', 'case-1', ['iv-1/cit-1'], ctx());
+    expect(r.replayed).toBe(true);
+    expect(r.artifactKey).toBe('art-1');
+  });
+
+  test("201 normal üretim → replayed:false; header'lı-201 çelişki → ContractError", async () => {
+    httpPost.mockResolvedValueOnce({ status: 201, data: OK_RECEIPT, headers: {} });
+    expect((await executeLiveExport('iv-1', 'case-1', ['iv-1/cit-1'], ctx())).replayed).toBe(false);
+    httpPost.mockResolvedValueOnce({
+      status: 201,
+      data: OK_RECEIPT,
+      headers: { 'x-ats-replay': 'true' },
+    });
+    await expect(executeLiveExport('iv-1', 'case-1', ['iv-1/cit-1'], ctx())).rejects.toBeInstanceOf(
+      AtsContractError,
+    );
+  });
+
+  test("200 header'sız / header!=true → ContractError (unresolved sınıfı)", async () => {
+    httpPost.mockResolvedValueOnce({ status: 200, data: OK_RECEIPT, headers: {} });
+    await expect(executeLiveExport('iv-1', 'case-1', ['iv-1/cit-1'], ctx())).rejects.toBeInstanceOf(
+      AtsContractError,
+    );
+    httpPost.mockResolvedValueOnce({
+      status: 200,
+      data: OK_RECEIPT,
+      headers: { 'x-ats-replay': 'FALSE' },
+    });
+    await expect(executeLiveExport('iv-1', 'case-1', ['iv-1/cit-1'], ctx())).rejects.toBeInstanceOf(
+      AtsContractError,
+    );
+  });
+
+  test('exact 409+UNSUPPORTED_IN_GATE → r4-in-progress + unresolved + reason yankısız', () => {
+    const c = classifyExportError({
+      response: { status: 409, data: { error: 'UNSUPPORTED_IN_GATE', reason: 'GIZLI' } },
+    });
+    expect([c.kind, c.certainty]).toEqual(['r4-in-progress', 'unresolved']);
+    expect(c.detail).not.toMatch(/GIZLI/);
   });
 });

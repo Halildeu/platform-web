@@ -106,6 +106,7 @@ const ERR_BADGE: Record<ClassifiedExportError['kind'], string> = {
   'tenant-scope': 'Kapsam güvenlik engeli',
   validation: 'Geçersiz istek',
   'not-found': 'Bulunamadı',
+  'r4-in-progress': 'Onarım gerekli (R4)',
   generic: 'İşlem başarısız',
 };
 
@@ -398,16 +399,79 @@ export function LiveExportPanel({
     setReceiptNote(result.detail);
   };
 
+  /**
+   * 39d-13 güvenli-retry: backend idempotent-replay (#107) CANLI olduğundan
+   * frozen AYNI gövdeyle POST artık güvenli — 200+X-ATS-Replay→makbuz;
+   * 201→makbuz (ilk istek hiç uygulanmamıştı); 409→R4-notu (kilit korunur);
+   * diğer her şey mevcut certainty-matrisi. Üç recovery aksiyonu (makbuz-GET /
+   * reconcile-GET / retry-POST) ORTAK mutex+epoch kullanır (Codex şartı):
+   * bayat sonuç hiçbir state/guard mutasyonu yapamaz.
+   */
+  const retryExportSafely = (confirmation: FrozenExportConfirmation) => {
+    if (receiptInFlight.current) return;
+    receiptInFlight.current = true;
+    const epoch = ++receiptEpoch.current;
+    const snapshot = { interviewId: confirmation.interviewId, caseKey: confirmation.caseKey };
+    setReceiptNote(null);
+    setReceiptBusy(true);
+    const mappingObj = mappingFromEntries(confirmation.citationCriterion);
+    executeLiveExport(confirmation.interviewId, confirmation.caseKey, confirmation.citationKeys, {
+      profile: confirmation.profile,
+      consentRefs: confirmation.consentRefs,
+      wormChainRefs: confirmation.wormChainRefs,
+      citationCriterion: mappingObj,
+    }).then(
+      (receipt) => {
+        receiptInFlight.current = false;
+        if (!alive.current) return;
+        if (
+          epoch !== receiptEpoch.current ||
+          snapshot.interviewId !== interviewIdRef.current ||
+          (selectedCaseRef.current && snapshot.caseKey !== selectedCaseRef.current)
+        ) {
+          return;
+        }
+        setReceiptBusy(false);
+        guardRef.current.clear(guardId(snapshot.interviewId, snapshot.caseKey));
+        setError(null);
+        setState({ phase: 'completed', receipt });
+        reloadCases().then((ok) => {
+          if (alive.current && !ok) setStaleListNote(true);
+        });
+      },
+      (err) => {
+        receiptInFlight.current = false;
+        if (!alive.current) return;
+        if (
+          epoch !== receiptEpoch.current ||
+          snapshot.interviewId !== interviewIdRef.current ||
+          (selectedCaseRef.current && snapshot.caseKey !== selectedCaseRef.current)
+        ) {
+          return;
+        }
+        setReceiptBusy(false);
+        const classified = classifyExportError(err);
+        // Frozen AYNI gövde → conflict beklenmez; her hata kilidi KORUR,
+        // yalnız not gösterilir (retry idempotent — buton yeniden aktif).
+        setReceiptNote(classified.detail);
+      },
+    );
+  };
+
   /** Ambiguous'tan çıkışın diğer yolu: authoritative review-cases GET'i (POST retry ASLA). */
   const reconcile = async (confirmation: FrozenExportConfirmation) => {
+    if (receiptInFlight.current) return;
+    receiptInFlight.current = true;
     let cases: LiveReviewCaseSummary[];
     try {
       cases = await fetchLiveReviewCases(interviewId);
     } catch (error) {
-      // GET hatası — ambiguous kalır; yalnız GET yeniden denenebilir (POST asla).
+      receiptInFlight.current = false;
+      // GET hatası — ambiguous kalır; yalnız GET yeniden denenebilir.
       if (alive.current) setList(classifyReviewListError(error));
       return;
     }
+    receiptInFlight.current = false;
     if (!alive.current) return;
     setList({ phase: 'ready', cases });
     const found = cases.find((c) => c.caseKey === confirmation.caseKey);
@@ -548,6 +612,16 @@ export function LiveExportPanel({
                 </Button>
               </div>
               {receiptRecovery(state.confirmation.caseKey)}
+              <div>
+                <Button
+                  data-testid="export-safe-retry"
+                  variant="secondary"
+                  disabled={receiptBusy}
+                  onClick={() => retryExportSafely(state.confirmation)}
+                >
+                  Güvenli yeniden dene (idempotent)
+                </Button>
+              </div>
             </Stack>
           )}
 
@@ -575,7 +649,11 @@ export function LiveExportPanel({
 
           {state.phase === 'completed' && (
             <Stack direction="column" gap={2} data-testid="export-completed-receipt">
-              <Badge variant="success">Kanıt paketi üretildi — vaka EXPORTED</Badge>
+              <Badge variant="success">
+                {state.receipt.replayed
+                  ? 'Makbuz idempotent-replay ile alındı — vaka EXPORTED'
+                  : 'Kanıt paketi üretildi — vaka EXPORTED'}
+              </Badge>
               <Text as="p" size="sm">
                 Artifact: <code>{keyTail(state.receipt.artifactKey)}</code> · kanıt:{' '}
                 <code>{keyTail(state.receipt.evidenceId)}</code> · packet digest:{' '}
