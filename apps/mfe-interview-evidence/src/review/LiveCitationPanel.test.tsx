@@ -140,6 +140,7 @@ describe('LiveCitationPanel — AI-taslak dili + hata sınıfları (Codex 019f50
         transcriptKey: 'iv-1/tr-a',
         evidenceId: 'ev-9',
         citationKey: RECEIPT.citationKey,
+        entailment: 'SUPPORTED',
       }),
     );
   });
