@@ -370,6 +370,7 @@ function LiveReadApp() {
             <LiveExportPanel
               key={interviewId}
               interviewId={interviewId}
+              selectedTranscriptKey={selectedKey || null}
               profileResolution={exportProfile}
               citationSuggestion={
                 citationReceipt && citationReceipt.entailment !== 'INSUFFICIENT'

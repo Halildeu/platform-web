@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Stack, Text } from '@mfe/design-system';
 import { classifyExportError, executeLiveExport } from './liveExportApi';
+import { isAuthnError, isAuthzError } from '../transcripts/liveTranscriptApi';
 import type { ClassifiedExportError, LiveExportReceipt } from './liveExportApi';
 import type { ExportProfileResolution, ExportProfileV1 } from './exportProfile';
 import { fetchLiveReviewCases } from '../review/liveReviewApi';
@@ -52,7 +53,44 @@ interface FrozenExportConfirmation {
 type ListState =
   | { phase: 'loading' }
   | { phase: 'ready'; cases: LiveReviewCaseSummary[] }
-  | { phase: 'error'; detail: string };
+  | { phase: 'error'; kind: 'authn' | 'authz' | 'generic'; detail: string };
+
+/** Review-list GET hataları (reconciliation dahil): ats.export.write yeterli
+ *  DEĞİLDİR — liste ats.review.read ister; kullanıcı doğru yönlendirilir. */
+function classifyReviewListError(error: unknown): Extract<ListState, { phase: 'error' }> {
+  if (isAuthnError(error)) {
+    return {
+      phase: 'error',
+      kind: 'authn',
+      detail: 'Oturum doğrulanamadı — yeniden giriş gerekebilir; rol ataması bu hatayı çözmez.',
+    };
+  }
+  if (isAuthzError(error)) {
+    return {
+      phase: 'error',
+      kind: 'authz',
+      detail: 'Vaka listesini görüntülemek için ats.review.read yetkisi gerekli.',
+    };
+  }
+  return { phase: 'error', kind: 'generic', detail: 'Vaka listesi okunamadı.' };
+}
+
+/** Null-prototype own-property map — panel yolu da API yoluyla AYNI güvenlikte
+ *  (__proto__/constructor/prototype normal veri anahtarı; Codex 7d blocker-2). */
+function mappingFromEntries(
+  entries: readonly (readonly [string, string])[],
+): Record<string, string> {
+  const result = Object.create(null) as Record<string, string>;
+  for (const [key, value] of entries) {
+    Object.defineProperty(result, key, {
+      value,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return result;
+}
 
 const ERR_BADGE: Record<ClassifiedExportError['kind'], string> = {
   authn: 'Oturum hatası',
@@ -68,13 +106,16 @@ const guardId = (interviewId: string, caseKey: string) =>
 
 export function LiveExportPanel({
   interviewId,
+  selectedTranscriptKey,
   profileResolution,
   citationSuggestion,
   guard,
 }: {
   interviewId: string;
+  /** Öneri yalnız GÖRÜNTÜLENEN transkriptin receipt'i için (stale-transcript önerisi yok). */
+  selectedTranscriptKey: string | null;
   profileResolution: ExportProfileResolution;
-  /** 7b receipt'i — yalnız AYNI interview bağlamında öneri (INSUFFICIENT önerilmez — App filtreler). */
+  /** 7b receipt'i — INSUFFICIENT önerilmez (App filtreler); transcript eşleşmesi burada. */
   citationSuggestion: CitationReceiptRef | null;
   guard?: UnresolvedErasureGuard;
 }) {
@@ -110,9 +151,9 @@ export function LiveExportPanel({
       if (!alive.current) return true;
       setList({ phase: 'ready', cases });
       return true;
-    } catch {
+    } catch (error) {
       if (alive.current) {
-        setList({ phase: 'error', detail: 'Vaka listesi okunamadı.' });
+        setList(classifyReviewListError(error));
       }
       return false;
     }
@@ -125,9 +166,9 @@ export function LiveExportPanel({
       (cases) => {
         if (!cancelled && alive.current) setList({ phase: 'ready', cases });
       },
-      () => {
+      (error) => {
         if (!cancelled && alive.current) {
-          setList({ phase: 'error', detail: 'Vaka listesi okunamadı.' });
+          setList(classifyReviewListError(error));
         }
       },
     );
@@ -161,6 +202,14 @@ export function LiveExportPanel({
   };
 
   const selectCase = (caseKey: string) => {
+    if (caseKey !== selectedCaseKey) {
+      // Case-spesifik pointer'lar başka vakaya TAŞINMAZ (Codex 7d şartı):
+      setCitationText('');
+      setConsentText('');
+      setWormText('');
+      setMapping({});
+      setStaleListNote(false);
+    }
     setSelectedCaseKey(caseKey);
     setError(null);
     setState((s) => (s.phase === 'confirming' ? { phase: 'editing' } : s));
@@ -239,8 +288,7 @@ export function LiveExportPanel({
       return;
     }
     setState({ phase: 'submitting', confirmation });
-    const mappingObj: Record<string, string> = {};
-    for (const [k, v] of confirmation.citationCriterion) mappingObj[k] = v;
+    const mappingObj = mappingFromEntries(confirmation.citationCriterion);
     // İkinci tık FROZEN snapshot'ı gönderir — canlı inputlar yeniden okunmaz.
     executeLiveExport(confirmation.interviewId, confirmation.caseKey, confirmation.citationKeys, {
       profile: confirmation.profile,
@@ -278,9 +326,9 @@ export function LiveExportPanel({
     let cases: LiveReviewCaseSummary[];
     try {
       cases = await fetchLiveReviewCases(interviewId);
-    } catch {
+    } catch (error) {
       // GET hatası — ambiguous kalır; yalnız GET yeniden denenebilir (POST asla).
-      if (alive.current) setList({ phase: 'error', detail: 'Vaka listesi okunamadı.' });
+      if (alive.current) setList(classifyReviewListError(error));
       return;
     }
     if (!alive.current) return;
@@ -417,7 +465,13 @@ export function LiveExportPanel({
               )}
               {list.phase === 'error' && (
                 <Stack direction="column" gap={2} data-testid="export-list-error">
-                  <Badge variant="error">Liste okunamadı</Badge>
+                  <Badge variant="error">
+                    {list.kind === 'authn'
+                      ? 'Oturum hatası'
+                      : list.kind === 'authz'
+                        ? 'Yetki hatası'
+                        : 'Liste okunamadı'}
+                  </Badge>
                   <Text as="p" size="sm">
                     {list.detail}
                   </Text>
@@ -482,25 +536,27 @@ export function LiveExportPanel({
                   }}
                   style={{ width: '100%', resize: 'vertical' }}
                 />
-                {citationSuggestion && citationSuggestion.interviewId === interviewId && (
-                  <div>
-                    <Button
-                      variant="ghost"
-                      data-testid="export-citation-suggest"
-                      disabled={busy || citationKeys.includes(citationSuggestion.citationKey)}
-                      onClick={() => {
-                        setCitationText((prev) =>
-                          prev.trim()
-                            ? `${prev.replace(/\n+$/, '')}\n${citationSuggestion.citationKey}`
-                            : citationSuggestion.citationKey,
-                        );
-                        inputsChanged();
-                      }}
-                    >
-                      Son kanıt-alıntıyı ekle ({keyTail(citationSuggestion.citationKey)})
-                    </Button>
-                  </div>
-                )}
+                {citationSuggestion &&
+                  citationSuggestion.interviewId === interviewId &&
+                  citationSuggestion.transcriptKey === selectedTranscriptKey && (
+                    <div>
+                      <Button
+                        variant="ghost"
+                        data-testid="export-citation-suggest"
+                        disabled={busy || citationKeys.includes(citationSuggestion.citationKey)}
+                        onClick={() => {
+                          setCitationText((prev) =>
+                            prev.trim()
+                              ? `${prev.replace(/\n+$/, '')}\n${citationSuggestion.citationKey}`
+                              : citationSuggestion.citationKey,
+                          );
+                          inputsChanged();
+                        }}
+                      >
+                        Son kanıt-alıntıyı ekle ({keyTail(citationSuggestion.citationKey)})
+                      </Button>
+                    </div>
+                  )}
               </Stack>
 
               {citationKeys.length > 0 && (

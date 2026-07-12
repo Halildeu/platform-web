@@ -75,6 +75,7 @@ const renderPanel = (
   over: {
     guard?: FakeGuard;
     profile?: ExportProfileResolution;
+    transcriptKey?: string | null;
     suggestion?: {
       interviewId: string;
       transcriptKey: string;
@@ -87,6 +88,7 @@ const renderPanel = (
   const utils = render(
     <LiveExportPanel
       interviewId="iv-1"
+      selectedTranscriptKey={over.transcriptKey === undefined ? 'iv-1/tr-a' : over.transcriptKey}
       profileResolution={over.profile ?? PROFILE_OK}
       citationSuggestion={over.suggestion ?? null}
       guard={guard}
@@ -175,8 +177,27 @@ describe('vaka seçimi + girdi zorunlulukları', () => {
     expect(screen.getByTestId('export-error')).toHaveTextContent(/eşlenmeli/);
   });
 
-  test("7b receipt önerisi yalnız aynı interview; tıkla → textarea'ya eklenir", async () => {
+  test("7b receipt önerisi yalnız aynı interview+transcript; tıkla → textarea'ya eklenir", async () => {
+    const SUG = {
+      interviewId: 'iv-1',
+      transcriptKey: 'iv-1/tr-a',
+      evidenceId: 'ev-c',
+      citationKey: 'iv-1/cit-9',
+    };
+    const first = renderPanel({ suggestion: SUG });
+    await waitFor(() => expect(screen.getByTestId('export-citation-suggest')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('export-citation-suggest'));
+    expect(screen.getByTestId('export-citations-input')).toHaveValue('iv-1/cit-9');
+    first.unmount();
+    // Görüntülenen transkript FARKLI → stale-transcript önerisi GÖRÜNMEZ (Codex 7d blocker-3):
+    renderPanel({ suggestion: SUG, transcriptKey: 'iv-1/tr-BAŞKA' });
+    await waitFor(() => expect(screen.getByTestId('export-citations-input')).toBeInTheDocument());
+    expect(screen.queryByTestId('export-citation-suggest')).not.toBeInTheDocument();
+  });
+
+  test('transcriptKey null → öneri yok (yalnız interview eşleşmesi YETMEZ)', async () => {
     renderPanel({
+      transcriptKey: null,
       suggestion: {
         interviewId: 'iv-1',
         transcriptKey: 'iv-1/tr-a',
@@ -184,9 +205,46 @@ describe('vaka seçimi + girdi zorunlulukları', () => {
         citationKey: 'iv-1/cit-9',
       },
     });
-    await waitFor(() => expect(screen.getByTestId('export-citation-suggest')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('export-citation-suggest'));
-    expect(screen.getByTestId('export-citations-input')).toHaveValue('iv-1/cit-9');
+    await waitFor(() => expect(screen.getByTestId('export-citations-input')).toBeInTheDocument());
+    expect(screen.queryByTestId('export-citation-suggest')).not.toBeInTheDocument();
+  });
+
+  test('vaka değişince case-spesifik girdiler (citation/mapping/consent/worm) TAŞINMAZ', async () => {
+    mockList.mockResolvedValue([
+      FINALIZED,
+      { caseKey: 'case-g', state: { kind: 'known', value: 'FINALIZED' } },
+    ]);
+    renderPanel();
+    await fillAndConfirm(); // case-f + tüm girdiler + teyit açık
+    fireEvent.click(screen.getByTestId('export-case-case-g'));
+    expect(screen.queryByTestId('export-confirm')).not.toBeInTheDocument();
+    expect(screen.getByTestId('export-citations-input')).toHaveValue('');
+    expect(screen.getByTestId('export-consents-input')).toHaveValue('');
+    expect(screen.getByTestId('export-worms-input')).toHaveValue('');
+    // Eski scope ile step-1 açılamaz:
+    fireEvent.click(screen.getByTestId('export-step1'));
+    expect(screen.getByTestId('export-error')).toHaveTextContent(/En az bir kanıt-alıntı/);
+  });
+
+  test('panel yolundan __proto__ mapping: frozen tuple → API context own-property (prototype-safe)', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('export-case-case-f')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('export-case-case-f'));
+    set('export-citations-input', '__proto__');
+    fireEvent.change(screen.getByTestId('export-criterion-__proto__'), {
+      target: { value: 'crit-1' },
+    });
+    set('export-consents-input', 'consent-1');
+    set('export-worms-input', 'worm-1');
+    fireEvent.click(screen.getByTestId('export-step1'));
+    mockExport.mockResolvedValueOnce(RECEIPT);
+    fireEvent.click(screen.getByTestId('export-step2'));
+    await waitFor(() => expect(mockExport).toHaveBeenCalledTimes(1));
+    const ctx = mockExport.mock.calls[0][3];
+    expect(Object.prototype.hasOwnProperty.call(ctx.citationCriterion, '__proto__')).toBe(true);
+    expect(ctx.citationCriterion['__proto__']).toBe('crit-1');
+    expect(JSON.stringify(ctx.citationCriterion)).toBe('{"__proto__":"crit-1"}');
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 });
 
@@ -303,6 +361,36 @@ describe('reconciliation 4-durum (POST retry ASLA)', () => {
     expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument();
     expect(guard.clearCalls).toBe(0);
     expect(mockExport).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    [401, 'Oturum hatası'],
+    [403, 'Yetki hatası'],
+  ])(
+    'reconcile GET %i → sınıflı mesaj + ambiguous KALIR + guard korunur + POST retry yok',
+    async (status, badge) => {
+      const guard = fakeGuard();
+      await toAmbiguous(guard);
+      mockList.mockRejectedValueOnce({ response: { status } });
+      fireEvent.click(screen.getByTestId('export-reconcile'));
+      await waitFor(() => expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument());
+      // Liste-hatası sınıflı görünür (403 → ats.review.read yönlendirmesi list-error'da):
+      if (status === 403) {
+        // initial-list yüzeyinde de doğrula:
+        expect(badge).toBe('Yetki hatası');
+      }
+      expect(guard.clearCalls).toBe(0);
+      expect(mockExport).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test('initial liste 403 → ats.review.read yönlendirmesi (export.write yeterli değil)', async () => {
+    mockList.mockReset();
+    mockList.mockRejectedValueOnce({ response: { status: 403 } });
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('export-list-error')).toBeInTheDocument());
+    expect(screen.getByText('Yetki hatası')).toBeInTheDocument();
+    expect(screen.getByText(/ats\.review\.read/)).toBeInTheDocument();
   });
 
   test('vaka listede YOK → ambiguous kalır; GET hatası → yalnız GET yeniden denenebilir', async () => {
