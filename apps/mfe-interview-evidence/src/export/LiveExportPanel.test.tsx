@@ -48,6 +48,7 @@ const RECEIPT = {
   evidenceId: 'ev-1',
   packetDigest: 'b'.repeat(64),
   claimCount: 1,
+  replayed: false,
 };
 
 type FakeGuard = UnresolvedErasureGuard & {
@@ -590,5 +591,69 @@ describe('39d-8b makbuz-kurtarma (ikinci oracle; GET idempotent)', () => {
     mockReceipt.mockResolvedValueOnce({ kind: 'completed', receipt: RECOVERED });
     fireEvent.click(screen.getByTestId('export-receipt-recover'));
     await waitFor(() => expect(screen.getByTestId('export-recovered-receipt')).toBeInTheDocument());
+  });
+});
+describe('39d-13 güvenli-retry (idempotent-replay backend canlı)', () => {
+  const toAmbiguous = async (guard: FakeGuard) => {
+    renderPanel({ guard });
+    await fillAndConfirm();
+    mockExport.mockRejectedValueOnce({ response: { status: 500 } });
+    fireEvent.click(screen.getByTestId('export-step2'));
+    await waitFor(() => expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument());
+  };
+
+  test('retry → 200-replay → completed + guard temiz + replay rozeti', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    mockExport.mockResolvedValueOnce({ ...RECEIPT, replayed: true });
+    fireEvent.click(screen.getByTestId('export-safe-retry'));
+    await waitFor(() => expect(screen.getByTestId('export-completed-receipt')).toBeInTheDocument());
+    expect(guard.clearCalls).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId('export-completed-receipt')).toHaveTextContent(/idempotent-replay/);
+    // frozen gövde AYNEN gönderildi (ikinci çağrı argümanları ilk POST'la aynı):
+    expect(mockExport.mock.calls[1][1]).toBe('case-f');
+  });
+
+  test('retry → 409 R4 → not + kilit korunur + buton yeniden aktif', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    mockExport.mockRejectedValueOnce({
+      response: { status: 409, data: { error: 'UNSUPPORTED_IN_GATE' } },
+    });
+    fireEvent.click(screen.getByTestId('export-safe-retry'));
+    await waitFor(() => expect(screen.getByTestId('export-receipt-note')).toBeInTheDocument());
+    expect(screen.getByTestId('export-receipt-note')).toHaveTextContent(/R4/);
+    expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument();
+    expect(guard.clearCalls).toBe(0);
+    expect(screen.getByTestId('export-safe-retry')).not.toBeDisabled();
+  });
+
+  test('retry → transport → ambiguous kalır + tekrar denenebilir; çift-tık tek POST', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    let resolveRetry: ((v: unknown) => void) | null = null;
+    mockExport.mockImplementationOnce(
+      () =>
+        new Promise((_res, rej) => {
+          resolveRetry = rej as never;
+        }),
+    );
+    const before = mockExport.mock.calls.length;
+    fireEvent.click(screen.getByTestId('export-safe-retry'));
+    fireEvent.click(screen.getByTestId('export-safe-retry'));
+    expect(mockExport.mock.calls.length).toBe(before + 1);
+    (resolveRetry as unknown as (v: unknown) => void)({ request: {} });
+    await waitFor(() => expect(screen.getByTestId('export-receipt-note')).toBeInTheDocument());
+    expect(screen.getByTestId('export-ambiguous')).toBeInTheDocument();
+    expect(guard.clearCalls).toBe(0);
+    expect(screen.getByTestId('export-safe-retry')).not.toBeDisabled();
+  });
+
+  test('ortak mutex: receipt-GET beklerken retry disabled (tek recovery aynı anda)', async () => {
+    const guard = fakeGuard();
+    await toAmbiguous(guard);
+    mockReceipt.mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByTestId('export-receipt-recover'));
+    expect(screen.getByTestId('export-safe-retry')).toBeDisabled();
   });
 });
