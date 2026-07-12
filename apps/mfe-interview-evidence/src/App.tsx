@@ -28,6 +28,7 @@ import {
 import type { Segment } from './segment-view/types';
 import type { TranscriptEntry } from './transcripts/types';
 import type { ErasureReceipt } from './dsar/types';
+import { IntegrationWorkspace } from './integrations/IntegrationWorkspace';
 
 const DEMO_TRANSCRIPT_KEY = 'tr-demo-1';
 
@@ -257,6 +258,8 @@ function LiveReadApp() {
         </div>
       </Stack>
 
+      <IntegrationWorkspace />
+
       {list.phase === 'loading' && (
         <Card variant="outlined" padding="md">
           <Text as="p" size="sm" data-testid="live-list-loading">
@@ -438,6 +441,8 @@ function DemoApp() {
           <Badge variant="warning">Demo veri — gerçek aday verisi değil (ATS-0016)</Badge>
         </div>
       </Stack>
+
+      <IntegrationWorkspace />
 
       <Card variant="outlined" padding="md">
         <ConsentRecordingPanel onTranscribed={handleTranscribed} />
