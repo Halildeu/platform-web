@@ -10,6 +10,7 @@ import type { CitationReceiptRef } from './review/LiveReviewCasePanel';
 import { DsarPanel } from './dsar/DsarPanel';
 import { LiveDsarPanel } from './dsar/LiveDsarPanel';
 import { LiveExportPanel } from './export/LiveExportPanel';
+import { DeploymentReadinessConsole } from './deployment-readiness/DeploymentReadinessConsole';
 import { IntelligenceGovernanceLab } from './intelligence-governance/IntelligenceGovernanceLab';
 import { resolveExportProfile } from './export/exportProfile';
 import type { CitationEntailment } from './review/liveCitationApi';
@@ -29,6 +30,7 @@ import {
 import type { Segment } from './segment-view/types';
 import type { TranscriptEntry } from './transcripts/types';
 import type { ErasureReceipt } from './dsar/types';
+import { IntegrationWorkspace } from './integrations/IntegrationWorkspace';
 
 const DEMO_TRANSCRIPT_KEY = 'tr-demo-1';
 
@@ -258,6 +260,8 @@ function LiveReadApp() {
         </div>
       </Stack>
 
+      <IntegrationWorkspace />
+
       {list.phase === 'loading' && (
         <Card variant="outlined" padding="md">
           <Text as="p" size="sm" data-testid="live-list-loading">
@@ -399,6 +403,7 @@ function LiveReadApp() {
         </>
       )}
 
+      <DeploymentReadinessConsole />
       <IntelligenceGovernanceLab />
     </Stack>
   );
@@ -441,6 +446,8 @@ function DemoApp() {
           <Badge variant="warning">Demo veri — gerçek aday verisi değil (ATS-0016)</Badge>
         </div>
       </Stack>
+
+      <IntegrationWorkspace />
 
       <Card variant="outlined" padding="md">
         <ConsentRecordingPanel onTranscribed={handleTranscribed} />
@@ -502,6 +509,7 @@ function DemoApp() {
         </>
       )}
 
+      <DeploymentReadinessConsole />
       <IntelligenceGovernanceLab />
     </Stack>
   );
