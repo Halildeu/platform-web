@@ -32,7 +32,7 @@ export interface UnresolvedErasureGuard {
   clear(interviewId: string): void;
 }
 
-const keyFor = (interviewId: string) => `ats.dsar.unresolved:${interviewId}`;
+const DEFAULT_PREFIX = 'ats.dsar.unresolved';
 
 function parseRecord(raw: string): UnresolvedErasureRecordV1 | null {
   try {
@@ -67,7 +67,11 @@ function parseRecord(raw: string): UnresolvedErasureRecordV1 | null {
  * yüzeyi açılabilir; yıkıcı POST yine de çıkamaz çünkü arm() aynı storage'a
  * yazamayıp false döner ve çağıran fail-closed durur.
  */
-export function createSessionUnresolvedGuard(storage?: Storage): UnresolvedErasureGuard {
+export function createSessionUnresolvedGuard(
+  storage?: Storage,
+  keyPrefix: string = DEFAULT_PREFIX,
+): UnresolvedErasureGuard {
+  const keyFor = (id: string) => `${keyPrefix}:${id}`;
   const resolve = (): Storage | null => {
     if (storage) return storage;
     try {
